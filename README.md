@@ -122,3 +122,8 @@ no message broker, no cache server to run alongside it.
 ## Status
 
 In development, pre-release. Not yet usable.
+
+## Licence
+
+[AGPL-3.0-or-later](LICENSE). Free to use, modify and self-host. If you run a modified version
+as a service for others, you must make your changes available to them.
