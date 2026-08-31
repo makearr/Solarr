@@ -40,13 +40,30 @@ before it is taken. The reason is not legal but architectural: the more that is 
 more the design drifts back toward the one MediaNexus exists to move away from. When something
 outside this scope looks worth taking, raise it — do not simply take it.
 
+## Third-party services
+
+**Servarr metadata proxies** — `skyhook.sonarr.tv`, `api.radarr.video`, `api.lidarr.audio` —
+are supported as metadata providers. These are not covered by any source licence; they are
+hosted services operated by the Servarr project for their own applications, with no published
+terms permitting third-party use.
+
+Conditions under which MediaNexus uses them:
+
+- **Honest identification.** The User-Agent identifies MediaNexus and its version and links to
+  this repository. It never impersonates another application, and no attempt is made to evade
+  rate limiting or blocking.
+- **Conservative request rates**, more conservative than for credentials MediaNexus owns.
+- **Never a hard dependency.** They are one provider among several (ADR-8). Direct TMDB, TVDB
+  and MusicBrainz providers are configurable as fallback, and the circuit breaker fails over
+  automatically. If access is withdrawn or blocked, the library keeps working.
+- **Aggressive caching** so a given lookup is made once (ADR-29).
+
+They may change or withdraw access at any time without notice, and that is their prerogative.
+
 ## Not sanctioned
 
-- **Servarr's hosted metadata services** (`skyhook.sonarr.tv`, `api.radarr.video`,
-  `api.lidarr.audio`). This is not a licensing question: they are someone else's
-  infrastructure and bandwidth, provided for their own applications. MediaNexus uses its own
-  TMDB, TVDB and MusicBrainz credentials.
 - Trademarks and branding. The names and logos are not covered by the source licence.
+- Impersonating another application's User-Agent, or any evasion of rate limits or blocks.
 
 ---
 
