@@ -34,4 +34,8 @@ config.local.yml
 # Local-only documents — never published
 /architecture.md
 /secrets.md
+/CLAUDE.md
 /*.local.md
+
+# Freezes the pre-commit version bump
+/.version-hold
