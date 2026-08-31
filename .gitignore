@@ -31,9 +31,8 @@ config.local.yml
 .vscode/
 *.swp
 
-# Local-only documents — never published
-/architecture.md
-/secrets.md
+# Local-only working documents — never published
+/private/
 /CLAUDE.md
 /*.local.md
 
