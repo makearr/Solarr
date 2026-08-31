@@ -32,6 +32,18 @@ jobs:
       - name: Test
         run: '[ -f go.mod ] && go test -race -count=1 ./... || true'
 
+      # ADR-31: generated code is committed. Stale output fails the build.
+      - name: sqlc up to date
+        run: |
+          [ -f sqlc.yaml ] || { echo "no sqlc.yaml yet, skipping"; exit 0; }
+          go run github.com/sqlc-dev/sqlc/cmd/sqlc@latest diff
+
+      - name: Generated API up to date
+        run: |
+          [ -f api/openapi.yaml ] || { echo "no spec yet, skipping"; exit 0; }
+          make api
+          git diff --exit-code || { echo "generated API is stale; run 'make api'"; exit 1; }
+
   benchmarks:
     runs-on: ubuntu-latest
     # ADR-28: performance targets are enforced here, not by intention.

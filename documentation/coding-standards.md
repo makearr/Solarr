@@ -150,7 +150,68 @@ the API filters; translation stays possible.
 
 ---
 
-## 9. Formatting and tooling
+## 9. The stack, and how to work in it
+
+Chosen so that no framework owns the shape of the code. Rationale in ADR-31.
+
+| Layer | Choice |
+|---|---|
+| SQL | **sqlc** — SQL in `queries/*.sql`, typed Go generated into `internal/store/gen/` |
+| Router | **stdlib `net/http` + chi** — everything stays an `http.Handler` |
+| Logging | **`log/slog`** — JSON handler, correlation ID from context |
+| API | **OpenAPI spec-first** — `api/openapi.yaml` generates Go interfaces and the TS client |
+| Frontend | **Vite · TanStack Query · Tailwind · shadcn/ui · TanStack Virtual** |
+
+### Generated code
+
+`internal/store/gen/`, the Go API interfaces, and `web/src/api/` are **generated, committed,
+and never edited by hand.** Change the source and regenerate:
+
+```bash
+sqlc generate          # after changing queries/*.sql or the schema
+make api               # after changing api/openapi.yaml
+```
+
+CI fails if generated output is stale. If a generated file looks wrong, the source is wrong.
+
+### Writing queries
+
+- One `.sql` file per domain area, named queries with `-- name: GetWorkByID :one`.
+- Queries live in SQL, not in Go string literals. Reviewability is the point.
+- `Queries.WithTx(tx)` binds to the write queue's transaction — never open your own (ADR-3).
+- **No `OFFSET`.** Cursor pagination only.
+- **No joins across database files.** Compose in Go (§4.3).
+
+### Handlers
+
+- Handlers unmarshal, call one service method, and marshal. No business logic, no SQL, no
+  plugin calls (Invariant 22).
+- The access context is threaded from middleware; **handlers never filter by category
+  themselves** — the repository does (Invariant 36).
+- Errors become RFC 7807 problem responses with a stable `type` slug.
+
+### Logging
+
+- `slog` with the request's logger from context, so correlation IDs thread automatically.
+- Structured attributes, never formatted strings: `slog.Int("work_id", id)`, not
+  `fmt.Sprintf`.
+- **Never log a secret**, a full file path from user input, or an entire request body.
+- Log at the point of handling, not at the point of raising — an error wrapped and returned is
+  logged once, by whoever finally handles it.
+
+### Frontend
+
+- **Server state lives in TanStack Query.** Local component state is `useState`. There is no
+  third category and no global store.
+- SSE events invalidate query keys; the UI never polls.
+- **Every list is virtualised.** 500k rows is the design point, not an edge case.
+- shadcn/ui components are copied into the repository as source. Edit them freely — they are
+  ours, not a dependency.
+- TypeScript `strict` is on. `any` requires a comment justifying it.
+
+---
+
+## 10. Formatting and tooling
 
 - `gofmt` (non-negotiable), `go vet`, `golangci-lint` — all enforced in CI.
 - `CGO_ENABLED=0` must build (ADR-30).
