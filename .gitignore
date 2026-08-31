@@ -1,0 +1,37 @@
+# Build output
+/medianexus
+/dist/
+/bin/
+*.exe
+
+# Web UI build artifacts (source lives in web/, output is embedded)
+/web/node_modules/
+/web/dist/
+/web/.vite/
+
+# Runtime data — never committed
+/data/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Local config: config.yml holds the encryption key (ADR-14)
+/config.yml
+config.local.yml
+
+# Go
+*.test
+*.out
+/vendor/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local-only documents — never published
+/architecture.md
+/secrets.md
+/*.local.md
