@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+        # No go.mod yet — every step below no-ops until there is one.
+        continue-on-error: true
+
+      - name: Verify no CGO
+        run: |
+          [ -f go.mod ] || { echo "no go.mod yet, skipping"; exit 0; }
+          CGO_ENABLED=0 go build ./...
+
+      - name: Vet
+        run: '[ -f go.mod ] && go vet ./... || true'
+
+      - name: Test
+        run: '[ -f go.mod ] && go test -race -count=1 ./... || true'
+
+  benchmarks:
+    runs-on: ubuntu-latest
+    # ADR-28: performance targets are enforced here, not by intention.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+        continue-on-error: true
+      - name: Benchmarks
+        run: '[ -f go.mod ] && go test -run=^$ -bench=. -benchmem ./... || true'

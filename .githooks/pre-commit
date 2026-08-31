@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Bump the patch version on every commit. Major/minor change by hand only.
+# Create .version-hold in the repo root to freeze the version (e.g. during design work).
+set -euo pipefail
+if [ -f .version-hold ]; then exit 0; fi
+[ -f VERSION ] || echo "0.0.0" > VERSION
+v=$(tr -d '[:space:]' < VERSION)
+IFS=. read -r MA MI PA <<< "$v"
+printf '%s.%s.%s\n' "$MA" "$MI" "$((PA + 1))" > VERSION
+git add VERSION
