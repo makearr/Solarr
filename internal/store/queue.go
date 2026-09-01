@@ -48,19 +48,30 @@ type writeOp struct {
 	// needing a rescan on every pop.
 	virtualStart time.Time
 
-	ctx    context.Context
-	run    func(context.Context, *sql.Tx) error
+	ctx context.Context
+
+	// execute receives the write connection rather than a transaction, so the
+	// queue can also serialise the few statements SQLite refuses to run inside
+	// one — VACUUM INTO, for the pre-migration backup. Store.Write wraps its
+	// caller's function in a transaction before it gets here.
+	execute func(context.Context, *sql.DB) error
+
+	// exemptFromBudget marks the one write that is legitimately unbounded: a
+	// migration creating an index over an existing library. Everything else is
+	// measured against Invariant 2.
+	exemptFromBudget bool
+
 	result chan error
 	index  int
 }
 
-func newWriteOp(ctx context.Context, priority Priority, now time.Time, run func(context.Context, *sql.Tx) error) *writeOp {
+func newWriteOp(ctx context.Context, priority Priority, now time.Time, execute func(context.Context, *sql.DB) error) *writeOp {
 	return &writeOp{
 		priority:     priority,
 		enqueued:     now,
 		virtualStart: now.Add(-time.Duration(priority) * agingInterval),
 		ctx:          ctx,
-		run:          run,
+		execute:      execute,
 		result:       make(chan error, 1),
 	}
 }
