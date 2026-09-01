@@ -159,6 +159,26 @@ func (m *Mem) Create(path string) (io.WriteCloser, error) {
 	return &memWriter{content: node.content}, nil
 }
 
+// CreateSecret mirrors Create but records the restricted mode, so the
+// conformance suite can assert the mode on both implementations rather than
+// only on the one that touches a real filesystem.
+func (m *Mem) CreateSecret(path string) (io.WriteCloser, error) {
+	writer, err := m.Create(path)
+	if err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	resolved, err := m.resolveLocked(path, 0)
+	if err != nil {
+		return nil, err
+	}
+	if node, ok := m.nodes[resolved]; ok {
+		node.mode = secretFilePerm
+	}
+	return writer, nil
+}
+
 func (m *Mem) MkdirAll(path string, perm fs.FileMode) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

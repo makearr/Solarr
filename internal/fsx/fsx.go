@@ -67,6 +67,12 @@ type FS interface {
 	Lstat(path string) (FileInfo, error)
 	Open(path string) (File, error)
 	Create(path string) (io.WriteCloser, error)
+
+	// CreateSecret is Create for a file whose contents are a credential. It is a
+	// separate method rather than a mode argument so that the restricted case is
+	// named at every call site and cannot be reached by passing the wrong
+	// constant.
+	CreateSecret(path string) (io.WriteCloser, error)
 	MkdirAll(path string, perm fs.FileMode) error
 	ReadDir(path string) ([]DirEntry, error)
 	Rename(oldPath, newPath string) error

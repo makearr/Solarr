@@ -11,7 +11,22 @@ import (
 
 // filePerm is the mode for files MediaNexus creates. The process umask narrows
 // it; the container runs non-root (§20.2).
+//
+// It is deliberately world-readable: imported media has to be readable by the
+// media server running as a different user, which is the whole point of writing
+// it. Do not tighten this to protect secrets -- see secretFilePerm.
 const filePerm fs.FileMode = 0o644
+
+// secretFilePerm is the mode for files whose contents are a credential: the
+// config.yml holding the encryption key (ADR-14), and nothing that a media
+// server ever needs to read.
+//
+// ADR-14 says there is no chmod *requirement* -- MediaNexus does not refuse to
+// start on a loose mode, because that is a check that strands the user out of
+// their own install. That is about what is enforced on a file we find. It says
+// nothing about the mode we choose when we create one, and creating the only
+// copy of a 256-bit key world-readable is indefensible when 0600 is free.
+const secretFilePerm fs.FileMode = 0o600
 
 // staleAttempts is how often a syscall is retried after ESTALE. An NFS server
 // restart invalidates open handles, and treating that as a missing file would
@@ -54,6 +69,13 @@ func (OS) Open(path string) (File, error) {
 
 func (OS) Create(path string) (io.WriteCloser, error) {
 	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, filePerm)
+}
+
+// CreateSecret creates the file already restricted, never chmod-ed afterwards:
+// a create-then-chmod leaves a window in which the key is world-readable, and
+// the window is exactly when the file has just been filled with the key.
+func (OS) CreateSecret(path string) (io.WriteCloser, error) {
+	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, secretFilePerm)
 }
 
 func (OS) MkdirAll(path string, perm fs.FileMode) error { return os.MkdirAll(path, perm) }
