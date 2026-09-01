@@ -7,6 +7,7 @@ run:
   timeout: 5m
   tests: true
 
+
 linters:
   default: standard # errcheck, govet, ineffassign, staticcheck, unused
   enable:
@@ -64,6 +65,11 @@ linters:
 
   exclusions:
     generated: lax
+    # npm dependencies are not ours to lint. eslint pulls in `flatted`, which
+    # ships a Go implementation beside its JavaScript, and linting someone
+    # else's vendored source fails the build over a missing package comment.
+    paths:
+      - web/node_modules
     rules:
       # The seams themselves are the one place the wrapped calls are legitimate.
       - path: internal/clock/system\.go

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"os"
 	"path/filepath"
 
 	"github.com/makearr/MediaNexus/internal/fsx"
+	"github.com/makearr/MediaNexus/internal/privilege"
 )
 
 // directoryPermissions is what a created directory gets. The process umask
@@ -126,6 +126,5 @@ func probeWritable(fsys fsx.FS, directory string) error {
 // PUID/PGID mismatch, and saying which ids to chown to saves the round trip
 // even without the directory's own ownership (§14.3).
 func identityHint() string {
-	return fmt.Sprintf("\n      running as uid=%d gid=%d; check PUID/PGID and the directory's owner",
-		os.Getuid(), os.Getgid())
+	return "\n      " + privilege.IdentityHint()
 }

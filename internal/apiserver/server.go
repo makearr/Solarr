@@ -53,6 +53,10 @@ type Config struct {
 	// rather than sleeping (ADR-17).
 	Clock  clock.Clock
 	Logger *slog.Logger
+	// Roots proves a candidate library root is usable before it is accepted.
+	// Optional: without it, adding a root folder is refused rather than
+	// accepted unchecked -- an unverified root is the failure this prevents.
+	Roots RootChecker
 	// WebUI serves the compiled interface. Optional: a CLI subcommand that only
 	// needs the API passes nothing and every path outside the API answers 404.
 	//
@@ -74,6 +78,7 @@ type Server struct {
 	events  *events.Bus
 	wall    clock.Clock
 	webui   http.Handler
+	roots   RootChecker
 	address string
 
 	// ready gates /ready independently of the checks themselves, so the answer
@@ -103,6 +108,7 @@ func New(config Config) (*Server, error) {
 		events:  config.Events,
 		wall:    config.Clock,
 		webui:   config.WebUI,
+		roots:   config.Roots,
 		address: net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -122,6 +128,12 @@ func New(config Config) (*Server, error) {
 		api.Post("/auth/login", server.Login)
 		api.Post("/auth/logout", server.Logout)
 
+		// Unauthenticated because before the first account exists there is
+		// nobody to authenticate as. Creating that account is refused once one
+		// exists, which is what closes the window (section 21.11).
+		api.Get("/setup", server.GetSetupStatus)
+		api.Post("/setup/admin", server.CreateFirstAdministrator)
+
 		// Everything else needs an identity. Grouping rather than per-route
 		// middleware means a new endpoint is authenticated by default: adding
 		// one outside this group is a visible act.
@@ -129,6 +141,8 @@ func New(config Config) (*Server, error) {
 			secured.Use(server.authenticate)
 			secured.Get("/me", server.GetMe)
 			secured.Get("/jobs", server.routeListJobs)
+			secured.Get("/rootfolders", server.ListRootFolders)
+			secured.Post("/rootfolders", server.AddRootFolder)
 			secured.Get("/events", server.routeStreamEvents)
 		})
 	})

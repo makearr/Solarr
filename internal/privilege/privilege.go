@@ -191,3 +191,14 @@ func walk(fsys fsx.FS, path string, identity Identity) error {
 	}
 	return nil
 }
+
+// IdentityHint describes who the process is, for a permission error.
+//
+// Nearly every "permission denied" in a container is a PUID/PGID mismatch, and
+// the message is useless without naming the identity that was refused. It lives
+// here rather than beside either caller because there is one such sentence in
+// the product, not two.
+func IdentityHint() string {
+	return fmt.Sprintf("running as uid=%d gid=%d; check PUID/PGID and the directory's owner",
+		syscall.Getuid(), syscall.Getgid())
+}

@@ -101,6 +101,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the first-run wizard still has to do.
+         * @description Unauthenticated, because before the first account exists there is nobody to authenticate as. It reports only what is outstanding, never anything about the install, so it is safe to answer to anyone.
+         */
+        get: operations["getSetupStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/setup/admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create the administrator account, once.
+         * @description Accepted only while no account exists; afterwards it is a conflict, for good. This is the standard first-run claim, and it does mean whoever reaches the port first owns the install -- which is why it closes permanently rather than whenever the wizard is finished.
+         */
+        post: operations["createFirstAdministrator"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rootfolders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The configured library roots. */
+        get: operations["listRootFolders"];
+        put?: never;
+        /**
+         * Add a library root.
+         * @description The path is probed for existence and writability before it is accepted, so a typo or a volume the container cannot write surfaces here rather than at the first import.
+         */
+        post: operations["addRootFolder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me": {
         parameters: {
             query?: never;
@@ -198,6 +259,19 @@ export interface components {
             source_url: string;
             /** @example AGPL-3.0-or-later */
             license: string;
+        };
+        SetupStatus: {
+            /** @description True while no account exists, which is the only time setup can be claimed. */
+            needs_administrator: boolean;
+            has_root_folder: boolean;
+        };
+        RootFolder: {
+            /** Format: int64 */
+            id: number;
+            path: string;
+            label?: string;
+            /** @description An unmounted root counts as unavailable, never as free space (Invariant 20a). */
+            online: boolean;
         };
         Identity: {
             /** Format: int64 */
@@ -394,6 +468,111 @@ export interface operations {
                     "application/json": components["schemas"]["LogoutStatus"];
                 };
             };
+        };
+    };
+    getSetupStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Outstanding setup steps. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupStatus"];
+                };
+            };
+        };
+    };
+    createFirstAdministrator: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    username: string;
+                    /** Format: password */
+                    password: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created, and signed in. The session cookie is set here. */
+            201: {
+                headers: {
+                    /** @description The `medianexus_session` cookie. */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Identity"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            /** @description An account already exists; setup is closed. */
+            409: components["responses"]["Problem"];
+        };
+    };
+    listRootFolders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every root folder. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RootFolder"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    addRootFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    path: string;
+                    label?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Added. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RootFolder"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     getMe: {

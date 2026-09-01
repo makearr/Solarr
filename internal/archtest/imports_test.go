@@ -34,10 +34,11 @@ var allowedInternalImports = map[string][]string{
 	"internal/authz": {"internal/settings"},
 	"internal/apiserver": {
 		"internal/apiserver/gen", "internal/auth", "internal/authz", "internal/clock",
-		"internal/events", "internal/jobs", "internal/paginate", "internal/settings",
+		"internal/events", "internal/fsx", "internal/jobs", "internal/paginate",
+		"internal/privilege", "internal/settings",
 	},
 	"internal/clock":  {},
-	"internal/config": {"internal/fsx"},
+	"internal/config": {"internal/fsx", "internal/privilege"},
 	"internal/events": {"internal/clock"},
 	"internal/fsx":    {"internal/clock"},
 	"internal/httpx":  {"internal/clock"},

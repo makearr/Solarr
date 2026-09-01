@@ -30,6 +30,7 @@ import (
 // process is everything the server owns, so shutdown has one place to look.
 type process struct {
 	config     config.Config
+	fsys       fsx.FS
 	logger     *slog.Logger
 	settings   *store.Store
 	jobs       *store.Store
@@ -72,7 +73,7 @@ func serve(ctx context.Context, configPath string, out io.Writer) error {
 		return err
 	}
 
-	running := &process{config: loaded, logger: logger}
+	running := &process{config: loaded, fsys: fsys, logger: logger}
 	defer running.close()
 
 	if err := running.openDatabases(ctx); err != nil {
@@ -224,6 +225,7 @@ func (p *process) startServer(ctx context.Context) error {
 		Clock:   clock.NewSystem(),
 		Logger:  p.logger,
 		WebUI:   webui.Handler(),
+		Roots:   apiserver.FilesystemRoots{FS: p.fsys},
 	})
 	if err != nil {
 		return err
