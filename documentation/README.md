@@ -5,6 +5,7 @@ named file, linked from the code by path.
 
 | Page | Covers |
 |---|---|
+| [codebase-map.md](codebase-map.md) | Where things live, what depends on what, and where to start reading |
 | [coding-standards.md](coding-standards.md) | Style, structure, comments, testing, AI-maintainability |
 | [startup-checks.md](startup-checks.md) | How directories are checked at startup, and what is deliberately not checked |
 | [sql-and-sqlc.md](sql-and-sqlc.md) | Writing queries, and the sqlc SQLite constraints that bite silently |
