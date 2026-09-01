@@ -27,7 +27,8 @@ var allowedInternalImports = map[string][]string{
 	"cmd/medianexus": {
 		"internal/apiserver", "internal/auth", "internal/clock", "internal/config",
 		"internal/events", "internal/fsx", "internal/health", "internal/jobs",
-		"internal/settings", "internal/store", "internal/webui", "migrations",
+		"internal/privilege", "internal/settings", "internal/store", "internal/webui",
+		"migrations",
 	},
 	"internal/auth":  {"internal/clock", "internal/secrets"},
 	"internal/authz": {"internal/settings"},
@@ -60,7 +61,10 @@ var allowedInternalImports = map[string][]string{
 	// apiserver receives it as an http.Handler, so the API layer never learns
 	// how the interface is packaged.
 	"internal/webui": {},
-	"migrations":     {"internal/store"},
+	// Takes ownership of directories before dropping root, so it needs the
+	// filesystem seam and nothing else.
+	"internal/privilege": {"internal/fsx"},
+	"migrations":         {"internal/store"},
 }
 
 // Plugins import internal/plugin and nothing else from core, which is what keeps

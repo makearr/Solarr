@@ -44,6 +44,21 @@ func (c Config) DirectoryRequirements() []DirectoryRequirement {
 	}
 }
 
+// ManagedDirectories are the paths MediaNexus owns and may take ownership of.
+//
+// Deliberately not the media roots. Those hold the 500k files of ADR-22, they
+// belong to the user rather than to us, and rewriting their ownership on every
+// boot would be both slow and presumptuous -- an unwritable root folder is
+// reported by the section 14.3 checks instead.
+func (c Config) ManagedDirectories() []string {
+	requirements := c.DirectoryRequirements()
+	paths := make([]string, 0, len(requirements))
+	for _, requirement := range requirements {
+		paths = append(paths, requirement.Path)
+	}
+	return paths
+}
+
 // CheckDirectories proves each directory exists and can be written, by writing
 // and removing a file rather than by inspecting permission bits. A mode that
 // looks correct still fails on a read-only mount, a full filesystem or a
