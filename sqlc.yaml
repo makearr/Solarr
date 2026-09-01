@@ -16,3 +16,16 @@ sql:
         emit_result_struct_pointers: false
         emit_params_struct_pointers: false
         output_files_suffix: ".gen"
+  - engine: "sqlite"
+    schema: "migrations/jobs"
+    queries: "queries/jobs"
+    gen:
+      go:
+        package: "jobsdb"
+        out: "internal/store/gen/jobsdb"
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_empty_slices: true
+        emit_result_struct_pointers: false
+        emit_params_struct_pointers: false
+        output_files_suffix: ".gen"
