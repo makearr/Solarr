@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/* Dark mode follows a class on <html>, set before first paint by the inline
+   script in index.html. A media-query-only scheme could not express the
+   per-user override that section 21 requires. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Tokens, not colours, at the point of use. A component asks for
+   "muted-foreground"; what that is in each theme is decided once, here. */
+@theme {
+  --color-canvas: oklch(99% 0 0);
+  --color-surface: oklch(100% 0 0);
+  --color-border-subtle: oklch(92% 0.004 260);
+  --color-ink: oklch(21% 0.006 260);
+  --color-ink-muted: oklch(52% 0.008 260);
+  --color-accent: oklch(58% 0.16 258);
+  --color-accent-ink: oklch(99% 0 0);
+  --color-danger: oklch(58% 0.19 27);
+  --color-ok: oklch(62% 0.15 150);
+  --color-warn: oklch(72% 0.15 75);
+}
+
+@layer base {
+  .dark {
+    --color-canvas: oklch(17% 0.006 260);
+    --color-surface: oklch(21% 0.007 260);
+    --color-border-subtle: oklch(30% 0.008 260);
+    --color-ink: oklch(94% 0.003 260);
+    --color-ink-muted: oklch(68% 0.008 260);
+    --color-accent: oklch(70% 0.14 258);
+    --color-accent-ink: oklch(17% 0.006 260);
+    --color-danger: oklch(68% 0.17 27);
+    --color-ok: oklch(72% 0.14 150);
+    --color-warn: oklch(80% 0.14 75);
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* A virtualised list is scrolled constantly; a scrollbar that appears and
+     disappears reflows the whole window on every hover. */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+}

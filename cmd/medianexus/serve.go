@@ -22,6 +22,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/jobs"
 	"github.com/makearr/MediaNexus/internal/settings"
 	"github.com/makearr/MediaNexus/internal/store"
+	"github.com/makearr/MediaNexus/internal/webui"
 	"github.com/makearr/MediaNexus/migrations"
 )
 
@@ -203,6 +204,7 @@ func (p *process) startServer(ctx context.Context) error {
 		Events:  p.bus,
 		Clock:   clock.NewSystem(),
 		Logger:  p.logger,
+		WebUI:   webui.Handler(),
 	})
 	if err != nil {
 		return err

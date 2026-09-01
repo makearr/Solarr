@@ -6,6 +6,19 @@
 # them -- still produces a working native image rather than failing to parse
 # the first line.
 ARG BUILDPLATFORM=linux/amd64
+
+# The interface is compiled first, on the builder's own architecture: it is
+# JavaScript, so the result is identical for every target and building it once
+# per platform would double release time for no difference in output.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS web
+WORKDIR /web
+# The lockfile alone first, so a source-only change does not reinstall.
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web/ ./
+# outDir points outside web/, so the bundle lands where the Go package embeds it.
+RUN npm run build
+
 FROM --platform=$BUILDPLATFORM golang:1 AS build
 
 ARG TARGETOS=linux
@@ -26,6 +39,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+# The compiled interface, which go:embed folds into the binary. Without this the
+# image would build and run but answer every page with "not in this binary".
+COPY --from=web /internal/webui/dist ./internal/webui/dist
+
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath \
       -ldflags "-s -w \

@@ -6,8 +6,15 @@
 
 # Web UI build artifacts (source lives in web/, output is embedded)
 /web/node_modules/
-/web/dist/
 /web/.vite/
+/web/*.tsbuildinfo
+
+# The production bundle is written here so it sits beside the Go package that
+# embeds it. Everything in it is generated, so none of it is committed -- but the
+# directory itself must exist or `go:embed` has no pattern to match and the build
+# fails before anyone has run `make web`. Hence the kept placeholder.
+/internal/webui/dist/*
+!/internal/webui/dist/.gitkeep
 
 # Runtime data — never committed
 /data/

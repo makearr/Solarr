@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/apiserver"
@@ -33,6 +34,21 @@ func newServer(t *testing.T, checker apiserver.Checker) *apiserver.Server {
 		},
 		Checker: checker,
 		Logger:  slog.New(slog.DiscardHandler),
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	return server
+}
+
+func newServerWithWebUI(t *testing.T, ui http.Handler) *apiserver.Server {
+	t.Helper()
+	server, err := apiserver.New(apiserver.Config{
+		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
+		Build:   apiserver.BuildInfo{Version: "1.2.3"},
+		Checker: fakeChecker{},
+		Logger:  slog.New(slog.DiscardHandler),
+		WebUI:   ui,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -255,4 +271,50 @@ func TestUnroutableRequestsAreProblemJSONWithDistinctSlugs(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The interface handler answers everything it is given, because it cannot tell
+// a client-side route from a typo. Mounted carelessly it would therefore answer
+// a mistyped API path with the application shell: status 200, content-type
+// text/html, and a client parsing a web page as though it were its response.
+//
+// A stub stands in for the real bundle so this holds whether or not the
+// interface has been built.
+func TestTheWebUINeverSwallowsAnAPIPath(t *testing.T) {
+	const shell = "<!doctype html><title>the app</title>"
+	server := newServerWithWebUI(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(shell))
+	}))
+
+	t.Run("an unknown API path is still a problem", func(t *testing.T) {
+		recorder := get(t, server, "/api/v1/no-such-endpoint")
+
+		if recorder.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want 404", recorder.Code)
+		}
+		if got := recorder.Header().Get("Content-Type"); got != "application/problem+json" {
+			t.Errorf("Content-Type = %q, want application/problem+json", got)
+		}
+		if strings.Contains(recorder.Body.String(), "the app") {
+			t.Error("the API answered with the application shell")
+		}
+	})
+
+	t.Run("a client-side route reaches the interface", func(t *testing.T) {
+		recorder := get(t, server, "/library/music")
+
+		if recorder.Code != http.StatusOK {
+			t.Errorf("status = %d, want 200", recorder.Code)
+		}
+		if !strings.Contains(recorder.Body.String(), "the app") {
+			t.Error("a client-side route did not reach the interface")
+		}
+	})
+
+	t.Run("a real API route is unaffected", func(t *testing.T) {
+		if got := get(t, server, "/api/v1/health").Code; got != http.StatusOK {
+			t.Errorf("status = %d, want 200", got)
+		}
+	})
 }
