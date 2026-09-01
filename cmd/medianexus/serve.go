@@ -20,6 +20,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/fsx"
 	"github.com/makearr/MediaNexus/internal/health"
 	"github.com/makearr/MediaNexus/internal/jobs"
+	"github.com/makearr/MediaNexus/internal/privilege"
 	"github.com/makearr/MediaNexus/internal/settings"
 	"github.com/makearr/MediaNexus/internal/store"
 	"github.com/makearr/MediaNexus/internal/webui"
@@ -29,6 +30,7 @@ import (
 // process is everything the server owns, so shutdown has one place to look.
 type process struct {
 	config     config.Config
+	fsys       fsx.FS
 	logger     *slog.Logger
 	settings   *store.Store
 	jobs       *store.Store
@@ -48,12 +50,30 @@ func serve(ctx context.Context, configPath string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+
+	logger := newLogger(loaded)
+
+	// Ownership and the privilege drop sit between loading the configuration and
+	// checking the directories, and the order is the whole point.
+	//
+	// After loading, because the directories to take ownership of are named in
+	// the configuration. Before the checks, because those checks ask "can *this
+	// user* write here" -- running them as root would answer yes and then the
+	// application would fail as the dropped user, which is precisely the
+	// late-discovered volume failure section 14.3 exists to prevent.
+	identity, err := privilege.Resolve(os.LookupEnv)
+	if err != nil {
+		return err
+	}
+	if _, err := privilege.Apply(fsys, identity, loaded.ManagedDirectories(), logger); err != nil {
+		return err
+	}
+
 	if err := config.CheckDirectories(fsys, loaded).OrNil(); err != nil {
 		return err
 	}
 
-	logger := newLogger(loaded)
-	running := &process{config: loaded, logger: logger}
+	running := &process{config: loaded, fsys: fsys, logger: logger}
 	defer running.close()
 
 	if err := running.openDatabases(ctx); err != nil {
@@ -205,6 +225,7 @@ func (p *process) startServer(ctx context.Context) error {
 		Clock:   clock.NewSystem(),
 		Logger:  p.logger,
 		WebUI:   webui.Handler(),
+		Roots:   apiserver.FilesystemRoots{FS: p.fsys},
 	})
 	if err != nil {
 		return err

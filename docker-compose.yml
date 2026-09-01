@@ -5,10 +5,21 @@ services:
     container_name: medianexus
     restart: unless-stopped
 
-    # Match whoever owns the volumes below. The container defaults to 65532;
-    # startup refuses with the effective uid and gid if it cannot write
-    # (architecture section 14.3).
-    user: "1000:1000"
+    # Who the application runs as. Two ways, and they are mutually exclusive.
+    #
+    # This one -- PUID/PGID -- is the convenient one and what most NAS setups
+    # want. The container starts as root, takes ownership of /config, drops to
+    # this user, and never runs as root again. It needs the four capabilities
+    # below to do that.
+    environment:
+      PUID: 1000
+      PGID: 1000
+
+    # The other way is `user: "1000:1000"`, which starts unprivileged and skips
+    # both the chown and the drop. It is the tighter option and needs no added
+    # capabilities at all -- but the volumes must already be owned by that user,
+    # because a process that is not root cannot fix them. Setting `user:`
+    # overrides PUID/PGID entirely rather than combining with them.
 
     ports:
       - "8080:8080"
@@ -37,3 +48,14 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # Exactly what the startup sequence needs and nothing else, verified against
+    # the built image: CHOWN and DAC_OVERRIDE to take ownership of a volume the
+    # runtime user does not own yet, SETUID and SETGID to stop being root.
+    #
+    # Delete all four if you use `user:` instead -- with no root to drop from,
+    # none of them is reachable.
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID

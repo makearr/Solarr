@@ -42,6 +42,12 @@ type memNode struct {
 	// Each path keeps its own timestamp even when two of them share content,
 	// because a hardlink is a directory entry, not a second file.
 	modTime time.Time
+
+	// Ownership, so a chown is observable here exactly as it is on a real
+	// filesystem. Nodes start unowned (-1), matching what OS reports where the
+	// platform does not supply it.
+	uid int
+	gid int
 }
 
 // memContent is shared between the two paths of a hardlink, which is what
@@ -59,7 +65,7 @@ func NewMem(c clock.Clock) *Mem {
 		reflinkSupported:  true,
 		hardlinkSupported: true,
 	}
-	m.nodes["/"] = &memNode{isDir: true, mode: fs.ModeDir | 0o755, modTime: m.now()}
+	m.nodes["/"] = &memNode{isDir: true, mode: fs.ModeDir | 0o755, modTime: m.now(), uid: -1, gid: -1}
 	return m
 }
 
@@ -107,6 +113,8 @@ func (m *Mem) statLocked(op, path string) (FileInfo, error) {
 		Mode:    node.mode,
 		ModTime: node.modTime,
 		IsDir:   node.isDir,
+		UID:     node.uid,
+		GID:     node.gid,
 	}
 	if node.content != nil {
 		node.content.mu.Lock()
@@ -154,7 +162,7 @@ func (m *Mem) Create(path string) (io.WriteCloser, error) {
 		return &memWriter{content: existing.content}, nil
 	}
 
-	node := &memNode{content: &memContent{}, mode: filePerm, modTime: m.now()}
+	node := &memNode{content: &memContent{}, mode: filePerm, modTime: m.now(), uid: -1, gid: -1}
 	m.nodes[resolved] = node
 	return &memWriter{content: node.content}, nil
 }
@@ -177,6 +185,29 @@ func (m *Mem) CreateSecret(path string) (io.WriteCloser, error) {
 		node.mode = secretFilePerm
 	}
 	return writer, nil
+}
+
+// Chown records ownership. A uid or gid of -1 leaves that half alone, which is
+// what chown(2) does and what callers rely on when changing only the group.
+func (m *Mem) Chown(path string, uid, gid int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	resolved, err := m.resolveLocked(path, 0)
+	if err != nil {
+		return pathError("chown", path, err)
+	}
+	node, ok := m.nodes[resolved]
+	if !ok {
+		return pathError("chown", path, fs.ErrNotExist)
+	}
+	if uid >= 0 {
+		node.uid = uid
+	}
+	if gid >= 0 {
+		node.gid = gid
+	}
+	return nil
 }
 
 func (m *Mem) MkdirAll(path string, perm fs.FileMode) error {
@@ -203,7 +234,7 @@ func (m *Mem) MkdirAll(path string, perm fs.FileMode) error {
 			}
 			continue
 		}
-		m.nodes[current] = &memNode{isDir: true, mode: fs.ModeDir | perm, modTime: m.now()}
+		m.nodes[current] = &memNode{isDir: true, mode: fs.ModeDir | perm, modTime: m.now(), uid: -1, gid: -1}
 	}
 	return nil
 }
@@ -307,7 +338,7 @@ func (m *Mem) Link(oldPath, newPath string) error {
 	}
 	// The shared content pointer is the hardlink: a write through either path is
 	// visible from the other, exactly as an inode behaves.
-	m.nodes[target] = &memNode{content: node.content, mode: node.mode, modTime: m.now()}
+	m.nodes[target] = &memNode{content: node.content, mode: node.mode, modTime: m.now(), uid: node.uid, gid: node.gid}
 	return nil
 }
 
@@ -318,7 +349,7 @@ func (m *Mem) Symlink(oldPath, newPath string) error {
 	if err := m.newEntryLocked("symlink", target); err != nil {
 		return err
 	}
-	m.nodes[target] = &memNode{linkTarget: oldPath, mode: fs.ModeSymlink | 0o777, modTime: m.now()}
+	m.nodes[target] = &memNode{linkTarget: oldPath, mode: fs.ModeSymlink | 0o777, modTime: m.now(), uid: -1, gid: -1}
 	return nil
 }
 
@@ -349,7 +380,7 @@ func (m *Mem) Reflink(oldPath, newPath string) error {
 	node.content.mu.Unlock()
 
 	// A clone is copy-on-write, so the two paths hold equal but independent data.
-	m.nodes[target] = &memNode{content: &memContent{data: cloned}, mode: node.mode, modTime: m.now()}
+	m.nodes[target] = &memNode{content: &memContent{data: cloned}, mode: node.mode, modTime: m.now(), uid: -1, gid: -1}
 	m.mu.Unlock()
 	return nil
 }

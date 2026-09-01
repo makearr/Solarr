@@ -7,6 +7,17 @@
 # the first line.
 ARG BUILDPLATFORM=linux/amd64
 
+# The `media` account and the directory skeleton are built here rather than with
+# a RUN in the final stage, which would execute a foreign-architecture binary
+# under qemu. This stage is pinned to the builder's own platform, and everything
+# taken from it -- /etc/passwd, /etc/group, empty directories -- is either plain
+# text or metadata, identical on every architecture.
+FROM --platform=$BUILDPLATFORM alpine:3 AS rootfs
+RUN addgroup -g 1000 media \
+ && adduser -D -u 1000 -G media -h /config -s /sbin/nologin media \
+ && mkdir -p /skeleton/config /skeleton/data /skeleton/media \
+ && chown -R 1000:1000 /skeleton
+
 # The interface is compiled first, on the builder's own architecture: it is
 # JavaScript, so the result is identical for every target and building it once
 # per platform would double release time for no difference in output.
@@ -52,11 +63,6 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
         -X main.sourceURL=${SOURCE_URL}" \
       -o /out/medianexus ./cmd/medianexus
 
-# An empty directory to copy into the final image with the right ownership. It
-# is made here because this stage runs natively on the builder; a RUN in the
-# final stage would execute a foreign-architecture binary under emulation.
-RUN mkdir -p /out/config
-
 # Alpine rather than distroless: a self-hosted deployment gets debugged on the
 # machine it runs on, and a shell is worth the few megabytes. It also runs under
 # any --user, which is how a NAS matches the uid that owns its volumes.
@@ -77,23 +83,40 @@ COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
 
 COPY --from=build /out/medianexus /usr/local/bin/medianexus
 
-# One volume holds config, databases, backups and cache, so a default
-# deployment mounts a single path (architecture section 20.2).
-#
-# Copied with ownership rather than left to VOLUME to create implicitly. An
-# implicitly created mount point belongs to root, and this image runs as 65532,
-# so `docker run` with no volume could not write its own config.yml on first
-# start -- the image failed out of the box, which is exactly the path a new user
-# takes first. Docker seeds an anonymous volume from the image, so the volume
-# inherits this ownership too.
-COPY --from=build --chown=65532:65532 /out/config /config
+# The `media` account, so ownership reads as a name rather than a bare number
+# and the process has a real passwd entry.
+COPY --from=rootfs /etc/passwd /etc/passwd
+COPY --from=rootfs /etc/group /etc/group
+
+# Mount points, owned by media. Copied with ownership rather than left to VOLUME
+# to create implicitly: an implicitly created mount point belongs to root, and
+# the process ends up as 1000, so `docker run` with no volume could not write
+# its own config.yml on first start. Docker seeds an anonymous volume from the
+# image, so a volume inherits this ownership too.
+COPY --from=rootfs --chown=1000:1000 /skeleton/config /config
+COPY --from=rootfs --chown=1000:1000 /skeleton/data /data
 VOLUME ["/config"]
+
+# /media is intentionally left as Alpine ships it. COPY --chown into a directory
+# that already exists copies the contents and leaves the directory's own
+# ownership alone, so a line here would look like it did something and would not.
+# In practice /media is a bind mount whose ownership comes from the host, and an
+# unwritable library root is reported by the section 14.3 checks with the
+# PUID/PGID hint rather than silently chowned -- the library belongs to the user.
 EXPOSE 8080
 
-# 65532 matches the conventional non-root uid. Override with --user to match
-# whoever owns the mounted volume; startup reports the mismatch if it cannot
-# write (architecture section 14.3).
-USER 65532:65532
+# Deliberately root, and deliberately brief.
+#
+# The process takes ownership of its own volumes and then drops to `media`
+# (1000:1000) before anything else happens -- internal/privilege, which refuses
+# to continue if the drop fails, so the application never runs as root. Starting
+# unprivileged instead would make PUID and PGID impossible to honour: a
+# non-root process cannot chown a volume it does not already own, which is the
+# single most common first-run failure on a NAS.
+#
+# `--user` still wins. Given one, the process is already unprivileged, skips both
+# the chown and the drop, and runs as whoever was asked for.
+ENV PUID=1000 PGID=1000
 
 # A subcommand of the same static binary, so the image needs no curl or wget.
 # start-period covers migrations on a large database.

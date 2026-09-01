@@ -24,6 +24,8 @@ tags:
     description: Liveness, readiness and build identity. Unauthenticated.
   - name: auth
     description: Sessions.
+  - name: setup
+    description: First-run wizard. Skippable and resumable; a convenience, not a gate.
   - name: jobs
     description: The job queue.
   - name: events
@@ -130,6 +132,102 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/LogoutStatus" }
+
+  /setup:
+    get:
+      operationId: getSetupStatus
+      tags: [setup]
+      summary: What the first-run wizard still has to do.
+      description: >-
+        Unauthenticated, because before the first account exists there is nobody
+        to authenticate as. It reports only what is outstanding, never anything
+        about the install, so it is safe to answer to anyone.
+      security: []
+      responses:
+        "200":
+          description: Outstanding setup steps.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SetupStatus" }
+
+  /setup/admin:
+    post:
+      operationId: createFirstAdministrator
+      tags: [setup]
+      summary: Create the administrator account, once.
+      description: >-
+        Accepted only while no account exists; afterwards it is a conflict, for
+        good. This is the standard first-run claim, and it does mean whoever
+        reaches the port first owns the install -- which is why it closes
+        permanently rather than whenever the wizard is finished.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, minLength: 1 }
+                password: { type: string, format: password, minLength: 12 }
+      responses:
+        "201":
+          description: Created, and signed in. The session cookie is set here.
+          headers:
+            Set-Cookie:
+              description: The `medianexus_session` cookie.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Identity" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "409":
+          $ref: "#/components/responses/Problem"
+          description: An account already exists; setup is closed.
+
+  /rootfolders:
+    get:
+      operationId: listRootFolders
+      tags: [setup]
+      summary: The configured library roots.
+      responses:
+        "200":
+          description: Every root folder.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RootFolder" }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: addRootFolder
+      tags: [setup]
+      summary: Add a library root.
+      description: >-
+        The path is probed for existence and writability before it is accepted,
+        so a typo or a volume the container cannot write surfaces here rather
+        than at the first import.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: { type: string, minLength: 1 }
+                label: { type: string }
+      responses:
+        "201":
+          description: Added.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RootFolder" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 
   /me:
     get:
@@ -294,6 +392,28 @@ components:
             The Corresponding Source for *this* build. A modified build must not
             point at upstream.
         license: { type: string, example: "AGPL-3.0-or-later" }
+
+    SetupStatus:
+      type: object
+      required: [needs_administrator, has_root_folder]
+      properties:
+        needs_administrator:
+          type: boolean
+          description: True while no account exists, which is the only time setup can be claimed.
+        has_root_folder: { type: boolean }
+
+    RootFolder:
+      type: object
+      required: [id, path, online]
+      properties:
+        id: { type: integer, format: int64 }
+        path: { type: string }
+        label: { type: string }
+        online:
+          type: boolean
+          description: >-
+            An unmounted root counts as unavailable, never as free space
+            (Invariant 20a).
 
     Identity:
       type: object

@@ -39,6 +39,10 @@ type FileInfo struct {
 	Mode    fs.FileMode
 	ModTime time.Time
 	IsDir   bool
+	// UID and GID are -1 where the platform or implementation does not report
+	// them, so a caller can tell "not known" from "owned by root".
+	UID int
+	GID int
 }
 
 // DirEntry carries only what a directory read yields for free. Size and ModTime
@@ -77,6 +81,11 @@ type FS interface {
 	ReadDir(path string) ([]DirEntry, error)
 	Rename(oldPath, newPath string) error
 	Remove(path string) error
+
+	// Chown changes ownership. Used when the container starts as root to hand
+	// its managed directories to the runtime user (PUID/PGID) before dropping
+	// privileges. A uid or gid of -1 leaves that half unchanged, as chown(2) does.
+	Chown(path string, uid, gid int) error
 
 	// Link creates a hardlink. Preferred for both import and cross-entry linking
 	// (ADR-11); fails with ErrUnsupported across filesystems.

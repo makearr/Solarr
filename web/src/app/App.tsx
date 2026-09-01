@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
+import { Setup } from "./Setup";
 import { ThemeToggle } from "./ThemeToggle";
 
 // The shell is deliberately thin. It proves the three things this stage is
@@ -8,6 +10,21 @@ import { ThemeToggle } from "./ThemeToggle";
 // theme applies -- and nothing more. The category sidebar and the list views
 // arrive with useLibraryList(), which is built before either view exists.
 export function App() {
+  // Skipping is remembered for this tab only. The wizard is a convenience, not
+  // a gate, and persisting "I skipped it" server-side would need a setting that
+  // exists to record an absence -- while the status endpoint already says what
+  // is outstanding, truthfully, on every load.
+  const [skipped, setSkipped] = useState(false);
+
+  const setup = useQuery({
+    queryKey: ["setup"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/setup");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const about = useQuery({
     queryKey: ["about"],
     queryFn: async () => {
@@ -16,6 +33,16 @@ export function App() {
       return data;
     },
   });
+
+  // Every hook above runs unconditionally. Returning the wizard before the
+  // second useQuery would call fewer hooks on some renders than on others,
+  // which React detects as "rendered fewer hooks than expected" -- so the
+  // branch happens here, after the hooks, not among them.
+  const outstanding =
+    setup.data && (setup.data.needs_administrator || !setup.data.has_root_folder);
+  if (!skipped && outstanding) {
+    return <Setup onDone={() => setSkipped(true)} />;
+  }
 
   return (
     <div className="flex h-full flex-col">

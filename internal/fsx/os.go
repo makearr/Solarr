@@ -79,10 +79,14 @@ func (OS) CreateSecret(path string) (io.WriteCloser, error) {
 }
 
 func (OS) MkdirAll(path string, perm fs.FileMode) error { return os.MkdirAll(path, perm) }
-func (OS) Rename(oldPath, newPath string) error         { return os.Rename(oldPath, newPath) }
-func (OS) Remove(path string) error                     { return os.Remove(path) }
-func (OS) Link(oldPath, newPath string) error           { return os.Link(oldPath, newPath) }
-func (OS) Symlink(oldPath, newPath string) error        { return os.Symlink(oldPath, newPath) }
+
+// Chown is os.Chown. It is here rather than called directly so the forbidigo
+// rule keeping every filesystem call inside this package stays absolute.
+func (OS) Chown(path string, uid, gid int) error { return os.Chown(path, uid, gid) }
+func (OS) Rename(oldPath, newPath string) error  { return os.Rename(oldPath, newPath) }
+func (OS) Remove(path string) error              { return os.Remove(path) }
+func (OS) Link(oldPath, newPath string) error    { return os.Link(oldPath, newPath) }
+func (OS) Symlink(oldPath, newPath string) error { return os.Symlink(oldPath, newPath) }
 
 func (OS) ReadDir(path string) ([]DirEntry, error) {
 	return retryStale(func() ([]DirEntry, error) {
@@ -124,13 +128,23 @@ func resolveExisting(path string) (string, error) {
 }
 
 func infoFrom(info fs.FileInfo) FileInfo {
-	return FileInfo{
+	converted := FileInfo{
 		Name:    info.Name(),
 		Size:    info.Size(),
 		Mode:    info.Mode(),
 		ModTime: info.ModTime(),
 		IsDir:   info.IsDir(),
+		UID:     -1,
+		GID:     -1,
 	}
+	// Ownership is not part of fs.FileInfo. Where the platform reports it we
+	// pass it through, because a permission error is nearly always a PUID/PGID
+	// mismatch and section 14.3 promises to name the owner, not only the caller.
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+		converted.UID = int(stat.Uid)
+		converted.GID = int(stat.Gid)
+	}
+	return converted
 }
 
 func retryStale[T any](operation func() (T, error)) (T, error) {

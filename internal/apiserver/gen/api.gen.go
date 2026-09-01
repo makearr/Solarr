@@ -216,6 +216,24 @@ type ReadyStatusStatus string
 // Role defines model for Role.
 type Role string
 
+// RootFolder defines model for RootFolder.
+type RootFolder struct {
+	Id    int64   `json:"id"`
+	Label *string `json:"label,omitempty"`
+
+	// Online An unmounted root counts as unavailable, never as free space (Invariant 20a).
+	Online bool   `json:"online"`
+	Path   string `json:"path"`
+}
+
+// SetupStatus defines model for SetupStatus.
+type SetupStatus struct {
+	HasRootFolder bool `json:"has_root_folder"`
+
+	// NeedsAdministrator True while no account exists, which is the only time setup can be claimed.
+	NeedsAdministrator bool `json:"needs_administrator"`
+}
+
 // LoginJSONBody defines parameters for Login.
 type LoginJSONBody struct {
 	Password string `json:"password"`
@@ -239,8 +257,26 @@ type ListJobsParams struct {
 	State *JobState `form:"state,omitempty" json:"state,omitempty"`
 }
 
+// AddRootFolderJSONBody defines parameters for AddRootFolder.
+type AddRootFolderJSONBody struct {
+	Label *string `json:"label,omitempty"`
+	Path  string  `json:"path"`
+}
+
+// CreateFirstAdministratorJSONBody defines parameters for CreateFirstAdministrator.
+type CreateFirstAdministratorJSONBody struct {
+	Password string `json:"password"`
+	Username string `json:"username"`
+}
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody LoginJSONBody
+
+// AddRootFolderJSONRequestBody defines body for AddRootFolder for application/json ContentType.
+type AddRootFolderJSONRequestBody AddRootFolderJSONBody
+
+// CreateFirstAdministratorJSONRequestBody defines body for CreateFirstAdministrator for application/json ContentType.
+type CreateFirstAdministratorJSONRequestBody CreateFirstAdministratorJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -268,6 +304,18 @@ type ServerInterface interface {
 	// Readiness.
 	// (GET /ready)
 	GetReady(w http.ResponseWriter, r *http.Request)
+	// The configured library roots.
+	// (GET /rootfolders)
+	ListRootFolders(w http.ResponseWriter, r *http.Request)
+	// Add a library root.
+	// (POST /rootfolders)
+	AddRootFolder(w http.ResponseWriter, r *http.Request)
+	// What the first-run wizard still has to do.
+	// (GET /setup)
+	GetSetupStatus(w http.ResponseWriter, r *http.Request)
+	// Create the administrator account, once.
+	// (POST /setup/admin)
+	CreateFirstAdministrator(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -319,6 +367,30 @@ func (_ Unimplemented) GetMe(w http.ResponseWriter, r *http.Request) {
 // Readiness.
 // (GET /ready)
 func (_ Unimplemented) GetReady(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The configured library roots.
+// (GET /rootfolders)
+func (_ Unimplemented) ListRootFolders(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add a library root.
+// (POST /rootfolders)
+func (_ Unimplemented) AddRootFolder(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What the first-run wizard still has to do.
+// (GET /setup)
+func (_ Unimplemented) GetSetupStatus(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create the administrator account, once.
+// (POST /setup/admin)
+func (_ Unimplemented) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -530,6 +602,78 @@ func (siw *ServerInterfaceWrapper) GetReady(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// ListRootFolders operation middleware
+func (siw *ServerInterfaceWrapper) ListRootFolders(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRootFolders(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddRootFolder operation middleware
+func (siw *ServerInterfaceWrapper) AddRootFolder(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddRootFolder(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSetupStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetSetupStatus(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSetupStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateFirstAdministrator operation middleware
+func (siw *ServerInterfaceWrapper) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateFirstAdministrator(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -666,6 +810,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/ready", wrapper.GetReady)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/rootfolders", wrapper.ListRootFolders)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/rootfolders", wrapper.AddRootFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/setup", wrapper.GetSetupStatus)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/setup/admin", wrapper.CreateFirstAdministrator)
 	})
 
 	return r
