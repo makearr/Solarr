@@ -49,8 +49,10 @@ a user offered the Corresponding Source should be able to see what the binary li
 | Module | Licence | Why |
 |---|---|---|
 | `modernc.org/sqlite` | BSD-3-Clause | Pure-Go SQLite. Keeps `CGO_ENABLED=0` building, which ADR-30 requires so the image can bundle its media tools rather than link them. Provisional pending the ADR-5 benchmark |
+| `github.com/goccy/go-yaml` | MIT | `config.yml` parsing. Go has no stdlib YAML, and ADR-44 needs a parser that reports positions. Chosen over the archived `gopkg.in/yaml.v3` |
+| `github.com/robfig/cron/v3` | MIT | Cron parsing for `backup.schedule`. The same parser validates at startup and schedules later, so a schedule accepted at boot cannot be rejected by the thing that runs it |
 
-Its transitive dependencies — `modernc.org/libc`, `modernc.org/memory`, `modernc.org/mathutil`,
+`modernc.org/sqlite`'s transitive dependencies — `modernc.org/libc`, `modernc.org/memory`, `modernc.org/mathutil`,
 `github.com/remyoudompheng/bigfft`, `github.com/dustin/go-humanize`, `github.com/google/uuid`,
 `github.com/mattn/go-isatty`, `github.com/ncruces/go-strftime` and `golang.org/x/sys` — are all
 BSD-3-Clause or MIT. `go.mod` is the authoritative list.
