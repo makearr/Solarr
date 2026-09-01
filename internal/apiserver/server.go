@@ -7,12 +7,14 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/makearr/MediaNexus/internal/apiserver/gen"
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/events"
 	"github.com/makearr/MediaNexus/internal/jobs"
@@ -106,20 +108,20 @@ func New(config Config) (*Server, error) {
 	router.Route(base+APIPrefix, func(api chi.Router) {
 		// Unauthenticated by design: an orchestrator has no credentials, and
 		// AGPL section 13 obliges About to be reachable without logging in.
-		api.Get("/health", server.handleHealth)
-		api.Get("/ready", server.handleReady)
-		api.Get("/about", server.handleAbout)
-		api.Post("/auth/login", server.handleLogin)
-		api.Post("/auth/logout", server.handleLogout)
+		api.Get("/health", server.GetHealth)
+		api.Get("/ready", server.GetReady)
+		api.Get("/about", server.GetAbout)
+		api.Post("/auth/login", server.Login)
+		api.Post("/auth/logout", server.Logout)
 
 		// Everything else needs an identity. Grouping rather than per-route
 		// middleware means a new endpoint is authenticated by default: adding
 		// one outside this group is a visible act.
 		api.Group(func(secured chi.Router) {
 			secured.Use(server.authenticate)
-			secured.Get("/me", server.handleMe)
-			secured.Get("/jobs", server.handleListJobs)
-			secured.Get("/events", server.handleEvents)
+			secured.Get("/me", server.GetMe)
+			secured.Get("/jobs", server.routeListJobs)
+			secured.Get("/events", server.routeStreamEvents)
 		})
 	})
 
@@ -244,3 +246,68 @@ func (s *Server) handleMethodNotAllowed(w http.ResponseWriter, r *http.Request) 
 // clock returns the SSE flush tick. A separate method so the ticker's lifetime
 // belongs to the connection rather than the server.
 func (s *Server) newFlushTicker() clock.Ticker { return s.wall.NewTicker(FlushInterval) }
+
+// The server implements the interface generated from api/openapi.yaml (ADR-31).
+//
+// This is the whole point of generating it: add an operation to the spec and
+// this stops compiling until a handler exists. It catches a missing handler,
+// a renamed operation and a changed parameter type. It cannot catch a route
+// registered here that the spec does not describe -- TestRoutesMatchTheSpec
+// covers that direction.
+var _ gen.ServerInterface = (*Server)(nil)
+
+// The two operations with parameters are reached through an adapter that turns
+// the query string into the generated parameter type. Routing stays hand-written
+// so that the authenticated group above keeps its meaning: a route added outside
+// it is a visible act, where generated routing would register everything flat and
+// make "is this authenticated?" a question you have to go and answer.
+func (s *Server) routeListJobs(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	var params gen.ListJobsParams
+
+	if raw := query.Get("cursor"); raw != "" {
+		params.Cursor = &raw
+	}
+	if raw := query.Get("limit"); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "limit must be a number")
+			return
+		}
+		params.Limit = &limit
+	}
+	if raw := query.Get("state"); raw != "" {
+		state := gen.JobState(raw)
+		params.State = &state
+	}
+
+	s.ListJobs(w, r, params)
+}
+
+func (s *Server) routeStreamEvents(w http.ResponseWriter, r *http.Request) {
+	var params gen.StreamEventsParams
+
+	if raw := r.URL.Query().Get("topics"); strings.TrimSpace(raw) != "" {
+		requested := make([]gen.EventTopic, 0, 1)
+		for _, name := range strings.Split(raw, ",") {
+			requested = append(requested, gen.EventTopic(strings.TrimSpace(name)))
+		}
+		params.Topics = &requested
+	}
+	if raw := r.Header.Get("Last-Event-ID"); raw != "" {
+		params.LastEventID = &raw
+	}
+
+	s.StreamEvents(w, r, params)
+}
+
+// derefOr reads through an optional generated parameter. Every query parameter
+// is a pointer because absent and zero are different -- ?limit=0 is a request
+// for none, no limit at all is a request for the default.
+func derefOr[T any](value *T, fallback T) T {
+	if value == nil {
+		return fallback
+	}
+	return *value
+}

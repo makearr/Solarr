@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/makearr/MediaNexus/internal/apiserver/gen"
 	"github.com/makearr/MediaNexus/internal/authz"
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/events"
@@ -37,13 +38,13 @@ const (
 	sseResync = "resync"
 )
 
-// handleEvents streams changes to one client.
+// StreamEvents streams changes to one client.
 //
 // Every event is filtered by the connection's category access *before* it is
 // buffered (ADR-27): a job-progress message naming an album from a hidden
 // category is a leak, and filtering at render time would already have put it in
 // a buffer that something else might log.
-func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request, params gen.StreamEventsParams) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
 		writeError(w, s.logger, err)
@@ -55,7 +56,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	topics, err := parseTopics(r.URL.Query().Get("topics"))
+	topics, err := topicsFrom(params.Topics)
 	if err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
 		return
@@ -266,16 +267,21 @@ func (e *eventStream) comment(text string) bool {
 // parseTopics validates the requested topics. An unknown one is an error
 // rather than a filter that matches nothing, which would look like a working
 // stream that never delivers.
-func parseTopics(raw string) ([]events.Topic, error) {
-	if strings.TrimSpace(raw) == "" {
+// topicsFrom converts the generated parameter into domain topics.
+//
+// The generated type constrains the *shape*; Valid() still decides membership,
+// because the spec's enum and events.Topic are two lists that could drift and
+// only one of them is the one the event bus actually publishes on.
+func topicsFrom(requested *[]gen.EventTopic) ([]events.Topic, error) {
+	if requested == nil || len(*requested) == 0 {
 		return nil, nil
 	}
 
-	var topics []events.Topic
-	for _, name := range strings.Split(raw, ",") {
-		topic := events.Topic(strings.TrimSpace(name))
+	topics := make([]events.Topic, 0, len(*requested))
+	for _, name := range *requested {
+		topic := events.Topic(strings.TrimSpace(string(name)))
 		if !topic.Valid() {
-			return nil, fmt.Errorf("unknown topic %q", name)
+			return nil, fmt.Errorf("unknown topic %q", string(name))
 		}
 		topics = append(topics, topic)
 	}

@@ -189,6 +189,18 @@ paths:
         replay is best-effort over a bounded ring, and a client too far behind
         receives a `resync` event rather than a silently partial history.
       parameters:
+        - name: topics
+          in: query
+          description: >-
+            Comma-separated subset of topics. Absent means every topic the caller
+            may see. An unrecognised name is rejected rather than ignored, so a
+            typo is not a silently empty stream.
+          required: false
+          schema:
+            type: array
+            items: { $ref: "#/components/schemas/EventTopic" }
+          style: form
+          explode: false
         - name: Last-Event-ID
           in: header
           required: false
@@ -324,6 +336,10 @@ components:
     MediaType:
       type: string
       enum: [music, tv, movie, audiobook, book, adult, comic, rom]
+
+    EventTopic:
+      type: string
+      enum: [job, acquisition, library, notification, pressure]
 
     JobState:
       type: string
