@@ -14,8 +14,8 @@ func TestSanitiseComponent(t *testing.T) {
 		want      string
 	}{
 		{"leaves an ordinary name alone", "Kata in Mifed", "Kata in Mifed"},
-		{"replaces a separator rather than dropping it", "XT/QK", "XT-QK"},
-		{"replaces a backslash too", `XT\QK`, "XT-QK"},
+		{"replaces a separator rather than dropping it", "XT/QK", "XT_QK"},
+		{"replaces a backslash too", `XT\QK`, "XT_QK"},
 		{"drops control characters", "Track\x01Two\x7f", "TrackTwo"},
 		{"drops a null byte", "evil\x00name", "evilname"},
 		{"keeps leading dots", "...And Justice for All", "...And Justice for All"},
@@ -24,7 +24,7 @@ func TestSanitiseComponent(t *testing.T) {
 		{"strips leading spaces", "   Album", "Album"},
 		{"rejects the current directory", ".", ""},
 		{"rejects the parent directory", "..", ""},
-		{"neutralises a traversal component", "../..", "..-"},
+		{"neutralises a traversal component", "../..", ".._"},
 		{"rejects an all-dots name", "...", ""},
 		{"rejects an empty name", "", ""},
 		{"rejects whitespace only", "   ", ""},

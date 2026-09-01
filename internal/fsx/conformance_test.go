@@ -377,7 +377,7 @@ func conformSafeJoinContained(t *testing.T, fsys fsx.FS, root string) {
 	if !fsx.Within(root, joined) {
 		t.Errorf("SafeJoin = %q, which is not inside %q", joined, root)
 	}
-	if !strings.Contains(joined, "XT-QK") {
+	if !strings.Contains(joined, "XT_QK") {
 		t.Errorf("SafeJoin = %q, want the separator in %q replaced rather than dropped", joined, "XT/QK")
 	}
 }
