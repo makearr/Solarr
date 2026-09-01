@@ -8,10 +8,8 @@ git config core.hooksPath .githooks
 
 | Hook | Does |
 |------|------|
-| `pre-commit` | Bumps the patch number in `VERSION` and stages it |
+| `pre-commit` | Nothing currently — commits do not change the version |
 
-`VERSION` follows `0.0.x`. Only the patch number moves automatically; major and minor are
-changed by hand.
-
-To freeze the version — during design work, or a series of commits that should share one
-number — create `.version-hold` in the repo root. It is gitignored. Delete it to resume.
+**Committing does not bump the version.** The build number advances only on a successful
+`make image`, and milestones are advanced by hand with `make milestone`. See
+`documentation/versioning.md`.

@@ -15,7 +15,14 @@ RUN_NODE    := docker run --rm -u $(UID):$(GID) $(MOUNT)/web -w /src/web \
                  -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
 
 .PHONY: help verify build test race bench lint vet fmt fmt-check sqlc sqlc-check \
-        api web web-dev image clean-cache
+        api web web-dev image milestone version clean-cache
+
+VERSION     := $(shell tr -d '[:space:]' < VERSION 2>/dev/null || echo 0.0.0)
+COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILD_DATE  := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS     := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)
+IMAGE       ?= ghcr.io/makearr/medianexus
+PLATFORMS   ?= linux/amd64,linux/arm64
 
 help:  ## List targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -24,7 +31,7 @@ help:  ## List targets
 verify: fmt-check vet lint test sqlc-check  ## Full check, as CI runs it
 
 build:      ## Build the binary (CGO_ENABLED=0, per ADR-30)
-	$(RUN_GO) go build -trimpath -o /src/medianexus ./cmd/medianexus
+	$(RUN_GO) go build -trimpath -ldflags "$(LDFLAGS)" -o /src/medianexus ./cmd/medianexus
 
 test:       ## Unit tests
 	$(RUN_GO) go test -count=1 ./...
@@ -67,8 +74,26 @@ web-dev:    ## Vite dev server on :5173, proxying the API
 	docker run --rm -it -u $(UID):$(GID) $(MOUNT)/web -w /src/web -p 5173:5173 \
 	  -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE) npm run dev
 
-image:      ## Build the container image
-	docker build -t medianexus:$$(cat VERSION) .
+## ---- versioning: builds advance BUILD, milestones advance MINOR ----
+## Full scheme: documentation/versioning.md
+version:    ## Print the current version
+	@echo $(VERSION)
+
+image:      ## Multi-arch build; advances the build number ONLY on success (NOBUMP=1 to skip)
+	@test -f Dockerfile || { echo "no Dockerfile yet"; exit 1; }
+	docker buildx build --platform $(PLATFORMS) \
+	  --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) \
+	  --build-arg BUILD_DATE=$(BUILD_DATE) \
+	  -t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
+	@if [ -z "$(NOBUMP)" ]; then \
+	  awk -F. '{printf "%s.%s.%d\n", $$1, $$2, $$3+1}' VERSION > VERSION.tmp && mv VERSION.tmp VERSION; \
+	  echo "build $(VERSION) -> $$(cat VERSION)"; \
+	else echo "version held at $(VERSION)"; fi
+
+milestone:  ## Advance to the next milestone: MINOR+1, BUILD reset to 0
+	@awk -F. '{printf "%s.%d.0\n", $$1, $$2+1}' VERSION > VERSION.tmp && mv VERSION.tmp VERSION
+	@echo "milestone: $(VERSION) -> $$(cat VERSION)"
+	@echo "tag it:  git tag v$$(cat VERSION) && git push origin v$$(cat VERSION)"
 
 clean-cache:
 	-docker volume rm medianexus-gomod medianexus-gobuild medianexus-npm
