@@ -52,6 +52,11 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
         -X main.sourceURL=${SOURCE_URL}" \
       -o /out/medianexus ./cmd/medianexus
 
+# An empty directory to copy into the final image with the right ownership. It
+# is made here because this stage runs natively on the builder; a RUN in the
+# final stage would execute a foreign-architecture binary under emulation.
+RUN mkdir -p /out/config
+
 # Alpine rather than distroless: a self-hosted deployment gets debugged on the
 # machine it runs on, and a shell is worth the few megabytes. It also runs under
 # any --user, which is how a NAS matches the uid that owns its volumes.
@@ -74,6 +79,14 @@ COPY --from=build /out/medianexus /usr/local/bin/medianexus
 
 # One volume holds config, databases, backups and cache, so a default
 # deployment mounts a single path (architecture section 20.2).
+#
+# Copied with ownership rather than left to VOLUME to create implicitly. An
+# implicitly created mount point belongs to root, and this image runs as 65532,
+# so `docker run` with no volume could not write its own config.yml on first
+# start -- the image failed out of the box, which is exactly the path a new user
+# takes first. Docker seeds an anonymous volume from the image, so the volume
+# inherits this ownership too.
+COPY --from=build --chown=65532:65532 /out/config /config
 VOLUME ["/config"]
 EXPOSE 8080
 
