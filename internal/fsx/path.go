@@ -10,10 +10,10 @@ import (
 // maxComponentBytes is the ext4/XFS/ZFS limit for one path component.
 const maxComponentBytes = 255
 
-// separatorReplacement keeps a name readable when it contains a path separator.
-// "XT/QK" becomes "XT-QK" rather than "XTQK", which is what every media library
-// on disk already looks like.
-const separatorReplacement = '-'
+// separatorReplacement keeps a name readable when it contains a path separator,
+// and makes the substitution visible rather than silently merging words:
+// "XT/QK" becomes "XT_QK", not "XTQK".
+const separatorReplacement = '_'
 
 // reservedNames are illegal as filenames on Windows whatever their extension.
 // The library is stored on Linux but read over SMB by Jellyfin, Kodi and
@@ -27,7 +27,7 @@ var reservedNames = map[string]bool{
 }
 
 // SanitiseComponent makes one path component safe to place beneath a root:
-// separators become '-', control characters are dropped, trailing dots and
+// separators become '_', control characters are dropped, trailing dots and
 // spaces are removed, Windows reserved names gain a trailing underscore, and
 // the result is capped at 255 bytes without splitting a rune. "." and ".."
 // sanitise to the empty string, which SafeJoin rejects.
