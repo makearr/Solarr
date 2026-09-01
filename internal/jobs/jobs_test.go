@@ -146,7 +146,13 @@ func TestEnqueue_EmptyActionKeyDoesNotDeduplicate(t *testing.T) {
 
 func claimOne(t *testing.T, queue *jobs.Queue, pool jobs.Pool, owner string) jobs.Job {
 	t.Helper()
-	claimed, err := queue.Claim(t.Context(), pool, owner, 1, time.Minute)
+	return claimOneWithTTL(t, queue, pool, owner, time.Minute)
+}
+
+func claimOneWithTTL(t *testing.T, queue *jobs.Queue, pool jobs.Pool, owner string,
+	leaseTTL time.Duration) jobs.Job {
+	t.Helper()
+	claimed, err := queue.Claim(t.Context(), pool, owner, 1, leaseTTL)
 	if err != nil {
 		t.Fatalf("Claim: %v", err)
 	}

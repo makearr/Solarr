@@ -82,8 +82,9 @@ WHERE id = ? AND lease_owner = ?;
 
 -- name: CancelJob :execrows
 UPDATE job
-SET state = 'CANCELLED', lease_owner = NULL, lease_expires_at = NULL, updated_at = ?
-WHERE id = ?
+SET state = 'CANCELLED', lease_owner = NULL, lease_expires_at = NULL,
+    last_error = sqlc.arg(reason), updated_at = sqlc.arg(now)
+WHERE id = sqlc.arg(id)
   AND state IN ('PENDING', 'PENDING_RETRY', 'LEASED', 'RUNNING');
 
 -- The reaper returns abandoned work to the queue. A crashed process therefore
