@@ -2,18 +2,15 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
+import { Jobs } from "./Jobs";
 import { Setup } from "./Setup";
 import { ThemeToggle } from "./ThemeToggle";
 
-// The shell is deliberately thin. It proves the three things this stage is
-// about -- the bundle is served, the generated client reaches the API, and the
-// theme applies -- and nothing more. The category sidebar and the list views
-// arrive with useLibraryList(), which is built before either view exists.
 export function App() {
   // Skipping is remembered for this tab only. The wizard is a convenience, not
-  // a gate, and persisting "I skipped it" server-side would need a setting that
-  // exists to record an absence -- while the status endpoint already says what
-  // is outstanding, truthfully, on every load.
+  // a gate, and persisting "I skipped it" would need a setting that exists to
+  // record an absence -- while the status endpoint already says what is
+  // outstanding, truthfully, on every load.
   const [skipped, setSkipped] = useState(false);
 
   const setup = useQuery({
@@ -36,7 +33,7 @@ export function App() {
 
   // Every hook above runs unconditionally. Returning the wizard before the
   // second useQuery would call fewer hooks on some renders than on others,
-  // which React detects as "rendered fewer hooks than expected" -- so the
+  // which React reports as "rendered fewer hooks than expected" -- so the
   // branch happens here, after the hooks, not among them.
   const outstanding =
     setup.data && (setup.data.needs_administrator || !setup.data.has_root_folder);
@@ -46,48 +43,37 @@ export function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b border-border-subtle bg-surface px-4 py-3">
+      <header className="flex shrink-0 items-center justify-between border-b border-border-subtle
+                         bg-surface px-4 py-3">
         <h1 className="text-sm font-semibold tracking-tight">MediaNexus</h1>
         <ThemeToggle />
       </header>
 
-      <main className="flex-1 overflow-auto p-6">
-        <section className="mx-auto max-w-2xl space-y-4">
-          <h2 className="text-lg font-medium">The shell is running</h2>
-          <p className="text-sm text-ink-muted">
-            The library views are not built yet. This page exists to prove the bundle is
-            served from the binary and that the generated API client reaches the server.
-          </p>
-
-          <dl className="rounded-lg border border-border-subtle bg-surface p-4 text-sm">
-            {about.isPending && <p className="text-ink-muted">Asking the server who it is…</p>}
-            {about.isError && (
-              <p className="text-danger">
-                Could not reach the API. In development, is the server running on :8080?
-              </p>
-            )}
-            {about.data && (
-              <div className="grid grid-cols-[8rem_1fr] gap-y-2">
-                <dt className="text-ink-muted">Version</dt>
-                <dd className="font-mono">{about.data.version}</dd>
-                <dt className="text-ink-muted">Commit</dt>
-                <dd className="font-mono">{about.data.commit}</dd>
-                <dt className="text-ink-muted">Licence</dt>
-                <dd>{about.data.license}</dd>
-                <dt className="text-ink-muted">Source</dt>
-                <dd>
-                  <a
-                    className="text-accent underline underline-offset-2"
-                    href={about.data.source_url}
-                  >
-                    {about.data.source_url}
-                  </a>
-                </dd>
-              </div>
-            )}
-          </dl>
-        </section>
+      <main className="min-h-0 flex-1">
+        <Jobs />
       </main>
+
+      {/* The source offer stays reachable from the interface itself, which is
+          what AGPL section 13 requires of a program used over a network. */}
+      <footer className="flex shrink-0 items-center gap-3 border-t border-border-subtle
+                         bg-surface px-4 py-1.5 text-xs text-ink-muted">
+        {about.data ? (
+          <>
+            <span className="font-mono">
+              {about.data.version} · {about.data.commit}
+            </span>
+            <span>{about.data.license}</span>
+            <a
+              className="ml-auto text-accent underline underline-offset-2"
+              href={about.data.source_url}
+            >
+              Source
+            </a>
+          </>
+        ) : (
+          <span>Connecting…</span>
+        )}
+      </footer>
     </div>
   );
 }
