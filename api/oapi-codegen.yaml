@@ -1,0 +1,12 @@
+# Generated output is committed and never hand-edited (ADR-31). A needed change
+# is made to openapi.yaml and regenerated; CI fails if the two disagree.
+package: gen
+output: internal/apiserver/gen/api.gen.go
+generate:
+  models: true
+  chi-server: true
+  strict-server: true
+output-options:
+  # The spec describes only the endpoints that exist, so there is nothing to
+  # prune and pruning would hide a mistake rather than fix one.
+  skip-prune: true

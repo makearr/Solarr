@@ -76,7 +76,7 @@ func loadOrCreateConfig(fsys fsx.FS, path string, out io.Writer) (config.Config,
 	if _, writeErr := fmt.Fprintf(out, "no config.yml at %s; writing the defaults\n", path); writeErr != nil {
 		return config.Config{}, writeErr
 	}
-	return config.Create(fsys, path, config.GenerateKey)
+	return config.Create(fsys, path, config.GenerateKey, config.OSEnv())
 }
 
 func newLogger(loaded config.Config) *slog.Logger {

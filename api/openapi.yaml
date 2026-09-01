@@ -1,0 +1,375 @@
+openapi: 3.0.3
+
+# This document describes the API that EXISTS, not the one planned. Architecture
+# section 13.2 lists the endpoints the finished product will carry; specifying
+# them before they are built would generate a client full of calls that return
+# 404, and the generated output is committed, so the drift would be permanent.
+# Each stage adds its own endpoints here as it lands.
+# Deliberately 3.0.3, not 3.1: oapi-codegen does not support 3.1 and drops what
+# it cannot read rather than failing, so a 3.1 spec generates a Go client that is
+# quietly missing constraints. Revisit when oapi-codegen issue 373 closes.
+info:
+  title: MediaNexus
+  description: Media management, discovery and acquisition.
+  version: 0.0.1
+  license:
+    name: AGPL-3.0-or-later
+    url: https://www.gnu.org/licenses/agpl-3.0.html
+
+servers:
+  - url: /api/v1
+
+tags:
+  - name: system
+    description: Liveness, readiness and build identity. Unauthenticated.
+  - name: auth
+    description: Sessions.
+  - name: jobs
+    description: The job queue.
+  - name: events
+    description: The server-sent event stream.
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [system]
+      summary: Liveness.
+      description: >-
+        Reports that the process is working. It must not depend on plugins or
+        external services: a dead indexer answering here would restart the
+        container.
+      security: []
+      responses:
+        "200":
+          description: Alive.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+        "503": { $ref: "#/components/responses/Problem" }
+
+  /ready:
+    get:
+      operationId: getReady
+      tags: [system]
+      summary: Readiness.
+      description: >-
+        False during startup and shutdown, so an orchestrator stops sending work
+        before the process stops accepting it.
+      security: []
+      responses:
+        "200":
+          description: Ready to serve.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadyStatus" }
+        "503": { $ref: "#/components/responses/Problem" }
+
+  /about:
+    get:
+      operationId: getAbout
+      tags: [system]
+      summary: Build identity and the source offer.
+      description: >-
+        Unauthenticated by obligation, not by convenience. AGPL section 13
+        requires the running program to offer its Corresponding Source to all
+        users interacting with it remotely, which is not limited to those who
+        can log in.
+      security: []
+      responses:
+        "200":
+          description: Build information.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BuildInfo" }
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Exchange a username and password for a session cookie.
+      description: >-
+        Every failure returns the same 401. Distinguishing an unknown user from
+        a wrong password turns the login form into an account enumerator.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: Signed in. The session cookie is set on this response.
+          headers:
+            Set-Cookie:
+              description: The `medianexus_session` cookie.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Identity" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403":
+          $ref: "#/components/responses/Problem"
+          description: This instance is configured for API keys only.
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Clear the session cookie.
+      security: []
+      responses:
+        "200":
+          description: Signed out.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LogoutStatus" }
+
+  /me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Who the caller is and what they may see.
+      description: >-
+        The endpoint a client uses to discover its own permissions, rather than
+        inferring them from requests that fail.
+      responses:
+        "200":
+          description: The caller's identity and visible categories.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /jobs:
+    get:
+      operationId: listJobs
+      tags: [jobs]
+      summary: A page of jobs the caller may see.
+      parameters:
+        - name: cursor
+          in: query
+          description: >-
+            From `next_cursor` of the previous page. Absent on the first page.
+            There is no offset parameter and there will not be one.
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: state
+          in: query
+          description: An unrecognised state is rejected rather than returning nothing.
+          schema: { $ref: "#/components/schemas/JobState" }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobPage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "503":
+          $ref: "#/components/responses/Problem"
+          description: The job queue is not running.
+
+  /events:
+    get:
+      operationId: streamEvents
+      tags: [events]
+      summary: Server-sent events, filtered by category access.
+      description: >-
+        Events are lossy and for notification only; anything that must happen is
+        a job. Progress is coalesced on a 250ms tick. Resume with `Last-Event-ID`;
+        replay is best-effort over a bounded ring, and a client too far behind
+        receives a `resync` event rather than a silently partial history.
+      parameters:
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: The stream. It does not end until the client disconnects.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Problem" }
+
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: medianexus_session
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+
+  responses:
+    Problem:
+      description: An RFC 7807 problem.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [ok] }
+
+    ReadyStatus:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [ready] }
+
+    LogoutStatus:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [signed-out] }
+
+    Problem:
+      type: object
+      description: RFC 7807. Every error uses this, including 404 and 405.
+      required: [type, title, status]
+      properties:
+        type:
+          description: >-
+            A stable slug, not a resolvable URL, so a client can branch on it
+            without following a link. Renaming one is a breaking change.
+          $ref: "#/components/schemas/ProblemType"
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+
+    ProblemType:
+      type: string
+      enum:
+        - not-found
+        - forbidden
+        - conflict
+        - bad-request
+        - method-not-allowed
+        - unavailable
+        - internal
+        - unauthorized
+
+    BuildInfo:
+      type: object
+      required: [version, commit, build_date, source_url, license]
+      properties:
+        version: { type: string, example: "0.2.17" }
+        commit:
+          type: string
+          description: >-
+            Reported as `unknown` rather than a plausible-looking wrong value
+            when it could not be determined; the source link depends on it.
+        build_date: { type: string, format: date-time }
+        source_url:
+          type: string
+          format: uri
+          description: >-
+            The Corresponding Source for *this* build. A modified build must not
+            point at upstream.
+        license: { type: string, example: "AGPL-3.0-or-later" }
+
+    Identity:
+      type: object
+      required: [user_id, username, role]
+      properties:
+        user_id: { type: integer, format: int64 }
+        username: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+
+    Role:
+      type: string
+      enum: [admin, operator, readonly]
+
+    Permission:
+      type: string
+      description: >-
+        `none` is never returned: a category a caller cannot read is absent
+        entirely, and reaching it directly is a 404 rather than a 403.
+      enum: [none, read, request, manage]
+
+    Me:
+      type: object
+      required: [user_id, role, categories]
+      properties:
+        user_id: { type: integer, format: int64 }
+        role: { $ref: "#/components/schemas/Role" }
+        categories:
+          type: array
+          items: { $ref: "#/components/schemas/Category" }
+
+    Category:
+      type: object
+      required: [id, media_type, name, permission]
+      properties:
+        id: { type: integer, format: int64 }
+        media_type: { $ref: "#/components/schemas/MediaType" }
+        name: { type: string, example: "anime" }
+        permission: { $ref: "#/components/schemas/Permission" }
+
+    MediaType:
+      type: string
+      enum: [music, tv, movie, audiobook, book, adult, comic, rom]
+
+    JobState:
+      type: string
+      enum: [PENDING, PENDING_RETRY, LEASED, RUNNING, SUCCEEDED, FAILED, CANCELLED]
+
+    JobPool:
+      type: string
+      enum: [search, acquire, import, metadata, maintenance]
+
+    Job:
+      type: object
+      description: >-
+        The job's payload is deliberately absent. It can carry paths and provider
+        identifiers, and a listing is not the place to hand that out.
+      required: [id, type, pool, state, priority, attempts, max_attempts, run_after, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        type: { type: string, example: "library.scan" }
+        pool: { $ref: "#/components/schemas/JobPool" }
+        state: { $ref: "#/components/schemas/JobState" }
+        priority: { type: integer }
+        attempts: { type: integer }
+        max_attempts: { type: integer }
+        category_id: { type: integer, format: int64 }
+        correlation_id: { type: string }
+        last_error: { type: string }
+        run_after: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    JobPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Job" }
+        next_cursor:
+          type: string
+          description: >-
+            Empty on the last page, which is how a client knows to stop without
+            one more request that returns nothing.
+
+# Authenticated by default. The endpoints a caller reaches without credentials
+# override this with `security: []`, so adding an endpoint without thinking
+# about auth makes it secured rather than open.
+security:
+  - session: []
+  - apiKey: []

@@ -237,7 +237,7 @@ func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMethodNotAllowed(w http.ResponseWriter, r *http.Request) {
-	writeProblem(w, s.logger, http.StatusMethodNotAllowed, TypeBadRequest,
+	writeProblem(w, s.logger, http.StatusMethodNotAllowed, TypeMethodNotAllowed,
 		"Method not allowed", fmt.Sprintf("%s is not allowed on %s", r.Method, r.URL.Path))
 }
 
