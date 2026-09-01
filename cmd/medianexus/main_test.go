@@ -2,13 +2,14 @@ package main
 
 import (
 	"errors"
+	"io"
 	"strings"
 	"testing"
 )
 
 func TestRun_VersionReportsTheInjectedBuildMetadata(t *testing.T) {
 	var out strings.Builder
-	if err := run([]string{"version"}, &out); err != nil {
+	if err := run([]string{"version"}, &out, io.Discard); err != nil {
 		t.Fatalf("run(version) = %v", err)
 	}
 
@@ -21,7 +22,7 @@ func TestRun_VersionReportsTheInjectedBuildMetadata(t *testing.T) {
 
 func TestRun_UnknownCommandIsAnError(t *testing.T) {
 	var out strings.Builder
-	err := run([]string{"nonsense"}, &out)
+	err := run([]string{"nonsense"}, &out, io.Discard)
 	if err == nil {
 		t.Fatal("run(nonsense) = nil, want an error")
 	}
@@ -32,7 +33,7 @@ func TestRun_UnknownCommandIsAnError(t *testing.T) {
 
 func TestRun_DefaultsToServe(t *testing.T) {
 	var out strings.Builder
-	if err := run(nil, &out); !errors.Is(err, errNotImplemented) {
+	if err := run(nil, &out, io.Discard); !errors.Is(err, errNotImplemented) {
 		t.Errorf("run(nil) = %v, want errNotImplemented", err)
 	}
 }

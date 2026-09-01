@@ -23,7 +23,7 @@ import (
 // A package missing from this table fails the test — that is intentional. New
 // packages state their dependencies here first.
 var allowedInternalImports = map[string][]string{
-	"cmd/medianexus":  {},
+	"cmd/medianexus":  {"internal/config", "internal/fsx"},
 	"internal/clock":  {},
 	"internal/config": {"internal/fsx"},
 	"internal/fsx":    {"internal/clock"},
