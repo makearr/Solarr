@@ -16,6 +16,13 @@ NODE_IMAGE  ?= node:22-alpine
 SQLC_IMAGE  ?= sqlc/sqlc:latest
 LINT_IMAGE  ?= golangci/golangci-lint:latest
 
+# Generator versions are pinned, not floated: generated output is committed, so
+# a generator that changes its formatting turns every unrelated build red on the
+# CI staleness check (ADR-31).
+OAPI_VERSION        ?= v2.4.1
+OPENAPI_TS_VERSION  ?= 7.4.4
+OAPI_CODEGEN        := github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_VERSION)
+
 UID         := $(shell id -u)
 GID         := $(shell id -g)
 MOUNT       := -v $(CURDIR):/src -w /src
@@ -25,6 +32,10 @@ CACHE       := -v medianexus-gopath:/go/pkg -v medianexus-gobuild:/.cache/go-bui
 GOENV       := -e GOCACHE=/.cache/go-build -e CGO_ENABLED=0 -e HOME=/tmp
 RUN_GO      := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) $(CACHE) $(GOENV) $(GO_IMAGE)
 RUN_NODE    := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT)/web -w /src/web \
+                 -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
+# The spec lives at the repository root, not under web/, so generation needs a
+# runner whose working directory is the root.
+RUN_NODE_ROOT := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) \
                  -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
 
 .PHONY: help verify build test race bench lint vet fmt fmt-check sqlc sqlc-check \
@@ -111,7 +122,11 @@ sqlc-check: ## Fail if generated SQL code is stale
 
 api:        ## Regenerate Go server + TS client from api/openapi.yaml
 	@test -f api/openapi.yaml || { echo "api: no spec yet, skipping"; exit 0; }
-	@echo "TODO: wire oapi-codegen and openapi-typescript"
+	@mkdir -p internal/apiserver/gen web/src/api
+	$(RUN_GO) go run $(OAPI_CODEGEN) -config api/oapi-codegen.yaml api/openapi.yaml
+	$(RUN_NODE_ROOT) npx --yes openapi-typescript@$(OPENAPI_TS_VERSION) \
+	  api/openapi.yaml -o web/src/api/schema.d.ts
+	$(RUN_GO) gofmt -w internal/apiserver/gen
 
 ## ---- web ----
 web:        ## Production build, embedded via embed.FS

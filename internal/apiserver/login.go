@@ -106,7 +106,7 @@ func mustHash(value string) string {
 // the encryption key is rotated, which internal/auth documents.
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, s.sessionCookie("", -1, r))
-	writeJSON(w, s.logger, http.StatusOK, map[string]string{"status": "signed out"})
+	writeJSON(w, s.logger, http.StatusOK, map[string]string{"status": "signed-out"})
 }
 
 // sessionCookie builds the cookie consistently for setting and clearing.
