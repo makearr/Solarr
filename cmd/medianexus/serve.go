@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/netip"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/makearr/MediaNexus/internal/apiserver"
+	"github.com/makearr/MediaNexus/internal/auth"
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/config"
 	"github.com/makearr/MediaNexus/internal/fsx"
@@ -177,6 +179,11 @@ func (p *process) startJobs(_ context.Context) error {
 }
 
 func (p *process) startServer(ctx context.Context) error {
+	authConfig, err := p.authConfig()
+	if err != nil {
+		return err
+	}
+
 	server, err := apiserver.New(apiserver.Config{
 		Bind:    p.config.Server.Bind,
 		Port:    p.config.Server.Port,
@@ -186,6 +193,7 @@ func (p *process) startServer(ctx context.Context) error {
 			SourceURL: sourceURL, License: license,
 		},
 		Checker: health.New(p.settings, p.jobs),
+		Auth:    authConfig,
 		Logger:  p.logger,
 	})
 	if err != nil {
@@ -253,4 +261,33 @@ func hostname() string {
 		return "unknown-host"
 	}
 	return name
+}
+
+// authConfig turns the validated configuration into the server's authentication
+// wiring. The CIDRs parsed here were already validated at startup, so a failure
+// would be a bug rather than bad input.
+func (p *process) authConfig() (apiserver.AuthConfig, error) {
+	key, err := config.DecodeKey(p.config.Security.EncryptionKey)
+	if err != nil {
+		return apiserver.AuthConfig{}, err
+	}
+
+	networks := make([]netip.Prefix, 0, len(p.config.Security.TrustedProxyCIDRs))
+	for _, raw := range p.config.Security.TrustedProxyCIDRs {
+		network, err := netip.ParsePrefix(raw)
+		if err != nil {
+			return apiserver.AuthConfig{}, fmt.Errorf("security.trusted_proxy_cidrs: %q: %w", raw, err)
+		}
+		networks = append(networks, network)
+	}
+
+	wall := clock.NewSystem()
+	return apiserver.AuthConfig{
+		Mode:          apiserver.AuthMode(p.config.Security.AuthMode),
+		Sessions:      auth.NewSessions(key, wall, auth.DefaultSessionTTL),
+		Settings:      p.cache,
+		Clock:         wall,
+		ProxyHeader:   p.config.Security.TrustedProxyHeader,
+		ProxyNetworks: networks,
+	}, nil
 }

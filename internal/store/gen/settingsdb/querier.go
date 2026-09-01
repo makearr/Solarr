@@ -30,6 +30,7 @@ type Querier interface {
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetCategory(ctx context.Context, id int64) (Category, error)
 	GetRootFolder(ctx context.Context, id int64) (RootFolder, error)
+	GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetUserByAPIKeyHashRow, error)
 	// Queries live in SQL, not in Go string literals: reviewability is the point
 	// (coding-standards section 9). Columns are listed explicitly rather than with *, so
 	// adding one cannot silently change the shape of an existing result.

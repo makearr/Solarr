@@ -74,3 +74,8 @@ UPDATE api_key SET last_used_at = ? WHERE id = ?;
 
 -- name: DeleteAPIKey :exec
 DELETE FROM api_key WHERE id = ?;
+
+-- name: GetUserByAPIKeyHash :one
+SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.ui_tier, k.id AS key_id
+FROM api_key k JOIN app_user u ON u.id = k.user_id
+WHERE k.key_hash = ?;

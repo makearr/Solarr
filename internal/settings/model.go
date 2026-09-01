@@ -106,3 +106,14 @@ type CategoryRoot struct {
 	// AcceptsNew drains a root without unmounting it.
 	AcceptsNew bool
 }
+
+// APIKey is a non-interactive credential. Only its hash is stored, so a
+// settings.db backup cannot be replayed as credentials even by whoever holds
+// the encryption key.
+type APIKey struct {
+	ID         int64
+	UserID     int64
+	Name       string
+	CreatedAt  time.Time
+	LastUsedAt time.Time
+}

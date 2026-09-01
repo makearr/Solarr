@@ -52,6 +52,7 @@ a user offered the Corresponding Source should be able to see what the binary li
 | `github.com/goccy/go-yaml` | MIT | `config.yml` parsing. Go has no stdlib YAML, and ADR-44 needs a parser that reports positions. Chosen over the archived `gopkg.in/yaml.v3` |
 | `github.com/robfig/cron/v3` | MIT | Cron parsing for `backup.schedule`. The same parser validates at startup and schedules later, so a schedule accepted at boot cannot be rejected by the thing that runs it |
 | `github.com/go-chi/chi/v5` | MIT | HTTP routing. Everything stays an `http.Handler`, so the router owns no part of the code's shape (ADR-31) |
+| `golang.org/x/crypto` | BSD-3-Clause | argon2id password hashing (ADR-14). Not in the standard library, and hand-rolling a password hash is never the right call |
 
 `modernc.org/sqlite`'s transitive dependencies — `modernc.org/libc`, `modernc.org/memory`, `modernc.org/mathutil`,
 `github.com/remyoudompheng/bigfft`, `github.com/dustin/go-humanize`, `github.com/google/uuid`,
