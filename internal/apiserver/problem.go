@@ -36,6 +36,10 @@ const (
 	TypeUnavailable  = "unavailable"
 	TypeInternal     = "internal"
 	TypeUnauthorized = "unauthorized"
+	// A wrong verb is not a malformed request. Sharing the bad-request slug
+	// would make a client branching on it unable to tell "fix your cursor" from
+	// "use POST", which are different fixes.
+	TypeMethodNotAllowed = "method-not-allowed"
 )
 
 // writeProblem renders an error as RFC 7807.

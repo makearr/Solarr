@@ -208,3 +208,51 @@ func contains(haystack, needle string) bool {
 		return false
 	})()
 }
+
+// chi answers an unmatched route and a wrong method in plain text by default,
+// and section 13.1 says every error is problem+json with a stable slug --
+// "every" including the two a client reaches by mistake.
+//
+// The slugs are distinct on purpose. A client branching on the type must be
+// able to tell a malformed request from a wrong verb: the first is fixed by
+// correcting the body or a parameter, the second by using another method.
+// Sharing bad-request between them makes that impossible.
+func TestUnroutableRequestsAreProblemJSONWithDistinctSlugs(t *testing.T) {
+	server := newServer(t, fakeChecker{})
+
+	tests := []struct {
+		name       string
+		method     string
+		path       string
+		wantStatus int
+		wantType   string
+	}{
+		{"unknown path", http.MethodGet, "/api/v1/nope", http.StatusNotFound, "not-found"},
+		{"wrong method", http.MethodDelete, "/api/v1/health", http.StatusMethodNotAllowed, "method-not-allowed"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			server.Handler().ServeHTTP(recorder, httptest.NewRequest(test.method, test.path, nil))
+
+			if recorder.Code != test.wantStatus {
+				t.Errorf("status = %d, want %d", recorder.Code, test.wantStatus)
+			}
+			if got := recorder.Header().Get("Content-Type"); got != "application/problem+json" {
+				t.Errorf("Content-Type = %q, want application/problem+json", got)
+			}
+
+			var problem apiserver.Problem
+			if err := json.Unmarshal(recorder.Body.Bytes(), &problem); err != nil {
+				t.Fatalf("body is not JSON: %v (%s)", err, recorder.Body.String())
+			}
+			if problem.Type != test.wantType {
+				t.Errorf("type = %q, want %q", problem.Type, test.wantType)
+			}
+			if problem.Status != test.wantStatus {
+				t.Errorf("body status = %d, want %d", problem.Status, test.wantStatus)
+			}
+		})
+	}
+}
