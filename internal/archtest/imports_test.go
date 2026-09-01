@@ -23,12 +23,13 @@ import (
 // A package missing from this table fails the test — that is intentional. New
 // packages state their dependencies here first.
 var allowedInternalImports = map[string][]string{
-	"cmd/medianexus":  {"internal/config", "internal/fsx"},
-	"internal/clock":  {},
-	"internal/config": {"internal/fsx"},
-	"internal/fsx":    {"internal/clock"},
-	"internal/httpx":  {"internal/clock"},
-	"internal/store":  {"internal/clock", "internal/fsx"},
+	"cmd/medianexus":   {"internal/config", "internal/fsx"},
+	"internal/clock":   {},
+	"internal/config":  {"internal/fsx"},
+	"internal/fsx":     {"internal/clock"},
+	"internal/httpx":   {"internal/clock"},
+	"internal/store":   {"internal/clock", "internal/fsx"},
+	"internal/secrets": {},
 }
 
 // Plugins import internal/plugin and nothing else from core, which is what keeps
