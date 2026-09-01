@@ -16,6 +16,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/auth"
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/config"
+	"github.com/makearr/MediaNexus/internal/events"
 	"github.com/makearr/MediaNexus/internal/fsx"
 	"github.com/makearr/MediaNexus/internal/health"
 	"github.com/makearr/MediaNexus/internal/jobs"
@@ -32,6 +33,7 @@ type process struct {
 	jobs       *store.Store
 	queue      *jobs.Queue
 	cache      *settings.Cache
+	bus        *events.Bus
 	dispatcher *jobs.Dispatcher
 	server     *apiserver.Server
 }
@@ -154,6 +156,7 @@ func (p *process) storeConfig(name string) store.Config {
 
 func (p *process) startJobs(_ context.Context) error {
 	wall := clock.NewSystem()
+	p.bus = events.NewBus(wall)
 	registry := jobs.NewRegistry()
 	queue := jobs.NewQueue(p.jobs, wall, registry, nil)
 	p.queue = queue
@@ -197,6 +200,8 @@ func (p *process) startServer(ctx context.Context) error {
 		Checker: health.New(p.settings, p.jobs),
 		Auth:    authConfig,
 		Jobs:    p.queue,
+		Events:  p.bus,
+		Clock:   clock.NewSystem(),
 		Logger:  p.logger,
 	})
 	if err != nil {

@@ -26,17 +26,18 @@ import (
 var allowedInternalImports = map[string][]string{
 	"cmd/medianexus": {
 		"internal/apiserver", "internal/auth", "internal/clock", "internal/config",
-		"internal/fsx", "internal/health", "internal/jobs", "internal/settings",
-		"internal/store", "migrations",
+		"internal/events", "internal/fsx", "internal/health", "internal/jobs",
+		"internal/settings", "internal/store", "migrations",
 	},
 	"internal/auth":  {"internal/clock", "internal/secrets"},
 	"internal/authz": {"internal/settings"},
 	"internal/apiserver": {
-		"internal/auth", "internal/authz", "internal/clock", "internal/jobs",
-		"internal/paginate", "internal/settings",
+		"internal/auth", "internal/authz", "internal/clock", "internal/events",
+		"internal/jobs", "internal/paginate", "internal/settings",
 	},
 	"internal/clock":  {},
 	"internal/config": {"internal/fsx"},
+	"internal/events": {"internal/clock"},
 	"internal/fsx":    {"internal/clock"},
 	"internal/httpx":  {"internal/clock"},
 	"internal/health": {"internal/store"},

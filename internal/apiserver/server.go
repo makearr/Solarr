@@ -13,6 +13,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/makearr/MediaNexus/internal/clock"
+	"github.com/makearr/MediaNexus/internal/events"
 	"github.com/makearr/MediaNexus/internal/jobs"
 )
 
@@ -42,7 +44,12 @@ type Config struct {
 	Checker Checker
 	Auth    AuthConfig
 	// Jobs is optional: a CLI command that only serves health has no queue.
-	Jobs   *jobs.Queue
+	Jobs *jobs.Queue
+	// Events is optional for the same reason.
+	Events *events.Bus
+	// Clock drives the SSE flush tick. Injected so a test can advance it
+	// rather than sleeping (ADR-17).
+	Clock  clock.Clock
 	Logger *slog.Logger
 }
 
@@ -56,6 +63,8 @@ type Server struct {
 	checker Checker
 	auth    AuthConfig
 	jobs    *jobs.Queue
+	events  *events.Bus
+	wall    clock.Clock
 	address string
 
 	// ready gates /ready independently of the checks themselves, so the answer
@@ -71,6 +80,9 @@ func New(config Config) (*Server, error) {
 	if config.Logger == nil {
 		config.Logger = slog.Default()
 	}
+	if config.Clock == nil {
+		config.Clock = clock.NewSystem()
+	}
 	base := strings.TrimSuffix(config.BaseURL, "/")
 
 	server := &Server{
@@ -79,6 +91,8 @@ func New(config Config) (*Server, error) {
 		checker: config.Checker,
 		auth:    config.Auth,
 		jobs:    config.Jobs,
+		events:  config.Events,
+		wall:    config.Clock,
 		address: net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -105,6 +119,7 @@ func New(config Config) (*Server, error) {
 			secured.Use(server.authenticate)
 			secured.Get("/me", server.handleMe)
 			secured.Get("/jobs", server.handleListJobs)
+			secured.Get("/events", server.handleEvents)
 		})
 	})
 
@@ -206,6 +221,16 @@ func (r *statusRecorder) WriteHeader(status int) {
 	r.ResponseWriter.WriteHeader(status)
 }
 
+// Unwrap exposes the writer underneath, so http.ResponseController can reach
+// Flush and SetWriteDeadline through this wrapper.
+//
+// Without it, wrapping the writer to record a status code silently removes
+// every optional interface the real one implements -- embedding
+// http.ResponseWriter promotes only that interface's methods, and Flush is not
+// one of them. The symptom is that streaming stops working, with nothing in the
+// logs and no obvious connection to a middleware that only counts statuses.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
 func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
 	writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound,
 		"Not found", fmt.Sprintf("no route for %s %s", r.Method, r.URL.Path))
@@ -215,3 +240,7 @@ func (s *Server) handleMethodNotAllowed(w http.ResponseWriter, r *http.Request) 
 	writeProblem(w, s.logger, http.StatusMethodNotAllowed, TypeBadRequest,
 		"Method not allowed", fmt.Sprintf("%s is not allowed on %s", r.Method, r.URL.Path))
 }
+
+// clock returns the SSE flush tick. A separate method so the ticker's lifetime
+// belongs to the connection rather than the server.
+func (s *Server) newFlushTicker() clock.Ticker { return s.wall.NewTicker(FlushInterval) }
