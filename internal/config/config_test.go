@@ -324,3 +324,15 @@ func TestParse_SuggestsAcrossCommonTypoShapes(t *testing.T) {
 		})
 	}
 }
+
+func TestParse_AMalformedSecretLineIsNotEchoed(t *testing.T) {
+	// The parser's context snippet is exactly the line the user got wrong,
+	// which for an encryption key is the line that must not be echoed back.
+	_, err := config.Parse([]byte("version: 1\nsecurity:\n  encryption_key: [S3CR3T: bad\n"))
+	if err == nil {
+		t.Fatal("malformed YAML was accepted")
+	}
+	if strings.Contains(err.Error(), "S3CR3T") {
+		t.Errorf("the encryption key appeared in the error:\n%s", err)
+	}
+}
