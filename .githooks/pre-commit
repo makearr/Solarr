@@ -1,4 +1,29 @@
 #!/usr/bin/env bash
-# Commits do NOT change the version. The build number advances only on a
-# successful `make image` — see documentation/versioning.md.
+# Two jobs.
+#
+# 1. Commits do NOT change the version. The build number advances only on a
+#    successful `make image` -- see documentation/versioning.md.
+# 2. Refuse to commit local-only working documents. .gitignore already covers
+#    them, but `git add -f` walks straight past it and the history has had to be
+#    rewritten once already to remove one of these files. This is the backstop.
+set -euo pipefail
+
+# Patterns that must never reach the remote. Anchored at the repo root.
+readonly FORBIDDEN='^(private/|CLAUDE\.md$|config\.yml$|Makefile\.local$|.*\.local\.md$|.*\.db$)'
+
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+[ -z "$staged" ] && exit 0
+
+offenders="$(printf '%s\n' "$staged" | grep -E "$FORBIDDEN" || true)"
+
+if [ -n "$offenders" ]; then
+  echo "pre-commit: refusing to commit local-only files." >&2
+  echo >&2
+  printf '  %s\n' $offenders >&2
+  echo >&2
+  echo "These are gitignored and must never be published. If one was staged with" >&2
+  echo "'git add -f', unstage it:  git restore --staged <file>" >&2
+  exit 1
+fi
+
 exit 0
