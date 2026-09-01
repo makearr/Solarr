@@ -16,6 +16,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/apiserver"
 	"github.com/makearr/MediaNexus/internal/auth"
 	"github.com/makearr/MediaNexus/internal/clock"
+	"github.com/makearr/MediaNexus/internal/events"
 	"github.com/makearr/MediaNexus/internal/settings"
 	"github.com/makearr/MediaNexus/internal/store"
 	"github.com/makearr/MediaNexus/migrations"
@@ -24,6 +25,7 @@ import (
 type authFixture struct {
 	server    *apiserver.Server
 	cache     *settings.Cache
+	bus       *events.Bus
 	clock     *clock.Fake
 	admin     settings.User
 	housemate settings.User
@@ -87,9 +89,12 @@ func newAuthFixture(t *testing.T, mode apiserver.AuthMode, networks ...netip.Pre
 		t.Fatalf("SetCategoryAccess: %v", err)
 	}
 
+	bus := events.NewBus(fake)
 	server, err := apiserver.New(apiserver.Config{
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
 		Checker: fakeChecker{},
+		Events:  bus,
+		Clock:   fake,
 		Logger:  slog.New(slog.DiscardHandler),
 		Auth: apiserver.AuthConfig{
 			Mode:          mode,
@@ -104,7 +109,7 @@ func newAuthFixture(t *testing.T, mode apiserver.AuthMode, networks ...netip.Pre
 		t.Fatalf("New: %v", err)
 	}
 
-	return authFixture{server: server, cache: cache, clock: fake,
+	return authFixture{server: server, cache: cache, bus: bus, clock: fake,
 		admin: admin, housemate: housemate, music: music, adult: adult}
 }
 
