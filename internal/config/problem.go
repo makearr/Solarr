@@ -1,0 +1,166 @@
+package config
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+)
+
+// redacted replaces the value of any setting that could carry a secret.
+const redacted = "<redacted>"
+
+// secretPaths are settings whose values must never reach a log, an error or the
+// API (Invariant 61).
+var secretPaths = map[string]bool{
+	"security.encryption_key": true,
+}
+
+// secretWords catch a key that is not in the schema at all. An unknown key is
+// reported with its value, and "encryption_keyy" is both a typo and a secret —
+// exact-path matching cannot see that, so the name is inspected too. Redacting
+// a value that turns out to be harmless costs nothing; the reverse does not.
+var secretWords = []string{"key", "secret", "password", "passwd", "token", "credential"}
+
+// isSecretPath reports whether a value at this path must be redacted.
+func isSecretPath(path string) bool {
+	if secretPaths[path] {
+		return true
+	}
+	lowered := strings.ToLower(path)
+	for _, word := range secretWords {
+		if strings.Contains(lowered, word) {
+			return true
+		}
+	}
+	return false
+}
+
+// redact returns the value as it may be shown.
+func redact(path, value string) string {
+	if isSecretPath(path) {
+		return redacted
+	}
+	return value
+}
+
+// Problem is one thing wrong with the configuration: where it is, what was
+// found, and what was expected. It is structured rather than a formatted string
+// so `config check` can print it, the API can return it, and a UI can translate
+// it (§6 of the coding standards).
+type Problem struct {
+	// Path is dotted, as written in the file: "server.port".
+	Path string
+	// Value is what was found, redacted when Path names a secret.
+	Value string
+	// Expectation says what would have been accepted.
+	Expectation string
+	// Suggestion is the nearest valid key, for an unknown one.
+	Suggestion string
+}
+
+func (p Problem) String() string {
+	line := fmt.Sprintf("%-24s %-18s %s", p.Path, p.Value, p.Expectation)
+	if p.Suggestion != "" {
+		line += fmt.Sprintf(" — did you mean `%s`?", p.Suggestion)
+	}
+	return strings.TrimRight(line, " ")
+}
+
+// newProblem redacts as it constructs, so no caller can forget to.
+func newProblem(path, value, expectation string) Problem {
+	return Problem{Path: path, Value: redact(path, value), Expectation: expectation}
+}
+
+// Problems is every fault found in one document. Validation collects rather than
+// returns early, because fixing configuration one error per restart is the
+// experience ADR-44 exists to prevent (Invariant 60).
+type Problems []Problem
+
+// Error renders §14.1's report: every problem at once, with a closing line
+// making it unambiguous that nothing started.
+func (p Problems) Error() string {
+	if len(p) == 0 {
+		return "config: no problems"
+	}
+
+	sorted := make(Problems, len(p))
+	copy(sorted, p)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Path < sorted[j].Path })
+
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "config.yml: %s\n\n", pluralise(len(sorted), "error"))
+	for _, problem := range sorted {
+		fmt.Fprintf(&builder, "  %s\n", problem)
+	}
+	builder.WriteString("\nNothing has been started.")
+	return builder.String()
+}
+
+// OrNil returns nil when there is nothing wrong, so callers can `if err != nil`.
+func (p Problems) OrNil() error {
+	if len(p) == 0 {
+		return nil
+	}
+	return p
+}
+
+func pluralise(count int, noun string) string {
+	if count == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", count, noun)
+}
+
+// nearestKey returns the closest valid key to an unknown one, or "" when
+// nothing is close enough to be a useful guess.
+func nearestKey(unknown string, candidates []string) string {
+	// A third of the length, so a genuine typo finds its key while an unrelated
+	// word suggests nothing. A wrong guess is worse than none.
+	budget := max(len(unknown)/3, 1)
+
+	best, bestDistance := "", budget+1
+	for _, candidate := range candidates {
+		distance := editDistance(unknown, candidate)
+		if distance < bestDistance {
+			best, bestDistance = candidate, distance
+		}
+	}
+	if bestDistance > budget {
+		return ""
+	}
+	return best
+}
+
+// editDistance is Damerau-Levenshtein, not plain Levenshtein, because a
+// transposition is the commonest typo and costs two edits under the latter —
+// which puts "prot" out of suggesting range of "port" unless the budget is
+// loosened enough to start guessing wrongly.
+func editDistance(a, b string) int {
+	if a == b {
+		return 0
+	}
+
+	distance := make([][]int, len(a)+1)
+	for i := range distance {
+		distance[i] = make([]int, len(b)+1)
+		distance[i][0] = i
+	}
+	for j := range distance[0] {
+		distance[0][j] = j
+	}
+
+	for i := 1; i <= len(a); i++ {
+		for j := 1; j <= len(b); j++ {
+			substitution := distance[i-1][j-1]
+			if a[i-1] != b[j-1] {
+				substitution++
+			}
+			distance[i][j] = min(substitution, min(distance[i-1][j]+1, distance[i][j-1]+1))
+
+			if i > 1 && j > 1 && a[i-1] == b[j-2] && a[i-2] == b[j-1] {
+				distance[i][j] = min(distance[i][j], distance[i-2][j-2]+1)
+			}
+		}
+	}
+	return distance[len(a)][len(b)]
+}
