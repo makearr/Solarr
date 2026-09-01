@@ -1,3 +1,6 @@
+# Mirrors `make verify`. The Makefile runs these toolchains in Docker because
+# the development machine has no Go installed; the runner has one, so CI calls
+# them directly rather than nesting containers.
 name: CI
 
 on:
@@ -18,19 +21,29 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-        # No go.mod yet — every step below no-ops until there is one.
-        continue-on-error: true
 
-      - name: Verify no CGO
+      # ADR-30: the binary stays pure Go so the image can bundle its media tools
+      # instead of linking them.
+      - name: Build without CGO
+        run: CGO_ENABLED=0 go build ./...
+
+      - name: Formatting
         run: |
-          [ -f go.mod ] || { echo "no go.mod yet, skipping"; exit 0; }
-          CGO_ENABLED=0 go build ./...
+          unformatted=$(gofmt -l -s .)
+          if [ -n "$unformatted" ]; then
+            echo "unformatted files:"; echo "$unformatted"; exit 1
+          fi
 
       - name: Vet
-        run: '[ -f go.mod ] && go vet ./... || true'
+        run: go vet ./...
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
 
       - name: Test
-        run: '[ -f go.mod ] && go test -race -count=1 ./... || true'
+        run: go test -race -count=1 ./...
 
       # ADR-31: generated code is committed. Stale output fails the build.
       - name: sqlc up to date
@@ -53,6 +66,5 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-        continue-on-error: true
       - name: Benchmarks
-        run: '[ -f go.mod ] && go test -run=^$ -bench=. -benchmem ./... || true'
+        run: go test -run=^$ -bench=. -benchmem ./...

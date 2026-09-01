@@ -15,7 +15,7 @@ RUN_NODE    := docker run --rm -u $(UID):$(GID) $(MOUNT)/web -w /src/web \
                  -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
 
 .PHONY: help verify build test race bench lint vet fmt fmt-check sqlc sqlc-check \
-        api web web-dev image image-local milestone version clean-cache
+        api web web-dev image image-local milestone version cache-init clean-cache
 
 VERSION     := $(shell tr -d '[:space:]' < VERSION 2>/dev/null || echo 0.0.0)
 COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -28,44 +28,58 @@ TOKEN       ?= $(shell grep -oP 'ghp_[A-Za-z0-9]+' private/secrets.md 2>/dev/nul
 help:  ## List targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
 
+## Docker creates named volumes owned by root, so a container running as the
+## invoking user cannot write to the module or build cache. Fixed once, guarded
+## by a marker so the check costs one container start per make invocation.
+cache-init:
+	@docker run --rm -u 0 $(CACHE) -v medianexus-npm:/tmp/.npm $(GO_IMAGE) sh -c \
+	  'test -f /.cache/go-build/.owned-by-$(UID) || \
+	   { chown -R $(UID):$(GID) /go/pkg/mod /.cache/go-build /tmp/.npm && \
+	     touch /.cache/go-build/.owned-by-$(UID); }'
+
 ## ---- the gate: everything that must pass before a subsystem is "done" ----
 verify: fmt-check vet lint test sqlc-check  ## Full check, as CI runs it
 
-build:      ## Build the binary (CGO_ENABLED=0, per ADR-30)
+build: cache-init  ## Build the binary (CGO_ENABLED=0, per ADR-30)
 	$(RUN_GO) go build -trimpath -ldflags "$(LDFLAGS)" -o /src/medianexus ./cmd/medianexus
 
-test:       ## Unit tests
+test: cache-init  ## Unit tests
 	$(RUN_GO) go test -count=1 ./...
 
-race:       ## Tests with the race detector (needs CGO)
+race: cache-init  ## Tests with the race detector (needs CGO)
 	docker run --rm -u $(UID):$(GID) $(MOUNT) $(CACHE) -e GOCACHE=/.cache/go-build -e HOME=/tmp \
 	  $(GO_IMAGE) go test -race -count=1 ./...
 
-bench:      ## Benchmarks — ADR-28 performance targets
+bench: cache-init  ## Benchmarks — ADR-28 performance targets
 	$(RUN_GO) go test -run=^$$ -bench=. -benchmem ./...
 
-vet:
+vet: cache-init
 	$(RUN_GO) go vet ./...
 
-lint:
+lint: cache-init
 	docker run --rm -u $(UID):$(GID) $(MOUNT) $(CACHE) -e HOME=/tmp $(LINT_IMAGE) golangci-lint run
 
-fmt:        ## Format in place
+fmt: cache-init  ## Format in place
 	$(RUN_GO) gofmt -w -s .
 
-fmt-check:
+fmt-check: cache-init
 	@out=$$($(RUN_GO) gofmt -l -s .); \
 	 if [ -n "$$out" ]; then echo "unformatted:"; echo "$$out"; exit 1; fi
 
 ## ---- generated code: committed, never hand-edited (ADR-31) ----
 sqlc:       ## Regenerate from queries/*.sql
+	@test -f sqlc.yaml || { echo "no sqlc.yaml yet"; exit 1; }
 	docker run --rm -u $(UID):$(GID) $(MOUNT) $(SQLC_IMAGE) generate
 
+## Skips until sqlc.yaml exists so `verify` is green from the first commit,
+## matching .github/workflows/ci.yml. It is a hard failure once it does.
 sqlc-check: ## Fail if generated SQL code is stale
-	docker run --rm -u $(UID):$(GID) $(MOUNT) $(SQLC_IMAGE) diff
+	@test -f sqlc.yaml || { echo "sqlc-check: no sqlc.yaml yet, skipping"; exit 0; }; \
+	 docker run --rm -u $(UID):$(GID) $(MOUNT) $(SQLC_IMAGE) diff
 
 api:        ## Regenerate Go server + TS client from api/openapi.yaml
-	@echo "TODO: wire oapi-codegen and openapi-typescript once api/openapi.yaml exists"
+	@test -f api/openapi.yaml || { echo "api: no spec yet, skipping"; exit 0; }
+	@echo "TODO: wire oapi-codegen and openapi-typescript"
 
 ## ---- web ----
 web:        ## Production build, embedded via embed.FS
