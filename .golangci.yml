@@ -73,9 +73,10 @@ linters:
       # CLI commands write to stdout by definition.
       - path: cmd/medianexus/
         linters: [forbidigo]
-      # Tests drive the real filesystem and clock deliberately.
+      # Tests drive the real filesystem and clock deliberately, and construct
+      # http.Response values directly, which bodyclose cannot reason about.
       - path: _test\.go
-        linters: [forbidigo]
+        linters: [forbidigo, bodyclose]
 
 formatters:
   enable:
