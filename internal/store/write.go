@@ -35,7 +35,9 @@ func (r TransactionReport) String() string {
 // handed to the transaction, which is bounded by Invariant 2 anyway, and an
 // operation still queued when its context ends is dropped without running.
 func (s *Store) Write(ctx context.Context, priority Priority, run func(context.Context, *sql.Tx) error) error {
-	op := newWriteOp(ctx, priority, s.clock.Now(), run)
+	op := newWriteOp(ctx, priority, s.clock.Now(), func(ctx context.Context, db *sql.DB) error {
+		return runInTransaction(ctx, db, s.config.Name, run)
+	})
 	if err := s.queue.push(op); err != nil {
 		return fmt.Errorf("store %s: %w", s.config.Name, err)
 	}
@@ -106,29 +108,60 @@ func (s *Store) execute(op *writeOp) error {
 	started := s.clock.Now()
 	queueWait := started.Sub(op.enqueued)
 
-	// An operation whose caller has already given up never reaches the database:
-	// BeginTx rejects a cancelled context, and database/sql rolls a transaction
-	// back if its context ends after it opened. An explicit pre-check here was
-	// removed after mutation testing showed it changed nothing.
-	tx, err := s.write.BeginTx(op.ctx, nil)
+	if err := op.execute(op.ctx, s.write); err != nil {
+		return err
+	}
+	if !op.exemptFromBudget {
+		s.reportDuration(op, s.clock.Since(started), queueWait)
+	}
+	return nil
+}
+
+// runInTransaction is the ordinary write path. An operation whose caller has
+// already given up never reaches the database: BeginTx rejects a cancelled
+// context, and database/sql rolls a transaction back if its context ends after
+// it opened. An explicit pre-check here was removed after mutation testing
+// showed it changed nothing.
+func runInTransaction(ctx context.Context, db *sql.DB, database string, run func(context.Context, *sql.Tx) error) error {
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("store %s: begin: %w", s.config.Name, err)
+		return fmt.Errorf("store %s: begin: %w", database, err)
 	}
 
-	if err := op.run(op.ctx, tx); err != nil {
+	if err := run(ctx, tx); err != nil {
 		if rollbackErr := tx.Rollback(); rollbackErr != nil {
 			// Both are reported: the caller needs its own error, and a failed
 			// rollback is a database problem the operation error would hide.
-			return errors.Join(err, fmt.Errorf("store %s: rollback: %w", s.config.Name, rollbackErr))
+			return errors.Join(err, fmt.Errorf("store %s: rollback: %w", database, rollbackErr))
 		}
 		return err
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("store %s: commit: %w", s.config.Name, err)
+		return fmt.Errorf("store %s: commit: %w", database, err)
 	}
-
-	s.reportDuration(op, s.clock.Since(started), queueWait)
 	return nil
+}
+
+// writeExclusive serialises a statement that cannot run inside a transaction,
+// through the same queue and therefore the same single writer.
+func (s *Store) writeExclusive(ctx context.Context, priority Priority, exemptFromBudget bool,
+	run func(context.Context, *sql.DB) error) error {
+	op := newWriteOp(ctx, priority, s.clock.Now(), run)
+	op.exemptFromBudget = exemptFromBudget
+	if err := s.queue.push(op); err != nil {
+		return fmt.Errorf("store %s: %w", s.config.Name, err)
+	}
+	select {
+	case err := <-op.result:
+		return err
+	case <-s.writerDone:
+		select {
+		case err := <-op.result:
+			return err
+		default:
+			return fmt.Errorf("store %s: %w before the write ran", s.config.Name, ErrClosed)
+		}
+	}
 }
 
 // reportDuration enforces the transaction budget. A rule nobody measures is a
@@ -150,7 +183,6 @@ func (s *Store) reportDuration(op *writeOp, duration, queueWait time.Duration) {
 
 	if duration < s.config.WriteHard {
 		s.logger.Warn("write transaction over its warning budget",
-			slog.String("database", report.Database),
 			slog.String("priority", report.Priority.String()),
 			slog.Duration("duration", report.Duration),
 			slog.Duration("budget", report.Budget),
@@ -160,7 +192,6 @@ func (s *Store) reportDuration(op *writeOp, duration, queueWait time.Duration) {
 
 	report.Budget = s.config.WriteHard
 	s.logger.Error("write transaction over its hard budget (Invariant 2)",
-		slog.String("database", report.Database),
 		slog.String("priority", report.Priority.String()),
 		slog.Duration("duration", report.Duration),
 		slog.Duration("budget", report.Budget),

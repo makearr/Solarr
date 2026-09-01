@@ -14,6 +14,7 @@ import (
 	_ "modernc.org/sqlite" // pure-Go driver, keeps CGO_ENABLED=0 building (ADR-5, ADR-30)
 
 	"github.com/makearr/MediaNexus/internal/clock"
+	"github.com/makearr/MediaNexus/internal/fsx"
 )
 
 // driverName is the only place the driver is named. ADR-5 calls the choice
@@ -60,6 +61,10 @@ type Config struct {
 
 	// Logger defaults to slog.Default.
 	Logger *slog.Logger
+
+	// FS defaults to the real filesystem. It is used for backup bookkeeping —
+	// the database itself is written by SQLite, not through here.
+	FS fsx.FS
 }
 
 func (c Config) withDefaults() Config {
@@ -84,6 +89,9 @@ func (c Config) withDefaults() Config {
 	if c.Logger == nil {
 		c.Logger = slog.Default()
 	}
+	if c.FS == nil {
+		c.FS = fsx.NewOS()
+	}
 	return c
 }
 
@@ -99,6 +107,7 @@ type Store struct {
 	read  *sql.DB
 
 	logger     *slog.Logger
+	fs         fsx.FS
 	queue      *writeQueue
 	writerDone chan struct{}
 }
@@ -139,6 +148,7 @@ func Open(ctx context.Context, c clock.Clock, config Config) (*Store, error) {
 		write:      write,
 		read:       read,
 		logger:     config.Logger.With(slog.String("database", config.Name)),
+		fs:         config.FS,
 		queue:      newWriteQueue(),
 		writerDone: make(chan struct{}),
 	}

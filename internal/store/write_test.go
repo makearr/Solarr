@@ -18,8 +18,9 @@ import (
 func openWritableStore(t *testing.T, fake *clock.Fake, adjust func(*store.Config)) *store.Store {
 	t.Helper()
 	config := store.Config{
-		Name: "library",
-		Path: filepath.Join(t.TempDir(), "library.db"),
+		Name:   "library",
+		Path:   filepath.Join(t.TempDir(), "library.db"),
+		Logger: quietLogger(),
 		OnBudgetExceeded: func(report store.TransactionReport) {
 			t.Errorf("transaction exceeded its hard budget: %s", report)
 		},
