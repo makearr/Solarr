@@ -50,11 +50,10 @@ func (c Config) DirectoryRequirements() []DirectoryRequirement {
 // container whose user is not who the mount expects, and the probe catches all
 // three.
 //
-// §14.3 also asks for the directory's owner and mode alongside the process's own
-// ids, and for db_dir to be refused on a network filesystem. Both need syscalls
-// beyond the fsx interface and are deliberately not implemented — see
-// documentation/startup-checks.md. Invariant 62 is therefore only half met, and
-// a database on NFS is currently accepted.
+// What this does not check, and why, is in documentation/startup-checks.md:
+// the directory's own ownership (so Invariant 62 is only half met), and whether
+// db_dir is a network filesystem — which is a bad idea and the operator's
+// responsibility rather than something MediaNexus detects.
 func CheckDirectories(fsys fsx.FS, config Config) Problems {
 	var problems Problems
 	for _, requirement := range config.DirectoryRequirements() {

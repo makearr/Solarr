@@ -21,16 +21,25 @@ three are ordinary deployment mistakes.
 
 ## What is deliberately not checked
 
-Two things architecture §14.3 asks for are **not implemented**, by decision
-rather than oversight. Both need syscalls beyond the `fsx.FS` interface —
-`stat` for ownership and `statfs` for filesystem type — and adding them was
-weighed against their value for a ZFS deployment and declined.
+### Where the databases live
 
-| Not checked | Consequence | What it would take |
-|---|---|---|
-| The directory's owner and mode, reported against the process's | **Invariant 62 is only half met.** The error names the uid/gid the process runs as, but not what the directory expects, so a PUID/PGID mismatch still needs one manual `ls -l` | `Uid`/`Gid` on `fsx.FileInfo`, from `syscall.Stat_t` |
-| Whether `db_dir` is a network filesystem | **A database on NFS or SMB is accepted.** ADR-2 requires refusing to start, because WAL is unsupported there and the locking is unreliable enough to corrupt a database. This will not bite the current ZFS deployment; it will bite anyone who mounts `/config` over NFS | `statfs` on the path, comparing `f_type` against the network filesystem magic numbers |
+**Putting `db_dir` on a network filesystem is a bad idea, and it is the
+operator's responsibility.**
 
-Revisit the second one before the image is published for anyone else to run:
-silent corruption is the worst failure mode this project has, and it is the one
-check that prevents it.
+SQLite's WAL mode is explicitly unsupported on NFS and SMB, and their locking is
+unreliable enough to corrupt a database. MediaNexus says so — here, in ADR-2,
+and in the comments of the example `docker-compose.yml` — and does not detect
+it. Media, downloads and backups may live anywhere; only the databases care.
+
+This is a decision, not an omission. Detecting it needs `statfs` and a table of
+filesystem magic numbers, carried in the `fsx` abstraction forever, to catch a
+mistake that is rare, documented at every point where someone would make it, and
+squarely the operator's to make.
+
+### The directory's own ownership
+
+The error from a failed write names the uid and gid the process runs as, which
+is nearly always the answer, but not what the directory expects. **Invariant 62
+is therefore only half met**, and a PUID/PGID mismatch still costs one manual
+`ls -l`. Closing it would mean `Uid` and `Gid` on `fsx.FileInfo`, from
+`syscall.Stat_t`.

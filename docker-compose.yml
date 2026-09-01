@@ -15,8 +15,11 @@ services:
 
     volumes:
       # Config, databases, backups and cache. One mount is enough.
-      # Databases must not live on a network filesystem: WAL is unsupported
-      # there and the locking is unreliable enough to corrupt them (ADR-2).
+      #
+      # Keep this on local storage. SQLite's WAL mode is unsupported on NFS and
+      # SMB, and their locking is unreliable enough to corrupt a database.
+      # MediaNexus does not check this -- it is yours to get right. Media,
+      # downloads and backups may live anywhere.
       - ./config:/config
 
       # The library. Import prefers a reflink, then a hardlink, then a copy
