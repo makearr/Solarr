@@ -1,0 +1,87 @@
+# Enforces documentation/coding-standards.md. The forbidigo rules turn the ADR-17
+# seams from prose into build failures: Invariant 45 (no time.Now) and the fsx
+# choke point (ADR-14) are the two that quietly rot without a linter.
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - errorlint
+    - forbidigo
+    - gocritic
+    - misspell
+    - nilerr
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+    - wastedassign
+
+  settings:
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^time\.(Now|Since|Until|Sleep|After|Tick|NewTimer|NewTicker|AfterFunc)$
+          msg: use the injected clock.Clock (ADR-17, Invariant 45)
+        - pattern: ^os\.(Open|OpenFile|Create|CreateTemp|Remove|RemoveAll|Rename|Mkdir|MkdirAll|MkdirTemp|ReadFile|WriteFile|ReadDir|Stat|Lstat|Link|Symlink|Readlink|Chmod|Chown|Truncate)$
+          msg: go through fsx.FS — it is the path-safety choke point (ADR-14, §11.2)
+        - pattern: ^http\.(Get|Head|Post|PostForm|DefaultClient|DefaultTransport)$
+          msg: all outbound HTTP goes through httpx (Invariant 28)
+        - pattern: ^fmt\.Print(|f|ln)$
+          msg: use log/slog, or write to an explicit io.Writer in a CLI command
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        # Interface implementations do not restate the interface's documentation.
+        - name: exported
+          arguments: [disableChecksOnMethods]
+        - name: if-return
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unexported-return
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: var-declaration
+        - name: var-naming
+
+  exclusions:
+    generated: lax
+    rules:
+      # The seams themselves are the one place the wrapped calls are legitimate.
+      - path: internal/clock/system\.go
+        linters: [forbidigo]
+      # CLI commands write to stdout by definition.
+      - path: cmd/medianexus/
+        linters: [forbidigo]
+      # Tests drive the real filesystem and clock deliberately.
+      - path: _test\.go
+        linters: [forbidigo]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/makearr/MediaNexus
