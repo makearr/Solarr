@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"os"
 
 	"github.com/goccy/go-yaml"
 
@@ -25,6 +26,13 @@ var ErrNotFound = errors.New("config: file not found")
 // means a document with a typo, a bad range and a contradiction reports all
 // three in one go.
 func Parse(data []byte) (Config, error) {
+	return ParseWithEnv(data, func(string) (string, bool) { return "", false })
+}
+
+// ParseWithEnv is Parse with environment overrides applied between decoding and
+// validation, so an override is checked by exactly the same rules as a file
+// value (ADR-44).
+func ParseWithEnv(data []byte, lookup Lookup) (Config, error) {
 	config := Default()
 
 	var document map[string]any
@@ -32,7 +40,7 @@ func Parse(data []byte) (Config, error) {
 		return config, Problems{{
 			Path:        "(document)",
 			Value:       "",
-			Expectation: fmt.Sprintf("valid YAML: %v", err),
+			Expectation: "valid YAML: " + sanitiseErrorText(err.Error()),
 		}}
 	}
 
@@ -49,13 +57,14 @@ func Parse(data []byte) (Config, error) {
 		problems = append(problems, Problem{
 			Path:        "(document)",
 			Value:       "",
-			Expectation: fmt.Sprintf("values matching their types: %v", err),
+			Expectation: "values matching their types: " + sanitiseErrorText(err.Error()),
 		})
 		// Decoding stopped, so the partially filled config is not worth
 		// validating — its untouched fields would report defaults as faults.
 		return config, problems
 	}
 
+	problems = append(problems, applyEnv(&config, lookup)...)
 	problems = append(problems, config.validate()...)
 	return config, problems.OrNil()
 }
@@ -76,5 +85,8 @@ func Load(fsys fsx.FS, path string) (Config, error) {
 	if err != nil {
 		return Default(), fmt.Errorf("config: read %s: %w", path, err)
 	}
-	return Parse(data)
+	return ParseWithEnv(data, os.LookupEnv)
 }
+
+// OSEnv reads the process environment.
+func OSEnv() Lookup { return os.LookupEnv }

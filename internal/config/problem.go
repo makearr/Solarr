@@ -43,6 +43,30 @@ func redact(path, value string) string {
 	return value
 }
 
+// redactedParseFailure replaces a parser's message when the value being parsed
+// is a secret. YAML parsers quote the offending source text back at you, so a
+// redacted Value is not enough on its own — the explanation carries the secret
+// instead. This is the one place that is worth losing detail over.
+const redactedParseFailure = "could not be parsed (details withheld because the value is a secret)"
+
+// sanitiseErrorText redacts any line of a parser error that mentions a secret
+// setting, for errors that describe the document as a whole rather than one
+// field. The snippet a parser includes for context is exactly the line the user
+// got wrong, which for an encryption key is the line that must not be echoed.
+func sanitiseErrorText(text string) string {
+	lines := strings.Split(text, "\n")
+	for index, line := range lines {
+		lowered := strings.ToLower(line)
+		for _, word := range secretWords {
+			if strings.Contains(lowered, word) {
+				lines[index] = "    " + redacted
+				break
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
 // Problem is one thing wrong with the configuration: where it is, what was
 // found, and what was expected. It is structured rather than a formatted string
 // so `config check` can print it, the API can return it, and a UI can translate
