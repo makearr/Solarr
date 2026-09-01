@@ -1,0 +1,18 @@
+# Generated code is committed and never hand-edited (ADR-31). If the output
+# looks wrong, the source is wrong: change queries/ or migrations/ and rerun
+# `make sqlc`. CI fails on stale output.
+version: "2"
+sql:
+  - engine: "sqlite"
+    schema: "migrations/settings"
+    queries: "queries/settings"
+    gen:
+      go:
+        package: "settingsdb"
+        out: "internal/store/gen/settingsdb"
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_empty_slices: true
+        emit_result_struct_pointers: false
+        emit_params_struct_pointers: false
+        output_files_suffix: ".gen"
