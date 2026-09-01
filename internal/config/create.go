@@ -69,7 +69,9 @@ func Create(fsys fsx.FS, path string, generateKey func() (string, error)) (Confi
 	}
 
 	document := fmt.Sprintf(template, CurrentVersion, key)
-	if err := fsx.WriteAtomic(fsys, path, func(w io.Writer) error {
+	// WriteAtomicSecret, not WriteAtomic: this document carries the only copy of
+	// the encryption key, so it is created 0600 rather than world-readable.
+	if err := fsx.WriteAtomicSecret(fsys, path, func(w io.Writer) error {
 		_, writeErr := io.WriteString(w, document)
 		return writeErr
 	}); err != nil {

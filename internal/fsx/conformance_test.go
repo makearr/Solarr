@@ -45,6 +45,8 @@ func TestConformance(t *testing.T) {
 		{"SafeJoinRejectsASymlinkEscape", conformSafeJoinSymlinkEscape},
 		{"SafeJoinAcceptsAContainedPath", conformSafeJoinContained},
 		{"WriteAtomicLeavesNoTemporaryOnFailure", conformWriteAtomicFailure},
+		{"CreateSecretIsNotReadableByOthers", conformCreateSecretMode},
+		{"WriteAtomicSecretLandsRestricted", conformWriteAtomicSecretMode},
 	}
 
 	for _, implementation := range implementations {
@@ -402,5 +404,77 @@ func conformWriteAtomicFailure(t *testing.T, fsys fsx.FS, root string) {
 		if fsx.IsTemporary(entry.Name) {
 			t.Errorf("a failed write left the temporary %q behind", entry.Name)
 		}
+	}
+}
+
+// The encryption key lives in a file this package creates (ADR-14). A mode that
+// lets any account on the host read it makes the encryption of settings.db
+// decorative, so the mode is asserted rather than assumed.
+func conformCreateSecretMode(t *testing.T, fsys fsx.FS, root string) {
+	path := filepath.Join(root, "config.yml")
+	file, err := fsys.CreateSecret(path)
+	if err != nil {
+		t.Fatalf("CreateSecret: %v", err)
+	}
+	if _, err := io.WriteString(file, "encryption_key: base64:xxx"); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	info, err := fsys.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if permissions := info.Mode.Perm(); permissions != 0o600 {
+		t.Errorf("CreateSecret made mode %04o, want 0600", permissions)
+	}
+	if info.Mode.Perm()&0o077 != 0 {
+		t.Errorf("mode %04o is readable beyond the owner", info.Mode.Perm())
+	}
+}
+
+// The temporary is what actually holds the secret before the rename, so the
+// restriction has to be on the temporary. Asserting only the destination would
+// pass even if the key spent its whole write world-readable.
+func conformWriteAtomicSecretMode(t *testing.T, fsys fsx.FS, root string) {
+	path := filepath.Join(root, "config.yml")
+
+	var temporaryMode fs.FileMode
+	err := fsx.WriteAtomicSecret(fsys, path, func(w io.Writer) error {
+		entries, readErr := fsys.ReadDir(root)
+		if readErr != nil {
+			return readErr
+		}
+		for _, entry := range entries {
+			if fsx.IsTemporary(entry.Name) {
+				info, statErr := fsys.Stat(filepath.Join(root, entry.Name))
+				if statErr != nil {
+					return statErr
+				}
+				temporaryMode = info.Mode.Perm()
+			}
+		}
+		_, writeErr := io.WriteString(w, "encryption_key: base64:xxx")
+		return writeErr
+	})
+	if err != nil {
+		t.Fatalf("WriteAtomicSecret: %v", err)
+	}
+
+	if temporaryMode == 0 {
+		t.Fatal("no temporary was observed mid-write; the test proved nothing")
+	}
+	if temporaryMode != 0o600 {
+		t.Errorf("the temporary holding the key had mode %04o, want 0600", temporaryMode)
+	}
+
+	info, err := fsys.Stat(path)
+	if err != nil {
+		t.Fatalf("stat destination: %v", err)
+	}
+	if permissions := info.Mode.Perm(); permissions != 0o600 {
+		t.Errorf("destination mode %04o, want 0600", permissions)
 	}
 }

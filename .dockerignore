@@ -3,7 +3,13 @@
 .git
 .github
 .githooks
+# Local-only working documents. The published image is the final stage, which
+# copies only the binary, so these could never reach it anyway -- but they have
+# no business in the build context either. Kept in step with .gitignore.
 private
+CLAUDE.md
+*.local.md
+config.local.yml
 documentation
 web/node_modules
 web/dist

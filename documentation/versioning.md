@@ -4,8 +4,9 @@
 MAJOR . MINOR . BUILD
   0   .   2   .  17
   │       │       └── successful Docker builds since this milestone
-  │       └────────── milestone: each working library type
-  └────────────────── 1.0 when every planned library type works
+  │       └────────── milestone: something that works. Not a digit -- 0.9 is
+  │                   followed by 0.10, then 0.11, for as long as it takes
+  └────────────────── advanced only when the author says so. Never automatic
 ```
 
 ## BUILD — successful Docker builds
@@ -71,19 +72,26 @@ milestone is **something that works**, not something that is written.
 | `0.7.x` | Working adult library |
 | `0.8.x` | Working comic library |
 | `0.9.x` | Working ROM library |
-| `1.0.0` | All planned library types working |
+| `0.10.x`, `0.11.x`, ... | Whatever comes after. **MINOR is a counter, not a digit** |
 
-The nine library milestones fit `0.1` to `0.9` exactly, so `1.0` means the roadmap in
-`private/architecture.md` Part IV is complete.
+**MINOR does not stop at 9.** The nine library types happen to fit `0.1` to `0.9`, which is a
+coincidence of counting and not a plan. Work continues past them -- `0.10.x`, `0.11.x` and
+onwards -- and `make milestone` increments arithmetically, so `0.9.14` becomes `0.10.0`.
+
+**`1.0.0` is not reached by finishing a list.** No milestone, no completed roadmap and no
+amount of working library types advances MAJOR. It happens when the author decides it happens,
+and nothing in the tooling can do it -- there is deliberately no `make major`.
 
 **"Working" is a high bar.** A library type reaches its milestone when it can identify,
-acquire, import and present that media end to end — not when its module compiles. The stage
-checklist in `private/todo.md` is the definition.
+acquire, import and present that media end to end — not when its module compiles.
 
 ## What the version is not
 
 - Not a measure of effort or commits.
 - Not automatically semver-meaningful below `1.0` — the API is unstable until then.
+- **Not a progress bar.** `0.9` does not mean "90% done", and it is not one step from `1.0`.
+- Not sortable as text. `0.10.0` is newer than `0.9.9` but sorts before it in any plain string
+  comparison; use `sort -V` and git's own tag ordering, never `sort`.
 
 ## Injecting it into the binary
 
