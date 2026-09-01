@@ -1,0 +1,72 @@
+// Package migrations carries the core schema as embedded SQL files, one per
+// version per database (ADR-16).
+//
+// The files are the single source: the migration runner applies them and sqlc
+// reads the same directory as its schema, so generated Go cannot describe a
+// table that does not exist.
+package migrations
+
+import (
+	"embed"
+	"fmt"
+	"io/fs"
+	"path"
+	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/makearr/MediaNexus/internal/store"
+)
+
+//go:embed settings/*.sql
+var files embed.FS
+
+// Settings returns the migration set for settings.db.
+func Settings() (store.Owner, error) {
+	loaded, err := load("settings")
+	if err != nil {
+		return store.Owner{}, err
+	}
+	return store.Owner{Name: store.CoreOwner, Migrations: loaded}, nil
+}
+
+// load reads a directory of NNNN_name.sql files in version order. The number is
+// the version, so a missing or duplicated one is a build-time mistake rather
+// than a runtime surprise.
+func load(directory string) ([]store.Migration, error) {
+	entries, err := fs.ReadDir(files, directory)
+	if err != nil {
+		return nil, fmt.Errorf("migrations: read %s: %w", directory, err)
+	}
+
+	migrations := make([]store.Migration, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
+			continue
+		}
+		version, err := versionOf(entry.Name())
+		if err != nil {
+			return nil, err
+		}
+		content, err := files.ReadFile(path.Join(directory, entry.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("migrations: read %s: %w", entry.Name(), err)
+		}
+		migrations = append(migrations, store.Migration{Version: version, Up: string(content)})
+	}
+
+	sort.Slice(migrations, func(i, j int) bool { return migrations[i].Version < migrations[j].Version })
+	return migrations, nil
+}
+
+func versionOf(name string) (int, error) {
+	prefix, _, found := strings.Cut(name, "_")
+	if !found {
+		return 0, fmt.Errorf("migrations: %q is not named NNNN_description.sql", name)
+	}
+	version, err := strconv.Atoi(prefix)
+	if err != nil || version <= 0 {
+		return 0, fmt.Errorf("migrations: %q does not start with a positive version number", name)
+	}
+	return version, nil
+}
