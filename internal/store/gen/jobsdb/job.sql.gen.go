@@ -12,18 +12,20 @@ import (
 
 const cancelJob = `-- name: CancelJob :execrows
 UPDATE job
-SET state = 'CANCELLED', lease_owner = NULL, lease_expires_at = NULL, updated_at = ?
-WHERE id = ?
+SET state = 'CANCELLED', lease_owner = NULL, lease_expires_at = NULL,
+    last_error = ?1, updated_at = ?2
+WHERE id = ?3
   AND state IN ('PENDING', 'PENDING_RETRY', 'LEASED', 'RUNNING')
 `
 
 type CancelJobParams struct {
-	UpdatedAt int64
-	ID        int64
+	Reason sql.NullString
+	Now    int64
+	ID     int64
 }
 
 func (q *Queries) CancelJob(ctx context.Context, arg CancelJobParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, cancelJob, arg.UpdatedAt, arg.ID)
+	result, err := q.db.ExecContext(ctx, cancelJob, arg.Reason, arg.Now, arg.ID)
 	if err != nil {
 		return 0, err
 	}

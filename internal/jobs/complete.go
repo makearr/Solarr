@@ -141,12 +141,20 @@ func (q *Queue) Fail(ctx context.Context, job Job, owner string, attempt Attempt
 // Cancel stops a job that has not finished. A job already running keeps running
 // until its worker notices; the state change is what the worker sees.
 func (q *Queue) Cancel(ctx context.Context, id int64) error {
+	return q.CancelWithReason(ctx, id, "cancelled")
+}
+
+// CancelWithReason cancels and records why, so a job that vanished from the
+// queue can still explain itself.
+func (q *Queue) CancelWithReason(ctx context.Context, id int64, reason string) error {
 	now := q.clock.Now()
 
 	var affected int64
 	err := q.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		rows, err := q.queries.WithTx(tx).CancelJob(ctx, jobsdb.CancelJobParams{
-			UpdatedAt: now.Unix(), ID: id,
+			Reason: nullString(reason),
+			Now:    now.Unix(),
+			ID:     id,
 		})
 		affected = rows
 		return err
