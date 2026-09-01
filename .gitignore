@@ -38,3 +38,6 @@ config.local.yml
 
 # Freezes the pre-commit version bump
 /.version-hold
+
+# Local-only test fixtures from the real library (never committed)
+/private/fixtures/

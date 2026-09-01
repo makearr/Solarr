@@ -1,6 +1,6 @@
 # Toolchains run in Docker — nothing needs installing locally.
 # Override the images to pin different versions.
-GO_IMAGE    ?= golang:1.23
+GO_IMAGE    ?= golang:1
 NODE_IMAGE  ?= node:22-alpine
 SQLC_IMAGE  ?= sqlc/sqlc:latest
 LINT_IMAGE  ?= golangci/golangci-lint:latest

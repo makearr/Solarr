@@ -120,6 +120,9 @@ the API filters; translation stays possible.
 
 ## 7. Tests
 
+- **Standard library only.** No testify, no assertion DSL. `if got != want { t.Errorf(...) }`,
+  with a small set of local generic helpers in `internal/testutil` for deep comparison and
+  error matching. One idiom, no dependency in every test file, failure output under our control.
 - Table-driven by default. Test names describe behaviour: `TestPlacement_PrefersAffinityRoot`.
 - **Assert whole values, not fragments.** A scorer test asserts the full `Decision` including
   its components — a right answer for the wrong reasons is a bug when the reasons are the
