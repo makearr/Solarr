@@ -6,6 +6,7 @@ named file, linked from the code by path.
 | Page | Covers |
 |---|---|
 | [coding-standards.md](coding-standards.md) | Style, structure, comments, testing, AI-maintainability |
+| [startup-checks.md](startup-checks.md) | How directories are checked at startup, and what is deliberately not checked |
 
 ## What goes here
 
