@@ -2,22 +2,22 @@
 INSERT INTO job (
   type, pool, action_key, priority, payload_json, state, mutating,
   max_attempts, run_after, depends_on, correlation_id, user_id,
-  created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  created_at, updated_at, category_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, type, pool, action_key, priority, payload_json, state, mutating,
           attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-          depends_on, correlation_id, user_id, last_error, created_at, updated_at;
+          depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id;
 
 -- name: GetJob :one
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-       depends_on, correlation_id, user_id, last_error, created_at, updated_at
+       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
 FROM job WHERE id = ?;
 
 -- name: FindActiveJobByActionKey :one
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-       depends_on, correlation_id, user_id, last_error, created_at, updated_at
+       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
 FROM job
 WHERE action_key = ?
   AND state IN ('PENDING', 'PENDING_RETRY', 'LEASED', 'RUNNING');
@@ -47,7 +47,7 @@ WHERE id IN (
 )
 RETURNING id, type, pool, action_key, priority, payload_json, state, mutating,
           attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-          depends_on, correlation_id, user_id, last_error, created_at, updated_at;
+          depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id;
 
 -- name: StartJob :exec
 UPDATE job
@@ -97,11 +97,29 @@ SET state = 'PENDING_RETRY', lease_owner = NULL, lease_expires_at = NULL,
 WHERE state IN ('LEASED', 'RUNNING') AND lease_expires_at <= sqlc.arg(now)
 RETURNING id, type, pool, attempts, max_attempts;
 
--- name: ListJobsByState :many
+-- Cursor pagination, never OFFSET (Invariant 32). The tie-break on id is not
+-- optional: updated_at is not unique, so a page boundary landing inside a group
+-- of equal timestamps would silently drop or repeat rows.
+--
+-- A zero cursor means the start of the list, which is why the comparison is
+-- guarded rather than written as a plain inequality.
+
+-- name: ListJobsPage :many
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-       depends_on, correlation_id, user_id, last_error, created_at, updated_at
-FROM job WHERE state = ? ORDER BY updated_at DESC LIMIT ?;
+       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
+FROM job
+WHERE (sqlc.arg(state) = '' OR state = sqlc.arg(state))
+  -- Category filtering happens here, in the query, rather than by discarding
+  -- rows afterwards: filtering after the fact returns short pages and breaks
+  -- the cursor (Invariant 36).
+  AND ((category_id IS NULL AND sqlc.arg(include_system) = 1)
+       OR category_id IN (SELECT value FROM json_each(sqlc.arg(visible_categories))))
+  AND (sqlc.arg(after_sort) = 0
+       OR updated_at < sqlc.arg(after_sort)
+       OR (updated_at = sqlc.arg(after_sort) AND id < sqlc.arg(after_id)))
+ORDER BY updated_at DESC, id DESC
+LIMIT sqlc.arg(page_size);
 
 -- name: CountJobsByState :many
 SELECT state, pool, count(*) AS total FROM job GROUP BY state, pool;

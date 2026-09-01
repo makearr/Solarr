@@ -11,6 +11,7 @@ import (
 
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/jobs"
+	"github.com/makearr/MediaNexus/internal/paginate"
 	"github.com/makearr/MediaNexus/internal/store"
 	"github.com/makearr/MediaNexus/migrations"
 )
@@ -665,5 +666,196 @@ func TestCounts_ReportsQueueDepthPerPool(t *testing.T) {
 	}
 	if counts[jobs.StatePending][jobs.PoolImport] != 1 {
 		t.Errorf("import pending = %d, want 1", counts[jobs.StatePending][jobs.PoolImport])
+	}
+}
+
+// Paging must not skip or repeat a job, including across the ties that
+// updated_at produces when several jobs are written in the same second.
+func TestListPage_WalksEveryJobExactlyOnce(t *testing.T) {
+	queue, fake := newQueue(t)
+
+	created := make(map[int64]bool, 25)
+	for index := range 25 {
+		// Advance only every fifth job, so most share an updated_at and the
+		// tie-break on id is what keeps the order total.
+		if index%5 == 0 {
+			fake.Advance(time.Second)
+		}
+		created[mustEnqueue(t, queue, jobs.Request{Type: typeBackup}).ID] = true
+	}
+
+	seen := make(map[int64]bool, len(created))
+	var cursor paginate.Cursor
+	for page := 0; ; page++ {
+		if page > 20 {
+			t.Fatal("paging did not terminate")
+		}
+		result, err := queue.ListPage(t.Context(), everything, "", cursor, 4)
+		if err != nil {
+			t.Fatalf("ListPage: %v", err)
+		}
+		for _, job := range result.Items {
+			if seen[job.ID] {
+				t.Errorf("job %d was returned twice", job.ID)
+			}
+			seen[job.ID] = true
+		}
+		if result.NextCursor == "" {
+			break
+		}
+		if cursor, err = paginate.Decode(result.NextCursor); err != nil {
+			t.Fatalf("Decode: %v", err)
+		}
+	}
+
+	if len(seen) != len(created) {
+		t.Errorf("saw %d of %d jobs; paging skipped some", len(seen), len(created))
+	}
+	for id := range created {
+		if !seen[id] {
+			t.Errorf("job %d was never returned", id)
+		}
+	}
+}
+
+func TestListPage_FiltersByState(t *testing.T) {
+	queue, _ := newQueue(t)
+	mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+	mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+
+	// Whichever job the queue hands out is the one that finishes; asserting on
+	// a particular id would be asserting the claim order, which is a different
+	// test.
+	claimed := claimOne(t, queue, jobs.PoolMaintenance, "worker-1")
+	attempt := startJob(t, queue, claimed, "worker-1")
+	if err := queue.Complete(t.Context(), claimed, "worker-1", attempt); err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+
+	page, err := queue.ListPage(t.Context(), everything, jobs.StateSucceeded, paginate.Cursor{}, 10)
+	if err != nil {
+		t.Fatalf("ListPage: %v", err)
+	}
+	if len(page.Items) != 1 || page.Items[0].ID != claimed.ID {
+		t.Errorf("succeeded page = %+v, want just the finished job %d", page.Items, claimed.ID)
+	}
+
+	pending, err := queue.ListPage(t.Context(), everything, jobs.StatePending, paginate.Cursor{}, 10)
+	if err != nil {
+		t.Fatalf("ListPage: %v", err)
+	}
+	if len(pending.Items) != 1 || pending.Items[0].ID == claimed.ID {
+		t.Errorf("pending page = %+v, want the other job", pending.Items)
+	}
+}
+
+func TestListPage_ClampsAnExcessiveLimit(t *testing.T) {
+	queue, _ := newQueue(t)
+	for range 3 {
+		mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+	}
+
+	// Asking for everything is how a 500k-row library takes down the process.
+	page, err := queue.ListPage(t.Context(), everything, "", paginate.Cursor{}, 100000)
+	if err != nil {
+		t.Fatalf("ListPage: %v", err)
+	}
+	if len(page.Items) != 3 {
+		t.Errorf("got %d items, want 3", len(page.Items))
+	}
+}
+
+// everything is the visibility a system caller has: all categories, plus the
+// jobs that belong to none.
+var everything = jobs.Visibility{System: true}
+
+// ADR-27 names job listings as a surface that must be filtered: a job naming an
+// album from a hidden category is a leak.
+func TestListPage_HidesJobsFromCategoriesTheCallerCannotSee(t *testing.T) {
+	queue, _ := newQueue(t)
+
+	const music, adult = int64(1), int64(2)
+	mine := mustEnqueue(t, queue, jobs.Request{Type: typeImport, CategoryID: music})
+	mustEnqueue(t, queue, jobs.Request{Type: typeImport, CategoryID: adult})
+	mustEnqueue(t, queue, jobs.Request{Type: typeBackup}) // system work, no category
+
+	page, err := queue.ListPage(t.Context(),
+		jobs.Visibility{Categories: []int64{music}}, "", paginate.Cursor{}, 10)
+	if err != nil {
+		t.Fatalf("ListPage: %v", err)
+	}
+	if len(page.Items) != 1 || page.Items[0].ID != mine.ID {
+		t.Fatalf("page = %+v, want only the music job %d", page.Items, mine.ID)
+	}
+}
+
+// Whether a job belonging to no category is visible is a question about roles,
+// not about categories, so the caller says.
+func TestListPage_SystemJobsFollowTheSystemFlag(t *testing.T) {
+	queue, _ := newQueue(t)
+	mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+
+	hidden, err := queue.ListPage(t.Context(),
+		jobs.Visibility{Categories: []int64{1}}, "", paginate.Cursor{}, 10)
+	if err != nil {
+		t.Fatalf("ListPage: %v", err)
+	}
+	if len(hidden.Items) != 0 {
+		t.Errorf("a system job was visible without the system flag: %+v", hidden.Items)
+	}
+
+	shown, err := queue.ListPage(t.Context(),
+		jobs.Visibility{Categories: []int64{1}, System: true}, "", paginate.Cursor{}, 10)
+	if err != nil {
+		t.Fatalf("ListPage: %v", err)
+	}
+	if len(shown.Items) != 1 {
+		t.Errorf("system jobs = %+v, want one", shown.Items)
+	}
+}
+
+// Filtering after fetching would return short pages and break the cursor, so
+// the narrowing has to be in the query (Invariant 36).
+func TestListPage_FiltersInTheQueryNotAfterwards(t *testing.T) {
+	queue, _ := newQueue(t)
+
+	const visible, hidden = int64(1), int64(2)
+	for range 5 {
+		mustEnqueue(t, queue, jobs.Request{Type: typeImport, CategoryID: hidden})
+		mustEnqueue(t, queue, jobs.Request{Type: typeImport, CategoryID: visible})
+	}
+
+	// Ten jobs exist, five visible. A page of three must hold three.
+	page, err := queue.ListPage(t.Context(),
+		jobs.Visibility{Categories: []int64{visible}}, "", paginate.Cursor{}, 3)
+	if err != nil {
+		t.Fatalf("ListPage: %v", err)
+	}
+	if len(page.Items) != 3 {
+		t.Errorf("page holds %d items, want a full 3; the filter ran after fetching",
+			len(page.Items))
+	}
+	if page.NextCursor == "" {
+		t.Error("no cursor with two visible jobs still to come")
+	}
+	for _, job := range page.Items {
+		if job.CategoryID != visible {
+			t.Errorf("job %d is in category %d, which the caller cannot see", job.ID, job.CategoryID)
+		}
+	}
+}
+
+func TestListPage_EmptyVisibilitySeesNothing(t *testing.T) {
+	queue, _ := newQueue(t)
+	mustEnqueue(t, queue, jobs.Request{Type: typeImport, CategoryID: 1})
+	mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+
+	// The zero Visibility is what a bug produces; it must be closed.
+	page, err := queue.ListPage(t.Context(), jobs.Visibility{}, "", paginate.Cursor{}, 10)
+	if err != nil {
+		t.Fatalf("ListPage: %v", err)
+	}
+	if len(page.Items) != 0 {
+		t.Errorf("the zero visibility saw %+v", page.Items)
 	}
 }

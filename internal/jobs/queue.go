@@ -3,12 +3,14 @@ package jobs
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
 	"time"
 
 	"github.com/makearr/MediaNexus/internal/clock"
+	"github.com/makearr/MediaNexus/internal/paginate"
 	"github.com/makearr/MediaNexus/internal/store"
 	"github.com/makearr/MediaNexus/internal/store/gen/jobsdb"
 )
@@ -119,6 +121,7 @@ func (q *Queue) Enqueue(ctx context.Context, request Request) (EnqueueResult, er
 			UserID:        nullInt(request.UserID),
 			CreatedAt:     now.Unix(),
 			UpdatedAt:     now.Unix(),
+			CategoryID:    nullInt(request.CategoryID),
 		})
 		if err != nil {
 			return fmt.Errorf("insert: %w", err)
@@ -248,4 +251,55 @@ func (q *Queue) Renew(ctx context.Context, job Job, owner string, leaseTTL time.
 		return fmt.Errorf("%w: job %d", ErrLeaseLost, job.ID)
 	}
 	return nil
+}
+
+// Visibility narrows a job listing to what a caller may see (ADR-27).
+//
+// It is a required argument rather than an option with a permissive default: a
+// caller that forgets it would see every job, and the whole point of applying
+// the filter in the repository is that it cannot be forgotten (Invariant 36).
+type Visibility struct {
+	// Categories the caller may read. A job scoped to any other category is
+	// invisible.
+	Categories []int64
+	// System admits jobs belonging to no category -- backups, database
+	// maintenance. Whether those are visible is a question about roles, not
+	// about categories, so the caller decides.
+	System bool
+}
+
+// ListPage returns one page of jobs the caller may see, newest first.
+//
+// state may be empty to list every state. Paging is by cursor rather than
+// offset, so the thousandth page costs the same as the first (Invariant 32).
+func (q *Queue) ListPage(ctx context.Context, visibility Visibility, state State,
+	after paginate.Cursor, limit int) (paginate.Page[Job], error) {
+	limit = paginate.ClampLimit(limit)
+
+	categories, err := json.Marshal(visibility.Categories)
+	if err != nil {
+		return paginate.Page[Job]{}, fmt.Errorf("jobs: encode visible categories: %w", err)
+	}
+
+	// One more row than asked for, so the last page is recognisable without a
+	// second counting query.
+	rows, err := q.queries.ListJobsPage(ctx, jobsdb.ListJobsPageParams{
+		State:             string(state),
+		IncludeSystem:     boolToInt(visibility.System),
+		VisibleCategories: string(categories),
+		AfterSort:         after.Sort,
+		AfterID:           after.ID,
+		PageSize:          int64(limit + 1),
+	})
+	if err != nil {
+		return paginate.Page[Job]{}, fmt.Errorf("jobs: list page: %w", err)
+	}
+
+	jobs := make([]Job, 0, len(rows))
+	for _, row := range rows {
+		jobs = append(jobs, convertJob(row))
+	}
+	return paginate.Build(jobs, limit, func(job Job) paginate.Cursor {
+		return paginate.Cursor{Sort: job.UpdatedAt.Unix(), ID: job.ID}
+	}), nil
 }

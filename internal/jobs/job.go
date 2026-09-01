@@ -82,9 +82,12 @@ type Job struct {
 	DependsOn     int64
 	CorrelationID string
 	UserID        int64
-	LastError     string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	// CategoryID scopes the job for per-category visibility (ADR-27). Zero
+	// means system work that belongs to no one category.
+	CategoryID int64
+	LastError  string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 // Definition declares how a job type behaves. It is registered once at startup
@@ -112,6 +115,7 @@ type Request struct {
 	DependsOn     int64
 	CorrelationID string
 	UserID        int64
+	CategoryID    int64
 }
 
 // Attempt is one recorded run, so a job that failed four times can be explained

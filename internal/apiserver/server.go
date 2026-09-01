@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/makearr/MediaNexus/internal/jobs"
 )
 
 // APIPrefix is where every versioned endpoint lives (section 13.1).
@@ -19,6 +21,10 @@ const APIPrefix = "/api/v1"
 
 // Timeouts that bound a request regardless of what a client does. Without
 // ReadHeaderTimeout a single slow client can hold a connection indefinitely.
+// timeFormat is RFC 3339 in UTC everywhere in the API, so a client never has
+// to guess a timezone.
+const timeFormat = time.RFC3339
+
 const (
 	readHeaderTimeout = 10 * time.Second
 	writeTimeout      = 60 * time.Second
@@ -35,7 +41,9 @@ type Config struct {
 	Build   BuildInfo
 	Checker Checker
 	Auth    AuthConfig
-	Logger  *slog.Logger
+	// Jobs is optional: a CLI command that only serves health has no queue.
+	Jobs   *jobs.Queue
+	Logger *slog.Logger
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -47,6 +55,7 @@ type Server struct {
 	build   BuildInfo
 	checker Checker
 	auth    AuthConfig
+	jobs    *jobs.Queue
 	address string
 
 	// ready gates /ready independently of the checks themselves, so the answer
@@ -69,6 +78,7 @@ func New(config Config) (*Server, error) {
 		build:   config.Build,
 		checker: config.Checker,
 		auth:    config.Auth,
+		jobs:    config.Jobs,
 		address: net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -94,6 +104,7 @@ func New(config Config) (*Server, error) {
 		api.Group(func(secured chi.Router) {
 			secured.Use(server.authenticate)
 			secured.Get("/me", server.handleMe)
+			secured.Get("/jobs", server.handleListJobs)
 		})
 	})
 
