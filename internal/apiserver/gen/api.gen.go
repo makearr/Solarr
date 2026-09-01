@@ -5,20 +5,26 @@ package gen
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/oapi-codegen/runtime"
-	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 )
 
 const (
 	ApiKeyScopes  = "apiKey.Scopes"
 	SessionScopes = "session.Scopes"
+)
+
+// Defines values for EventTopic.
+const (
+	EventTopicAcquisition  EventTopic = "acquisition"
+	EventTopicJob          EventTopic = "job"
+	EventTopicLibrary      EventTopic = "library"
+	EventTopicNotification EventTopic = "notification"
+	EventTopicPressure     EventTopic = "pressure"
 )
 
 // Defines values for HealthStatusStatus.
@@ -118,6 +124,9 @@ type Category struct {
 	Permission Permission `json:"permission"`
 }
 
+// EventTopic defines model for EventTopic.
+type EventTopic string
+
 // HealthStatus defines model for HealthStatus.
 type HealthStatus struct {
 	Status HealthStatusStatus `json:"status"`
@@ -215,7 +224,9 @@ type LoginJSONBody struct {
 
 // StreamEventsParams defines parameters for StreamEvents.
 type StreamEventsParams struct {
-	LastEventID *string `json:"Last-Event-ID,omitempty"`
+	// Topics Comma-separated subset of topics. Absent means every topic the caller may see. An unrecognised name is rejected rather than ignored, so a typo is not a silently empty stream.
+	Topics      *[]EventTopic `form:"topics,omitempty" json:"topics,omitempty"`
+	LastEventID *string       `json:"Last-Event-ID,omitempty"`
 }
 
 // ListJobsParams defines parameters for ListJobs.
@@ -377,6 +388,14 @@ func (siw *ServerInterfaceWrapper) StreamEvents(w http.ResponseWriter, r *http.R
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params StreamEventsParams
+
+	// ------------- Optional query parameter "topics" -------------
+
+	err = runtime.BindQueryParameter("form", false, false, "topics", r.URL.Query(), &params.Topics)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "topics", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -650,517 +669,4 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 
 	return r
-}
-
-type ProblemApplicationProblemPlusJSONResponse Problem
-
-type GetAboutRequestObject struct {
-}
-
-type GetAboutResponseObject interface {
-	VisitGetAboutResponse(w http.ResponseWriter) error
-}
-
-type GetAbout200JSONResponse BuildInfo
-
-func (response GetAbout200JSONResponse) VisitGetAboutResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type LoginRequestObject struct {
-	Body *LoginJSONRequestBody
-}
-
-type LoginResponseObject interface {
-	VisitLoginResponse(w http.ResponseWriter) error
-}
-
-type Login200ResponseHeaders struct {
-	SetCookie string
-}
-
-type Login200JSONResponse struct {
-	Body    Identity
-	Headers Login200ResponseHeaders
-}
-
-func (response Login200JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response.Body)
-}
-
-type Login400ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response Login400ApplicationProblemPlusJSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type Login401ApplicationProblemPlusJSONResponse Problem
-
-func (response Login401ApplicationProblemPlusJSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type Login403ApplicationProblemPlusJSONResponse Problem
-
-func (response Login403ApplicationProblemPlusJSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type LogoutRequestObject struct {
-}
-
-type LogoutResponseObject interface {
-	VisitLogoutResponse(w http.ResponseWriter) error
-}
-
-type Logout200JSONResponse LogoutStatus
-
-func (response Logout200JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type StreamEventsRequestObject struct {
-	Params StreamEventsParams
-}
-
-type StreamEventsResponseObject interface {
-	VisitStreamEventsResponse(w http.ResponseWriter) error
-}
-
-type StreamEvents200TexteventStreamResponse struct {
-	Body          io.Reader
-	ContentLength int64
-}
-
-func (response StreamEvents200TexteventStreamResponse) VisitStreamEventsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "text/event-stream")
-	if response.ContentLength != 0 {
-		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
-	}
-	w.WriteHeader(200)
-
-	if closer, ok := response.Body.(io.ReadCloser); ok {
-		defer closer.Close()
-	}
-	_, err := io.Copy(w, response.Body)
-	return err
-}
-
-type StreamEvents401ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response StreamEvents401ApplicationProblemPlusJSONResponse) VisitStreamEventsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetHealthRequestObject struct {
-}
-
-type GetHealthResponseObject interface {
-	VisitGetHealthResponse(w http.ResponseWriter) error
-}
-
-type GetHealth200JSONResponse HealthStatus
-
-func (response GetHealth200JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetHealth503ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response GetHealth503ApplicationProblemPlusJSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(503)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListJobsRequestObject struct {
-	Params ListJobsParams
-}
-
-type ListJobsResponseObject interface {
-	VisitListJobsResponse(w http.ResponseWriter) error
-}
-
-type ListJobs200JSONResponse JobPage
-
-func (response ListJobs200JSONResponse) VisitListJobsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListJobs400ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response ListJobs400ApplicationProblemPlusJSONResponse) VisitListJobsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListJobs401ApplicationProblemPlusJSONResponse Problem
-
-func (response ListJobs401ApplicationProblemPlusJSONResponse) VisitListJobsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListJobs503ApplicationProblemPlusJSONResponse Problem
-
-func (response ListJobs503ApplicationProblemPlusJSONResponse) VisitListJobsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(503)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetMeRequestObject struct {
-}
-
-type GetMeResponseObject interface {
-	VisitGetMeResponse(w http.ResponseWriter) error
-}
-
-type GetMe200JSONResponse Me
-
-func (response GetMe200JSONResponse) VisitGetMeResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetMe401ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response GetMe401ApplicationProblemPlusJSONResponse) VisitGetMeResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetReadyRequestObject struct {
-}
-
-type GetReadyResponseObject interface {
-	VisitGetReadyResponse(w http.ResponseWriter) error
-}
-
-type GetReady200JSONResponse ReadyStatus
-
-func (response GetReady200JSONResponse) VisitGetReadyResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetReady503ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response GetReady503ApplicationProblemPlusJSONResponse) VisitGetReadyResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(503)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-// StrictServerInterface represents all server handlers.
-type StrictServerInterface interface {
-	// Build identity and the source offer.
-	// (GET /about)
-	GetAbout(ctx context.Context, request GetAboutRequestObject) (GetAboutResponseObject, error)
-	// Exchange a username and password for a session cookie.
-	// (POST /auth/login)
-	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
-	// Clear the session cookie.
-	// (POST /auth/logout)
-	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
-	// Server-sent events, filtered by category access.
-	// (GET /events)
-	StreamEvents(ctx context.Context, request StreamEventsRequestObject) (StreamEventsResponseObject, error)
-	// Liveness.
-	// (GET /health)
-	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
-	// A page of jobs the caller may see.
-	// (GET /jobs)
-	ListJobs(ctx context.Context, request ListJobsRequestObject) (ListJobsResponseObject, error)
-	// Who the caller is and what they may see.
-	// (GET /me)
-	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
-	// Readiness.
-	// (GET /ready)
-	GetReady(ctx context.Context, request GetReadyRequestObject) (GetReadyResponseObject, error)
-}
-
-type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
-type StrictMiddlewareFunc = strictnethttp.StrictHTTPMiddlewareFunc
-
-type StrictHTTPServerOptions struct {
-	RequestErrorHandlerFunc  func(w http.ResponseWriter, r *http.Request, err error)
-	ResponseErrorHandlerFunc func(w http.ResponseWriter, r *http.Request, err error)
-}
-
-func NewStrictHandler(ssi StrictServerInterface, middlewares []StrictMiddlewareFunc) ServerInterface {
-	return &strictHandler{ssi: ssi, middlewares: middlewares, options: StrictHTTPServerOptions{
-		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		},
-		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		},
-	}}
-}
-
-func NewStrictHandlerWithOptions(ssi StrictServerInterface, middlewares []StrictMiddlewareFunc, options StrictHTTPServerOptions) ServerInterface {
-	return &strictHandler{ssi: ssi, middlewares: middlewares, options: options}
-}
-
-type strictHandler struct {
-	ssi         StrictServerInterface
-	middlewares []StrictMiddlewareFunc
-	options     StrictHTTPServerOptions
-}
-
-// GetAbout operation middleware
-func (sh *strictHandler) GetAbout(w http.ResponseWriter, r *http.Request) {
-	var request GetAboutRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetAbout(ctx, request.(GetAboutRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetAbout")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetAboutResponseObject); ok {
-		if err := validResponse.VisitGetAboutResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// Login operation middleware
-func (sh *strictHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var request LoginRequestObject
-
-	var body LoginJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.Login(ctx, request.(LoginRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "Login")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(LoginResponseObject); ok {
-		if err := validResponse.VisitLoginResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// Logout operation middleware
-func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	var request LogoutRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.Logout(ctx, request.(LogoutRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "Logout")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(LogoutResponseObject); ok {
-		if err := validResponse.VisitLogoutResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// StreamEvents operation middleware
-func (sh *strictHandler) StreamEvents(w http.ResponseWriter, r *http.Request, params StreamEventsParams) {
-	var request StreamEventsRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.StreamEvents(ctx, request.(StreamEventsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "StreamEvents")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(StreamEventsResponseObject); ok {
-		if err := validResponse.VisitStreamEventsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetHealth operation middleware
-func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
-	var request GetHealthRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetHealth(ctx, request.(GetHealthRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetHealth")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetHealthResponseObject); ok {
-		if err := validResponse.VisitGetHealthResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListJobs operation middleware
-func (sh *strictHandler) ListJobs(w http.ResponseWriter, r *http.Request, params ListJobsParams) {
-	var request ListJobsRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListJobs(ctx, request.(ListJobsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListJobs")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListJobsResponseObject); ok {
-		if err := validResponse.VisitListJobsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetMe operation middleware
-func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
-	var request GetMeRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetMe(ctx, request.(GetMeRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetMe")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetMeResponseObject); ok {
-		if err := validResponse.VisitGetMeResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetReady operation middleware
-func (sh *strictHandler) GetReady(w http.ResponseWriter, r *http.Request) {
-	var request GetReadyRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetReady(ctx, request.(GetReadyRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetReady")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetReadyResponseObject); ok {
-		if err := validResponse.VisitGetReadyResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
 }

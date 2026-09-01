@@ -3,37 +3,33 @@ package apiserver
 import (
 	"errors"
 	"net/http"
-	"strconv"
 
+	"github.com/makearr/MediaNexus/internal/apiserver/gen"
 	"github.com/makearr/MediaNexus/internal/authz"
 	"github.com/makearr/MediaNexus/internal/jobs"
 	"github.com/makearr/MediaNexus/internal/paginate"
 	"github.com/makearr/MediaNexus/internal/settings"
 )
 
-// handleListJobs returns a page of jobs the caller may see.
+// ListJobs returns a page of jobs the caller may see.
 //
 // The handler does not filter: it converts an Access into a Visibility and
 // hands that to the repository, which narrows the query (Invariant 36). A
 // handler that filtered afterwards would return short pages and break the
 // cursor, quite apart from being the kind of check that gets forgotten.
-func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
+func (s *Server) ListJobs(w http.ResponseWriter, r *http.Request, params gen.ListJobsParams) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	cursor, err := paginate.Decode(r.URL.Query().Get("cursor"))
+	cursor, err := paginate.Decode(derefOr(params.Cursor, ""))
 	if err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
 		return
 	}
-	limit, err := parseLimit(r.URL.Query().Get("limit"))
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
-		return
-	}
-	state, err := parseState(r.URL.Query().Get("state"))
+	limit := derefOr(params.Limit, 0)
+	state, err := parseState(string(derefOr(params.State, "")))
 	if err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
 		return
@@ -69,17 +65,6 @@ func visibilityFor(access authz.Access) jobs.Visibility {
 		Categories: access.VisibleCategoryIDs(settings.PermissionRead),
 		System:     access.IsSystem() || role == settings.RoleAdmin || role == settings.RoleOperator,
 	}
-}
-
-func parseLimit(raw string) (int, error) {
-	if raw == "" {
-		return 0, nil
-	}
-	limit, err := strconv.Atoi(raw)
-	if err != nil {
-		return 0, errors.New("limit must be a number")
-	}
-	return limit, nil
 }
 
 // parseState rejects an unknown state rather than silently returning nothing,

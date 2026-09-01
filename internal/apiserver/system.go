@@ -41,7 +41,7 @@ type Checker interface {
 // answering slowly is as bad as not answering.
 const healthTimeout = 3 * time.Second
 
-func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+func (s *Server) GetHealth(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), healthTimeout)
 	defer cancel()
 
@@ -53,7 +53,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
+func (s *Server) GetReady(w http.ResponseWriter, r *http.Request) {
 	// Readiness is false during startup and shutdown, so an orchestrator stops
 	// sending work before the process stops accepting it (section 15.2).
 	if !s.ready.Load() {
@@ -73,17 +73,17 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, map[string]string{"status": "ready"})
 }
 
-// handleAbout is unauthenticated by design. AGPL section 13 obliges the running
+// GetAbout is unauthenticated by design. AGPL section 13 obliges the running
 // program to offer its source to "all users interacting with it remotely",
 // which is not limited to those who can log in.
-func (s *Server) handleAbout(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) GetAbout(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, s.build)
 }
 
-// handleMe reports who the caller is and what they can see. It is the smallest
+// GetMe reports who the caller is and what they can see. It is the smallest
 // authenticated endpoint, and the one a client uses to discover its own
 // permissions rather than guessing from failed requests.
-func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+func (s *Server) GetMe(w http.ResponseWriter, r *http.Request) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
 		writeError(w, s.logger, err)

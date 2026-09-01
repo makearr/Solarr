@@ -229,6 +229,8 @@ export interface components {
         /** @enum {string} */
         MediaType: "music" | "tv" | "movie" | "audiobook" | "book" | "adult" | "comic" | "rom";
         /** @enum {string} */
+        EventTopic: "job" | "acquisition" | "library" | "notification" | "pressure";
+        /** @enum {string} */
         JobState: "PENDING" | "PENDING_RETRY" | "LEASED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED";
         /** @enum {string} */
         JobPool: "search" | "acquire" | "import" | "metadata" | "maintenance";
@@ -447,7 +449,10 @@ export interface operations {
     };
     streamEvents: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Comma-separated subset of topics. Absent means every topic the caller may see. An unrecognised name is rejected rather than ignored, so a typo is not a silently empty stream. */
+                topics?: components["schemas"]["EventTopic"][];
+            };
             header?: {
                 "Last-Event-ID"?: string;
             };
