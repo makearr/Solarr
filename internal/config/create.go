@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"path/filepath"
 	"strings"
 
 	"github.com/makearr/MediaNexus/internal/fsx"
@@ -77,6 +78,17 @@ func Create(fsys fsx.FS, path string, generateKey func() (string, error), lookup
 	// bad override is not an answer to that question.
 	if _, err := Parse([]byte(document)); err != nil {
 		return Config{}, fmt.Errorf("config: the generated file is not valid: %w", err)
+	}
+
+	// The directory has to exist before the file can be written into it. The
+	// section 14.3 checks that normally create it run *after* this, because they
+	// validate a configuration that does not exist yet -- so without this, a
+	// first run against a fresh directory fails with a bare "no such file or
+	// directory" naming a temporary file, instead of the error those checks
+	// would have given.
+	directory := filepath.Dir(path)
+	if err := fsys.MkdirAll(directory, directoryPermissions); err != nil {
+		return Config{}, fmt.Errorf("config: create %s: %w (%s)", directory, err, identityHint())
 	}
 
 	// WriteAtomicSecret, not WriteAtomic: this document carries the only copy of

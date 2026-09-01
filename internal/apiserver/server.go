@@ -53,6 +53,12 @@ type Config struct {
 	// rather than sleeping (ADR-17).
 	Clock  clock.Clock
 	Logger *slog.Logger
+	// WebUI serves the compiled interface. Optional: a CLI subcommand that only
+	// needs the API passes nothing and every path outside the API answers 404.
+	//
+	// It is a handler rather than an fs.FS so apiserver does not have to know how
+	// the interface is packaged -- that belongs to internal/webui.
+	WebUI http.Handler
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -67,6 +73,7 @@ type Server struct {
 	jobs    *jobs.Queue
 	events  *events.Bus
 	wall    clock.Clock
+	webui   http.Handler
 	address string
 
 	// ready gates /ready independently of the checks themselves, so the answer
@@ -95,6 +102,7 @@ func New(config Config) (*Server, error) {
 		jobs:    config.Jobs,
 		events:  config.Events,
 		wall:    config.Clock,
+		webui:   config.WebUI,
 		address: net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -124,6 +132,18 @@ func New(config Config) (*Server, error) {
 			secured.Get("/events", server.routeStreamEvents)
 		})
 	})
+
+	// The interface takes everything the API did not claim.
+	//
+	// Registered *after* the API subtree, which is what keeps a mistyped
+	// /api/v1 path answering problem+json: chi gives that subtree the NotFound
+	// handler in force when Route was called, so this later reassignment applies
+	// only outside it. Move this above the Route call and every wrong API path
+	// starts returning the application shell with status 200.
+	// TestTheWebUINeverSwallowsAnAPIPath holds that line.
+	if server.webui != nil {
+		router.NotFound(server.webui.ServeHTTP)
+	}
 
 	server.router = router
 	server.http = &http.Server{

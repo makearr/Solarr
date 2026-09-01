@@ -27,7 +27,7 @@ var allowedInternalImports = map[string][]string{
 	"cmd/medianexus": {
 		"internal/apiserver", "internal/auth", "internal/clock", "internal/config",
 		"internal/events", "internal/fsx", "internal/health", "internal/jobs",
-		"internal/settings", "internal/store", "migrations",
+		"internal/settings", "internal/store", "internal/webui", "migrations",
 	},
 	"internal/auth":  {"internal/clock", "internal/secrets"},
 	"internal/authz": {"internal/settings"},
@@ -56,7 +56,11 @@ var allowedInternalImports = map[string][]string{
 	// nothing of ours by design: the API types are derived from the spec, so a
 	// dependency here would mean the spec had stopped being the source of truth.
 	"internal/apiserver/gen": {},
-	"migrations":             {"internal/store"},
+	// Serves the compiled bundle from embed.FS. It depends on nothing of ours:
+	// apiserver receives it as an http.Handler, so the API layer never learns
+	// how the interface is packaged.
+	"internal/webui": {},
+	"migrations":     {"internal/store"},
 }
 
 // Plugins import internal/plugin and nothing else from core, which is what keeps

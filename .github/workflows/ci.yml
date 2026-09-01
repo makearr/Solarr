@@ -22,6 +22,21 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # Before the Go build, because go:embed folds the result into the binary.
+      # Building it here also means a TypeScript error fails CI rather than
+      # surfacing when someone next runs `make web`.
+      - name: Build the web interface
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
       # ADR-30: the binary stays pure Go so the image can bundle its media tools
       # instead of linking them.
       - name: Build without CGO
@@ -56,6 +71,11 @@ jobs:
           [ -f api/openapi.yaml ] || { echo "no spec yet, skipping"; exit 0; }
           make api
           git diff --exit-code || { echo "generated API is stale; run 'make api'"; exit 1; }
+
+      # The bundle is generated and gitignored, so building it must leave the
+      # tree clean. If it does not, something generated is being tracked.
+      - name: The web build leaves the tree clean
+        run: git status --porcelain --untracked-files=all | grep . && exit 1 || exit 0
 
   benchmarks:
     runs-on: ubuntu-latest

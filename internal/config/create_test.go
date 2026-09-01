@@ -239,3 +239,24 @@ func TestCreate_AppliesEnvironmentOverridesOnTheFirstRun(t *testing.T) {
 		t.Error("the override was written into config.yml; it must apply to the run, not the file")
 	}
 }
+
+// A first run into a directory that does not exist yet must work.
+//
+// The section 14.3 directory checks create the configured directories, but they
+// validate a configuration that on a first run does not exist yet, so they run
+// after this. Without Create making its own parent, pointing the config
+// directory somewhere new failed with a bare "no such file or directory" naming
+// a temporary file -- which describes the atomic-write mechanism rather than
+// anything the operator did.
+func TestCreate_MakesTheDirectoryItWritesInto(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+
+	const path = "/srv/medianexus/config/config.yml"
+	if _, err := config.Create(fsys, path, fixedKey, noEnv); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if _, err := fsys.Stat(path); err != nil {
+		t.Fatalf("the file was not created: %v", err)
+	}
+}

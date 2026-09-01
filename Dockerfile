@@ -6,6 +6,19 @@
 # them -- still produces a working native image rather than failing to parse
 # the first line.
 ARG BUILDPLATFORM=linux/amd64
+
+# The interface is compiled first, on the builder's own architecture: it is
+# JavaScript, so the result is identical for every target and building it once
+# per platform would double release time for no difference in output.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS web
+WORKDIR /web
+# The lockfile alone first, so a source-only change does not reinstall.
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web/ ./
+# outDir points outside web/, so the bundle lands where the Go package embeds it.
+RUN npm run build
+
 FROM --platform=$BUILDPLATFORM golang:1 AS build
 
 ARG TARGETOS=linux
@@ -26,6 +39,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+# The compiled interface, which go:embed folds into the binary. Without this the
+# image would build and run but answer every page with "not in this binary".
+COPY --from=web /internal/webui/dist ./internal/webui/dist
+
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath \
       -ldflags "-s -w \
@@ -34,6 +51,11 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
         -X main.buildDate=${BUILD_DATE} \
         -X main.sourceURL=${SOURCE_URL}" \
       -o /out/medianexus ./cmd/medianexus
+
+# An empty directory to copy into the final image with the right ownership. It
+# is made here because this stage runs natively on the builder; a RUN in the
+# final stage would execute a foreign-architecture binary under emulation.
+RUN mkdir -p /out/config
 
 # Alpine rather than distroless: a self-hosted deployment gets debugged on the
 # machine it runs on, and a shell is worth the few megabytes. It also runs under
@@ -57,6 +79,14 @@ COPY --from=build /out/medianexus /usr/local/bin/medianexus
 
 # One volume holds config, databases, backups and cache, so a default
 # deployment mounts a single path (architecture section 20.2).
+#
+# Copied with ownership rather than left to VOLUME to create implicitly. An
+# implicitly created mount point belongs to root, and this image runs as 65532,
+# so `docker run` with no volume could not write its own config.yml on first
+# start -- the image failed out of the box, which is exactly the path a new user
+# takes first. Docker seeds an anonymous volume from the image, so the volume
+# inherits this ownership too.
+COPY --from=build --chown=65532:65532 /out/config /config
 VOLUME ["/config"]
 EXPOSE 8080
 
