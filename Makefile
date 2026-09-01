@@ -1,5 +1,16 @@
 # Toolchains run in Docker — nothing needs installing locally.
 # Override the images to pin different versions.
+
+# Machine-specific overrides (DOCKER_DNS, image pins). Gitignored, optional.
+-include Makefile.local
+
+# Docker's bridge network cannot use a host resolv.conf that points at
+# systemd-resolved's 127.0.0.53 stub, so it substitutes 8.8.8.8 — which some
+# networks block, leaving module downloads to time out. Set DOCKER_DNS to the
+# host's real upstream resolvers when that happens.
+DOCKER_DNS  ?=
+DNS_FLAGS   := $(foreach server,$(DOCKER_DNS),--dns $(server))
+
 GO_IMAGE    ?= golang:1
 NODE_IMAGE  ?= node:22-alpine
 SQLC_IMAGE  ?= sqlc/sqlc:latest
@@ -8,14 +19,16 @@ LINT_IMAGE  ?= golangci/golangci-lint:latest
 UID         := $(shell id -u)
 GID         := $(shell id -g)
 MOUNT       := -v $(CURDIR):/src -w /src
-CACHE       := -v medianexus-gomod:/go/pkg/mod -v medianexus-gobuild:/.cache/go-build
+# Mounted at /go/pkg rather than /go/pkg/mod: the checksum database cache lives
+# beside the module cache at /go/pkg/sumdb, and a module download fails without it.
+CACHE       := -v medianexus-gopath:/go/pkg -v medianexus-gobuild:/.cache/go-build
 GOENV       := -e GOCACHE=/.cache/go-build -e CGO_ENABLED=0 -e HOME=/tmp
-RUN_GO      := docker run --rm -u $(UID):$(GID) $(MOUNT) $(CACHE) $(GOENV) $(GO_IMAGE)
-RUN_NODE    := docker run --rm -u $(UID):$(GID) $(MOUNT)/web -w /src/web \
+RUN_GO      := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) $(CACHE) $(GOENV) $(GO_IMAGE)
+RUN_NODE    := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT)/web -w /src/web \
                  -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
 
 .PHONY: help verify build test race bench lint vet fmt fmt-check sqlc sqlc-check \
-        api web web-dev image image-local milestone version cache-init clean-cache
+        api web web-dev image image-local milestone version cache-init clean-cache deps tidy
 
 VERSION     := $(shell tr -d '[:space:]' < VERSION 2>/dev/null || echo 0.0.0)
 COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -33,9 +46,9 @@ help:  ## List targets
 ## by a marker so the check costs one container start per make invocation.
 cache-init:
 	@docker run --rm -u 0 $(CACHE) -v medianexus-npm:/tmp/.npm $(GO_IMAGE) sh -c \
-	  'test -f /.cache/go-build/.owned-by-$(UID) || \
-	   { chown -R $(UID):$(GID) /go/pkg/mod /.cache/go-build /tmp/.npm && \
-	     touch /.cache/go-build/.owned-by-$(UID); }'
+	  'for dir in /go/pkg /.cache/go-build /tmp/.npm; do \
+	     [ "$$(stat -c %u $$dir)" = "$(UID)" ] || chown -R $(UID):$(GID) $$dir; \
+	   done'
 
 ## ---- the gate: everything that must pass before a subsystem is "done" ----
 verify: fmt-check vet lint test sqlc-check  ## Full check, as CI runs it
@@ -47,7 +60,7 @@ test: cache-init  ## Unit tests
 	$(RUN_GO) go test -count=1 ./...
 
 race: cache-init  ## Tests with the race detector (needs CGO)
-	docker run --rm -u $(UID):$(GID) $(MOUNT) $(CACHE) -e GOCACHE=/.cache/go-build -e HOME=/tmp \
+	docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) $(CACHE) -e GOCACHE=/.cache/go-build -e HOME=/tmp \
 	  $(GO_IMAGE) go test -race -count=1 ./...
 
 bench: cache-init  ## Benchmarks — ADR-28 performance targets
@@ -65,6 +78,14 @@ fmt: cache-init  ## Format in place
 fmt-check: cache-init
 	@out=$$($(RUN_GO) gofmt -l -s .); \
 	 if [ -n "$$out" ]; then echo "unformatted:"; echo "$$out"; exit 1; fi
+
+## ---- dependencies ----
+deps: cache-init  ## Add or update a module: make deps MODULE=modernc.org/sqlite
+	@test -n "$(MODULE)" || { echo "usage: make deps MODULE=<path>"; exit 1; }
+	$(RUN_GO) sh -c 'GOFLAGS=-mod=mod go get $(MODULE) && go mod tidy'
+
+tidy: cache-init  ## Reconcile go.mod and go.sum with the source
+	$(RUN_GO) go mod tidy
 
 ## ---- generated code: committed, never hand-edited (ADR-31) ----
 sqlc:       ## Regenerate from queries/*.sql
@@ -120,4 +141,4 @@ milestone:  ## Advance to the next milestone: MINOR+1, BUILD reset to 0
 	@echo "tag it:  git tag v$$(cat VERSION) && git push origin v$$(cat VERSION)"
 
 clean-cache:
-	-docker volume rm medianexus-gomod medianexus-gobuild medianexus-npm
+	-docker volume rm medianexus-gopath medianexus-gobuild medianexus-npm
