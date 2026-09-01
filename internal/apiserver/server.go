@@ -34,6 +34,7 @@ type Config struct {
 	BaseURL string
 	Build   BuildInfo
 	Checker Checker
+	Auth    AuthConfig
 	Logger  *slog.Logger
 }
 
@@ -45,6 +46,7 @@ type Server struct {
 	logger  *slog.Logger
 	build   BuildInfo
 	checker Checker
+	auth    AuthConfig
 	address string
 
 	// ready gates /ready independently of the checks themselves, so the answer
@@ -66,6 +68,7 @@ func New(config Config) (*Server, error) {
 		logger:  config.Logger,
 		build:   config.Build,
 		checker: config.Checker,
+		auth:    config.Auth,
 		address: net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -82,6 +85,16 @@ func New(config Config) (*Server, error) {
 		api.Get("/health", server.handleHealth)
 		api.Get("/ready", server.handleReady)
 		api.Get("/about", server.handleAbout)
+		api.Post("/auth/login", server.handleLogin)
+		api.Post("/auth/logout", server.handleLogout)
+
+		// Everything else needs an identity. Grouping rather than per-route
+		// middleware means a new endpoint is authenticated by default: adding
+		// one outside this group is a visible act.
+		api.Group(func(secured chi.Router) {
+			secured.Use(server.authenticate)
+			secured.Get("/me", server.handleMe)
+		})
 	})
 
 	server.router = router

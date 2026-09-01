@@ -138,6 +138,37 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, 
 	return i, err
 }
 
+const getUserByAPIKeyHash = `-- name: GetUserByAPIKeyHash :one
+SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.ui_tier, k.id AS key_id
+FROM api_key k JOIN app_user u ON u.id = k.user_id
+WHERE k.key_hash = ?
+`
+
+type GetUserByAPIKeyHashRow struct {
+	ID           int64
+	Username     string
+	PasswordHash sql.NullString
+	Role         string
+	CreatedAt    int64
+	UiTier       string
+	KeyID        int64
+}
+
+func (q *Queries) GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetUserByAPIKeyHashRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserByAPIKeyHash, keyHash)
+	var i GetUserByAPIKeyHashRow
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UiTier,
+		&i.KeyID,
+	)
+	return i, err
+}
+
 const getUserByID = `-- name: GetUserByID :one
 
 SELECT id, username, password_hash, role, created_at, ui_tier

@@ -4,6 +4,9 @@ import (
 	"context"
 	"net/http"
 	"time"
+
+	"github.com/makearr/MediaNexus/internal/authz"
+	"github.com/makearr/MediaNexus/internal/settings"
 )
 
 // BuildInfo is what the About endpoint reports. An unknown commit is reported
@@ -75,4 +78,47 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 // which is not limited to those who can log in.
 func (s *Server) handleAbout(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, s.build)
+}
+
+// handleMe reports who the caller is and what they can see. It is the smallest
+// authenticated endpoint, and the one a client uses to discover its own
+// permissions rather than guessing from failed requests.
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+
+	visible := access.Categories(settings.PermissionRead)
+	categories := make([]categoryView, 0, len(visible))
+	for _, category := range visible {
+		categories = append(categories, categoryView{
+			ID:         category.ID,
+			MediaType:  category.MediaType,
+			Name:       category.Name,
+			Permission: string(access.Permission(category.ID)),
+		})
+	}
+
+	writeJSON(w, s.logger, http.StatusOK, meView{
+		UserID:     access.UserID(),
+		Role:       string(access.Role()),
+		Categories: categories,
+	})
+}
+
+type meView struct {
+	UserID     int64          `json:"user_id"`
+	Role       string         `json:"role"`
+	Categories []categoryView `json:"categories"`
+}
+
+type categoryView struct {
+	ID        int64  `json:"id"`
+	MediaType string `json:"media_type"`
+	Name      string `json:"name"`
+	// Permission is what this caller may do here, so a client does not have to
+	// discover its limits by being refused.
+	Permission string `json:"permission"`
 }
