@@ -31,8 +31,10 @@ jobs:
       # Before the Go build, because go:embed folds the result into the binary.
       # Building it here also means a TypeScript error fails CI rather than
       # surfacing when someone next runs `make web`.
-      # `npm run build` lints first: the rules of hooks are invisible to tsc, so a
-      # hook called after an early return compiles cleanly and fails at runtime.
+      # `npm run build` lints and tests first: the rules of hooks are invisible to
+      # tsc, so a hook called after an early return compiles cleanly and fails at
+      # runtime, and the list core's selection and pagination logic is pure
+      # enough to test but too central to leave untested.
       - name: Build the web interface
         working-directory: web
         run: |

@@ -39,7 +39,7 @@ RUN_NODE_ROOT := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) \
                  -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
 
 .PHONY: help verify build test race bench lint vet fmt fmt-check sqlc sqlc-check \
-        api web web-dev image image-local builder milestone version cache-init clean-cache deps tidy
+        api web web-test web-dev image image-local builder milestone version cache-init clean-cache deps tidy
 
 VERSION     := $(shell tr -d '[:space:]' < VERSION 2>/dev/null || echo 0.0.0)
 COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -129,8 +129,11 @@ api:        ## Regenerate Go server + TS client from api/openapi.yaml
 	$(RUN_GO) gofmt -w internal/apiserver/gen
 
 ## ---- web ----
-web:        ## Production build, embedded via embed.FS
+web:        ## Production build, embedded via embed.FS. Lints and tests first.
 	$(RUN_NODE) npm ci && $(RUN_NODE) npm run build
+
+web-test:   ## Frontend unit tests only
+	$(RUN_NODE) npm ci && $(RUN_NODE) npm run test
 
 web-dev:    ## Vite dev server on :5173, proxying the API
 	docker run --rm -it -u $(UID):$(GID) $(MOUNT)/web -w /src/web -p 5173:5173 \
