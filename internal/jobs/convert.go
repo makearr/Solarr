@@ -25,6 +25,7 @@ func convertJob(row jobsdb.Job) Job {
 		DependsOn:      row.DependsOn.Int64,
 		CorrelationID:  row.CorrelationID.String,
 		UserID:         row.UserID.Int64,
+		CategoryID:     row.CategoryID.Int64,
 		LastError:      row.LastError.String,
 		CreatedAt:      time.Unix(row.CreatedAt, 0).UTC(),
 		UpdatedAt:      time.Unix(row.UpdatedAt, 0).UTC(),

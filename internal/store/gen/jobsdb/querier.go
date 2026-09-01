@@ -25,7 +25,13 @@ type Querier interface {
 	FindActiveJobByActionKey(ctx context.Context, actionKey sql.NullString) (Job, error)
 	GetJob(ctx context.Context, id int64) (Job, error)
 	ListAttempts(ctx context.Context, jobID int64) ([]JobAttempt, error)
-	ListJobsByState(ctx context.Context, arg ListJobsByStateParams) ([]Job, error)
+	// Cursor pagination, never OFFSET (Invariant 32). The tie-break on id is not
+	// optional: updated_at is not unique, so a page boundary landing inside a group
+	// of equal timestamps would silently drop or repeat rows.
+	//
+	// A zero cursor means the start of the list, which is why the comparison is
+	// guarded rather than written as a plain inequality.
+	ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]Job, error)
 	// The reaper returns abandoned work to the queue. A crashed process therefore
 	// self-heals with no manual cleanup, which is what makes restart recovery real.
 	ReclaimExpiredLeases(ctx context.Context, arg ReclaimExpiredLeasesParams) ([]ReclaimExpiredLeasesRow, error)

@@ -30,6 +30,7 @@ type process struct {
 	logger     *slog.Logger
 	settings   *store.Store
 	jobs       *store.Store
+	queue      *jobs.Queue
 	cache      *settings.Cache
 	dispatcher *jobs.Dispatcher
 	server     *apiserver.Server
@@ -155,6 +156,7 @@ func (p *process) startJobs(_ context.Context) error {
 	wall := clock.NewSystem()
 	registry := jobs.NewRegistry()
 	queue := jobs.NewQueue(p.jobs, wall, registry, nil)
+	p.queue = queue
 
 	// The lease owner must be unique per process run, or the reaper cannot tell
 	// a stale lease from a live one after a restart.
@@ -194,6 +196,7 @@ func (p *process) startServer(ctx context.Context) error {
 		},
 		Checker: health.New(p.settings, p.jobs),
 		Auth:    authConfig,
+		Jobs:    p.queue,
 		Logger:  p.logger,
 	})
 	if err != nil {

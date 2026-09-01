@@ -28,6 +28,7 @@ type Job struct {
 	LastError      sql.NullString
 	CreatedAt      int64
 	UpdatedAt      int64
+	CategoryID     sql.NullInt64
 }
 
 type JobAttempt struct {

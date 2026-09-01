@@ -358,3 +358,37 @@ func TestAuth_SessionForADeletedUserIsRefused(t *testing.T) {
 		t.Errorf("session for a deleted user = %d, want 401", got)
 	}
 }
+
+func TestJobs_RejectsABadCursor(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+	cookies := fixture.login(t, "avs", testPassword).Result().Cookies()
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/jobs?cursor=not-a-cursor", nil)
+	request.AddCookie(cookies[0])
+
+	// Validated before the queue's availability is considered, so a client is
+	// told what is actually wrong with its request.
+	if got := fixture.do(t, request).Code; got != http.StatusBadRequest {
+		t.Errorf("bad cursor = %d, want 400", got)
+	}
+}
+
+func TestJobs_RejectsAnUnknownState(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+	cookies := fixture.login(t, "avs", testPassword).Result().Cookies()
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/jobs?state=SLEEPING", nil)
+	request.AddCookie(cookies[0])
+
+	// Silently returning nothing would look like an empty queue.
+	if got := fixture.do(t, request).Code; got != http.StatusBadRequest {
+		t.Errorf("unknown state = %d, want 400", got)
+	}
+}
+
+func TestJobs_RequiresAuthentication(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+	if got := fixture.do(t, httptest.NewRequest(http.MethodGet, "/api/v1/jobs", nil)).Code; got != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", got)
+	}
+}

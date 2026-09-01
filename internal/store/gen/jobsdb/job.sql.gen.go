@@ -52,7 +52,7 @@ WHERE id IN (
 )
 RETURNING id, type, pool, action_key, priority, payload_json, state, mutating,
           attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-          depends_on, correlation_id, user_id, last_error, created_at, updated_at
+          depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
 `
 
 type ClaimJobsParams struct {
@@ -103,6 +103,7 @@ func (q *Queries) ClaimJobs(ctx context.Context, arg ClaimJobsParams) ([]Job, er
 			&i.LastError,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CategoryID,
 		); err != nil {
 			return nil, err
 		}
@@ -188,11 +189,11 @@ const enqueueJob = `-- name: EnqueueJob :one
 INSERT INTO job (
   type, pool, action_key, priority, payload_json, state, mutating,
   max_attempts, run_after, depends_on, correlation_id, user_id,
-  created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  created_at, updated_at, category_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, type, pool, action_key, priority, payload_json, state, mutating,
           attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-          depends_on, correlation_id, user_id, last_error, created_at, updated_at
+          depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
 `
 
 type EnqueueJobParams struct {
@@ -210,6 +211,7 @@ type EnqueueJobParams struct {
 	UserID        sql.NullInt64
 	CreatedAt     int64
 	UpdatedAt     int64
+	CategoryID    sql.NullInt64
 }
 
 func (q *Queries) EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, error) {
@@ -228,6 +230,7 @@ func (q *Queries) EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, er
 		arg.UserID,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+		arg.CategoryID,
 	)
 	var i Job
 	err := row.Scan(
@@ -250,6 +253,7 @@ func (q *Queries) EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, er
 		&i.LastError,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CategoryID,
 	)
 	return i, err
 }
@@ -284,7 +288,7 @@ func (q *Queries) FailJob(ctx context.Context, arg FailJobParams) (int64, error)
 const findActiveJobByActionKey = `-- name: FindActiveJobByActionKey :one
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-       depends_on, correlation_id, user_id, last_error, created_at, updated_at
+       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
 FROM job
 WHERE action_key = ?
   AND state IN ('PENDING', 'PENDING_RETRY', 'LEASED', 'RUNNING')
@@ -313,6 +317,7 @@ func (q *Queries) FindActiveJobByActionKey(ctx context.Context, actionKey sql.Nu
 		&i.LastError,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CategoryID,
 	)
 	return i, err
 }
@@ -320,7 +325,7 @@ func (q *Queries) FindActiveJobByActionKey(ctx context.Context, actionKey sql.Nu
 const getJob = `-- name: GetJob :one
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-       depends_on, correlation_id, user_id, last_error, created_at, updated_at
+       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
 FROM job WHERE id = ?
 `
 
@@ -347,6 +352,7 @@ func (q *Queries) GetJob(ctx context.Context, id int64) (Job, error) {
 		&i.LastError,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CategoryID,
 	)
 	return i, err
 }
@@ -388,20 +394,49 @@ func (q *Queries) ListAttempts(ctx context.Context, jobID int64) ([]JobAttempt, 
 	return items, nil
 }
 
-const listJobsByState = `-- name: ListJobsByState :many
+const listJobsPage = `-- name: ListJobsPage :many
+
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-       depends_on, correlation_id, user_id, last_error, created_at, updated_at
-FROM job WHERE state = ? ORDER BY updated_at DESC LIMIT ?
+       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
+FROM job
+WHERE (?1 = '' OR state = ?1)
+  -- Category filtering happens here, in the query, rather than by discarding
+  -- rows afterwards: filtering after the fact returns short pages and breaks
+  -- the cursor (Invariant 36).
+  AND ((category_id IS NULL AND ?2 = 1)
+       OR category_id IN (SELECT value FROM json_each(?3)))
+  AND (?4 = 0
+       OR updated_at < ?4
+       OR (updated_at = ?4 AND id < ?5))
+ORDER BY updated_at DESC, id DESC
+LIMIT ?6
 `
 
-type ListJobsByStateParams struct {
-	State string
-	Limit int64
+type ListJobsPageParams struct {
+	State             interface{}
+	IncludeSystem     interface{}
+	VisibleCategories interface{}
+	AfterSort         interface{}
+	AfterID           int64
+	PageSize          int64
 }
 
-func (q *Queries) ListJobsByState(ctx context.Context, arg ListJobsByStateParams) ([]Job, error) {
-	rows, err := q.db.QueryContext(ctx, listJobsByState, arg.State, arg.Limit)
+// Cursor pagination, never OFFSET (Invariant 32). The tie-break on id is not
+// optional: updated_at is not unique, so a page boundary landing inside a group
+// of equal timestamps would silently drop or repeat rows.
+//
+// A zero cursor means the start of the list, which is why the comparison is
+// guarded rather than written as a plain inequality.
+func (q *Queries) ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]Job, error) {
+	rows, err := q.db.QueryContext(ctx, listJobsPage,
+		arg.State,
+		arg.IncludeSystem,
+		arg.VisibleCategories,
+		arg.AfterSort,
+		arg.AfterID,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -429,6 +464,7 @@ func (q *Queries) ListJobsByState(ctx context.Context, arg ListJobsByStateParams
 			&i.LastError,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CategoryID,
 		); err != nil {
 			return nil, err
 		}
