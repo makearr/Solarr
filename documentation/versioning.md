@@ -13,8 +13,46 @@ MAJOR . MINOR . BUILD
 Advances **only** when `make image` completes successfully. Commits do not change it, so the
 number means "this many images have been produced", not "this much has been typed".
 
-A failed build leaves the version untouched. `make image NOBUMP=1` builds without advancing —
-useful when iterating on the Dockerfile itself.
+A failed build leaves the version untouched.
+
+### What `make image` does
+
+```text
+1  refuse if the working tree is dirty          ← see below
+2  docker login ghcr.io
+3  buildx --push, linux/amd64 + linux/arm64
+4  bump BUILD in VERSION
+5  prepend a CHANGELOG.md entry — commits since the previous tag
+6  commit VERSION + CHANGELOG.md
+7  annotated tag v<version>
+8  git push main + tag
+9  create the GitHub release, body = the changelog entry
+```
+
+Everything after step 3 runs only if the build and push succeeded, so a failed build leaves
+the repository untouched.
+
+### Why a dirty tree is refused
+
+The About page reports the commit the binary was built from, which is how the AGPL §13 source
+obligation is met (`licence-compliance.md`). Building from uncommitted changes would stamp a
+commit that does not describe the running binary — the source offered would not correspond to
+the software. That is precisely the misrepresentation §13 exists to prevent, so it is a hard
+failure rather than a warning.
+
+**`make image-local`** exists for iteration: single-arch, loaded locally, tolerates a dirty
+tree, pushes nothing, and stamps the version `-dirty` so such an image is never mistaken for a
+release.
+
+### Where changes are documented
+
+| Surface | Content |
+|---|---|
+| `CHANGELOG.md` | One section per build, newest first, in the repository |
+| Annotated git tag | The same entry, attached to `v<version>` |
+| **GitHub release** | Published per build, body is the changelog entry plus the image reference and platforms |
+
+Releases below `1.0.0` are marked as pre-releases.
 
 ## MINOR — milestones
 

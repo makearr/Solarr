@@ -15,7 +15,7 @@ RUN_NODE    := docker run --rm -u $(UID):$(GID) $(MOUNT)/web -w /src/web \
                  -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
 
 .PHONY: help verify build test race bench lint vet fmt fmt-check sqlc sqlc-check \
-        api web web-dev image milestone version clean-cache
+        api web web-dev image image-local milestone version clean-cache
 
 VERSION     := $(shell tr -d '[:space:]' < VERSION 2>/dev/null || echo 0.0.0)
 COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -23,6 +23,7 @@ BUILD_DATE  := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS     := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)
 IMAGE       ?= ghcr.io/makearr/medianexus
 PLATFORMS   ?= linux/amd64,linux/arm64
+TOKEN       ?= $(shell grep -oP 'ghp_[A-Za-z0-9]+' private/secrets.md 2>/dev/null | head -1)
 
 help:  ## List targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -79,16 +80,25 @@ web-dev:    ## Vite dev server on :5173, proxying the API
 version:    ## Print the current version
 	@echo $(VERSION)
 
-image:      ## Multi-arch build; advances the build number ONLY on success (NOBUMP=1 to skip)
+image:      ## Release build: multi-arch, push to ghcr, bump, changelog, tag, push, release
 	@test -f Dockerfile || { echo "no Dockerfile yet"; exit 1; }
-	docker buildx build --platform $(PLATFORMS) \
+	@# A release image must correspond to a commit, or the About page (AGPL §13)
+	@# claims a source revision that does not describe the running binary.
+	@git diff --quiet && git diff --cached --quiet || 	  { echo "working tree is dirty — commit first, or use 'make image-local'"; exit 1; }
+	@echo "$(TOKEN)" | docker login ghcr.io -u makearr --password-stdin
+	docker buildx build --push --platform $(PLATFORMS) \
 	  --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) \
 	  --build-arg BUILD_DATE=$(BUILD_DATE) \
 	  -t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
-	@if [ -z "$(NOBUMP)" ]; then \
-	  awk -F. '{printf "%s.%s.%d\n", $$1, $$2, $$3+1}' VERSION > VERSION.tmp && mv VERSION.tmp VERSION; \
-	  echo "build $(VERSION) -> $$(cat VERSION)"; \
-	else echo "version held at $(VERSION)"; fi
+	@./scripts/release.sh
+
+image-local: ## Local single-arch build: allows a dirty tree, no bump, no push
+	@test -f Dockerfile || { echo "no Dockerfile yet"; exit 1; }
+	docker buildx build --load --platform linux/$(shell uname -m | sed s/x86_64/amd64/) \
+	  --build-arg VERSION=$(VERSION)-dirty --build-arg COMMIT=$(COMMIT) \
+	  --build-arg BUILD_DATE=$(BUILD_DATE) \
+	  -t $(IMAGE):dev .
+	@echo "built $(IMAGE):dev — version held at $(VERSION)"
 
 milestone:  ## Advance to the next milestone: MINOR+1, BUILD reset to 0
 	@awk -F. '{printf "%s.%d.0\n", $$1, $$2+1}' VERSION > VERSION.tmp && mv VERSION.tmp VERSION
