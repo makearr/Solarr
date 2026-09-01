@@ -192,7 +192,40 @@ func (s *Store) WriteDB() *sql.DB { return s.write }
 func (s *Store) Close() error {
 	s.queue.close()
 	<-s.writerDone
-	return s.closeHandles()
+
+	var errs []error
+	// The read pool closes before the checkpoint. A TRUNCATE checkpoint needs
+	// exclusive access to the WAL, so with readers still connected it blocks for
+	// the whole busy timeout and then gives up -- fifteen seconds added to every
+	// shutdown, for nothing.
+	if s.read != nil {
+		if err := s.read.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close read pool: %w", err))
+		}
+	}
+	s.checkpoint()
+	if s.write != nil {
+		if err := s.write.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close write handle: %w", err))
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("store %s: %w", s.config.Name, errors.Join(errs...))
+	}
+	return nil
+}
+
+// checkpoint truncates the WAL and updates the query planner's statistics on a
+// clean shutdown (section 15.2 step 6). Both are best effort: the next start is
+// correct without them, just slower, so a failure here must not turn an orderly
+// stop into an error.
+func (s *Store) checkpoint() {
+	for _, statement := range []string{"PRAGMA wal_checkpoint(TRUNCATE)", "PRAGMA optimize"} {
+		if _, err := s.write.Exec(statement); err != nil {
+			s.logger.Warn("shutdown maintenance",
+				slog.String("statement", statement), slog.Any("error", err))
+		}
+	}
 }
 
 func (s *Store) closeHandles() error {

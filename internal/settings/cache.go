@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -29,6 +30,11 @@ type Cache struct {
 	// current is swapped atomically. A reader takes the pointer once and holds
 	// it for the whole request, so no lock is held while work is done.
 	current atomic.Pointer[Snapshot]
+	// rebuilding serialises build-and-publish. Without it two concurrent
+	// reloads race: the one that read the older state can finish last and
+	// overwrite the newer snapshot, so a committed write silently disappears
+	// from the cache until something else reloads. Readers never take this.
+	rebuilding sync.Mutex
 }
 
 // NewCache builds a cache and loads it.
@@ -49,7 +55,15 @@ func (c *Cache) Snapshot() *Snapshot { return c.current.Load() }
 // Reload rebuilds the snapshot from the database and publishes it atomically.
 // A reader holding the previous snapshot keeps a consistent view until it is
 // finished with it.
+//
+// Reading and publishing happen under one lock, so the snapshot that ends up
+// published is always the one built last. Two concurrent reloads would
+// otherwise be free to finish out of order, and the slower build -- which saw
+// less -- would win.
 func (c *Cache) Reload(ctx context.Context) error {
+	c.rebuilding.Lock()
+	defer c.rebuilding.Unlock()
+
 	built, err := c.build(ctx)
 	if err != nil {
 		return err
