@@ -40,9 +40,14 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 # any --user, which is how a NAS matches the uid that owns its volumes.
 FROM alpine:3
 
-# ca-certificates for HTTPS to indexers and metadata providers; tzdata because
-# air dates are timezone-dependent (architecture section 19.2).
-RUN apk add --no-cache ca-certificates tzdata
+# Certificates and timezone data are copied from the build stage rather than
+# installed with apk. A RUN in this stage would execute a foreign-architecture
+# binary, which needs qemu binfmt emulation on the builder -- slow, and a hidden
+# requirement that only shows up when someone tries to release. Copying files
+# needs neither. ca-certificates for HTTPS to indexers and metadata providers,
+# zoneinfo because air dates are timezone-dependent (architecture section 19.2).
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
 
 # ADR-30 note: fpcalc and the tagging helper belong in this image, not the
 # binary. They are added when MediaTool lands with music (stage 3) rather than

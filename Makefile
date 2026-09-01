@@ -28,7 +28,7 @@ RUN_NODE    := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT)/web -w /sr
                  -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
 
 .PHONY: help verify build test race bench lint vet fmt fmt-check sqlc sqlc-check \
-        api web web-dev image image-local milestone version cache-init clean-cache deps tidy
+        api web web-dev image image-local builder milestone version cache-init clean-cache deps tidy
 
 VERSION     := $(shell tr -d '[:space:]' < VERSION 2>/dev/null || echo 0.0.0)
 COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -42,6 +42,11 @@ ARCH        := $(shell uname -m | sed -e s/x86_64/amd64/ -e s/aarch64/arm64/)
 # multi-arch manifest, and shipping only amd64 would silently drop arm64 --
 # which ADR-35 cares about, because fingerprinting runs there.
 HAS_BUILDX  := $(shell docker buildx version >/dev/null 2>&1 && echo yes)
+
+# The default "docker" driver cannot export a manifest list, so a multi-arch
+# build needs a container-driver builder. Created on demand by the builder
+# target; it persists, so this costs nothing after the first run.
+BUILDER     ?= medianexus
 TOKEN       ?= $(shell grep -oP 'ghp_[A-Za-z0-9]+' private/secrets.md 2>/dev/null | head -1)
 
 help:  ## List targets
@@ -128,11 +133,12 @@ image:      ## Release build: multi-arch, push to ghcr, bump, changelog, tag, pu
 	  echo "Install it (Debian/Ubuntu: 'apt install docker-buildx'), then re-run."; \
 	  echo "Use 'make image-local' for a single-arch image without it."; \
 	  exit 1; }
+	@$(MAKE) --no-print-directory builder
 	@# A release image must correspond to a commit, or the About page (AGPL §13)
 	@# claims a source revision that does not describe the running binary.
 	@git diff --quiet && git diff --cached --quiet || 	  { echo "working tree is dirty — commit first, or use 'make image-local'"; exit 1; }
 	@echo "$(TOKEN)" | docker login ghcr.io -u makearr --password-stdin
-	docker buildx build --push --platform $(PLATFORMS) \
+	docker buildx build --builder $(BUILDER) --push --platform $(PLATFORMS) \
 	  --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) \
 	  --build-arg BUILD_DATE=$(BUILD_DATE) \
 	  -t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
@@ -144,7 +150,8 @@ image-local: ## Local single-arch build: allows a dirty tree, no bump, no push
 	@# gives its platform args defaults for exactly this, so a machine without
 	@# buildx can still build and run the image it is about to deploy.
 	@if [ -n "$(HAS_BUILDX)" ]; then \
-	  docker buildx build --load --platform linux/$(ARCH) \
+	  $(MAKE) --no-print-directory builder; \
+	  docker buildx build --builder $(BUILDER) --load --platform linux/$(ARCH) \
 	    --build-arg VERSION=$(VERSION)-dirty --build-arg COMMIT=$(COMMIT) \
 	    --build-arg BUILD_DATE=$(BUILD_DATE) -t $(IMAGE):dev . ; \
 	else \
@@ -160,5 +167,11 @@ milestone:  ## Advance to the next milestone: MINOR+1, BUILD reset to 0
 	@echo "milestone: $(VERSION) -> $$(cat VERSION)"
 	@echo "tag it:  git tag v$$(cat VERSION) && git push origin v$$(cat VERSION)"
 
+builder:    ## Create the multi-arch builder if it does not exist
+	@docker buildx inspect $(BUILDER) >/dev/null 2>&1 || { \
+	  echo "creating the $(BUILDER) buildx builder"; \
+	  docker buildx create --name $(BUILDER) --driver docker-container --bootstrap >/dev/null; }
+
 clean-cache:
 	-docker volume rm medianexus-gopath medianexus-gobuild medianexus-npm
+	-docker buildx rm $(BUILDER)
