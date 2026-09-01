@@ -56,7 +56,7 @@ func DecodeKey(key string) ([]byte, error) {
 // It refuses to overwrite. The file carries the only copy of the key, and a
 // second one would make every credential in settings.db undecryptable with no
 // error until something tried to read one.
-func Create(fsys fsx.FS, path string, generateKey func() (string, error)) (Config, error) {
+func Create(fsys fsx.FS, path string, generateKey func() (string, error), lookup Lookup) (Config, error) {
 	if _, err := fsys.Stat(path); err == nil {
 		return Config{}, fmt.Errorf("%w: %s", ErrAlreadyExists, path)
 	} else if !errors.Is(err, fs.ErrNotExist) {
@@ -69,6 +69,16 @@ func Create(fsys fsx.FS, path string, generateKey func() (string, error)) (Confi
 	}
 
 	document := fmt.Sprintf(template, CurrentVersion, key)
+
+	// The template is validated on its own before anything is written, so a
+	// template that has drifted from the schema fails without leaving a file on
+	// disk that will not load next time. Environment overrides are deliberately
+	// not applied to this pass: this asks "did we generate a valid file", and a
+	// bad override is not an answer to that question.
+	if _, err := Parse([]byte(document)); err != nil {
+		return Config{}, fmt.Errorf("config: the generated file is not valid: %w", err)
+	}
+
 	// WriteAtomicSecret, not WriteAtomic: this document carries the only copy of
 	// the encryption key, so it is created 0600 rather than world-readable.
 	if err := fsx.WriteAtomicSecret(fsys, path, func(w io.Writer) error {
@@ -78,11 +88,14 @@ func Create(fsys fsx.FS, path string, generateKey func() (string, error)) (Confi
 		return Config{}, fmt.Errorf("config: write %s: %w", path, err)
 	}
 
-	created, err := Parse([]byte(document))
+	// The environment is applied to what is returned, exactly as Load does it.
+	// Without this a first run ignores every override and refuses to start on
+	// the default paths, then succeeds on the next run because the file now
+	// exists -- a container that fails once and then fixes itself, which is far
+	// harder to diagnose than one that simply fails.
+	created, err := ParseWithEnv([]byte(document), lookup)
 	if err != nil {
-		// The template and the schema have drifted apart. Better to fail here
-		// than to leave a file on disk that will not load next time.
-		return Config{}, fmt.Errorf("config: the generated file is not valid: %w", err)
+		return Config{}, err
 	}
 	return created, nil
 }
