@@ -36,6 +36,12 @@ BUILD_DATE  := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS     := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)
 IMAGE       ?= ghcr.io/makearr/medianexus
 PLATFORMS   ?= linux/amd64,linux/arm64
+ARCH        := $(shell uname -m | sed -e s/x86_64/amd64/ -e s/aarch64/arm64/)
+
+# buildx is required for a release: the legacy builder cannot produce a
+# multi-arch manifest, and shipping only amd64 would silently drop arm64 --
+# which ADR-35 cares about, because fingerprinting runs there.
+HAS_BUILDX  := $(shell docker buildx version >/dev/null 2>&1 && echo yes)
 TOKEN       ?= $(shell grep -oP 'ghp_[A-Za-z0-9]+' private/secrets.md 2>/dev/null | head -1)
 
 help:  ## List targets
@@ -117,6 +123,11 @@ version:    ## Print the current version
 
 image:      ## Release build: multi-arch, push to ghcr, bump, changelog, tag, push, release
 	@test -f Dockerfile || { echo "no Dockerfile yet"; exit 1; }
+	@test -n "$(HAS_BUILDX)" || { \
+	  echo "docker buildx is not installed, and a release must be multi-arch."; \
+	  echo "Install it (Debian/Ubuntu: 'apt install docker-buildx'), then re-run."; \
+	  echo "Use 'make image-local' for a single-arch image without it."; \
+	  exit 1; }
 	@# A release image must correspond to a commit, or the About page (AGPL §13)
 	@# claims a source revision that does not describe the running binary.
 	@git diff --quiet && git diff --cached --quiet || 	  { echo "working tree is dirty — commit first, or use 'make image-local'"; exit 1; }
@@ -129,11 +140,20 @@ image:      ## Release build: multi-arch, push to ghcr, bump, changelog, tag, pu
 
 image-local: ## Local single-arch build: allows a dirty tree, no bump, no push
 	@test -f Dockerfile || { echo "no Dockerfile yet"; exit 1; }
-	docker buildx build --load --platform linux/$(shell uname -m | sed s/x86_64/amd64/) \
-	  --build-arg VERSION=$(VERSION)-dirty --build-arg COMMIT=$(COMMIT) \
-	  --build-arg BUILD_DATE=$(BUILD_DATE) \
-	  -t $(IMAGE):dev .
-	@echo "built $(IMAGE):dev — version held at $(VERSION)"
+	@# Falls back to the legacy builder when buildx is absent. The Dockerfile
+	@# gives its platform args defaults for exactly this, so a machine without
+	@# buildx can still build and run the image it is about to deploy.
+	@if [ -n "$(HAS_BUILDX)" ]; then \
+	  docker buildx build --load --platform linux/$(ARCH) \
+	    --build-arg VERSION=$(VERSION)-dirty --build-arg COMMIT=$(COMMIT) \
+	    --build-arg BUILD_DATE=$(BUILD_DATE) -t $(IMAGE):dev . ; \
+	else \
+	  echo "buildx not found; building single-arch with the legacy builder"; \
+	  docker build --build-arg VERSION=$(VERSION)-dirty --build-arg COMMIT=$(COMMIT) \
+	    --build-arg BUILD_DATE=$(BUILD_DATE) --build-arg TARGETARCH=$(ARCH) \
+	    -t $(IMAGE):dev . ; \
+	fi
+	@echo "built $(IMAGE):dev - version held at $(VERSION)"
 
 milestone:  ## Advance to the next milestone: MINOR+1, BUILD reset to 0
 	@awk -F. '{printf "%s.%d.0\n", $$1, $$2+1}' VERSION > VERSION.tmp && mv VERSION.tmp VERSION

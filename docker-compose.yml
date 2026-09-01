@@ -1,0 +1,36 @@
+# Example deployment. Copy, adjust the paths, and run `docker compose up -d`.
+services:
+  medianexus:
+    image: ghcr.io/makearr/medianexus:latest
+    container_name: medianexus
+    restart: unless-stopped
+
+    # Match whoever owns the volumes below. The container defaults to 65532;
+    # startup refuses with the effective uid and gid if it cannot write
+    # (architecture section 14.3).
+    user: "1000:1000"
+
+    ports:
+      - "8080:8080"
+
+    volumes:
+      # Config, databases, backups and cache. One mount is enough.
+      # Databases must not live on a network filesystem: WAL is unsupported
+      # there and the locking is unreliable enough to corrupt them (ADR-2).
+      - ./config:/config
+
+      # The library. Import prefers a reflink, then a hardlink, then a copy
+      # (ADR-11), and hardlinking only works within one filesystem -- so
+      # downloads and the library want to be on the same mount, not two.
+      - /media:/media
+
+      # The download client's completed directory, at the same path the client
+      # reports. A mismatch here is why an import cannot find its files.
+      - /downloads:/downloads
+
+    # The image declares its own healthcheck, so nothing needs supplying here.
+
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
