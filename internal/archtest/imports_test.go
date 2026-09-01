@@ -27,6 +27,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/clock": {},
 	"internal/fsx":   {"internal/clock"},
 	"internal/httpx": {"internal/clock"},
+	"internal/store": {"internal/clock"},
 }
 
 // Plugins import internal/plugin and nothing else from core, which is what keeps

@@ -39,3 +39,6 @@ config.local.yml
 
 # Local-only test fixtures from the real library (never committed)
 /private/fixtures/
+
+# Machine-specific Makefile overrides (DNS, image pins)
+/Makefile.local

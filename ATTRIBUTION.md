@@ -40,6 +40,23 @@ before it is taken. The reason is not legal but architectural: the more that is 
 more the design drifts back toward the one MediaNexus exists to move away from. When something
 outside this scope looks worth taking, raise it — do not simply take it.
 
+## Dependencies
+
+Linked libraries, not incorporated code — they are not modified and AGPL-3.0 §5 does not
+apply to them. They are listed because the About view surfaces this file to satisfy §13, and
+a user offered the Corresponding Source should be able to see what the binary links.
+
+| Module | Licence | Why |
+|---|---|---|
+| `modernc.org/sqlite` | BSD-3-Clause | Pure-Go SQLite. Keeps `CGO_ENABLED=0` building, which ADR-30 requires so the image can bundle its media tools rather than link them. Provisional pending the ADR-5 benchmark |
+
+Its transitive dependencies — `modernc.org/libc`, `modernc.org/memory`, `modernc.org/mathutil`,
+`github.com/remyoudompheng/bigfft`, `github.com/dustin/go-humanize`, `github.com/google/uuid`,
+`github.com/mattn/go-isatty`, `github.com/ncruces/go-strftime` and `golang.org/x/sys` — are all
+BSD-3-Clause or MIT. `go.mod` is the authoritative list.
+
+---
+
 ## Third-party services
 
 **Servarr metadata proxies** — `skyhook.sonarr.tv`, `api.radarr.video`, `api.lidarr.audio` —
