@@ -38,15 +38,33 @@ func (e *InUseError) Error() string {
 
 func (e *InUseError) Unwrap() error { return ErrInUse }
 
-// CreateCategory adds a category.
+// CreateCategory adds a category and grants every administrator manage on it.
+//
+// ADR-27 is explicit that admin is not a bypass: an administrator has manage on
+// all categories "granted explicitly and visibly, so an audit shows who can see
+// what". So the rows are written rather than implied, in the same transaction —
+// a category that existed for even a moment with no administrator able to
+// manage it would be one nobody could grant access to.
 func (c *Cache) CreateCategory(ctx context.Context, mediaType, name string, priorityRank int64) (Category, error) {
+	administrators := c.administratorIDs()
+
 	var created settingsdb.Category
 	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		row, err := queries.CreateCategory(ctx, settingsdb.CreateCategoryParams{
 			MediaType: mediaType, Name: name, PriorityRank: priorityRank,
 		})
+		if err != nil {
+			return err
+		}
 		created = row
-		return err
+		for _, administrator := range administrators {
+			if err := queries.SetCategoryAccess(ctx, settingsdb.SetCategoryAccessParams{
+				UserID: administrator, CategoryID: row.ID, Permission: string(PermissionManage),
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return Category{}, fmt.Errorf("settings: create category %q: %w", name, err)
@@ -174,7 +192,18 @@ func (c *Cache) DetachRootFolder(ctx context.Context, categoryID, rootFolderID i
 
 // CreateUser adds an account. The password hash is passed already hashed;
 // hashing is the caller's concern and argon2id parameters are not settings.
+//
+// An administrator is granted manage on every existing category, for the same
+// reason CreateCategory grants it on every new one: the access is explicit and
+// auditable rather than a role check hidden in the authorisation path.
 func (c *Cache) CreateUser(ctx context.Context, cl clock.Clock, username, passwordHash string, role Role) (User, error) {
+	var categories []int64
+	if role == RoleAdmin {
+		for _, category := range c.Snapshot().Categories() {
+			categories = append(categories, category.ID)
+		}
+	}
+
 	var created settingsdb.AppUser
 	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		row, err := queries.CreateUser(ctx, settingsdb.CreateUserParams{
@@ -184,8 +213,18 @@ func (c *Cache) CreateUser(ctx context.Context, cl clock.Clock, username, passwo
 			CreatedAt:    cl.Now().Unix(),
 			UiTier:       string(TierNormal),
 		})
+		if err != nil {
+			return err
+		}
 		created = row
-		return err
+		for _, categoryID := range categories {
+			if err := queries.SetCategoryAccess(ctx, settingsdb.SetCategoryAccessParams{
+				UserID: row.ID, CategoryID: categoryID, Permission: string(PermissionManage),
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return User{}, fmt.Errorf("settings: create user %q: %w", username, err)
@@ -242,4 +281,15 @@ func boolToInt(value bool) int64 {
 		return 1
 	}
 	return 0
+}
+
+// administratorIDs lists the accounts that get manage on every category.
+func (c *Cache) administratorIDs() []int64 {
+	var ids []int64
+	for _, user := range c.Snapshot().Users() {
+		if user.Role == RoleAdmin {
+			ids = append(ids, user.ID)
+		}
+	}
+	return ids
 }

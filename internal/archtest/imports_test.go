@@ -25,6 +25,7 @@ import (
 // packages state their dependencies here first.
 var allowedInternalImports = map[string][]string{
 	"cmd/medianexus":    {"internal/config", "internal/fsx"},
+	"internal/authz":    {"internal/settings"},
 	"internal/clock":    {},
 	"internal/config":   {"internal/fsx"},
 	"internal/fsx":      {"internal/clock"},
