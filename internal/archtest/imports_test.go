@@ -26,6 +26,7 @@ var allowedInternalImports = map[string][]string{
 	"cmd/medianexus": {},
 	"internal/clock": {},
 	"internal/fsx":   {"internal/clock"},
+	"internal/httpx": {},
 }
 
 // Plugins import internal/plugin and nothing else from core, which is what keeps
