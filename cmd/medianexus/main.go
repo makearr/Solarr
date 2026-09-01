@@ -57,10 +57,12 @@ func run(args []string, out, errOut io.Writer) error {
 		return runConfig(args[1:], out, errOut)
 	case "user":
 		return runUser(args[1:], out, errOut)
+	case "healthcheck":
+		return runHealthcheck(args[1:], out, errOut)
 	case "serve":
 		return runServe(args[1:], out, errOut)
 	default:
-		return fmt.Errorf("unknown command %q; known commands: config, serve, user, version", command)
+		return fmt.Errorf("unknown command %q; known commands: config, healthcheck, serve, user, version", command)
 	}
 }
 

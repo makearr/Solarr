@@ -1,0 +1,16 @@
+# Everything the image does not need. Keeping this tight matters for build
+# speed: the whole context is sent to the daemon before anything runs.
+.git
+.github
+.githooks
+private
+documentation
+web/node_modules
+web/dist
+Makefile.local
+medianexus
+*.db
+*.db-wal
+*.db-shm
+config.yml
+scripts
