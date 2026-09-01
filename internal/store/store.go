@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"time"
 
@@ -51,6 +52,14 @@ type Config struct {
 	// Invariant 2 is measured against.
 	WriteWarn time.Duration
 	WriteHard time.Duration
+
+	// OnBudgetExceeded is called when a transaction passes WriteHard. Tests wire
+	// it to t.Errorf so Invariant 2 is enforced rather than merely logged;
+	// production leaves it nil and gets the log and the metric.
+	OnBudgetExceeded func(TransactionReport)
+
+	// Logger defaults to slog.Default.
+	Logger *slog.Logger
 }
 
 func (c Config) withDefaults() Config {
@@ -72,6 +81,9 @@ func (c Config) withDefaults() Config {
 	if c.WriteHard <= 0 {
 		c.WriteHard = defaultWriteHard
 	}
+	if c.Logger == nil {
+		c.Logger = slog.Default()
+	}
 	return c
 }
 
@@ -85,6 +97,10 @@ type Store struct {
 	// per file is what prevents SQLITE_BUSY storms (ADR-3, Invariant 1).
 	write *sql.DB
 	read  *sql.DB
+
+	logger     *slog.Logger
+	queue      *writeQueue
+	writerDone chan struct{}
 }
 
 // Open opens a database file, creating it if absent, and verifies that the
@@ -117,7 +133,15 @@ func Open(ctx context.Context, c clock.Clock, config Config) (*Store, error) {
 	read.SetMaxIdleConns(config.ReadPoolSize)
 	read.SetConnMaxLifetime(0)
 
-	store := &Store{config: config, clock: c, write: write, read: read}
+	store := &Store{
+		config:     config,
+		clock:      c,
+		write:      write,
+		read:       read,
+		logger:     config.Logger.With(slog.String("database", config.Name)),
+		queue:      newWriteQueue(),
+		writerDone: make(chan struct{}),
+	}
 
 	// The write handle goes first: it creates the file, and page_size has to be
 	// set before anything writes to it.
@@ -130,9 +154,11 @@ func Open(ctx context.Context, c clock.Clock, config Config) (*Store, error) {
 		return nil, fmt.Errorf("store %s: %w", config.Name, err)
 	}
 	if err := store.verifyPragmas(ctx); err != nil {
-		_ = store.Close()
+		_ = store.closeHandles()
 		return nil, err
 	}
+
+	go store.writeLoop()
 	return store, nil
 }
 
@@ -150,8 +176,16 @@ func (s *Store) Read() *sql.DB { return s.read }
 // duration bound stay true (ADR-3).
 func (s *Store) WriteDB() *sql.DB { return s.write }
 
-// Close drains and closes both handles.
+// Close stops accepting writes, drains the queue, and closes both handles. The
+// drain is bounded because every transaction is bounded (Invariant 2), which is
+// what makes the shutdown deadline in §15.2 safe.
 func (s *Store) Close() error {
+	s.queue.close()
+	<-s.writerDone
+	return s.closeHandles()
+}
+
+func (s *Store) closeHandles() error {
 	var errs []error
 	if s.read != nil {
 		if err := s.read.Close(); err != nil {
