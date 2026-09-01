@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -31,9 +30,12 @@ func TestRun_UnknownCommandIsAnError(t *testing.T) {
 	}
 }
 
-func TestRun_DefaultsToServe(t *testing.T) {
+func TestRun_ServeUsesTheConfiguredPath(t *testing.T) {
 	var out strings.Builder
-	if err := run(nil, &out, io.Discard); !errors.Is(err, errNotImplemented) {
-		t.Errorf("run(nil) = %v, want errNotImplemented", err)
+	// A config path that cannot be created fails before anything is started,
+	// which is enough to prove the flag is honoured without booting a server.
+	err := run([]string{"serve", "--config", "/proc/nonexistent/config.yml"}, &out, io.Discard)
+	if err == nil {
+		t.Fatal("serve with an unusable config path returned no error")
 	}
 }

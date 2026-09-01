@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -26,9 +27,14 @@ var (
 // defaultConfigPath matches the single /config volume the image expects (§20.2).
 const defaultConfigPath = "/config/config.yml"
 
-// errNotImplemented keeps an unfinished command honest: it fails loudly rather
-// than starting something that does nothing.
-var errNotImplemented = errors.New("not implemented yet — stage 1 is in progress")
+// AGPL section 13: the running program must offer the Corresponding Source for
+// *this* build. sourceURL is a build-time variable defaulting to upstream; a
+// fork overrides it with -ldflags, and it must never silently point at upstream
+// when the build is modified (documentation/licence-compliance.md).
+var (
+	sourceURL = "https://github.com/makearr/MediaNexus"
+	license   = "AGPL-3.0-or-later"
+)
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
@@ -50,7 +56,7 @@ func run(args []string, out, errOut io.Writer) error {
 	case "config":
 		return runConfig(args[1:], out, errOut)
 	case "serve":
-		return fmt.Errorf("serve: %w", errNotImplemented)
+		return runServe(args[1:], out, errOut)
 	default:
 		return fmt.Errorf("unknown command %q; known commands: config, serve, version", command)
 	}
@@ -111,4 +117,14 @@ func checkConfig(path string, out io.Writer) error {
 func listenAddress(loaded config.Config) string {
 	return fmt.Sprintf("%s:%d%s", loaded.Server.Bind, loaded.Server.Port,
 		filepath.Clean("/"+loaded.Server.BaseURL))
+}
+
+func runServe(args []string, out, errOut io.Writer) error {
+	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
+	flags.SetOutput(errOut)
+	path := flags.String("config", defaultConfigPath, "path to config.yml")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	return serve(context.Background(), *path, out)
 }
