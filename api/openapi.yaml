@@ -80,6 +80,23 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BuildInfo" }
 
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [system]
+      summary: Configured libraries and current state, for the landing page.
+      description: >-
+        One call, because this is the first screen and three round trips to
+        render it is three chances to look slow. Library counts are read from
+        the `counter` table rather than aggregated live (section 21.12).
+      responses:
+        "200":
+          description: A summary of configured storage, work in flight and library size.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardSummary" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /auth/login:
     post:
       operationId: login
@@ -430,6 +447,17 @@ components:
             The Corresponding Source for *this* build. A modified build must not
             point at upstream.
         license: { type: string, example: "AGPL-3.0-or-later" }
+        server_time:
+          type: string
+          format: date-time
+          description: >-
+            The server's wall clock at the moment of the response. Schedules,
+            air dates and retention run on this clock, not the viewer's, and
+            on a remote host the two routinely differ.
+        timezone:
+          type: string
+          example: "Europe/Fefobo"
+          description: The server's configured zone, from TZ. `UTC` when unset.
 
     SetupStatus:
       type: object
@@ -519,6 +547,45 @@ components:
     EventTopic:
       type: string
       enum: [job, acquisition, library, notification, pressure]
+
+    DashboardSummary:
+      type: object
+      required: [root_folders, jobs, library]
+      properties:
+        root_folders:
+          type: array
+          items: { $ref: "#/components/schemas/RootFolder" }
+        jobs: { $ref: "#/components/schemas/JobCounts" }
+        library: { $ref: "#/components/schemas/LibraryCounts" }
+
+    JobCounts:
+      type: object
+      description: Live counts over jobs.db, which retention keeps bounded.
+      required: [total, pending, running, failed, succeeded, cancelled]
+      properties:
+        total: { type: integer }
+        pending:
+          type: integer
+          description: PENDING and PENDING_RETRY together; both are waiting.
+        running:
+          type: integer
+          description: RUNNING and LEASED together; both are claimed by a worker.
+        failed: { type: integer }
+        succeeded: { type: integer }
+        cancelled: { type: integer }
+
+    LibraryCounts:
+      type: object
+      description: >-
+        Read from the `counter` table, never aggregated live (section 21.12,
+        ADR-28). Absent counters report zero, so an empty library and an
+        uncounted one look the same until the reconciliation job has run.
+      required: [works, files, monitored, missing]
+      properties:
+        works: { type: integer }
+        files: { type: integer }
+        monitored: { type: integer }
+        missing: { type: integer }
 
     JobState:
       type: string

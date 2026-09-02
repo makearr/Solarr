@@ -112,9 +112,15 @@ type BuildInfo struct {
 	Commit  string `json:"commit"`
 	License string `json:"license"`
 
+	// ServerTime The server's wall clock at the moment of the response. Schedules, air dates and retention run on this clock, not the viewer's, and on a remote host the two routinely differ.
+	ServerTime *time.Time `json:"server_time,omitempty"`
+
 	// SourceUrl The Corresponding Source for *this* build. A modified build must not point at upstream.
 	SourceUrl string `json:"source_url"`
-	Version   string `json:"version"`
+
+	// Timezone The server's configured zone, from TZ. `UTC` when unset.
+	Timezone *string `json:"timezone,omitempty"`
+	Version  string  `json:"version"`
 }
 
 // Category defines model for Category.
@@ -127,6 +133,16 @@ type Category struct {
 
 	// Permission `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.
 	Permission Permission `json:"permission"`
+}
+
+// DashboardSummary defines model for DashboardSummary.
+type DashboardSummary struct {
+	// Jobs Live counts over jobs.db, which retention keeps bounded.
+	Jobs JobCounts `json:"jobs"`
+
+	// Library Read from the `counter` table, never aggregated live (section 21.12, ADR-28). Absent counters report zero, so an empty library and an uncounted one look the same until the reconciliation job has run.
+	Library     LibraryCounts `json:"library"`
+	RootFolders []RootFolder  `json:"root_folders"`
 }
 
 // EventTopic defines model for EventTopic.
@@ -164,6 +180,20 @@ type Job struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+// JobCounts Live counts over jobs.db, which retention keeps bounded.
+type JobCounts struct {
+	Cancelled int `json:"cancelled"`
+	Failed    int `json:"failed"`
+
+	// Pending PENDING and PENDING_RETRY together; both are waiting.
+	Pending int `json:"pending"`
+
+	// Running RUNNING and LEASED together; both are claimed by a worker.
+	Running   int `json:"running"`
+	Succeeded int `json:"succeeded"`
+	Total     int `json:"total"`
+}
+
 // JobPage defines model for JobPage.
 type JobPage struct {
 	Items []Job `json:"items"`
@@ -177,6 +207,14 @@ type JobPool string
 
 // JobState defines model for JobState.
 type JobState string
+
+// LibraryCounts Read from the `counter` table, never aggregated live (section 21.12, ADR-28). Absent counters report zero, so an empty library and an uncounted one look the same until the reconciliation job has run.
+type LibraryCounts struct {
+	Files     int `json:"files"`
+	Missing   int `json:"missing"`
+	Monitored int `json:"monitored"`
+	Works     int `json:"works"`
+}
 
 // LogoutStatus defines model for LogoutStatus.
 type LogoutStatus struct {
@@ -297,6 +335,9 @@ type ServerInterface interface {
 	// Clear the session cookie.
 	// (POST /auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
+	// Configured libraries and current state, for the landing page.
+	// (GET /dashboard)
+	GetDashboard(w http.ResponseWriter, r *http.Request)
 	// Server-sent events, filtered by category access.
 	// (GET /events)
 	StreamEvents(w http.ResponseWriter, r *http.Request, params StreamEventsParams)
@@ -351,6 +392,12 @@ func (_ Unimplemented) Login(w http.ResponseWriter, r *http.Request) {
 // Clear the session cookie.
 // (POST /auth/logout)
 func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Configured libraries and current state, for the landing page.
+// (GET /dashboard)
+func (_ Unimplemented) GetDashboard(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -462,6 +509,28 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Logout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDashboard operation middleware
+func (siw *ServerInterfaceWrapper) GetDashboard(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDashboard(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -865,6 +934,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/logout", wrapper.Logout)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/dashboard", wrapper.GetDashboard)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/events", wrapper.StreamEvents)

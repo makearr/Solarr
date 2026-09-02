@@ -64,6 +64,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Configured libraries and current state, for the landing page.
+         * @description One call, because this is the first screen and three round trips to render it is three chances to look slow. Library counts are read from the `counter` table rather than aggregated live (section 21.12).
+         */
+        get: operations["getDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/login": {
         parameters: {
             query?: never;
@@ -299,6 +319,16 @@ export interface components {
             source_url: string;
             /** @example AGPL-3.0-or-later */
             license: string;
+            /**
+             * Format: date-time
+             * @description The server's wall clock at the moment of the response. Schedules, air dates and retention run on this clock, not the viewer's, and on a remote host the two routinely differ.
+             */
+            server_time?: string;
+            /**
+             * @description The server's configured zone, from TZ. `UTC` when unset.
+             * @example Europe/Fefobo
+             */
+            timezone?: string;
         };
         SetupStatus: {
             /** @description True while no account exists, which is the only time setup can be claimed. */
@@ -349,6 +379,29 @@ export interface components {
         MediaType: "music" | "tv" | "movie" | "audiobook" | "book" | "adult" | "comic" | "rom" | "podcast" | "news" | "youtube";
         /** @enum {string} */
         EventTopic: "job" | "acquisition" | "library" | "notification" | "pressure";
+        DashboardSummary: {
+            root_folders: components["schemas"]["RootFolder"][];
+            jobs: components["schemas"]["JobCounts"];
+            library: components["schemas"]["LibraryCounts"];
+        };
+        /** @description Live counts over jobs.db, which retention keeps bounded. */
+        JobCounts: {
+            total: number;
+            /** @description PENDING and PENDING_RETRY together; both are waiting. */
+            pending: number;
+            /** @description RUNNING and LEASED together; both are claimed by a worker. */
+            running: number;
+            failed: number;
+            succeeded: number;
+            cancelled: number;
+        };
+        /** @description Read from the `counter` table, never aggregated live (section 21.12, ADR-28). Absent counters report zero, so an empty library and an uncounted one look the same until the reconciliation job has run. */
+        LibraryCounts: {
+            works: number;
+            files: number;
+            monitored: number;
+            missing: number;
+        };
         /** @enum {string} */
         JobState: "PENDING" | "PENDING_RETRY" | "LEASED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED";
         /** @enum {string} */
@@ -459,6 +512,27 @@ export interface operations {
                     "application/json": components["schemas"]["BuildInfo"];
                 };
             };
+        };
+    };
+    getDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A summary of configured storage, work in flight and library size. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardSummary"];
+                };
+            };
+            401: components["responses"]["Problem"];
         };
     };
     login: {

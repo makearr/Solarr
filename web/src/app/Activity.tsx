@@ -20,9 +20,9 @@ const COLUMNS: readonly Column<Job>[] = [
   { key: "created_at", header: "Created", render: (job) => job.created_at },
 ];
 
-// The first consumer of the headless core: the only real cursor-paginated
-// collection until library.db lands at stage 2.
-export function Jobs() {
+// The first consumer of the headless core, and the only real cursor-paginated
+// collection until the library has rows to list.
+export function Activity() {
   const [view, setView] = useState<"table" | "grid">("table");
 
   const narrow = useNarrow();

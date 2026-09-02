@@ -1,13 +1,15 @@
 import { useState } from "react";
+import { RouterProvider } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import { Jobs } from "./Jobs";
+import { router } from "./router";
 import { Setup } from "./Setup";
-import { ThemeToggle } from "./ThemeToggle";
 
+/** The setup gate, outside the router: an install with no administrator has
+ *  nothing to route to, because every other endpoint answers 401. */
 export function App() {
-  // This tab only: the status endpoint already reports what is outstanding.
+  // This tab only. Skipping is about the root folder, never about the account.
   const [skipped, setSkipped] = useState(false);
 
   const setup = useQuery({
@@ -19,54 +21,38 @@ export function App() {
     },
   });
 
-  const about = useQuery({
-    queryKey: ["about"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/about");
-      if (error) throw error;
-      return data;
-    },
-  });
-
   // After every hook, or React renders fewer hooks on some passes than others.
-  const outstanding =
-    setup.data && (setup.data.needs_administrator || !setup.data.has_root_folder);
-  if (!skipped && outstanding) {
+  if (setup.isLoading) return <Splash>Starting…</Splash>;
+
+  // Said out loud rather than fallen through. Treating an unreadable setup
+  // state as "configured" is what hid a broken API base URL: the wizard never
+  // ran and every list rendered empty, with nothing on screen to say why.
+  if (setup.error !== null || !setup.data) {
+    return (
+      <Splash>
+        The server could not be reached. Check that MediaNexus is running and that any reverse
+        proxy forwards <code className="font-mono">/api/v1</code>.
+      </Splash>
+    );
+  }
+
+  // Not skippable: with no account there is nobody to authenticate as, so the
+  // rest of the interface cannot load at all.
+  if (setup.data.needs_administrator) return <Setup onDone={() => setSkipped(true)} />;
+
+  // Skippable: without a root folder the library stays empty, but everything
+  // else works and the dashboard says what is missing.
+  if (!skipped && !setup.data.has_root_folder) {
     return <Setup onDone={() => setSkipped(true)} />;
   }
 
+  return <RouterProvider router={router} />;
+}
+
+function Splash({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex shrink-0 items-center justify-between border-b border-border-subtle
-                         bg-surface px-4 py-3">
-        <h1 className="text-sm font-semibold tracking-tight">MediaNexus</h1>
-        <ThemeToggle />
-      </header>
-
-      <main className="min-h-0 flex-1">
-        <Jobs />
-      </main>
-
-      {/* AGPL section 13 requires the source offer to stay reachable. */}
-      <footer className="flex shrink-0 items-center gap-3 border-t border-border-subtle
-                         bg-surface px-4 py-1.5 text-xs text-ink-muted">
-        {about.data ? (
-          <>
-            <span className="font-mono">
-              {about.data.version} · {about.data.commit}
-            </span>
-            <span>{about.data.license}</span>
-            <a
-              className="ml-auto text-accent underline underline-offset-2"
-              href={about.data.source_url}
-            >
-              Source
-            </a>
-          </>
-        ) : (
-          <span>Connecting…</span>
-        )}
-      </footer>
+    <div className="flex h-full items-center justify-center p-6">
+      <p className="max-w-sm text-center text-sm text-ink-muted">{children}</p>
     </div>
   );
 }

@@ -55,6 +55,12 @@ type Config struct {
 	// WebUI serves the compiled interface. A handler, not an fs.FS, so this
 	// package never learns how the interface is packaged.
 	WebUI http.Handler
+	// LibrarySize reads library counters for the dashboard. Optional: without it
+	// the figures report zero rather than the page failing.
+	LibrarySize LibrarySize
+	// Timezone is the zone name TZ resolved to. time.Location reports "Local"
+	// once time.Local is replaced, which tells a reader nothing.
+	Timezone string
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -72,6 +78,9 @@ type Server struct {
 	webui   http.Handler
 	roots   RootChecker
 	address string
+
+	librarySize LibrarySize
+	timezone    string
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -101,7 +110,10 @@ func New(config Config) (*Server, error) {
 		wall:    config.Clock,
 		webui:   config.WebUI,
 		roots:   config.Roots,
-		address: net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
+
+		librarySize: config.LibrarySize,
+		timezone:    config.Timezone,
+		address:     net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
 	router := chi.NewRouter()
@@ -128,6 +140,7 @@ func New(config Config) (*Server, error) {
 		api.Group(func(secured chi.Router) {
 			secured.Use(server.authenticate)
 			secured.Get("/me", server.GetMe)
+			secured.Get("/dashboard", server.GetDashboard)
 			secured.Get("/jobs", server.routeListJobs)
 			secured.Get("/rootfolders", server.ListRootFolders)
 			secured.Get("/settings/export", server.ExportSettings)

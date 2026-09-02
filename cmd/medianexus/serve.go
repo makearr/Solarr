@@ -20,6 +20,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/fsx"
 	"github.com/makearr/MediaNexus/internal/health"
 	"github.com/makearr/MediaNexus/internal/jobs"
+	"github.com/makearr/MediaNexus/internal/library"
 	"github.com/makearr/MediaNexus/internal/privilege"
 	"github.com/makearr/MediaNexus/internal/settings"
 	"github.com/makearr/MediaNexus/internal/store"
@@ -40,6 +41,7 @@ type process struct {
 	bus        *events.Bus
 	dispatcher *jobs.Dispatcher
 	server     *apiserver.Server
+	timezone   string
 }
 
 // serve is the startup sequence of architecture section 15.1, in order.
@@ -74,7 +76,7 @@ func serve(ctx context.Context, configPath string, out io.Writer) error {
 		return err
 	}
 
-	running := &process{config: loaded, fsys: fsys, logger: logger}
+	running := &process{config: loaded, fsys: fsys, logger: logger, timezone: timezone}
 	defer running.close()
 
 	if err := running.openDatabases(ctx); err != nil {
@@ -232,14 +234,17 @@ func (p *process) startServer(ctx context.Context) error {
 			Version: version, Commit: commit, BuildDate: buildDate,
 			SourceURL: sourceURL, License: license,
 		},
-		Checker: health.New(p.settings, p.jobs, p.library),
-		Auth:    authConfig,
-		Jobs:    p.queue,
-		Events:  p.bus,
-		Clock:   clock.NewSystem(),
-		Logger:  p.logger,
-		WebUI:   webui.Handler(),
-		Roots:   apiserver.FilesystemRoots{FS: p.fsys},
+		Checker:     health.New(p.settings, p.jobs, p.library),
+		Auth:        authConfig,
+		Jobs:        p.queue,
+		Events:      p.bus,
+		Clock:       clock.NewSystem(),
+		Logger:      p.logger,
+		WebUI:       webui.Handler(),
+		Roots:       apiserver.FilesystemRoots{FS: p.fsys},
+		LibrarySize: library.NewCounters(p.library),
+		// time.Local.String() reports "Local"; the name the operator set is the useful one.
+		Timezone: p.timezone,
 	})
 	if err != nil {
 		return err
