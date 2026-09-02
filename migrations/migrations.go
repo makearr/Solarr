@@ -14,7 +14,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/store"
 )
 
-//go:embed settings/*.sql jobs/*.sql
+//go:embed settings/*.sql jobs/*.sql library/*.sql
 var files embed.FS
 
 // Settings returns the migration set for settings.db.
@@ -22,6 +22,9 @@ func Settings() (store.Owner, error) { return owner("settings") }
 
 // Jobs returns the migration set for jobs.db.
 func Jobs() (store.Owner, error) { return owner("jobs") }
+
+// Library returns the migration set for library.db.
+func Library() (store.Owner, error) { return owner("library") }
 
 func owner(directory string) (store.Owner, error) {
 	loaded, err := load(directory)

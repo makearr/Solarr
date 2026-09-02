@@ -34,6 +34,7 @@ type process struct {
 	logger     *slog.Logger
 	settings   *store.Store
 	jobs       *store.Store
+	library    *store.Store
 	queue      *jobs.Queue
 	cache      *settings.Cache
 	bus        *events.Bus
@@ -134,6 +135,12 @@ func (p *process) openDatabases(ctx context.Context) error {
 	}
 	p.jobs = jobsStore
 
+	libraryStore, err := store.Open(ctx, wall, p.storeConfig("library"))
+	if err != nil {
+		return err
+	}
+	p.library = libraryStore
+
 	// Migrations back up first and refuse to run without somewhere to back up
 	// to (Invariant 7).
 	backupDir := p.config.Paths.BackupDir
@@ -149,6 +156,13 @@ func (p *process) openDatabases(ctx context.Context) error {
 		return err
 	}
 	if err := store.Migrate(ctx, jobsStore, backupDir, jobsOwner); err != nil {
+		return err
+	}
+	libraryOwner, err := migrations.Library()
+	if err != nil {
+		return err
+	}
+	if err := store.Migrate(ctx, libraryStore, backupDir, libraryOwner); err != nil {
 		return err
 	}
 
@@ -218,7 +232,7 @@ func (p *process) startServer(ctx context.Context) error {
 			Version: version, Commit: commit, BuildDate: buildDate,
 			SourceURL: sourceURL, License: license,
 		},
-		Checker: health.New(p.settings, p.jobs),
+		Checker: health.New(p.settings, p.jobs, p.library),
 		Auth:    authConfig,
 		Jobs:    p.queue,
 		Events:  p.bus,
@@ -276,7 +290,7 @@ func (p *process) startServer(ctx context.Context) error {
 // close drains and closes the databases. The write queues drain before their
 // handles close, which is bounded because every transaction is bounded.
 func (p *process) close() {
-	for _, opened := range []*store.Store{p.jobs, p.settings} {
+	for _, opened := range []*store.Store{p.library, p.jobs, p.settings} {
 		if opened == nil {
 			continue
 		}
