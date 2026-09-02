@@ -1,14 +1,20 @@
 # Database layout
 
-Four persistent databases, one disposable cache (ADR-2). Each has one writer and a read pool
+Three persistent databases, one disposable cache (ADR-2). Each has one writer and a read pool
 (ADR-3), and **no query joins across them** — compose in Go (architecture section 4.3).
 
 | Database | Holds | Shape |
 |---|---|---|
 | `settings.db` | Configuration and credentials | Small, rarely written, **fully cached in memory** |
 | `library.db` | Everything that scales with the library | Large, written constantly, never cached whole |
-| `jobs.db` | The durable work queue | Churns; retention-bounded |
-| `history.db` | Decisions and events past their retention in `library.db` | Append-mostly |
+| `jobs.db` | The work queue and the append-only event log | Churns; retention-bounded |
+
+There is no `history.db`. `decision_rollup` sits in `library.db` beside the decisions it
+aggregates, so F1's "why wasn't this downloaded?" stays one join across both the recent and the
+aged record. `event_log` sits in `jobs.db`, whose profile it shares: high churn,
+retention-bounded, and not authoritative for library correctness. Under ADR-3's one writer per
+file, putting the event log in `library.db` would queue every append against a library commit,
+and an event is lossy notification data (ADR-9) that must never block one.
 
 ## Which database a table belongs in
 
