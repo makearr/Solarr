@@ -41,8 +41,11 @@ asks for enforcement.
 A target is a ceiling stated at 500k files, so a smaller corpus has headroom and a breach
 at 20k is a plan or index regression rather than noise.
 
-Full-text search has no test yet: FTS5 is not built. The indexed title lookup stands in
-its place and is measured against the same target.
+**Full-text search** is `title_search` (migration 0010), an FTS5 index over titles and
+aliases maintained by triggers. `TestADR28_SearchStaysUnderItsTarget` measures
+`library.Search.Works` with a one-word, prefix-matched query — what a search box holds
+partway through typing — and gets p99 17ms against the 150ms target at 500k, replacing
+the indexed-title-lookup stand-in this section used to describe.
 
 ## The driver (ADR-5)
 
