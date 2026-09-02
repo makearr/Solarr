@@ -20,9 +20,7 @@ type Querier interface {
 	// Every tag is its own ancestor at depth zero, so a root tag still matches.
 	AddTagSelfClosure(ctx context.Context, arg AddTagSelfClosureParams) error
 	AddWorkTitle(ctx context.Context, arg AddWorkTitleParams) (WorkTitle, error)
-	// excluded.value is the delta, since that is what the insert carries. A named
-	// argument would be clearer but sqlc does not substitute one inside DO UPDATE:
-	// it emits the literal text and SQLite rejects it.
+	// excluded.value is the delta: sqlc cannot substitute a named argument inside DO UPDATE.
 	AdjustCounter(ctx context.Context, arg AdjustCounterParams) error
 	AssignTag(ctx context.Context, arg AssignTagParams) error
 	AttachFile(ctx context.Context, arg AttachFileParams) error

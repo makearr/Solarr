@@ -175,9 +175,8 @@ SELECT id, username, password_hash, role, created_at, ui_tier
 FROM app_user WHERE id = ?
 `
 
-// Queries live in SQL, not in Go string literals: reviewability is the point
-// (coding-standards section 9). Columns are listed explicitly rather than with *, so
-// adding one cannot silently change the shape of an existing result.
+// Columns are listed explicitly rather than with *, so adding one cannot
+// silently reshape an existing result (documentation/sql-and-sqlc.md).
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (AppUser, error) {
 	row := q.db.QueryRowContext(ctx, getUserByID, id)
 	var i AppUser

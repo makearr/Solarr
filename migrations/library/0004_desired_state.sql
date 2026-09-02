@@ -1,6 +1,5 @@
--- Desired state, what satisfies it, and the materialised aggregates over it
--- (section 5.3). category_id, profile_id and added_by carry no foreign key:
--- those tables live in settings.db (ADR-25, section 4.3).
+-- Desired state, what satisfies it, and the materialised aggregates over it (section 5.3)
+-- (ADR-25, section 4.3).
 
 CREATE TABLE desired_item (
   id                   INTEGER PRIMARY KEY,
@@ -40,14 +39,6 @@ CREATE INDEX desired_by_work ON desired_item(work_id, media_sort_key);
 CREATE INDEX desired_by_category ON desired_item(category_id, state);
 
 -- What actually satisfies a desired item.
---
--- Without this a file found by a scan has no home, since the only other path
--- from bytes back to intent runs through acquisition -- and a scan acquires
--- nothing. present_count is maintained from these rows, so it has a membership
--- to be recomputed from rather than being a number nobody can check.
---
--- role is what makes extras expressible: a trailer belongs to the work without
--- satisfying it, which is why only 'primary' counts toward present_count.
 CREATE TABLE desired_item_file (
   desired_item_id INTEGER NOT NULL REFERENCES desired_item(id) ON DELETE CASCADE,
   media_object_id INTEGER NOT NULL REFERENCES media_object(id) ON DELETE CASCADE,

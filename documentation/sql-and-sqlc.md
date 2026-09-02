@@ -33,12 +33,59 @@ sqlc produces. It fails at runtime with `no such column: usernam`.
 Nothing else in the build catches this, which is why it is a test and not a
 convention. Write `section 5.5`, not `§5.5`, in SQL.
 
-## Other constraints of the SQLite engine
+## What SQLite refuses
+
+- **No expression in a `PRIMARY KEY` or `UNIQUE` constraint.** `PRIMARY KEY (a, b,
+  COALESCE(c, ''))` fails with `expressions prohibited in PRIMARY KEY and UNIQUE
+  constraints`. Make the column `NOT NULL DEFAULT ''` and key on it directly, which carries
+  the same meaning.
+- **A foreign key cannot cross a database file.** `library.db` references `settings.db` rows
+  by integer id with no constraint; the application enforces integrity (ADR-25). See
+  `database-layout.md`.
+
+## What sqlc refuses, or gets wrong quietly
 
 - **No `SELECT *` or `RETURNING *`.** sqlc cannot expand them and fails with
-  `extraneous input 'SELECTid'`. List columns explicitly, which is better
-  practice anyway: adding a column then cannot silently reshape an existing
-  result.
+  `extraneous input 'SELECTid'`. List columns explicitly, which is better practice anyway:
+  adding a column then cannot silently reshape an existing result.
+
+- **Column lists must match table order and be complete**, or sqlc stops reusing the table's
+  model and generates a one-off row struct instead. This bites after `ALTER TABLE ADD COLUMN`:
+  the new column has to be added to every `RETURNING` and `SELECT` that returned the whole row,
+  in table order, or callers start seeing `InternAttributesRow` where they had
+  `MediaAttribute`.
+
+- **`sqlc.arg(name)` is not substituted inside `ON CONFLICT ... DO UPDATE SET`.** The literal
+  text is emitted and SQLite rejects it with a syntax error near `(`. Use `excluded.<column>`,
+  which refers to the row the insert was carrying:
+
+  ```sql
+  ON CONFLICT (scope, metric) DO UPDATE SET
+    value = counter.value + excluded.value
+  ```
+
+- **Aggregates come back as `interface{}` without a cast**, because sqlc cannot infer the type.
+  `COUNT(*)` is the exception and is inferred as `int64` on its own.
+
+  ```sql
+  SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM quarantine
+  ```
+
+- **A recursive CTE must not name its column `id`**, or sqlc reports
+  `column reference "id" is ambiguous` against the table being walked. Name it for the subject
+  and qualify both sides:
+
+  ```sql
+  WITH RECURSIVE subtree(org_id) AS (
+    SELECT organisation.id FROM organisation WHERE organisation.id = ?
+    UNION
+    SELECT o.id FROM organisation o JOIN subtree ON o.parent_id = subtree.org_id
+  )
+  ```
+
+- **Every branch of a `UNION` needs named columns**, or sqlc fails with
+  `*ast.ResTarget has nil name`. Alias bare parameters and literals. Where a branch is only a
+  constant row, a separate statement is usually clearer than an alias.
 
 ## Conventions
 
@@ -46,28 +93,17 @@ convention. Write `section 5.5`, not `§5.5`, in SQL.
 - `Queries.WithTx(tx)` binds to the write queue's transaction. Never open one
   directly (ADR-3).
 - No `OFFSET`: cursor pagination only (Invariant 32).
+- **A cursor needs a tie-break on `id`.** Ordering by a non-unique column alone silently drops
+  rows when a page boundary falls inside a group that shares a value:
+
+  ```sql
+  AND (sqlc.arg(after_sort) = ''
+       OR sort_title > sqlc.arg(after_sort)
+       OR (sort_title = sqlc.arg(after_sort) AND id > sqlc.arg(after_id)))
+  ORDER BY sort_title, id
+  ```
+
 - No joins across database files. Compose in Go (architecture section 4.3).
-
-## Named arguments and ON CONFLICT
-
-`sqlc.arg(name)` is not substituted inside an `ON CONFLICT ... DO UPDATE SET` clause. sqlc
-emits the literal text `sqlc.arg(name)` into the query and SQLite rejects it with a syntax
-error near `(`.
-
-Use `excluded.<column>` instead, which refers to the row the insert was carrying:
-
-```sql
-ON CONFLICT (scope, metric) DO UPDATE SET
-  value = counter.value + excluded.value
-```
-
-## Aggregates need an explicit cast
-
-`SUM`, `COALESCE` and similar expressions come back as `interface{}` unless the type is stated,
-because sqlc cannot infer one. Every caller then has to type-assert.
-
-```sql
-SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM quarantine
-```
-
-`COUNT(*)` is the exception and is inferred as `int64` on its own.
+- **Never write through the read pool inside a write transaction.** The write connection holds
+  the lock, so the second connection blocks against it until the busy timeout expires.
+  Everything inside a `store.Write` goes through the `Queries` it is given.

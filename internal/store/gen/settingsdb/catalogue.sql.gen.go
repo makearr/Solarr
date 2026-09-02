@@ -41,9 +41,8 @@ const countCategoriesUsingRootFolder = `-- name: CountCategoriesUsingRootFolder 
 SELECT count(*) FROM category_root_folder WHERE root_folder_id = ?
 `
 
-// Invariant 41: deleting a configuration entity that is in use is refused, with
-// a count of what references it. The application asks before it deletes so the
-// user gets a reason rather than a constraint violation.
+// Invariant 41: deleting an entity in use is refused with a count of what
+// references it, so the user gets a reason rather than a constraint violation.
 func (q *Queries) CountCategoriesUsingRootFolder(ctx context.Context, rootFolderID int64) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countCategoriesUsingRootFolder, rootFolderID)
 	var count int64

@@ -11,11 +11,8 @@ import (
 
 type Querier interface {
 	CancelJob(ctx context.Context, arg CancelJobParams) (int64, error)
-	// Claiming is one conditional UPDATE ... RETURNING: a single bounded write-queue
-	// operation, so two dispatchers can never hand the same job to two workers.
-	//
-	// The depends_on clause keeps a job unclaimable until what it waits on has
-	// succeeded, rather than claiming it and discovering that inside a worker.
+	// One conditional UPDATE ... RETURNING, so two dispatchers cannot hand the same
+	// job to two workers. depends_on keeps a job unclaimable until its parent succeeds.
 	ClaimJobs(ctx context.Context, arg ClaimJobsParams) ([]Job, error)
 	CompleteJob(ctx context.Context, arg CompleteJobParams) (int64, error)
 	CountJobsByState(ctx context.Context) ([]CountJobsByStateRow, error)
@@ -25,12 +22,8 @@ type Querier interface {
 	FindActiveJobByActionKey(ctx context.Context, actionKey sql.NullString) (Job, error)
 	GetJob(ctx context.Context, id int64) (Job, error)
 	ListAttempts(ctx context.Context, jobID int64) ([]JobAttempt, error)
-	// Cursor pagination, never OFFSET (Invariant 32). The tie-break on id is not
-	// optional: updated_at is not unique, so a page boundary landing inside a group
-	// of equal timestamps would silently drop or repeat rows.
-	//
-	// A zero cursor means the start of the list, which is why the comparison is
-	// guarded rather than written as a plain inequality.
+	// Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
+	// updated_at is not unique. A zero cursor is the start, hence the guarded comparison.
 	ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]Job, error)
 	// The reaper returns abandoned work to the queue. A crashed process therefore
 	// self-heals with no manual cleanup, which is what makes restart recovery real.

@@ -1,6 +1,5 @@
--- Queries live in SQL, not in Go string literals: reviewability is the point
--- (coding-standards section 9). Columns are listed explicitly rather than with *, so
--- adding one cannot silently change the shape of an existing result.
+-- Columns are listed explicitly rather than with *, so adding one cannot
+-- silently reshape an existing result (documentation/sql-and-sqlc.md).
 
 -- name: GetUserByID :one
 SELECT id, username, password_hash, role, created_at, ui_tier

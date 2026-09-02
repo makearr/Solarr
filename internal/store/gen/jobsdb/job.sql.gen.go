@@ -63,11 +63,8 @@ type ClaimJobsParams struct {
 	Capacity       int64
 }
 
-// Claiming is one conditional UPDATE ... RETURNING: a single bounded write-queue
-// operation, so two dispatchers can never hand the same job to two workers.
-//
-// The depends_on clause keeps a job unclaimable until what it waits on has
-// succeeded, rather than claiming it and discovering that inside a worker.
+// One conditional UPDATE ... RETURNING, so two dispatchers cannot hand the same
+// job to two workers. depends_on keeps a job unclaimable until its parent succeeds.
 func (q *Queries) ClaimJobs(ctx context.Context, arg ClaimJobsParams) ([]Job, error) {
 	rows, err := q.db.QueryContext(ctx, claimJobs,
 		arg.LeaseOwner,
@@ -401,9 +398,8 @@ SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
 FROM job
 WHERE (?1 = '' OR state = ?1)
-  -- Category filtering happens here, in the query, rather than by discarding
-  -- rows afterwards: filtering after the fact returns short pages and breaks
-  -- the cursor (Invariant 36).
+  -- In the query, not afterwards: filtering results returns short pages and
+  -- breaks the cursor (Invariant 36).
   AND ((category_id IS NULL AND ?2 = 1)
        OR category_id IN (SELECT value FROM json_each(?3)))
   AND (?4 = 0
@@ -422,12 +418,8 @@ type ListJobsPageParams struct {
 	PageSize          int64
 }
 
-// Cursor pagination, never OFFSET (Invariant 32). The tie-break on id is not
-// optional: updated_at is not unique, so a page boundary landing inside a group
-// of equal timestamps would silently drop or repeat rows.
-//
-// A zero cursor means the start of the list, which is why the comparison is
-// guarded rather than written as a plain inequality.
+// Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
+// updated_at is not unique. A zero cursor is the start, hence the guarded comparison.
 func (q *Queries) ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]Job, error) {
 	rows, err := q.db.QueryContext(ctx, listJobsPage,
 		arg.State,

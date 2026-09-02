@@ -1,13 +1,4 @@
 -- jobs.db (ADR-2, architecture section 5.6).
---
--- Separate from library.db by write pattern, not by domain: every state
--- transition and every lease renewal is a write, and keeping that churn out of
--- the library WAL is the point. Nothing here is authoritative for library
--- correctness -- if this file is lost, the planner reconstructs the work on the
--- next reconciliation pass.
---
--- ASCII only: a multi-byte character makes sqlc emit wrong SQL that still
--- compiles (documentation/sql-and-sqlc.md).
 
 CREATE TABLE job (
   id           INTEGER PRIMARY KEY,
@@ -46,9 +37,8 @@ CREATE TABLE job (
   updated_at INTEGER NOT NULL
 );
 
--- Invariant 16: every planned action carries a deterministic action_key and the
--- queue deduplicates on it, so a restart cannot enqueue the same download
--- twice. Partial, because a completed job must not block the next one.
+-- Invariant 16: every planned action carries a deterministic action_key and the queue
+-- deduplicates on it, so a restart cannot enqueue the same download twice.
 CREATE UNIQUE INDEX job_action_active ON job(action_key)
   WHERE action_key IS NOT NULL
     AND state IN ('PENDING', 'PENDING_RETRY', 'LEASED', 'RUNNING');

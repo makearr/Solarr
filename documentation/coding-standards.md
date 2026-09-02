@@ -138,6 +138,32 @@ the API filters; translation stays possible.
 - Fakes model failure too: timeouts, 429s, malformed responses, partial results. Most bugs in
   this class of software live in error paths.
 - Benchmarks live beside the code they measure and run in CI (ADR-28).
+- **Assert the property, not the mechanism.** A test that a row round-trips proves the database
+  works. A test that an extra does not satisfy a desired item proves the design works.
+- **A vacuous pass is a failure.** Where a test could silently cover nothing — an empty table, a
+  skipped branch, no routes walked — assert it found something before asserting anything about
+  what it found.
+- **Make the fixture disagree with what it asserts.** Ranks reversed against the expected
+  order, timestamps identical across every row, a second copy of a part already covered. A
+  fixture that happens to be in the right order tests nothing about ordering.
+- Everything inside a `store.Write` goes through the `Queries` it is given. Writing through the
+  read pool inside a write transaction blocks against the lock the same test is holding, until
+  the busy timeout expires.
+
+## 7a. Mutation testing
+
+Before trusting a guard, break it and confirm a test fails. A guard nobody has watched fail is
+a guard nobody knows works, and this has repeatedly found tests that passed for the wrong
+reason:
+
+- A fixture whose ordering coincided with the ordering under test, so a missing sort passed.
+- A subject protected by something else entirely, so removing the guard under test changed
+  nothing.
+- A mutation that broke the build rather than the test, which proves nothing. Change the
+  behaviour, not the signature — `AND x = ?` becomes `AND (x = ? OR 1 = 1)`, not a deleted
+  parameter.
+
+Restore the original immediately afterwards, and re-run to confirm green.
 
 ---
 

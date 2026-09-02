@@ -74,9 +74,8 @@ CREATE TABLE artwork (
   UNIQUE(subject_type, subject_id, kind)
 );
 
--- bounded_success is a Wilson lower bound and is what scoring reads; the raw
--- rate is kept for display only, so a group with three lucky imports cannot
--- outrank one with three hundred (ADR-45).
+-- bounded_success is a Wilson lower bound and is what scoring reads; the raw rate is kept for
+-- display only, so a group with three lucky imports cannot outrank one with three hundred
 CREATE TABLE group_reputation (
   release_group    TEXT    PRIMARY KEY,
   -- Decay-weighted, not a raw count.

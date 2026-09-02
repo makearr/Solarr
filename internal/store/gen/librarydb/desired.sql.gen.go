@@ -25,9 +25,7 @@ type AdjustCounterParams struct {
 	UpdatedAt int64
 }
 
-// excluded.value is the delta, since that is what the insert carries. A named
-// argument would be clearer but sqlc does not substitute one inside DO UPDATE:
-// it emits the literal text and SQLite rejects it.
+// excluded.value is the delta: sqlc cannot substitute a named argument inside DO UPDATE.
 func (q *Queries) AdjustCounter(ctx context.Context, arg AdjustCounterParams) error {
 	_, err := q.db.ExecContext(ctx, adjustCounter,
 		arg.Scope,
