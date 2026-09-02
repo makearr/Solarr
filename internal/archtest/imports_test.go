@@ -44,6 +44,9 @@ var allowedInternalImports = map[string][]string{
 	// Pure domain types (architecture section 6): no I/O, so it depends on nothing
 	// of ours.
 	"internal/model": {},
+	// Field-level provider merge (ADR-8): no I/O, the caller fetches rows and
+	// priority order.
+	"internal/metaresolve": {},
 	"internal/library/fixture": {
 		"internal/clock", "internal/fsx", "internal/store",
 		"internal/store/gen/librarydb", "migrations",
