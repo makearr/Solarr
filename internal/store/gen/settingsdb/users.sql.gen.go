@@ -423,6 +423,20 @@ func (q *Queries) SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHa
 	return err
 }
 
+const setUserRole = `-- name: SetUserRole :exec
+UPDATE app_user SET role = ? WHERE id = ?
+`
+
+type SetUserRoleParams struct {
+	Role string
+	ID   int64
+}
+
+func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) error {
+	_, err := q.db.ExecContext(ctx, setUserRole, arg.Role, arg.ID)
+	return err
+}
+
 const setUserTier = `-- name: SetUserTier :exec
 UPDATE app_user SET ui_tier = ? WHERE id = ?
 `

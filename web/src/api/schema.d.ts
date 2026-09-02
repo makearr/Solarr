@@ -181,6 +181,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every account, with its role and category grants. */
+        get: operations["listUsers"];
+        put?: never;
+        /** Add an account. */
+        post: operations["createUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove an account. */
+        delete: operations["deleteUser"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a role or set a password.
+         * @description Demoting or deleting the only administrator is refused: nothing else can restore the role, so the interface would be locked out of its own settings (ADR-44).
+         */
+        patch: operations["updateUser"];
+        trace?: never;
+    };
+    "/users/{id}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Grant or change access to one category.
+         * @description An absent grant denies, so a new category is private until shared. Sending "none" revokes rather than storing a denial.
+         */
+        put: operations["setUserAccess"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/auth": {
         parameters: {
             query?: never;
@@ -373,6 +436,22 @@ export interface components {
              * @example Europe/Fefobo
              */
             timezone?: string;
+        };
+        CategoryGrant: {
+            /** Format: int64 */
+            category_id: number;
+            permission: components["schemas"]["Permission"];
+        };
+        UserAccount: {
+            /** Format: int64 */
+            id: number;
+            username: string;
+            role: components["schemas"]["Role"];
+            /** @description False for an account that authenticates by proxy header or API key, or the passwordless one an open-access install creates. */
+            has_password: boolean;
+            /** Format: date-time */
+            created_at: string;
+            access: components["schemas"]["CategoryGrant"][];
         };
         AuthPolicy: {
             /** @description Whether a caller must present a credential. False serves every request as the administrator. */
@@ -736,6 +815,149 @@ export interface operations {
             400: components["responses"]["Problem"];
             /** @description An account already exists; setup is closed. */
             409: components["responses"]["Problem"];
+        };
+    };
+    listUsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAccount"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    createUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    username: string;
+                    /** Format: password */
+                    password: string;
+                    role: components["schemas"]["Role"];
+                };
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAccount"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    deleteUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    role?: components["schemas"]["Role"];
+                    /** Format: password */
+                    password?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The updated account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAccount"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setUserAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    category_id: number;
+                    permission: components["schemas"]["Permission"];
+                };
+            };
+        };
+        responses: {
+            /** @description The updated account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAccount"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     getAuthPolicy: {

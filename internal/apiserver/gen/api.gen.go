@@ -161,6 +161,14 @@ type Category struct {
 	Permission Permission `json:"permission"`
 }
 
+// CategoryGrant defines model for CategoryGrant.
+type CategoryGrant struct {
+	CategoryId int64 `json:"category_id"`
+
+	// Permission `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.
+	Permission Permission `json:"permission"`
+}
+
 // DashboardSummary defines model for DashboardSummary.
 type DashboardSummary struct {
 	// Jobs Live counts over jobs.db, which retention keeps bounded.
@@ -321,6 +329,18 @@ type SetupStatus struct {
 	NeedsAdministrator bool `json:"needs_administrator"`
 }
 
+// UserAccount defines model for UserAccount.
+type UserAccount struct {
+	Access    []CategoryGrant `json:"access"`
+	CreatedAt time.Time       `json:"created_at"`
+
+	// HasPassword False for an account that authenticates by proxy header or API key, or the passwordless one an open-access install creates.
+	HasPassword bool   `json:"has_password"`
+	Id          int64  `json:"id"`
+	Role        Role   `json:"role"`
+	Username    string `json:"username"`
+}
+
 // LoginJSONBody defines parameters for Login.
 type LoginJSONBody struct {
 	Password string `json:"password"`
@@ -368,6 +388,27 @@ type CreateFirstAdministratorJSONBody struct {
 	Username string `json:"username"`
 }
 
+// CreateUserJSONBody defines parameters for CreateUser.
+type CreateUserJSONBody struct {
+	Password string `json:"password"`
+	Role     Role   `json:"role"`
+	Username string `json:"username"`
+}
+
+// UpdateUserJSONBody defines parameters for UpdateUser.
+type UpdateUserJSONBody struct {
+	Password *string `json:"password,omitempty"`
+	Role     *Role   `json:"role,omitempty"`
+}
+
+// SetUserAccessJSONBody defines parameters for SetUserAccess.
+type SetUserAccessJSONBody struct {
+	CategoryId int64 `json:"category_id"`
+
+	// Permission `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.
+	Permission Permission `json:"permission"`
+}
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody LoginJSONBody
 
@@ -379,6 +420,15 @@ type SetAuthPolicyJSONRequestBody SetAuthPolicyJSONBody
 
 // CreateFirstAdministratorJSONRequestBody defines body for CreateFirstAdministrator for application/json ContentType.
 type CreateFirstAdministratorJSONRequestBody CreateFirstAdministratorJSONBody
+
+// CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
+type CreateUserJSONRequestBody CreateUserJSONBody
+
+// UpdateUserJSONRequestBody defines body for UpdateUser for application/json ContentType.
+type UpdateUserJSONRequestBody UpdateUserJSONBody
+
+// SetUserAccessJSONRequestBody defines body for SetUserAccess for application/json ContentType.
+type SetUserAccessJSONRequestBody SetUserAccessJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -436,6 +486,21 @@ type ServerInterface interface {
 	// The address this host appears to come from.
 	// (GET /system/egress)
 	GetEgress(w http.ResponseWriter, r *http.Request)
+	// Every account, with its role and category grants.
+	// (GET /users)
+	ListUsers(w http.ResponseWriter, r *http.Request)
+	// Add an account.
+	// (POST /users)
+	CreateUser(w http.ResponseWriter, r *http.Request)
+	// Remove an account.
+	// (DELETE /users/{id})
+	DeleteUser(w http.ResponseWriter, r *http.Request, id int64)
+	// Change a role or set a password.
+	// (PATCH /users/{id})
+	UpdateUser(w http.ResponseWriter, r *http.Request, id int64)
+	// Grant or change access to one category.
+	// (PUT /users/{id}/access)
+	SetUserAccess(w http.ResponseWriter, r *http.Request, id int64)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -547,6 +612,36 @@ func (_ Unimplemented) CreateFirstAdministrator(w http.ResponseWriter, r *http.R
 // The address this host appears to come from.
 // (GET /system/egress)
 func (_ Unimplemented) GetEgress(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every account, with its role and category grants.
+// (GET /users)
+func (_ Unimplemented) ListUsers(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add an account.
+// (POST /users)
+func (_ Unimplemented) CreateUser(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove an account.
+// (DELETE /users/{id})
+func (_ Unimplemented) DeleteUser(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change a role or set a password.
+// (PATCH /users/{id})
+func (_ Unimplemented) UpdateUser(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Grant or change access to one category.
+// (PUT /users/{id}/access)
+func (_ Unimplemented) SetUserAccess(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -954,6 +1049,149 @@ func (siw *ServerInterfaceWrapper) GetEgress(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// ListUsers operation middleware
+func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListUsers(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateUser operation middleware
+func (siw *ServerInterfaceWrapper) CreateUser(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateUser(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteUser operation middleware
+func (siw *ServerInterfaceWrapper) DeleteUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteUser(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateUser operation middleware
+func (siw *ServerInterfaceWrapper) UpdateUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateUser(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetUserAccess operation middleware
+func (siw *ServerInterfaceWrapper) SetUserAccess(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetUserAccess(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1120,6 +1358,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/system/egress", wrapper.GetEgress)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/users", wrapper.ListUsers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/users", wrapper.CreateUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/users/{id}", wrapper.DeleteUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/users/{id}", wrapper.UpdateUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/users/{id}/access", wrapper.SetUserAccess)
 	})
 
 	return r

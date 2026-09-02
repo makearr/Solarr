@@ -234,12 +234,58 @@ func (c *Cache) CreateUser(ctx context.Context, cl clock.Clock, username, passwo
 
 // DeleteUser removes an account.
 func (c *Cache) DeleteUser(ctx context.Context, id int64) error {
-	if _, found := c.Snapshot().User(id); !found {
+	user, found := c.Snapshot().User(id)
+	if !found {
 		return fmt.Errorf("%w: user %d", ErrNotFound, id)
+	}
+	if err := c.wouldStrandTheInstance(user, RoleReadonly); err != nil {
+		return err
 	}
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		return queries.DeleteUser(ctx, id)
 	})
+}
+
+// SetRole changes what a user may do outside any one category.
+func (c *Cache) SetRole(ctx context.Context, id int64, role Role) error {
+	user, found := c.Snapshot().User(id)
+	if !found {
+		return fmt.Errorf("%w: user %d", ErrNotFound, id)
+	}
+	if err := c.wouldStrandTheInstance(user, role); err != nil {
+		return err
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetUserRole(ctx, settingsdb.SetUserRoleParams{ID: id, Role: string(role)})
+	})
+}
+
+// RevokeCategoryAccess removes a grant entirely. An absent row denies, so this
+// is not the same as storing "none" -- it returns the user to the default.
+func (c *Cache) RevokeCategoryAccess(ctx context.Context, userID, categoryID int64) error {
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.RevokeCategoryAccess(ctx, settingsdb.RevokeCategoryAccessParams{
+			UserID: userID, CategoryID: categoryID,
+		})
+	})
+}
+
+// ErrLastAdministrator reports a change that would leave nobody able to
+// administer the instance.
+var ErrLastAdministrator = errors.New("settings: that would leave no administrator")
+
+// wouldStrandTheInstance refuses removing or demoting the only administrator.
+// Nothing else can restore the role, so the interface would be locked out of its
+// own settings with no way back that does not involve the database file
+// (ADR-44).
+func (c *Cache) wouldStrandTheInstance(user User, becoming Role) error {
+	if user.Role != RoleAdmin || becoming == RoleAdmin {
+		return nil
+	}
+	if len(c.administratorIDs()) > 1 {
+		return nil
+	}
+	return fmt.Errorf("%w: %q is the only one", ErrLastAdministrator, user.Username)
 }
 
 // SetCategoryAccess grants or changes a user's permission on one category.

@@ -40,6 +40,11 @@ var allowedInternalImports = map[string][]string{
 	"internal/jobs": {
 		"internal/clock", "internal/paginate", "internal/store", "internal/store/gen/jobsdb",
 	},
+	// Builds a library.db at ADR-22 scale for the ADR-28 and ADR-5 benchmarks.
+	"internal/library/fixture": {
+		"internal/clock", "internal/fsx", "internal/store",
+		"internal/store/gen/librarydb", "migrations",
+	},
 	// Owns librarydb, as jobs owns jobsdb and settings owns settingsdb.
 	"internal/library": {
 		"internal/clock", "internal/paginate", "internal/store", "internal/store/gen/librarydb",

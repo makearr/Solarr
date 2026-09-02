@@ -340,7 +340,9 @@ func TestDeleteUser_TakesTheirGrantsWithThem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateCategory: %v", err)
 	}
-	user, err := cache.CreateUser(t.Context(), fake, "avs", "hash", settings.RoleAdmin)
+	// An operator, not an administrator: removing the only administrator is
+	// refused, and this test is about grants outliving their owner.
+	user, err := cache.CreateUser(t.Context(), fake, "avs", "hash", settings.RoleOperator)
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
@@ -372,5 +374,41 @@ func TestMutations_RejectUnknownIDs(t *testing.T) {
 	}
 	if err := cache.AttachRootFolder(t.Context(), settings.CategoryRoot{CategoryID: 999, RootFolderID: 999}); !errors.Is(err, settings.ErrNotFound) {
 		t.Errorf("AttachRootFolder with unknown ids = %v, want ErrNotFound", err)
+	}
+}
+
+// Nothing else can restore the administrator role, so removing or demoting the
+// only one leaves the interface locked out of its own settings with no way back
+// that does not involve editing the database file (ADR-44).
+func TestTheLastAdministratorCannotBeRemovedOrDemoted(t *testing.T) {
+	cache, fake := newCache(t)
+
+	only, err := cache.CreateUser(t.Context(), fake, "avs", "hash", settings.RoleAdmin)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	if err := cache.DeleteUser(t.Context(), only.ID); !errors.Is(err, settings.ErrLastAdministrator) {
+		t.Errorf("DeleteUser on the only administrator = %v, want ErrLastAdministrator", err)
+	}
+	if err := cache.SetRole(t.Context(), only.ID, settings.RoleReadonly); !errors.Is(err, settings.ErrLastAdministrator) {
+		t.Errorf("demoting the only administrator = %v, want ErrLastAdministrator", err)
+	}
+	if got, _ := cache.Snapshot().User(only.ID); got.Role != settings.RoleAdmin {
+		t.Fatalf("the administrator survived as %q, want admin", got.Role)
+	}
+
+	// A second administrator makes the first removable: the rule is about the
+	// instance keeping one, not about protecting a particular account.
+	second, err := cache.CreateUser(t.Context(), fake, "other", "hash", settings.RoleAdmin)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := cache.SetRole(t.Context(), only.ID, settings.RoleReadonly); err != nil {
+		t.Errorf("demoting one of two administrators: %v", err)
+	}
+	if err := cache.DeleteUser(t.Context(), second.ID); !errors.Is(err, settings.ErrLastAdministrator) {
+		t.Errorf("the demotion left %q as the only administrator, so removing them "+
+			"should be refused: %v", second.Username, err)
 	}
 }

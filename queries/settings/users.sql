@@ -21,6 +21,9 @@ RETURNING id, username, password_hash, role, created_at, ui_tier;
 -- name: SetUserPasswordHash :exec
 UPDATE app_user SET password_hash = ? WHERE id = ?;
 
+-- name: SetUserRole :exec
+UPDATE app_user SET role = ? WHERE id = ?;
+
 -- name: SetUserTier :exec
 UPDATE app_user SET ui_tier = ? WHERE id = ?;
 
