@@ -4,6 +4,7 @@ import { api } from "@/api/client";
 import { ListGrid } from "@/list/ListGrid";
 import { ListTable, type Column } from "@/list/ListTable";
 import { useLibraryList } from "@/list/useLibraryList";
+import { useRouteView } from "@/list/useRouteView";
 import { useNarrow } from "@/list/useNarrow";
 import type { components } from "@/api/schema";
 
@@ -20,6 +21,9 @@ const COLUMNS: readonly Column<Job>[] = [
   { key: "created_at", header: "Created", render: (job) => job.created_at },
 ];
 
+// Module scope, so the identity is stable across renders.
+const FILTER_KEYS = ["state"];
+
 // The first consumer of the headless core, and the only real cursor-paginated
 // collection until the library has rows to list.
 export function Activity() {
@@ -29,7 +33,6 @@ export function Activity() {
   const list = useLibraryList<Job>({
     name: "jobs",
     rowHeight: narrow ? CARD_HEIGHT : undefined,
-    filterKeys: ["state"],
     idOf: (job) => job.id,
     topics: ["job"],
     fetchPage: async ({ cursor, query, signal }) => {
@@ -46,7 +49,7 @@ export function Activity() {
       if (error) throw error;
       return data;
     },
-  });
+  }, useRouteView(FILTER_KEYS));
 
   return (
     <div className="flex h-full flex-col">
