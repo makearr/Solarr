@@ -52,11 +52,14 @@ const createMediaObject = `-- name: CreateMediaObject :one
 INSERT INTO media_object (size_bytes, quick_hash, content_hash, oshash, phash,
                           audio_fp, audio_fp_prefix, fingerprinted_at,
                           claimed_attributes_id, measured_attributes_id,
-                          attribute_mismatch_json, probe_json, first_seen_at, verified_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                          attribute_mismatch_json, duration_ms, width, height,
+                          video_bitrate, audio_bitrate, overall_bitrate,
+                          probe_json, first_seen_at, verified_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
           audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
-          measured_attributes_id, attribute_mismatch_json, probe_json,
+          measured_attributes_id, attribute_mismatch_json, duration_ms, width,
+          height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
           first_seen_at, verified_at
 `
 
@@ -72,6 +75,12 @@ type CreateMediaObjectParams struct {
 	ClaimedAttributesID   sql.NullInt64
 	MeasuredAttributesID  sql.NullInt64
 	AttributeMismatchJson sql.NullString
+	DurationMs            sql.NullInt64
+	Width                 sql.NullInt64
+	Height                sql.NullInt64
+	VideoBitrate          sql.NullInt64
+	AudioBitrate          sql.NullInt64
+	OverallBitrate        sql.NullInt64
 	ProbeJson             sql.NullString
 	FirstSeenAt           int64
 	VerifiedAt            sql.NullInt64
@@ -90,6 +99,12 @@ func (q *Queries) CreateMediaObject(ctx context.Context, arg CreateMediaObjectPa
 		arg.ClaimedAttributesID,
 		arg.MeasuredAttributesID,
 		arg.AttributeMismatchJson,
+		arg.DurationMs,
+		arg.Width,
+		arg.Height,
+		arg.VideoBitrate,
+		arg.AudioBitrate,
+		arg.OverallBitrate,
 		arg.ProbeJson,
 		arg.FirstSeenAt,
 		arg.VerifiedAt,
@@ -108,6 +123,12 @@ func (q *Queries) CreateMediaObject(ctx context.Context, arg CreateMediaObjectPa
 		&i.ClaimedAttributesID,
 		&i.MeasuredAttributesID,
 		&i.AttributeMismatchJson,
+		&i.DurationMs,
+		&i.Width,
+		&i.Height,
+		&i.VideoBitrate,
+		&i.AudioBitrate,
+		&i.OverallBitrate,
 		&i.ProbeJson,
 		&i.FirstSeenAt,
 		&i.VerifiedAt,
@@ -136,7 +157,8 @@ func (q *Queries) DeleteMediaObject(ctx context.Context, id int64) error {
 const findMediaObjectsByQuickHash = `-- name: FindMediaObjectsByQuickHash :many
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
-       measured_attributes_id, attribute_mismatch_json, probe_json,
+       measured_attributes_id, attribute_mismatch_json, duration_ms, width,
+       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
        first_seen_at, verified_at
 FROM media_object WHERE quick_hash = ?
 `
@@ -164,6 +186,12 @@ func (q *Queries) FindMediaObjectsByQuickHash(ctx context.Context, quickHash str
 			&i.ClaimedAttributesID,
 			&i.MeasuredAttributesID,
 			&i.AttributeMismatchJson,
+			&i.DurationMs,
+			&i.Width,
+			&i.Height,
+			&i.VideoBitrate,
+			&i.AudioBitrate,
+			&i.OverallBitrate,
 			&i.ProbeJson,
 			&i.FirstSeenAt,
 			&i.VerifiedAt,
@@ -184,9 +212,8 @@ func (q *Queries) FindMediaObjectsByQuickHash(ctx context.Context, quickHash str
 const getAttributes = `-- name: GetAttributes :one
 SELECT id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
        audio_channels, bit_depth, languages, subtitles, edition_tokens,
-       release_group, proper_repack, video_bitrate, audio_bitrate, overall_bitrate,
-       duration_ms, width, height, frame_rate, scan_type, container, lossless,
-       sample_rate, image_format, colour_depth, page_count
+       release_group, proper_repack, frame_rate, scan_type, container,
+       lossless, sample_rate, image_format, colour_depth, page_count
 FROM media_attributes WHERE id = ?
 `
 
@@ -208,12 +235,6 @@ func (q *Queries) GetAttributes(ctx context.Context, id int64) (MediaAttribute, 
 		&i.EditionTokens,
 		&i.ReleaseGroup,
 		&i.ProperRepack,
-		&i.VideoBitrate,
-		&i.AudioBitrate,
-		&i.OverallBitrate,
-		&i.DurationMs,
-		&i.Width,
-		&i.Height,
 		&i.FrameRate,
 		&i.ScanType,
 		&i.Container,
@@ -229,7 +250,8 @@ func (q *Queries) GetAttributes(ctx context.Context, id int64) (MediaAttribute, 
 const getMediaObject = `-- name: GetMediaObject :one
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
-       measured_attributes_id, attribute_mismatch_json, probe_json,
+       measured_attributes_id, attribute_mismatch_json, duration_ms, width,
+       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
        first_seen_at, verified_at
 FROM media_object WHERE id = ?
 `
@@ -250,6 +272,12 @@ func (q *Queries) GetMediaObject(ctx context.Context, id int64) (MediaObject, er
 		&i.ClaimedAttributesID,
 		&i.MeasuredAttributesID,
 		&i.AttributeMismatchJson,
+		&i.DurationMs,
+		&i.Width,
+		&i.Height,
+		&i.VideoBitrate,
+		&i.AudioBitrate,
+		&i.OverallBitrate,
 		&i.ProbeJson,
 		&i.FirstSeenAt,
 		&i.VerifiedAt,
@@ -260,7 +288,8 @@ func (q *Queries) GetMediaObject(ctx context.Context, id int64) (MediaObject, er
 const getMediaObjectByOshash = `-- name: GetMediaObjectByOshash :one
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
-       measured_attributes_id, attribute_mismatch_json, probe_json,
+       measured_attributes_id, attribute_mismatch_json, duration_ms, width,
+       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
        first_seen_at, verified_at
 FROM media_object WHERE oshash = ?
 `
@@ -282,6 +311,12 @@ func (q *Queries) GetMediaObjectByOshash(ctx context.Context, oshash sql.NullStr
 		&i.ClaimedAttributesID,
 		&i.MeasuredAttributesID,
 		&i.AttributeMismatchJson,
+		&i.DurationMs,
+		&i.Width,
+		&i.Height,
+		&i.VideoBitrate,
+		&i.AudioBitrate,
+		&i.OverallBitrate,
 		&i.ProbeJson,
 		&i.FirstSeenAt,
 		&i.VerifiedAt,
@@ -319,46 +354,38 @@ const internAttributes = `-- name: InternAttributes :one
 INSERT INTO media_attributes (attr_hash, resolution, source, video_codec, hdr,
                               audio_codec, audio_channels, bit_depth, languages,
                               subtitles, edition_tokens, release_group, proper_repack,
-                              video_bitrate, audio_bitrate, overall_bitrate, duration_ms,
-                              width, height, frame_rate, scan_type, container,
-                              lossless, sample_rate, image_format, colour_depth, page_count)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              frame_rate, scan_type, container, lossless, sample_rate,
+                              image_format, colour_depth, page_count)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (attr_hash) DO UPDATE SET attr_hash = excluded.attr_hash
 RETURNING id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
           audio_channels, bit_depth, languages, subtitles, edition_tokens,
-          release_group, proper_repack, video_bitrate, audio_bitrate, overall_bitrate,
-          duration_ms, width, height, frame_rate, scan_type, container, lossless,
-          sample_rate, image_format, colour_depth, page_count
+          release_group, proper_repack, frame_rate, scan_type, container,
+          lossless, sample_rate, image_format, colour_depth, page_count
 `
 
 type InternAttributesParams struct {
-	AttrHash       string
-	Resolution     sql.NullString
-	Source         sql.NullString
-	VideoCodec     sql.NullString
-	Hdr            sql.NullString
-	AudioCodec     sql.NullString
-	AudioChannels  sql.NullString
-	BitDepth       sql.NullInt64
-	Languages      sql.NullString
-	Subtitles      sql.NullString
-	EditionTokens  sql.NullString
-	ReleaseGroup   sql.NullString
-	ProperRepack   int64
-	VideoBitrate   sql.NullInt64
-	AudioBitrate   sql.NullInt64
-	OverallBitrate sql.NullInt64
-	DurationMs     sql.NullInt64
-	Width          sql.NullInt64
-	Height         sql.NullInt64
-	FrameRate      sql.NullFloat64
-	ScanType       sql.NullString
-	Container      sql.NullString
-	Lossless       sql.NullInt64
-	SampleRate     sql.NullInt64
-	ImageFormat    sql.NullString
-	ColourDepth    sql.NullInt64
-	PageCount      sql.NullInt64
+	AttrHash      string
+	Resolution    sql.NullString
+	Source        sql.NullString
+	VideoCodec    sql.NullString
+	Hdr           sql.NullString
+	AudioCodec    sql.NullString
+	AudioChannels sql.NullString
+	BitDepth      sql.NullInt64
+	Languages     sql.NullString
+	Subtitles     sql.NullString
+	EditionTokens sql.NullString
+	ReleaseGroup  sql.NullString
+	ProperRepack  int64
+	FrameRate     sql.NullFloat64
+	ScanType      sql.NullString
+	Container     sql.NullString
+	Lossless      sql.NullInt64
+	SampleRate    sql.NullInt64
+	ImageFormat   sql.NullString
+	ColourDepth   sql.NullInt64
+	PageCount     sql.NullInt64
 }
 
 // Physical files. Column lists follow table order, or sqlc stops reusing models.
@@ -377,12 +404,6 @@ func (q *Queries) InternAttributes(ctx context.Context, arg InternAttributesPara
 		arg.EditionTokens,
 		arg.ReleaseGroup,
 		arg.ProperRepack,
-		arg.VideoBitrate,
-		arg.AudioBitrate,
-		arg.OverallBitrate,
-		arg.DurationMs,
-		arg.Width,
-		arg.Height,
 		arg.FrameRate,
 		arg.ScanType,
 		arg.Container,
@@ -408,12 +429,6 @@ func (q *Queries) InternAttributes(ctx context.Context, arg InternAttributesPara
 		&i.EditionTokens,
 		&i.ReleaseGroup,
 		&i.ProperRepack,
-		&i.VideoBitrate,
-		&i.AudioBitrate,
-		&i.OverallBitrate,
-		&i.DurationMs,
-		&i.Width,
-		&i.Height,
 		&i.FrameRate,
 		&i.ScanType,
 		&i.Container,
@@ -546,7 +561,8 @@ func (q *Queries) ListPerceptualHashes(ctx context.Context) ([]ListPerceptualHas
 const listUnfingerprinted = `-- name: ListUnfingerprinted :many
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
-       measured_attributes_id, attribute_mismatch_json, probe_json,
+       measured_attributes_id, attribute_mismatch_json, duration_ms, width,
+       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
        first_seen_at, verified_at
 FROM media_object
 WHERE fingerprinted_at IS NULL AND id > ?1
@@ -583,6 +599,12 @@ func (q *Queries) ListUnfingerprinted(ctx context.Context, arg ListUnfingerprint
 			&i.ClaimedAttributesID,
 			&i.MeasuredAttributesID,
 			&i.AttributeMismatchJson,
+			&i.DurationMs,
+			&i.Width,
+			&i.Height,
+			&i.VideoBitrate,
+			&i.AudioBitrate,
+			&i.OverallBitrate,
 			&i.ProbeJson,
 			&i.FirstSeenAt,
 			&i.VerifiedAt,
@@ -629,24 +651,40 @@ func (q *Queries) SetFingerprints(ctx context.Context, arg SetFingerprintsParams
 
 const setMeasuredAttributes = `-- name: SetMeasuredAttributes :exec
 UPDATE media_object
-SET measured_attributes_id = ?, attribute_mismatch_json = ?, probe_json = ?, verified_at = ?
+SET measured_attributes_id = ?, attribute_mismatch_json = ?,
+    duration_ms = ?, width = ?, height = ?,
+    video_bitrate = ?, audio_bitrate = ?, overall_bitrate = ?,
+    probe_json = ?, verified_at = ?
 WHERE id = ?
 `
 
 type SetMeasuredAttributesParams struct {
 	MeasuredAttributesID  sql.NullInt64
 	AttributeMismatchJson sql.NullString
+	DurationMs            sql.NullInt64
+	Width                 sql.NullInt64
+	Height                sql.NullInt64
+	VideoBitrate          sql.NullInt64
+	AudioBitrate          sql.NullInt64
+	OverallBitrate        sql.NullInt64
 	ProbeJson             sql.NullString
 	VerifiedAt            sql.NullInt64
 	ID                    int64
 }
 
 // Measured attributes replace claimed ones after probing; the claim is kept so a
-// mismatch stays visible (ADR-39).
+// mismatch stays visible (ADR-39). The scalars land on the object, not the
+// interned row, because they are unique per file.
 func (q *Queries) SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttributesParams) error {
 	_, err := q.db.ExecContext(ctx, setMeasuredAttributes,
 		arg.MeasuredAttributesID,
 		arg.AttributeMismatchJson,
+		arg.DurationMs,
+		arg.Width,
+		arg.Height,
+		arg.VideoBitrate,
+		arg.AudioBitrate,
+		arg.OverallBitrate,
 		arg.ProbeJson,
 		arg.VerifiedAt,
 		arg.ID,

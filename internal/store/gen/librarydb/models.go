@@ -250,34 +250,28 @@ type LibraryPath struct {
 }
 
 type MediaAttribute struct {
-	ID             int64
-	AttrHash       string
-	Resolution     sql.NullString
-	Source         sql.NullString
-	VideoCodec     sql.NullString
-	Hdr            sql.NullString
-	AudioCodec     sql.NullString
-	AudioChannels  sql.NullString
-	BitDepth       sql.NullInt64
-	Languages      sql.NullString
-	Subtitles      sql.NullString
-	EditionTokens  sql.NullString
-	ReleaseGroup   sql.NullString
-	ProperRepack   int64
-	VideoBitrate   sql.NullInt64
-	AudioBitrate   sql.NullInt64
-	OverallBitrate sql.NullInt64
-	DurationMs     sql.NullInt64
-	Width          sql.NullInt64
-	Height         sql.NullInt64
-	FrameRate      sql.NullFloat64
-	ScanType       sql.NullString
-	Container      sql.NullString
-	Lossless       sql.NullInt64
-	SampleRate     sql.NullInt64
-	ImageFormat    sql.NullString
-	ColourDepth    sql.NullInt64
-	PageCount      sql.NullInt64
+	ID            int64
+	AttrHash      string
+	Resolution    sql.NullString
+	Source        sql.NullString
+	VideoCodec    sql.NullString
+	Hdr           sql.NullString
+	AudioCodec    sql.NullString
+	AudioChannels sql.NullString
+	BitDepth      sql.NullInt64
+	Languages     sql.NullString
+	Subtitles     sql.NullString
+	EditionTokens sql.NullString
+	ReleaseGroup  sql.NullString
+	ProperRepack  int64
+	FrameRate     sql.NullFloat64
+	ScanType      sql.NullString
+	Container     sql.NullString
+	Lossless      sql.NullInt64
+	SampleRate    sql.NullInt64
+	ImageFormat   sql.NullString
+	ColourDepth   sql.NullInt64
+	PageCount     sql.NullInt64
 }
 
 type MediaObject struct {
@@ -293,6 +287,12 @@ type MediaObject struct {
 	ClaimedAttributesID   sql.NullInt64
 	MeasuredAttributesID  sql.NullInt64
 	AttributeMismatchJson sql.NullString
+	DurationMs            sql.NullInt64
+	Width                 sql.NullInt64
+	Height                sql.NullInt64
+	VideoBitrate          sql.NullInt64
+	AudioBitrate          sql.NullInt64
+	OverallBitrate        sql.NullInt64
 	ProbeJson             sql.NullString
 	FirstSeenAt           int64
 	VerifiedAt            sql.NullInt64
