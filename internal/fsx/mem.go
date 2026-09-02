@@ -156,6 +156,7 @@ func (m *Mem) Create(path string) (io.WriteCloser, error) {
 
 	node := &memNode{content: &memContent{}, mode: filePerm, modTime: m.now(), uid: -1, gid: -1}
 	m.nodes[resolved] = node
+	m.touchParent(resolved)
 	return &memWriter{content: node.content}, nil
 }
 
@@ -225,6 +226,7 @@ func (m *Mem) MkdirAll(path string, perm fs.FileMode) error {
 			continue
 		}
 		m.nodes[current] = &memNode{isDir: true, mode: fs.ModeDir | perm, modTime: m.now(), uid: -1, gid: -1}
+		m.touchParent(current)
 	}
 	return nil
 }
@@ -283,6 +285,8 @@ func (m *Mem) Rename(oldPath, newPath string) error {
 	}
 	m.nodes[to] = node
 	delete(m.nodes, from)
+	m.touchParent(from)
+	m.touchParent(to)
 	return nil
 }
 
@@ -302,6 +306,7 @@ func (m *Mem) Remove(path string) error {
 		}
 	}
 	delete(m.nodes, target)
+	m.touchParent(target)
 	return nil
 }
 
@@ -329,6 +334,7 @@ func (m *Mem) Link(oldPath, newPath string) error {
 	// The shared content pointer is the hardlink: a write through either path is
 	// visible from the other, exactly as an inode behaves.
 	m.nodes[target] = &memNode{content: node.content, mode: node.mode, modTime: m.now(), uid: node.uid, gid: node.gid}
+	m.touchParent(target)
 	return nil
 }
 
@@ -340,6 +346,7 @@ func (m *Mem) Symlink(oldPath, newPath string) error {
 		return err
 	}
 	m.nodes[target] = &memNode{linkTarget: oldPath, mode: fs.ModeSymlink | 0o777, modTime: m.now(), uid: -1, gid: -1}
+	m.touchParent(target)
 	return nil
 }
 
@@ -371,6 +378,7 @@ func (m *Mem) Reflink(oldPath, newPath string) error {
 
 	// A clone is copy-on-write, so the two paths hold equal but independent data.
 	m.nodes[target] = &memNode{content: &memContent{data: cloned}, mode: node.mode, modTime: m.now(), uid: -1, gid: -1}
+	m.touchParent(target)
 	m.mu.Unlock()
 	return nil
 }
@@ -417,6 +425,17 @@ func (m *Mem) resolveLocked(path string, depth int) (string, error) {
 		walked = next
 	}
 	return walked, nil
+}
+
+// touchParent advances the mtime of the directory an entry was added to or removed
+// from, which is what a real filesystem does and what the section 10.4 sweep reads to
+// decide whether a directory is worth opening. Rewriting a file's contents does not
+// reach here: that changes the file, not the listing.
+func (m *Mem) touchParent(path string) {
+	parent := filepath.Dir(path)
+	if node, ok := m.nodes[parent]; ok && node.isDir {
+		node.modTime = m.now()
+	}
 }
 
 func (m *Mem) requireDir(path string) error {

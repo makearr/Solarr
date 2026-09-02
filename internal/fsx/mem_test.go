@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/fsx"
@@ -194,5 +195,79 @@ func TestMem_ReadDirSkipsGrandchildren(t *testing.T) {
 			names[i] = entry.Name
 		}
 		t.Errorf("ReadDir = %v, want only [Artist]", strings.Join(names, ", "))
+	}
+}
+
+// The section 10.4 sweep decides whether to open a directory from its mtime, so the
+// fake has to move it for the same reasons a real filesystem does. os_test.go holds
+// the matching assertion against the real one.
+func TestMem_ChangingADirectorysEntriesMovesItsModificationTime(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	if err := fsys.MkdirAll("/library/album", 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	modTimeOf := func(path string) time.Time {
+		t.Helper()
+		info, err := fsys.Stat(path)
+		if err != nil {
+			t.Fatalf("Stat(%q): %v", path, err)
+		}
+		return info.ModTime
+	}
+
+	for _, step := range []struct {
+		name   string
+		change func()
+	}{
+		{"creating a file", func() { writeMem(t, fsys, "/library/album/01.flac") }},
+		{"creating a subdirectory", func() {
+			if err := fsys.MkdirAll("/library/album/scans", 0o755); err != nil {
+				t.Fatalf("MkdirAll: %v", err)
+			}
+		}},
+		{"renaming a file in", func() {
+			if err := fsys.Rename("/library/album/01.flac", "/library/album/02.flac"); err != nil {
+				t.Fatalf("Rename: %v", err)
+			}
+		}},
+		{"removing a file", func() {
+			if err := fsys.Remove("/library/album/02.flac"); err != nil {
+				t.Fatalf("Remove: %v", err)
+			}
+		}},
+	} {
+		before := modTimeOf("/library/album")
+		fake.Advance(time.Second)
+		step.change()
+		if after := modTimeOf("/library/album"); !after.After(before) {
+			t.Errorf("%s left the directory's mtime at %s", step.name, after)
+		}
+	}
+
+	// Rewriting a file changes the file, not the listing, so a real filesystem
+	// leaves the directory alone -- and the sweep's stat-verification layer, not
+	// the mtime sweep, is what catches it (section 10.4).
+	writeMem(t, fsys, "/library/album/03.flac")
+	before := modTimeOf("/library/album")
+	fake.Advance(time.Second)
+	writeMem(t, fsys, "/library/album/03.flac")
+	if after := modTimeOf("/library/album"); after.After(before) {
+		t.Errorf("rewriting a file moved the directory's mtime to %s", after)
+	}
+}
+
+func writeMem(t *testing.T, fsys fsx.FS, path string) {
+	t.Helper()
+	file, err := fsys.Create(path)
+	if err != nil {
+		t.Fatalf("Create(%q): %v", path, err)
+	}
+	if _, err := file.Write([]byte("bytes")); err != nil {
+		t.Fatalf("Write(%q): %v", path, err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("Close(%q): %v", path, err)
 	}
 }
