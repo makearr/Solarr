@@ -181,6 +181,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/auth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether a login is required.
+         * @description Unauthenticated, because an instance that requires no login has nobody to authenticate and the interface still has to discover that.
+         */
+        get: operations["getAuthPolicy"];
+        /**
+         * Require a login, or stop requiring one.
+         * @description Administrators only, except during first-run setup when there is no account yet and therefore nobody to be one. Turning authentication off serves every subsequent request as the administrator.
+         */
+        put: operations["setAuthPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rootfolders": {
         parameters: {
             query?: never;
@@ -349,6 +373,19 @@ export interface components {
              * @example Europe/Fefobo
              */
             timezone?: string;
+        };
+        AuthPolicy: {
+            /** @description Whether a caller must present a credential. False serves every request as the administrator. */
+            auth_required: boolean;
+            /** @description The account a login would use, when one exists. Shown rather than asked for: turning a login on sets a password on this account. */
+            administrator?: string;
+            /** @description Whether any account has a password. False means turning a login on must set one in the same request, or nobody could get back in. */
+            can_sign_in: boolean;
+            /**
+             * @description How config.yml says callers authenticate when they must. Turning authentication back on restores this mode rather than guessing one.
+             * @enum {string}
+             */
+            configured_mode: "local" | "proxy" | "apikey_only" | "none";
         };
         SetupStatus: {
             /** @description True while no account exists, which is the only time setup can be claimed. */
@@ -699,6 +736,58 @@ export interface operations {
             400: components["responses"]["Problem"];
             /** @description An account already exists; setup is closed. */
             409: components["responses"]["Problem"];
+        };
+    };
+    getAuthPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policy in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthPolicy"];
+                };
+            };
+        };
+    };
+    setAuthPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    auth_required: boolean;
+                    /** @description Required when turning a login back on and no account has a password yet, which is the state an open-access install is left in. Names the account the credential is set on. */
+                    username?: string;
+                    /** Format: password */
+                    password?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The policy now in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthPolicy"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     listRootFolders: {

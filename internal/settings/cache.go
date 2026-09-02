@@ -80,6 +80,15 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 		return nil, fmt.Errorf("settings: list category access: %w", err)
 	}
 
+	stored, err := c.queries.ListInstanceSettings(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list instance settings: %w", err)
+	}
+	policy := make(map[string]string, len(stored))
+	for _, row := range stored {
+		policy[row.Key] = row.ValueJson
+	}
+
 	access := make(map[int64]map[int64]Permission, len(grants))
 	for _, grant := range grants {
 		if access[grant.UserID] == nil {
@@ -94,6 +103,7 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 		convertRootFolders(rootFolders),
 		convertAttachments(attachments),
 		access,
+		policy,
 	), nil
 }
 

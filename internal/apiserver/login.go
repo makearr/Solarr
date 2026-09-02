@@ -23,12 +23,12 @@ type loginRequest struct {
 
 // Login exchanges a username and password for a session cookie.
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
-	if s.auth.Mode == AuthAPIKeyOnly {
+	if s.authMode() == AuthAPIKeyOnly {
 		writeProblem(w, s.logger, http.StatusForbidden, TypeForbidden,
 			"Login disabled", "this instance is configured for API keys only")
 		return
 	}
-	if s.auth.Mode == AuthNone {
+	if s.authMode() == AuthNone {
 		writeProblem(w, s.logger, http.StatusForbidden, TypeForbidden,
 			"Login disabled", "this instance runs without authentication")
 		return

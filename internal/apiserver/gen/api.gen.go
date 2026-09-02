@@ -18,6 +18,14 @@ const (
 	SessionScopes = "session.Scopes"
 )
 
+// Defines values for AuthPolicyConfiguredMode.
+const (
+	AuthPolicyConfiguredModeApikeyOnly AuthPolicyConfiguredMode = "apikey_only"
+	AuthPolicyConfiguredModeLocal      AuthPolicyConfiguredMode = "local"
+	AuthPolicyConfiguredModeNone       AuthPolicyConfiguredMode = "none"
+	AuthPolicyConfiguredModeProxy      AuthPolicyConfiguredMode = "proxy"
+)
+
 // Defines values for EventTopic.
 const (
 	EventTopicAcquisition  EventTopic = "acquisition"
@@ -74,10 +82,10 @@ const (
 
 // Defines values for Permission.
 const (
-	Manage  Permission = "manage"
-	None    Permission = "none"
-	Read    Permission = "read"
-	Request Permission = "request"
+	PermissionManage  Permission = "manage"
+	PermissionNone    Permission = "none"
+	PermissionRead    Permission = "read"
+	PermissionRequest Permission = "request"
 )
 
 // Defines values for ProblemType.
@@ -103,6 +111,24 @@ const (
 	Operator Role = "operator"
 	Readonly Role = "readonly"
 )
+
+// AuthPolicy defines model for AuthPolicy.
+type AuthPolicy struct {
+	// Administrator The account a login would use, when one exists. Shown rather than asked for: turning a login on sets a password on this account.
+	Administrator *string `json:"administrator,omitempty"`
+
+	// AuthRequired Whether a caller must present a credential. False serves every request as the administrator.
+	AuthRequired bool `json:"auth_required"`
+
+	// CanSignIn Whether any account has a password. False means turning a login on must set one in the same request, or nobody could get back in.
+	CanSignIn bool `json:"can_sign_in"`
+
+	// ConfiguredMode How config.yml says callers authenticate when they must. Turning authentication back on restores this mode rather than guessing one.
+	ConfiguredMode AuthPolicyConfiguredMode `json:"configured_mode"`
+}
+
+// AuthPolicyConfiguredMode How config.yml says callers authenticate when they must. Turning authentication back on restores this mode rather than guessing one.
+type AuthPolicyConfiguredMode string
 
 // BuildInfo defines model for BuildInfo.
 type BuildInfo struct {
@@ -327,6 +353,15 @@ type AddRootFolderJSONBody struct {
 	Path  string  `json:"path"`
 }
 
+// SetAuthPolicyJSONBody defines parameters for SetAuthPolicy.
+type SetAuthPolicyJSONBody struct {
+	AuthRequired bool    `json:"auth_required"`
+	Password     *string `json:"password,omitempty"`
+
+	// Username Required when turning a login back on and no account has a password yet, which is the state an open-access install is left in. Names the account the credential is set on.
+	Username *string `json:"username,omitempty"`
+}
+
 // CreateFirstAdministratorJSONBody defines parameters for CreateFirstAdministrator.
 type CreateFirstAdministratorJSONBody struct {
 	Password string `json:"password"`
@@ -338,6 +373,9 @@ type LoginJSONRequestBody LoginJSONBody
 
 // AddRootFolderJSONRequestBody defines body for AddRootFolder for application/json ContentType.
 type AddRootFolderJSONRequestBody AddRootFolderJSONBody
+
+// SetAuthPolicyJSONRequestBody defines body for SetAuthPolicy for application/json ContentType.
+type SetAuthPolicyJSONRequestBody SetAuthPolicyJSONBody
 
 // CreateFirstAdministratorJSONRequestBody defines body for CreateFirstAdministrator for application/json ContentType.
 type CreateFirstAdministratorJSONRequestBody CreateFirstAdministratorJSONBody
@@ -377,6 +415,12 @@ type ServerInterface interface {
 	// Add a library root.
 	// (POST /rootfolders)
 	AddRootFolder(w http.ResponseWriter, r *http.Request)
+	// Whether a login is required.
+	// (GET /settings/auth)
+	GetAuthPolicy(w http.ResponseWriter, r *http.Request)
+	// Require a login, or stop requiring one.
+	// (PUT /settings/auth)
+	SetAuthPolicy(w http.ResponseWriter, r *http.Request)
 	// Configuration as round-tripping YAML (F9).
 	// (GET /settings/export)
 	ExportSettings(w http.ResponseWriter, r *http.Request)
@@ -461,6 +505,18 @@ func (_ Unimplemented) ListRootFolders(w http.ResponseWriter, r *http.Request) {
 // Add a library root.
 // (POST /rootfolders)
 func (_ Unimplemented) AddRootFolder(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Whether a login is required.
+// (GET /settings/auth)
+func (_ Unimplemented) GetAuthPolicy(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Require a login, or stop requiring one.
+// (PUT /settings/auth)
+func (_ Unimplemented) SetAuthPolicy(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -768,6 +824,42 @@ func (siw *ServerInterfaceWrapper) AddRootFolder(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// GetAuthPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetAuthPolicy(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAuthPolicy(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAuthPolicy operation middleware
+func (siw *ServerInterfaceWrapper) SetAuthPolicy(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAuthPolicy(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ExportSettings operation middleware
 func (siw *ServerInterfaceWrapper) ExportSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -1007,6 +1099,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/rootfolders", wrapper.AddRootFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/settings/auth", wrapper.GetAuthPolicy)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/settings/auth", wrapper.SetAuthPolicy)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/export", wrapper.ExportSettings)

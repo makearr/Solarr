@@ -225,6 +225,54 @@ paths:
           $ref: "#/components/responses/Problem"
           description: An account already exists; setup is closed.
 
+  /settings/auth:
+    get:
+      operationId: getAuthPolicy
+      tags: [settings]
+      summary: Whether a login is required.
+      security: []
+      description: >-
+        Unauthenticated, because an instance that requires no login has nobody
+        to authenticate and the interface still has to discover that.
+      responses:
+        "200":
+          description: The policy in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthPolicy" }
+    put:
+      operationId: setAuthPolicy
+      tags: [settings]
+      summary: Require a login, or stop requiring one.
+      description: >-
+        Administrators only, except during first-run setup when there is no
+        account yet and therefore nobody to be one. Turning authentication off
+        serves every subsequent request as the administrator.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [auth_required]
+              properties:
+                auth_required: { type: boolean }
+                username:
+                  type: string
+                  description: >-
+                    Required when turning a login back on and no account has a
+                    password yet, which is the state an open-access install is
+                    left in. Names the account the credential is set on.
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: The policy now in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthPolicy" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /rootfolders:
     get:
       operationId: listRootFolders
@@ -485,6 +533,32 @@ components:
           type: string
           example: "Europe/Fefobo"
           description: The server's configured zone, from TZ. `UTC` when unset.
+
+    AuthPolicy:
+      type: object
+      required: [auth_required, configured_mode, can_sign_in]
+      properties:
+        auth_required:
+          type: boolean
+          description: >-
+            Whether a caller must present a credential. False serves every
+            request as the administrator.
+        administrator:
+          type: string
+          description: >-
+            The account a login would use, when one exists. Shown rather than
+            asked for: turning a login on sets a password on this account.
+        can_sign_in:
+          type: boolean
+          description: >-
+            Whether any account has a password. False means turning a login on
+            must set one in the same request, or nobody could get back in.
+        configured_mode:
+          type: string
+          enum: [local, proxy, apikey_only, none]
+          description: >-
+            How config.yml says callers authenticate when they must. Turning
+            authentication back on restores this mode rather than guessing one.
 
     SetupStatus:
       type: object
