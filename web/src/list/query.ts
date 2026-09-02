@@ -11,36 +11,45 @@ export interface ListQuery {
 export const EMPTY: ListQuery = { filters: {}, sort: null, direction: "asc" };
 
 /** The URL wins over stored preferences (section 21.2). Unknown parameters are
- *  ignored: a URL is user input. */
-export function fromSearch(search: string, filterKeys: readonly string[]): ListQuery {
-  const parameters = new URLSearchParams(search);
-
+ *  ignored, and so is anything that is not a string: a URL is user input. */
+export function fromRecord(
+  record: Record<string, unknown>,
+  filterKeys: readonly string[],
+): ListQuery {
   const filters: Record<string, string> = {};
   for (const key of filterKeys) {
-    const value = parameters.get(key);
-    if (value !== null && value !== "") filters[key] = value;
+    const value = record[key];
+    if (typeof value === "string" && value !== "") filters[key] = value;
   }
 
-  const direction = parameters.get("dir");
   return {
     filters,
-    sort: parameters.get("sort") || null,
-    direction: direction === "desc" ? "desc" : "asc",
+    sort: typeof record.sort === "string" && record.sort !== "" ? record.sort : null,
+    direction: record.dir === "desc" ? "desc" : "asc",
   };
 }
 
 /** Defaults are omitted, so identical views produce identical links. */
-export function toSearch(query: ListQuery): string {
-  const parameters = new URLSearchParams();
+export function toRecord(query: ListQuery): Record<string, string> {
+  const record: Record<string, string> = {};
   for (const [key, value] of Object.entries(query.filters)) {
-    if (value !== "") parameters.set(key, value);
+    if (value !== "") record[key] = value;
   }
   if (query.sort) {
-    parameters.set("sort", query.sort);
-    if (query.direction === "desc") parameters.set("dir", "desc");
+    record.sort = query.sort;
+    if (query.direction === "desc") record.dir = "desc";
   }
+  return record;
+}
 
-  const encoded = parameters.toString();
+/** The router hands over a parsed object; these two are for the raw string a
+ *  test or a deep link starts from. */
+export function fromSearch(search: string, filterKeys: readonly string[]): ListQuery {
+  return fromRecord(Object.fromEntries(new URLSearchParams(search)), filterKeys);
+}
+
+export function toSearch(query: ListQuery): string {
+  const encoded = new URLSearchParams(toRecord(query)).toString();
   return encoded === "" ? "" : `?${encoded}`;
 }
 

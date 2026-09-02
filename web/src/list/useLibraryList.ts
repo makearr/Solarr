@@ -4,6 +4,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 
 import * as query from "./query";
 import * as selection from "./selection";
+import type { ViewState } from "./useRouteView";
 
 /** A page as every collection endpoint returns it: items plus an opaque cursor. */
 export interface Page<T> {
@@ -14,8 +15,6 @@ export interface Page<T> {
 export interface ListSource<T> {
   /** Distinguishes one list's cache from another's. */
   readonly name: string;
-  /** Which query parameters this list treats as filters, for the URL. */
-  readonly filterKeys: readonly string[];
   readonly idOf: (item: T) => selection.Id;
   readonly fetchPage: (request: {
     cursor?: string;
@@ -31,23 +30,25 @@ const DEFAULT_ROW_HEIGHT = 36;
 
 /** The headless core both library views render (section 21.2).
  *  See documentation/web-interface.md. */
-export function useLibraryList<T>(source: ListSource<T>) {
+export function useLibraryList<T>(source: ListSource<T>, view: ViewState) {
   const client = useQueryClient();
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  const [listQuery, setListQuery] = useState<query.ListQuery>(() =>
-    query.fromSearch(window.location.search, source.filterKeys),
-  );
+  const listQuery = view.query;
   const [selected, setSelected] = useState<selection.Selection>(selection.NOTHING);
   const [lastToggled, setLastToggled] = useState<selection.Id | null>(null);
 
-  // replaceState, not pushState: a filter change is not a navigation.
-  useEffect(() => {
-    const next = `${window.location.pathname}${query.toSearch(listQuery)}`;
-    if (next !== `${window.location.pathname}${window.location.search}`) {
-      window.history.replaceState(null, "", next);
-    }
-  }, [listQuery]);
+  // The view state is the URL, so a navigation into a filtered view arrives here
+  // as a re-render. Holding a copy in state would ignore it (section 21.12).
+  const setQuery = useCallback(
+    (next: query.ListQuery) => {
+      view.setQuery(next);
+      // Or it acts on rows the user can no longer see.
+      setSelected(selection.NOTHING);
+      setLastToggled(null);
+    },
+    [view],
+  );
 
   const queryKey = useMemo(
     () => [source.name, query.key(listQuery)] as const,
@@ -87,25 +88,24 @@ export function useLibraryList<T>(source: ListSource<T>) {
     }
   }, [lastVisible, items.length, pages]);
 
+  // A string, not the array: a caller writing its source inline hands over a new
+  // array every render, and depending on that identity reopens the stream every
+  // render. The list is meant to survive being called the obvious way.
+  const topics = source.topics?.join(",") ?? "";
+  const listName = source.name;
+
   // Events are lossy and for notification only (ADR-9), so they invalidate.
   useEffect(() => {
-    if (!source.topics || source.topics.length === 0) return;
+    if (topics === "") return;
 
-    const stream = new EventSource(`/api/v1/events?topics=${source.topics.join(",")}`);
-    const invalidate = () => void client.invalidateQueries({ queryKey: [source.name] });
-    for (const topic of source.topics) stream.addEventListener(topic, invalidate);
+    const stream = new EventSource(`/api/v1/events?topics=${topics}`);
+    const invalidate = () => void client.invalidateQueries({ queryKey: [listName] });
+    for (const topic of topics.split(",")) stream.addEventListener(topic, invalidate);
     // A resync means the client fell too far behind to replay.
     stream.addEventListener("resync", invalidate);
 
     return () => stream.close();
-  }, [client, source.name, source.topics]);
-
-  const setQuery = useCallback((next: query.ListQuery) => {
-    setListQuery(next);
-    // Or it acts on rows the user can no longer see.
-    setSelected(selection.NOTHING);
-    setLastToggled(null);
-  }, []);
+  }, [client, listName, topics]);
 
   const toggle = useCallback(
     (id: selection.Id, extendRange = false) => {

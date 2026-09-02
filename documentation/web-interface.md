@@ -55,8 +55,36 @@ Pages are fetched when the sentinel row enters the window rather than from a scr
 which at 500k rows fires far more often than it needs to. Invalidation is SSE-driven: events are
 lossy and for notification only (ADR-9).
 
-The URL carries sort and filters, with `replaceState` rather than `pushState` — changing a
-filter is not a navigation, and making it one turns Back into "undo one filter" thirty times.
+The URL carries sort and filters, and **the router owns it**. `useLibraryList` takes its view
+state rather than holding it: `useRouteView` reads the router's search parameters and writes
+them back with `replace`, because changing a filter is not a navigation and making it one turns
+Back into "undo one filter" thirty times.
+
+Reading `window.location` instead leaves two owners of one URL, and the list loses. It held the
+query in `useState`, initialised from the search string, so the initialiser ran once at mount: a
+navigation to the same route with different filters re-rendered the component and changed
+nothing — which is exactly what a dashboard figure linking into a filtered view does
+(section 21.12). `useLibraryList.test.tsx` holds that line.
+
+A list's source object is written inline at the call site, so **the hook must not depend on the
+identity of anything in it**. `topics` is joined into a string before it reaches the effect
+dependencies; depending on the array closed and reopened the event stream on every render.
+
+## Components
+
+Radix primitives, added per component as one is needed, styled with the existing Tailwind. The
+value is the behaviour that is tedious and easy to get wrong — focus traps, roving tabindex,
+escape and dismissal — not the styling. shadcn/ui was considered and declined: it is Radix plus
+a styling layer, copied in as owned source, and that is a second set of conventions to reconcile
+and keep in step for a benefit this interface does not need.
+
+## Testing
+
+Two kinds. The pure logic — `query.ts`, `selection.ts`, the virtualisation window — is tested
+without React. The hook's wiring needs a DOM, so vitest runs under jsdom with Testing Library,
+and `useLibraryList.test.tsx` drives the hook inside a real memory router. That is what makes
+the URL binding and the event stream assertable rather than reasoned about; both were wrong
+until it existed, and both mutations are caught by it.
 
 ## Linting
 

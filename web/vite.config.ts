@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -9,6 +10,13 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+  },
+  test: {
+    // The list hook's wiring -- URL binding, page accumulation, SSE invalidation --
+    // is only testable with a DOM. The pure logic beside it does not need one and
+    // does not mind having one.
+    environment: "jsdom",
+    setupFiles: ["./src/test-setup.ts"],
   },
   build: {
     outDir: "../internal/webui/dist",
