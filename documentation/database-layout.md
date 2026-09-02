@@ -138,6 +138,26 @@ where SQLite never reads a page — so by the time anything is moved aside there
 log left to move. `Restore` still clears stale sidecars, because a user-initiated
 restore runs with no probe in front of it.
 
+## The library sweep
+
+`internal/scan` is section 10.4's mtime sweep: at ADR-22's 500k files a full rescan is
+not an answer, so only directories whose mtime has moved are read. The whole tree is
+still traversed — a directory's mtime moves when its **own** entries change, never
+when a grandchild's do — but traversal is stat calls and reading is the expensive
+half.
+
+**The watermark is when the last completed sweep started**, not when it finished and
+not the newest mtime it saw. A sweep over 500k files takes minutes and the library is
+live throughout; a directory written after the walk has already passed it would sit
+behind a later watermark and never be read again. Starting-time errs toward
+re-reading, which is recoverable, over missing a change, which is not.
+
+**The resume cursor is compared segment by segment, never as a string.** The walk
+visits a directory's whole subtree before its next sibling, so the order is `a`,
+`a/c`, `a-b` — while as plain strings `a-b` < `a/c`, because `-` is below `/`. A
+string comparison silently skips that sibling. The cursor also advances only *after*
+the caller has committed a batch, because it means "everything up to here is durable".
+
 ## Post-restore reconciliation
 
 After any restore, and before workers start, `internal/recovery` fails every

@@ -65,6 +65,9 @@ var allowedInternalImports = map[string][]string{
 	// The music media type, direct-wired until stage 9 extracts it as a plugin.
 	"internal/music":    {"internal/mediatool", "internal/model"},
 	"internal/paginate": {},
+	// The section 10.4 sweep: a walk over the filesystem seam and nothing else.
+	// What it finds is persisted by the caller, so it touches no database.
+	"internal/scan": {"internal/clock", "internal/fsx"},
 	// ADR-15's post-restore pass spans library.db and jobs.db, so it composes their
 	// owning packages rather than reaching into either gen package (section 4.3).
 	"internal/recovery": {

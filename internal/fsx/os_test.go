@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/makearr/MediaNexus/internal/fsx"
 )
@@ -51,5 +52,49 @@ func TestOS_ResolveReportsALoopRatherThanHanging(t *testing.T) {
 
 	if _, err := fsys.Resolve(first); err == nil {
 		t.Error("Resolve of a symlink loop succeeded; it must report ELOOP")
+	}
+}
+
+// What the fake is imitating. Mem's matching test asserts the same rules, and this
+// is what says they are the real filesystem's rules and not an invention.
+func TestOS_ChangingADirectorysEntriesMovesItsModificationTime(t *testing.T) {
+	fsys := fsx.NewOS()
+	directory := t.TempDir()
+	modTimeOf := func() time.Time {
+		t.Helper()
+		info, err := fsys.Stat(directory)
+		if err != nil {
+			t.Fatalf("Stat: %v", err)
+		}
+		return info.ModTime
+	}
+
+	first := filepath.Join(directory, "01.flac")
+	before := modTimeOf()
+	writeOS(t, fsys, first)
+	created := modTimeOf()
+	if !created.After(before) {
+		t.Fatalf("creating a file left the mtime at %s", created)
+	}
+
+	if err := fsys.Remove(first); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if removed := modTimeOf(); !removed.After(created) {
+		t.Errorf("removing a file left the mtime at %s", removed)
+	}
+}
+
+func writeOS(t *testing.T, fsys fsx.FS, path string) {
+	t.Helper()
+	file, err := fsys.Create(path)
+	if err != nil {
+		t.Fatalf("Create(%q): %v", path, err)
+	}
+	if _, err := file.Write([]byte("bytes")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
 	}
 }
