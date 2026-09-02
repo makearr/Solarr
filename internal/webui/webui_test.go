@@ -9,10 +9,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/webui"
 )
 
-// The bundle is generated and gitignored, so it is present in a release build
-// and absent in a fresh checkout. Both are legitimate states and both have a
-// defined behaviour, so the suite asserts whichever one it is actually in
-// rather than skipping and proving nothing.
+// Present in a release build, absent in a fresh checkout; both are defined.
 func TestServesTheBundleOrExplainsItsAbsence(t *testing.T) {
 	if webui.Built() {
 		t.Run("built", assertServesBundle)
@@ -32,8 +29,7 @@ func assertServesBundle(t *testing.T) {
 		if got := response.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/html") {
 			t.Errorf("Content-Type = %q, want text/html", got)
 		}
-		// index.html names the current hashed bundle. A cached copy points at
-		// assets that no longer exist, and the page loads blank.
+		// A cached copy points at hashed assets that no longer exist.
 		if got := response.Header().Get("Cache-Control"); got != "no-cache" {
 			t.Errorf("Cache-Control = %q, want no-cache", got)
 		}
@@ -66,8 +62,7 @@ func assertServesBundle(t *testing.T) {
 func assertExplainsAbsence(t *testing.T) {
 	response := get(webui.Handler(), "/")
 
-	// 503 rather than 404: the service is running and the interface is simply
-	// not in this build, which is a different thing from a missing page.
+	// 503, not 404: the service runs, the interface is simply not in this build.
 	if response.Code != http.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503", response.Code)
 	}

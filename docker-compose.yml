@@ -1,62 +1,32 @@
 # Example deployment. Copy, adjust the paths, and run `docker compose up -d`.
+# See documentation/container-runtime.md.
 services:
   medianexus:
     image: ghcr.io/makearr/medianexus:latest
     container_name: medianexus
     restart: unless-stopped
 
-    # Who the application runs as, and who owns everything it writes. Set these
-    # to whoever owns the volumes below. They are always respected; 1000:1000 is
-    # only what happens when they are unset.
-    #
-    # The container starts as root, takes ownership of /config, drops to this
-    # user, and never runs as root again.
-    #
-    # MediaNexus takes ownership of /config only. Your library and downloads are
-    # yours: it will not rewrite their ownership -- that would mean touching
-    # hundreds of thousands of files on every start, and they are not its files
-    # to change. If they do not match, startup says so plainly, naming the path,
-    # its owner and this process's identity, and then carries on. Fixing it is
-    # your call: `chown -R 1000:1000 /your/media`, or set PUID and PGID to
-    # whoever already owns it.
     environment:
+      # Who the app runs as, and who owns everything it writes. 1000:1000 when unset.
       PUID: 1000
       PGID: 1000
+      # Air dates and log timestamps are timezone-dependent.
+      TZ: Europe/Fefobo
 
     ports:
       - "8080:8080"
 
     volumes:
-      # Config, databases, backups and cache. One mount is enough.
-      #
-      # Keep this on local storage. SQLite's WAL mode is unsupported on NFS and
-      # SMB, and their locking is unreliable enough to corrupt a database.
-      # MediaNexus does not check this -- it is yours to get right. Media,
-      # downloads and backups may live anywhere.
+      # Config, databases, backups and cache. Keep on local storage: SQLite WAL
+      # is unsupported on NFS and SMB.
       - ./config:/config
 
-      # The library. Import prefers a reflink, then a hardlink, then a copy
-      # (ADR-11), and hardlinking only works within one filesystem -- so
-      # downloads and the library want to be on the same mount, not two.
+      # The library. Hardlinking only works within one filesystem, so this and
+      # the downloads below want to be on the same mount.
       - /media:/media
 
-      # The download client's completed directory, at the same path the client
-      # reports. A mismatch here is why an import cannot find its files.
+      # At the same path the download client reports, or imports cannot find files.
       - /downloads:/downloads
 
-    # The image declares its own healthcheck, so nothing needs supplying here.
-
-    # No cap_add, cap_drop or security_opt. Docker's default capability set
-    # already contains everything the startup sequence uses -- CHOWN and
-    # DAC_OVERRIDE to take ownership of /config, SETUID and SETGID to stop being
-    # root -- so the common case needs no tuning, which is how the *Arr images
-    # people are coming from behave.
-    #
-    # Do not add `user:` here. It is the one thing that stops PUID and PGID
-    # working: the container is then handed to us as somebody else, and changing
-    # uid needs root. MediaNexus says so loudly in the log rather than quietly
-    # running as the wrong user, but it cannot fix it. Set PUID and PGID above
-    # instead -- that is what they are for.
-    #
-    # `cap_drop: ALL` still works if you want it, with CHOWN, DAC_OVERRIDE,
-    # SETUID and SETGID added back.
+    # No cap_add, cap_drop or security_opt: Docker's defaults already cover it.
+    # Do not set `user:` -- it is the one thing that stops PUID/PGID working.

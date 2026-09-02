@@ -1,7 +1,4 @@
-// The list's view state: what is being asked for, not what came back.
-//
-// Kept apart from the hook so it can be tested without React, and so the URL
-// round-trip is one place rather than scattered through effects.
+// The list's view state, kept apart from the hook so it is testable without React.
 
 export type SortDirection = "asc" | "desc";
 
@@ -13,13 +10,8 @@ export interface ListQuery {
 
 export const EMPTY: ListQuery = { filters: {}, sort: null, direction: "asc" };
 
-/**
- * Reads view state out of a URL.
- *
- * The URL wins over stored preferences when it carries state, so a link to a
- * particular view opens as that view (section 21.2). Unknown parameters are
- * ignored rather than rejected: a URL is user input and may carry anything.
- */
+/** The URL wins over stored preferences (section 21.2). Unknown parameters are
+ *  ignored: a URL is user input. */
 export function fromSearch(search: string, filterKeys: readonly string[]): ListQuery {
   const parameters = new URLSearchParams(search);
 
@@ -37,12 +29,7 @@ export function fromSearch(search: string, filterKeys: readonly string[]): ListQ
   };
 }
 
-/**
- * Writes view state into a query string.
- *
- * Defaults are omitted rather than spelled out, so an untouched view has a
- * clean URL and two identical views produce the same link.
- */
+/** Defaults are omitted, so identical views produce identical links. */
 export function toSearch(query: ListQuery): string {
   const parameters = new URLSearchParams();
   for (const [key, value] of Object.entries(query.filters)) {
@@ -71,13 +58,7 @@ export function withFilter(query: ListQuery, key: string, value: string): ListQu
   return { ...query, filters };
 }
 
-/**
- * The identity of a query, for a cache key.
- *
- * Object key order is not stable across the ways a filter can be built, so the
- * entries are sorted -- otherwise the same view fetches twice and the two
- * copies drift.
- */
+/** Cache key. Entries are sorted, or the same view fetches twice and drifts. */
 export function key(query: ListQuery): string {
   const filters = Object.entries(query.filters).sort(([a], [b]) => a.localeCompare(b));
   return JSON.stringify({ filters, sort: query.sort, direction: query.direction });

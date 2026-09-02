@@ -39,8 +39,7 @@ type FileInfo struct {
 	Mode    fs.FileMode
 	ModTime time.Time
 	IsDir   bool
-	// UID and GID are -1 where the platform or implementation does not report
-	// them, so a caller can tell "not known" from "owned by root".
+	// -1 where unreported, so "not known" differs from "owned by root".
 	UID int
 	GID int
 }
@@ -72,19 +71,15 @@ type FS interface {
 	Open(path string) (File, error)
 	Create(path string) (io.WriteCloser, error)
 
-	// CreateSecret is Create for a file whose contents are a credential. It is a
-	// separate method rather than a mode argument so that the restricted case is
-	// named at every call site and cannot be reached by passing the wrong
-	// constant.
+	// CreateSecret is Create for a credential. A separate method, not a mode
+	// argument, so the restricted case is named at every call site.
 	CreateSecret(path string) (io.WriteCloser, error)
 	MkdirAll(path string, perm fs.FileMode) error
 	ReadDir(path string) ([]DirEntry, error)
 	Rename(oldPath, newPath string) error
 	Remove(path string) error
 
-	// Chown changes ownership. Used when the container starts as root to hand
-	// its managed directories to the runtime user (PUID/PGID) before dropping
-	// privileges. A uid or gid of -1 leaves that half unchanged, as chown(2) does.
+	// Chown changes ownership; -1 leaves that half alone, as chown(2) does.
 	Chown(path string, uid, gid int) error
 
 	// Link creates a hardlink. Preferred for both import and cross-entry linking

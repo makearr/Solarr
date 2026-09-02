@@ -29,15 +29,8 @@ export interface ListSource<T> {
 
 const DEFAULT_ROW_HEIGHT = 36;
 
-/**
- * The headless core every library view is built on (section 21.2).
- *
- * It owns fetching, cursor pagination, sort and filter state, the selection
- * model and virtualisation. `ListTable` and `ListGrid` render what it returns
- * and decide nothing. A new filter, column or bulk action is implemented once,
- * here -- which is the difference between the table/grid toggle costing a
- * little and costing double.
- */
+/** The headless core both library views render (section 21.2).
+ *  See documentation/web-interface.md. */
 export function useLibraryList<T>(source: ListSource<T>) {
   const client = useQueryClient();
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -48,9 +41,7 @@ export function useLibraryList<T>(source: ListSource<T>) {
   const [selected, setSelected] = useState<selection.Selection>(selection.NOTHING);
   const [lastToggled, setLastToggled] = useState<selection.Id | null>(null);
 
-  // The URL reflects the view so it can be linked and bookmarked (section
-  // 21.2). replaceState, not pushState: changing a filter is not a navigation,
-  // and making it one turns Back into "undo one filter" thirty times over.
+  // replaceState, not pushState: a filter change is not a navigation.
   useEffect(() => {
     const next = `${window.location.pathname}${query.toSearch(listQuery)}`;
     if (next !== `${window.location.pathname}${window.location.search}`) {
@@ -68,8 +59,7 @@ export function useLibraryList<T>(source: ListSource<T>) {
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) =>
       source.fetchPage({ cursor: pageParam, query: listQuery, signal }),
-    // An absent cursor is the last page. Returning undefined is what stops
-    // TanStack asking again -- an empty string would loop.
+    // undefined stops TanStack asking again; an empty string would loop.
     getNextPageParam: (last: Page<T>) => last.next_cursor || undefined,
   });
 
@@ -80,17 +70,15 @@ export function useLibraryList<T>(source: ListSource<T>) {
   const loadedIds = useMemo(() => items.map(source.idOf), [items, source]);
 
   const virtualizer = useVirtualizer({
-    // One extra row when more pages exist: it is the sentinel that triggers the
-    // next fetch, and it also stops the scrollbar claiming the list has ended.
+    // One extra row: the sentinel that triggers the next fetch.
     count: items.length + (pages.hasNextPage ? 1 : 0),
     getScrollElement: () => scrollRef.current,
     estimateSize: () => source.rowHeight ?? DEFAULT_ROW_HEIGHT,
     overscan: 8,
   });
 
-  // Fetch the next page when its sentinel comes into the window, rather than on
-  // a scroll handler: the virtualiser already knows what is visible, and a
-  // scroll listener at 500k rows fires far more often than it needs to.
+  // From the window, not a scroll handler, which at 500k rows fires far more
+  // often than it needs to.
   const virtualItems = virtualizer.getVirtualItems();
   const lastVisible = virtualItems[virtualItems.length - 1]?.index ?? 0;
   useEffect(() => {
@@ -99,17 +87,14 @@ export function useLibraryList<T>(source: ListSource<T>) {
     }
   }, [lastVisible, items.length, pages]);
 
-  // Events are lossy and for notification only (ADR-9), so they invalidate
-  // rather than carrying data. Polling instead would multiply requests across a
-  // 500k library for data the stream already says is unchanged.
+  // Events are lossy and for notification only (ADR-9), so they invalidate.
   useEffect(() => {
     if (!source.topics || source.topics.length === 0) return;
 
     const stream = new EventSource(`/api/v1/events?topics=${source.topics.join(",")}`);
     const invalidate = () => void client.invalidateQueries({ queryKey: [source.name] });
     for (const topic of source.topics) stream.addEventListener(topic, invalidate);
-    // A client too far behind is told to resync rather than given a partial
-    // history, and the only correct response is to refetch.
+    // A resync means the client fell too far behind to replay.
     stream.addEventListener("resync", invalidate);
 
     return () => stream.close();
@@ -117,9 +102,7 @@ export function useLibraryList<T>(source: ListSource<T>) {
 
   const setQuery = useCallback((next: query.ListQuery) => {
     setListQuery(next);
-    // The selection is scoped to the filters it was made under. Keeping it
-    // across a filter change would silently act on rows the user can no longer
-    // see, which for "all matching" means acting on a different set entirely.
+    // Or it acts on rows the user can no longer see.
     setSelected(selection.NOTHING);
     setLastToggled(null);
   }, []);
@@ -159,8 +142,7 @@ export function useLibraryList<T>(source: ListSource<T>) {
     selectAllMatching: useCallback(() => setSelected(selection.ALL), []),
     clearSelection: useCallback(() => setSelected(selection.NOTHING), []),
     selectionIsEmpty: selection.isEmpty(selected),
-    // Null until the server reports a total. Section 21.7's preview needs a
-    // truthful count, and the number of loaded rows is not it.
+    // Null until the server reports a total; loaded rows are not the count.
     selectionCount: selection.count(selected, null),
     selectionRequest: useMemo(
       () => selection.toRequest(selected, listQuery.filters),

@@ -11,12 +11,7 @@ import (
 )
 
 // FilesystemRoots checks a candidate library root against a real filesystem.
-//
-// It distinguishes two kinds of wrong, because they belong to different people.
-// A path that is relative, absent or a file is a mistake in what was typed, and
-// is refused. A path that exists but this process cannot write is a statement
-// about ownership on the host, and that is the operator's to decide -- it is
-// reported, and accepted.
+// See documentation/container-runtime.md.
 type FilesystemRoots struct {
 	FS fsx.FS
 }
@@ -44,12 +39,8 @@ func (r FilesystemRoots) Validate(path string) error {
 	return nil
 }
 
-// Writable reports whether the process can write here, and says who owns it if
-// it cannot.
-//
-// MediaNexus does not chown a library root. It holds the 500k files of ADR-22
-// and it is the user's, not ours -- so a mismatch is described rather than
-// corrected, with everything needed to fix it in one line.
+// Writable reports whether this process can write here, naming the owner if
+// not. A library root is never chowned.
 func (r FilesystemRoots) Writable(path string) error {
 	if err := r.probeWritable(path); err != nil {
 		info, statErr := r.FS.Stat(path)
@@ -73,6 +64,6 @@ func (r FilesystemRoots) probeWritable(directory string) error {
 	if err := file.Close(); err != nil {
 		return err
 	}
-	// A probe left behind would litter every library root the user adds.
+	// Or every root the user adds gets a stray file.
 	return r.FS.Remove(probe)
 }

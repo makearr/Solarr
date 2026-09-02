@@ -22,12 +22,8 @@ func WriteAtomic(fsys FS, destination string, write func(io.Writer) error) error
 	return writeAtomic(fsys, destination, fsys.Create, write)
 }
 
-// WriteAtomicSecret is WriteAtomic for a file whose contents are a credential.
-//
-// The restricted mode is applied to the *temporary*, which is the only way to
-// get it right: the temporary is what briefly holds the secret, so creating it
-// world-readable and tightening the destination afterwards protects nothing.
-// The rename carries the mode to the destination.
+// WriteAtomicSecret is WriteAtomic for a credential. The mode goes on the
+// temporary, which is what actually holds the secret; the rename carries it.
 func WriteAtomicSecret(fsys FS, destination string, write func(io.Writer) error) error {
 	return writeAtomic(fsys, destination, fsys.CreateSecret, write)
 }

@@ -4,10 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MediaNexus</title>
-    <!--
-      The theme is applied before first paint. Doing it in React would show a
-      light flash on every load for a user who chose dark, which reads as a bug.
-    -->
+    <!-- Before first paint, or a dark-mode user sees a light flash. -->
     <script>
       (() => {
         try {

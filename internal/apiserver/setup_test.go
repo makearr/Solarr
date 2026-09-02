@@ -20,8 +20,7 @@ import (
 	"github.com/makearr/MediaNexus/migrations"
 )
 
-// setupFixture is an install with no accounts -- the state the wizard exists
-// for, and the one every other fixture skips past.
+// An install with no accounts: the state the wizard exists for.
 type setupFixture struct {
 	server *apiserver.Server
 	cache  *settings.Cache
@@ -85,9 +84,7 @@ func (f setupFixture) post(t *testing.T, path, body string) *httptest.ResponseRe
 	return recorder
 }
 
-// The window in which anyone can claim the install closes on the first account
-// and never reopens. Tying it to "the wizard finished" would leave it open
-// across a restart someone abandoned halfway -- exactly when nobody is watching.
+// The claim closes on the first account, not when the wizard finishes.
 func TestCreateFirstAdministrator_ClosesPermanently(t *testing.T) {
 	fixture := newSetupFixture(t, nil)
 
@@ -96,8 +93,7 @@ func TestCreateFirstAdministrator_ClosesPermanently(t *testing.T) {
 	if first.Code != http.StatusCreated {
 		t.Fatalf("first claim: status = %d, want 201 (%s)", first.Code, first.Body)
 	}
-	// Signed in by the same response: asking someone to log in with credentials
-	// they typed ten seconds ago is friction with nothing behind it.
+	// Signed in by the same response.
 	if len(first.Result().Cookies()) == 0 {
 		t.Error("the claim did not set a session cookie")
 	}
@@ -138,8 +134,7 @@ func TestCreateFirstAdministrator_RejectsWeakInput(t *testing.T) {
 	}
 }
 
-// The status endpoint is unauthenticated, so it must give away nothing beyond
-// what is outstanding.
+// Unauthenticated, so it must give away nothing but the outstanding steps.
 func TestGetSetupStatus_IsUnauthenticatedAndMinimal(t *testing.T) {
 	fixture := newSetupFixture(t, nil)
 
@@ -164,8 +159,7 @@ func TestGetSetupStatus_IsUnauthenticatedAndMinimal(t *testing.T) {
 	}
 }
 
-// stubRoots stands in for a filesystem, so a test can make a path unusable or
-// unwritable without arranging either on disk.
+// Makes a path unusable or unwritable without arranging either on disk.
 type stubRoots struct {
 	invalid     error
 	notWritable error
@@ -174,8 +168,7 @@ type stubRoots struct {
 func (r stubRoots) Validate(string) error { return r.invalid }
 func (r stubRoots) Writable(string) error { return r.notWritable }
 
-// A path that does not exist is a mistake in what was typed, and is refused --
-// accepting it turns a typo into a mystery at the first import.
+// A path that does not exist is a typo, and is refused.
 func TestAddRootFolder_RefusesAnUnusablePath(t *testing.T) {
 	fixture := newSetupFixture(t, stubRoots{invalid: errUnusable})
 
@@ -205,10 +198,7 @@ func TestAddRootFolder_RefusesAnUnusablePath(t *testing.T) {
 
 var errUnusable = errors.New("\"/media/music\" does not exist inside the container")
 
-// A folder that exists but is owned by somebody else is not a mistake -- it is a
-// working library with one thing to fix, and whether to fix it is the
-// operator's call. MediaNexus reports it and accepts it, because refusing would
-// mean a library owned by another user could not be configured at all.
+// Owned by somebody else is the operator's call, so it is flagged and accepted.
 func TestAddRootFolder_AcceptsAndFlagsAnUnwritablePath(t *testing.T) {
 	fixture := newSetupFixture(t, stubRoots{notWritable: errUnwritable})
 
@@ -243,7 +233,7 @@ func TestAddRootFolder_AcceptsAndFlagsAnUnwritablePath(t *testing.T) {
 		t.Error("the root was stored without being flagged as unwritable")
 	}
 
-	// Stored, so the interface can show it and the operator can act on it.
+	// Stored, so the interface can show it.
 	if folders := fixture.cache.Snapshot().RootFolders(); len(folders) != 1 {
 		t.Errorf("%d root folders stored, want 1", len(folders))
 	}

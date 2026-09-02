@@ -16,14 +16,8 @@ import (
 	"github.com/makearr/MediaNexus/internal/apiserver"
 )
 
-// The generated ServerInterface already makes a spec operation with no handler
-// a compile error. This covers the direction a compiler cannot see: a route
-// registered on the router that the specification does not describe.
-//
-// That direction matters more than it looks. An endpoint missing from the spec
-// is missing from the generated TypeScript client, so the UI cannot call it and
-// nobody finds out until someone asks why the feature does not work. It is also
-// how an endpoint quietly escapes review: the spec is where the API is agreed.
+// The compile-time assertion catches a spec operation with no handler; this
+// catches the other direction. See documentation/api-generation.md.
 func TestRoutesMatchTheSpec(t *testing.T) {
 	specified := operationsInSpec(t)
 	registered := operationsOnRouter(t)
@@ -42,9 +36,7 @@ func TestRoutesMatchTheSpec(t *testing.T) {
 	}
 }
 
-// operationsInSpec reads the document rather than an embedded copy of it, so the
-// test fails when the checked-in YAML is wrong -- not when a generated mirror of
-// it is stale.
+// Reads the checked-in document, not a generated mirror of it.
 func operationsInSpec(t *testing.T) []string {
 	t.Helper()
 
@@ -76,8 +68,7 @@ func operationsInSpec(t *testing.T) []string {
 	return operations
 }
 
-// operationsOnRouter walks what chi will actually serve, rather than a list
-// someone remembered to update.
+// Walks what chi actually serves, not a list someone remembered to update.
 func operationsOnRouter(t *testing.T) []string {
 	t.Helper()
 

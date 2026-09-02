@@ -407,9 +407,7 @@ func conformWriteAtomicFailure(t *testing.T, fsys fsx.FS, root string) {
 	}
 }
 
-// The encryption key lives in a file this package creates (ADR-14). A mode that
-// lets any account on the host read it makes the encryption of settings.db
-// decorative, so the mode is asserted rather than assumed.
+// A world-readable key file makes the encryption of settings.db decorative.
 func conformCreateSecretMode(t *testing.T, fsys fsx.FS, root string) {
 	path := filepath.Join(root, "config.yml")
 	file, err := fsys.CreateSecret(path)
@@ -435,9 +433,8 @@ func conformCreateSecretMode(t *testing.T, fsys fsx.FS, root string) {
 	}
 }
 
-// The temporary is what actually holds the secret before the rename, so the
-// restriction has to be on the temporary. Asserting only the destination would
-// pass even if the key spent its whole write world-readable.
+// The temporary holds the secret before the rename, so it is what must be
+// restricted; asserting only the destination would miss that entirely.
 func conformWriteAtomicSecretMode(t *testing.T, fsys fsx.FS, root string) {
 	path := filepath.Join(root, "config.yml")
 

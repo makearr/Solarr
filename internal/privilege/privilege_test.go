@@ -20,8 +20,7 @@ func TestResolve(t *testing.T) {
 		wantError   string
 	}{
 		{
-			// Requested stays false: nobody asked for 1000, it is simply what
-			// happens in its absence.
+			// Requested stays false: nobody asked for 1000.
 			name:        "unset falls back to the image's media user",
 			environment: nil,
 			want:        privilege.Identity{UID: 1000, GID: 1000, Requested: false},
@@ -32,16 +31,13 @@ func TestResolve(t *testing.T) {
 			want:        privilege.Identity{UID: 1027, GID: 100, Requested: true},
 		},
 		{
-			// Setting one governs the identity as a whole: the other half takes
-			// the default, and the pair is still a request.
+			// Setting one still makes the pair a request.
 			name:        "one set, one defaulted, is still a request",
 			environment: map[string]string{"PGID": "100"},
 			want:        privilege.Identity{UID: 1000, GID: 100, Requested: true},
 		},
 		{
-			// Asking for exactly the default is still asking, and has to be
-			// distinguishable -- it is the difference between a request that
-			// cannot be honoured and no request at all.
+			// Asking for the default is still asking, and must be distinguishable.
 			name:        "asking for the default is still a request",
 			environment: map[string]string{"PUID": "1000", "PGID": "1000"},
 			want:        privilege.Identity{UID: 1000, GID: 1000, Requested: true},
@@ -52,9 +48,7 @@ func TestResolve(t *testing.T) {
 			want:        privilege.Identity{UID: 1000, GID: 1000, Requested: false},
 		},
 		{
-			// Silently falling back to 1000 would surface much later as a
-			// permission error against the volume, sending the operator to
-			// look at the mount rather than at the typo.
+			// A silent fallback surfaces much later, against the volume.
 			name:        "a typo is an error, not a fallback",
 			environment: map[string]string{"PUID": "1O00"},
 			wantError:   "must be a number",
@@ -98,9 +92,7 @@ func TestResolve(t *testing.T) {
 	}
 }
 
-// Apply is a no-op for an unprivileged process, which is what the test runner
-// is. That is the branch taken whenever an operator passes --user, so it is
-// worth asserting rather than assuming.
+// The branch taken whenever an operator passes --user.
 func TestApply_LeavesAnUnprivilegedProcessAlone(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
 	if err := fsys.MkdirAll("/config", 0o755); err != nil {
@@ -119,8 +111,7 @@ func TestApply_LeavesAnUnprivilegedProcessAlone(t *testing.T) {
 		t.Errorf("chowned %v; an unprivileged process must not try", outcome.Chowned)
 	}
 
-	// Ownership must be untouched: a process that cannot chown must not pretend
-	// it did, or the caller believes the volume is ready when it is not.
+	// A process that cannot chown must not report that it did.
 	info, err := fsys.Stat("/config")
 	if err != nil {
 		t.Fatalf("Stat: %v", err)
@@ -134,11 +125,7 @@ func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// The warning has to reach the operator before the failure it explains.
-//
-// Started with a --user that does not own /config, the first thing that breaks
-// is writing config.yml, and "permission denied" sends someone to look at the
-// volume when the answer is a flag they passed.
+// The warning must reach the operator before the failure it explains.
 func TestWarnIfUnapplicable(t *testing.T) {
 	current := privilege.Identity{UID: syscall.Getuid(), GID: syscall.Getgid()}
 
@@ -158,8 +145,7 @@ func TestWarnIfUnapplicable(t *testing.T) {
 			wantWarn: false,
 		},
 		{
-			// Nobody asked for 1000, so there is no request to disappoint --
-			// warning here would fire on every ordinary --user deployment.
+			// No request to disappoint, or every --user deployment warns.
 			name:     "the default is not a request, so it is silent",
 			identity: privilege.Identity{UID: current.UID + 7, GID: current.GID, Requested: false},
 			wantWarn: false,

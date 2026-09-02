@@ -1,9 +1,5 @@
 // Selection is a query, not a set of rows (section 21.7).
-//
-// "Select all matching" has to cover items the virtualised list has never
-// fetched, and deselecting three of 231 must not require materialising the
-// other 228. So the selection is carried as a mode plus a small exception set,
-// and the exception set is the *only* thing that grows with clicking.
+// See documentation/web-interface.md.
 
 export type Id = number;
 
@@ -14,7 +10,7 @@ export type Selection =
 
 export const NOTHING: Selection = { mode: "none" };
 
-/** ALL selects every item matching the current filters, including unfetched ones. */
+/** Every item matching the current filters, including unfetched ones. */
 export const ALL: Selection = { mode: "all", excluded: new Set() };
 
 export function isSelected(selection: Selection, id: Id): boolean {
@@ -35,9 +31,7 @@ export function toggle(selection: Selection, id: Id): Selection {
     case "include": {
       const ids = new Set(selection.ids);
       if (!ids.delete(id)) ids.add(id);
-      // An empty include set is "nothing", not "an empty selection": the
-      // difference matters to every caller that asks whether anything is
-      // selected at all.
+      // "Nothing", not "an empty selection": callers ask which.
       return ids.size === 0 ? NOTHING : { mode: "include", ids };
     }
     case "all": {
@@ -48,13 +42,7 @@ export function toggle(selection: Selection, id: Id): Selection {
   }
 }
 
-/**
- * Extends the selection across a range, for shift-click.
- *
- * The range is taken from the ids currently loaded, which is the only order the
- * client knows. Selecting a range it has not fetched is not expressible and
- * must not be faked -- that is what "select all matching" is for.
- */
+/** Shift-click. Only spans loaded ids: the client knows no other order. */
 export function selectRange(selection: Selection, loaded: readonly Id[], from: Id, to: Id): Selection {
   const start = loaded.indexOf(from);
   const end = loaded.indexOf(to);
@@ -74,14 +62,8 @@ export function selectRange(selection: Selection, loaded: readonly Id[], from: I
   return { mode: "include", ids };
 }
 
-/**
- * Counts the selection, given how many items match the filters in total.
- *
- * Returns null when the count is not knowable: "all" needs a server-side total,
- * and until one arrives the honest answer is "unknown" rather than the number
- * of rows that happen to be loaded. Showing "12 selected" when the user asked
- * for all 231 is worse than showing nothing.
- */
+/** Null when unknowable: "all" needs a server total, and the loaded-row count
+ *  would show "12 selected" to someone who asked for all 231. */
 export function count(selection: Selection, matching: number | null): number | null {
   switch (selection.mode) {
     case "none":
@@ -97,12 +79,7 @@ export function isEmpty(selection: Selection): boolean {
   return selection.mode === "none" || (selection.mode === "include" && selection.ids.size === 0);
 }
 
-/**
- * The wire form: what a bulk action sends to the server.
- *
- * Deliberately mirrors section 21.7's `{filters, excludedIDs}` rather than a
- * list of ids, so the server re-runs the query and acts on what matches now.
- */
+/** The wire form: section 21.7's `{filters, excludedIDs}`, not a list of ids. */
 export type SelectionRequest =
   | { readonly kind: "ids"; readonly ids: Id[] }
   | { readonly kind: "query"; readonly filters: Readonly<Record<string, string>>; readonly excluded: Id[] };

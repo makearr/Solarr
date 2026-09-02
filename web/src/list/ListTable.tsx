@@ -5,17 +5,12 @@ export interface Column<T> {
   readonly key: string;
   readonly header: string;
   readonly render: (item: T) => React.ReactNode;
-  /** Absent means the column cannot be sorted, which is the default. */
+  /** Absent means the column cannot be sorted. */
   readonly sortable?: boolean;
   readonly width?: string;
 }
 
-/**
- * The dense view. Presentational only (section 21.2): it decides how a row
- * looks and nothing else. Every behaviour -- what is selected, what is sorted,
- * what is loaded -- belongs to the hook, so adding a column or a bulk action
- * does not have to be done twice.
- */
+/** The dense view. Presentational only (section 21.2). */
 export function ListTable<T>({
   list,
   columns,
@@ -54,9 +49,7 @@ export function ListTable<T>({
       </div>
 
       <div ref={list.scrollRef} className="min-h-0 flex-1 overflow-auto">
-        {/* The spacer carries the full height of the collection so the
-            scrollbar tells the truth about 500k rows, while only the window
-            below is ever in the document. */}
+        {/* Full collection height, so the scrollbar tells the truth. */}
         <div style={{ height: list.totalSize, position: "relative" }}>
           {list.virtualItems.map((virtual) => {
             const item = list.items[virtual.index];

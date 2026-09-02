@@ -5,10 +5,8 @@ import (
 	"testing"
 )
 
-// These two constants are a decision, not a detail, and the decision is easy to
-// get backwards in either direction. The mode a file lands with also depends on
-// the process umask, so this asserts the constants themselves: it is the only
-// check of them that cannot be turned green or red by the environment.
+// Asserted directly: the mode a file lands with depends on the umask, so only
+// the constants can be checked independently of the environment.
 func TestFileModeConstants(t *testing.T) {
 	tests := []struct {
 		name string

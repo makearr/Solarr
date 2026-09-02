@@ -15,16 +15,11 @@ import (
 // maxSetupBody bounds what an unauthenticated caller can make the server read.
 const maxSetupBody = 4 << 10
 
-// minPasswordLength is a floor, not a policy. Composition rules push people
-// towards predictable substitutions; length is what actually helps.
+// A floor, not a policy: composition rules produce predictable substitutions.
 const minPasswordLength = 12
 
-// GetSetupStatus reports what the wizard still has to do.
-//
-// It answers unauthenticated because before the first account exists there is
-// nobody to authenticate as. It deliberately reveals nothing but the outstanding
-// steps -- no version, no paths, no usernames -- so answering it to anyone costs
-// nothing.
+// GetSetupStatus reports what the wizard still has to do. Unauthenticated, and
+// reveals only the outstanding steps.
 func (s *Server) GetSetupStatus(w http.ResponseWriter, _ *http.Request) {
 	snapshot := s.auth.Settings.Snapshot()
 	writeJSON(w, s.logger, http.StatusOK, gen.SetupStatus{
@@ -33,11 +28,8 @@ func (s *Server) GetSetupStatus(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-// CreateFirstAdministrator claims the install, once.
-//
-// The window closes permanently on the first account rather than when the
-// wizard finishes: tying it to the wizard would leave it open across a restart
-// someone abandoned halfway, which is exactly when nobody is watching.
+// CreateFirstAdministrator claims the install once. The window closes on the
+// first account, not when the wizard finishes.
 func (s *Server) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request) {
 	if len(s.auth.Settings.Snapshot().Users()) > 0 {
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
@@ -73,14 +65,12 @@ func (s *Server) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request
 	created, err := s.auth.Settings.CreateUser(r.Context(), s.auth.Clock,
 		username, hashed, settings.RoleAdmin)
 	if err != nil {
-		// A second request that arrived while the first was still writing loses
-		// the race here rather than creating a second administrator.
+		// A concurrent second claim loses the race here.
 		writeError(w, s.logger, err)
 		return
 	}
 
-	// Signed in immediately. Asking someone to log in with the credentials they
-	// typed ten seconds ago is friction with nothing behind it.
+	// Signed in immediately; re-typing the credentials adds nothing.
 	http.SetCookie(w, s.sessionCookie(s.auth.Sessions.Issue(created.ID),
 		int(s.auth.Sessions.TTL().Seconds()), r))
 	s.logger.Info("first administrator created", "username", created.Username)
@@ -110,12 +100,8 @@ func (s *Server) ListRootFolders(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, views)
 }
 
-// AddRootFolder accepts a library root after proving it is usable.
-//
-// The probe is the point. A path that does not exist, or a volume the container
-// cannot write, is the single most common misconfiguration in a containerised
-// deployment, and finding it here rather than at the first import is the
-// difference between a typo and a mystery.
+// AddRootFolder accepts a library root, refusing an unusable path and flagging
+// an unwritable one. See documentation/container-runtime.md.
 func (s *Server) AddRootFolder(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdministrator(w, r) {
 		return
@@ -141,10 +127,7 @@ func (s *Server) AddRootFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Not writable is reported, not refused. Ownership on the host is the
-	// operator's decision, and refusing here would mean a library that exists
-	// and is simply owned by someone else could not be configured at all --
-	// while the import that eventually needs to write it is far away in time.
+	// Reported, not refused: host ownership is the operator's decision.
 	writable := true
 	if err := s.roots.Writable(path); err != nil {
 		writable = false
@@ -177,10 +160,8 @@ func rootFolderView(folder settings.RootFolder) gen.RootFolder {
 	return view
 }
 
-// RootChecker inspects a candidate library root.
-//
-// An interface so apiserver does not reach for the filesystem itself, and so a
-// test can make a path fail without arranging a real unwritable directory.
+// RootChecker inspects a candidate library root, so this package never reaches
+// for the filesystem itself.
 type RootChecker interface {
 	// Validate refuses a path that cannot be a root at all.
 	Validate(path string) error

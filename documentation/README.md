@@ -23,3 +23,7 @@ named file, linked from the code by path.
 - Restating what the code plainly does
 - Architecture decisions — those are ADRs
 - Anything that will silently rot. A page nobody updates is worse than no page
+- [container-runtime.md](container-runtime.md) — PUID/PGID, TZ, ownership, capabilities
+- [web-interface.md](web-interface.md) — bundle, routing order, theme, the list core
+- [api-generation.md](api-generation.md) — spec-first generation and what it catches
+- [configuration-export.md](configuration-export.md) — F9 export and import

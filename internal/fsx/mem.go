@@ -43,9 +43,7 @@ type memNode struct {
 	// because a hardlink is a directory entry, not a second file.
 	modTime time.Time
 
-	// Ownership, so a chown is observable here exactly as it is on a real
-	// filesystem. Nodes start unowned (-1), matching what OS reports where the
-	// platform does not supply it.
+	// Unowned (-1) to start, matching what OS reports when unavailable.
 	uid int
 	gid int
 }
@@ -167,9 +165,8 @@ func (m *Mem) Create(path string) (io.WriteCloser, error) {
 	return &memWriter{content: node.content}, nil
 }
 
-// CreateSecret mirrors Create but records the restricted mode, so the
-// conformance suite can assert the mode on both implementations rather than
-// only on the one that touches a real filesystem.
+// CreateSecret mirrors Create with the restricted mode, so the conformance
+// suite can assert it on both implementations.
 func (m *Mem) CreateSecret(path string) (io.WriteCloser, error) {
 	writer, err := m.Create(path)
 	if err != nil {
@@ -187,8 +184,7 @@ func (m *Mem) CreateSecret(path string) (io.WriteCloser, error) {
 	return writer, nil
 }
 
-// Chown records ownership. A uid or gid of -1 leaves that half alone, which is
-// what chown(2) does and what callers rely on when changing only the group.
+// Chown records ownership; -1 leaves that half alone.
 func (m *Mem) Chown(path string, uid, gid int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

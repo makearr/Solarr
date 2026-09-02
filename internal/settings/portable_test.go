@@ -9,9 +9,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/settings"
 )
 
-// The property F9 actually promises: what comes out goes back in and means the
-// same thing. An export that cannot be imported is a backup that cannot be
-// restored, which is worse than none because it is believed.
+// An export that cannot be imported is a backup that cannot be restored.
 func TestDocument_RoundTrips(t *testing.T) {
 	cache, _ := newCache(t)
 
@@ -39,9 +37,7 @@ func TestDocument_RoundTrips(t *testing.T) {
 		t.Fatalf("our own export does not validate: %v", problems)
 	}
 
-	// Applied to a *different* install, which is the case that matters: the
-	// document carries no identifiers, so it has to rebuild the same shape from
-	// natural keys alone.
+	// A different install: no identifiers, so natural keys must carry it.
 	fresh, _ := newCache(t)
 	if err := fresh.Import(t.Context(), decoded); err != nil {
 		t.Fatalf("import: %v", err)
@@ -52,14 +48,11 @@ func TestDocument_RoundTrips(t *testing.T) {
 	}
 }
 
-// A file in version control that reshuffles itself on every export is unusable,
-// and that is most of what an export is for.
+// A file that reshuffles itself on every export is unusable in version control.
 func TestExport_IsStableAcrossCalls(t *testing.T) {
 	cache, _ := newCache(t)
-	// The priority ranks are deliberately the reverse of the export order.
-	// ListCategories orders by priority_rank, so with ranks that agree with the
-	// media type order this test would pass whether or not the exporter sorted
-	// anything -- which is exactly how it read before it was checked.
+	// Reversed against the export order: ListCategories sorts by priority_rank,
+	// so agreeing ranks would let this pass without the exporter sorting.
 	mustCategory(t, cache, "tv", "Zulu", 10)
 	mustCategory(t, cache, "music", "Zemih", 30)
 	mustRoot(t, cache, "/media/zzz", "")
@@ -77,11 +70,7 @@ func TestExport_IsStableAcrossCalls(t *testing.T) {
 		t.Error("two exports of the same configuration differ")
 	}
 
-	// Stability alone is too weak a claim: the underlying queries already return
-	// rows in a fixed order, so a test that only compares two exports passes
-	// whether or not this package sorts anything. Asserting the order itself is
-	// what makes the ordering this package guarantees actually tested -- and
-	// insertion order here is the reverse of it, so the two cannot be confused.
+	// The order itself, not just stability: the queries are already ordered.
 	document := cache.Export()
 	if got := []string{document.Roots[0].Path, document.Roots[1].Path}; got[0] != "/media/aaa" {
 		t.Errorf("roots exported as %v, want them sorted by path", got)
@@ -95,8 +84,7 @@ func TestExport_IsStableAcrossCalls(t *testing.T) {
 	}
 }
 
-// An export is attached to bug reports and committed to repositories. Anything
-// in it will eventually be somewhere public.
+// Anything in an export eventually ends up somewhere public.
 func TestExport_CarriesNoCredentials(t *testing.T) {
 	cache, fake := newCache(t)
 	if _, err := cache.CreateUser(t.Context(), fake, "avs", "argon2id$secret-hash", settings.RoleAdmin); err != nil {
@@ -130,8 +118,7 @@ func TestImport_ReportsEveryProblemAtOnce(t *testing.T) {
 	}
 
 	problems := document.Validate()
-	// Five distinct mistakes; reporting them one per attempt is five round
-	// trips through a file the user has to re-upload each time.
+	// Five mistakes, one upload.
 	if len(problems) < 4 {
 		t.Errorf("reported %d problems, want every one of them: %v", len(problems), problems)
 	}
@@ -153,8 +140,7 @@ func TestImport_AppliesNothingWhenAnythingIsWrong(t *testing.T) {
 		t.Fatal("import succeeded despite an invalid category")
 	}
 
-	// A partial import leaves settings in a state the user never chose and
-	// cannot easily undo (section 14.4).
+	// A partial import leaves a state the user never chose (section 14.4).
 	if roots := cache.Snapshot().RootFolders(); len(roots) != 0 {
 		t.Errorf("a rejected import created %d root folders", len(roots))
 	}
@@ -180,8 +166,7 @@ func TestImport_IsIdempotent(t *testing.T) {
 		}
 	}
 
-	// Applying a document twice is normal -- it is how a configuration is kept
-	// in sync -- and must not multiply what it describes.
+	// Applying twice is how a configuration is kept in sync.
 	if roots := cache.Snapshot().RootFolders(); len(roots) != 1 {
 		t.Errorf("%d root folders after three imports, want 1", len(roots))
 	}
@@ -191,8 +176,7 @@ func TestImport_IsIdempotent(t *testing.T) {
 }
 
 func TestImport_RefusesADocumentFromTheFuture(t *testing.T) {
-	// Silently ignoring fields it does not understand would import a subset of
-	// what the file says and report success.
+	// Ignoring unknown fields would import a subset and report success.
 	document := settings.Document{Version: settings.DocumentVersion + 1}
 
 	problems := document.Validate()

@@ -12,16 +12,8 @@ import (
 	"github.com/makearr/MediaNexus/internal/store/gen/settingsdb"
 )
 
-// Document is configuration in a form a person can read, diff and share (F9).
-//
-// It carries policy, never identity or credentials. Accounts, password hashes
-// and API keys are deliberately absent: the point of an export is that it can
-// be attached to a bug report or committed to a dotfiles repository, and
-// anything in it will eventually be somewhere public.
-//
-// Identifiers are absent too. Rows are matched on their natural keys -- a
-// category by media type and name, a root folder by path -- so a document from
-// one install applies to another, where the numbers would mean different things.
+// Document is configuration a person can read, diff and share (F9). Policy
+// only, matched on natural keys. See documentation/configuration-export.md.
 type Document struct {
 	Version    int             `yaml:"version"`
 	Categories []CategoryEntry `yaml:"categories,omitempty"`
@@ -36,8 +28,7 @@ type CategoryEntry struct {
 	Roots        []AttachedRoot `yaml:"roots,omitempty"`
 }
 
-// AttachedRoot names a root by path rather than by id, so the attachment
-// survives the export.
+// AttachedRoot names a root by path, so the attachment survives the export.
 type AttachedRoot struct {
 	Path       string `yaml:"path"`
 	Order      int64  `yaml:"order"`
@@ -52,16 +43,11 @@ type RootEntry struct {
 	Label string `yaml:"label,omitempty"`
 }
 
-// DocumentVersion is the shape of the document, not the product's version. It
-// changes when a field is renamed or removed, so an old export is rejected with
-// an explanation rather than silently half-applied.
+// DocumentVersion is the document's shape, not the product's version.
 const DocumentVersion = 1
 
-// Export renders the current configuration.
-//
-// Ordering is stable -- by natural key, not by id -- so exporting twice produces
-// an identical file and a diff shows only what actually changed. An export that
-// reshuffles itself is unusable in version control, which is most of the point.
+// Export renders the current configuration, ordered by natural key so the file
+// is stable in version control.
 func (c *Cache) Export() Document {
 	snapshot := c.Snapshot()
 
@@ -72,15 +58,8 @@ func (c *Cache) Export() Document {
 		pathOf[root.ID] = root.Path
 		document.Roots = append(document.Roots, RootEntry{Path: root.Path, Label: root.Label})
 	}
-	// ListRootFolders already orders by path, so this sort changes nothing
-	// today and no test can distinguish it. It is kept deliberately: stable
-	// output is a promise this document makes to version control, and resting
-	// that promise on the ORDER BY of a query written for the interface means
-	// it breaks the day that query is retuned, in a file nobody re-reads.
-	//
-	// The category sort below is not in that position -- ListCategories orders
-	// by priority_rank, so it genuinely reorders, and TestExport_IsStable fails
-	// without it.
+	// Redundant while ListRootFolders orders by path; kept so the ordering does
+	// not rest on a query written for the interface.
 	sort.Slice(document.Roots, func(i, j int) bool {
 		return document.Roots[i].Path < document.Roots[j].Path
 	})
@@ -98,9 +77,7 @@ func (c *Cache) Export() Document {
 			}
 			path, known := pathOf[attachment.RootFolderID]
 			if !known {
-				// A dangling attachment is not exportable as a path. Skipping it
-				// keeps the document valid; the reference itself is a data
-				// problem for the integrity check, not for the exporter.
+				// Not exportable as a path; a data problem, not the exporter's.
 				continue
 			}
 			entry.Roots = append(entry.Roots, AttachedRoot{
@@ -122,12 +99,7 @@ func (c *Cache) Export() Document {
 	return document
 }
 
-// Validate reports every problem with a document, not the first.
-//
-// An import is arbitrary input -- a hand-edited file, an export from a newer
-// version, something from a forum post -- so it is checked whole before anything
-// is written (section 14.4). Reporting one error at a time turns a five-mistake
-// file into five round trips.
+// Validate reports every problem with a document, not the first (section 14.4).
 func (d Document) Validate() config.Problems {
 	var problems config.Problems
 
@@ -183,8 +155,7 @@ func (d Document) Validate() config.Problems {
 		seenCategories[key] = true
 
 		for rootIndex, attached := range category.Roots {
-			// An attachment naming a root the document does not define would
-			// import as a category with a silently missing disc.
+			// Or the category imports with a silently missing disc.
 			if !knownPaths[attached.Path] {
 				problems = append(problems, config.Problem{
 					Path:        fmt.Sprintf("%s.roots[%d].path", where, rootIndex),
@@ -198,12 +169,8 @@ func (d Document) Validate() config.Problems {
 	return problems
 }
 
-// Import applies a document, or changes nothing.
-//
-// Everything happens in one transaction: a partial import would leave settings
-// in a state the user never chose and cannot easily undo (section 14.4). It
-// merges on natural keys rather than replacing, because replacing would mean
-// deleting categories that hold a library to satisfy a file.
+// Import applies a document in one transaction, or changes nothing. Merges on
+// natural keys. See documentation/configuration-export.md.
 func (c *Cache) Import(ctx context.Context, document Document) error {
 	if problems := document.Validate(); len(problems) > 0 {
 		return problems
@@ -251,10 +218,7 @@ func (c *Cache) Import(ctx context.Context, document Document) error {
 				id = created.ID
 				categoryIDByKey[key] = id
 
-				// The same rule CreateCategory follows: administrators are
-				// granted manage explicitly and visibly (ADR-27), in the same
-				// transaction, or the category exists with nobody able to
-				// grant access to it.
+				// As CreateCategory does: explicit and visible (ADR-27).
 				for _, administrator := range administrators {
 					if err := queries.SetCategoryAccess(ctx, settingsdb.SetCategoryAccessParams{
 						UserID: administrator, CategoryID: id, Permission: string(PermissionManage),

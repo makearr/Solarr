@@ -22,13 +22,8 @@ import (
 	"github.com/makearr/MediaNexus/migrations"
 )
 
-// Walking every page of a real collection, against a real database.
-//
-// The paginate package's own tests cover Build in isolation, and they cannot
-// catch the failure that actually happens: a cursor without an id tie-break
-// silently skips rows when several share a sort value. Every job here is
-// created at the same instant on a fake clock, so the sort column is identical
-// across all of them -- which is precisely the case that breaks.
+// A cursor without an id tie-break skips rows when several share a sort value.
+// Every job here is created at the same instant, so they all do.
 func TestJobsPagination_WalksEveryRowExactlyOnce(t *testing.T) {
 	const total = 250
 	const pageSize = 20
@@ -86,8 +81,7 @@ func TestJobsPagination_WalksEveryRowExactlyOnce(t *testing.T) {
 		cursor = body.NextCursor
 	}
 
-	// Every row exactly once. Skipping is the tie-break bug; repeating means the
-	// cursor went backwards.
+	// Skipping is the tie-break bug; repeating means the cursor went backwards.
 	if len(seen) != total {
 		t.Errorf("walked %d distinct rows, want %d -- %d were skipped",
 			len(seen), total, total-len(seen))
@@ -144,9 +138,7 @@ func mustEnqueueJob(t *testing.T, queue *jobs.Queue, actionKey string) jobs.Job 
 	return result.Job
 }
 
-// jobsFixture is a server wired to a real job queue. The shared auth fixture
-// deliberately has none -- several tests there assert what happens without one --
-// so this stands beside it rather than changing its meaning.
+// A server wired to a real queue; the shared auth fixture deliberately has none.
 type jobsFixture struct {
 	server *apiserver.Server
 }

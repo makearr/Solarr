@@ -1,7 +1,5 @@
 // Package webui serves the compiled web interface from inside the binary.
-//
-// The bundle is written to dist/ by `make web` and embedded here, so a release
-// is one static file with no assets to deploy beside it (ADR-1, ADR-19).
+// See documentation/web-interface.md.
 package webui
 
 import (
@@ -15,11 +13,7 @@ import (
 	"time"
 )
 
-// dist holds the compiled bundle.
-//
-// The `all:` prefix is required: the directory carries a committed .gitkeep so
-// this pattern always matches something, and a plain `embed dist` would skip a
-// dotfile and fail to build on a clean checkout where nobody has run `make web`.
+// The `all:` prefix matches the committed .gitkeep, so a clean checkout builds.
 //
 //go:embed all:dist
 var dist embed.FS
@@ -34,17 +28,12 @@ func Built() bool {
 	return err == nil
 }
 
-// Handler serves the bundle, falling back to index.html so that client-side
-// routes survive a reload or a shared link.
-//
-// It must be mounted so the API is matched first: this handler answers
-// *everything* it is given, because it cannot tell a client-side route from a
-// typo, and guessing would turn a mistyped API path into a page of HTML.
+// Handler serves the bundle, falling back to index.html. Must be mounted after
+// the API: it answers everything. See documentation/web-interface.md.
 func Handler() http.Handler {
 	assets, err := fs.Sub(dist, "dist")
 	if err != nil {
-		// Only reachable if the embed directive above stopped matching, which
-		// is a build-time mistake rather than a runtime condition.
+		// Only reachable if the embed directive stopped matching.
 		panic("webui: embedded bundle is not a directory: " + err.Error())
 	}
 
@@ -73,9 +62,7 @@ func Handler() http.Handler {
 		}
 		_ = file.Close()
 
-		// Vite fingerprints asset filenames, so a given URL's contents can never
-		// change. Anything else -- index.html above all -- must be revalidated,
-		// or a deploy leaves browsers on the previous build indefinitely.
+		// Fingerprinted, so the contents at a given URL can never change.
 		if strings.HasPrefix(name, "assets/") {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		}
@@ -91,19 +78,14 @@ func serveIndex(w http.ResponseWriter, r *http.Request, assets fs.FS) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	// The document names the current hashed bundle, so a stale copy points at
-	// assets that no longer exist and the page loads blank.
+	// A stale copy points at hashed assets that no longer exist.
 	w.Header().Set("Cache-Control", "no-cache")
-	// A zero modification time tells ServeContent to skip If-Modified-Since:
-	// an embedded file has no meaningful timestamp, and inventing one would
-	// make caches trust a date that says nothing about the build.
+	// Zero time skips If-Modified-Since: an embedded file has no useful one.
 	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(document))
 }
 
-// explainMissingBundle answers when the binary was built without the interface.
-//
-// The alternative is a 404, which reads as a broken install rather than a build
-// step nobody ran.
+// explainMissingBundle answers when the binary was built without the interface,
+// since a 404 reads as a broken install rather than a missing build step.
 func explainMissingBundle(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")

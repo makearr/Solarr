@@ -9,23 +9,12 @@ import (
 	"syscall"
 )
 
-// filePerm is the mode for files MediaNexus creates. The process umask narrows
-// it; the container runs non-root (§20.2).
-//
-// It is deliberately world-readable: imported media has to be readable by the
-// media server running as a different user, which is the whole point of writing
-// it. Do not tighten this to protect secrets -- see secretFilePerm.
+// World-readable on purpose: a media server reads imported files as another
+// user. Do not tighten it to protect secrets -- see secretFilePerm.
 const filePerm fs.FileMode = 0o644
 
-// secretFilePerm is the mode for files whose contents are a credential: the
-// config.yml holding the encryption key (ADR-14), and nothing that a media
-// server ever needs to read.
-//
-// ADR-14 says there is no chmod *requirement* -- MediaNexus does not refuse to
-// start on a loose mode, because that is a check that strands the user out of
-// their own install. That is about what is enforced on a file we find. It says
-// nothing about the mode we choose when we create one, and creating the only
-// copy of a 256-bit key world-readable is indefensible when 0600 is free.
+// For files whose contents are a credential. ADR-14's "no chmod requirement"
+// governs a file we find, not the mode we choose when creating one.
 const secretFilePerm fs.FileMode = 0o600
 
 // staleAttempts is how often a syscall is retried after ESTALE. An NFS server
@@ -71,17 +60,15 @@ func (OS) Create(path string) (io.WriteCloser, error) {
 	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, filePerm)
 }
 
-// CreateSecret creates the file already restricted, never chmod-ed afterwards:
-// a create-then-chmod leaves a window in which the key is world-readable, and
-// the window is exactly when the file has just been filled with the key.
+// Created restricted, never chmod-ed after: that would leave a window open
+// exactly while the file holds the key.
 func (OS) CreateSecret(path string) (io.WriteCloser, error) {
 	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, secretFilePerm)
 }
 
 func (OS) MkdirAll(path string, perm fs.FileMode) error { return os.MkdirAll(path, perm) }
 
-// Chown is os.Chown. It is here rather than called directly so the forbidigo
-// rule keeping every filesystem call inside this package stays absolute.
+// Chown is os.Chown, here so the forbidigo choke point stays absolute.
 func (OS) Chown(path string, uid, gid int) error { return os.Chown(path, uid, gid) }
 func (OS) Rename(oldPath, newPath string) error  { return os.Rename(oldPath, newPath) }
 func (OS) Remove(path string) error              { return os.Remove(path) }
@@ -137,9 +124,7 @@ func infoFrom(info fs.FileInfo) FileInfo {
 		UID:     -1,
 		GID:     -1,
 	}
-	// Ownership is not part of fs.FileInfo. Where the platform reports it we
-	// pass it through, because a permission error is nearly always a PUID/PGID
-	// mismatch and section 14.3 promises to name the owner, not only the caller.
+	// Not part of fs.FileInfo, but section 14.3 promises to name the owner.
 	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
 		converted.UID = int(stat.Uid)
 		converted.GID = int(stat.Gid)

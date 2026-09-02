@@ -16,10 +16,8 @@ const COLUMNS: readonly Column<Job>[] = [
   { key: "created_at", header: "Created", render: (job) => job.created_at },
 ];
 
-// The first consumer of the headless core, deliberately: jobs is the only real
-// cursor-paginated collection until library.db lands at stage 2, so building
-// against it proves pagination, selection and virtualisation against a real
-// server rather than a fixture.
+// The first consumer of the headless core: the only real cursor-paginated
+// collection until library.db lands at stage 2.
 export function Jobs() {
   const [view, setView] = useState<"table" | "grid">("table");
 

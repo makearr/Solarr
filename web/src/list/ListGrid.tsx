@@ -1,14 +1,7 @@
 import type { LibraryList } from "./useLibraryList";
 import type { Id } from "./selection";
 
-/**
- * The cover view. The other half of section 21.2's "built once, rendered
- * twice": it shares every behaviour with ListTable through the hook and differs
- * only in what a row looks like.
- *
- * Virtualised too -- the grid is where 500k items is most tempting to render
- * whole, and most expensive.
- */
+/** The cover view. Shares every behaviour with ListTable through the hook. */
 export function ListGrid<T>({
   list,
   idOf,

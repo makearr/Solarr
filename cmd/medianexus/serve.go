@@ -46,10 +46,9 @@ type process struct {
 func serve(ctx context.Context, configPath string, out io.Writer) error {
 	fsys := fsx.NewOS()
 
-	// Resolved before anything is read or written, so an identity that cannot
-	// be reached is reported as itself rather than as whatever fails first --
-	// which, with a --user that does not own /config, is a permission error
-	// while creating config.yml, pointing at the volume instead of the flag.
+	// Before anything logs a timestamp or reads a directory.
+	timezone := privilege.ApplyTimezone(os.LookupEnv, out)
+
 	identity, err := privilege.Resolve(os.LookupEnv)
 	if err != nil {
 		return err
@@ -62,15 +61,10 @@ func serve(ctx context.Context, configPath string, out io.Writer) error {
 	}
 
 	logger := newLogger(loaded)
+	logger.Info("timezone", "tz", timezone)
 
-	// Ownership and the privilege drop sit between loading the configuration and
-	// checking the directories, and the order is the whole point.
-	//
-	// After loading, because the directories to take ownership of are named in
-	// the configuration. Before the checks, because those checks ask "can *this
-	// user* write here" -- running them as root would answer yes and then the
-	// application would fail as the dropped user, which is precisely the
-	// late-discovered volume failure section 14.3 exists to prevent.
+	// Between loading config and checking directories, both deliberately:
+	// documentation/container-runtime.md.
 	if _, err := privilege.Apply(fsys, identity, loaded.ManagedDirectories(), logger); err != nil {
 		return err
 	}

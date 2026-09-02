@@ -71,28 +71,18 @@ func Create(fsys fsx.FS, path string, generateKey func() (string, error), lookup
 
 	document := fmt.Sprintf(template, CurrentVersion, key)
 
-	// The template is validated on its own before anything is written, so a
-	// template that has drifted from the schema fails without leaving a file on
-	// disk that will not load next time. Environment overrides are deliberately
-	// not applied to this pass: this asks "did we generate a valid file", and a
-	// bad override is not an answer to that question.
+	// Asks only whether the template still matches the schema, so no overrides.
 	if _, err := Parse([]byte(document)); err != nil {
 		return Config{}, fmt.Errorf("config: the generated file is not valid: %w", err)
 	}
 
-	// The directory has to exist before the file can be written into it. The
-	// section 14.3 checks that normally create it run *after* this, because they
-	// validate a configuration that does not exist yet -- so without this, a
-	// first run against a fresh directory fails with a bare "no such file or
-	// directory" naming a temporary file, instead of the error those checks
-	// would have given.
+	// The section 14.3 checks that normally create it run after this.
 	directory := filepath.Dir(path)
 	if err := fsys.MkdirAll(directory, directoryPermissions); err != nil {
 		return Config{}, fmt.Errorf("config: create %s: %w (%s)", directory, err, identityHint())
 	}
 
-	// WriteAtomicSecret, not WriteAtomic: this document carries the only copy of
-	// the encryption key, so it is created 0600 rather than world-readable.
+	// Secret, not plain: this carries the only copy of the encryption key.
 	if err := fsx.WriteAtomicSecret(fsys, path, func(w io.Writer) error {
 		_, writeErr := io.WriteString(w, document)
 		return writeErr
@@ -100,11 +90,8 @@ func Create(fsys fsx.FS, path string, generateKey func() (string, error), lookup
 		return Config{}, fmt.Errorf("config: write %s: %w", path, err)
 	}
 
-	// The environment is applied to what is returned, exactly as Load does it.
-	// Without this a first run ignores every override and refuses to start on
-	// the default paths, then succeeds on the next run because the file now
-	// exists -- a container that fails once and then fixes itself, which is far
-	// harder to diagnose than one that simply fails.
+	// As Load does, or a first run ignores every override and then succeeds on
+	// the next, which is far harder to diagnose than a plain failure.
 	created, err := ParseWithEnv([]byte(document), lookup)
 	if err != nil {
 		return Config{}, err

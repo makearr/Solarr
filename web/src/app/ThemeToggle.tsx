@@ -9,9 +9,7 @@ const LABEL: Record<Theme, string> = {
   dark: "Dark",
 };
 
-// Three states rather than two: "follow the system" is a real choice, and a
-// two-way toggle silently converts it into whichever the OS happened to be on
-// the first click.
+// Three states: a two-way toggle silently discards "follow the system".
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>(stored);
 

@@ -106,13 +106,8 @@ func (p Problems) Error() string {
 	return p.Report("config.yml", "Nothing has been started.")
 }
 
-// Report renders the same list under a caller's own heading and closing line.
-//
-// The same problem shape describes a bad config.yml at startup and a bad
-// document handed to F9's import (§14.4), and those are not the same event:
-// telling someone importing settings through the web interface that "config.yml
-// has 4 errors" and that "nothing has been started" names a file they did not
-// touch and a process that is already running.
+// Report renders the list under the caller's own heading and closing line.
+// See documentation/configuration-export.md.
 func (p Problems) Report(subject, closing string) string {
 	if len(p) == 0 {
 		return "config: no problems"

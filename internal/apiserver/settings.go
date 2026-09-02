@@ -12,17 +12,13 @@ import (
 	"github.com/makearr/MediaNexus/internal/settings"
 )
 
-// maxImportBody bounds a configuration document. Generous for something a
-// person edits, small enough that it cannot be used to make the server read
-// arbitrarily much.
+// Generous for a hand-edited file, bounded against an unauthenticated read.
 const maxImportBody = 1 << 20
 
 const yamlContentType = "application/yaml"
 
-// ExportSettings renders the configuration as YAML (F9).
-//
-// Administrator only. The document carries no credentials, but it does describe
-// the whole shape of someone's library, which is not a read-only user's to take.
+// ExportSettings renders the configuration as YAML (F9). Administrator only:
+// it describes the whole shape of a library.
 func (s *Server) ExportSettings(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdministrator(w, r) {
 		return
@@ -35,7 +31,7 @@ func (s *Server) ExportSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", yamlContentType)
-	// Named so a browser saves something recognisable rather than "export".
+	// Named, or a browser saves it as "export".
 	w.Header().Set("Content-Disposition", `attachment; filename="medianexus-settings.yaml"`)
 	if _, err := w.Write(encoded); err != nil {
 		s.logger.Warn("could not write the settings export", "error", err)
@@ -63,9 +59,7 @@ func (s *Server) ImportSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.auth.Settings.Import(r.Context(), document); err != nil {
-		// Validation failures carry every problem, and the whole list is what
-		// makes the response useful -- reporting only the first turns a
-		// five-mistake file into five uploads.
+		// The whole list is what makes the response useful.
 		var problems config.Problems
 		if errors.As(err, &problems) {
 			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
@@ -82,8 +76,7 @@ func (s *Server) ImportSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// requireAdministrator answers the request itself when the caller is not one,
-// so a handler cannot forget to stop after checking.
+// requireAdministrator answers the request itself when the caller is not one.
 func (s *Server) requireAdministrator(w http.ResponseWriter, r *http.Request) bool {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {

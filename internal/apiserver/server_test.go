@@ -225,14 +225,8 @@ func contains(haystack, needle string) bool {
 	})()
 }
 
-// chi answers an unmatched route and a wrong method in plain text by default,
-// and section 13.1 says every error is problem+json with a stable slug --
-// "every" including the two a client reaches by mistake.
-//
-// The slugs are distinct on purpose. A client branching on the type must be
-// able to tell a malformed request from a wrong verb: the first is fixed by
-// correcting the body or a parameter, the second by using another method.
-// Sharing bad-request between them makes that impossible.
+// Section 13.1's "every error is problem+json" includes the two a client
+// reaches by mistake, and the slugs must be distinct to be actionable.
 func TestUnroutableRequestsAreProblemJSONWithDistinctSlugs(t *testing.T) {
 	server := newServer(t, fakeChecker{})
 
@@ -273,13 +267,8 @@ func TestUnroutableRequestsAreProblemJSONWithDistinctSlugs(t *testing.T) {
 	}
 }
 
-// The interface handler answers everything it is given, because it cannot tell
-// a client-side route from a typo. Mounted carelessly it would therefore answer
-// a mistyped API path with the application shell: status 200, content-type
-// text/html, and a client parsing a web page as though it were its response.
-//
-// A stub stands in for the real bundle so this holds whether or not the
-// interface has been built.
+// Mounted carelessly, the interface answers a mistyped API path with the shell.
+// See documentation/web-interface.md.
 func TestTheWebUINeverSwallowsAnAPIPath(t *testing.T) {
 	const shell = "<!doctype html><title>the app</title>"
 	server := newServerWithWebUI(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

@@ -1,10 +1,5 @@
-// The theme lives on <html> and is mirrored into localStorage so the inline
-// script in index.html can apply it before first paint.
-//
-// Browser storage is deliberate here and does not contradict section 21.2's rule
-// that view state is server-side: this is a pre-authentication paint decision,
-// needed before any request can be made. The user's stored preference remains
-// authoritative once loaded.
+// Mirrored into localStorage for the pre-paint script in index.html.
+// See documentation/web-interface.md.
 export type Theme = "light" | "dark" | "system";
 
 const STORAGE_KEY = "medianexus.theme";
@@ -20,8 +15,7 @@ export function apply(theme: Theme): void {
     if (theme === "system") localStorage.removeItem(STORAGE_KEY);
     else localStorage.setItem(STORAGE_KEY, theme);
   } catch {
-    // Storage can be denied. The class is already set, so this run is correct;
-    // only the pre-paint hint for the next load is lost.
+    // Denied storage loses only the next load's pre-paint hint.
   }
 }
 

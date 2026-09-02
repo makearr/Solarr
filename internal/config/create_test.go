@@ -11,9 +11,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/fsx"
 )
 
-// noEnv is an empty environment. Most creation tests are about the template and
-// the file, not about overrides, and an empty lookup keeps them independent of
-// whatever the test runner happens to have set.
+// An empty environment, so these tests do not depend on the runner's.
 func noEnv(string) (string, bool) { return "", false }
 
 func fixedKey() (string, error) { return "base64:" + strings.Repeat("A", 43) + "=", nil }
@@ -192,15 +190,8 @@ func TestCreate_TemplateDocumentsTheEnvironmentOverrides(t *testing.T) {
 	}
 }
 
-// A first run must honour the environment.
-//
-// Create used to parse the generated template without the environment, so a
-// container started with MEDIANEXUS_DB_DIR set refused to boot on the default
-// /config paths -- and then started cleanly on the next attempt, because by
-// then the file existed and Load *does* apply overrides. A service that fails
-// once and then appears to fix itself is far worse than one that fails
-// consistently: under a restart policy it looks like a transient fault and the
-// real cause is never found.
+// A first run that ignores the environment fails once and then appears to fix
+// itself, which under a restart policy reads as a transient fault.
 func TestCreate_AppliesEnvironmentOverridesOnTheFirstRun(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
 	if err := fsys.MkdirAll("/config", 0o755); err != nil {
@@ -228,9 +219,7 @@ func TestCreate_AppliesEnvironmentOverridesOnTheFirstRun(t *testing.T) {
 		t.Errorf("Server.Port = %d, want 9999 -- the environment was ignored", created.Server.Port)
 	}
 
-	// The override belongs to the process, not to the file: writing it into
-	// config.yml would silently freeze one run's environment into permanent
-	// configuration, and the next run without the variable would keep it.
+	// The override belongs to the process, not the file.
 	loaded, err := config.Load(fsys, "/config/config.yml")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -240,14 +229,8 @@ func TestCreate_AppliesEnvironmentOverridesOnTheFirstRun(t *testing.T) {
 	}
 }
 
-// A first run into a directory that does not exist yet must work.
-//
-// The section 14.3 directory checks create the configured directories, but they
-// validate a configuration that on a first run does not exist yet, so they run
-// after this. Without Create making its own parent, pointing the config
-// directory somewhere new failed with a bare "no such file or directory" naming
-// a temporary file -- which describes the atomic-write mechanism rather than
-// anything the operator did.
+// The section 14.3 checks that create directories run after this, so Create
+// must make its own parent or the error names a temporary file.
 func TestCreate_MakesTheDirectoryItWritesInto(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
 

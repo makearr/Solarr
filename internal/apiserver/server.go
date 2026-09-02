@@ -53,15 +53,10 @@ type Config struct {
 	// rather than sleeping (ADR-17).
 	Clock  clock.Clock
 	Logger *slog.Logger
-	// Roots proves a candidate library root is usable before it is accepted.
-	// Optional: without it, adding a root folder is refused rather than
-	// accepted unchecked -- an unverified root is the failure this prevents.
+	// Roots checks a candidate library root. Without it, adding one is refused.
 	Roots RootChecker
-	// WebUI serves the compiled interface. Optional: a CLI subcommand that only
-	// needs the API passes nothing and every path outside the API answers 404.
-	//
-	// It is a handler rather than an fs.FS so apiserver does not have to know how
-	// the interface is packaged -- that belongs to internal/webui.
+	// WebUI serves the compiled interface. A handler, not an fs.FS, so this
+	// package never learns how the interface is packaged.
 	WebUI http.Handler
 }
 
@@ -149,14 +144,8 @@ func New(config Config) (*Server, error) {
 		})
 	})
 
-	// The interface takes everything the API did not claim.
-	//
-	// Registered *after* the API subtree, which is what keeps a mistyped
-	// /api/v1 path answering problem+json: chi gives that subtree the NotFound
-	// handler in force when Route was called, so this later reassignment applies
-	// only outside it. Move this above the Route call and every wrong API path
-	// starts returning the application shell with status 200.
-	// TestTheWebUINeverSwallowsAnAPIPath holds that line.
+	// Registered after the API subtree, and that order is load-bearing:
+	// documentation/web-interface.md.
 	if server.webui != nil {
 		router.NotFound(server.webui.ServeHTTP)
 	}
@@ -283,20 +272,12 @@ func (s *Server) handleMethodNotAllowed(w http.ResponseWriter, r *http.Request) 
 // belongs to the connection rather than the server.
 func (s *Server) newFlushTicker() clock.Ticker { return s.wall.NewTicker(FlushInterval) }
 
-// The server implements the interface generated from api/openapi.yaml (ADR-31).
-//
-// This is the whole point of generating it: add an operation to the spec and
-// this stops compiling until a handler exists. It catches a missing handler,
-// a renamed operation and a changed parameter type. It cannot catch a route
-// registered here that the spec does not describe -- TestRoutesMatchTheSpec
-// covers that direction.
+// An operation added to api/openapi.yaml stops the build until a handler exists
+// (ADR-31). See documentation/api-generation.md.
 var _ gen.ServerInterface = (*Server)(nil)
 
-// The two operations with parameters are reached through an adapter that turns
-// the query string into the generated parameter type. Routing stays hand-written
-// so that the authenticated group above keeps its meaning: a route added outside
-// it is a visible act, where generated routing would register everything flat and
-// make "is this authenticated?" a question you have to go and answer.
+// Adapters build the generated parameter types; routing stays hand-written so
+// the authenticated group keeps its meaning.
 func (s *Server) routeListJobs(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	var params gen.ListJobsParams
@@ -338,9 +319,7 @@ func (s *Server) routeStreamEvents(w http.ResponseWriter, r *http.Request) {
 	s.StreamEvents(w, r, params)
 }
 
-// derefOr reads through an optional generated parameter. Every query parameter
-// is a pointer because absent and zero are different -- ?limit=0 is a request
-// for none, no limit at all is a request for the default.
+// derefOr reads an optional parameter: absent and zero are different.
 func derefOr[T any](value *T, fallback T) T {
 	if value == nil {
 		return fallback

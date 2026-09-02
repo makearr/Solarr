@@ -3,10 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 
-// The wizard is a convenience, not a gate (section 21.11). Every step can be
-// skipped and the app is usable without finishing it, so nothing here blocks
-// the rest of the interface -- it only offers the two things a fresh install
-// cannot do for you: decide who the administrator is, and where the library is.
+// A convenience, not a gate (section 21.11): every step can be skipped.
 export function Setup({ onDone }: { onDone: () => void }) {
   const status = useQuery({
     queryKey: ["setup"],
@@ -56,8 +53,7 @@ function CreateAdministrator() {
     onSuccess: () => queryClient.invalidateQueries(),
   });
 
-  // Mirrors the server's own floor rather than inventing a second rule: a
-  // client-side check that disagrees with the server is worse than none.
+  // Mirrors the server's floor; a second, different rule would be worse.
   const tooShort = password.length > 0 && password.length < 12;
 
   return (
@@ -166,9 +162,7 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
   );
 }
 
-// The server answers RFC 7807 and its `detail` is written to be read by a
-// person -- it is the sentence that says which volume is not mounted. Replacing
-// it with a generic "something went wrong" throws away the only useful part.
+// `detail` is written to be read by a person; do not replace it.
 function Problem({ error }: { error: unknown }) {
   const detail =
     typeof error === "object" && error !== null && "detail" in error

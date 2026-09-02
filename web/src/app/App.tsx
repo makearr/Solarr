@@ -7,10 +7,7 @@ import { Setup } from "./Setup";
 import { ThemeToggle } from "./ThemeToggle";
 
 export function App() {
-  // Skipping is remembered for this tab only. The wizard is a convenience, not
-  // a gate, and persisting "I skipped it" would need a setting that exists to
-  // record an absence -- while the status endpoint already says what is
-  // outstanding, truthfully, on every load.
+  // This tab only: the status endpoint already reports what is outstanding.
   const [skipped, setSkipped] = useState(false);
 
   const setup = useQuery({
@@ -31,10 +28,7 @@ export function App() {
     },
   });
 
-  // Every hook above runs unconditionally. Returning the wizard before the
-  // second useQuery would call fewer hooks on some renders than on others,
-  // which React reports as "rendered fewer hooks than expected" -- so the
-  // branch happens here, after the hooks, not among them.
+  // After every hook, or React renders fewer hooks on some passes than others.
   const outstanding =
     setup.data && (setup.data.needs_administrator || !setup.data.has_root_folder);
   if (!skipped && outstanding) {
@@ -53,8 +47,7 @@ export function App() {
         <Jobs />
       </main>
 
-      {/* The source offer stays reachable from the interface itself, which is
-          what AGPL section 13 requires of a program used over a network. */}
+      {/* AGPL section 13 requires the source offer to stay reachable. */}
       <footer className="flex shrink-0 items-center gap-3 border-t border-border-subtle
                          bg-surface px-4 py-1.5 text-xs text-ink-muted">
         {about.data ? (
