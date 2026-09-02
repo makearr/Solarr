@@ -131,3 +131,43 @@ FROM job_attempt WHERE job_id = ? ORDER BY attempt;
 -- name: DeleteFinishedJobsBefore :execrows
 DELETE FROM job
 WHERE state IN ('SUCCEEDED', 'FAILED', 'CANCELLED') AND updated_at < ?;
+
+-- History (section 5.7). Appended after a library commit succeeds, never inside one.
+
+-- name: AppendEvent :execlastid
+INSERT INTO event_log (at, kind, subject_type, subject_id, user_id, correlation_id, data_json)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- What happened to this album, in the order it happened. Cursor on id, never OFFSET
+-- (Invariant 32); at is not unique, so it cannot page on its own.
+-- name: ListEventsForSubject :many
+SELECT id, at, kind, subject_type, subject_id, user_id, correlation_id, data_json
+FROM event_log
+WHERE subject_type = sqlc.arg(subject_type) AND subject_id = sqlc.arg(subject_id)
+  AND (sqlc.arg(before_id) = 0 OR id < sqlc.arg(before_id))
+ORDER BY id DESC
+LIMIT sqlc.arg(page_size);
+
+-- name: ListEventsByKind :many
+SELECT id, at, kind, subject_type, subject_id, user_id, correlation_id, data_json
+FROM event_log
+WHERE kind = sqlc.arg(kind)
+  AND (sqlc.arg(before_id) = 0 OR id < sqlc.arg(before_id))
+ORDER BY id DESC
+LIMIT sqlc.arg(page_size);
+
+-- Pruning is bounded per pass and resumable, so retention never becomes one enormous
+-- transaction (Invariant 2).
+-- name: PruneEventsBefore :execrows
+DELETE FROM event_log
+WHERE id IN (
+  SELECT e.id FROM event_log e WHERE e.at < sqlc.arg(before) ORDER BY e.id LIMIT sqlc.arg(batch_size)
+);
+
+-- name: GetRetentionState :one
+SELECT stream, pruned_through FROM retention_state WHERE stream = ?;
+
+-- name: SetRetentionState :exec
+INSERT INTO retention_state (stream, pruned_through)
+VALUES (?, ?)
+ON CONFLICT (stream) DO UPDATE SET pruned_through = excluded.pruned_through;

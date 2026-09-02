@@ -109,6 +109,42 @@ func (q *Queries) CountPrimaryFiles(ctx context.Context, desiredItemID int64) (i
 	return covered, err
 }
 
+const countRollupOutcomes = `-- name: CountRollupOutcomes :many
+SELECT outcome, CAST(SUM(count) AS INTEGER) AS total
+FROM decision_rollup
+WHERE period >= ?1
+GROUP BY outcome
+ORDER BY outcome
+`
+
+type CountRollupOutcomesRow struct {
+	Outcome string
+	Total   int64
+}
+
+func (q *Queries) CountRollupOutcomes(ctx context.Context, since int64) ([]CountRollupOutcomesRow, error) {
+	rows, err := q.db.QueryContext(ctx, countRollupOutcomes, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountRollupOutcomesRow{}
+	for rows.Next() {
+		var i CountRollupOutcomesRow
+		if err := rows.Scan(&i.Outcome, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createDesiredItem = `-- name: CreateDesiredItem :one
 
 INSERT INTO desired_item (work_id, edition_id, media_ref, media_sort_key, category_id,
@@ -305,6 +341,43 @@ func (q *Queries) ListCountersForScope(ctx context.Context, scope string) ([]Cou
 			&i.Metric,
 			&i.Value,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDecisionRollup = `-- name: ListDecisionRollup :many
+SELECT desired_item_id, period, outcome, count, best_score, top_reason
+FROM decision_rollup
+WHERE desired_item_id = ?
+ORDER BY period DESC, outcome
+`
+
+func (q *Queries) ListDecisionRollup(ctx context.Context, desiredItemID int64) ([]DecisionRollup, error) {
+	rows, err := q.db.QueryContext(ctx, listDecisionRollup, desiredItemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DecisionRollup{}
+	for rows.Next() {
+		var i DecisionRollup
+		if err := rows.Scan(
+			&i.DesiredItemID,
+			&i.Period,
+			&i.Outcome,
+			&i.Count,
+			&i.BestScore,
+			&i.TopReason,
 		); err != nil {
 			return nil, err
 		}
@@ -656,6 +729,38 @@ DELETE FROM hunt_queue WHERE desired_item_id = ?
 
 func (q *Queries) RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error {
 	_, err := q.db.ExecContext(ctx, removeFromHuntQueue, desiredItemID)
+	return err
+}
+
+const rollUpDecisions = `-- name: RollUpDecisions :exec
+
+INSERT INTO decision_rollup (desired_item_id, period, outcome, count, best_score, top_reason)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (desired_item_id, period, outcome) DO UPDATE SET
+  count = decision_rollup.count + excluded.count,
+  best_score = MAX(COALESCE(decision_rollup.best_score, excluded.best_score), excluded.best_score),
+  top_reason = excluded.top_reason
+`
+
+type RollUpDecisionsParams struct {
+	DesiredItemID int64
+	Period        int64
+	Outcome       string
+	Count         int64
+	BestScore     sql.NullFloat64
+	TopReason     sql.NullString
+}
+
+// Aged decision detail (section 5.7, Part VI Q5).
+func (q *Queries) RollUpDecisions(ctx context.Context, arg RollUpDecisionsParams) error {
+	_, err := q.db.ExecContext(ctx, rollUpDecisions,
+		arg.DesiredItemID,
+		arg.Period,
+		arg.Outcome,
+		arg.Count,
+		arg.BestScore,
+		arg.TopReason,
+	)
 	return err
 }
 

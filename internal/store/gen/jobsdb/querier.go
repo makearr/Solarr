@@ -10,6 +10,8 @@ import (
 )
 
 type Querier interface {
+	// History (section 5.7). Appended after a library commit succeeds, never inside one.
+	AppendEvent(ctx context.Context, arg AppendEventParams) (int64, error)
 	CancelJob(ctx context.Context, arg CancelJobParams) (int64, error)
 	// One conditional UPDATE ... RETURNING, so two dispatchers cannot hand the same
 	// job to two workers. depends_on keeps a job unclaimable until its parent succeeds.
@@ -21,10 +23,18 @@ type Querier interface {
 	FailJob(ctx context.Context, arg FailJobParams) (int64, error)
 	FindActiveJobByActionKey(ctx context.Context, actionKey sql.NullString) (Job, error)
 	GetJob(ctx context.Context, id int64) (Job, error)
+	GetRetentionState(ctx context.Context, stream string) (RetentionState, error)
 	ListAttempts(ctx context.Context, jobID int64) ([]JobAttempt, error)
+	ListEventsByKind(ctx context.Context, arg ListEventsByKindParams) ([]EventLog, error)
+	// What happened to this album, in the order it happened. Cursor on id, never OFFSET
+	// (Invariant 32); at is not unique, so it cannot page on its own.
+	ListEventsForSubject(ctx context.Context, arg ListEventsForSubjectParams) ([]EventLog, error)
 	// Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
 	// updated_at is not unique. A zero cursor is the start, hence the guarded comparison.
 	ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]Job, error)
+	// Pruning is bounded per pass and resumable, so retention never becomes one enormous
+	// transaction (Invariant 2).
+	PruneEventsBefore(ctx context.Context, arg PruneEventsBeforeParams) (int64, error)
 	// The reaper returns abandoned work to the queue. A crashed process therefore
 	// self-heals with no manual cleanup, which is what makes restart recovery real.
 	ReclaimExpiredLeases(ctx context.Context, arg ReclaimExpiredLeasesParams) ([]ReclaimExpiredLeasesRow, error)
@@ -34,6 +44,7 @@ type Querier interface {
 	// reaped must not be able to take it back and race the worker that has it now.
 	RenewLease(ctx context.Context, arg RenewLeaseParams) (int64, error)
 	RetryJob(ctx context.Context, arg RetryJobParams) (int64, error)
+	SetRetentionState(ctx context.Context, arg SetRetentionStateParams) error
 	StartJob(ctx context.Context, arg StartJobParams) error
 }
 

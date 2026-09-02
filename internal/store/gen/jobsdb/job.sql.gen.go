@@ -10,6 +10,39 @@ import (
 	"database/sql"
 )
 
+const appendEvent = `-- name: AppendEvent :execlastid
+
+INSERT INTO event_log (at, kind, subject_type, subject_id, user_id, correlation_id, data_json)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+`
+
+type AppendEventParams struct {
+	At            int64
+	Kind          string
+	SubjectType   sql.NullString
+	SubjectID     sql.NullInt64
+	UserID        sql.NullInt64
+	CorrelationID sql.NullString
+	DataJson      string
+}
+
+// History (section 5.7). Appended after a library commit succeeds, never inside one.
+func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, appendEvent,
+		arg.At,
+		arg.Kind,
+		arg.SubjectType,
+		arg.SubjectID,
+		arg.UserID,
+		arg.CorrelationID,
+		arg.DataJson,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
+}
+
 const cancelJob = `-- name: CancelJob :execrows
 UPDATE job
 SET state = 'CANCELLED', lease_owner = NULL, lease_expires_at = NULL,
@@ -354,6 +387,17 @@ func (q *Queries) GetJob(ctx context.Context, id int64) (Job, error) {
 	return i, err
 }
 
+const getRetentionState = `-- name: GetRetentionState :one
+SELECT stream, pruned_through FROM retention_state WHERE stream = ?
+`
+
+func (q *Queries) GetRetentionState(ctx context.Context, stream string) (RetentionState, error) {
+	row := q.db.QueryRowContext(ctx, getRetentionState, stream)
+	var i RetentionState
+	err := row.Scan(&i.Stream, &i.PrunedThrough)
+	return i, err
+}
+
 const listAttempts = `-- name: ListAttempts :many
 SELECT id, job_id, attempt, lease_owner, started_at, finished_at, outcome, error
 FROM job_attempt WHERE job_id = ? ORDER BY attempt
@@ -377,6 +421,108 @@ func (q *Queries) ListAttempts(ctx context.Context, jobID int64) ([]JobAttempt, 
 			&i.FinishedAt,
 			&i.Outcome,
 			&i.Error,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEventsByKind = `-- name: ListEventsByKind :many
+SELECT id, at, kind, subject_type, subject_id, user_id, correlation_id, data_json
+FROM event_log
+WHERE kind = ?1
+  AND (?2 = 0 OR id < ?2)
+ORDER BY id DESC
+LIMIT ?3
+`
+
+type ListEventsByKindParams struct {
+	Kind     string
+	BeforeID interface{}
+	PageSize int64
+}
+
+func (q *Queries) ListEventsByKind(ctx context.Context, arg ListEventsByKindParams) ([]EventLog, error) {
+	rows, err := q.db.QueryContext(ctx, listEventsByKind, arg.Kind, arg.BeforeID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []EventLog{}
+	for rows.Next() {
+		var i EventLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.At,
+			&i.Kind,
+			&i.SubjectType,
+			&i.SubjectID,
+			&i.UserID,
+			&i.CorrelationID,
+			&i.DataJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEventsForSubject = `-- name: ListEventsForSubject :many
+SELECT id, at, kind, subject_type, subject_id, user_id, correlation_id, data_json
+FROM event_log
+WHERE subject_type = ?1 AND subject_id = ?2
+  AND (?3 = 0 OR id < ?3)
+ORDER BY id DESC
+LIMIT ?4
+`
+
+type ListEventsForSubjectParams struct {
+	SubjectType sql.NullString
+	SubjectID   sql.NullInt64
+	BeforeID    interface{}
+	PageSize    int64
+}
+
+// What happened to this album, in the order it happened. Cursor on id, never OFFSET
+// (Invariant 32); at is not unique, so it cannot page on its own.
+func (q *Queries) ListEventsForSubject(ctx context.Context, arg ListEventsForSubjectParams) ([]EventLog, error) {
+	rows, err := q.db.QueryContext(ctx, listEventsForSubject,
+		arg.SubjectType,
+		arg.SubjectID,
+		arg.BeforeID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []EventLog{}
+	for rows.Next() {
+		var i EventLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.At,
+			&i.Kind,
+			&i.SubjectType,
+			&i.SubjectID,
+			&i.UserID,
+			&i.CorrelationID,
+			&i.DataJson,
 		); err != nil {
 			return nil, err
 		}
@@ -469,6 +615,28 @@ func (q *Queries) ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]J
 		return nil, err
 	}
 	return items, nil
+}
+
+const pruneEventsBefore = `-- name: PruneEventsBefore :execrows
+DELETE FROM event_log
+WHERE id IN (
+  SELECT e.id FROM event_log e WHERE e.at < ?1 ORDER BY e.id LIMIT ?2
+)
+`
+
+type PruneEventsBeforeParams struct {
+	Before    int64
+	BatchSize int64
+}
+
+// Pruning is bounded per pass and resumable, so retention never becomes one enormous
+// transaction (Invariant 2).
+func (q *Queries) PruneEventsBefore(ctx context.Context, arg PruneEventsBeforeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneEventsBefore, arg.Before, arg.BatchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const reclaimExpiredLeases = `-- name: ReclaimExpiredLeases :many
@@ -635,6 +803,22 @@ func (q *Queries) RetryJob(ctx context.Context, arg RetryJobParams) (int64, erro
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const setRetentionState = `-- name: SetRetentionState :exec
+INSERT INTO retention_state (stream, pruned_through)
+VALUES (?, ?)
+ON CONFLICT (stream) DO UPDATE SET pruned_through = excluded.pruned_through
+`
+
+type SetRetentionStateParams struct {
+	Stream        string
+	PrunedThrough int64
+}
+
+func (q *Queries) SetRetentionState(ctx context.Context, arg SetRetentionStateParams) error {
+	_, err := q.db.ExecContext(ctx, setRetentionState, arg.Stream, arg.PrunedThrough)
+	return err
 }
 
 const startJob = `-- name: StartJob :exec

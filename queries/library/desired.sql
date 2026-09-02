@@ -152,3 +152,26 @@ LIMIT sqlc.arg(page_size);
 UPDATE hunt_queue
 SET last_searched_at = ?, search_count = search_count + 1, eligible_after = ?
 WHERE desired_item_id = ?;
+
+-- Aged decision detail (section 5.7, Part VI Q5).
+
+-- name: RollUpDecisions :exec
+INSERT INTO decision_rollup (desired_item_id, period, outcome, count, best_score, top_reason)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (desired_item_id, period, outcome) DO UPDATE SET
+  count = decision_rollup.count + excluded.count,
+  best_score = MAX(COALESCE(decision_rollup.best_score, excluded.best_score), excluded.best_score),
+  top_reason = excluded.top_reason;
+
+-- name: ListDecisionRollup :many
+SELECT desired_item_id, period, outcome, count, best_score, top_reason
+FROM decision_rollup
+WHERE desired_item_id = ?
+ORDER BY period DESC, outcome;
+
+-- name: CountRollupOutcomes :many
+SELECT outcome, CAST(SUM(count) AS INTEGER) AS total
+FROM decision_rollup
+WHERE period >= sqlc.arg(since)
+GROUP BY outcome
+ORDER BY outcome;

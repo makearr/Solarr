@@ -144,6 +144,15 @@ type Credit struct {
 	Ord       sql.NullInt64
 }
 
+type DecisionRollup struct {
+	DesiredItemID int64
+	Period        int64
+	Outcome       string
+	Count         int64
+	BestScore     sql.NullFloat64
+	TopReason     sql.NullString
+}
+
 type DesiredItem struct {
 	ID                  int64
 	WorkID              int64
