@@ -41,6 +41,9 @@ var allowedInternalImports = map[string][]string{
 		"internal/clock", "internal/paginate", "internal/store", "internal/store/gen/jobsdb",
 	},
 	// Builds a library.db at ADR-22 scale for the ADR-28 and ADR-5 benchmarks.
+	// Pure domain types (architecture section 6): no I/O, so it depends on nothing
+	// of ours.
+	"internal/model": {},
 	"internal/library/fixture": {
 		"internal/clock", "internal/fsx", "internal/store",
 		"internal/store/gen/librarydb", "migrations",
