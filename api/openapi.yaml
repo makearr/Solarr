@@ -225,6 +225,121 @@ paths:
           $ref: "#/components/responses/Problem"
           description: An account already exists; setup is closed.
 
+  /users:
+    get:
+      operationId: listUsers
+      tags: [settings]
+      summary: Every account, with its role and category grants.
+      responses:
+        "200":
+          description: The accounts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/UserAccount" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createUser
+      tags: [settings]
+      summary: Add an account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password, role]
+              properties:
+                username: { type: string }
+                password: { type: string, format: password }
+                role: { $ref: "#/components/schemas/Role" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserAccount" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    patch:
+      operationId: updateUser
+      tags: [settings]
+      summary: Change a role or set a password.
+      description: >-
+        Demoting or deleting the only administrator is refused: nothing else can
+        restore the role, so the interface would be locked out of its own
+        settings (ADR-44).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role: { $ref: "#/components/schemas/Role" }
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: The updated account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserAccount" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteUser
+      tags: [settings]
+      summary: Remove an account.
+      responses:
+        "204": { description: Removed. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /users/{id}/access:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: setUserAccess
+      tags: [settings]
+      summary: Grant or change access to one category.
+      description: >-
+        An absent grant denies, so a new category is private until shared.
+        Sending "none" revokes rather than storing a denial.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_id, permission]
+              properties:
+                category_id: { type: integer, format: int64 }
+                permission: { $ref: "#/components/schemas/Permission" }
+      responses:
+        "200":
+          description: The updated account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserAccount" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /settings/auth:
     get:
       operationId: getAuthPolicy
@@ -533,6 +648,30 @@ components:
           type: string
           example: "Europe/Fefobo"
           description: The server's configured zone, from TZ. `UTC` when unset.
+
+    CategoryGrant:
+      type: object
+      required: [category_id, permission]
+      properties:
+        category_id: { type: integer, format: int64 }
+        permission: { $ref: "#/components/schemas/Permission" }
+
+    UserAccount:
+      type: object
+      required: [id, username, role, has_password, created_at, access]
+      properties:
+        id: { type: integer, format: int64 }
+        username: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        has_password:
+          type: boolean
+          description: >-
+            False for an account that authenticates by proxy header or API key,
+            or the passwordless one an open-access install creates.
+        created_at: { type: string, format: date-time }
+        access:
+          type: array
+          items: { $ref: "#/components/schemas/CategoryGrant" }
 
     AuthPolicy:
       type: object

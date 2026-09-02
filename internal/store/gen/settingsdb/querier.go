@@ -51,6 +51,7 @@ type Querier interface {
 	SetPreference(ctx context.Context, arg SetPreferenceParams) error
 	SetRootFolderOnline(ctx context.Context, arg SetRootFolderOnlineParams) error
 	SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) error
+	SetUserRole(ctx context.Context, arg SetUserRoleParams) error
 	SetUserTier(ctx context.Context, arg SetUserTierParams) error
 	TouchAPIKey(ctx context.Context, arg TouchAPIKeyParams) error
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) error

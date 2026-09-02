@@ -4,6 +4,7 @@ import { ShieldAlert, ShieldCheck } from "lucide-react";
 
 import { api } from "@/api/client";
 import { useAuthPolicy, useSetAuthRequired } from "@/lib/useAuthPolicy";
+import { Users } from "./Users";
 
 /** Settings sections in the order they matter to someone setting the thing up.
  *  `stage` names what has to exist before a section can do anything, so the
@@ -15,11 +16,19 @@ const SECTIONS = [
   { id: "indexers", title: "Indexers", blurb: "Newznab and Torznab sources, and their egress.", stage: 5 },
   { id: "downloaders", title: "Download clients", blurb: "Usenet, torrent and direct downloads.", stage: 5 },
   { id: "metadata", title: "Metadata", blurb: "Providers, field priority and refresh cadence.", stage: 3 },
-  { id: "users", title: "Users and access", blurb: "Accounts, API keys and per-category permission.", stage: 12 },
   { id: "general", title: "General", blurb: "Interface, backups and maintenance." },
 ] as const;
 
 export function Settings() {
+  const me = useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/me");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const roots = useQuery({
     queryKey: ["rootfolders"],
     queryFn: async () => {
@@ -41,6 +50,8 @@ export function Settings() {
         </header>
 
         <AccessSection />
+
+        {me.data && <Users currentUserId={me.data.user_id} />}
 
         <section className="flex flex-col gap-2">
           <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Storage</h2>
