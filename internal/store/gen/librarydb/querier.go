@@ -17,19 +17,24 @@ type Querier interface {
 	// it emits the literal text and SQLite rejects it.
 	AdjustCounter(ctx context.Context, arg AdjustCounterParams) error
 	AttachFile(ctx context.Context, arg AttachFileParams) error
+	BlocklistRelease(ctx context.Context, arg BlocklistReleaseParams) (BlocklistedRelease, error)
 	ClearWorkClassification(ctx context.Context, arg ClearWorkClassificationParams) error
 	// The truth the reconciliation job compares a counter against.
 	CountDesiredItemsByState(ctx context.Context, categoryID interface{}) ([]CountDesiredItemsByStateRow, error)
 	// Only 'primary' counts: a trailer belongs to the work without satisfying it.
 	CountPrimaryFiles(ctx context.Context, desiredItemID int64) (int64, error)
+	CreateAcquisition(ctx context.Context, arg CreateAcquisitionParams) (Acquisition, error)
 	// Desired state. Column lists follow table order, or sqlc stops reusing models.
 	CreateDesiredItem(ctx context.Context, arg CreateDesiredItemParams) (DesiredItem, error)
 	CreateEdition(ctx context.Context, arg CreateEditionParams) (Edition, error)
 	CreateMediaObject(ctx context.Context, arg CreateMediaObjectParams) (MediaObject, error)
 	// Identity queries. Column lists follow table order, or sqlc stops reusing models.
 	CreateWork(ctx context.Context, arg CreateWorkParams) (Work, error)
+	// A DEFER is not a failure: the candidate stays cached until it expires (section 10.1).
+	DeleteExpiredCandidates(ctx context.Context, expiresAt int64) error
 	DeleteLibraryPath(ctx context.Context, id int64) error
 	DeleteMediaObject(ctx context.Context, id int64) error
+	DeleteQuarantineEntry(ctx context.Context, id int64) error
 	DeleteWork(ctx context.Context, id int64) error
 	DetachFile(ctx context.Context, arg DetachFileParams) error
 	// The cheap identity check an incremental scan runs before reading a file.
@@ -38,7 +43,11 @@ type Querier interface {
 	FindWorksByClassification(ctx context.Context, arg FindWorksByClassificationParams) ([]Work, error)
 	// Every stored variant is matched during import, not just the canonical one (ADR-41).
 	FindWorksByNormalizedTitle(ctx context.Context, arg FindWorksByNormalizedTitleParams) ([]Work, error)
+	GetAcquisition(ctx context.Context, id int64) (Acquisition, error)
+	// Identity is the client reference; the path is re-read on every poll.
+	GetAcquisitionByClientRef(ctx context.Context, arg GetAcquisitionByClientRefParams) (Acquisition, error)
 	GetAttributes(ctx context.Context, id int64) (MediaAttribute, error)
+	GetCandidate(ctx context.Context, id int64) (Candidate, error)
 	// A dashboard figure is one lookup regardless of library size (ADR-28).
 	GetCounter(ctx context.Context, arg GetCounterParams) (Counter, error)
 	GetDesiredItem(ctx context.Context, id int64) (DesiredItem, error)
@@ -52,16 +61,26 @@ type Querier interface {
 	GetWorkByExternalID(ctx context.Context, arg GetWorkByExternalIDParams) (Work, error)
 	// Physical files. Column lists follow table order, or sqlc stops reusing models.
 	InternAttributes(ctx context.Context, arg InternAttributesParams) (MediaAttribute, error)
+	// The pipeline filters against this between dedupe and evaluate (section 10.11).
+	IsBlocklisted(ctx context.Context, arg IsBlocklistedParams) (int64, error)
 	LinkEditionExternalID(ctx context.Context, arg LinkEditionExternalIDParams) error
 	LinkWorkExternalID(ctx context.Context, arg LinkWorkExternalIDParams) error
+	ListAcquiredFiles(ctx context.Context, acquisitionID int64) ([]AcquisitionFile, error)
+	// Startup reconciliation polls every non-terminal acquisition (section 10.9).
+	ListActiveAcquisitions(ctx context.Context) ([]Acquisition, error)
+	ListBlocklist(ctx context.Context, arg ListBlocklistParams) ([]BlocklistedRelease, error)
 	ListCountersForScope(ctx context.Context, scope string) ([]Counter, error)
+	// Every candidate with its full breakdown, newest first (F1, F16).
+	ListDecisionsForItem(ctx context.Context, arg ListDecisionsForItemParams) ([]CandidateDecision, error)
 	// What a file belongs to. A scan needs this to recognise bytes it has seen.
 	ListDesiredItemsForFile(ctx context.Context, mediaObjectID int64) ([]DesiredItemFile, error)
 	ListDesiredItemsForWork(ctx context.Context, workID int64) ([]DesiredItem, error)
 	// The planner reads the dirty set, not the whole library (ADR-6).
 	ListDirtyDesiredItems(ctx context.Context, arg ListDirtyDesiredItemsParams) ([]DesiredItem, error)
 	ListEditions(ctx context.Context, workID int64) ([]Edition, error)
+	ListExpiredQuarantine(ctx context.Context, arg ListExpiredQuarantineParams) ([]Quarantine, error)
 	ListFilesForDesiredItem(ctx context.Context, desiredItemID int64) ([]DesiredItemFile, error)
+	ListImportDecisionsNeedingReview(ctx context.Context, limit int64) ([]ImportDecision, error)
 	ListPathsForObject(ctx context.Context, mediaObjectID int64) ([]LibraryPath, error)
 	// A vanished path is MISSING, not deleted, until the root is confirmed online
 	// (section 10.4), so the scan lists a root rather than removing from it.
@@ -83,16 +102,33 @@ type Querier interface {
 	MarkDesiredItemDirty(ctx context.Context, id int64) error
 	MarkDesiredItemPlanned(ctx context.Context, arg MarkDesiredItemPlannedParams) error
 	MarkHunted(ctx context.Context, arg MarkHuntedParams) error
+	MarkQuarantineRestored(ctx context.Context, arg MarkQuarantineRestoredParams) error
 	NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error)
 	// oldest_searched, the default hunt mode (section 9.3).
 	NextHuntByOldestSearched(ctx context.Context, arg NextHuntByOldestSearchedParams) ([]HuntQueue, error)
+	// Which search caused this file, and which download produced it (F4, section 12).
+	ProvenanceForObject(ctx context.Context, mediaObjectID sql.NullInt64) ([]ProvenanceForObjectRow, error)
+	// Auto entries expire because indexers repair things; manual ones do not.
+	PurgeExpiredBlocklist(ctx context.Context, expiresAt sql.NullInt64) error
+	Quarantine(ctx context.Context, arg QuarantineParams) (Quarantine, error)
+	// Quarantined bytes count against the free-space gate, so they are summed per
+	// root rather than assumed to be free (ADR-12).
+	QuarantinedBytesForRoot(ctx context.Context, rootFolderID sql.NullInt64) (int64, error)
 	// The reconciliation job compares this against present_count. Drift is
 	// inevitable, so the repair path is not optional.
 	RecomputePresentCount(ctx context.Context, id int64) error
+	RecordAcquiredFile(ctx context.Context, arg RecordAcquiredFileParams) (AcquisitionFile, error)
+	RecordDecision(ctx context.Context, arg RecordDecisionParams) (CandidateDecision, error)
+	RecordImportDecision(ctx context.Context, arg RecordImportDecisionParams) (ImportDecision, error)
+	RemoveFromBlocklist(ctx context.Context, id int64) error
 	RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error
+	SetAcquisitionPath(ctx context.Context, arg SetAcquisitionPathParams) error
+	SetAcquisitionState(ctx context.Context, arg SetAcquisitionStateParams) error
 	SetCounter(ctx context.Context, arg SetCounterParams) error
 	SetDesiredItemAvailability(ctx context.Context, arg SetDesiredItemAvailabilityParams) error
 	SetDesiredItemState(ctx context.Context, arg SetDesiredItemStateParams) error
+	// Persisted before bytes move, so a restart resumes rather than restarts (ADR-46).
+	SetDownloadProgress(ctx context.Context, arg SetDownloadProgressParams) error
 	SetFingerprints(ctx context.Context, arg SetFingerprintsParams) error
 	// Measured attributes replace claimed ones after probing; the claim is kept so a
 	// mismatch stays visible (ADR-39).
@@ -101,6 +137,8 @@ type Querier interface {
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error
 	SetWorkField(ctx context.Context, arg SetWorkFieldParams) error
 	UpdateWorkTimestamp(ctx context.Context, arg UpdateWorkTimestampParams) error
+	// Candidates, decisions and provenance. Column lists follow table order.
+	UpsertCandidate(ctx context.Context, arg UpsertCandidateParams) (Candidate, error)
 	UpsertHuntQueueEntry(ctx context.Context, arg UpsertHuntQueueEntryParams) error
 }
 

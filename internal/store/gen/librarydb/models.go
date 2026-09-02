@@ -8,12 +8,89 @@ import (
 	"database/sql"
 )
 
+type Acquisition struct {
+	ID                int64
+	DesiredItemID     sql.NullInt64
+	CandidateID       sql.NullInt64
+	IndexerID         sql.NullInt64
+	CandidateGuid     sql.NullString
+	CandidateTitle    sql.NullString
+	SearchTerms       sql.NullString
+	DownloaderID      int64
+	DownloadClientRef string
+	DownloadDir       sql.NullString
+	ClientCategory    sql.NullString
+	ClientFingerprint sql.NullString
+	Protocol          string
+	DdlResolvedUrl    sql.NullString
+	DdlBytesDone      int64
+	DdlResumable      sql.NullInt64
+	State             string
+	LastError         sql.NullString
+	CreatedAt         int64
+	UpdatedAt         int64
+}
+
+type AcquisitionFile struct {
+	ID            int64
+	AcquisitionID int64
+	SourcePath    string
+	MediaObjectID sql.NullInt64
+	LibraryPathID sql.NullInt64
+	ImportedAt    sql.NullInt64
+}
+
 type AltNumbering struct {
 	WorkID   int64
 	MediaRef string
 	Scheme   string
 	Provider string
 	AltRef   string
+}
+
+type BlocklistedRelease struct {
+	ID            int64
+	IndexerID     sql.NullInt64
+	Guid          sql.NullString
+	ContentHash   sql.NullString
+	Title         string
+	DesiredItemID sql.NullInt64
+	Reason        string
+	DetailJson    sql.NullString
+	Source        string
+	ExpiresAt     sql.NullInt64
+	CreatedAt     int64
+}
+
+type Candidate struct {
+	ID              int64
+	IndexerID       int64
+	Guid            string
+	Title           string
+	AttributesID    sql.NullInt64
+	SizeBytes       sql.NullInt64
+	Seeders         sql.NullInt64
+	Leechers        sql.NullInt64
+	PublishedAt     sql.NullInt64
+	Protocol        string
+	DownloadUrl     string
+	ParseConfidence sql.NullFloat64
+	Source          string
+	FirstSeenAt     int64
+	ExpiresAt       int64
+}
+
+type CandidateDecision struct {
+	ID              int64
+	CandidateID     int64
+	DesiredItemID   int64
+	Outcome         string
+	Score           float64
+	ComponentsJson  string
+	RejectionsJson  sql.NullString
+	DeferralsJson   sql.NullString
+	MatchConfidence sql.NullFloat64
+	DecidedAt       int64
 }
 
 type Counter struct {
@@ -83,6 +160,20 @@ type HuntQueue struct {
 	SearchCount    int64
 }
 
+type ImportDecision struct {
+	ID                int64
+	DesiredItemID     int64
+	AcquisitionID     sql.NullInt64
+	IncumbentObjectID sql.NullInt64
+	ArrivedProbeJson  string
+	ComparisonJson    string
+	Outcome           string
+	ReasonJson        string
+	DecidedAt         int64
+	OverriddenBy      sql.NullInt64
+	OverriddenAt      sql.NullInt64
+}
+
 type LibraryPath struct {
 	ID            int64
 	MediaObjectID int64
@@ -140,6 +231,20 @@ type MediaObject struct {
 	ProbeJson             sql.NullString
 	FirstSeenAt           int64
 	VerifiedAt            sql.NullInt64
+}
+
+type Quarantine struct {
+	ID             int64
+	OriginalPath   string
+	QuarantinePath string
+	RootFolderID   sql.NullInt64
+	MediaObjectID  sql.NullInt64
+	AcquisitionID  sql.NullInt64
+	Reason         string
+	SizeBytes      int64
+	QuarantinedAt  int64
+	ExpiresAt      int64
+	RestoredAt     sql.NullInt64
 }
 
 type Request struct {

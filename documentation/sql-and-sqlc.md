@@ -60,3 +60,14 @@ Use `excluded.<column>` instead, which refers to the row the insert was carrying
 ON CONFLICT (scope, metric) DO UPDATE SET
   value = counter.value + excluded.value
 ```
+
+## Aggregates need an explicit cast
+
+`SUM`, `COALESCE` and similar expressions come back as `interface{}` unless the type is stated,
+because sqlc cannot infer one. Every caller then has to type-assert.
+
+```sql
+SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM quarantine
+```
+
+`COUNT(*)` is the exception and is inferred as `int64` on its own.
