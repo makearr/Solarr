@@ -63,7 +63,8 @@ func (q *Queries) AttachFile(ctx context.Context, arg AttachFileParams) error {
 
 const countDesiredItemsByState = `-- name: CountDesiredItemsByState :many
 SELECT state, COUNT(*) AS total FROM desired_item
-WHERE monitored = 1 AND (?1 = 0 OR category_id = ?1)
+WHERE monitored = 1
+  AND (CAST(?1 AS INTEGER) = 0 OR category_id = ?1)
 GROUP BY state
 `
 
@@ -73,7 +74,7 @@ type CountDesiredItemsByStateRow struct {
 }
 
 // The truth the reconciliation job compares a counter against.
-func (q *Queries) CountDesiredItemsByState(ctx context.Context, categoryID interface{}) ([]CountDesiredItemsByStateRow, error) {
+func (q *Queries) CountDesiredItemsByState(ctx context.Context, categoryID int64) ([]CountDesiredItemsByStateRow, error) {
 	rows, err := q.db.QueryContext(ctx, countDesiredItemsByState, categoryID)
 	if err != nil {
 		return nil, err
