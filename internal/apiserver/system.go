@@ -17,6 +17,12 @@ type BuildInfo struct {
 	// SourceURL points at the Corresponding Source for *this* build (section 13).
 	SourceURL string `json:"source_url"`
 	License   string `json:"license"`
+
+	// ServerTime and Timezone are filled per response, not at build time: the
+	// status bar shows the clock schedules actually run on, which on a remote
+	// host is rarely the viewer's (section 19.2).
+	ServerTime string `json:"server_time,omitempty"`
+	Timezone   string `json:"timezone,omitempty"`
 }
 
 // Checker reports whether the process is alive and whether it is ready to serve.
@@ -63,9 +69,17 @@ func (s *Server) GetReady(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, map[string]string{"status": "ready"})
 }
 
-// GetAbout is unauthenticated by design (section 13).
+// GetAbout is unauthenticated by design (section 13). It carries the clock too,
+// so the status bar reads correctly before anyone has logged in.
 func (s *Server) GetAbout(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, s.logger, http.StatusOK, s.build)
+	about := s.build
+	now := s.wall.Now()
+	about.ServerTime = now.Format(timeFormat)
+	about.Timezone = s.timezone
+	if about.Timezone == "" {
+		about.Timezone = now.Location().String()
+	}
+	writeJSON(w, s.logger, http.StatusOK, about)
 }
 
 // GetMe reports who the caller is and what they can see.

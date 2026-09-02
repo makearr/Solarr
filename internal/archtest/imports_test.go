@@ -21,8 +21,8 @@ var allowedInternalImports = map[string][]string{
 	"cmd/medianexus": {
 		"internal/apiserver", "internal/auth", "internal/clock", "internal/config",
 		"internal/events", "internal/fsx", "internal/health", "internal/jobs",
-		"internal/privilege", "internal/settings", "internal/store", "internal/webui",
-		"migrations",
+		"internal/library", "internal/privilege", "internal/settings", "internal/store",
+		"internal/webui", "migrations",
 	},
 	"internal/auth":  {"internal/clock", "internal/secrets"},
 	"internal/authz": {"internal/settings"},
@@ -39,6 +39,10 @@ var allowedInternalImports = map[string][]string{
 	"internal/health": {"internal/store"},
 	"internal/jobs": {
 		"internal/clock", "internal/paginate", "internal/store", "internal/store/gen/jobsdb",
+	},
+	// Owns librarydb, as jobs owns jobsdb and settings owns settingsdb.
+	"internal/library": {
+		"internal/clock", "internal/paginate", "internal/store", "internal/store/gen/librarydb",
 	},
 	"internal/store":    {"internal/clock", "internal/fsx"},
 	"internal/paginate": {},

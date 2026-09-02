@@ -87,17 +87,7 @@ func (s *Server) ListRootFolders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	folders := s.auth.Settings.Snapshot().RootFolders()
-	views := make([]gen.RootFolder, 0, len(folders))
-	for _, folder := range folders {
-		view := rootFolderView(folder)
-		if s.roots != nil {
-			writable := s.roots.Writable(folder.Path) == nil
-			view.Writable = &writable
-		}
-		views = append(views, view)
-	}
-	writeJSON(w, s.logger, http.StatusOK, views)
+	writeJSON(w, s.logger, http.StatusOK, s.rootFolderViews())
 }
 
 // AddRootFolder accepts a library root, refusing an unusable path and flagging
