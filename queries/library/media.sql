@@ -4,40 +4,41 @@
 INSERT INTO media_attributes (attr_hash, resolution, source, video_codec, hdr,
                               audio_codec, audio_channels, bit_depth, languages,
                               subtitles, edition_tokens, release_group, proper_repack,
-                              video_bitrate, audio_bitrate, overall_bitrate, duration_ms,
-                              width, height, frame_rate, scan_type, container,
-                              lossless, sample_rate, image_format, colour_depth, page_count)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              frame_rate, scan_type, container, lossless, sample_rate,
+                              image_format, colour_depth, page_count)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (attr_hash) DO UPDATE SET attr_hash = excluded.attr_hash
 RETURNING id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
           audio_channels, bit_depth, languages, subtitles, edition_tokens,
-          release_group, proper_repack, video_bitrate, audio_bitrate, overall_bitrate,
-          duration_ms, width, height, frame_rate, scan_type, container, lossless,
-          sample_rate, image_format, colour_depth, page_count;
+          release_group, proper_repack, frame_rate, scan_type, container,
+          lossless, sample_rate, image_format, colour_depth, page_count;
 
 -- name: GetAttributes :one
 SELECT id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
        audio_channels, bit_depth, languages, subtitles, edition_tokens,
-       release_group, proper_repack, video_bitrate, audio_bitrate, overall_bitrate,
-       duration_ms, width, height, frame_rate, scan_type, container, lossless,
-       sample_rate, image_format, colour_depth, page_count
+       release_group, proper_repack, frame_rate, scan_type, container,
+       lossless, sample_rate, image_format, colour_depth, page_count
 FROM media_attributes WHERE id = ?;
 
 -- name: CreateMediaObject :one
 INSERT INTO media_object (size_bytes, quick_hash, content_hash, oshash, phash,
                           audio_fp, audio_fp_prefix, fingerprinted_at,
                           claimed_attributes_id, measured_attributes_id,
-                          attribute_mismatch_json, probe_json, first_seen_at, verified_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                          attribute_mismatch_json, duration_ms, width, height,
+                          video_bitrate, audio_bitrate, overall_bitrate,
+                          probe_json, first_seen_at, verified_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
           audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
-          measured_attributes_id, attribute_mismatch_json, probe_json,
+          measured_attributes_id, attribute_mismatch_json, duration_ms, width,
+          height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
           first_seen_at, verified_at;
 
 -- name: GetMediaObject :one
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
-       measured_attributes_id, attribute_mismatch_json, probe_json,
+       measured_attributes_id, attribute_mismatch_json, duration_ms, width,
+       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
        first_seen_at, verified_at
 FROM media_object WHERE id = ?;
 
@@ -45,7 +46,8 @@ FROM media_object WHERE id = ?;
 -- name: FindMediaObjectsByQuickHash :many
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
-       measured_attributes_id, attribute_mismatch_json, probe_json,
+       measured_attributes_id, attribute_mismatch_json, duration_ms, width,
+       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
        first_seen_at, verified_at
 FROM media_object WHERE quick_hash = ?;
 
@@ -53,15 +55,20 @@ FROM media_object WHERE quick_hash = ?;
 -- name: GetMediaObjectByOshash :one
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
-       measured_attributes_id, attribute_mismatch_json, probe_json,
+       measured_attributes_id, attribute_mismatch_json, duration_ms, width,
+       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
        first_seen_at, verified_at
 FROM media_object WHERE oshash = ?;
 
 -- Measured attributes replace claimed ones after probing; the claim is kept so a
--- mismatch stays visible (ADR-39).
+-- mismatch stays visible (ADR-39). The scalars land on the object, not the
+-- interned row, because they are unique per file.
 -- name: SetMeasuredAttributes :exec
 UPDATE media_object
-SET measured_attributes_id = ?, attribute_mismatch_json = ?, probe_json = ?, verified_at = ?
+SET measured_attributes_id = ?, attribute_mismatch_json = ?,
+    duration_ms = ?, width = ?, height = ?,
+    video_bitrate = ?, audio_bitrate = ?, overall_bitrate = ?,
+    probe_json = ?, verified_at = ?
 WHERE id = ?;
 
 -- Fingerprint generation is the lowest-priority background work and resumable,
@@ -69,7 +76,8 @@ WHERE id = ?;
 -- name: ListUnfingerprinted :many
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
-       measured_attributes_id, attribute_mismatch_json, probe_json,
+       measured_attributes_id, attribute_mismatch_json, duration_ms, width,
+       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
        first_seen_at, verified_at
 FROM media_object
 WHERE fingerprinted_at IS NULL AND id > sqlc.arg(after_id)

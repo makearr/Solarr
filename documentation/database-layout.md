@@ -38,6 +38,24 @@ People, credits, tags, collections, counters and reputation are **library data, 
 is written on every state transition — neither survives the "fully cached in memory" property
 that makes `settings.db` what it is.
 
+## Interned attributes against per-file measurements
+
+`media_attributes` is interned: one row per distinct combination, referenced by many files.
+That only works while every column in it is categorical and low-cardinality -- resolution,
+source, codecs, hdr, channels, container, scan type, sample rate, frame rate, lossless. A few
+thousand combinations cover 500k files, and "all my 2160p files" stays a small-table scan.
+
+Measurements that are unique per file -- `duration_ms`, `width`, `height` and the three
+bitrates -- are columns on `media_object` instead. Interning them would defeat the point:
+duration alone is near-unique, so the table would grow one row per file and every attribute
+read would become a join for nothing.
+
+The division is not claimed-against-measured. `media_object` carries **both**
+`claimed_attributes_id` and `measured_attributes_id` into the same interned table, so a release
+name's claim and ffprobe's finding are two rows of one shape and ADR-39 compares them field by
+field. A release name states no duration and no exact pixel dimensions, so the columns that
+moved had no claimed counterpart to be compared against anyway.
+
 ## Crossing the boundary
 
 `library.db` references `settings.db` rows by integer id and **carries no foreign key** — a

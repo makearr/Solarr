@@ -229,7 +229,8 @@ type Querier interface {
 	SetFingerprints(ctx context.Context, arg SetFingerprintsParams) error
 	SetGroupReputation(ctx context.Context, arg SetGroupReputationParams) error
 	// Measured attributes replace claimed ones after probing; the claim is kept so a
-	// mismatch stays visible (ADR-39).
+	// mismatch stays visible (ADR-39). The scalars land on the object, not the
+	// interned row, because they are unique per file.
 	SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttributesParams) error
 	SetPersonMonitored(ctx context.Context, arg SetPersonMonitoredParams) error
 	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error

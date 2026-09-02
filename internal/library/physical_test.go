@@ -3,6 +3,7 @@ package library_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/store"
@@ -249,5 +250,60 @@ func TestDeletingAnObjectCascadesToItsPaths(t *testing.T) {
 	}
 	if len(paths) != 0 {
 		t.Errorf("%d paths survived their object", len(paths))
+	}
+}
+
+// The reason the measured scalars are not interned. Two rips of the same film at
+// the same quality differ by a few seconds and a few kbps; with duration and
+// bitrate in the interned set every file would mint its own attribute row and the
+// table would grow one-for-one with the library.
+func TestFilesDifferingOnlyInDurationShareOneAttributeRow(t *testing.T) {
+	opened, queries := newLibrary(t)
+
+	attributes := intern(t, opened, "hash-1080p-webdl-x264", "1080p")
+
+	var objects []librarydb.MediaObject
+	for index, measured := range []struct {
+		duration int64
+		bitrate  int64
+	}{{7_281_344, 8_412_000}, {7_283_991, 8_407_500}, {7_280_002, 8_419_250}} {
+		var object librarydb.MediaObject
+		write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+			row, err := q.CreateMediaObject(ctx, librarydb.CreateMediaObjectParams{
+				SizeBytes: 7 << 30, QuickHash: fmt.Sprintf("quick-rip-%d", index),
+				FirstSeenAt:          1,
+				MeasuredAttributesID: sql.NullInt64{Int64: attributes.ID, Valid: true},
+				DurationMs:           sql.NullInt64{Int64: measured.duration, Valid: true},
+				OverallBitrate:       sql.NullInt64{Int64: measured.bitrate, Valid: true},
+				Width:                sql.NullInt64{Int64: 1920, Valid: true},
+				Height:               sql.NullInt64{Int64: 804, Valid: true},
+			})
+			object = row
+			return err
+		})
+		objects = append(objects, object)
+	}
+
+	for _, object := range objects {
+		if object.MeasuredAttributesID.Int64 != attributes.ID {
+			t.Errorf("object %d interned as attribute row %d, want the shared %d",
+				object.ID, object.MeasuredAttributesID.Int64, attributes.ID)
+		}
+	}
+
+	// Each file kept its own measurements even though they share the attribute row.
+	durations := map[int64]bool{}
+	for _, object := range objects {
+		stored, err := queries.GetMediaObject(t.Context(), object.ID)
+		if err != nil {
+			t.Fatalf("GetMediaObject: %v", err)
+		}
+		if !stored.DurationMs.Valid || !stored.OverallBitrate.Valid {
+			t.Fatalf("object %d lost its measurements: %+v", object.ID, stored)
+		}
+		durations[stored.DurationMs.Int64] = true
+	}
+	if len(durations) != 3 {
+		t.Errorf("the three rips report %d distinct durations, want 3", len(durations))
 	}
 }

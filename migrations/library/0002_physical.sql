@@ -1,8 +1,11 @@
 -- Physical files: bytes, the paths that reference them, and interned attributes
 -- (section 5.2). media_attributes first, so the references below resolve.
 
--- Distinct combinations number in the thousands even at 500k files, so interning
--- saves space and makes "all my 2160p files" a small-table scan.
+-- Interned, and only what interning survives: every column here is categorical and
+-- low-cardinality, so distinct combinations stay in the thousands at 500k files and
+-- "all my 2160p files" is a small-table scan. A claim and a measurement are two rows
+-- of this one shape, which is what lets ADR-39 compare them row against row.
+-- What is unique per file lives on media_object (documentation/database-layout.md).
 CREATE TABLE media_attributes (
   id              INTEGER PRIMARY KEY,
   -- Deterministic hash of the normalised set.
@@ -20,13 +23,6 @@ CREATE TABLE media_attributes (
   edition_tokens  TEXT,
   release_group   TEXT,
   proper_repack   INTEGER NOT NULL DEFAULT 0,
-  -- Measured only: null on a claimed set, populated after probing (ADR-39).
-  video_bitrate   INTEGER,
-  audio_bitrate   INTEGER,
-  overall_bitrate INTEGER,
-  duration_ms     INTEGER,
-  width           INTEGER,
-  height          INTEGER,
   frame_rate      REAL,
   scan_type       TEXT,
   container       TEXT,
@@ -55,6 +51,15 @@ CREATE TABLE media_object (
   claimed_attributes_id   INTEGER REFERENCES media_attributes(id),
   measured_attributes_id  INTEGER REFERENCES media_attributes(id),
   attribute_mismatch_json TEXT,
+  -- Measured, and unique per file: interning these would give one attribute row per
+  -- object and a join for every read. A release name states none of them, so they
+  -- have no claimed counterpart to be compared against as a set.
+  duration_ms      INTEGER,
+  width            INTEGER,
+  height           INTEGER,
+  video_bitrate    INTEGER,
+  audio_bitrate    INTEGER,
+  overall_bitrate  INTEGER,
   probe_json       TEXT,
   first_seen_at    INTEGER NOT NULL,
   verified_at      INTEGER

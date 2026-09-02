@@ -440,9 +440,8 @@ func TestImageAttributesInternAlongsideVideo(t *testing.T) {
 		row, err := q.InternAttributes(ctx, librarydb.InternAttributesParams{
 			AttrHash:    "gallery-jpeg-40",
 			ImageFormat: sql.NullString{String: "jpeg", Valid: true},
+			ColourDepth: sql.NullInt64{Int64: 8, Valid: true},
 			PageCount:   sql.NullInt64{Int64: 40, Valid: true},
-			Width:       sql.NullInt64{Int64: 3000, Valid: true},
-			Height:      sql.NullInt64{Int64: 2000, Valid: true},
 		})
 		gallery = row
 		return err
@@ -456,7 +455,7 @@ func TestImageAttributesInternAlongsideVideo(t *testing.T) {
 		t.Errorf("image attributes did not round-trip: %+v", stored)
 	}
 	// The audio and video columns stay null, as the image ones do on a video row.
-	if stored.VideoCodec.Valid || stored.DurationMs.Valid {
-		t.Error("a gallery was given video attributes")
+	if stored.VideoCodec.Valid || stored.AudioCodec.Valid {
+		t.Error("a gallery was given audio or video attributes")
 	}
 }
