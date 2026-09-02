@@ -89,6 +89,7 @@ func (s *Store) writeLoop() {
 			return
 		}
 		op.result <- s.execute(op)
+		s.wantCheckpoint()
 	}
 }
 

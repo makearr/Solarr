@@ -22,6 +22,7 @@ func (s *Store) expectations() []pragmaExpectation {
 		{"busy_timeout", fmt.Sprint(s.config.BusyTimeout.Milliseconds())},
 		{"page_size", fmt.Sprint(s.config.PageSize)},
 		{"cache_size", fmt.Sprint(-s.config.CacheSizeKB)},
+		{"wal_autocheckpoint", "0"},
 	}
 }
 
