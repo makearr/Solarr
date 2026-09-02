@@ -8,6 +8,17 @@ import (
 	"database/sql"
 )
 
+type EventLog struct {
+	ID            int64
+	At            int64
+	Kind          string
+	SubjectType   sql.NullString
+	SubjectID     sql.NullInt64
+	UserID        sql.NullInt64
+	CorrelationID sql.NullString
+	DataJson      string
+}
+
 type Job struct {
 	ID             int64
 	Type           string
@@ -40,4 +51,9 @@ type JobAttempt struct {
 	FinishedAt sql.NullInt64
 	Outcome    sql.NullString
 	Error      sql.NullString
+}
+
+type RetentionState struct {
+	Stream        string
+	PrunedThrough int64
 }

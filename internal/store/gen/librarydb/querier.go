@@ -45,6 +45,7 @@ type Querier interface {
 	CountMonitoredParts(ctx context.Context, workID int64) (int64, error)
 	// Only 'primary' counts: a trailer belongs to the work without satisfying it.
 	CountPrimaryFiles(ctx context.Context, desiredItemID int64) (int64, error)
+	CountRollupOutcomes(ctx context.Context, since int64) ([]CountRollupOutcomesRow, error)
 	// Coverage: what a monitored person has produced against what is held (ADR-32).
 	CountWorksCreditedTo(ctx context.Context, arg CountWorksCreditedToParams) (int64, error)
 	CreateAcquisition(ctx context.Context, arg CreateAcquisitionParams) (Acquisition, error)
@@ -145,6 +146,7 @@ type Querier interface {
 	// The work itself only. A narrator credited on one audiobook edition, or a soloist
 	// on one track, is not a credit on the work and must not appear here.
 	ListCreditsForWork(ctx context.Context, workID int64) ([]Credit, error)
+	ListDecisionRollup(ctx context.Context, desiredItemID int64) ([]DecisionRollup, error)
 	// Every candidate with its full breakdown, newest first (F1, F16).
 	ListDecisionsForItem(ctx context.Context, arg ListDecisionsForItemParams) ([]CandidateDecision, error)
 	// What a file belongs to. A scan needs this to recognise bytes it has seen.
@@ -219,6 +221,8 @@ type Querier interface {
 	RecordImportDecision(ctx context.Context, arg RecordImportDecisionParams) (ImportDecision, error)
 	RemoveFromBlocklist(ctx context.Context, id int64) error
 	RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error
+	// Aged decision detail (section 5.7, Part VI Q5).
+	RollUpDecisions(ctx context.Context, arg RollUpDecisionsParams) error
 	SetAcquisitionPath(ctx context.Context, arg SetAcquisitionPathParams) error
 	SetAcquisitionState(ctx context.Context, arg SetAcquisitionStateParams) error
 	SetCounter(ctx context.Context, arg SetCounterParams) error
