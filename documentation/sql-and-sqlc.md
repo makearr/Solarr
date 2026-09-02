@@ -39,6 +39,13 @@ convention. Write `section 5.5`, not `§5.5`, in SQL.
   COALESCE(c, ''))` fails with `expressions prohibited in PRIMARY KEY and UNIQUE
   constraints`. Make the column `NOT NULL DEFAULT ''` and key on it directly, which carries
   the same meaning.
+- **NULL is admitted into a `PRIMARY KEY`.** SQLite does not enforce the standard's implied
+  `NOT NULL`, so a key containing a nullable column stops deduplicating: two rows differing
+  only by a `NULL` both insert. A column that scopes a key — `credit.part_id`, which is zero
+  when the credit is on the work itself — must therefore be `NOT NULL DEFAULT 0` rather than
+  nullable, which costs it its foreign key. The same reasoning made `credit.character`
+  `NOT NULL DEFAULT ''`.
+
 - **A foreign key cannot cross a database file.** `library.db` references `settings.db` rows
   by integer id with no constraint; the application enforces integrity (ADR-25). See
   `database-layout.md`.

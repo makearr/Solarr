@@ -10,7 +10,9 @@ import (
 )
 
 type Querier interface {
+	AddAltNumbering(ctx context.Context, arg AddAltNumberingParams) error
 	AddCollectionMember(ctx context.Context, arg AddCollectionMemberParams) error
+	// edition_id and part_id are 0 for a credit on the work itself (Appendix E, D2).
 	AddCredit(ctx context.Context, arg AddCreditParams) error
 	AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (LibraryPath, error)
 	AddPersonAlias(ctx context.Context, arg AddPersonAliasParams) error
@@ -19,6 +21,7 @@ type Querier interface {
 	AddTagClosure(ctx context.Context, arg AddTagClosureParams) error
 	// Every tag is its own ancestor at depth zero, so a root tag still matches.
 	AddTagSelfClosure(ctx context.Context, arg AddTagSelfClosureParams) error
+	AddWorkPartTitle(ctx context.Context, arg AddWorkPartTitleParams) (WorkPartTitle, error)
 	AddWorkTitle(ctx context.Context, arg AddWorkTitleParams) (WorkTitle, error)
 	// excluded.value is the delta: sqlc cannot substitute a named argument inside DO UPDATE.
 	AdjustCounter(ctx context.Context, arg AdjustCounterParams) error
@@ -36,6 +39,9 @@ type Querier interface {
 	CountDesiredItemsByState(ctx context.Context, categoryID interface{}) ([]CountDesiredItemsByStateRow, error)
 	// Recomputable from the observations, which is why they are kept individually.
 	CountGroupOutcomes(ctx context.Context, arg CountGroupOutcomesParams) ([]CountGroupOutcomesRow, error)
+	// What a SET requires follows the monitored parts, so unmonitoring an episode
+	// shrinks the season rather than leaving it permanently incomplete (Appendix E, D3).
+	CountMonitoredParts(ctx context.Context, workID int64) (int64, error)
 	// Only 'primary' counts: a trailer belongs to the work without satisfying it.
 	CountPrimaryFiles(ctx context.Context, desiredItemID int64) (int64, error)
 	// Coverage: what a monitored person has produced against what is held (ADR-32).
@@ -54,6 +60,7 @@ type Querier interface {
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	// Identity queries. Column lists follow table order, or sqlc stops reusing models.
 	CreateWork(ctx context.Context, arg CreateWorkParams) (Work, error)
+	CreateWorkPart(ctx context.Context, arg CreateWorkPartParams) (WorkPart, error)
 	// A DEFER is not a failure: the candidate stays cached until it expires (section 10.1).
 	DeleteExpiredCandidates(ctx context.Context, expiresAt int64) error
 	DeleteLibraryPath(ctx context.Context, id int64) error
@@ -62,14 +69,25 @@ type Querier interface {
 	DeleteQuarantineEntry(ctx context.Context, id int64) error
 	DeleteSubscription(ctx context.Context, id int64) error
 	DeleteWork(ctx context.Context, id int64) error
+	DeleteWorkPart(ctx context.Context, id int64) error
 	DequeueReady(ctx context.Context, candidateID int64) error
+	// Removes the file from the item entirely, every part it covered with it.
 	DetachFile(ctx context.Context, arg DetachFileParams) error
+	// Removes one part's coverage, for a file that turned out to cover less than claimed.
+	DetachFilePart(ctx context.Context, arg DetachFilePartParams) error
 	// Primed so something dispatches the instant a slot frees (section 10.5).
 	EnqueueReady(ctx context.Context, arg EnqueueReadyParams) error
 	// The cheap identity check an incremental scan runs before reading a file.
 	FindMediaObjectsByQuickHash(ctx context.Context, quickHash string) ([]MediaObject, error)
+	// Anime absolute numbering: episode 137 of a series resolves to the part that
+	// aired numbers do not name (ADR-41). Scoped to the work, or two series collide.
+	FindPartByAltNumber(ctx context.Context, arg FindPartByAltNumberParams) (WorkPart, error)
+	// One recording appears on many albums, so this returns every part sharing the
+	// identifier. That is the cross-album duplicate question (ADR-35).
+	FindPartsByExternalID(ctx context.Context, arg FindPartsByExternalIDParams) ([]WorkPart, error)
 	// A stage name is often the only way to connect a release to a person (ADR-32).
 	FindPeopleByAlias(ctx context.Context, normalized string) ([]Person, error)
+	FindWorkPart(ctx context.Context, arg FindWorkPartParams) (WorkPart, error)
 	// Monitoring on an album type is the point: "studio albums, not live".
 	FindWorksByClassification(ctx context.Context, arg FindWorksByClassificationParams) ([]Work, error)
 	// Every stored variant is matched during import, not just the canonical one (ADR-41).
@@ -96,6 +114,7 @@ type Querier interface {
 	GetWork(ctx context.Context, id int64) (Work, error)
 	// Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
 	GetWorkByExternalID(ctx context.Context, arg GetWorkByExternalIDParams) (Work, error)
+	GetWorkPart(ctx context.Context, id int64) (WorkPart, error)
 	// Physical files. Column lists follow table order, or sqlc stops reusing models.
 	InternAttributes(ctx context.Context, arg InternAttributesParams) (MediaAttribute, error)
 	// The pipeline filters against this between dedupe and evaluate (section 10.11).
@@ -104,14 +123,24 @@ type Querier interface {
 	LinkPersonExternalID(ctx context.Context, arg LinkPersonExternalIDParams) error
 	LinkWorkExternalID(ctx context.Context, arg LinkWorkExternalIDParams) error
 	LinkWorkOrganisation(ctx context.Context, arg LinkWorkOrganisationParams) error
+	LinkWorkPartExternalID(ctx context.Context, arg LinkWorkPartExternalIDParams) error
 	ListAcquiredFiles(ctx context.Context, acquisitionID int64) ([]AcquisitionFile, error)
 	// Startup reconciliation polls every non-terminal acquisition (section 10.9).
 	ListActiveAcquisitions(ctx context.Context) ([]Acquisition, error)
+	// Every credit anywhere under a work, at any scope. Coverage counts use this;
+	// the work-level listing above deliberately does not.
+	ListAllCreditsUnderWork(ctx context.Context, workID int64) ([]Credit, error)
 	ListArtworkForSubject(ctx context.Context, arg ListArtworkForSubjectParams) ([]Artwork, error)
 	ListBlocklist(ctx context.Context, arg ListBlocklistParams) ([]BlocklistedRelease, error)
 	ListCollectionMembers(ctx context.Context, collectionID int64) ([]CollectionMember, error)
 	ListCollectionsForWork(ctx context.Context, workID int64) ([]Collection, error)
 	ListCountersForScope(ctx context.Context, scope string) ([]Counter, error)
+	ListCreditsForEdition(ctx context.Context, editionID int64) ([]Credit, error)
+	// Per-track performers and composers, which is what classical and various-artists
+	// releases need and what a work-level credit cannot express.
+	ListCreditsForPart(ctx context.Context, partID int64) ([]Credit, error)
+	// The work itself only. A narrator credited on one audiobook edition, or a soloist
+	// on one track, is not a credit on the work and must not appear here.
 	ListCreditsForWork(ctx context.Context, workID int64) ([]Credit, error)
 	// Every candidate with its full breakdown, newest first (F1, F16).
 	ListDecisionsForItem(ctx context.Context, arg ListDecisionsForItemParams) ([]CandidateDecision, error)
@@ -150,6 +179,10 @@ type Querier interface {
 	ListWorkDates(ctx context.Context, workID int64) ([]WorkDate, error)
 	ListWorkExternalIDs(ctx context.Context, workID int64) ([]WorkExternalID, error)
 	ListWorkFields(ctx context.Context, workID int64) ([]WorkField, error)
+	ListWorkPartExternalIDs(ctx context.Context, partID int64) ([]WorkPartExternalID, error)
+	ListWorkPartTitles(ctx context.Context, partID int64) ([]WorkPartTitle, error)
+	// Ordered by the module's sort key. Core never parses media_ref to order parts.
+	ListWorkParts(ctx context.Context, workID int64) ([]WorkPart, error)
 	ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle, error)
 	// "Htuacmasn as director, not producer" is a role-scoped query, which is why the
 	// role lives on the credit (F13).
@@ -203,6 +236,7 @@ type Querier interface {
 	SetWorkClassification(ctx context.Context, arg SetWorkClassificationParams) error
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error
 	SetWorkField(ctx context.Context, arg SetWorkFieldParams) error
+	SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonitoredParams) error
 	UpdateWorkTimestamp(ctx context.Context, arg UpdateWorkTimestampParams) error
 	UpsertArtwork(ctx context.Context, arg UpsertArtworkParams) error
 	// Candidates, decisions and provenance. Column lists follow table order.

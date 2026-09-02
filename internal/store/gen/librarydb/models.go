@@ -41,8 +41,7 @@ type AcquisitionFile struct {
 }
 
 type AltNumbering struct {
-	WorkID   int64
-	MediaRef string
+	PartID   int64
 	Scheme   string
 	Provider string
 	AltRef   string
@@ -138,6 +137,8 @@ type Counter struct {
 type Credit struct {
 	PersonID  int64
 	WorkID    int64
+	EditionID int64
+	PartID    int64
 	Role      string
 	Character string
 	Ord       sql.NullInt64
@@ -459,16 +460,6 @@ type WorkCertification struct {
 	Rating string
 }
 
-type WorkChildTitle struct {
-	ID         int64
-	WorkID     int64
-	MediaRef   string
-	Title      string
-	Normalized string
-	Language   sql.NullString
-	Provider   sql.NullString
-}
-
 type WorkClassification struct {
 	WorkID int64
 	Kind   string
@@ -504,6 +495,33 @@ type WorkOrganisation struct {
 	WorkID         int64
 	OrganisationID int64
 	Role           string
+}
+
+type WorkPart struct {
+	ID        int64
+	WorkID    int64
+	MediaRef  string
+	SortKey   string
+	Title     sql.NullString
+	RuntimeMs sql.NullInt64
+	Date      sql.NullString
+	Monitored int64
+}
+
+type WorkPartExternalID struct {
+	Provider   string
+	ExternalID string
+	PartID     int64
+	Confidence float64
+}
+
+type WorkPartTitle struct {
+	ID         int64
+	PartID     int64
+	Title      string
+	Normalized string
+	Language   sql.NullString
+	Provider   sql.NullString
 }
 
 type WorkRating struct {

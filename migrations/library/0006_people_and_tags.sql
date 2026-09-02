@@ -40,16 +40,24 @@ CREATE INDEX person_external_by_person ON person_external_id(person_id);
 
 -- Roles are the point: subscribing to Htuacmasn as director and not as producer needs the role
 -- stored per credit, not per person (ADR-32, F13).
+-- edition_id and part_id scope a credit below the work: a narrator belongs to the
+-- audiobook edition, a performer to the track (Appendix E, D2). Zero means unscoped,
+-- and they are NOT NULL because SQLite admits NULL into a PRIMARY KEY and would then
+-- stop deduplicating; work_id stays so the cascade still reaches every credit.
 CREATE TABLE credit (
-  person_id INTEGER NOT NULL REFERENCES person(id) ON DELETE CASCADE,
-  work_id   INTEGER NOT NULL REFERENCES work(id) ON DELETE CASCADE,
-  role      TEXT    NOT NULL,
-  character TEXT    NOT NULL DEFAULT '',
-  ord       INTEGER,
-  PRIMARY KEY (person_id, work_id, role, character)
+  person_id  INTEGER NOT NULL REFERENCES person(id) ON DELETE CASCADE,
+  work_id    INTEGER NOT NULL REFERENCES work(id) ON DELETE CASCADE,
+  edition_id INTEGER NOT NULL DEFAULT 0,
+  part_id    INTEGER NOT NULL DEFAULT 0,
+  role       TEXT    NOT NULL,
+  character  TEXT    NOT NULL DEFAULT '',
+  ord        INTEGER,
+  PRIMARY KEY (person_id, work_id, edition_id, part_id, role, character)
 );
 CREATE INDEX credit_by_work ON credit(work_id, role);
 CREATE INDEX credit_by_person ON credit(person_id, role);
+CREATE INDEX credit_by_part ON credit(part_id, role) WHERE part_id != 0;
+CREATE INDEX credit_by_edition ON credit(edition_id, role) WHERE edition_id != 0;
 
 -- Studios, networks, labels, publishers, imprints and sites are one entity.
 CREATE TABLE organisation (

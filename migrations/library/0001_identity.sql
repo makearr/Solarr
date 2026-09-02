@@ -72,29 +72,60 @@ CREATE TABLE work_title (
 CREATE INDEX work_title_norm ON work_title(normalized);
 CREATE INDEX work_title_work ON work_title(work_id);
 
--- Providers disagree about child titles; the disagreement is data (ADR-41).
-CREATE TABLE work_child_title (
+-- A part of a work: a track, episode, chapter, issue or disc. media_ref is the
+-- module's vocabulary and stays opaque to core (ADR-23).
+CREATE TABLE work_part (
   id         INTEGER PRIMARY KEY,
   work_id    INTEGER NOT NULL REFERENCES work(id) ON DELETE CASCADE,
   -- 's03e10' or 'disc1:track5'.
   media_ref  TEXT    NOT NULL,
+  -- Module-supplied and padded, so ordering never parses the reference.
+  sort_key   TEXT    NOT NULL DEFAULT '',
+  title      TEXT,
+  runtime_ms INTEGER,
+  -- Partial dates as work_date: an episode air date outlives any intent to hold it.
+  date       TEXT,
+  -- Per-part monitoring inside a SET: the season, but not s03e05 (Appendix E, D3).
+  monitored  INTEGER NOT NULL DEFAULT 1 CHECK (monitored IN (0, 1)),
+  UNIQUE(work_id, media_ref)
+);
+CREATE INDEX work_part_order ON work_part(work_id, sort_key);
+CREATE INDEX work_part_monitored ON work_part(work_id) WHERE monitored = 1;
+
+-- A recording MBID identifies a track, not the release carrying it (ADR-29). part_id
+-- is in the key because one recording appears on many albums, and finding those is
+-- the cross-album duplicate query.
+CREATE TABLE work_part_external_id (
+  provider    TEXT    NOT NULL,
+  external_id TEXT    NOT NULL,
+  part_id     INTEGER NOT NULL REFERENCES work_part(id) ON DELETE CASCADE,
+  confidence  REAL    NOT NULL DEFAULT 1.0,
+  PRIMARY KEY (provider, external_id, part_id)
+) WITHOUT ROWID;
+CREATE INDEX work_part_external_by_part ON work_part_external_id(part_id);
+
+-- Providers disagree about part titles; the disagreement is data (ADR-41).
+CREATE TABLE work_part_title (
+  id         INTEGER PRIMARY KEY,
+  part_id    INTEGER NOT NULL REFERENCES work_part(id) ON DELETE CASCADE,
   title      TEXT    NOT NULL,
   normalized TEXT    NOT NULL,
   language   TEXT,
   provider   TEXT
 );
-CREATE INDEX work_child_title_norm ON work_child_title(work_id, normalized);
+CREATE INDEX work_part_title_norm ON work_part_title(normalized);
+CREATE INDEX work_part_title_part ON work_part_title(part_id);
 
--- A file numbered under any known scheme resolves to the right child (ADR-41).
+-- A file numbered under any known scheme resolves to the right part (ADR-41).
+-- The index carries part_id so an absolute-numbering lookup never reads the table.
 CREATE TABLE alt_numbering (
-  work_id   INTEGER NOT NULL REFERENCES work(id) ON DELETE CASCADE,
-  media_ref TEXT    NOT NULL,
-  scheme    TEXT    NOT NULL,
-  provider  TEXT    NOT NULL,
-  alt_ref   TEXT    NOT NULL,
-  PRIMARY KEY (work_id, media_ref, scheme, provider)
+  part_id  INTEGER NOT NULL REFERENCES work_part(id) ON DELETE CASCADE,
+  scheme   TEXT    NOT NULL,
+  provider TEXT    NOT NULL,
+  alt_ref  TEXT    NOT NULL,
+  PRIMARY KEY (part_id, scheme, provider)
 ) WITHOUT ROWID;
-CREATE INDEX alt_numbering_lookup ON alt_numbering(work_id, scheme, alt_ref);
+CREATE INDEX alt_numbering_lookup ON alt_numbering(scheme, alt_ref, part_id);
 
 CREATE TABLE edition (
   id               INTEGER PRIMARY KEY,

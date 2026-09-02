@@ -43,10 +43,12 @@ CREATE TABLE desired_item_file (
   desired_item_id INTEGER NOT NULL REFERENCES desired_item(id) ON DELETE CASCADE,
   media_object_id INTEGER NOT NULL REFERENCES media_object(id) ON DELETE CASCADE,
   role            TEXT    NOT NULL DEFAULT 'primary',
-  -- Which part of a SET this file covers; '' when the item is SINGLE.
+  -- Which part of a SET this file covers; '' when the item is SINGLE. In the key,
+  -- so one file can cover many parts: an audiobook whose twenty chapters are one
+  -- file, or a trade paperback carrying six issues (Appendix E, D1).
   media_ref       TEXT    NOT NULL DEFAULT '',
   added_at        INTEGER NOT NULL,
-  PRIMARY KEY (desired_item_id, media_object_id, role)
+  PRIMARY KEY (desired_item_id, media_object_id, role, media_ref)
 ) WITHOUT ROWID;
 CREATE INDEX desired_file_by_object ON desired_item_file(media_object_id);
 CREATE INDEX desired_file_primary ON desired_item_file(desired_item_id)
