@@ -26,14 +26,26 @@ func intern(t *testing.T, opened *store.Store, hash, resolution string) libraryd
 
 func createObject(t *testing.T, opened *store.Store, quickHash string, size int64) librarydb.MediaObject {
 	t.Helper()
-	var object librarydb.MediaObject
+	return readBack(t, opened, librarydb.CreateMediaObjectParams{
+		SizeBytes: size, QuickHash: quickHash, FirstSeenAt: 1,
+	})
+}
+
+// The insert returns an id rather than a row (documentation/benchmarks.md), so a test
+// wanting the whole object reads it back.
+func readBack(t *testing.T, opened *store.Store, params librarydb.CreateMediaObjectParams) librarydb.MediaObject {
+	t.Helper()
+	var id int64
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
-		row, err := q.CreateMediaObject(ctx, librarydb.CreateMediaObjectParams{
-			SizeBytes: size, QuickHash: quickHash, FirstSeenAt: 1,
-		})
-		object = row
+		created, err := q.CreateMediaObject(ctx, params)
+		id = created
 		return err
 	})
+
+	object, err := librarydb.New(opened.Read()).GetMediaObject(t.Context(), id)
+	if err != nil {
+		t.Fatalf("read back object %d: %v", id, err)
+	}
 	return object
 }
 
@@ -128,14 +140,9 @@ func TestClaimedAndMeasuredAttributesBothSurvive(t *testing.T) {
 	claimed := intern(t, opened, "claimed-2160p", "2160p")
 	measured := intern(t, opened, "measured-1080p", "1080p")
 
-	var object librarydb.MediaObject
-	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
-		row, err := q.CreateMediaObject(ctx, librarydb.CreateMediaObjectParams{
-			SizeBytes: 1, QuickHash: "quick-1", FirstSeenAt: 1,
-			ClaimedAttributesID: sql.NullInt64{Int64: claimed.ID, Valid: true},
-		})
-		object = row
-		return err
+	object := readBack(t, opened, librarydb.CreateMediaObjectParams{
+		SizeBytes: 1, QuickHash: "quick-1", FirstSeenAt: 1,
+		ClaimedAttributesID: sql.NullInt64{Int64: claimed.ID, Valid: true},
 	})
 
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
@@ -267,21 +274,15 @@ func TestFilesDifferingOnlyInDurationShareOneAttributeRow(t *testing.T) {
 		duration int64
 		bitrate  int64
 	}{{7_281_344, 8_412_000}, {7_283_991, 8_407_500}, {7_280_002, 8_419_250}} {
-		var object librarydb.MediaObject
-		write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
-			row, err := q.CreateMediaObject(ctx, librarydb.CreateMediaObjectParams{
-				SizeBytes: 7 << 30, QuickHash: fmt.Sprintf("quick-rip-%d", index),
-				FirstSeenAt:          1,
-				MeasuredAttributesID: sql.NullInt64{Int64: attributes.ID, Valid: true},
-				DurationMs:           sql.NullInt64{Int64: measured.duration, Valid: true},
-				OverallBitrate:       sql.NullInt64{Int64: measured.bitrate, Valid: true},
-				Width:                sql.NullInt64{Int64: 1920, Valid: true},
-				Height:               sql.NullInt64{Int64: 804, Valid: true},
-			})
-			object = row
-			return err
-		})
-		objects = append(objects, object)
+		objects = append(objects, readBack(t, opened, librarydb.CreateMediaObjectParams{
+			SizeBytes: 7 << 30, QuickHash: fmt.Sprintf("quick-rip-%d", index),
+			FirstSeenAt:          1,
+			MeasuredAttributesID: sql.NullInt64{Int64: attributes.ID, Valid: true},
+			DurationMs:           sql.NullInt64{Int64: measured.duration, Valid: true},
+			OverallBitrate:       sql.NullInt64{Int64: measured.bitrate, Valid: true},
+			Width:                sql.NullInt64{Int64: 1920, Valid: true},
+			Height:               sql.NullInt64{Int64: 804, Valid: true},
+		}))
 	}
 
 	for _, object := range objects {

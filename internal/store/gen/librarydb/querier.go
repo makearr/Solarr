@@ -14,7 +14,8 @@ type Querier interface {
 	AddCollectionMember(ctx context.Context, arg AddCollectionMemberParams) error
 	// edition_id and part_id are 0 for a credit on the work itself (Appendix E, D2).
 	AddCredit(ctx context.Context, arg AddCreditParams) error
-	AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (LibraryPath, error)
+	// The second half of importing a file, and execlastid for the same reason.
+	AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (int64, error)
 	AddPersonAlias(ctx context.Context, arg AddPersonAliasParams) error
 	AddRelationship(ctx context.Context, arg AddRelationshipParams) error
 	// The closure is materialised, so inserting a tag inserts its ancestry too.
@@ -52,7 +53,9 @@ type Querier interface {
 	// Desired state. Column lists follow table order, or sqlc stops reusing models.
 	CreateDesiredItem(ctx context.Context, arg CreateDesiredItemParams) (DesiredItem, error)
 	CreateEdition(ctx context.Context, arg CreateEditionParams) (Edition, error)
-	CreateMediaObject(ctx context.Context, arg CreateMediaObjectParams) (MediaObject, error)
+	// Returning the row costs four times the insert itself at import scale, so this is
+	// execlastid: documentation/benchmarks.md.
+	CreateMediaObject(ctx context.Context, arg CreateMediaObjectParams) (int64, error)
 	CreateOrganisation(ctx context.Context, arg CreateOrganisationParams) (Organisation, error)
 	// People, organisations, tags and subscriptions. Column lists follow table order.
 	CreatePerson(ctx context.Context, arg CreatePersonParams) (Person, error)

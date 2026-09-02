@@ -47,5 +47,9 @@ config.local.yml
 # Local-only test fixtures from the real library (never committed)
 /private/fixtures/
 
+# The generated ADR-28 benchmark corpus and the migration backups beside it. Big,
+# reproducible from internal/library/fixture, and rebuilt on demand.
+/internal/library/testdata/fixtures/
+
 # Machine-specific Makefile overrides (DNS, image pins)
 /Makefile.local

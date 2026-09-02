@@ -10,11 +10,10 @@ import (
 	"database/sql"
 )
 
-const addLibraryPath = `-- name: AddLibraryPath :one
+const addLibraryPath = `-- name: AddLibraryPath :execlastid
 INSERT INTO library_path (media_object_id, root_folder_id, rel_path, link_kind,
                           is_primary, created_at)
 VALUES (?, ?, ?, ?, ?, ?)
-RETURNING id, media_object_id, root_folder_id, rel_path, link_kind, is_primary, created_at
 `
 
 type AddLibraryPathParams struct {
@@ -26,8 +25,9 @@ type AddLibraryPathParams struct {
 	CreatedAt     int64
 }
 
-func (q *Queries) AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (LibraryPath, error) {
-	row := q.db.QueryRowContext(ctx, addLibraryPath,
+// The second half of importing a file, and execlastid for the same reason.
+func (q *Queries) AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, addLibraryPath,
 		arg.MediaObjectID,
 		arg.RootFolderID,
 		arg.RelPath,
@@ -35,20 +35,13 @@ func (q *Queries) AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) 
 		arg.IsPrimary,
 		arg.CreatedAt,
 	)
-	var i LibraryPath
-	err := row.Scan(
-		&i.ID,
-		&i.MediaObjectID,
-		&i.RootFolderID,
-		&i.RelPath,
-		&i.LinkKind,
-		&i.IsPrimary,
-		&i.CreatedAt,
-	)
-	return i, err
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
 }
 
-const createMediaObject = `-- name: CreateMediaObject :one
+const createMediaObject = `-- name: CreateMediaObject :execlastid
 INSERT INTO media_object (size_bytes, quick_hash, content_hash, oshash, phash,
                           audio_fp, audio_fp_prefix, fingerprinted_at,
                           claimed_attributes_id, measured_attributes_id,
@@ -56,11 +49,6 @@ INSERT INTO media_object (size_bytes, quick_hash, content_hash, oshash, phash,
                           video_bitrate, audio_bitrate, overall_bitrate,
                           probe_json, first_seen_at, verified_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
-          audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
-          measured_attributes_id, attribute_mismatch_json, duration_ms, width,
-          height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
-          first_seen_at, verified_at
 `
 
 type CreateMediaObjectParams struct {
@@ -86,8 +74,10 @@ type CreateMediaObjectParams struct {
 	VerifiedAt            sql.NullInt64
 }
 
-func (q *Queries) CreateMediaObject(ctx context.Context, arg CreateMediaObjectParams) (MediaObject, error) {
-	row := q.db.QueryRowContext(ctx, createMediaObject,
+// Returning the row costs four times the insert itself at import scale, so this is
+// execlastid: documentation/benchmarks.md.
+func (q *Queries) CreateMediaObject(ctx context.Context, arg CreateMediaObjectParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, createMediaObject,
 		arg.SizeBytes,
 		arg.QuickHash,
 		arg.ContentHash,
@@ -109,31 +99,10 @@ func (q *Queries) CreateMediaObject(ctx context.Context, arg CreateMediaObjectPa
 		arg.FirstSeenAt,
 		arg.VerifiedAt,
 	)
-	var i MediaObject
-	err := row.Scan(
-		&i.ID,
-		&i.SizeBytes,
-		&i.QuickHash,
-		&i.ContentHash,
-		&i.Oshash,
-		&i.Phash,
-		&i.AudioFp,
-		&i.AudioFpPrefix,
-		&i.FingerprintedAt,
-		&i.ClaimedAttributesID,
-		&i.MeasuredAttributesID,
-		&i.AttributeMismatchJson,
-		&i.DurationMs,
-		&i.Width,
-		&i.Height,
-		&i.VideoBitrate,
-		&i.AudioBitrate,
-		&i.OverallBitrate,
-		&i.ProbeJson,
-		&i.FirstSeenAt,
-		&i.VerifiedAt,
-	)
-	return i, err
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
 }
 
 const deleteLibraryPath = `-- name: DeleteLibraryPath :exec
