@@ -22,15 +22,12 @@ var (
 	// ErrNotFound reports a job id that is not in the queue.
 	ErrNotFound = errors.New("jobs: not found")
 
-	// ErrLeaseLost reports an operation by a worker that no longer holds the
-	// lease, because the reaper took it back. The worker must stop rather than
-	// race whoever has it now.
+	// ErrLeaseLost reports an operation by a worker that no longer holds the lease, because the
+	// reaper took it back.
 	ErrLeaseLost = errors.New("jobs: lease no longer held")
 )
 
-// DefaultLeaseTTL is how long a claim lasts without renewal. Long enough to
-// survive a slow step, short enough that a crashed process's work is picked up
-// promptly (architecture section 7.2).
+// DefaultLeaseTTL is how long a claim lasts without renewal (section 7.2).
 const DefaultLeaseTTL = 60 * time.Second
 
 // Queue is the durable job queue over jobs.db.
@@ -59,20 +56,13 @@ func NewQueue(jobStore *store.Store, cl clock.Clock, registry *Registry,
 	}
 }
 
-// EnqueueResult reports what happened. Duplicate means an equivalent job was
-// already queued and this one was not created — ADR-6's deduplication, which is
-// what stops a restart re-downloading everything in flight.
+// EnqueueResult reports what happened (ADR-6).
 type EnqueueResult struct {
 	Job       Job
 	Duplicate bool
 }
 
-// Enqueue adds a job, or returns the active one already carrying its action key.
-//
-// The existence check and the insert share one transaction. Because there is
-// exactly one writer per database (ADR-3), that is enough to make the pair
-// atomic without depending on the driver's phrasing of a unique-constraint
-// violation.
+// Enqueue adds a job, or returns the active one already carrying its action key (ADR-3).
 func (q *Queue) Enqueue(ctx context.Context, request Request) (EnqueueResult, error) {
 	definition, known := q.registry.Lookup(request.Type)
 	if !known {
@@ -148,9 +138,6 @@ func (q *Queue) Get(ctx context.Context, id int64) (Job, error) {
 }
 
 // Claim leases up to capacity jobs for one pool.
-//
-// It is a single conditional UPDATE ... RETURNING, so two dispatchers cannot
-// hand the same job to two workers however they interleave.
 func (q *Queue) Claim(ctx context.Context, pool Pool, owner string, capacity int,
 	leaseTTL time.Duration) ([]Job, error) {
 	if capacity <= 0 {
@@ -182,10 +169,8 @@ func (q *Queue) Claim(ctx context.Context, pool Pool, owner string, capacity int
 		jobs = append(jobs, convertJob(row))
 	}
 
-	// The subquery's ORDER BY decides which jobs are claimed; it does not decide
-	// the order RETURNING yields them in, which SQLite leaves unspecified and
-	// which came back in rowid order. Callers hand these to workers in sequence,
-	// so the order is sorted here rather than left to the storage engine.
+	// The subquery's ORDER BY decides which jobs are claimed, not the order
+	// RETURNING yields them in, which SQLite leaves unspecified.
 	sort.SliceStable(jobs, func(i, j int) bool {
 		if jobs[i].Priority != jobs[j].Priority {
 			return jobs[i].Priority > jobs[j].Priority
@@ -224,9 +209,7 @@ func (q *Queue) Start(ctx context.Context, job Job, owner string) (Attempt, erro
 	return convertAttempt(attempt), nil
 }
 
-// Renew extends a lease. It fails with ErrLeaseLost if the reaper already took
-// the job back, which is the worker's signal to stop rather than race the
-// worker that has it now.
+// Renew extends a lease.
 func (q *Queue) Renew(ctx context.Context, job Job, owner string, leaseTTL time.Duration) error {
 	if leaseTTL <= 0 {
 		leaseTTL = DefaultLeaseTTL
@@ -253,25 +236,16 @@ func (q *Queue) Renew(ctx context.Context, job Job, owner string, leaseTTL time.
 	return nil
 }
 
-// Visibility narrows a job listing to what a caller may see (ADR-27).
-//
-// It is a required argument rather than an option with a permissive default: a
-// caller that forgets it would see every job, and the whole point of applying
-// the filter in the repository is that it cannot be forgotten (Invariant 36).
+// Visibility narrows a job listing to what a caller may see (ADR-27) (Invariant 36).
 type Visibility struct {
 	// Categories the caller may read. A job scoped to any other category is
 	// invisible.
 	Categories []int64
-	// System admits jobs belonging to no category -- backups, database
-	// maintenance. Whether those are visible is a question about roles, not
-	// about categories, so the caller decides.
+	// System admits jobs belonging to no category -- backups, database maintenance.
 	System bool
 }
 
-// ListPage returns one page of jobs the caller may see, newest first.
-//
-// state may be empty to list every state. Paging is by cursor rather than
-// offset, so the thousandth page costs the same as the first (Invariant 32).
+// ListPage returns one page of jobs the caller may see, newest first (Invariant 32).
 func (q *Queue) ListPage(ctx context.Context, visibility Visibility, state State,
 	after paginate.Cursor, limit int) (paginate.Page[Job], error) {
 	limit = paginate.ClampLimit(limit)

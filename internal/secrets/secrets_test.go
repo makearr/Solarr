@@ -21,9 +21,7 @@ func testKey() []byte { return bytes.Repeat([]byte{0x2a}, 32) }
 func TestSecret_CannotBePrintedByAccident(t *testing.T) {
 	secret := secrets.Secret(password)
 
-	// staticcheck suggests secret.String() for the %s case. The point is to
-	// exercise the fmt route a caller would actually take by accident, not the
-	// method it happens to reach.
+	// staticcheck suggests secret.String() for the %s case.
 	cases := map[string]string{
 		"%s":       fmt.Sprintf("%s", secret), //nolint:staticcheck // the verb is the test
 		"%v":       fmt.Sprintf("%v", secret),

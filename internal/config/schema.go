@@ -7,10 +7,8 @@ import (
 	"strings"
 )
 
-// The key set is derived from the struct tags rather than written out
-// separately, so a new setting cannot be added and then rejected as unknown.
-// This is the one place reflection is used: the alternative is a second copy of
-// the schema that silently drifts from the first.
+// The key set is derived from the struct tags rather than written out separately, so a new
+// setting cannot be added and then rejected as unknown.
 func schemaKeys() map[string][]string {
 	keys := make(map[string][]string)
 	collectKeys("", reflect.TypeOf(Config{}), keys)
@@ -46,9 +44,8 @@ func yamlName(field reflect.StructField) string {
 	return name
 }
 
-// unknownKeys reports every key the schema does not define, each with the
-// nearest valid alternative. Reporting all of them matters: a config with three
-// typos should take one restart to fix, not three (Invariant 59, 60).
+// unknownKeys reports every key the schema does not define, each with the nearest valid
+// alternative (Invariant 59).
 func unknownKeys(document map[string]any) Problems {
 	keys := schemaKeys()
 	var problems Problems

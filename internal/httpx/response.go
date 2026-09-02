@@ -8,8 +8,6 @@ import (
 )
 
 // ResponseClass decides behaviour, which is the part that matters (§16).
-// Retrying a 404 spends an hour of exponential backoff reaching the same
-// conclusion, so the class is derived from the status, not from an attempt count.
 type ResponseClass string
 
 const (
@@ -19,8 +17,6 @@ const (
 	// counts towards backoff and the circuit breaker.
 	ClassRetryable ResponseClass = "retryable"
 	// ClassTerminal is our request being wrong — a bad key, a missing resource.
-	// Retrying cannot help, and it must not open the breaker: a 404 says nothing
-	// about the provider's health.
 	ClassTerminal ResponseClass = "terminal"
 )
 

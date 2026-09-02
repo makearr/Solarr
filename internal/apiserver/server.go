@@ -23,10 +23,7 @@ import (
 // APIPrefix is where every versioned endpoint lives (section 13.1).
 const APIPrefix = "/api/v1"
 
-// Timeouts that bound a request regardless of what a client does. Without
-// ReadHeaderTimeout a single slow client can hold a connection indefinitely.
-// timeFormat is RFC 3339 in UTC everywhere in the API, so a client never has
-// to guess a timezone.
+// Timeouts that bound a request regardless of what a client does.
 const timeFormat = time.RFC3339
 
 const (
@@ -109,9 +106,8 @@ func New(config Config) (*Server, error) {
 
 	router := chi.NewRouter()
 	router.Use(server.recoverPanic, server.logRequest)
-	// chi's defaults answer in plain text; section 13.1 says every error is
-	// problem+json with a stable slug, and "every" includes the ones a client
-	// reaches by mistake.
+	// chi's defaults answer in plain text; section 13.1 says every error is problem+json with a
+	// stable slug, and "every" includes the ones a client reaches by mistake.
 	router.NotFound(server.handleNotFound)
 	router.MethodNotAllowed(server.handleMethodNotAllowed)
 	router.Route(base+APIPrefix, func(api chi.Router) {
@@ -123,15 +119,12 @@ func New(config Config) (*Server, error) {
 		api.Post("/auth/login", server.Login)
 		api.Post("/auth/logout", server.Logout)
 
-		// Unauthenticated because before the first account exists there is
-		// nobody to authenticate as. Creating that account is refused once one
-		// exists, which is what closes the window (section 21.11).
+		// Unauthenticated because before the first account exists there is nobody to authenticate as
+		// (section 21.11).
 		api.Get("/setup", server.GetSetupStatus)
 		api.Post("/setup/admin", server.CreateFirstAdministrator)
 
-		// Everything else needs an identity. Grouping rather than per-route
-		// middleware means a new endpoint is authenticated by default: adding
-		// one outside this group is a visible act.
+		// Everything else needs an identity.
 		api.Group(func(secured chi.Router) {
 			secured.Use(server.authenticate)
 			secured.Get("/me", server.GetMe)
@@ -191,10 +184,7 @@ func (s *Server) Listen() (net.Listener, error) {
 	return listener, nil
 }
 
-// Shutdown stops accepting connections and waits for in-flight requests.
-//
-// /ready goes false first, so an orchestrator stops sending work before the
-// process stops accepting it (section 15.2 step 1).
+// Shutdown stops accepting connections and waits for in-flight requests (section 15.2).
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.ready.Store(false)
 
@@ -248,14 +238,8 @@ func (r *statusRecorder) WriteHeader(status int) {
 	r.ResponseWriter.WriteHeader(status)
 }
 
-// Unwrap exposes the writer underneath, so http.ResponseController can reach
-// Flush and SetWriteDeadline through this wrapper.
-//
-// Without it, wrapping the writer to record a status code silently removes
-// every optional interface the real one implements -- embedding
-// http.ResponseWriter promotes only that interface's methods, and Flush is not
-// one of them. The symptom is that streaming stops working, with nothing in the
-// logs and no obvious connection to a middleware that only counts statuses.
+// Unwrap exposes the writer underneath, so http.ResponseController can reach Flush and
+// SetWriteDeadline through this wrapper.
 func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {

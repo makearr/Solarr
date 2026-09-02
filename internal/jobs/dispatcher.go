@@ -18,10 +18,7 @@ type PoolSize struct {
 	Capacity int
 }
 
-// ImportCapacity is fixed at one and is not configurable (ADR-3). Parallelism in
-// the import pipeline lives ahead of the writer -- probing, hashing, parsing and
-// metadata lookup run concurrently and hand finished batches to the single
-// importer.
+// ImportCapacity is fixed at one and is not configurable (ADR-3).
 const ImportCapacity = 1
 
 // workerPool runs jobs of one Pool with bounded concurrency.
@@ -77,9 +74,7 @@ type DispatcherConfig struct {
 	Logger *slog.Logger
 }
 
-// Dispatcher claims work and hands it to worker pools. It enqueues and hands
-// off; it never executes (Invariant 23), which is what keeps one slow job from
-// stalling every other pool.
+// Dispatcher claims work and hands it to worker pools (Invariant 23).
 type Dispatcher struct {
 	queue    *Queue
 	clock    clock.Clock
@@ -142,9 +137,7 @@ func (d *Dispatcher) Run(ctx context.Context) {
 	}
 }
 
-// Tick is one pass: reclaim, then fill each pool. Exported so a test can drive
-// the loop without a clock, and so the deterministic scheduler mode (ADR-17)
-// can step it.
+// Tick is one pass: reclaim, then fill each pool (ADR-17).
 func (d *Dispatcher) Tick(ctx context.Context) {
 	d.reclaim(ctx)
 

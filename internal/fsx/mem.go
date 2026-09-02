@@ -17,13 +17,7 @@ import (
 // ELOOP rather than a hang.
 const maxSymlinkDepth = 40
 
-// Mem is an in-memory filesystem for tests (ADR-17). Import, linking, rename and
-// path-safety logic run against it, so none of that needs a real disk.
-//
-// It models the failures that matter rather than only the happy path: reflink
-// and hardlink support are switchable, because "this filesystem cannot clone"
-// and "these two paths are on different filesystems" are the cases the import
-// ladder (ADR-11) exists to handle and the ones production hits constantly.
+// Mem is an in-memory filesystem for tests (ADR-17) (ADR-11).
 type Mem struct {
 	mu    sync.RWMutex
 	clock clock.Clock

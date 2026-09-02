@@ -28,9 +28,8 @@ func TestClassifyAddress(t *testing.T) {
 		{"::ffff:127.0.0.1", httpx.ReasonLoopback},
 		{"::ffff:10.0.0.1", httpx.ReasonPrivate},
 		{"::ffff:169.254.169.254", httpx.ReasonLinkLocal},
-		// netip's own predicates unmap for themselves, but Prefix.Contains does
-		// not match a 4-in-6 address against an IPv4 prefix. Without the explicit
-		// Unmap these three walk straight through the blocked-prefix table.
+		// netip's own predicates unmap for themselves, but Prefix.Contains does not match a 4-in-6
+		// address against an IPv4 prefix.
 		{"::ffff:100.64.0.1", httpx.ReasonSharedAddress},
 		{"::ffff:192.0.2.1", httpx.ReasonReserved},
 		{"::ffff:240.0.0.1", httpx.ReasonReserved},
@@ -116,9 +115,8 @@ func TestGuard_BlocksAHostnameResolvingToAPrivateAddress(t *testing.T) {
 	}
 }
 
-// The rebinding defence: the connection must go to the literal address that was
-// validated, never back to the hostname, or DNS can answer differently the
-// second time.
+// The rebinding defence: the connection must go to the literal address that was validated,
+// never back to the hostname, or DNS can answer differently the second time.
 func TestGuard_DialsTheValidatedAddressNotTheHostname(t *testing.T) {
 	resolver := fakeResolver{"indexer.invalid": {netip.MustParseAddr("93.184.216.34")}}
 	var dialled string

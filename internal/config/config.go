@@ -1,10 +1,4 @@
-// Package config loads and validates config.yml, the bootstrap file. Everything
-// tunable lives in settings.db instead (ADR-21); what is here is only what must
-// be known before a database can be opened.
-//
-// Invalid configuration prevents startup and never degrades to defaults
-// (ADR-44, Invariant 58). A typo that silently does nothing is the worst class
-// of support problem, so an unknown key is an error, not a warning.
+// Package config loads and validates config.yml, the bootstrap file (ADR-21, ADR-44).
 package config
 
 import "time"

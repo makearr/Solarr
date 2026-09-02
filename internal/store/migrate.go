@@ -13,9 +13,7 @@ import (
 )
 
 var (
-	// ErrMigrationChanged reports a migration whose SQL differs from what was
-	// applied. Editing an applied migration is always a mistake, and continuing
-	// would leave the schema silently disagreeing with the code (§4.4).
+	// ErrMigrationChanged reports a migration whose SQL differs from what was applied (§4.4).
 	ErrMigrationChanged = errors.New("store: applied migration has been modified")
 
 	// ErrPrefixCollision reports two owners claiming overlapping table prefixes.
@@ -25,9 +23,8 @@ var (
 	// prefix, which is how one plugin ends up owning another's data.
 	ErrPrefixViolation = errors.New("store: table is outside its owner's reserved prefix")
 
-	// ErrBackupDirRequired reports migrations attempted with nowhere to back up
-	// to. Migrations are forward-only, so the backup is the only rollback there
-	// is (Invariant 7, ADR-15).
+	// ErrBackupDirRequired reports migrations attempted with nowhere to back up to (Invariant 7,
+	// ADR-15).
 	ErrBackupDirRequired = errors.New("store: a backup directory is required before migrating")
 )
 
@@ -35,9 +32,7 @@ var (
 // because core tables are the unprefixed ones.
 const CoreOwner = "core"
 
-// Migration is one forward-only schema change. There is no Down: rollback is
-// restoring the pre-migration backup, which is why that backup is unconditional
-// (§4.4, ADR-15).
+// Migration is one forward-only schema change (§4.4, ADR-15).
 type Migration struct {
 	Version int
 	Up      string
@@ -62,10 +57,7 @@ CREATE TABLE IF NOT EXISTS schema_migration (
   PRIMARY KEY (owner, version)
 ) WITHOUT ROWID`
 
-// Migrate applies every owner's pending migrations, in version order per owner.
-//
-// Core runs at startup; a plugin's owner is passed when the plugin is enabled
-// (§4.4). Both go through here so the checksum and prefix rules apply equally.
+// Migrate applies every owner's pending migrations, in version order per owner (§4.4).
 func Migrate(ctx context.Context, s *Store, backupDirectory string, owners ...Owner) error {
 	if err := validateOwners(owners); err != nil {
 		return err
@@ -106,10 +98,8 @@ type pendingMigration struct {
 	migration Migration
 }
 
-// validateOwners enforces the registration-time rules: unique owner names,
-// non-overlapping prefixes, and versions that are unique and ordered within an
-// owner. A collision found here is a programming error found at startup rather
-// than a plugin quietly writing to another's tables.
+// validateOwners enforces the registration-time rules: unique owner names, non-overlapping
+// prefixes, and versions that are unique and ordered within an owner.
 func validateOwners(owners []Owner) error {
 	seenNames := make(map[string]bool, len(owners))
 	for _, owner := range owners {
@@ -252,9 +242,7 @@ func (s *Store) applyMigration(ctx context.Context, step pendingMigration) error
 	return s.verifyPrefix(ctx, step.owner, before)
 }
 
-// verifyPrefix checks the tables a migration created against the owner's
-// reserved namespace. Inspecting the schema afterwards is used rather than
-// parsing the SQL, because the SQL can create tables in ways a regex will miss.
+// verifyPrefix checks the tables a migration created against the owner's reserved namespace.
 func (s *Store) verifyPrefix(ctx context.Context, owner Owner, before map[string]bool) error {
 	if owner.TablePrefix == "" {
 		return nil

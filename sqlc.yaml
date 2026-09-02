@@ -1,6 +1,4 @@
-# Generated code is committed and never hand-edited (ADR-31). If the output
-# looks wrong, the source is wrong: change queries/ or migrations/ and rerun
-# `make sqlc`. CI fails on stale output.
+# Generated code is committed and never hand-edited (ADR-31).
 version: "2"
 sql:
   - engine: "sqlite"

@@ -15,10 +15,7 @@ var secretPaths = map[string]bool{
 	"security.encryption_key": true,
 }
 
-// secretWords catch a key that is not in the schema at all. An unknown key is
-// reported with its value, and "encryption_keyy" is both a typo and a secret —
-// exact-path matching cannot see that, so the name is inspected too. Redacting
-// a value that turns out to be harmless costs nothing; the reverse does not.
+// secretWords catch a key that is not in the schema at all.
 var secretWords = []string{"key", "secret", "password", "passwd", "token", "credential"}
 
 // isSecretPath reports whether a value at this path must be redacted.
@@ -43,16 +40,11 @@ func redact(path, value string) string {
 	return value
 }
 
-// redactedParseFailure replaces a parser's message when the value being parsed
-// is a secret. YAML parsers quote the offending source text back at you, so a
-// redacted Value is not enough on its own — the explanation carries the secret
-// instead. This is the one place that is worth losing detail over.
+// redactedParseFailure replaces a parser's message when the value being parsed is a secret.
 const redactedParseFailure = "could not be parsed (details withheld because the value is a secret)"
 
-// sanitiseErrorText redacts any line of a parser error that mentions a secret
-// setting, for errors that describe the document as a whole rather than one
-// field. The snippet a parser includes for context is exactly the line the user
-// got wrong, which for an encryption key is the line that must not be echoed.
+// sanitiseErrorText redacts any line of a parser error that mentions a secret setting, for
+// errors that describe the document as a whole rather than one field.
 func sanitiseErrorText(text string) string {
 	lines := strings.Split(text, "\n")
 	for index, line := range lines {
@@ -67,10 +59,8 @@ func sanitiseErrorText(text string) string {
 	return strings.Join(lines, "\n")
 }
 
-// Problem is one thing wrong with the configuration: where it is, what was
-// found, and what was expected. It is structured rather than a formatted string
-// so `config check` can print it, the API can return it, and a UI can translate
-// it (§6 of the coding standards).
+// Problem is one thing wrong with the configuration: where it is, what was found, and what was
+// expected (§6).
 type Problem struct {
 	// Path is dotted, as written in the file: "server.port".
 	Path string
@@ -95,9 +85,7 @@ func newProblem(path, value, expectation string) Problem {
 	return Problem{Path: path, Value: redact(path, value), Expectation: expectation}
 }
 
-// Problems is every fault found in one document. Validation collects rather than
-// returns early, because fixing configuration one error per restart is the
-// experience ADR-44 exists to prevent (Invariant 60).
+// Problems is every fault found in one document (ADR-44, Invariant 60).
 type Problems []Problem
 
 // Error renders §14.1's report: every problem at once, with a closing line
@@ -163,10 +151,8 @@ func nearestKey(unknown string, candidates []string) string {
 	return best
 }
 
-// editDistance is Damerau-Levenshtein, not plain Levenshtein, because a
-// transposition is the commonest typo and costs two edits under the latter —
-// which puts "prot" out of suggesting range of "port" unless the budget is
-// loosened enough to start guessing wrongly.
+// Damerau-Levenshtein, not plain Levenshtein: a transposition is the commonest
+// typo and costs two edits under the latter, losing the suggestion.
 func editDistance(a, b string) int {
 	if a == b {
 		return 0

@@ -20,9 +20,7 @@ const keyPrefix = "base64:"
 // keyBytes is 256 bits, which is what the AEAD used for settings.db wants.
 const keyBytes = 32
 
-// ErrAlreadyExists reports a config.yml that is already there. Creation never
-// overwrites: the file holds the encryption key, and replacing it makes every
-// stored credential undecryptable.
+// ErrAlreadyExists reports a config.yml that is already there.
 var ErrAlreadyExists = errors.New("config: file already exists")
 
 // GenerateKey makes a new encryption key (ADR-14).
@@ -51,12 +49,8 @@ func DecodeKey(key string) ([]byte, error) {
 	return raw, nil
 }
 
-// Create writes a first-run config.yml with a freshly generated encryption key
-// and returns the configuration it represents.
-//
-// It refuses to overwrite. The file carries the only copy of the key, and a
-// second one would make every credential in settings.db undecryptable with no
-// error until something tried to read one.
+// Create writes a first-run config.yml with a freshly generated encryption key and returns the
+// configuration it represents.
 func Create(fsys fsx.FS, path string, generateKey func() (string, error), lookup Lookup) (Config, error) {
 	if _, err := fsys.Stat(path); err == nil {
 		return Config{}, fmt.Errorf("%w: %s", ErrAlreadyExists, path)
@@ -99,9 +93,8 @@ func Create(fsys fsx.FS, path string, generateKey func() (string, error), lookup
 	return created, nil
 }
 
-// template is hand-written rather than marshalled from Default, because a
-// bootstrap file a human edits deserves comments explaining what each setting is
-// for. TestCreate_MatchesTheDefaults asserts the two cannot drift apart.
+// template is hand-written rather than marshalled from Default, because a bootstrap file a
+// human edits deserves comments explaining what each setting is for.
 const template = `# MediaNexus bootstrap configuration.
 #
 # Only what must be known before a database can be opened lives here. Everything

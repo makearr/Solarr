@@ -1,6 +1,4 @@
-// Package apiserver serves the HTTP API. Handlers unmarshal, call one service
-// method, and marshal: no business logic, no SQL, no plugin calls
-// (Invariant 22).
+// Package apiserver serves the HTTP API (Invariant 22).
 package apiserver
 
 import (
@@ -36,17 +34,11 @@ const (
 	TypeUnavailable  = "unavailable"
 	TypeInternal     = "internal"
 	TypeUnauthorized = "unauthorized"
-	// A wrong verb is not a malformed request. Sharing the bad-request slug
-	// would make a client branching on it unable to tell "fix your cursor" from
-	// "use POST", which are different fixes.
+	// A wrong verb is not a malformed request.
 	TypeMethodNotAllowed = "method-not-allowed"
 )
 
 // writeProblem renders an error as RFC 7807.
-//
-// Detail carries the error's own message, so the classification below decides
-// only the status and the slug. The message must therefore never contain a
-// secret, which is what internal/secrets.Secret enforces at the type level.
 func writeProblem(w http.ResponseWriter, logger *slog.Logger, status int, slug, title, detail string) {
 	w.Header().Set("Content-Type", problemContentType)
 	w.WriteHeader(status)
@@ -60,11 +52,7 @@ func writeProblem(w http.ResponseWriter, logger *slog.Logger, status int, slug, 
 	}
 }
 
-// writeError maps a domain error onto a status.
-//
-// The mapping lives here so a handler never chooses a status code: a handler
-// that picks 403 where the domain said "not visible" would leak the existence
-// of a private category (Invariant 37).
+// writeError maps a domain error onto a status (Invariant 37).
 func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	switch {
 	case errors.Is(err, authz.ErrNotVisible), errors.Is(err, settings.ErrNotFound),

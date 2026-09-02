@@ -9,9 +9,7 @@ import (
 // defaultMaxAttempts bounds what a misclassified retryable error can cost.
 const defaultMaxAttempts = 5
 
-// Registry maps a job type to how it behaves. Registration happens once at
-// startup, so an enqueue cannot assert that a type mutates while an executor
-// believes it does not.
+// Registry maps a job type to how it behaves.
 type Registry struct {
 	mu          sync.RWMutex
 	definitions map[Type]Definition
@@ -22,9 +20,7 @@ func NewRegistry() *Registry {
 	return &Registry{definitions: make(map[Type]Definition)}
 }
 
-// Register adds a job type. Registering one twice is a programming error and is
-// refused rather than overwritten: the second registration would silently
-// change the behaviour of work already queued under the first.
+// Register adds a job type.
 func (r *Registry) Register(definition Definition) error {
 	if definition.Type == "" {
 		return fmt.Errorf("jobs: definition has no type")

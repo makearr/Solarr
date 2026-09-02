@@ -7,10 +7,7 @@ import (
 	"strings"
 )
 
-// pragmaExpectation is one setting and the value every connection must report.
-// The DSN asks for these; this checks the driver actually applied them, because
-// a silently ignored PRAGMA is indistinguishable from a working one until the
-// day it matters (Invariant 4).
+// pragmaExpectation is one setting and the value every connection must report (Invariant 4).
 type pragmaExpectation struct {
 	name string
 	want string
@@ -28,10 +25,7 @@ func (s *Store) expectations() []pragmaExpectation {
 	}
 }
 
-// verifyPragmas checks the write connection and every connection in the read
-// pool. Checking one read connection would prove nothing: the failure this
-// guards against is precisely that some connections have the settings and
-// others do not.
+// verifyPragmas checks the write connection and every connection in the read pool.
 func (s *Store) verifyPragmas(ctx context.Context) error {
 	if err := verifyOn(ctx, s.write, s.expectations(), s.config.Name, "write"); err != nil {
 		return err

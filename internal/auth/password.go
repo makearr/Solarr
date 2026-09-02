@@ -1,6 +1,5 @@
-// Package auth turns a request into an identity: local passwords, API keys and
-// trusted proxy headers (ADR-14). It decides *who* is asking; internal/authz
-// decides what they may see.
+// Package auth turns a request into an identity: local passwords, API keys and trusted proxy
+// headers (ADR-14).
 package auth
 
 import (
@@ -14,10 +13,7 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// argon2id parameters. OWASP's minimum recommendation at the time of writing:
-// enough work to make offline cracking expensive, little enough that a login on
-// a NAS is not noticeable. They are encoded into every hash, so raising them
-// later re-hashes on next login rather than invalidating stored passwords.
+// argon2id parameters.
 const (
 	hashMemoryKiB  = 19456 // 19 MiB
 	hashIterations = 2
@@ -27,9 +23,7 @@ const (
 )
 
 var (
-	// ErrPasswordMismatch reports a wrong password. It is deliberately the same
-	// error whatever was wrong, so nothing distinguishes a bad password from an
-	// unknown user.
+	// ErrPasswordMismatch reports a wrong password.
 	ErrPasswordMismatch = errors.New("auth: password does not match")
 
 	// ErrMalformedHash reports a stored hash this binary cannot read.
@@ -51,10 +45,6 @@ func HashPassword(password string) (string, error) {
 }
 
 // VerifyPassword checks a password against an encoded hash.
-//
-// The comparison is constant-time. The parameters come from the hash rather
-// than from the constants above, so a password stored under older settings
-// still verifies.
 func VerifyPassword(password, encoded string) error {
 	parsed, err := parseHash(encoded)
 	if err != nil {

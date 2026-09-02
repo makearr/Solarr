@@ -12,14 +12,8 @@ import (
 // EnvPrefix namespaces every override.
 const EnvPrefix = "MEDIANEXUS_"
 
-// pathAliases are the short environment variable names §14 documents for the
-// directory settings, because those are the ones a Docker deployment actually
-// sets. Everything else uses the generated MEDIANEXUS_<SECTION>_<KEY> form,
-// which cannot collide as the schema grows.
-//
-// Setting both forms for one setting is an error rather than a precedence rule:
-// a container with two variables disagreeing about where the database lives
-// should say so, not pick one.
+// pathAliases are the short environment variable names §14 documents for the directory
+// settings, because those are the ones a Docker deployment actually sets.
 var pathAliases = map[string]string{
 	"MEDIANEXUS_CONFIG_DIR": "paths.config_dir",
 	"MEDIANEXUS_DATA_DIR":   "paths.data_dir",
@@ -37,11 +31,7 @@ func EnvName(path string) string {
 // without touching the process environment.
 type Lookup func(name string) (string, bool)
 
-// applyEnv overlays environment variables onto an already-decoded config.
-//
-// Values are parsed as YAML scalars, the same way the file's were, so an
-// override is validated identically to a file value and MEDIANEXUS_SERVER_PORT=abc
-// fails exactly as `port: abc` would (ADR-44).
+// applyEnv overlays environment variables onto an already-decoded config (ADR-44).
 func applyEnv(config *Config, lookup Lookup) Problems {
 	var problems Problems
 
@@ -94,9 +84,8 @@ type schemaLeaf struct {
 	index []int
 }
 
-// schemaLeaves enumerates every scalar setting, so the environment mapping is
-// generated from the same struct tags as the key set. A setting cannot be added
-// and then be unsettable from the environment.
+// schemaLeaves enumerates every scalar setting, so the environment mapping is generated from
+// the same struct tags as the key set.
 func schemaLeaves() []schemaLeaf {
 	var leaves []schemaLeaf
 	collectLeaves("", nil, reflect.TypeOf(Config{}), &leaves)

@@ -12,12 +12,7 @@ func WithAccess(ctx context.Context, access Access) context.Context {
 	return context.WithValue(ctx, contextKey{}, access)
 }
 
-// FromContext returns the Access a request is running under.
-//
-// A missing Access is an error rather than an empty one that sees nothing.
-// Defaulting would turn a route that forgot its middleware into a route that
-// silently returns no results, which looks like an empty library rather than a
-// bug (Invariant 36).
+// FromContext returns the Access a request is running under (Invariant 36).
 func FromContext(ctx context.Context) (Access, error) {
 	access, ok := ctx.Value(contextKey{}).(Access)
 	if !ok {

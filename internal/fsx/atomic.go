@@ -12,12 +12,8 @@ import (
 // something obviously ours rather than something that looks like a media file.
 const tempPrefix = ".mnx-tmp-"
 
-// WriteAtomic writes through a temporary file in the destination's own directory
-// and renames it into place, so an interrupted write leaves the library
-// untouched. That is what makes the hard shutdown deadline in §15.2 safe.
-//
-// The temporary lives beside the destination, not in a temp directory, because a
-// rename is only atomic within one filesystem.
+// WriteAtomic writes through a temporary file in the destination's own directory and renames it
+// into place, so an interrupted write leaves the library untouched (§15.2).
 func WriteAtomic(fsys FS, destination string, write func(io.Writer) error) error {
 	return writeAtomic(fsys, destination, fsys.Create, write)
 }
@@ -44,9 +40,8 @@ func writeAtomic(
 	if err != nil {
 		return fmt.Errorf("create temporary for %q: %w", destination, err)
 	}
-	// The cleanup errors are deliberately dropped: the caller needs the reason
-	// the write failed, and a failed removal of a temporary cannot corrupt the
-	// destination, which was never touched.
+	// The cleanup errors are deliberately dropped: the caller needs the reason the write failed,
+	// and a failed removal of a temporary cannot corrupt the destination, which was never touched.
 	if err := write(file); err != nil {
 		_ = file.Close()
 		_ = fsys.Remove(temporary)

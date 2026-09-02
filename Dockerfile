@@ -70,9 +70,7 @@ COPY --from=rootfs --chown=1000:1000 /skeleton/data /data
 VOLUME ["/config"]
 EXPOSE 8080
 
-# Root only until internal/privilege drops to PUID:PGID, which it does before
-# anything else. No ENV defaults for PUID/PGID/TZ, so a set variable means the
-# operator set it. See documentation/container-runtime.md.
+# Root only until internal/privilege drops to PUID:PGID, which it does before anything else.
 
 # A subcommand of the same binary, so the image needs no curl. start-period
 # covers migrations on a large database.

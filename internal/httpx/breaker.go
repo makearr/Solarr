@@ -9,9 +9,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/clock"
 )
 
-// ErrCircuitOpen reports a provider being skipped entirely. One failing provider
-// must never stop the others (Invariant 27), so this is how a search fans out
-// past a dead indexer rather than waiting on it.
+// ErrCircuitOpen reports a provider being skipped entirely (Invariant 27).
 var ErrCircuitOpen = errors.New("httpx: circuit open")
 
 // BreakerState is where a provider sits in the open/probe/closed cycle.
@@ -74,10 +72,7 @@ type BreakerSnapshot struct {
 	RetryAt             time.Time
 }
 
-// Breaker skips providers that are consistently failing (ADR-13 step 3,
-// Invariant 26). It is separate from the rate limiter because backing off and
-// giving up are different decisions: a slow provider should be used less, a
-// dead one should not be used at all.
+// Breaker skips providers that are consistently failing (ADR-13 step 3, Invariant 26).
 type Breaker struct {
 	clock  clock.Clock
 	config BreakerConfig
@@ -91,9 +86,7 @@ type breakerEntry struct {
 	consecutiveFailures int
 	openedAt            time.Time
 	cooldown            time.Duration
-	// probing marks the single in-flight half-open request. Without it every
-	// waiting caller would probe at once and a recovering provider would be hit
-	// by the whole backlog.
+	// probing marks the single in-flight half-open request.
 	probing bool
 }
 
@@ -106,9 +99,7 @@ func NewBreaker(c clock.Clock, config BreakerConfig) *Breaker {
 	}
 }
 
-// Allow reports whether a request to provider may proceed. A caller that is
-// allowed through must report the result with Observe, or a half-open probe
-// never resolves.
+// Allow reports whether a request to provider may proceed.
 func (b *Breaker) Allow(provider string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()

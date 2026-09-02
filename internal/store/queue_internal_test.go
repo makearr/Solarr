@@ -9,9 +9,8 @@ import (
 
 var testEpoch = time.Date(2026, time.March, 1, 12, 0, 0, 0, time.UTC)
 
-// The queue orders by virtualStart, which does not change as time passes, so a
-// heap stays valid. That is only sound if it agrees with the aged effective
-// priority §4.2 actually specifies. This checks the two orderings agree.
+// The queue orders by virtualStart, which does not change as time passes, so a heap stays valid
+// (§4.2).
 func TestWriteOp_VirtualStartOrdersTheSameAsAgedPriority(t *testing.T) {
 	source := rand.New(rand.NewPCG(1, 2))
 	priorities := []Priority{PrioBulk, PrioNormal, PrioInteractive}

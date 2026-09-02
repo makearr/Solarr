@@ -1,10 +1,5 @@
-// Package settings holds configuration policy: the contents of settings.db,
-// loaded into memory at startup and kept there (ADR-25).
-//
-// Resolving a category or a root folder becomes a map lookup rather than a
-// join, on every one of 500k library rows (ADR-28). library.db references these
-// by integer id with no foreign key, so integrity is the application's job:
-// deleting something that is in use is refused, never cascaded (Invariant 41).
+// Package settings holds configuration policy: the contents of settings.db, loaded into memory
+// at startup and kept there (ADR-25) (ADR-28, Invariant 41).
 package settings
 
 import "time"
@@ -107,9 +102,7 @@ type CategoryRoot struct {
 	AcceptsNew bool
 }
 
-// APIKey is a non-interactive credential. Only its hash is stored, so a
-// settings.db backup cannot be replayed as credentials even by whoever holds
-// the encryption key.
+// APIKey is a non-interactive credential.
 type APIKey struct {
 	ID         int64
 	UserID     int64

@@ -11,12 +11,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/settings"
 )
 
-// ListJobs returns a page of jobs the caller may see.
-//
-// The handler does not filter: it converts an Access into a Visibility and
-// hands that to the repository, which narrows the query (Invariant 36). A
-// handler that filtered afterwards would return short pages and break the
-// cursor, quite apart from being the kind of check that gets forgotten.
+// ListJobs returns a page of jobs the caller may see (Invariant 36).
 func (s *Server) ListJobs(w http.ResponseWriter, r *http.Request, params gen.ListJobsParams) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
@@ -35,9 +30,8 @@ func (s *Server) ListJobs(w http.ResponseWriter, r *http.Request, params gen.Lis
 		return
 	}
 
-	// Availability is checked after the request is validated: a malformed
-	// cursor is a bad request whether or not the queue happens to be running,
-	// and answering 503 to it would send a client looking in the wrong place.
+	// Validated before availability: a malformed cursor is a bad request whether
+	// or not the queue is running, and 503 would send the client looking elsewhere.
 	if s.jobs == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
 			"Unavailable", "the job queue is not running")
@@ -55,10 +49,6 @@ func (s *Server) ListJobs(w http.ResponseWriter, r *http.Request, params gen.Lis
 }
 
 // visibilityFor turns an identity into what it may see.
-//
-// System jobs -- a backup, a maintenance pass -- belong to no category, so no
-// category grant can cover them. Who sees them is a role question, and only an
-// administrator or operator does.
 func visibilityFor(access authz.Access) jobs.Visibility {
 	role := access.Role()
 	return jobs.Visibility{
@@ -80,9 +70,7 @@ func parseState(raw string) (jobs.State, error) {
 	}
 }
 
-// jobView is the API's shape. The payload is deliberately absent: it can carry
-// anything a job type puts there, including paths and provider identifiers, and
-// a listing is not the place to hand that out.
+// jobView is the API's shape.
 type jobView struct {
 	ID            int64  `json:"id"`
 	Type          string `json:"type"`

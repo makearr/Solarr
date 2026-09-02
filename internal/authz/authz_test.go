@@ -23,9 +23,8 @@ type fixture struct {
 	housemate settings.User
 }
 
-// newFixture builds a realistic arrangement: two categories, an administrator,
-// and a housemate who may read one of them. Adult content is ADR-27's obvious
-// case, but a child's account or a private music collection is the same shape.
+// newFixture builds a realistic arrangement: two categories, an administrator, and a housemate
+// who may read one of them (ADR-27).
 func newFixture(t *testing.T) fixture {
 	t.Helper()
 	directory := t.TempDir()
@@ -149,9 +148,8 @@ func TestCategories_ReturnsOnlyWhatTheCallerMaySee(t *testing.T) {
 	}
 }
 
-// ADR-27: an administrator has manage on all categories, granted explicitly and
-// visibly, so an audit shows who can see what — not by a role check hidden in
-// the authorisation path.
+// ADR-27: an administrator has manage on all categories, granted explicitly and visibly, so an
+// audit shows who can see what — not by a role check hidden in the authorisation path.
 func TestAdministrator_HasExplicitGrantsRatherThanABypass(t *testing.T) {
 	fixture := newFixture(t)
 	snapshot := fixture.cache.Snapshot()
@@ -212,9 +210,7 @@ func TestSystem_SeesEverything(t *testing.T) {
 	}
 }
 
-// A route that skipped its middleware must fail loudly. Defaulting to an empty
-// Access would make it return no results, which looks like an empty library
-// rather than a bug (Invariant 36).
+// A route that skipped its middleware must fail loudly (Invariant 36).
 func TestFromContext_MissingAccessIsAnError(t *testing.T) {
 	if _, err := authz.FromContext(context.Background()); !errors.Is(err, authz.ErrNoAccess) {
 		t.Errorf("FromContext on a bare context = %v, want ErrNoAccess", err)

@@ -12,9 +12,8 @@ import (
 	"github.com/makearr/MediaNexus/internal/fsx"
 )
 
-// The import ladder is reflink → hardlink → copy (ADR-11), so the fake has to be
-// able to say no to each rung. Production says no constantly: ZFS below 2.2 has
-// no block cloning, and two datasets in one pool cannot hardlink between them.
+// The import ladder is reflink → hardlink → copy (ADR-11), so the fake has to be able to say no
+// to each rung.
 
 func TestMem_ReflinkClonesIndependently(t *testing.T) {
 	fsys, root := newMemUnderTest(t)

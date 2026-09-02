@@ -1,9 +1,4 @@
-// Package authz decides what a request may see. Authorisation is per category,
-// not per instance (ADR-27).
-//
-// The filter is applied in the repository layer, never in a handler: a handler
-// can forget, and a repository cannot (Invariant 36). Handlers therefore do not
-// build queries — they pass an Access down and the repository narrows on it.
+// Package authz decides what a request may see (ADR-27, Invariant 36).
 package authz
 
 import (
@@ -14,19 +9,13 @@ import (
 )
 
 var (
-	// ErrNotVisible reports a category the caller cannot see at all. It maps to
-	// 404, never 403: the existence of a private library is itself information
-	// (Invariant 37).
+	// ErrNotVisible reports a category the caller cannot see at all (Invariant 37).
 	ErrNotVisible = errors.New("authz: not found")
 
-	// ErrInsufficientPermission reports a category the caller can see but may
-	// not act on. It maps to 403, which is correct here — the caller already
-	// knows the category exists, so refusing plainly tells them nothing new.
+	// ErrInsufficientPermission reports a category the caller can see but may not act on.
 	ErrInsufficientPermission = errors.New("authz: insufficient permission")
 
-	// ErrNoAccess reports a context carrying no Access at all. It is a
-	// programming error — a route that skipped the middleware — and never
-	// something a user can cause.
+	// ErrNoAccess reports a context carrying no Access at all.
 	ErrNoAccess = errors.New("authz: no access context")
 )
 
@@ -37,10 +26,8 @@ type Access struct {
 	role     settings.Role
 	snapshot *settings.Snapshot
 
-	// system marks internal work — the planner, the scanner, a scheduled job —
-	// which is not a user request and has no user to filter by. It is the only
-	// bypass, and it exists so that "filter by user" never has to mean "filter
-	// by nobody, which means everybody" by accident.
+	// system marks internal work — the planner, the scanner, a scheduled job — which is not a user
+	// request and has no user to filter by.
 	system bool
 }
 
@@ -84,10 +71,8 @@ func (a Access) CanSee(categoryID int64) bool {
 	return a.Permission(categoryID).AtLeast(settings.PermissionRead)
 }
 
-// Require checks a category against a needed permission, distinguishing "you
-// cannot see this" from "you can see this but may not do that". Collapsing the
-// two would either leak the existence of private categories or make an
-// ordinary permission error look like a missing record.
+// Require checks a category against a needed permission, distinguishing "you cannot see this"
+// from "you can see this but may not do that".
 func (a Access) Require(categoryID int64, required settings.Permission) error {
 	held := a.Permission(categoryID)
 	if !held.AtLeast(settings.PermissionRead) {
@@ -116,12 +101,7 @@ func (a Access) VisibleCategoryIDs(required settings.Permission) []int64 {
 	return a.snapshot.VisibleCategoryIDs(a.userID, required)
 }
 
-// Categories returns the categories the caller may act on, in snapshot order.
-//
-// This is the category repository: handlers call it instead of reaching for the
-// settings snapshot, so the filter is applied once here rather than at every
-// call site (Invariant 36). Everything else that lists categories for a user
-// goes through this.
+// Categories returns the categories the caller may act on, in snapshot order (Invariant 36).
 func (a Access) Categories(required settings.Permission) []settings.Category {
 	if a.snapshot == nil {
 		return nil
@@ -136,9 +116,7 @@ func (a Access) Categories(required settings.Permission) []settings.Category {
 	return visible
 }
 
-// Category fetches one category, or reports why not. A category the caller
-// cannot see is ErrNotVisible whether or not it exists, so probing ids reveals
-// nothing (Invariant 37).
+// Category fetches one category, or reports why not (Invariant 37).
 func (a Access) Category(id int64, required settings.Permission) (settings.Category, error) {
 	if err := a.Require(id, required); err != nil {
 		return settings.Category{}, err

@@ -13,27 +13,20 @@ import (
 	"github.com/makearr/MediaNexus/internal/store/gen/settingsdb"
 )
 
-// ErrInUse reports a configuration entity that something still references.
-// Invariant 41: the deletion is refused, never cascaded, and the error says
-// what is holding it.
+// ErrInUse reports a configuration entity that something still references (Invariant 41).
 var ErrInUse = errors.New("settings: entity is still referenced")
 
 // ErrNotFound reports an id that is not in settings.db.
 var ErrNotFound = errors.New("settings: not found")
 
-// Cache is the in-memory authority for reads. Writers go to the database and
-// then rebuild, so the snapshot is derived from the database rather than
-// maintained alongside it — the two cannot disagree.
+// Cache is the in-memory authority for reads.
 type Cache struct {
 	store   *store.Store
 	queries *settingsdb.Queries
 	// current is swapped atomically. A reader takes the pointer once and holds
 	// it for the whole request, so no lock is held while work is done.
 	current atomic.Pointer[Snapshot]
-	// rebuilding serialises build-and-publish. Without it two concurrent
-	// reloads race: the one that read the older state can finish last and
-	// overwrite the newer snapshot, so a committed write silently disappears
-	// from the cache until something else reloads. Readers never take this.
+	// rebuilding serialises build-and-publish.
 	rebuilding sync.Mutex
 }
 
@@ -53,13 +46,6 @@ func NewCache(ctx context.Context, settingsStore *store.Store) (*Cache, error) {
 func (c *Cache) Snapshot() *Snapshot { return c.current.Load() }
 
 // Reload rebuilds the snapshot from the database and publishes it atomically.
-// A reader holding the previous snapshot keeps a consistent view until it is
-// finished with it.
-//
-// Reading and publishing happen under one lock, so the snapshot that ends up
-// published is always the one built last. Two concurrent reloads would
-// otherwise be free to finish out of order, and the slower build -- which saw
-// less -- would win.
 func (c *Cache) Reload(ctx context.Context) error {
 	c.rebuilding.Lock()
 	defer c.rebuilding.Unlock()

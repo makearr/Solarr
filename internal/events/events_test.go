@@ -72,9 +72,7 @@ func TestBus_FiltersByTopic(t *testing.T) {
 	}
 }
 
-// Invariant 25: buffers are bounded; overflow drops and counts, never blocks or
-// grows. A bus that blocked would make a job's correctness depend on a browser
-// tab's speed.
+// Invariant 25: buffers are bounded; overflow drops and counts, never blocks or grows.
 func TestBus_PublishNeverBlocksOnASlowSubscriber(t *testing.T) {
 	bus, _ := newBus(t)
 	subscription := bus.Subscribe(nil, 2)
@@ -212,9 +210,8 @@ func TestTopic_Valid(t *testing.T) {
 	}
 }
 
-// Subscribing without naming a topic means every topic, and replay has to
-// agree: when it did not, a reconnecting client with no filter was replayed
-// nothing at all.
+// Subscribing without naming a topic means every topic, and replay has to agree: when it did
+// not, a reconnecting client with no filter was replayed nothing at all.
 func TestBus_SinceWithNoTopicsMeansEveryTopic(t *testing.T) {
 	bus, _ := newBus(t)
 	bus.Publish(events.Event{Topic: events.TopicJob, Entity: "job:1"})

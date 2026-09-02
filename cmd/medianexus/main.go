@@ -15,9 +15,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/fsx"
 )
 
-// Injected with -ldflags -X at build time; see documentation/versioning.md.
-// An unknown commit is reported as unknown rather than as a plausible-looking
-// wrong value, because the About page's source link depends on it (AGPL §13).
+// Injected with -ldflags -X at build time; see documentation/versioning.md (§13).
 var (
 	version   = "0.0.0-dev"
 	commit    = "unknown"
@@ -27,10 +25,7 @@ var (
 // defaultConfigPath matches the single /config volume the image expects (§20.2).
 const defaultConfigPath = "/config/config.yml"
 
-// AGPL section 13: the running program must offer the Corresponding Source for
-// *this* build. sourceURL is a build-time variable defaulting to upstream; a
-// fork overrides it with -ldflags, and it must never silently point at upstream
-// when the build is modified (documentation/licence-compliance.md).
+// AGPL section 13: the running program must offer the Corresponding Source for *this* build.
 var (
 	sourceURL = "https://github.com/makearr/MediaNexus"
 	license   = "AGPL-3.0-or-later"
@@ -84,9 +79,8 @@ func runConfig(args []string, out, errOut io.Writer) error {
 	return checkConfig(*path, out)
 }
 
-// checkConfig runs the same validation startup runs and exits, so configuration
-// can be verified without starting the service — a container pre-flight, or a
-// CI step (§14.1).
+// checkConfig runs the same validation startup runs and exits, so configuration can be verified
+// without starting the service — a container pre-flight, or a CI step (§14.1).
 func checkConfig(path string, out io.Writer) error {
 	fsys := fsx.NewOS()
 

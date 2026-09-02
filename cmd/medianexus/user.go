@@ -21,9 +21,7 @@ import (
 	"github.com/makearr/MediaNexus/migrations"
 )
 
-// runUser handles `medianexus user ...`. It exists because a fresh install has
-// no accounts and therefore no way to log in and make one -- and because
-// section 20.1 wants a CLI for recovery when the interface is unreachable.
+// runUser handles `medianexus user ...` (section 20.1).
 func runUser(args []string, out, errOut io.Writer) error {
 	if len(args) == 0 {
 		return errors.New("user: expected a subcommand; known subcommands: add, list")
@@ -135,9 +133,7 @@ func addUser(configPath, username, role string, passwordStdin bool, out io.Write
 	return err
 }
 
-// resolvePassword either reads one or makes one. A generated password beats a
-// typed one here: reading a typed password without echo needs terminal
-// handling, and a password typed to make that easy is usually a weak one.
+// resolvePassword either reads one or makes one.
 func resolvePassword(fromStdin bool) (string, bool, error) {
 	if !fromStdin {
 		password, err := generatePassword()

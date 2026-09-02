@@ -1,9 +1,4 @@
 // Package health answers the liveness and readiness probes (section 20.2).
-//
-// The two are deliberately different questions. Liveness asks whether the
-// process is working and must never depend on an external service, or a dead
-// indexer restarts the container. Readiness asks whether it can serve, and is
-// false during startup and shutdown.
 package health
 
 import (
@@ -13,13 +8,8 @@ import (
 	"github.com/makearr/MediaNexus/internal/store"
 )
 
-// wedgedQueueDepth is the write-queue depth taken as evidence that the writer
-// has stopped making progress.
-//
-// Depth is used rather than a probe write: a health check that writes adds WAL
-// churn every thirty seconds forever, and a stuck writer shows up as a growing
-// queue anyway. Transactions are bounded (Invariant 2), so a healthy queue
-// drains faster than it can reach this.
+// wedgedQueueDepth is the write-queue depth taken as evidence that the writer has stopped
+// making progress (Invariant 2).
 const wedgedQueueDepth = 256
 
 // Checker reports on the databases. It holds stores rather than a database

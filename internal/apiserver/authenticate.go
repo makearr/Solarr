@@ -39,18 +39,11 @@ type AuthConfig struct {
 	Clock    clock.Clock
 	// ProxyHeader carries the username when Mode is proxy.
 	ProxyHeader string
-	// ProxyNetworks are the only sources whose ProxyHeader is believed. Trusting
-	// the header without knowing who may set it lets anyone claim to be anyone,
-	// which is why config refuses proxy mode without them.
+	// ProxyNetworks are the only sources whose ProxyHeader is believed.
 	ProxyNetworks []netip.Prefix
 }
 
 // authenticate resolves a request's identity and attaches an authz.Access.
-//
-// Order is session, then API key, then proxy header. A browser sends a cookie
-// on every request, so checking it first avoids a database lookup on the common
-// path; the proxy header comes last because it is the weakest evidence and is
-// only believed from a trusted network at all.
 func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, err := s.identify(r)
@@ -143,10 +136,6 @@ func (s *Server) identifyByProxy(r *http.Request) (settings.User, error) {
 }
 
 // fromTrustedNetwork reports whether the immediate peer is a configured proxy.
-//
-// RemoteAddr is used rather than X-Forwarded-For: the peer address cannot be
-// spoofed by the client, and a forwarded-for header is exactly as trustworthy
-// as the header being checked.
 func (s *Server) fromTrustedNetwork(remoteAddr string) bool {
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {

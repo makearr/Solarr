@@ -1,6 +1,4 @@
-# Mirrors `make verify`. The Makefile runs these toolchains in Docker because
-# the development machine has no Go installed; the runner has one, so CI calls
-# them directly rather than nesting containers.
+# Mirrors `make verify`, calling the toolchains directly rather than in Docker.
 name: CI
 
 on:
@@ -28,13 +26,8 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      # Before the Go build, because go:embed folds the result into the binary.
-      # Building it here also means a TypeScript error fails CI rather than
-      # surfacing when someone next runs `make web`.
-      # `npm run build` lints and tests first: the rules of hooks are invisible to
-      # tsc, so a hook called after an early return compiles cleanly and fails at
-      # runtime, and the list core's selection and pagination logic is pure
-      # enough to test but too central to leave untested.
+      # Before the Go build: go:embed folds the result into the binary.
+      # `npm run build` lints and tests first (documentation/web-interface.md).
       - name: Build the web interface
         working-directory: web
         run: |

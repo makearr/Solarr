@@ -2,12 +2,7 @@ package settings
 
 import "slices"
 
-// Snapshot is an immutable view of settings.db. Readers take a pointer to one
-// and hold it for the length of a request, so no lock is held while work is
-// done and a reload cannot change the answers half way through (ADR-25).
-//
-// Nothing here is modified after construction. The slices are exposed for
-// iteration; callers must not write to them.
+// Snapshot is an immutable view of settings.db (ADR-25).
 type Snapshot struct {
 	users        []User
 	categories   []Category
@@ -69,9 +64,8 @@ func (s *Snapshot) Permission(userID, categoryID int64) Permission {
 	return granted
 }
 
-// VisibleCategoryIDs returns the categories a user may see at the given level,
-// in snapshot order. The repository layer filters on this; a handler never does
-// (Invariant 36).
+// VisibleCategoryIDs returns the categories a user may see at the given level, in snapshot
+// order (Invariant 36).
 func (s *Snapshot) VisibleCategoryIDs(userID int64, required Permission) []int64 {
 	visible := make([]int64, 0, len(s.categories))
 	for _, category := range s.categories {

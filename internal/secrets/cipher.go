@@ -8,16 +8,11 @@ import (
 	"fmt"
 )
 
-// ErrCorrupt reports ciphertext that failed authentication — a truncated value,
-// a bit flip, or a value encrypted under a different key. The three are
-// indistinguishable by design, so the message does not guess between them.
+// ErrCorrupt reports ciphertext that failed authentication — a truncated value, a bit flip, or
+// a value encrypted under a different key.
 var ErrCorrupt = errors.New("secrets: value could not be decrypted")
 
-// Cipher seals and opens credentials with AES-256-GCM.
-//
-// AES-GCM rather than an external AEAD because it is in the standard library
-// and needs no CGO, which ADR-30 requires of the shipped binary. It is
-// authenticated, so a tampered value fails rather than decrypting to rubbish.
+// Cipher seals and opens credentials with AES-256-GCM (ADR-30).
 type Cipher struct {
 	aead cipher.AEAD
 }
@@ -36,9 +31,7 @@ func New(key []byte) (*Cipher, error) {
 	return &Cipher{aead: aead}, nil
 }
 
-// Seal encrypts a secret for storage. A fresh random nonce is prepended to each
-// value, so encrypting the same password twice produces different ciphertext —
-// otherwise a settings.db would reveal which accounts share a password.
+// Seal encrypts a secret for storage.
 func (c *Cipher) Seal(secret Secret) ([]byte, error) {
 	nonce := make([]byte, c.aead.NonceSize())
 	if _, err := rand.Read(nonce); err != nil {
@@ -57,9 +50,8 @@ func (c *Cipher) Open(sealed []byte) (Secret, error) {
 	nonce, ciphertext := sealed[:nonceSize], sealed[nonceSize:]
 	plaintext, err := c.aead.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		// The underlying error is not wrapped: it says nothing useful and
-		// distinguishing "wrong key" from "tampered" is not something a
-		// message should guess at.
+		// The underlying error is not wrapped: it says nothing useful and distinguishing "wrong key"
+		// from "tampered" is not something a message should guess at.
 		return "", ErrCorrupt
 	}
 	return Secret(plaintext), nil

@@ -20,10 +20,6 @@ type Authenticated struct {
 }
 
 // UserByAPIKeyHash resolves an API key to its owner.
-//
-// This is a database read rather than a snapshot lookup: keys are credentials
-// and are deliberately not held in the in-memory configuration every reader can
-// see, for the same reason password hashes are not.
 func (c *Cache) UserByAPIKeyHash(ctx context.Context, keyHash string) (Authenticated, error) {
 	row, err := c.queries.GetUserByAPIKeyHash(ctx, keyHash)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -72,9 +68,6 @@ func (c *Cache) CreateAPIKey(ctx context.Context, cl clock.Clock, userID int64,
 }
 
 // TouchAPIKey records that a key was used.
-//
-// It runs at bulk priority: it is bookkeeping on the hot path of every
-// authenticated request, and must never make a user wait behind it.
 func (c *Cache) TouchAPIKey(ctx context.Context, cl clock.Clock, keyID int64) error {
 	err := c.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return c.queries.WithTx(tx).TouchAPIKey(ctx, settingsdb.TouchAPIKeyParams{

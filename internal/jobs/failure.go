@@ -7,9 +7,7 @@ import (
 	"time"
 )
 
-// Class decides what happens after a failure. Classification matters more than
-// the attempt count: retrying a 404 spends an hour of exponential backoff to
-// reach the same conclusion (architecture section 16).
+// Class decides what happens after a failure (section 16).
 type Class string
 
 // The three classes of architecture section 16.
@@ -17,9 +15,8 @@ const (
 	// ClassRetryable is a condition that may pass: a timeout, a 429, a 503, a
 	// connection reset, a busy database.
 	ClassRetryable Class = "retryable"
-	// ClassTerminal is a condition that will not: a parse failure, a 404,
-	// permission denied, invalid configuration. It fails immediately, without
-	// consuming the retry budget and without backoff.
+	// ClassTerminal is a condition that will not: a parse failure, a 404, permission denied,
+	// invalid configuration.
 	ClassTerminal Class = "terminal"
 	// ClassFatal is a programming error or a violated invariant. It fails and
 	// is reported loudly; retrying could only repeat it.
@@ -60,17 +57,11 @@ func Fatalf(op, subject string, cause error) *Error {
 	return &Error{Class: ClassFatal, Op: op, Subject: subject, Cause: cause}
 }
 
-// retryable is implemented by errors that already know their own nature, such
-// as httpx.StatusError. It is matched structurally rather than by import, so
-// the queue does not depend on every package that can fail.
+// retryable is implemented by errors that already know their own nature, such as
+// httpx.StatusError.
 type retryable interface{ Retryable() bool }
 
 // Classify decides how to treat a failure.
-//
-// An unrecognised error is retryable. Transient I/O is the commonest unlabelled
-// failure and giving up on it immediately is the worse mistake; the attempt cap
-// bounds what a misclassification costs. Anything that genuinely must not be
-// retried says so by returning an Error.
 func Classify(err error) Class {
 	if err == nil {
 		return ClassRetryable

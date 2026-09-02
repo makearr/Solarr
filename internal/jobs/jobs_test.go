@@ -227,9 +227,8 @@ func TestClaim_TakesTheHighestPriorityWhenCapacityIsScarce(t *testing.T) {
 	}
 }
 
-// RETURNING yields rows in update order, which SQLite leaves unspecified and
-// which came back as rowid order. Workers take these in sequence, so the order
-// is not left to the storage engine.
+// RETURNING yields rows in update order, which SQLite leaves unspecified and which came back as
+// rowid order.
 func TestClaim_ReturnsHighestPriorityFirst(t *testing.T) {
 	queue, fake := newQueue(t)
 
@@ -723,9 +722,8 @@ func TestListPage_FiltersByState(t *testing.T) {
 	mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
 	mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
 
-	// Whichever job the queue hands out is the one that finishes; asserting on
-	// a particular id would be asserting the claim order, which is a different
-	// test.
+	// Whichever job the queue hands out is the one that finishes; asserting on a particular id
+	// would be asserting the claim order, which is a different test.
 	claimed := claimOne(t, queue, jobs.PoolMaintenance, "worker-1")
 	attempt := startJob(t, queue, claimed, "worker-1")
 	if err := queue.Complete(t.Context(), claimed, "worker-1", attempt); err != nil {

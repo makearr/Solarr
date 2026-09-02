@@ -12,9 +12,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/fsx"
 )
 
-// Both implementations run the same suite. A fake that behaves differently from
-// the real filesystem makes every test above it a lie, so the two are held to
-// one specification rather than tested separately (ADR-17).
+// Both implementations run the same suite (ADR-17).
 func TestConformance(t *testing.T) {
 	implementations := []struct {
 		name string

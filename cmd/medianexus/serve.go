@@ -86,8 +86,6 @@ func serve(ctx context.Context, configPath string, out io.Writer) error {
 }
 
 // loadOrCreateConfig writes a default config.yml on a first run, then loads it.
-// The generated file carries a fresh encryption key, so it is created once and
-// never overwritten.
 func loadOrCreateConfig(fsys fsx.FS, path string, out io.Writer) (config.Config, error) {
 	loaded, err := config.Load(fsys, path)
 	if !errors.Is(err, config.ErrNotFound) {
@@ -296,9 +294,7 @@ func hostname() string {
 	return name
 }
 
-// authConfig turns the validated configuration into the server's authentication
-// wiring. The CIDRs parsed here were already validated at startup, so a failure
-// would be a bug rather than bad input.
+// authConfig turns the validated configuration into the server's authentication wiring.
 func (p *process) authConfig() (apiserver.AuthConfig, error) {
 	key, err := config.DecodeKey(p.config.Security.EncryptionKey)
 	if err != nil {
@@ -325,17 +321,8 @@ func (p *process) authConfig() (apiserver.AuthConfig, error) {
 	}, nil
 }
 
-// reportRootFolders says, once at startup, whether the library can actually be
-// written -- and then carries on regardless.
-//
-// MediaNexus takes ownership of the directories it creates and no others. A
-// library root belongs to the operator: chowning it would mean rewriting
-// hundreds of thousands of files on every start, and they are not ours to
-// change. Refusing to start would be worse still, because a library that is
-// merely owned by somebody else is a working installation with one thing to fix.
-//
-// So the answer is to say so plainly, with everything needed to fix it, and
-// leave the decision where it belongs.
+// reportRootFolders says, once at startup, whether the library can actually be written -- and
+// then carries on regardless.
 func (p *process) reportRootFolders() {
 	roots := apiserver.FilesystemRoots{FS: p.fsys}
 

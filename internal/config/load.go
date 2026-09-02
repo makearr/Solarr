@@ -16,22 +16,14 @@ import (
 // run writes one from the defaults.
 var ErrNotFound = errors.New("config: file not found")
 
-// Parse decodes and validates a config document, returning every problem it
-// finds rather than the first (ADR-44).
-//
-// It runs three passes over the same document because they fail differently.
-// Unknown keys are found structurally, so all of them are reported. Type
-// mismatches come from the decoder, which stops at the first. Value and
-// cross-field rules are checked afterwards and are all reported. Merging them
-// means a document with a typo, a bad range and a contradiction reports all
-// three in one go.
+// Parse decodes and validates a config document, returning every problem it finds rather than
+// the first (ADR-44).
 func Parse(data []byte) (Config, error) {
 	return ParseWithEnv(data, func(string) (string, bool) { return "", false })
 }
 
-// ParseWithEnv is Parse with environment overrides applied between decoding and
-// validation, so an override is checked by exactly the same rules as a file
-// value (ADR-44).
+// ParseWithEnv is Parse with environment overrides applied between decoding and validation, so
+// an override is checked by exactly the same rules as a file value (ADR-44).
 func ParseWithEnv(data []byte, lookup Lookup) (Config, error) {
 	config := Default()
 
@@ -46,9 +38,7 @@ func ParseWithEnv(data []byte, lookup Lookup) (Config, error) {
 
 	problems := unknownKeys(document)
 
-	// A file with no version key is the first schema, not the current one.
-	// Defaulting it to CurrentVersion would make an old document skip every
-	// migration between the two the moment CurrentVersion moves on (§14.2).
+	// A file with no version key is the first schema, not the current one (§14.2).
 	if _, versioned := document["version"]; !versioned {
 		config.Version = 1
 	}

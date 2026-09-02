@@ -17,9 +17,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/fsx"
 )
 
-// driverName is the only place the driver is named. ADR-5 calls the choice
-// provisional pending a benchmark at 500k rows, so swapping it must be this one
-// line plus a test run — no driver-specific SQL or types anywhere else.
+// driverName is the only place the driver is named (ADR-5).
 const driverName = "sqlite"
 
 // Defaults from §14. Every one is overridable through config.yml.
@@ -54,9 +52,7 @@ type Config struct {
 	WriteWarn time.Duration
 	WriteHard time.Duration
 
-	// OnBudgetExceeded is called when a transaction passes WriteHard. Tests wire
-	// it to t.Errorf so Invariant 2 is enforced rather than merely logged;
-	// production leaves it nil and gets the log and the metric.
+	// OnBudgetExceeded is called when a transaction passes WriteHard (Invariant 2).
 	OnBudgetExceeded func(TransactionReport)
 
 	// Logger defaults to slog.Default.
@@ -175,29 +171,19 @@ func Open(ctx context.Context, c clock.Clock, config Config) (*Store, error) {
 // Name reports which database this is.
 func (s *Store) Name() string { return s.config.Name }
 
-// Read exposes the read pool. Repositories query through it; nothing writes
-// through it, because a write there would bypass the queue and the one-writer
-// rule with it.
+// Read exposes the read pool.
 func (s *Store) Read() *sql.DB { return s.read }
 
-// WriteDB exposes the single write connection. It is unexported behaviour made
-// visible for the migration runner and for tests; ordinary writes go through the
-// priority queue, which is the only way the one-writer rule and the transaction
-// duration bound stay true (ADR-3).
+// WriteDB exposes the single write connection (ADR-3).
 func (s *Store) WriteDB() *sql.DB { return s.write }
 
-// Close stops accepting writes, drains the queue, and closes both handles. The
-// drain is bounded because every transaction is bounded (Invariant 2), which is
-// what makes the shutdown deadline in §15.2 safe.
+// Close stops accepting writes, drains the queue, and closes both handles (Invariant 2, §15.2).
 func (s *Store) Close() error {
 	s.queue.close()
 	<-s.writerDone
 
 	var errs []error
-	// The read pool closes before the checkpoint. A TRUNCATE checkpoint needs
-	// exclusive access to the WAL, so with readers still connected it blocks for
-	// the whole busy timeout and then gives up -- fifteen seconds added to every
-	// shutdown, for nothing.
+	// The read pool closes before the checkpoint.
 	if s.read != nil {
 		if err := s.read.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("close read pool: %w", err))
@@ -215,10 +201,8 @@ func (s *Store) Close() error {
 	return nil
 }
 
-// checkpoint truncates the WAL and updates the query planner's statistics on a
-// clean shutdown (section 15.2 step 6). Both are best effort: the next start is
-// correct without them, just slower, so a failure here must not turn an orderly
-// stop into an error.
+// checkpoint truncates the WAL and updates the query planner's statistics on a clean shutdown
+// (section 15.2 step 6).
 func (s *Store) checkpoint() {
 	for _, statement := range []string{"PRAGMA wal_checkpoint(TRUNCATE)", "PRAGMA optimize"} {
 		if _, err := s.write.Exec(statement); err != nil {

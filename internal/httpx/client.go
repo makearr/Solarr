@@ -17,9 +17,7 @@ const defaultTimeout = 30 * time.Second
 // redirect chain from a user-supplied URL is a probe, not a feature.
 const defaultMaxRedirects = 5
 
-// sourceURL is where the corresponding source lives (AGPL §13). It is also what
-// MusicBrainz's User-Agent policy asks for: an identifiable application and a
-// way to make contact (ADR-29).
+// sourceURL is where the corresponding source lives (AGPL §13) (ADR-29).
 const sourceURL = "https://github.com/makearr/MediaNexus"
 
 // UserAgent builds the identifying header. MusicBrainz blocks generic agents, so
@@ -92,9 +90,7 @@ func NewClient(c clock.Clock, guard *Guard, limiter *Limiter, breaker *Breaker, 
 	}
 }
 
-// NewTransport builds a transport that can only reach publicly routable
-// addresses. TLS still verifies against the URL's hostname even though the
-// dialer connects to a validated IP.
+// NewTransport builds a transport that can only reach publicly routable addresses.
 func NewTransport(guard *Guard) *http.Transport {
 	return &http.Transport{
 		DialContext:           guard.DialContext,
@@ -107,17 +103,7 @@ func NewTransport(guard *Guard) *http.Transport {
 	}
 }
 
-// Do sends a request through the guard, the breaker and the rate limiter.
-//
-// The order is guard, breaker, limiter. §11.3 sketches the limiter before the
-// breaker; taking the breaker first is strictly better, because spending a rate
-// token on a provider that is being skipped anyway wastes budget the other
-// subsystems sharing that bucket could use.
-//
-// The concurrency slot is released when the response headers arrive, not when
-// the body is closed. Holding it to the end would measure concurrency more
-// accurately, at the cost of leaking a slot every time a caller forgets to close
-// a body — a bug that presents as the cap silently ceasing to hold.
+// Do sends a request through the guard, the breaker and the rate limiter (§11.3).
 func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response, error) {
 	if err := c.guard.CheckURL(request.URL); err != nil {
 		return nil, err

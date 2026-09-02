@@ -135,10 +135,8 @@ const (
 // Driver selects the SQLite implementation (ADR-5).
 type Driver string
 
-// DriverModernc is the pure-Go driver, and the only one compiled in: the others
-// ADR-5 names for benchmarking need CGO, which ADR-30 forbids in the shipped
-// binary. Naming one that is not compiled in is a validation error, not a
-// silent fallback.
+// DriverModernc is the pure-Go driver, and the only one compiled in: the others ADR-5 names for
+// benchmarking need CGO, which ADR-30 forbids in the shipped binary.
 const DriverModernc Driver = "modernc"
 
 // LogLevel is the slog level.

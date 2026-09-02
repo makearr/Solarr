@@ -15,9 +15,7 @@ import (
 // narrows it; the container runs non-root (§20.2).
 const directoryPermissions fs.FileMode = 0o755
 
-// probeName is written and removed to prove a directory is usable. It is
-// distinctive so a crash between write and remove leaves something obviously
-// ours.
+// probeName is written and removed to prove a directory is usable.
 const probeName = ".mnx-writable"
 
 // DirectoryRequirement is one directory the process needs, and what it needs
@@ -31,9 +29,7 @@ type DirectoryRequirement struct {
 	Create bool
 }
 
-// DirectoryRequirements lists what §14.3 checks before anything opens. The most
-// common containerised failure is a volume the process cannot write, discovered
-// at the first import rather than at startup.
+// DirectoryRequirements lists what §14.3 checks before anything opens.
 func (c Config) DirectoryRequirements() []DirectoryRequirement {
 	return []DirectoryRequirement{
 		{Setting: "paths.config_dir", Path: c.Paths.ConfigDir, Create: true},
@@ -55,16 +51,8 @@ func (c Config) ManagedDirectories() []string {
 	return paths
 }
 
-// CheckDirectories proves each directory exists and can be written, by writing
-// and removing a file rather than by inspecting permission bits. A mode that
-// looks correct still fails on a read-only mount, a full filesystem or a
-// container whose user is not who the mount expects, and the probe catches all
-// three.
-//
-// What this does not check, and why, is in documentation/startup-checks.md:
-// the directory's own ownership (so Invariant 62 is only half met), and whether
-// db_dir is a network filesystem — which is a bad idea and the operator's
-// responsibility rather than something MediaNexus detects.
+// CheckDirectories proves each directory exists and can be written, by writing and removing a
+// file rather than by inspecting permission bits (Invariant 62).
 func CheckDirectories(fsys fsx.FS, config Config) Problems {
 	var problems Problems
 	for _, requirement := range config.DirectoryRequirements() {
@@ -100,9 +88,8 @@ func checkDirectory(fsys fsx.FS, requirement DirectoryRequirement) (Problem, boo
 	return Problem{}, false
 }
 
-// probeWritable writes a file, renames it into place and removes it — the same
-// three operations an import performs, so a directory that passes here cannot
-// fail later for a reason this could have caught.
+// probeWritable writes, renames and removes: the three operations an import
+// performs, so passing here means an import cannot fail for a reason this misses.
 func probeWritable(fsys fsx.FS, directory string) error {
 	probe := filepath.Join(directory, probeName)
 
@@ -118,9 +105,7 @@ func probeWritable(fsys fsx.FS, directory string) error {
 	return nil
 }
 
-// identityHint names the user the process is running as. It is nearly always a
-// PUID/PGID mismatch, and saying which ids to chown to saves the round trip
-// even without the directory's own ownership (§14.3).
+// identityHint names the user the process is running as (§14.3).
 func identityHint() string {
 	return "\n      " + privilege.IdentityHint()
 }

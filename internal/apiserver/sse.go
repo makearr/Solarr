@@ -17,18 +17,10 @@ import (
 	"github.com/makearr/MediaNexus/internal/settings"
 )
 
-// FlushInterval is how often buffered changes are sent (architecture section
-// 13.4).
-//
-// A bulk import at 500k rows would otherwise emit an event storm that saturates
-// the connection and pins the browser. Coalescing makes stream volume a
-// function of the tick rate rather than of backend activity, and 250ms costs a
-// latency no human perceives.
+// FlushInterval is how often buffered changes are sent (architecture section 13.4).
 const FlushInterval = 250 * time.Millisecond
 
-// keepAliveInterval stops a proxy closing an idle stream. A comment frame is
-// used rather than a real event, so a client never has to filter heartbeats
-// out of its own data.
+// keepAliveInterval stops a proxy closing an idle stream.
 const keepAliveInterval = 20 * time.Second
 
 // SSE event names. "update" carries changes; "resync" says the client must
@@ -38,12 +30,7 @@ const (
 	sseResync = "resync"
 )
 
-// StreamEvents streams changes to one client.
-//
-// Every event is filtered by the connection's category access *before* it is
-// buffered (ADR-27): a job-progress message naming an album from a hidden
-// category is a leak, and filtering at render time would already have put it in
-// a buffer that something else might log.
+// StreamEvents streams changes to one client (ADR-27).
 func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request, params gen.StreamEventsParams) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
@@ -62,14 +49,12 @@ func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request, params gen
 		return
 	}
 
-	// A ResponseController rather than a type assertion on http.Flusher: any
-	// middleware wrapping the writer hides the optional interfaces the real one
-	// implements, and the controller follows Unwrap through them.
+	// A ResponseController, not a type assertion on http.Flusher: middleware
+	// wrapping the writer hides the optional interfaces, and the controller unwraps.
 	controller := http.NewResponseController(w)
 
-	// The server's WriteTimeout would otherwise kill every stream after a
-	// minute, which presents as a client that mysteriously reconnects on a
-	// timer. A stream has no meaningful write deadline.
+	// The server's WriteTimeout would otherwise kill every stream after a minute, which presents
+	// as a client that mysteriously reconnects on a timer.
 	if err := controller.SetWriteDeadline(time.Time{}); err != nil {
 		s.logger.Debug("could not clear the write deadline for a stream", slog.Any("error", err))
 	}
@@ -80,11 +65,7 @@ func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request, params gen
 	// has enough bytes -- meaning nothing arrives until something else does.
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	// The first flush commits the 200 and proves the connection can stream. It
-	// happens before any status is written explicitly, so a writer that cannot
-	// flush -- middleware wrapping away the capability, most likely -- still
-	// gets a clean 500 instead of a 200 that then never sends anything and
-	// leaves the client waiting until it gives up.
+	// The first flush commits the 200 and proves the connection can stream.
 	if err := controller.Flush(); err != nil {
 		w.Header().Del("Content-Type")
 		w.Header().Del("X-Accel-Buffering")
@@ -147,11 +128,7 @@ func (e *eventStream) run(r *http.Request, subscription *events.Subscription, ti
 			e.collect(pending, event)
 
 		case <-tick:
-			// Take everything already queued before flushing. Without this, a
-			// burst that arrives between ticks is only partly coalesced --
-			// whatever the select happened to consume goes out now and the rest
-			// waits for the next tick, which is both more messages and a
-			// staler first one.
+			// Take everything already queued before flushing.
 			e.drain(subscription, pending)
 
 			if subscription.Missed() {
@@ -264,14 +241,7 @@ func (e *eventStream) comment(text string) bool {
 	return e.controller.Flush() == nil
 }
 
-// parseTopics validates the requested topics. An unknown one is an error
-// rather than a filter that matches nothing, which would look like a working
-// stream that never delivers.
-// topicsFrom converts the generated parameter into domain topics.
-//
-// The generated type constrains the *shape*; Valid() still decides membership,
-// because the spec's enum and events.Topic are two lists that could drift and
-// only one of them is the one the event bus actually publishes on.
+// parseTopics validates the requested topics.
 func topicsFrom(requested *[]gen.EventTopic) ([]events.Topic, error) {
 	if requested == nil || len(*requested) == 0 {
 		return nil, nil
@@ -304,12 +274,8 @@ func allowsSystemEvents(access authz.Access) bool {
 	return access.IsSystem() || role == settings.RoleAdmin || role == settings.RoleOperator
 }
 
-// collect adds an event to the coalescing buffer, dropping what this connection
-// may not see.
-//
-// The filter runs here, before the event is buffered, rather than at render
-// time (ADR-27): an event that reached the buffer has already been kept in
-// memory associated with this connection, and the point is that it never is.
+// collect adds an event to the coalescing buffer, dropping what this connection may not see
+// (ADR-27).
 func (e *eventStream) collect(pending map[string]events.Event, event events.Event) {
 	if !e.maySee(event) {
 		return

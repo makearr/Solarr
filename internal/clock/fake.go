@@ -6,14 +6,7 @@ import (
 	"time"
 )
 
-// Fake is a deterministic clock for tests. Time moves only when Advance or Set
-// is called, so scheduling, backoff and lease behaviour are reproducible rather
-// than timing-dependent (ADR-17).
-//
-// Waiters woken by Advance run only after Advance returns, because Advance holds
-// the lock they need to re-arm. A test that expects a loop to re-arm and fire
-// again must therefore call Advance once per expected firing, using
-// BlockUntilWaiters to wait for the loop to be armed again.
+// Fake is a deterministic clock for tests (ADR-17).
 type Fake struct {
 	mu      sync.Mutex
 	changed sync.Cond

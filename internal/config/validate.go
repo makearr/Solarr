@@ -17,9 +17,7 @@ const minimumBackupsKept = 3
 // at startup cannot be rejected later by the thing that runs it.
 var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 
-// validate collects every value and cross-field fault. It never returns early:
-// fixing configuration one error per restart is the experience ADR-44 exists to
-// prevent.
+// validate collects every value and cross-field fault (ADR-44).
 func (c Config) validate() Problems {
 	var problems Problems
 

@@ -9,29 +9,19 @@ import (
 	"github.com/makearr/MediaNexus/internal/settings"
 )
 
-// BuildInfo is what the About endpoint reports. An unknown commit is reported
-// as unknown rather than as a plausible-looking wrong value, because the source
-// link depends on it (AGPL section 13).
+// BuildInfo is what the About endpoint reports (section 13).
 type BuildInfo struct {
 	Version   string `json:"version"`
 	Commit    string `json:"commit"`
 	BuildDate string `json:"build_date"`
-	// SourceURL points at the Corresponding Source for *this* build. A modified
-	// build must not point at upstream: that is precisely the misrepresentation
-	// section 13 exists to prevent (documentation/licence-compliance.md).
+	// SourceURL points at the Corresponding Source for *this* build (section 13).
 	SourceURL string `json:"source_url"`
 	License   string `json:"license"`
 }
 
 // Checker reports whether the process is alive and whether it is ready to serve.
-//
-// An interface rather than a concrete dependency, so apiserver does not import
-// every subsystem it reports on -- and so a test can make either answer fail
-// without arranging a broken database.
 type Checker interface {
-	// Live reports that the process is working: the write queues are not
-	// wedged. It must not depend on plugins or external services, or a dead
-	// indexer restarts the container (section 20.2).
+	// Live reports that the process is working: the write queues are not wedged (section 20.2).
 	Live(ctx context.Context) error
 	// Ready reports that the databases are open, migrated and answering.
 	Ready(ctx context.Context) error
@@ -73,16 +63,12 @@ func (s *Server) GetReady(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, map[string]string{"status": "ready"})
 }
 
-// GetAbout is unauthenticated by design. AGPL section 13 obliges the running
-// program to offer its source to "all users interacting with it remotely",
-// which is not limited to those who can log in.
+// GetAbout is unauthenticated by design (section 13).
 func (s *Server) GetAbout(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, s.build)
 }
 
-// GetMe reports who the caller is and what they can see. It is the smallest
-// authenticated endpoint, and the one a client uses to discover its own
-// permissions rather than guessing from failed requests.
+// GetMe reports who the caller is and what they can see.
 func (s *Server) GetMe(w http.ResponseWriter, r *http.Request) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {

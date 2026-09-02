@@ -1,13 +1,6 @@
 openapi: 3.0.3
 
-# This document describes the API that EXISTS, not the one planned. Architecture
-# section 13.2 lists the endpoints the finished product will carry; specifying
-# them before they are built would generate a client full of calls that return
-# 404, and the generated output is committed, so the drift would be permanent.
-# Each stage adds its own endpoints here as it lands.
-# Deliberately 3.0.3, not 3.1: oapi-codegen does not support 3.1 and drops what
-# it cannot read rather than failing, so a 3.1 spec generates a Go client that is
-# quietly missing constraints. Revisit when oapi-codegen issue 373 closes.
+# This document describes the API that EXISTS, not the one planned (section 13.2).
 info:
   title: MediaNexus
   description: Media management, discovery and acquisition.
@@ -555,9 +548,7 @@ components:
             Empty on the last page, which is how a client knows to stop without
             one more request that returns nothing.
 
-# Authenticated by default. The endpoints a caller reaches without credentials
-# override this with `security: []`, so adding an endpoint without thinking
-# about auth makes it secured rather than open.
+# Authenticated by default.
 security:
   - session: []
   - apiKey: []

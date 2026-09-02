@@ -10,10 +10,8 @@ import (
 // on amd64 and arm64, the two architectures the image is built for.
 const ficlone = 0x40049409
 
-// Reflink clones oldPath to newPath copy-on-write, the first rung of the import
-// ladder (ADR-11). Block cloning needs OpenZFS 2.2 or later with it enabled, and
-// btrfs or XFS otherwise, so ErrUnsupported is the common answer rather than an
-// exceptional one — §11.2 is explicit that this must be attempted, never inferred.
+// Reflink clones oldPath to newPath copy-on-write, the first rung of the import ladder (ADR-11)
+// (§11.2).
 func (OS) Reflink(oldPath, newPath string) error {
 	source, err := os.Open(oldPath)
 	if err != nil {
@@ -40,9 +38,7 @@ func (OS) Reflink(oldPath, newPath string) error {
 	return destination.Close()
 }
 
-// isUnsupportedClone distinguishes "this filesystem cannot clone" from a real
-// failure. EXDEV means the two paths are on different filesystems, which on ZFS
-// happens between datasets in a single pool.
+// isUnsupportedClone distinguishes "this filesystem cannot clone" from a real failure.
 func isUnsupportedClone(errno syscall.Errno) bool {
 	return errors.Is(errno, syscall.EOPNOTSUPP) ||
 		errors.Is(errno, syscall.ENOTTY) ||

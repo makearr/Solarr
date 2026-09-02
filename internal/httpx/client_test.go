@@ -124,10 +124,8 @@ func TestClient_RetryableStatusOpensTheBreaker(t *testing.T) {
 		if _, err := client.Get(t.Context(), "https://indexer.invalid/api"); err == nil {
 			t.Fatalf("attempt %d on a 502 returned no error", attempt)
 		}
-		// A retryable failure also pauses the provider in the limiter, so the
-		// breaker's threshold is only reached once that backoff has elapsed.
-		// Less than the breaker's cooldown, or the next call is a half-open
-		// probe rather than a skip.
+		// A retryable failure also pauses the provider in the limiter, so the breaker's threshold is
+		// only reached once that backoff has elapsed.
 		fake.Advance(5 * time.Second)
 	}
 
@@ -142,10 +140,8 @@ func TestClient_RetryableStatusOpensTheBreaker(t *testing.T) {
 	}
 }
 
-// The breaker is consulted before the rate limiter, so a skipped provider costs
-// nothing: no rate token is spent and no backoff is waited out. §11.3 sketches
-// the opposite order, which would make every call to a dead provider sit through
-// its own pause first.
+// The breaker is consulted before the rate limiter, so a skipped provider costs nothing: no
+// rate token is spent and no backoff is waited out (§11.3).
 func TestClient_OpenCircuitReturnsWithoutWaitingOutTheBackoff(t *testing.T) {
 	transport := &roundTripper{responses: []*http.Response{respond(http.StatusBadGateway, nil)}}
 	client, limiter, _, fake := newTestClient(t, transport)

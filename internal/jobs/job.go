@@ -1,6 +1,4 @@
-// Package jobs is the durable work queue. Anything that must happen is a job,
-// and jobs are persistent (Invariant 22, ADR-9); events are notification only
-// and may be dropped.
+// Package jobs is the durable work queue (Invariant 22, ADR-9).
 package jobs
 
 import "time"
@@ -90,15 +88,12 @@ type Job struct {
 	UpdatedAt  time.Time
 }
 
-// Definition declares how a job type behaves. It is registered once at startup
-// rather than passed at every enqueue, so two callers cannot disagree about
-// whether a type mutates.
+// Definition declares how a job type behaves.
 type Definition struct {
 	Type Type
 	Pool Pool
-	// Mutating must be true for anything that changes the library, the
-	// filesystem or a download client. Getting it wrong makes observe mode a
-	// lie, which is worse than not having observe mode.
+	// Mutating must be true for anything that changes the library, the filesystem or a download
+	// client.
 	Mutating bool
 	// MaxAttempts caps retries. Zero takes the default.
 	MaxAttempts int

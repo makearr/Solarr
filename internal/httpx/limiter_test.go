@@ -61,9 +61,8 @@ func TestLimiter_MinIntervalSpacesConsecutiveRequests(t *testing.T) {
 	}
 }
 
-// The claim ADR-13 exists to make: three subsystems calling one provider draw
-// from one budget, not three. Before this, each could stay within its own limit
-// while collectively getting the user banned.
+// The claim ADR-13 exists to make: three subsystems calling one provider draw from one budget,
+// not three.
 func TestLimiter_SearchRSSAndMetadataShareOneProviderBucket(t *testing.T) {
 	limiter, fake := newLimiter(httpx.Config{
 		Defaults: httpx.Limits{RequestsPerMinute: 3},

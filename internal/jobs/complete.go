@@ -66,11 +66,6 @@ type Resolution struct {
 }
 
 // Fail records a failed attempt and decides what happens next.
-//
-// A terminal or fatal error fails immediately, without consuming the retry
-// budget and without backoff: retrying a 404 spends an hour of exponential
-// backoff to reach the same conclusion. A retryable error goes back to the
-// queue with backoff until the attempt cap is reached.
 func (q *Queue) Fail(ctx context.Context, job Job, owner string, attempt Attempt, cause error) (Resolution, error) {
 	class := Classify(cause)
 	now := q.clock.Now()
@@ -178,10 +173,6 @@ type Reclaimed struct {
 }
 
 // ReclaimExpired returns abandoned jobs to the queue.
-//
-// This is what makes restart recovery real rather than aspirational: a crashed
-// process leaves leases that expire, and the next reaper pass puts the work
-// back with no manual cleanup.
 func (q *Queue) ReclaimExpired(ctx context.Context) ([]Reclaimed, error) {
 	now := q.clock.Now()
 
@@ -242,9 +233,7 @@ func (q *Queue) Counts(ctx context.Context) (map[State]map[Pool]int64, error) {
 	return counts, nil
 }
 
-// fullJitter spreads a backoff over [0, d]. Full jitter rather than a fraction,
-// because the failure that caused it is usually shared: every worker retrying
-// in lockstep re-hits whatever failed.
+// fullJitter spreads a backoff over [0, d].
 func fullJitter(d time.Duration) time.Duration {
 	if d <= 0 {
 		return 0

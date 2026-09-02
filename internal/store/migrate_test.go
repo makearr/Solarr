@@ -325,10 +325,7 @@ func TestBackup_RejectsARelativeDirectory(t *testing.T) {
 	}
 }
 
-// Two backups at the same instant must both succeed. The clock is frozen in
-// tests, and in production a pre-migration backup and a scheduled one can land
-// in the same second — VACUUM INTO refuses to overwrite, so a colliding name is
-// a hard failure rather than a warning.
+// Two backups at the same instant must both succeed.
 func TestBackup_TwoBackupsInTheSameSecondBothSucceed(t *testing.T) {
 	fixture := newMigrationFixture(t)
 

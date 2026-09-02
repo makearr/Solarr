@@ -1,7 +1,4 @@
-// Package clock is the injected time seam (ADR-17). No production code anywhere
-// in MediaNexus calls time.Now, time.After, time.NewTimer or time.NewTicker
-// directly (Invariant 45) — hunt scheduling, backoff, lease expiry, rate limits
-// and air dates are all time-dependent and otherwise untestable.
+// Package clock is the injected time seam (ADR-17) (Invariant 45).
 package clock
 
 import (

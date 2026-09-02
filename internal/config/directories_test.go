@@ -159,9 +159,8 @@ func TestCheckDirectories_PassesOnARealFilesystem(t *testing.T) {
 }
 
 func TestDirectoryRequirements_CoverEveryConfiguredPath(t *testing.T) {
-	// A path added to config.Paths but not checked is a volume that fails at the
-	// first import instead of at startup, which is the failure §14.3 exists to
-	// prevent.
+	// A path added to config.Paths but not checked is a volume that fails at the first import
+	// instead of at startup, which is the failure §14.3 exists to prevent.
 	settings := configRootedAt("/config")
 	required := make(map[string]bool)
 	for _, requirement := range settings.DirectoryRequirements() {

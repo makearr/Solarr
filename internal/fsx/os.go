@@ -17,10 +17,7 @@ const filePerm fs.FileMode = 0o644
 // governs a file we find, not the mode we choose when creating one.
 const secretFilePerm fs.FileMode = 0o600
 
-// staleAttempts is how often a syscall is retried after ESTALE. An NFS server
-// restart invalidates open handles, and treating that as a missing file would
-// read as a deleted library (§11.2). The kernel re-resolves on the next call,
-// so retrying immediately is enough; there is nothing to back off from.
+// staleAttempts is how often a syscall is retried after ESTALE (§11.2).
 const staleAttempts = 3
 
 // OS is the production filesystem. It targets Linux, matching the deployment

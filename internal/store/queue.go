@@ -33,9 +33,7 @@ func (p Priority) String() string {
 	}
 }
 
-// agingInterval is how much waiting is worth one point of priority. At 250ms, a
-// bulk operation outranks a fresh interactive one after roughly 22 seconds, so
-// bulk work cannot starve however busy the interactive path is (§4.2).
+// agingInterval is how much waiting is worth one point of priority (§4.2).
 const agingInterval = 250 * time.Millisecond
 
 type writeOp struct {
@@ -43,22 +41,16 @@ type writeOp struct {
 	enqueued time.Time
 
 	// virtualStart is enqueued shifted back by the priority's worth of aging.
-	// Ordering by it is identical to ordering by the aged effective priority,
-	// but it does not change as time passes — so a heap stays valid instead of
-	// needing a rescan on every pop.
 	virtualStart time.Time
 
 	ctx context.Context
 
-	// execute receives the write connection rather than a transaction, so the
-	// queue can also serialise the few statements SQLite refuses to run inside
-	// one — VACUUM INTO, for the pre-migration backup. Store.Write wraps its
-	// caller's function in a transaction before it gets here.
+	// execute receives the write connection, not a transaction, so the queue can
+	// also serialise what SQLite refuses to run inside one, such as VACUUM INTO.
 	execute func(context.Context, *sql.DB) error
 
-	// exemptFromBudget marks the one write that is legitimately unbounded: a
-	// migration creating an index over an existing library. Everything else is
-	// measured against Invariant 2.
+	// exemptFromBudget marks the one write that is legitimately unbounded: a migration creating an
+	// index over an existing library (Invariant 2).
 	exemptFromBudget bool
 
 	result chan error
@@ -134,9 +126,8 @@ func (q *writeQueue) push(op *writeOp) error {
 	return nil
 }
 
-// pop blocks until work arrives, and returns nil only once the queue is closed
-// and drained — which is what makes the shutdown sequence's "drain the write
-// queue" step (§15.2) bounded rather than a race.
+// pop blocks until work arrives, returning nil only once the queue is closed
+// and drained, which is what bounds the shutdown drain (section 15.2).
 func (q *writeQueue) pop() *writeOp {
 	q.mu.Lock()
 	defer q.mu.Unlock()

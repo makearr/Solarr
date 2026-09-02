@@ -53,11 +53,8 @@ func runHealthcheck(args []string, out, errOut io.Writer) error {
 	return err
 }
 
-// healthEndpoint builds the URL from the same configuration the server binds
-// with, so a non-default port or base URL does not silently break the probe.
-//
-// A bind of 0.0.0.0 or :: means "every interface", which is not an address to
-// connect to; the probe runs inside the container, so loopback is.
+// healthEndpoint builds the URL from the same configuration the server binds with, so a non-
+// default port or base URL does not silently break the probe.
 func healthEndpoint(loaded config.Config) string {
 	host := loaded.Server.Bind
 	switch host {

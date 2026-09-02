@@ -1,8 +1,5 @@
-// Package fsx is the filesystem seam (ADR-17) and the single choke point for
-// path safety (ADR-14, §11.2). Every filesystem write in the process passes
-// through it, so callers are never trusted to validate a path themselves — the
-// containment check in SafeJoin is what makes Invariant 20 structural rather
-// than a rule each caller must remember.
+// Package fsx is the filesystem seam (ADR-17) and the single choke point for path safety
+// (ADR-14, §11.2) (Invariant 20).
 package fsx
 
 import (
@@ -13,9 +10,8 @@ import (
 )
 
 var (
-	// ErrUnsupported reports an operation this filesystem cannot perform, such as
-	// a reflink on a filesystem without block cloning. It is not a failure: the
-	// import ladder (reflink → hardlink → copy, ADR-11) treats it as "try the next".
+	// ErrUnsupported reports an operation this filesystem cannot perform, such as a reflink on a
+	// filesystem without block cloning (ADR-11).
 	ErrUnsupported = errors.New("fsx: operation not supported by this filesystem")
 
 	// ErrEscapesRoot reports a path that resolved outside the root folder it was
@@ -44,9 +40,7 @@ type FileInfo struct {
 	GID int
 }
 
-// DirEntry carries only what a directory read yields for free. Size and ModTime
-// cost a stat per entry on Linux, which at 500k files (ADR-22) is the difference
-// between a sweep and an outage, so callers ask for them explicitly.
+// DirEntry carries only what a directory read yields for free (ADR-22).
 type DirEntry struct {
 	Name  string
 	IsDir bool
@@ -60,11 +54,7 @@ type File interface {
 	io.ReaderAt
 }
 
-// FS is the filesystem. Implementations are OS (production) and Mem (tests).
-//
-// Paths given to these methods are already-resolved absolute paths — SafeJoin
-// produces them. The methods do not sanitise, because a check that happens in
-// two places happens correctly in one.
+// FS is the filesystem.
 type FS interface {
 	Stat(path string) (FileInfo, error)
 	Lstat(path string) (FileInfo, error)

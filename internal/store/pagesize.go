@@ -11,19 +11,7 @@ import (
 // existing, non-empty database.
 var ErrPageSizeLocked = errors.New("store: page size cannot be changed on a populated database")
 
-// ensurePageSize runs before the WAL handles are opened, on its own connection.
-//
-// Entering WAL mode commits the database header, and page_size cannot be
-// changed while a database is in WAL mode — measured, not assumed: setting
-// page_size and journal_mode together in one DSN yields the default page size
-// whichever order they are given in. So the page size is settled first, on a
-// connection with no journal mode of its own, and only then does the database
-// become a WAL database.
-//
-// ADR-22 is explicit that page_size is a creation-time decision. Changing it on
-// a populated 500k-row library means a full VACUUM, which would turn a restart
-// into a multi-minute outage with no warning, so that is refused rather than
-// performed silently.
+// ensurePageSize runs before the WAL handles are opened, on its own connection (ADR-22).
 func ensurePageSize(ctx context.Context, config Config) error {
 	db, err := sql.Open(driverName, "file:"+config.Path)
 	if err != nil {

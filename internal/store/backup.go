@@ -10,20 +10,10 @@ import (
 	"strings"
 )
 
-// maxBackupDisambiguation caps the search for an unused backup name. Reaching it
-// means something is generating backups in a tight loop, which is a bug worth
-// reporting rather than papering over.
+// maxBackupDisambiguation caps the search for an unused backup name.
 const maxBackupDisambiguation = 100
 
-// Backup writes a consistent copy of the database into directory and returns its
-// path.
-//
-// VACUUM INTO rather than a file copy: it produces a defragmented, internally
-// consistent snapshot without stopping writers, and copying the file while WAL
-// is active gives a torn database that looks fine until it is restored.
-//
-// It cannot run inside a transaction, so it goes through the queue's exclusive
-// path — still the single writer, still serialised against everything else.
+// Backup writes a consistent copy of the database into directory and returns its path.
 func (s *Store) Backup(ctx context.Context, directory string) (string, error) {
 	if !filepath.IsAbs(directory) {
 		return "", fmt.Errorf("store %s: backup directory %q must be absolute", s.config.Name, directory)
@@ -46,9 +36,7 @@ func (s *Store) Backup(ctx context.Context, directory string) (string, error) {
 	return path, nil
 }
 
-// unusedBackupPath finds a free name. ADR-2's naming is second-resolution, so
-// two backups within one second — a pre-migration backup and a scheduled one, or
-// anything running against a frozen clock — would otherwise collide and fail.
+// unusedBackupPath finds a free name (ADR-2).
 func (s *Store) unusedBackupPath(directory string) (string, error) {
 	stamp := strings.ReplaceAll(s.clock.Now().UTC().Format("2006-01-02T15:04:05Z"), ":", "-")
 	base := filepath.Join(directory, fmt.Sprintf("%s.db.%s", s.config.Name, stamp))

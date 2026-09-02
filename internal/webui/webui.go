@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// The `all:` prefix matches the committed .gitkeep, so a clean checkout builds.
+// `all:` matches the committed .gitkeep, so a clean checkout builds.
 //
 //go:embed all:dist
 var dist embed.FS

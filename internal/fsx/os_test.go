@@ -9,11 +9,8 @@ import (
 	"github.com/makearr/MediaNexus/internal/fsx"
 )
 
-// Reflink support is a property of the filesystem under the test runner, which
-// is overlayfs in CI and could be anything locally. Either answer is correct;
-// what must hold in both cases is that a refused clone leaves nothing behind,
-// because the import ladder falls through to hardlink and would find the
-// destination already taken (ADR-11).
+// Reflink support is a property of the filesystem under the test runner, which is overlayfs in
+// CI and could be anything locally (ADR-11).
 func TestOS_ReflinkEitherClonesOrLeavesNothingBehind(t *testing.T) {
 	fsys := fsx.NewOS()
 	root, err := fsys.Resolve(t.TempDir())

@@ -10,14 +10,11 @@ import (
 // maxComponentBytes is the ext4/XFS/ZFS limit for one path component.
 const maxComponentBytes = 255
 
-// separatorReplacement keeps a name readable when it contains a path separator,
-// and makes the substitution visible rather than silently merging words:
-// "XT/QK" becomes "XT_QK", not "XTQK".
+// separatorReplacement keeps a name readable when it contains a path separator, and makes the
+// substitution visible rather than silently merging words: "XT/QK" becomes "XT_QK", not "XTQK".
 const separatorReplacement = '_'
 
 // reservedNames are illegal as filenames on Windows whatever their extension.
-// The library is stored on Linux but read over SMB by Jellyfin, Kodi and
-// Navidrome clients, where a file called CON.mkv is unopenable.
 var reservedNames = map[string]bool{
 	"CON": true, "PRN": true, "AUX": true, "NUL": true,
 	"COM0": true, "COM1": true, "COM2": true, "COM3": true, "COM4": true,
@@ -26,15 +23,8 @@ var reservedNames = map[string]bool{
 	"LPT5": true, "LPT6": true, "LPT7": true, "LPT8": true, "LPT9": true,
 }
 
-// SanitiseComponent makes one path component safe to place beneath a root:
-// separators become '_', control characters are dropped, trailing dots and
-// spaces are removed, Windows reserved names gain a trailing underscore, and
-// the result is capped at 255 bytes without splitting a rune. "." and ".."
-// sanitise to the empty string, which SafeJoin rejects.
-//
-// Truncation cuts the tail, so a caller building a filename passes the base
-// name and the extension separately rather than one joined string — otherwise a
-// long title would take the extension with it.
+// SanitiseComponent makes one path component safe beneath a root: separators,
+// control characters, trailing dots and spaces, and Windows reserved names.
 func SanitiseComponent(component string) string {
 	var b strings.Builder
 	b.Grow(len(component))
@@ -82,13 +72,7 @@ func truncateBytes(s string, limit int) string {
 	return s[:limit]
 }
 
-// SafeJoin builds an absolute path beneath root and proves it stays there
-// (Invariant 20). Every component is sanitised, the result is resolved through
-// any symlinks, and a path landing outside root is ErrEscapesRoot.
-//
-// Sanitising alone would be enough against a traversal in the component text;
-// resolving is what catches a symlink already on disk pointing out of the root,
-// which is the case a template renderer cannot see.
+// SafeJoin builds an absolute path beneath root and proves it stays there (Invariant 20).
 func SafeJoin(fsys FS, root string, components ...string) (string, error) {
 	if !filepath.IsAbs(root) {
 		return "", fmt.Errorf("%w: %q", ErrNotAbsolute, root)
@@ -118,9 +102,7 @@ func SafeJoin(fsys FS, root string, components ...string) (string, error) {
 	return resolved, nil
 }
 
-// Within reports whether path is root itself or lies beneath it. Both must
-// already be cleaned and resolved; comparing unresolved paths is how a symlink
-// slips past this check.
+// Within reports whether path is root itself or lies beneath it.
 func Within(root, path string) bool {
 	if path == root {
 		return true

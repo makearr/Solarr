@@ -1,6 +1,4 @@
-# Enforces documentation/coding-standards.md. The forbidigo rules turn the ADR-17
-# seams from prose into build failures: Invariant 45 (no time.Now) and the fsx
-# choke point (ADR-14) are the two that quietly rot without a linter.
+# Enforces documentation/coding-standards.md (ADR-17, Invariant 45).
 version: "2"
 
 run:
@@ -65,9 +63,7 @@ linters:
 
   exclusions:
     generated: lax
-    # npm dependencies are not ours to lint. eslint pulls in `flatted`, which
-    # ships a Go implementation beside its JavaScript, and linting someone
-    # else's vendored source fails the build over a missing package comment.
+    # npm dependencies are not ours to lint.
     paths:
       - web/node_modules
     rules:

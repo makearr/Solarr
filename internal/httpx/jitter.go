@@ -5,11 +5,7 @@ import (
 	"time"
 )
 
-// fullJitter spreads a computed backoff over [0, d]. Full jitter rather than a
-// fraction, because the failure that triggered it is usually shared: every
-// worker backing off in lockstep re-hits the provider together.
-//
-// Tests inject their own so backoff is deterministic (ADR-17).
+// fullJitter spreads a computed backoff over [0, d] (ADR-17).
 func fullJitter(d time.Duration) time.Duration {
 	if d <= 0 {
 		return 0

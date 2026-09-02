@@ -4,10 +4,8 @@
 # Machine-specific overrides (DOCKER_DNS, image pins). Gitignored, optional.
 -include Makefile.local
 
-# Docker's bridge network cannot use a host resolv.conf that points at
-# systemd-resolved's 127.0.0.53 stub, so it substitutes 8.8.8.8 — which some
-# networks block, leaving module downloads to time out. Set DOCKER_DNS to the
-# host's real upstream resolvers when that happens.
+# Docker's bridge network cannot use a host resolv.conf that points at systemd-resolved's
+# 127.0.0.53 stub, so it substitutes 8.8.8.8 — which some networks block, leaving module
 DOCKER_DNS  ?=
 DNS_FLAGS   := $(foreach server,$(DOCKER_DNS),--dns $(server))
 
@@ -16,9 +14,8 @@ NODE_IMAGE  ?= node:22-alpine
 SQLC_IMAGE  ?= sqlc/sqlc:latest
 LINT_IMAGE  ?= golangci/golangci-lint:latest
 
-# Generator versions are pinned, not floated: generated output is committed, so
-# a generator that changes its formatting turns every unrelated build red on the
-# CI staleness check (ADR-31).
+# Generator versions are pinned, not floated: generated output is committed, so a generator that
+# changes its formatting turns every unrelated build red on the CI staleness check (ADR-31).
 OAPI_VERSION        ?= v2.4.1
 OPENAPI_TS_VERSION  ?= 7.4.4
 OAPI_CODEGEN        := github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_VERSION)
@@ -49,23 +46,20 @@ IMAGE       ?= ghcr.io/makearr/medianexus
 PLATFORMS   ?= linux/amd64,linux/arm64
 ARCH        := $(shell uname -m | sed -e s/x86_64/amd64/ -e s/aarch64/arm64/)
 
-# buildx is required for a release: the legacy builder cannot produce a
-# multi-arch manifest, and shipping only amd64 would silently drop arm64 --
-# which ADR-35 cares about, because fingerprinting runs there.
+# buildx is required for a release: the legacy builder cannot produce a multi-arch manifest, and
+# shipping only amd64 would silently drop arm64 -- which ADR-35 cares about, because
 HAS_BUILDX  := $(shell docker buildx version >/dev/null 2>&1 && echo yes)
 
-# The default "docker" driver cannot export a manifest list, so a multi-arch
-# build needs a container-driver builder. Created on demand by the builder
-# target; it persists, so this costs nothing after the first run.
+# The default "docker" driver cannot export a manifest list, so a multi-arch build needs a
+# container-driver builder.
 BUILDER     ?= medianexus
 TOKEN       ?= $(shell grep -oP 'ghp_[A-Za-z0-9]+' private/secrets.md 2>/dev/null | head -1)
 
 help:  ## List targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
 
-## Docker creates named volumes owned by root, so a container running as the
-## invoking user cannot write to the module or build cache. Fixed once, guarded
-## by a marker so the check costs one container start per make invocation.
+# # Docker creates named volumes owned by root, so a container running as the # invoking user
+# cannot write to the module or build cache.
 cache-init:
 	@docker run --rm -u 0 $(CACHE) -v medianexus-npm:/tmp/.npm $(GO_IMAGE) sh -c \
 	  'for dir in /go/pkg /.cache/go-build /tmp/.npm; do \

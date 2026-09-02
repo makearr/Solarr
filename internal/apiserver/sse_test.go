@@ -106,9 +106,8 @@ func (f authFixture) openStream(t *testing.T, username, query string) (*bufio.Re
 	}
 }
 
-// Section 13.4: a bulk import at 500k rows would otherwise emit an event storm
-// that saturates the connection and pins the browser. Repeated changes to one
-// entity collapse to the latest.
+// Section 13.4: a bulk import at 500k rows would otherwise emit an event storm that saturates
+// the connection and pins the browser.
 func TestEvents_CoalescesRepeatedChangesToOneEntity(t *testing.T) {
 	fixture := newAuthFixture(t, apiserver.AuthLocal)
 	body, closeStream := fixture.openStream(t, "avs", "")

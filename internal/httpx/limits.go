@@ -6,9 +6,7 @@ import (
 )
 
 var (
-	// ErrDailyCapReached reports a provider whose hard daily quota is spent. It
-	// is not waited out: the reset can be most of a day away, and blocking a
-	// worker that long is worse than reporting the provider unavailable.
+	// ErrDailyCapReached reports a provider whose hard daily quota is spent.
 	ErrDailyCapReached = errors.New("httpx: provider daily cap reached")
 )
 
@@ -64,9 +62,7 @@ func (l Limits) resolve(defaults Limits) Limits {
 	return l
 }
 
-// Outcome is what a completed request tells the limiter. Searches, RSS polls and
-// metadata lookups all report through here, which is what makes them share one
-// provider's budget rather than three parallel ones.
+// Outcome is what a completed request tells the limiter.
 type Outcome struct {
 	Success bool
 	// RetryAfter is the header's value when the provider sent one. It is
@@ -74,9 +70,8 @@ type Outcome struct {
 	RetryAfter time.Duration
 }
 
-// ProviderState is what the user is shown when work is paused (Invariant 29): a
-// provider quietly returning nothing is indistinguishable from a library with
-// nothing to find.
+// ProviderState is what the user is shown when work is paused (Invariant 29): a provider
+// quietly returning nothing is indistinguishable from a library with nothing to find.
 type ProviderState struct {
 	Provider string
 	// Zero in both means the provider is unrated, not that it is stopped.

@@ -10,10 +10,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/clock"
 )
 
-// Limiter is the one global rate-limit registry (ADR-13). Every outbound request
-// passes through it, so a provider's searches, RSS polls and metadata lookups
-// draw from a single bucket. Before that, three subsystems could each stay
-// within budget while collectively getting the user banned.
+// Limiter is the one global rate-limit registry (ADR-13).
 type Limiter struct {
 	clock  clock.Clock
 	jitter func(time.Duration) time.Duration
@@ -67,12 +64,8 @@ func NewLimiter(c clock.Clock, config Config, jitter func(time.Duration) time.Du
 	}
 }
 
-// Acquire blocks until the provider may be called, then returns a release
-// function the caller must invoke when the request finishes.
-//
-// The order is rate first, then concurrency slots. Spending a token and then
-// waiting for a slot delays a request; holding a slot while waiting for a token
-// would idle capacity that another provider could use.
+// Acquire blocks until the provider may be called, then returns a release function the caller
+// must invoke when the request finishes.
 func (l *Limiter) Acquire(ctx context.Context, provider string) (release func(), err error) {
 	for {
 		wait, err := l.tryTake(provider)

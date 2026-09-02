@@ -18,10 +18,6 @@ type loginRequest struct {
 }
 
 // Login exchanges a username and password for a session cookie.
-//
-// Every failure returns the same response. Distinguishing "no such user" from
-// "wrong password" turns the login form into an account enumerator, and the
-// user learns nothing useful from the difference either.
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	if s.auth.Mode == AuthAPIKeyOnly {
 		writeProblem(w, s.logger, http.StatusForbidden, TypeForbidden,
@@ -73,14 +69,8 @@ func (s *Server) verifyPassword(r *http.Request, username, password string) (set
 	return user, nil
 }
 
-// decoyHash is a genuine argon2id hash of a random value, so verifying against
-// it costs the same as verifying a real password.
-//
-// A hand-written literal would be worse than nothing: VerifyPassword rejects a
-// malformed hash immediately, so the decoy would return faster than a real
-// comparison and advertise exactly the difference it exists to hide. Computed
-// once, on first use, rather than at init -- a package that does work before
-// main is a package whose failures have nowhere to go.
+// decoyHash is a genuine argon2id hash of a random value, so verifying against it costs the
+// same as verifying a real password.
 var decoyHash = sync.OnceValue(func() string {
 	filler := make([]byte, 32)
 	if _, err := rand.Read(filler); err != nil {
@@ -100,10 +90,6 @@ func mustHash(value string) string {
 }
 
 // Logout clears the session cookie.
-//
-// Sessions are signed rather than stored, so this removes the browser's copy
-// and nothing else. A token that has escaped stays valid until it expires or
-// the encryption key is rotated, which internal/auth documents.
 func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, s.sessionCookie("", -1, r))
 	writeJSON(w, s.logger, http.StatusOK, map[string]string{"status": "signed-out"})

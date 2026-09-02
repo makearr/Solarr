@@ -89,8 +89,6 @@ func TestWrite_SerialisesConcurrentCallers(t *testing.T) {
 	opened := openWritableStore(t, clock.NewFakeAtEpoch(), nil)
 
 	// One writer per database is what prevents SQLITE_BUSY storms (Invariant 1).
-	// If two transactions ever overlapped, this counter would race and the
-	// inserted count would be wrong.
 	var group sync.WaitGroup
 	for worker := range 20 {
 		group.Add(1)
@@ -272,9 +270,8 @@ func TestWrite_QueuedOperationWithACancelledContextIsDropped(t *testing.T) {
 	cancel()
 	close(blocking)
 
-	// Whether the cancellation is caught before BeginTx or by it does not matter;
-	// what must hold is that the caller learns it was cancelled and nothing was
-	// written.
+	// Whether the cancellation is caught before BeginTx or by it does not matter; what must hold
+	// is that the caller learns it was cancelled and nothing was written.
 	if err := <-queued; !errors.Is(err, context.Canceled) {
 		t.Fatalf("Write = %v, want context.Canceled", err)
 	}

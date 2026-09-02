@@ -1,9 +1,5 @@
-// Package migrations carries the core schema as embedded SQL files, one per
-// version per database (ADR-16).
-//
-// The files are the single source: the migration runner applies them and sqlc
-// reads the same directory as its schema, so generated Go cannot describe a
-// table that does not exist.
+// Package migrations carries the core schema as embedded SQL files, one per version per
+// database (ADR-16).
 package migrations
 
 import (
@@ -35,9 +31,7 @@ func owner(directory string) (store.Owner, error) {
 	return store.Owner{Name: store.CoreOwner, Migrations: loaded}, nil
 }
 
-// load reads a directory of NNNN_name.sql files in version order. The number is
-// the version, so a missing or duplicated one is a build-time mistake rather
-// than a runtime surprise.
+// load reads a directory of NNNN_name.sql files in version order.
 func load(directory string) ([]store.Migration, error) {
 	entries, err := fs.ReadDir(files, directory)
 	if err != nil {

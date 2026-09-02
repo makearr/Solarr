@@ -5,17 +5,9 @@ output: internal/apiserver/gen/api.gen.go
 generate:
   models: true
   chi-server: true
-  # embedded-spec is deliberately off. It would pull in kin-openapi purely so a
-  # test could read the document, and the drift test reads api/openapi.yaml with
-  # the YAML library already in go.mod instead. ADR-31: a dependency is added
-  # when it removes real work.
+  # embedded-spec is deliberately off (ADR-31).
   embedded-spec: false
-  # strict-server is deliberately NOT generated. Its handlers return a response
-  # *object* that the wrapper then writes, which cannot express a long-lived SSE
-  # stream -- and its ResponseWriter wrapping is the exact hazard that has
-  # already broken streaming here once (a wrapper without Unwrap). ServerInterface
-  # hands the handler the raw writer and still gives typed parameters, so the
-  # compile-time guarantee is kept without the streaming problem.
+  # strict-server is deliberately NOT generated.
   strict-server: false
 output-options:
   # The spec describes only the endpoints that exist, so there is nothing to

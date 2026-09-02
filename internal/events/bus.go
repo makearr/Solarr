@@ -7,17 +7,13 @@ import (
 	"github.com/makearr/MediaNexus/internal/clock"
 )
 
-// Bounds. Both are deliberately modest: the bus is not a queue, and a
-// subscriber far enough behind to exhaust either has already lost the plot and
-// is better served by refetching.
+// Bounds.
 const (
 	// DefaultSubscriberBuffer is how far behind one subscriber may fall before
 	// its events start being dropped.
 	DefaultSubscriberBuffer = 256
 
-	// DefaultReplayBuffer is how many recent events are kept for a reconnecting
-	// client. Beyond it, the client is told to resynchronise rather than being
-	// handed a silently incomplete history.
+	// DefaultReplayBuffer is how many recent events are kept for a reconnecting client.
 	DefaultReplayBuffer = 512
 )
 
@@ -51,10 +47,6 @@ func NewBus(c clock.Clock) *Bus {
 }
 
 // Publish delivers an event to every interested subscriber.
-//
-// It never blocks and never fails. A subscriber whose buffer is full has its
-// event dropped and counted; the publisher is a job or a request handler, and
-// making either wait on a browser tab would be the wrong way round entirely.
 func (b *Bus) Publish(event Event) {
 	event.ID = b.nextID.Add(1)
 	if event.At.IsZero() {
@@ -94,13 +86,7 @@ func (b *Bus) remember(event Event) {
 	b.replayAt = (b.replayAt + 1) % len(b.replay)
 }
 
-// Since returns events newer than the given id, and whether the history is
-// complete.
-//
-// An incomplete answer is reported rather than hidden: a client that missed
-// events must refetch, and a bus that silently returns a partial history turns
-// a lossy notification channel into a source of truth it was never meant to be
-// (ADR-9).
+// Since returns events newer than the given id, and whether the history is complete (ADR-9).
 func (b *Bus) Since(id uint64, topics map[Topic]bool) (found []Event, complete bool) {
 	b.replayMu.RLock()
 	defer b.replayMu.RUnlock()
@@ -112,10 +98,7 @@ func (b *Bus) Since(id uint64, topics map[Topic]bool) (found []Event, complete b
 		if event.ID == 0 || event.ID <= id {
 			continue
 		}
-		// An empty set means every topic, matching Subscription.wants. The two
-		// must agree: when they did not, a client reconnecting without a topic
-		// filter was replayed nothing at all, because "no topics named" read as
-		// "no topics wanted" here and as "all topics" there.
+		// An empty set means every topic, matching Subscription.wants.
 		if len(topics) > 0 && !topics[event.Topic] {
 			continue
 		}
@@ -188,9 +171,7 @@ func (s *Subscription) wants(topic Topic) bool {
 	return len(s.topics) == 0 || s.topics[topic]
 }
 
-// Close detaches the subscription. It is safe to call more than once, because
-// a handler that closes on both a normal return and a deferred cleanup is the
-// ordinary shape.
+// Close detaches the subscription.
 func (s *Subscription) Close() {
 	s.closed.Do(func() {
 		s.bus.mu.Lock()

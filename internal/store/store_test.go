@@ -37,9 +37,8 @@ func openTestStore(t *testing.T, adjust func(*store.Config)) *store.Store {
 }
 
 func TestOpen_AppliesPragmasToEveryPooledConnection(t *testing.T) {
-	// Open already verifies this and fails if it does not hold, but the check
-	// is the point of the package, so it is asserted from the outside too:
-	// every connection is pinned at once and questioned individually.
+	// Open verifies this already, but it is the point of the package, so it is
+	// asserted from outside too.
 	opened := openTestStore(t, func(config *store.Config) { config.ReadPoolSize = 4 })
 
 	pinned := make([]*sql.Conn, 0, 4)
@@ -114,9 +113,8 @@ func TestOpen_CreatesTheDatabaseFile(t *testing.T) {
 	}
 }
 
-// _txlock=immediate makes a busy database block at BEGIN rather than partway
-// through a transaction, turning a mid-transaction SQLITE_BUSY into a clean
-// wait at the start (§4.1). Two stores on one file is how that is observable.
+// _txlock=immediate makes a busy database block at BEGIN rather than partway through a
+// transaction, turning a mid-transaction SQLITE_BUSY into a clean wait at the start (§4.1).
 func TestOpen_WriteHandleTakesTheLockAtBegin(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.db")
 	config := store.Config{

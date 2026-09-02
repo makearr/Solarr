@@ -92,9 +92,8 @@ func TestExecute_RecoversFromAPanic(t *testing.T) {
 	}
 }
 
-// ADR-20: the executor refuses mutating job types, and it is checked here and
-// nowhere else, because a flag consulted throughout the codebase guarantees a
-// missed check (Invariant 31).
+// ADR-20: the executor refuses mutating job types, and it is checked here and nowhere else,
+// because a flag consulted throughout the codebase guarantees a missed check (Invariant 31).
 func TestExecute_RefusesAMutatingJobInObserveMode(t *testing.T) {
 	queue, fake := newQueue(t)
 	executor := newExecutor(t, queue, fake, jobs.ModeObserve)

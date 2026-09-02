@@ -1,10 +1,5 @@
-// Package secrets encrypts credentials at rest and keeps them out of everything
-// that is not the database (ADR-14).
-//
-// Credentials live in settings.db and never in library.db (ADR-25,
-// Invariant 40). Separation is the primary control and encryption is the
-// second: library.db is the file that gets shared, exported and attached to a
-// bug report, and it holds no credential in any form.
+// Package secrets encrypts credentials at rest and keeps them out of everything that is not the
+// database (ADR-14) (ADR-25, Invariant 40).
 package secrets
 
 import (
@@ -17,12 +12,7 @@ import (
 // redacted is what a secret renders as everywhere except the database.
 const redacted = "<redacted>"
 
-// Secret is a credential. Its value cannot be printed, formatted, logged or
-// serialised by accident: every path that would normally reveal a string
-// returns a placeholder, and reading the real value takes an explicit call.
-//
-// Invariant 61 says secrets never appear in logs or errors. A convention would
-// be forgotten; a type that cannot be printed will not be.
+// Secret is a credential (Invariant 61).
 type Secret string
 
 // String satisfies fmt.Stringer, so %s and %v redact.
@@ -52,9 +42,7 @@ type Masked struct {
 	Masked   string `json:"masked,omitempty"`
 }
 
-// Mask renders a secret for display. Short secrets show nothing but their
-// length, because revealing three of six characters is most of a six-character
-// secret.
+// Mask renders a secret for display.
 func (s Secret) Mask() Masked {
 	if s.IsZero() {
 		return Masked{HasValue: false}

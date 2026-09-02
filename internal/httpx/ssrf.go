@@ -1,7 +1,4 @@
-// Package httpx is the outbound HTTP seam. Every request the process makes goes
-// through it (Invariant 28), which is what lets one rate limiter cover a
-// provider's searches, RSS polls and metadata lookups together (ADR-13) and one
-// guard cover every user-supplied URL (ADR-14).
+// Package httpx is the outbound HTTP seam (Invariant 28, ADR-13).
 package httpx
 
 import (
@@ -55,10 +52,7 @@ func (e *BlockedError) Error() string {
 
 func (e *BlockedError) Unwrap() error { return ErrBlockedAddress }
 
-// blockedPrefixes covers the ranges netip's own predicates miss. Every one of
-// them is either unroutable on the public internet or reserved, so a
-// user-supplied URL pointing at one is a mistake or an attack, never a real
-// indexer.
+// blockedPrefixes covers the ranges netip's own predicates miss.
 var blockedPrefixes = []struct {
 	prefix netip.Prefix
 	reason BlockReason
@@ -76,9 +70,8 @@ var blockedPrefixes = []struct {
 	{netip.MustParsePrefix("2001:db8::/32"), ReasonReserved},      // documentation
 }
 
-// ClassifyAddress reports why an address must not be contacted, or an empty
-// reason if it may be. IPv4-mapped IPv6 is unmapped first, or ::ffff:127.0.0.1
-// would walk straight past every IPv4 check below it.
+// ClassifyAddress reports why an address must not be contacted, or an empty reason if it may
+// be.
 func ClassifyAddress(address netip.Addr) BlockReason {
 	address = address.Unmap()
 
@@ -115,13 +108,7 @@ type Resolver interface {
 // DialFunc opens a connection to an already-validated address.
 type DialFunc func(ctx context.Context, network, address string) (net.Conn, error)
 
-// Guard refuses outbound connections to addresses that are not on the public
-// internet (ADR-14).
-//
-// It validates and then dials the specific address it validated, so a hostname
-// cannot resolve to a public address for the check and a private one for the
-// connection. That rebinding window is the reason validating the URL alone is
-// not enough.
+// Guard refuses outbound connections to addresses that are not on the public internet (ADR-14).
 type Guard struct {
 	resolver Resolver
 	dial     DialFunc
@@ -140,9 +127,7 @@ func NewGuard(resolver Resolver, dial DialFunc, allowedHosts []string) *Guard {
 	return &Guard{resolver: resolver, dial: dial, allowedHosts: allowed}
 }
 
-// CheckURL rejects a scheme the client will not speak. Addresses are checked at
-// dial time instead, because that is the only point at which the address the
-// connection actually uses is known.
+// CheckURL rejects a scheme the client will not speak.
 func (g *Guard) CheckURL(target *url.URL) error {
 	switch target.Scheme {
 	case "http", "https":

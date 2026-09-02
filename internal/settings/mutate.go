@@ -11,17 +11,13 @@ import (
 	"github.com/makearr/MediaNexus/internal/store/gen/settingsdb"
 )
 
-// Reference is one kind of thing holding on to an entity, and how many there
-// are. Structured rather than a formatted string so the UI can offer to detach
-// them (coding-standards §6).
+// Reference is one kind of thing holding on to an entity, and how many there are (§6).
 type Reference struct {
 	Kind  string
 	Count int64
 }
 
-// InUseError reports a refused deletion and everything that caused it. The
-// counts are all gathered before reporting, so the user sees the whole problem
-// rather than discovering the next one after fixing the first.
+// InUseError reports a refused deletion and everything that caused it.
 type InUseError struct {
 	Entity     string
 	ID         int64
@@ -38,13 +34,7 @@ func (e *InUseError) Error() string {
 
 func (e *InUseError) Unwrap() error { return ErrInUse }
 
-// CreateCategory adds a category and grants every administrator manage on it.
-//
-// ADR-27 is explicit that admin is not a bypass: an administrator has manage on
-// all categories "granted explicitly and visibly, so an audit shows who can see
-// what". So the rows are written rather than implied, in the same transaction —
-// a category that existed for even a moment with no administrator able to
-// manage it would be one nobody could grant access to.
+// CreateCategory adds a category and grants every administrator manage on it (ADR-27).
 func (c *Cache) CreateCategory(ctx context.Context, mediaType, name string, priorityRank int64) (Category, error) {
 	administrators := c.administratorIDs()
 
@@ -73,12 +63,7 @@ func (c *Cache) CreateCategory(ctx context.Context, mediaType, name string, prio
 		PriorityRank: created.PriorityRank}, nil
 }
 
-// DeleteCategory removes a category, or refuses and says what still uses it.
-//
-// Access grants are counted rather than cascaded. They are meaningless without
-// the category, so removing them would be defensible — but Invariant 41 admits
-// no exceptions, and the interface can offer to detach and retry. A rule with
-// one exception acquires a second.
+// DeleteCategory removes a category, or refuses and says what still uses it (Invariant 41).
 func (c *Cache) DeleteCategory(ctx context.Context, id int64) error {
 	if _, found := c.Snapshot().Category(id); !found {
 		return fmt.Errorf("%w: category %d", ErrNotFound, id)
@@ -190,12 +175,7 @@ func (c *Cache) DetachRootFolder(ctx context.Context, categoryID, rootFolderID i
 	})
 }
 
-// CreateUser adds an account. The password hash is passed already hashed;
-// hashing is the caller's concern and argon2id parameters are not settings.
-//
-// An administrator is granted manage on every existing category, for the same
-// reason CreateCategory grants it on every new one: the access is explicit and
-// auditable rather than a role check hidden in the authorisation path.
+// CreateUser adds an account.
 func (c *Cache) CreateUser(ctx context.Context, cl clock.Clock, username, passwordHash string, role Role) (User, error) {
 	var categories []int64
 	if role == RoleAdmin {
@@ -233,9 +213,7 @@ func (c *Cache) CreateUser(ctx context.Context, cl clock.Clock, username, passwo
 	return user, nil
 }
 
-// DeleteUser removes an account. Its access grants and preferences go with it:
-// they belong to the user rather than referencing them, which is why the schema
-// cascades those and nothing else.
+// DeleteUser removes an account.
 func (c *Cache) DeleteUser(ctx context.Context, id int64) error {
 	if _, found := c.Snapshot().User(id); !found {
 		return fmt.Errorf("%w: user %d", ErrNotFound, id)
@@ -262,9 +240,7 @@ func (c *Cache) SetCategoryAccess(ctx context.Context, userID, categoryID int64,
 	})
 }
 
-// PasswordHash reads a user's stored hash. It is not in the snapshot, because a
-// credential that is only needed at login has no business sitting in every
-// reader's view of the configuration.
+// PasswordHash reads a user's stored hash.
 func (c *Cache) PasswordHash(ctx context.Context, username string) (string, error) {
 	row, err := c.queries.GetUserByUsername(ctx, username)
 	if errors.Is(err, sql.ErrNoRows) {
