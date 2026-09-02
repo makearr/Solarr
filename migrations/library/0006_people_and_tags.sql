@@ -1,10 +1,4 @@
--- People, organisations, tags and subscriptions (ADR-32, ADR-33).
---
--- In library.db, not settings.db. The specification listed these under the
--- settings heading, but settings.db is defined as small, rarely written and
--- fully cached (ADR-25), and credits alone run to hundreds of thousands of rows
--- at the design scale. category_id, profile_id and user_id therefore carry no
--- foreign key, as elsewhere.
+-- People, organisations, tags and subscriptions (ADR-32, ADR-33) (ADR-25).
 
 -- First-class monitorable entities, not just credits (ADR-32).
 CREATE TABLE person (
@@ -44,11 +38,8 @@ CREATE TABLE person_external_id (
 ) WITHOUT ROWID;
 CREATE INDEX person_external_by_person ON person_external_id(person_id);
 
--- Roles are the point: subscribing to Htuacmasn as director and not as producer
--- needs the role stored per credit, not per person (ADR-32, F13).
--- character is NOT NULL DEFAULT '' rather than nullable: SQLite prohibits an
--- expression in a PRIMARY KEY, so COALESCE cannot appear there. Empty string
--- carries the same meaning and keys cleanly.
+-- Roles are the point: subscribing to Htuacmasn as director and not as producer needs the role
+-- stored per credit, not per person (ADR-32, F13).
 CREATE TABLE credit (
   person_id INTEGER NOT NULL REFERENCES person(id) ON DELETE CASCADE,
   work_id   INTEGER NOT NULL REFERENCES work(id) ON DELETE CASCADE,
@@ -150,9 +141,7 @@ CREATE TABLE subscription (
 );
 CREATE INDEX subscription_subject ON subscription(subject_type, subject_id) WHERE enabled = 1;
 
--- Crossovers, collaborations, spin-offs and side projects (F12). Modelled from
--- day one and surfaced later: storing it early avoids moving files to
--- re-attribute them once F12 lands.
+-- Crossovers, collaborations, spin-offs and side projects (F12).
 CREATE TABLE relationship (
   id        INTEGER PRIMARY KEY,
   from_type TEXT    NOT NULL,

@@ -45,9 +45,8 @@ ON CONFLICT (category_id, root_folder_id) DO UPDATE
 -- name: DetachRootFolderFromCategory :exec
 DELETE FROM category_root_folder WHERE category_id = ? AND root_folder_id = ?;
 
--- Invariant 41: deleting a configuration entity that is in use is refused, with
--- a count of what references it. The application asks before it deletes so the
--- user gets a reason rather than a constraint violation.
+-- Invariant 41: deleting an entity in use is refused with a count of what
+-- references it, so the user gets a reason rather than a constraint violation.
 
 -- name: CountCategoriesUsingRootFolder :one
 SELECT count(*) FROM category_root_folder WHERE root_folder_id = ?;

@@ -1,17 +1,6 @@
--- settings.db, stage 1 (ADR-25, architecture section 5.5).
---
--- Configuration and credentials, kept apart from library.db so that a library
--- backup, export or support bundle carries no credential in any form
--- (Invariant 40). Small, rarely written, and fully cached in memory.
---
--- Foreign keys inside this file are RESTRICT by default, which is Invariant 41
--- enforced by the database as well as by the application: deleting a
--- configuration entity that is in use is refused, never cascaded. The exception
--- is a user's own rows, which belong to the user rather than referencing them.
+-- settings.db, stage 1 (ADR-25, architecture section 5.5) (Invariant 40, Invariant 41).
 
--- Local accounts (ADR-14). Multi-user ships at stage 12, but user_id is carried
--- from the first migration so the feature is later work rather than a migration
--- of every historical row.
+-- Local accounts (ADR-14).
 CREATE TABLE app_user (
   id            INTEGER PRIMARY KEY,
   username      TEXT    NOT NULL UNIQUE,
@@ -48,9 +37,7 @@ CREATE TABLE category (
   UNIQUE (media_type, name)
 );
 
--- A category spans one or more roots (section 11.7). Ordering and weight serve the
--- placement strategies that need them; accepts_new = 0 drains a root without
--- unmounting it.
+-- A category spans one or more roots (section 11.7).
 CREATE TABLE category_root_folder (
   category_id    INTEGER NOT NULL REFERENCES category(id),
   root_folder_id INTEGER NOT NULL REFERENCES root_folder(id),
@@ -74,9 +61,7 @@ CREATE TABLE user_category_access (
 
 CREATE INDEX user_category_access_by_category ON user_category_access(category_id);
 
--- Server-side UI state: theme, column layout, saved filters, collapsed
--- sections. Deliberately not browser storage, so it follows the user across
--- devices (ADR-25).
+-- Server-side UI state: theme, column layout, saved filters, collapsed sections (ADR-25).
 CREATE TABLE user_preference (
   user_id    INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
   key        TEXT    NOT NULL,

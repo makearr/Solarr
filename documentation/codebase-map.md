@@ -11,6 +11,7 @@ Roughly in dependency order — everything below depends only on things above it
 | Package | Responsibility |
 |---|---|
 | `internal/clock` | Injected time. No production code calls `time.Now` (ADR-17) |
+| `internal/privilege` | `PUID`/`PGID`/`TZ`, ownership of managed directories, the privilege drop |
 | `internal/fsx` | Injected filesystem, and the one place paths are made safe (ADR-14) |
 | `internal/secrets` | Encryption at rest, and a `Secret` type that redacts itself everywhere |
 | `internal/paginate` | Cursor pagination. `OFFSET` is banned |
@@ -23,11 +24,29 @@ Roughly in dependency order — everything below depends only on things above it
 | `internal/auth` | Passwords, API keys, sessions |
 | `internal/jobs` | Durable queue, executor, dispatcher |
 | `internal/health` | Liveness and readiness |
-| `internal/apiserver` | Routing, problem responses, authentication, SSE |
+| `internal/apiserver` | Routing, problem responses, authentication, SSE, setup, settings |
+| `internal/webui` | The compiled interface, embedded and served from the binary |
 | `cmd/medianexus` | Wiring only. No logic |
 
 `migrations/` holds embedded SQL, one directory per database; `queries/` holds sqlc source;
-`internal/store/gen/` holds generated code that is committed and never hand-edited.
+`internal/store/gen/` and `internal/apiserver/gen/` hold generated code that is committed and
+never hand-edited. `web/` is the interface source; `make web` compiles it into
+`internal/webui/dist`, which is generated and gitignored.
+
+Which database a table belongs in, and why the boundary is where it is:
+`database-layout.md`.
+
+## The front end
+
+`web/src/list/` is the headless list core. `useLibraryList()` owns fetching, cursor pagination,
+sort and filter state, the selection model and virtualisation; `ListTable` and `ListGrid`
+decide only what a row looks like. A new filter, column or bulk action is implemented once, in
+the hook. See `web-interface.md`.
+
+`api/openapi.yaml` is the source of truth for the HTTP surface. It generates the Go server
+interface and the TypeScript client, and `*Server` is asserted to implement the interface, so
+an operation added to the spec stops the build until a handler exists. See
+`api-generation.md`.
 
 ## The seams
 

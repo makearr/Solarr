@@ -1,6 +1,4 @@
--- Candidates, decisions and the provenance chain (section 5.4). indexer_id and
--- root_folder_id carry no foreign key: those tables live in settings.db
--- (ADR-25, section 4.3).
+-- Candidates, decisions and the provenance chain (section 5.4) (ADR-25, section 4.3).
 
 CREATE TABLE candidate (
   id               INTEGER PRIMARY KEY,

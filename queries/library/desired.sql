@@ -91,9 +91,7 @@ ON CONFLICT (scope, metric) DO UPDATE SET
   value = excluded.value,
   updated_at = excluded.updated_at;
 
--- excluded.value is the delta, since that is what the insert carries. A named
--- argument would be clearer but sqlc does not substitute one inside DO UPDATE:
--- it emits the literal text and SQLite rejects it.
+-- excluded.value is the delta: sqlc cannot substitute a named argument inside DO UPDATE.
 -- name: AdjustCounter :exec
 INSERT INTO counter (scope, metric, value, updated_at)
 VALUES (?, ?, ?, ?)

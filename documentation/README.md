@@ -27,3 +27,4 @@ named file, linked from the code by path.
 - [web-interface.md](web-interface.md) — bundle, routing order, theme, the list core
 - [api-generation.md](api-generation.md) — spec-first generation and what it catches
 - [configuration-export.md](configuration-export.md) — F9 export and import
+- [database-layout.md](database-layout.md) — which database a table belongs in, and why

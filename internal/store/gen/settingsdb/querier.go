@@ -10,9 +10,8 @@ import (
 
 type Querier interface {
 	AttachRootFolderToCategory(ctx context.Context, arg AttachRootFolderToCategoryParams) error
-	// Invariant 41: deleting a configuration entity that is in use is refused, with
-	// a count of what references it. The application asks before it deletes so the
-	// user gets a reason rather than a constraint violation.
+	// Invariant 41: deleting an entity in use is refused with a count of what
+	// references it, so the user gets a reason rather than a constraint violation.
 	CountCategoriesUsingRootFolder(ctx context.Context, rootFolderID int64) (int64, error)
 	CountRootFoldersInCategory(ctx context.Context, categoryID int64) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
@@ -31,9 +30,8 @@ type Querier interface {
 	GetCategory(ctx context.Context, id int64) (Category, error)
 	GetRootFolder(ctx context.Context, id int64) (RootFolder, error)
 	GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetUserByAPIKeyHashRow, error)
-	// Queries live in SQL, not in Go string literals: reviewability is the point
-	// (coding-standards section 9). Columns are listed explicitly rather than with *, so
-	// adding one cannot silently change the shape of an existing result.
+	// Columns are listed explicitly rather than with *, so adding one cannot
+	// silently reshape an existing result (documentation/sql-and-sqlc.md).
 	GetUserByID(ctx context.Context, id int64) (AppUser, error)
 	GetUserByUsername(ctx context.Context, username string) (AppUser, error)
 	ListAPIKeysForUser(ctx context.Context, userID int64) ([]ApiKey, error)
