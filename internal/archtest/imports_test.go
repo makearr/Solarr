@@ -67,7 +67,12 @@ var allowedInternalImports = map[string][]string{
 	"internal/paginate": {},
 	// The section 10.4 sweep: a walk over the filesystem seam and nothing else.
 	// What it finds is persisted by the caller, so it touches no database.
-	"internal/scan": {"internal/clock", "internal/fsx"},
+	// The sweep itself walks only the fsx seam; the job handler beside it composes
+	// the pieces a scan needs, the way internal/recovery does.
+	"internal/scan": {
+		"internal/clock", "internal/fsx", "internal/jobs", "internal/library",
+		"internal/mediatool", "internal/settings",
+	},
 	// ADR-15's post-restore pass spans library.db and jobs.db, so it composes their
 	// owning packages rather than reaching into either gen package (section 4.3).
 	"internal/recovery": {

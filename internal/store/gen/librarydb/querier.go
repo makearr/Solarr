@@ -85,6 +85,8 @@ type Querier interface {
 	DeleteMediaObject(ctx context.Context, id int64) error
 	DeletePerson(ctx context.Context, id int64) error
 	DeleteQuarantineEntry(ctx context.Context, id int64) error
+	// A root that is removed from configuration leaves no progress behind.
+	DeleteScanState(ctx context.Context, rootFolderID int64) error
 	DeleteSubscription(ctx context.Context, id int64) error
 	DeleteWork(ctx context.Context, id int64) error
 	DeleteWorkPart(ctx context.Context, id int64) error
@@ -110,6 +112,8 @@ type Querier interface {
 	FindWorksByClassification(ctx context.Context, arg FindWorksByClassificationParams) ([]Work, error)
 	// Every stored variant is matched during import, not just the canonical one (ADR-41).
 	FindWorksByNormalizedTitle(ctx context.Context, arg FindWorksByNormalizedTitleParams) ([]Work, error)
+	// Only a completed sweep moves the watermark and clears the cursor.
+	FinishScan(ctx context.Context, arg FinishScanParams) error
 	GetAcquisition(ctx context.Context, id int64) (Acquisition, error)
 	// Identity is the client reference; the path is re-read on every poll.
 	GetAcquisitionByClientRef(ctx context.Context, arg GetAcquisitionByClientRefParams) (Acquisition, error)
@@ -129,6 +133,9 @@ type Querier interface {
 	GetPerson(ctx context.Context, id int64) (Person, error)
 	GetPersonByExternalID(ctx context.Context, arg GetPersonByExternalIDParams) (Person, error)
 	GetRequest(ctx context.Context, id int64) (Request, error)
+	// Per-root sweep progress (section 10.4). Column lists follow table order, or sqlc
+	// stops reusing models.
+	GetScanState(ctx context.Context, rootFolderID int64) (ScanState, error)
 	GetTagBySlug(ctx context.Context, slug string) (Tag, error)
 	GetWork(ctx context.Context, id int64) (Work, error)
 	// Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
@@ -192,6 +199,7 @@ type Querier interface {
 	ListRelationshipsFrom(ctx context.Context, arg ListRelationshipsFromParams) ([]Relationship, error)
 	// Newest first: a user's own request history.
 	ListRequestsForUser(ctx context.Context, arg ListRequestsForUserParams) ([]Request, error)
+	ListScanStates(ctx context.Context) ([]ScanState, error)
 	// Every chart reads a rollup, never a live aggregate (ADR-28, section 21.12).
 	ListStatRollup(ctx context.Context, arg ListStatRollupParams) ([]StatRollup, error)
 	// "This tag or any descendant" is one join because the closure is materialised.
@@ -268,11 +276,16 @@ type Querier interface {
 	// interned row, because they are unique per file.
 	SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttributesParams) error
 	SetPersonMonitored(ctx context.Context, arg SetPersonMonitoredParams) error
+	// Progress mid-sweep: the cursor advances, the watermark does not.
+	SetScanCursor(ctx context.Context, arg SetScanCursorParams) error
 	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error
 	SetWorkClassification(ctx context.Context, arg SetWorkClassificationParams) error
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error
 	SetWorkField(ctx context.Context, arg SetWorkFieldParams) error
 	SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonitoredParams) error
+	// A sweep that starts records only that it started: the watermark must not move
+	// until one finishes, or an interrupted scan would look complete.
+	StartScan(ctx context.Context, arg StartScanParams) error
 	// The list surface composes its own WHERE in internal/library/works.go: a filter
 	// written here as an is-it-empty test is not sargable, so SQLite uses no index for that
 	// column and sorts the whole table for every page (documentation/sql-and-sqlc.md).

@@ -158,6 +158,25 @@ visits a directory's whole subtree before its next sibling, so the order is `a`,
 string comparison silently skips that sibling. The cursor also advances only *after*
 the caller has committed a batch, because it means "everything up to here is durable".
 
+### Progress is persisted per batch
+
+`scan_state` (migration 0011) holds one row per root folder. **Only a completed sweep
+moves the watermark**; a sweep that starts records only that it started, and one that
+is interrupted leaves its cursor behind so a restart resumes rather than rescanning.
+The cursor is written *after* the consumer has committed a batch — writing it first
+means a crash between the two silently drops that batch.
+
+A root folder is `settings.db` policy, referenced by id with no foreign key (ADR-25),
+so the scan asks for it rather than reading the table. An offline root is a
+**retryable** failure, never a conclusion: an unmounted disk must not look like the
+loss of a library. An unconfigured root and an unreadable payload are terminal — they
+will not become valid on a retry.
+
+**A test must not mix a fake clock with the real filesystem here.** The sweep compares
+the injected clock against filesystem mtimes, so a `clock.Fake` at epoch over real
+files makes every directory look newer than every watermark. `internal/scan`'s job
+tests walk an `fsx.Mem` on the same fake clock, with a real `library.db` beside it.
+
 ## Post-restore reconciliation
 
 After any restore, and before workers start, `internal/recovery` fails every

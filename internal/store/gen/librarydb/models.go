@@ -399,6 +399,16 @@ type Request struct {
 	CreatedAt     int64
 }
 
+type ScanState struct {
+	RootFolderID    int64
+	SweptThrough    int64
+	Cursor          string
+	StartedAt       sql.NullInt64
+	FinishedAt      sql.NullInt64
+	FilesFound      int64
+	DirectoriesRead int64
+}
+
 type StatRollup struct {
 	Metric     string
 	Dimension  string
