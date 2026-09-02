@@ -450,6 +450,12 @@ type TagClosure struct {
 	Depth        int64
 }
 
+type TitleSearch struct {
+	Title     string
+	WorkID    string
+	MediaType string
+}
+
 type Work struct {
 	ID               int64
 	MediaType        string

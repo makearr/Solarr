@@ -223,6 +223,12 @@ type Querier interface {
 	RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error
 	// Aged decision detail (section 5.7, Part VI Q5).
 	RollUpDecisions(ctx context.Context, arg RollUpDecisionsParams) error
+	// Ranked cross-media search over titles and aliases (migration 0010, section 21.1).
+	// One row per matching work, even if several of its titles match: the best (lowest) bm25
+	// rank wins, so a common alias never crowds out the rest of the results. media_type is
+	// filtered on title_search directly, before the join, since MATCH has already cut the
+	// candidate set down from the full corpus.
+	SearchWorks(ctx context.Context, arg SearchWorksParams) ([]SearchWorksRow, error)
 	SetAcquisitionPath(ctx context.Context, arg SetAcquisitionPathParams) error
 	SetAcquisitionState(ctx context.Context, arg SetAcquisitionStateParams) error
 	SetCounter(ctx context.Context, arg SetCounterParams) error
