@@ -171,3 +171,16 @@ SELECT stream, pruned_through FROM retention_state WHERE stream = ?;
 INSERT INTO retention_state (stream, pruned_through)
 VALUES (?, ?)
 ON CONFLICT (stream) DO UPDATE SET pruned_through = excluded.pruned_through;
+
+-- A restore leaves jobs referencing library rows that no longer exist, so unfinished
+-- work is failed with the reason rather than retried into the same absence (ADR-15).
+-- Batched for Invariant 2, and self-terminating once nothing unfinished is left.
+-- name: FailUnfinishedJobsBatch :execrows
+UPDATE job
+SET state = 'FAILED', lease_owner = NULL, lease_expires_at = NULL,
+    last_error = sqlc.arg(reason), updated_at = sqlc.arg(now)
+WHERE id IN (
+  SELECT j.id FROM job j
+  WHERE j.state IN ('PENDING', 'PENDING_RETRY', 'LEASED', 'RUNNING')
+  LIMIT sqlc.arg(batch_size)
+);

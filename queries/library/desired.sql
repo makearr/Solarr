@@ -176,3 +176,17 @@ FROM decision_rollup
 WHERE period >= sqlc.arg(since)
 GROUP BY outcome
 ORDER BY outcome;
+
+-- After a restore the planner has to re-evaluate everything (ADR-15). Batched so no
+-- single transaction exceeds the write budget (Invariant 2), and self-terminating:
+-- it stops reporting rows once nothing is left clean.
+-- name: MarkDesiredItemsDirtyBatch :execrows
+UPDATE desired_item SET dirty = 1
+WHERE id IN (SELECT d.id FROM desired_item d WHERE d.dirty = 0 LIMIT sqlc.arg(batch_size));
+
+-- library.db references settings.db by id with no foreign key (ADR-25), so only the
+-- application can find a reference a restore has orphaned. The count is what makes
+-- the report worth reading.
+-- name: CountDesiredItemsByCategory :many
+SELECT category_id, CAST(count(*) AS INTEGER) AS total
+FROM desired_item GROUP BY category_id ORDER BY category_id;

@@ -61,6 +61,42 @@ func (q *Queries) AttachFile(ctx context.Context, arg AttachFileParams) error {
 	return err
 }
 
+const countDesiredItemsByCategory = `-- name: CountDesiredItemsByCategory :many
+SELECT category_id, CAST(count(*) AS INTEGER) AS total
+FROM desired_item GROUP BY category_id ORDER BY category_id
+`
+
+type CountDesiredItemsByCategoryRow struct {
+	CategoryID int64
+	Total      int64
+}
+
+// library.db references settings.db by id with no foreign key (ADR-25), so only the
+// application can find a reference a restore has orphaned. The count is what makes
+// the report worth reading.
+func (q *Queries) CountDesiredItemsByCategory(ctx context.Context) ([]CountDesiredItemsByCategoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, countDesiredItemsByCategory)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountDesiredItemsByCategoryRow{}
+	for rows.Next() {
+		var i CountDesiredItemsByCategoryRow
+		if err := rows.Scan(&i.CategoryID, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countDesiredItemsByState = `-- name: CountDesiredItemsByState :many
 SELECT state, COUNT(*) AS total FROM desired_item
 WHERE monitored = 1
@@ -596,6 +632,22 @@ type MarkDesiredItemPlannedParams struct {
 func (q *Queries) MarkDesiredItemPlanned(ctx context.Context, arg MarkDesiredItemPlannedParams) error {
 	_, err := q.db.ExecContext(ctx, markDesiredItemPlanned, arg.LastPlannedAt, arg.ID, arg.Generation)
 	return err
+}
+
+const markDesiredItemsDirtyBatch = `-- name: MarkDesiredItemsDirtyBatch :execrows
+UPDATE desired_item SET dirty = 1
+WHERE id IN (SELECT d.id FROM desired_item d WHERE d.dirty = 0 LIMIT ?1)
+`
+
+// After a restore the planner has to re-evaluate everything (ADR-15). Batched so no
+// single transaction exceeds the write budget (Invariant 2), and self-terminating:
+// it stops reporting rows once nothing is left clean.
+func (q *Queries) MarkDesiredItemsDirtyBatch(ctx context.Context, batchSize int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markDesiredItemsDirtyBatch, batchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const markHunted = `-- name: MarkHunted :exec

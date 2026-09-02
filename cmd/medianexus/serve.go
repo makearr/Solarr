@@ -23,6 +23,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/jobs"
 	"github.com/makearr/MediaNexus/internal/library"
 	"github.com/makearr/MediaNexus/internal/privilege"
+	"github.com/makearr/MediaNexus/internal/recovery"
 	"github.com/makearr/MediaNexus/internal/settings"
 	"github.com/makearr/MediaNexus/internal/store"
 	"github.com/makearr/MediaNexus/internal/webui"
@@ -125,55 +126,88 @@ func slogLevel(level config.LogLevel) slog.Level {
 
 func (p *process) openDatabases(ctx context.Context) error {
 	wall := clock.NewSystem()
-
-	settingsStore, err := store.Open(ctx, wall, p.storeConfig(settingsProfile))
-	if err != nil {
-		return err
-	}
-	p.settings = settingsStore
-
-	jobsStore, err := store.Open(ctx, wall, p.storeConfig(jobsProfile))
-	if err != nil {
-		return err
-	}
-	p.jobs = jobsStore
-
-	libraryStore, err := store.Open(ctx, wall, p.storeConfig(libraryProfile))
-	if err != nil {
-		return err
-	}
-	p.library = libraryStore
-
-	// Migrations back up first and refuse to run without somewhere to back up
-	// to (Invariant 7).
 	backupDir := p.config.Paths.BackupDir
-	settingsOwner, err := migrations.Settings()
-	if err != nil {
-		return err
-	}
-	if err := store.Migrate(ctx, settingsStore, backupDir, settingsOwner); err != nil {
-		return err
-	}
-	jobsOwner, err := migrations.Jobs()
-	if err != nil {
-		return err
-	}
-	if err := store.Migrate(ctx, jobsStore, backupDir, jobsOwner); err != nil {
-		return err
-	}
-	libraryOwner, err := migrations.Library()
-	if err != nil {
-		return err
-	}
-	if err := store.Migrate(ctx, libraryStore, backupDir, libraryOwner); err != nil {
-		return err
+
+	// Section 15.1 step 2: each database is checked before it is used, and a
+	// corrupt one is replaced from a backup rather than started from (ADR-15).
+	var restored []store.RecoveryReport
+	for _, target := range []struct {
+		profile databaseProfile
+		into    **store.Store
+		owner   func() (store.Owner, error)
+	}{
+		{settingsProfile, &p.settings, migrations.Settings},
+		{jobsProfile, &p.jobs, migrations.Jobs},
+		{libraryProfile, &p.library, migrations.Library},
+	} {
+		opened, report, err := store.OpenChecked(ctx, wall, p.storeConfig(target.profile),
+			store.RecoveryOptions{BackupDir: backupDir})
+		if err != nil {
+			return err
+		}
+		*target.into = opened
+		if report.Recovered {
+			restored = append(restored, report)
+			p.logRestore(report)
+		}
+
+		// Migrations back up first and refuse to run without somewhere to back
+		// up to (Invariant 7).
+		owner, err := target.owner()
+		if err != nil {
+			return err
+		}
+		if err := store.Migrate(ctx, opened, backupDir, owner); err != nil {
+			return err
+		}
 	}
 
-	cache, err := settings.NewCache(ctx, settingsStore)
+	cache, err := settings.NewCache(ctx, p.settings)
 	if err != nil {
 		return err
 	}
 	p.cache = cache
+
+	return p.reconcileRestore(ctx, wall, restored)
+}
+
+// logRestore says loudly what was replaced with what. Recovery is never silent
+// (ADR-15), and this is the line an operator finds first.
+func (p *process) logRestore(report store.RecoveryReport) {
+	p.logger.Warn("database restored from backup",
+		slog.String("database", report.Database),
+		slog.String("backup", report.From),
+		slog.Time("backup_taken_at", report.BackupAt),
+		slog.String("damaged_database_kept_at", report.CorruptPath),
+		slog.Any("backups_rejected_as_corrupt", report.Rejected))
+}
+
+// reconcileRestore runs ADR-15's post-restore pass. Section 15.1 puts it at step 3,
+// before migrations; it runs after them here because it queries both databases at
+// the current schema and needs settings.db's configuration to find orphaned
+// references. It is still well before workers start, which is what ADR-15 requires.
+func (p *process) reconcileRestore(ctx context.Context, cl clock.Clock, restored []store.RecoveryReport) error {
+	if len(restored) == 0 {
+		return nil
+	}
+
+	snapshot := p.cache.Snapshot()
+	known := recovery.Known{}
+	for _, category := range snapshot.Categories() {
+		known.CategoryIDs = append(known.CategoryIDs, category.ID)
+	}
+	for _, root := range snapshot.RootFolders() {
+		known.RootFolderIDs = append(known.RootFolderIDs, root.ID)
+	}
+
+	report, err := recovery.Reconcile(ctx, cl, p.library, p.jobs, known, restored)
+	if err != nil {
+		return err
+	}
+	p.logger.Warn("post-restore reconciliation",
+		slog.Int64("jobs_failed", report.JobsFailed),
+		slog.Int64("desired_items_marked_dirty", report.DesiredItemsDirtied),
+		slog.Any("orphaned_references", report.Orphans))
 	return nil
 }
 

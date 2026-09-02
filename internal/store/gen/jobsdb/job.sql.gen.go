@@ -315,6 +315,34 @@ func (q *Queries) FailJob(ctx context.Context, arg FailJobParams) (int64, error)
 	return result.RowsAffected()
 }
 
+const failUnfinishedJobsBatch = `-- name: FailUnfinishedJobsBatch :execrows
+UPDATE job
+SET state = 'FAILED', lease_owner = NULL, lease_expires_at = NULL,
+    last_error = ?1, updated_at = ?2
+WHERE id IN (
+  SELECT j.id FROM job j
+  WHERE j.state IN ('PENDING', 'PENDING_RETRY', 'LEASED', 'RUNNING')
+  LIMIT ?3
+)
+`
+
+type FailUnfinishedJobsBatchParams struct {
+	Reason    sql.NullString
+	Now       int64
+	BatchSize int64
+}
+
+// A restore leaves jobs referencing library rows that no longer exist, so unfinished
+// work is failed with the reason rather than retried into the same absence (ADR-15).
+// Batched for Invariant 2, and self-terminating once nothing unfinished is left.
+func (q *Queries) FailUnfinishedJobsBatch(ctx context.Context, arg FailUnfinishedJobsBatchParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, failUnfinishedJobsBatch, arg.Reason, arg.Now, arg.BatchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const findActiveJobByActionKey = `-- name: FindActiveJobByActionKey :one
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        attempts, max_attempts, run_after, lease_owner, lease_expires_at,

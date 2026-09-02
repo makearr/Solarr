@@ -36,10 +36,16 @@ type Querier interface {
 	// "You have 4 of 6 Ihaol films" is the first thing library-derived discovery
 	// looks for, so held and stated counts come back together (ADR-38).
 	CollectionCoverage(ctx context.Context, id int64) (CollectionCoverageRow, error)
+	// library.db references settings.db by id with no foreign key (ADR-25), so only the
+	// application can find a reference a restore has orphaned. The count is what makes
+	// the report worth reading.
+	CountDesiredItemsByCategory(ctx context.Context) ([]CountDesiredItemsByCategoryRow, error)
 	// The truth the reconciliation job compares a counter against.
 	CountDesiredItemsByState(ctx context.Context, categoryID int64) ([]CountDesiredItemsByStateRow, error)
 	// Recomputable from the observations, which is why they are kept individually.
 	CountGroupOutcomes(ctx context.Context, arg CountGroupOutcomesParams) ([]CountGroupOutcomesRow, error)
+	// The root_folder_id half of the ADR-25 orphan check. See CountDesiredItemsByCategory.
+	CountLibraryPathsByRootFolder(ctx context.Context) ([]CountLibraryPathsByRootFolderRow, error)
 	// What a SET requires follows the monitored parts, so unmonitoring an episode
 	// shrinks the season rather than leaving it permanently incomplete (Appendix E, D3).
 	CountMonitoredParts(ctx context.Context, workID int64) (int64, error)
@@ -208,6 +214,10 @@ type Querier interface {
 	ListWorksCreditedTo(ctx context.Context, arg ListWorksCreditedToParams) ([]Work, error)
 	MarkDesiredItemDirty(ctx context.Context, id int64) error
 	MarkDesiredItemPlanned(ctx context.Context, arg MarkDesiredItemPlannedParams) error
+	// After a restore the planner has to re-evaluate everything (ADR-15). Batched so no
+	// single transaction exceeds the write budget (Invariant 2), and self-terminating:
+	// it stops reporting rows once nothing is left clean.
+	MarkDesiredItemsDirtyBatch(ctx context.Context, batchSize int64) (int64, error)
 	MarkHunted(ctx context.Context, arg MarkHuntedParams) error
 	MarkQuarantineRestored(ctx context.Context, arg MarkQuarantineRestoredParams) error
 	MarkRequestFulfilled(ctx context.Context, id int64) (int64, error)

@@ -116,3 +116,43 @@ is a hard failure naming both checksums.
 
 Every migration is preceded by a backup, and a failure restores from it rather than leaving a
 half-applied schema (Invariant 7).
+
+## Corruption recovery at startup
+
+Every database is verified before it is used (ADR-15, architecture section 15.1).
+`store.OpenChecked` runs `PRAGMA quick_check`, confirms a failure with
+`integrity_check` — `quick_check` has false positives — and only then moves the file
+aside as `<name>.db.corrupt.<timestamp>` and restores backups newest first until one
+checks out. If none does, the process refuses to start rather than running on data it
+cannot vouch for. Nothing is ever deleted.
+
+**The check runs before `Open`, on a connection of its own.** `Open` settles
+`page_size` by querying `sqlite_schema`, so it fails on a corrupt file before any of
+the three real handles exist; probing first means recovery never has to close a live
+`*Store`. A database that is not there yet is a fresh install with nothing to check —
+and creating it during the probe would beat the `0600` creation above to it.
+
+**The log cannot be preserved with the damaged file.** The driver discards an
+unreadable `-wal` when the probe opens the database — including on `SQLITE_NOTADB`,
+where SQLite never reads a page — so by the time anything is moved aside there is no
+log left to move. `Restore` still clears stale sidecars, because a user-initiated
+restore runs with no probe in front of it.
+
+## Post-restore reconciliation
+
+After any restore, and before workers start, `internal/recovery` fails every
+unfinished job with a reason, marks every `desired_item` dirty so the planner
+re-evaluates the whole library (ADR-6), reports the `settings.db` references the
+restore orphaned — `library.db` holds no foreign key to it (ADR-25) — and writes all
+of it to `event_log` under `database.restored`, which is what makes the notification
+survive the restart that produced it.
+
+It runs *after* migrations, where architecture section 15.1 puts it at step 3 before
+them: it queries both databases at the current schema and needs `settings.db`'s
+categories and root folders to find orphans, neither of which exists earlier. ADR-15
+only requires that it precede workers, which it does.
+
+What ADR-15 asks for that cannot be built yet is named in the report's `gaps`, not
+stubbed: re-deriving in-flight acquisitions needs a downloader client (stage 5), and
+checking `candidate.indexer_id` and `acquisition.downloader_id` needs those to be
+configurable (stage 5).

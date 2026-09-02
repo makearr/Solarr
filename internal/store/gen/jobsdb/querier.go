@@ -21,6 +21,10 @@ type Querier interface {
 	DeleteFinishedJobsBefore(ctx context.Context, updatedAt int64) (int64, error)
 	EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, error)
 	FailJob(ctx context.Context, arg FailJobParams) (int64, error)
+	// A restore leaves jobs referencing library rows that no longer exist, so unfinished
+	// work is failed with the reason rather than retried into the same absence (ADR-15).
+	// Batched for Invariant 2, and self-terminating once nothing unfinished is left.
+	FailUnfinishedJobsBatch(ctx context.Context, arg FailUnfinishedJobsBatchParams) (int64, error)
 	FindActiveJobByActionKey(ctx context.Context, actionKey sql.NullString) (Job, error)
 	GetJob(ctx context.Context, id int64) (Job, error)
 	GetRetentionState(ctx context.Context, stream string) (RetentionState, error)
