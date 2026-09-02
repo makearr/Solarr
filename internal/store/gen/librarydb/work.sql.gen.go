@@ -1007,66 +1007,6 @@ func (q *Queries) ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle
 	return items, nil
 }
 
-const listWorksPage = `-- name: ListWorksPage :many
-SELECT id, media_type, canonical_title, sort_title, original_language,
-       year, runtime_ms, added_at, updated_at, added_by
-FROM work
-WHERE (?1 = '' OR media_type = ?1)
-  AND (?2 = ''
-       OR sort_title > ?2
-       OR (sort_title = ?2 AND id > ?3))
-ORDER BY sort_title, id
-LIMIT ?4
-`
-
-type ListWorksPageParams struct {
-	MediaType interface{}
-	AfterSort interface{}
-	AfterID   int64
-	PageSize  int64
-}
-
-// Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
-// sort_title is not unique, so a page boundary inside a group would drop or repeat rows.
-func (q *Queries) ListWorksPage(ctx context.Context, arg ListWorksPageParams) ([]Work, error) {
-	rows, err := q.db.QueryContext(ctx, listWorksPage,
-		arg.MediaType,
-		arg.AfterSort,
-		arg.AfterID,
-		arg.PageSize,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Work{}
-	for rows.Next() {
-		var i Work
-		if err := rows.Scan(
-			&i.ID,
-			&i.MediaType,
-			&i.CanonicalTitle,
-			&i.SortTitle,
-			&i.OriginalLanguage,
-			&i.Year,
-			&i.RuntimeMs,
-			&i.AddedAt,
-			&i.UpdatedAt,
-			&i.AddedBy,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const setWorkClassification = `-- name: SetWorkClassification :exec
 INSERT INTO work_classification (work_id, kind, value, source)
 VALUES (?, ?, ?, ?)
@@ -1159,6 +1099,7 @@ func (q *Queries) SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonit
 }
 
 const updateWorkTimestamp = `-- name: UpdateWorkTimestamp :exec
+
 UPDATE work SET updated_at = ? WHERE id = ?
 `
 
@@ -1167,6 +1108,9 @@ type UpdateWorkTimestampParams struct {
 	ID        int64
 }
 
+// The list surface composes its own WHERE in internal/library/works.go: a filter
+// written here as an is-it-empty test is not sargable, so SQLite uses no index for that
+// column and sorts the whole table for every page (documentation/sql-and-sqlc.md).
 func (q *Queries) UpdateWorkTimestamp(ctx context.Context, arg UpdateWorkTimestampParams) error {
 	_, err := q.db.ExecContext(ctx, updateWorkTimestamp, arg.UpdatedAt, arg.ID)
 	return err

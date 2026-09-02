@@ -4,6 +4,8 @@ package fixture
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -16,8 +18,8 @@ import (
 	"github.com/makearr/MediaNexus/migrations"
 )
 
-// generatorVersion changes whenever the generated shape does, so a cached fixture
-// from an older generator is rebuilt instead of silently answering new benchmarks.
+// generatorVersion changes whenever the generated rows change shape, so a cached
+// fixture from an older generator is rebuilt rather than answering new benchmarks.
 const generatorVersion = 1
 
 // DefaultFiles keeps an ordinary test run to seconds; ADR-22's 500k is opt-in.
@@ -42,10 +44,33 @@ func (s Spec) withDefaults() Spec {
 	return s
 }
 
-// FileName identifies one corpus, so two specs never share a cached database.
-func (s Spec) FileName() string {
+// FileName identifies one corpus, so two specs never share a cached database. The schema
+// is in the name as well as the generator: a migration changes the plans a benchmark
+// measures, and a cached file from before it would answer for the new one without saying
+// so.
+func (s Spec) FileName() (string, error) {
 	s = s.withDefaults()
-	return fmt.Sprintf("library-%dfiles-seed%d-v%d.db", s.Files, s.Seed, generatorVersion)
+	schema, err := schemaFingerprint()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("library-%dfiles-seed%d-g%d-s%s.db", s.Files, s.Seed, generatorVersion, schema), nil
+}
+
+// schemaFingerprint covers the migrations' contents, not their count. An edited
+// migration at the same version is exactly the case a version number misses, and it is
+// the case the migration runner itself refuses for the same reason.
+func schemaFingerprint() (string, error) {
+	owner, err := migrations.Library()
+	if err != nil {
+		return "", fmt.Errorf("fixture: %w", err)
+	}
+
+	digest := sha256.New()
+	for _, migration := range owner.Migrations {
+		_, _ = fmt.Fprintf(digest, "%d\n%s\n", migration.Version, migration.Up)
+	}
+	return hex.EncodeToString(digest.Sum(nil))[:12], nil
 }
 
 // Ensure returns the path of a generated database, building it only the first time.
@@ -54,7 +79,11 @@ func Ensure(ctx context.Context, filesystem fsx.FS, directory string, spec Spec)
 	if !filepath.IsAbs(directory) {
 		return "", fmt.Errorf("fixture: directory %q must be absolute", directory)
 	}
-	path := filepath.Join(directory, spec.FileName())
+	name, err := spec.FileName()
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(directory, name)
 
 	switch _, err := filesystem.Stat(path); {
 	case err == nil:

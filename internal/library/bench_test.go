@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -112,13 +113,12 @@ func openCorpus(tb testing.TB, path string) *store.Store {
 
 // cursors walks the corpus once and keeps every page boundary, so a measurement
 // reads across the whole table rather than repeatedly hitting a warm first page.
-func cursors(tb testing.TB, queries *librarydb.Queries, mediaType string) []librarydb.ListWorksPageParams {
+func cursors(tb testing.TB, works library.Works, filter library.WorkFilter) []library.WorkCursor {
 	tb.Helper()
-	page := librarydb.ListWorksPageParams{MediaType: mediaType, AfterSort: "", PageSize: listPageSize}
-	positions := []librarydb.ListWorksPageParams{page}
+	positions := []library.WorkCursor{{}}
 
 	for {
-		rows, err := queries.ListWorksPage(context.Background(), page)
+		rows, err := works.List(context.Background(), filter, positions[len(positions)-1], listPageSize)
 		if err != nil {
 			tb.Fatalf("walk the corpus: %v", err)
 		}
@@ -126,10 +126,7 @@ func cursors(tb testing.TB, queries *librarydb.Queries, mediaType string) []libr
 			return positions
 		}
 		last := rows[len(rows)-1]
-		page = librarydb.ListWorksPageParams{
-			MediaType: mediaType, AfterSort: last.SortTitle, AfterID: last.ID, PageSize: listPageSize,
-		}
-		positions = append(positions, page)
+		positions = append(positions, library.WorkCursor{SortTitle: last.SortTitle, ID: last.ID})
 	}
 }
 
@@ -162,12 +159,13 @@ func assertTarget(tb testing.TB, name string, durations []time.Duration, limit t
 func TestADR28_ListPageStaysUnderItsTarget(t *testing.T) {
 	timed(t)
 
-	queries := librarydb.New(corpus(t).Read())
-	positions := cursors(t, queries, "music")
+	works := library.NewWorks(corpus(t))
+	filter := library.WorkFilter{MediaType: "music"}
+	positions := cursors(t, works, filter)
 
 	durations := measure(samples, func(index int) {
-		if _, err := queries.ListWorksPage(t.Context(), positions[index%len(positions)]); err != nil {
-			t.Fatalf("ListWorksPage: %v", err)
+		if _, err := works.List(t.Context(), filter, positions[index%len(positions)], listPageSize); err != nil {
+			t.Fatalf("List: %v", err)
 		}
 	})
 	assertTarget(t, "library list page", durations, listPageTarget)
@@ -279,35 +277,36 @@ func TestADR28_CountersAnswerWithoutScanningTheLibrary(t *testing.T) {
 }
 
 func BenchmarkListWorksPage(b *testing.B) {
-	queries := librarydb.New(corpus(b).Read())
-	positions := cursors(b, queries, "music")
+	works := library.NewWorks(corpus(b))
+	filter := library.WorkFilter{MediaType: "music"}
+	positions := cursors(b, works, filter)
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for index := 0; b.Loop(); index++ {
-		if _, err := queries.ListWorksPage(b.Context(), positions[index%len(positions)]); err != nil {
-			b.Fatalf("ListWorksPage: %v", err)
+		if _, err := works.List(b.Context(), filter, positions[index%len(positions)], listPageSize); err != nil {
+			b.Fatalf("List: %v", err)
 		}
 	}
 }
 
 func BenchmarkCursorWalkOfTheWholeCorpus(b *testing.B) {
-	queries := librarydb.New(corpus(b).Read())
+	works := library.NewWorks(corpus(b))
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
-		page := librarydb.ListWorksPageParams{MediaType: "", AfterSort: "", PageSize: listPageSize}
+		cursor := library.WorkCursor{}
 		for {
-			rows, err := queries.ListWorksPage(b.Context(), page)
+			rows, err := works.List(b.Context(), library.WorkFilter{}, cursor, listPageSize)
 			if err != nil {
-				b.Fatalf("ListWorksPage: %v", err)
+				b.Fatalf("List: %v", err)
 			}
 			if len(rows) < listPageSize {
 				break
 			}
 			last := rows[len(rows)-1]
-			page.AfterSort, page.AfterID = last.SortTitle, last.ID
+			cursor = library.WorkCursor{SortTitle: last.SortTitle, ID: last.ID}
 		}
 	}
 }
@@ -445,4 +444,43 @@ func quickHashes(tb testing.TB, opened *store.Store, count int) []string {
 		tb.Fatal("the corpus has no files")
 	}
 	return found
+}
+
+// planCases are the filter combinations the list surface offers, and what each must
+// reach. A plan is asserted at corpus scale rather than in a unit test because on a
+// small table SQLite is right to scan, and an assertion that passes for that reason
+// says nothing about 500k rows.
+var planCases = []struct {
+	name   string
+	filter library.WorkFilter
+	after  library.WorkCursor
+	index  string
+}{
+	{"unfiltered", library.WorkFilter{}, library.WorkCursor{}, "work_sort"},
+	{"media type", library.WorkFilter{MediaType: "music"}, library.WorkCursor{}, "work_type_sort"},
+	{"title prefix", library.WorkFilter{TitlePrefix: "silver"}, library.WorkCursor{}, "work_sort"},
+	{"media type and cursor", library.WorkFilter{MediaType: "music"},
+		library.WorkCursor{SortTitle: "silver signals 50", ID: 100}, "work_type_sort"},
+	{"year range", library.WorkFilter{MediaType: "music", YearFrom: 1990, YearTo: 2000},
+		library.WorkCursor{}, "work_type_sort"},
+}
+
+// A list that sorts its whole result cannot meet the ADR-28 page target at 500k, whatever
+// the measured p99 says at a smaller scale.
+func TestADR28_ListPlansReachAnIndexAndNeverSort(t *testing.T) {
+	timed(t)
+
+	works := library.NewWorks(corpus(t))
+	for _, item := range planCases {
+		plan, err := works.ExplainList(t.Context(), item.filter, item.after, listPageSize)
+		if err != nil {
+			t.Fatalf("%s: %v", item.name, err)
+		}
+		if !strings.Contains(plan, item.index) {
+			t.Errorf("%s does not reach %s:\n%s", item.name, item.index, plan)
+		}
+		if strings.Contains(plan, "TEMP B-TREE") {
+			t.Errorf("%s sorts its whole result:\n%s", item.name, plan)
+		}
+	}
 }

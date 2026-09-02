@@ -10,6 +10,11 @@ ADR-28 states performance as numbers, and numbers only mean something against a 
 same spec, same rows — so two runs, or two drivers, compare like with like. Nothing in
 that directory is committed (`*.db` is gitignored); delete it to force a rebuild.
 
+The name carries the spec, the generator version **and a fingerprint of the library
+migrations**, so a schema change builds a new corpus rather than measuring the old one
+against new queries. Superseded files are left behind rather than deleted — they are
+large, and deleting a file this code did not create is not its business.
+
 The mix follows the real library: roughly 50% music, 35% TV, 15% film, with music and TV
 works carrying parts and a film satisfied by one file. Three details are deliberate:
 
@@ -71,10 +76,10 @@ Measured on the development machine at 500,000 files, `modernc.org/sqlite`, in D
 
 | Measurement | p50 | p99 | Target |
 |---|---|---|---|
-| Library list page (cursor, filtered) | 13 ms | 24 ms | 100 ms |
-| Title lookup | 0.8 ms | 32 ms | 150 ms |
-| Import batch commit (200 rows) | 13 ms | 15 ms | 50 ms |
-| Interactive write behind bulk | 6 ms | 24 ms | 25 ms, under a writer that never pauses |
+| Library list page (cursor, filtered) | 1.7 ms | 3.5 ms | 100 ms |
+| Title lookup | 0.5 ms | 15 ms | 150 ms |
+| Import batch commit (200 rows) | 3.7 ms | 5.7 ms | 50 ms |
+| Interactive write behind bulk | 4.3 ms | 19 ms | 25 ms, under a writer that never pauses |
 
 ## What the measurements have found
 
@@ -93,6 +98,18 @@ Recorded so the next person does not re-derive them.
 The column count is nearly free; the row that comes back is not. `RETURNING` turns an exec
 into a query, and `database/sql` pays for a result set per row. Bulk insert paths therefore
 use `:execlastid` rather than `:one` — see `documentation/sql-and-sqlc.md`.
+
+**An optional predicate in static SQL costs the index entirely.** The list page was
+`SCAN work` plus a sort of the whole table, for every page, and passed its ADR-28 target
+only because `work` holds 52k rows rather than 500k. Composing the WHERE clause from the
+filters actually present took p50 from 13.4ms to 1.7ms and p99 from 23.5ms to 3.5ms at
+500k. The full numbers and the rule are in `documentation/sql-and-sqlc.md`.
+
+Finding it also turned up a missing index: `work_type_sort` leads on `media_type`, so the
+**unfiltered** list -- the first thing anyone sees -- could not use it for ordering and
+sorted the table regardless of how the filters were written. `work_sort` (migration 0008)
+covers that, and `TestADR28_ListPlansReachAnIndexAndNeverSort` holds every filter
+combination to an index and to no temp b-tree.
 
 **Preparing statements once per transaction saves about 30%**, which is real but far
 smaller. ADR-28's prepared-statement cache is worth having; it is not the main cost.

@@ -190,9 +190,6 @@ type Querier interface {
 	// "Htuacmasn as director, not producer" is a role-scoped query, which is why the
 	// role lives on the credit (F13).
 	ListWorksCreditedTo(ctx context.Context, arg ListWorksCreditedToParams) ([]Work, error)
-	// Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
-	// sort_title is not unique, so a page boundary inside a group would drop or repeat rows.
-	ListWorksPage(ctx context.Context, arg ListWorksPageParams) ([]Work, error)
 	MarkDesiredItemDirty(ctx context.Context, id int64) error
 	MarkDesiredItemPlanned(ctx context.Context, arg MarkDesiredItemPlannedParams) error
 	MarkHunted(ctx context.Context, arg MarkHuntedParams) error
@@ -241,6 +238,9 @@ type Querier interface {
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error
 	SetWorkField(ctx context.Context, arg SetWorkFieldParams) error
 	SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonitoredParams) error
+	// The list surface composes its own WHERE in internal/library/works.go: a filter
+	// written here as an is-it-empty test is not sargable, so SQLite uses no index for that
+	// column and sorts the whole table for every page (documentation/sql-and-sqlc.md).
 	UpdateWorkTimestamp(ctx context.Context, arg UpdateWorkTimestampParams) error
 	UpsertArtwork(ctx context.Context, arg UpsertArtworkParams) error
 	// Candidates, decisions and provenance. Column lists follow table order.
