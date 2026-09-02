@@ -92,7 +92,7 @@ func corpus(tb testing.TB) *store.Store {
 func writableCorpus(tb testing.TB) *store.Store {
 	tb.Helper()
 	source := corpus(tb)
-	copied, err := source.Backup(context.Background(), tb.TempDir())
+	copied, err := source.Backup(context.Background(), tb.TempDir(), store.BackupRotation)
 	if err != nil {
 		tb.Fatalf("copy the fixture: %v", err)
 	}

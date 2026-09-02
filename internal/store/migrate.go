@@ -77,7 +77,7 @@ func Migrate(ctx context.Context, s *Store, backupDirectory string, owners ...Ow
 	if backupDirectory == "" {
 		return fmt.Errorf("%w: %d migrations pending on %s", ErrBackupDirRequired, len(pending), s.config.Name)
 	}
-	backupPath, err := s.Backup(ctx, backupDirectory)
+	backupPath, err := s.Backup(ctx, backupDirectory, BackupPreMigration)
 	if err != nil {
 		return fmt.Errorf("pre-migration backup: %w", err)
 	}
