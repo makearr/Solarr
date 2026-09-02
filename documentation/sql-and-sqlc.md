@@ -47,3 +47,16 @@ convention. Write `section 5.5`, not `§5.5`, in SQL.
   directly (ADR-3).
 - No `OFFSET`: cursor pagination only (Invariant 32).
 - No joins across database files. Compose in Go (architecture section 4.3).
+
+## Named arguments and ON CONFLICT
+
+`sqlc.arg(name)` is not substituted inside an `ON CONFLICT ... DO UPDATE SET` clause. sqlc
+emits the literal text `sqlc.arg(name)` into the query and SQLite rejects it with a syntax
+error near `(`.
+
+Use `excluded.<column>` instead, which refers to the row the insert was carrying:
+
+```sql
+ON CONFLICT (scope, metric) DO UPDATE SET
+  value = counter.value + excluded.value
+```

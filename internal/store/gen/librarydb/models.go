@@ -16,6 +16,43 @@ type AltNumbering struct {
 	AltRef   string
 }
 
+type Counter struct {
+	Scope     string
+	Metric    string
+	Value     int64
+	UpdatedAt int64
+}
+
+type DesiredItem struct {
+	ID                  int64
+	WorkID              int64
+	EditionID           sql.NullInt64
+	MediaRef            string
+	MediaSortKey        string
+	CategoryID          int64
+	ProfileID           int64
+	Monitored           int64
+	SatisfactionKind    string
+	RequiredCount       sql.NullInt64
+	PresentCount        int64
+	State               string
+	AvailableFrom       sql.NullInt64
+	AvailableConfidence sql.NullString
+	AvailableBasis      sql.NullString
+	Dirty               int64
+	Generation          int64
+	LastPlannedAt       sql.NullInt64
+	AddedBy             sql.NullInt64
+}
+
+type DesiredItemFile struct {
+	DesiredItemID int64
+	MediaObjectID int64
+	Role          string
+	MediaRef      string
+	AddedAt       int64
+}
+
 type Edition struct {
 	ID              int64
 	WorkID          int64
@@ -34,6 +71,16 @@ type EditionExternalID struct {
 	ExternalID string
 	EditionID  int64
 	Confidence float64
+}
+
+type HuntQueue struct {
+	DesiredItemID  int64
+	Class          string
+	Priority       int64
+	LastSearchedAt int64
+	ReleaseDate    sql.NullInt64
+	EligibleAfter  int64
+	SearchCount    int64
 }
 
 type LibraryPath struct {
@@ -93,6 +140,21 @@ type MediaObject struct {
 	ProbeJson             sql.NullString
 	FirstSeenAt           int64
 	VerifiedAt            sql.NullInt64
+}
+
+type Request struct {
+	ID            int64
+	UserID        int64
+	WorkID        sql.NullInt64
+	ExternalRef   sql.NullString
+	MediaType     string
+	CategoryID    sql.NullInt64
+	ScopeJson     sql.NullString
+	State         string
+	DecidedBy     sql.NullInt64
+	DecidedAt     sql.NullInt64
+	DeclineReason sql.NullString
+	CreatedAt     int64
 }
 
 type Work struct {

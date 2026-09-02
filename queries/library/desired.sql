@@ -1,0 +1,150 @@
+-- Desired state. Column lists follow table order, or sqlc stops reusing models.
+
+-- name: CreateDesiredItem :one
+INSERT INTO desired_item (work_id, edition_id, media_ref, media_sort_key, category_id,
+                          profile_id, monitored, satisfaction_kind, required_count,
+                          present_count, state, available_from, available_confidence,
+                          available_basis, dirty, generation, last_planned_at, added_by)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, work_id, edition_id, media_ref, media_sort_key, category_id, profile_id,
+          monitored, satisfaction_kind, required_count, present_count, state,
+          available_from, available_confidence, available_basis, dirty, generation,
+          last_planned_at, added_by;
+
+-- name: GetDesiredItem :one
+SELECT id, work_id, edition_id, media_ref, media_sort_key, category_id, profile_id,
+       monitored, satisfaction_kind, required_count, present_count, state,
+       available_from, available_confidence, available_basis, dirty, generation,
+       last_planned_at, added_by
+FROM desired_item WHERE id = ?;
+
+-- name: ListDesiredItemsForWork :many
+SELECT id, work_id, edition_id, media_ref, media_sort_key, category_id, profile_id,
+       monitored, satisfaction_kind, required_count, present_count, state,
+       available_from, available_confidence, available_basis, dirty, generation,
+       last_planned_at, added_by
+FROM desired_item WHERE work_id = ? ORDER BY media_sort_key, id;
+
+-- The planner reads the dirty set, not the whole library (ADR-6).
+-- name: ListDirtyDesiredItems :many
+SELECT id, work_id, edition_id, media_ref, media_sort_key, category_id, profile_id,
+       monitored, satisfaction_kind, required_count, present_count, state,
+       available_from, available_confidence, available_basis, dirty, generation,
+       last_planned_at, added_by
+FROM desired_item
+WHERE dirty = 1 AND id > sqlc.arg(after_id)
+ORDER BY id
+LIMIT sqlc.arg(page_size);
+
+-- name: MarkDesiredItemPlanned :exec
+UPDATE desired_item SET dirty = 0, generation = generation + 1, last_planned_at = ?
+WHERE id = ? AND generation = sqlc.arg(generation);
+
+-- name: MarkDesiredItemDirty :exec
+UPDATE desired_item SET dirty = 1 WHERE id = ?;
+
+-- name: SetDesiredItemState :exec
+UPDATE desired_item SET state = ?, present_count = ?, dirty = 1 WHERE id = ?;
+
+-- name: SetDesiredItemAvailability :exec
+UPDATE desired_item
+SET available_from = ?, available_confidence = ?, available_basis = ?, dirty = 1
+WHERE id = ?;
+
+-- name: AttachFile :exec
+INSERT INTO desired_item_file (desired_item_id, media_object_id, role, media_ref, added_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (desired_item_id, media_object_id, role) DO NOTHING;
+
+-- name: DetachFile :exec
+DELETE FROM desired_item_file
+WHERE desired_item_id = ? AND media_object_id = ? AND role = ?;
+
+-- name: ListFilesForDesiredItem :many
+SELECT desired_item_id, media_object_id, role, media_ref, added_at
+FROM desired_item_file WHERE desired_item_id = ? ORDER BY role, media_ref, media_object_id;
+
+-- What a file belongs to. A scan needs this to recognise bytes it has seen.
+-- name: ListDesiredItemsForFile :many
+SELECT desired_item_id, media_object_id, role, media_ref, added_at
+FROM desired_item_file WHERE media_object_id = ? ORDER BY desired_item_id;
+
+-- Only 'primary' counts: a trailer belongs to the work without satisfying it.
+-- name: CountPrimaryFiles :one
+SELECT COUNT(DISTINCT media_ref) AS covered
+FROM desired_item_file WHERE desired_item_id = ? AND role = 'primary';
+
+-- The reconciliation job compares this against present_count. Drift is
+-- inevitable, so the repair path is not optional.
+-- name: RecomputePresentCount :exec
+UPDATE desired_item
+SET present_count = (
+      SELECT COUNT(DISTINCT media_ref)
+      FROM desired_item_file
+      WHERE desired_item_id = desired_item.id AND role = 'primary')
+WHERE id = ?;
+
+-- name: SetCounter :exec
+INSERT INTO counter (scope, metric, value, updated_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (scope, metric) DO UPDATE SET
+  value = excluded.value,
+  updated_at = excluded.updated_at;
+
+-- excluded.value is the delta, since that is what the insert carries. A named
+-- argument would be clearer but sqlc does not substitute one inside DO UPDATE:
+-- it emits the literal text and SQLite rejects it.
+-- name: AdjustCounter :exec
+INSERT INTO counter (scope, metric, value, updated_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (scope, metric) DO UPDATE SET
+  value = counter.value + excluded.value,
+  updated_at = excluded.updated_at;
+
+-- A dashboard figure is one lookup regardless of library size (ADR-28).
+-- name: GetCounter :one
+SELECT scope, metric, value, updated_at FROM counter WHERE scope = ? AND metric = ?;
+
+-- name: ListCountersForScope :many
+SELECT scope, metric, value, updated_at FROM counter WHERE scope = ? ORDER BY metric;
+
+-- The truth the reconciliation job compares a counter against.
+-- name: CountDesiredItemsByState :many
+SELECT state, COUNT(*) AS total FROM desired_item
+WHERE monitored = 1 AND (sqlc.arg(category_id) = 0 OR category_id = sqlc.arg(category_id))
+GROUP BY state;
+
+-- name: UpsertHuntQueueEntry :exec
+INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at,
+                        release_date, eligible_after, search_count)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (desired_item_id) DO UPDATE SET
+  class = excluded.class,
+  priority = excluded.priority,
+  release_date = excluded.release_date,
+  eligible_after = excluded.eligible_after;
+
+-- name: RemoveFromHuntQueue :exec
+DELETE FROM hunt_queue WHERE desired_item_id = ?;
+
+-- oldest_searched, the default hunt mode (section 9.3).
+-- name: NextHuntByOldestSearched :many
+SELECT desired_item_id, class, priority, last_searched_at, release_date,
+       eligible_after, search_count
+FROM hunt_queue
+WHERE class = sqlc.arg(class) AND eligible_after <= sqlc.arg(now)
+ORDER BY priority DESC, last_searched_at ASC
+LIMIT sqlc.arg(page_size);
+
+-- name: NextHuntByNewestRelease :many
+SELECT desired_item_id, class, priority, last_searched_at, release_date,
+       eligible_after, search_count
+FROM hunt_queue
+WHERE class = sqlc.arg(class) AND eligible_after <= sqlc.arg(now)
+ORDER BY priority DESC, release_date DESC
+LIMIT sqlc.arg(page_size);
+
+-- name: MarkHunted :exec
+UPDATE hunt_queue
+SET last_searched_at = ?, search_count = search_count + 1, eligible_after = ?
+WHERE desired_item_id = ?;

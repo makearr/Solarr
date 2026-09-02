@@ -12,7 +12,18 @@ import (
 type Querier interface {
 	AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (LibraryPath, error)
 	AddWorkTitle(ctx context.Context, arg AddWorkTitleParams) (WorkTitle, error)
+	// excluded.value is the delta, since that is what the insert carries. A named
+	// argument would be clearer but sqlc does not substitute one inside DO UPDATE:
+	// it emits the literal text and SQLite rejects it.
+	AdjustCounter(ctx context.Context, arg AdjustCounterParams) error
+	AttachFile(ctx context.Context, arg AttachFileParams) error
 	ClearWorkClassification(ctx context.Context, arg ClearWorkClassificationParams) error
+	// The truth the reconciliation job compares a counter against.
+	CountDesiredItemsByState(ctx context.Context, categoryID interface{}) ([]CountDesiredItemsByStateRow, error)
+	// Only 'primary' counts: a trailer belongs to the work without satisfying it.
+	CountPrimaryFiles(ctx context.Context, desiredItemID int64) (int64, error)
+	// Desired state. Column lists follow table order, or sqlc stops reusing models.
+	CreateDesiredItem(ctx context.Context, arg CreateDesiredItemParams) (DesiredItem, error)
 	CreateEdition(ctx context.Context, arg CreateEditionParams) (Edition, error)
 	CreateMediaObject(ctx context.Context, arg CreateMediaObjectParams) (MediaObject, error)
 	// Identity queries. Column lists follow table order, or sqlc stops reusing models.
@@ -20,6 +31,7 @@ type Querier interface {
 	DeleteLibraryPath(ctx context.Context, id int64) error
 	DeleteMediaObject(ctx context.Context, id int64) error
 	DeleteWork(ctx context.Context, id int64) error
+	DetachFile(ctx context.Context, arg DetachFileParams) error
 	// The cheap identity check an incremental scan runs before reading a file.
 	FindMediaObjectsByQuickHash(ctx context.Context, quickHash string) ([]MediaObject, error)
 	// Monitoring on an album type is the point: "studio albums, not live".
@@ -27,6 +39,9 @@ type Querier interface {
 	// Every stored variant is matched during import, not just the canonical one (ADR-41).
 	FindWorksByNormalizedTitle(ctx context.Context, arg FindWorksByNormalizedTitleParams) ([]Work, error)
 	GetAttributes(ctx context.Context, id int64) (MediaAttribute, error)
+	// A dashboard figure is one lookup regardless of library size (ADR-28).
+	GetCounter(ctx context.Context, arg GetCounterParams) (Counter, error)
+	GetDesiredItem(ctx context.Context, id int64) (DesiredItem, error)
 	GetEditionByExternalID(ctx context.Context, arg GetEditionByExternalIDParams) (Edition, error)
 	GetMediaObject(ctx context.Context, id int64) (MediaObject, error)
 	// oshash is exact identity: the same bytes, with no decoding (ADR-35).
@@ -39,7 +54,14 @@ type Querier interface {
 	InternAttributes(ctx context.Context, arg InternAttributesParams) (MediaAttribute, error)
 	LinkEditionExternalID(ctx context.Context, arg LinkEditionExternalIDParams) error
 	LinkWorkExternalID(ctx context.Context, arg LinkWorkExternalIDParams) error
+	ListCountersForScope(ctx context.Context, scope string) ([]Counter, error)
+	// What a file belongs to. A scan needs this to recognise bytes it has seen.
+	ListDesiredItemsForFile(ctx context.Context, mediaObjectID int64) ([]DesiredItemFile, error)
+	ListDesiredItemsForWork(ctx context.Context, workID int64) ([]DesiredItem, error)
+	// The planner reads the dirty set, not the whole library (ADR-6).
+	ListDirtyDesiredItems(ctx context.Context, arg ListDirtyDesiredItemsParams) ([]DesiredItem, error)
 	ListEditions(ctx context.Context, workID int64) ([]Edition, error)
+	ListFilesForDesiredItem(ctx context.Context, desiredItemID int64) ([]DesiredItemFile, error)
 	ListPathsForObject(ctx context.Context, mediaObjectID int64) ([]LibraryPath, error)
 	// A vanished path is MISSING, not deleted, until the root is confirmed online
 	// (section 10.4), so the scan lists a root rather than removing from it.
@@ -58,6 +80,19 @@ type Querier interface {
 	// Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
 	// sort_title is not unique, so a page boundary inside a group would drop or repeat rows.
 	ListWorksPage(ctx context.Context, arg ListWorksPageParams) ([]Work, error)
+	MarkDesiredItemDirty(ctx context.Context, id int64) error
+	MarkDesiredItemPlanned(ctx context.Context, arg MarkDesiredItemPlannedParams) error
+	MarkHunted(ctx context.Context, arg MarkHuntedParams) error
+	NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error)
+	// oldest_searched, the default hunt mode (section 9.3).
+	NextHuntByOldestSearched(ctx context.Context, arg NextHuntByOldestSearchedParams) ([]HuntQueue, error)
+	// The reconciliation job compares this against present_count. Drift is
+	// inevitable, so the repair path is not optional.
+	RecomputePresentCount(ctx context.Context, id int64) error
+	RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error
+	SetCounter(ctx context.Context, arg SetCounterParams) error
+	SetDesiredItemAvailability(ctx context.Context, arg SetDesiredItemAvailabilityParams) error
+	SetDesiredItemState(ctx context.Context, arg SetDesiredItemStateParams) error
 	SetFingerprints(ctx context.Context, arg SetFingerprintsParams) error
 	// Measured attributes replace claimed ones after probing; the claim is kept so a
 	// mismatch stays visible (ADR-39).
@@ -66,6 +101,7 @@ type Querier interface {
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error
 	SetWorkField(ctx context.Context, arg SetWorkFieldParams) error
 	UpdateWorkTimestamp(ctx context.Context, arg UpdateWorkTimestampParams) error
+	UpsertHuntQueueEntry(ctx context.Context, arg UpsertHuntQueueEntryParams) error
 }
 
 var _ Querier = (*Queries)(nil)
