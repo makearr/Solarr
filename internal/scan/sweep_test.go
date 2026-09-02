@@ -17,15 +17,15 @@ import (
 
 const root = "/media/music"
 
-type library struct {
+type tree struct {
 	fsys  *fsx.Mem
 	clock *clock.Fake
 }
 
-func newLibrary(t *testing.T, files ...string) *library {
+func newTree(t *testing.T, files ...string) *tree {
 	t.Helper()
 	fake := clock.NewFakeAtEpoch()
-	lib := &library{fsys: fsx.NewMem(fake), clock: fake}
+	lib := &tree{fsys: fsx.NewMem(fake), clock: fake}
 	if err := lib.fsys.MkdirAll(root, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -37,7 +37,7 @@ func newLibrary(t *testing.T, files ...string) *library {
 
 // write creates a file and every directory above it, advancing the clock first so
 // each change lands at a distinct time -- which is what a real filesystem does.
-func (l *library) write(t *testing.T, relPath string) {
+func (l *tree) write(t *testing.T, relPath string) {
 	t.Helper()
 	l.clock.Advance(time.Second)
 	absolute := path.Join(root, relPath)
@@ -56,7 +56,7 @@ func (l *library) write(t *testing.T, relPath string) {
 	}
 }
 
-func (l *library) remove(t *testing.T, relPath string) {
+func (l *tree) remove(t *testing.T, relPath string) {
 	t.Helper()
 	l.clock.Advance(time.Second)
 	if err := l.fsys.Remove(path.Join(root, relPath)); err != nil {
@@ -90,7 +90,7 @@ func (c *collector) sorted() []string {
 	return found
 }
 
-func sweep(t *testing.T, lib *library, state scan.State, options scan.Options) (scan.Result, *collector) {
+func sweep(t *testing.T, lib *tree, state scan.State, options scan.Options) (scan.Result, *collector) {
 	t.Helper()
 	// A sweep happens after the writes it is looking for, never in the same instant.
 	lib.clock.Advance(time.Second)
@@ -103,7 +103,7 @@ func sweep(t *testing.T, lib *library, state scan.State, options scan.Options) (
 }
 
 func TestSweep_FirstPassFindsEveryFileAtEveryDepth(t *testing.T) {
-	lib := newLibrary(t,
+	lib := newTree(t,
 		"loose.flac",
 		"Nick Cave/Tender Prey/01.flac",
 		"Nick Cave/Tender Prey/02.flac",
@@ -138,7 +138,7 @@ func TestSweep_FirstPassFindsEveryFileAtEveryDepth(t *testing.T) {
 // The workhorse of section 10.4: at 500k files a full rescan is not an answer, so a
 // second sweep must read only what changed.
 func TestSweep_SecondPassReadsOnlyDirectoriesThatChanged(t *testing.T) {
-	lib := newLibrary(t,
+	lib := newTree(t,
 		"Nick Cave/Tender Prey/01.flac",
 		"Bokuf Lipad/Rupe of Fofu/01.flac",
 	)
@@ -169,7 +169,7 @@ func TestSweep_SecondPassReadsOnlyDirectoriesThatChanged(t *testing.T) {
 // sweep -- a watermark taken from the newest mtime seen, or from when the sweep
 // finished, would leave it behind forever.
 func TestSweep_CatchesADirectoryWrittenWhileTheSweepWasRunning(t *testing.T) {
-	lib := newLibrary(t, "a/01.flac", "b/01.flac")
+	lib := newTree(t, "a/01.flac", "b/01.flac")
 	lib.clock.Advance(time.Second)
 
 	// Emitting "a" is the moment the walk has passed it. Writing into it then is
@@ -200,7 +200,7 @@ func TestSweep_CatchesADirectoryWrittenWhileTheSweepWasRunning(t *testing.T) {
 }
 
 func TestSweep_WithNothingChangedReadsNothingAtAll(t *testing.T) {
-	lib := newLibrary(t, "Nick Cave/Tender Prey/01.flac")
+	lib := newTree(t, "Nick Cave/Tender Prey/01.flac")
 	first, _ := sweep(t, lib, scan.State{}, scan.Options{Full: true})
 
 	second, collected := sweep(t, lib, first.State, scan.Options{})
@@ -219,7 +219,7 @@ func TestSweep_WithNothingChangedReadsNothingAtAll(t *testing.T) {
 // directory -- deciding a path has gone is the caller's job, and section 10.4 is
 // explicit that it is MISSING, never an immediate deletion.
 func TestSweep_RereadsADirectoryAfterADeletion(t *testing.T) {
-	lib := newLibrary(t,
+	lib := newTree(t,
 		"Nick Cave/Tender Prey/01.flac",
 		"Nick Cave/Tender Prey/02.flac",
 	)
@@ -238,7 +238,7 @@ func TestSweep_RereadsADirectoryAfterADeletion(t *testing.T) {
 // is "a", "a/c", "a-b" -- while as plain strings "a-b" < "a/c", because '-' is below
 // '/'. A cursor compared as a string therefore skips the sibling entirely.
 func TestSweep_DoesNotSkipASiblingThatSortsInsideAnEarlierSubtree(t *testing.T) {
-	lib := newLibrary(t,
+	lib := newTree(t,
 		"a/01.flac",
 		"a/c/01.flac",
 		"a-b/01.flac",
@@ -255,7 +255,7 @@ func TestSweep_DoesNotSkipASiblingThatSortsInsideAnEarlierSubtree(t *testing.T) 
 // The same hazard on the resume path: an interrupted sweep must not lose the sibling
 // it had not reached yet.
 func TestSweep_ResumesPastASubtreeWithoutLosingTheNextSibling(t *testing.T) {
-	lib := newLibrary(t,
+	lib := newTree(t,
 		"a/01.flac",
 		"a/c/01.flac",
 		"a-b/01.flac",
@@ -280,7 +280,7 @@ func TestSweep_ResumesPastASubtreeWithoutLosingTheNextSibling(t *testing.T) {
 }
 
 func TestSweep_ReportsSizeAndModificationTimeFromTheWalk(t *testing.T) {
-	lib := newLibrary(t, "a/01.flac")
+	lib := newTree(t, "a/01.flac")
 	_, collected := sweep(t, lib, scan.State{}, scan.Options{Full: true})
 
 	if len(collected.found) != 1 {
@@ -296,7 +296,7 @@ func TestSweep_ReportsSizeAndModificationTimeFromTheWalk(t *testing.T) {
 }
 
 func TestSweep_SkipsWhatIncludeRejects(t *testing.T) {
-	lib := newLibrary(t,
+	lib := newTree(t,
 		"Nick Cave/Tender Prey/01.flac",
 		"Nick Cave/Tender Prey/cover.jpg",
 		"Nick Cave/Tender Prey/notes.txt",
@@ -316,7 +316,7 @@ func TestSweep_SplitsALargeDirectoryIntoBoundedBatches(t *testing.T) {
 	for index := range 25 {
 		files = append(files, fmt.Sprintf("box set/%02d.flac", index))
 	}
-	lib := newLibrary(t, files...)
+	lib := newTree(t, files...)
 
 	_, collected := sweep(t, lib, scan.State{}, scan.Options{Full: true, BatchSize: 10})
 
@@ -336,7 +336,7 @@ func TestSweep_SplitsALargeDirectoryIntoBoundedBatches(t *testing.T) {
 // A scan across 500k files is a job with progress, not a function call: a restart
 // continues from the last committed batch (section 10.4, ADR-3).
 func TestSweep_ResumesAfterTheCallerStoppedIt(t *testing.T) {
-	lib := newLibrary(t,
+	lib := newTree(t,
 		"a/01.flac",
 		"b/01.flac",
 		"c/01.flac",
@@ -367,7 +367,7 @@ func TestSweep_ResumesAfterTheCallerStoppedIt(t *testing.T) {
 // The cursor means "everything up to here is durable". Advancing it for a batch the
 // caller rejected would silently drop that batch on restart.
 func TestSweep_DoesNotAdvanceThePastABatchTheCallerRefused(t *testing.T) {
-	lib := newLibrary(t, "a/01.flac", "b/01.flac")
+	lib := newTree(t, "a/01.flac", "b/01.flac")
 
 	refused := errors.New("write queue closed")
 	collected := &collector{failAfter: 1, failure: refused}
@@ -386,7 +386,7 @@ func TestSweep_DoesNotAdvanceThePastABatchTheCallerRefused(t *testing.T) {
 // A directory whose files were all filtered out is still swept, or a resume would
 // read it again forever.
 func TestSweep_AdvancesPastADirectoryWithNothingWorthEmitting(t *testing.T) {
-	lib := newLibrary(t, "a/notes.txt", "b/01.flac")
+	lib := newTree(t, "a/notes.txt", "b/01.flac")
 
 	result, collected := sweep(t, lib, scan.State{}, scan.Options{
 		Full:    true,
@@ -401,7 +401,7 @@ func TestSweep_AdvancesPastADirectoryWithNothingWorthEmitting(t *testing.T) {
 }
 
 func TestSweep_StopsWhenTheContextIsCancelled(t *testing.T) {
-	lib := newLibrary(t, "a/01.flac", "b/01.flac")
+	lib := newTree(t, "a/01.flac", "b/01.flac")
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
@@ -417,7 +417,7 @@ func TestSweep_StopsWhenTheContextIsCancelled(t *testing.T) {
 }
 
 func TestSweep_RefusesARelativeRoot(t *testing.T) {
-	lib := newLibrary(t)
+	lib := newTree(t)
 	_, err := scan.NewSweeper(lib.fsys, lib.clock).Sweep(t.Context(), "music", scan.State{},
 		scan.Options{}, (&collector{}).emit)
 	if err == nil {
@@ -429,7 +429,7 @@ func TestSweep_RefusesARelativeRoot(t *testing.T) {
 // reports nothing and fails nothing; whether the root is online is settings.db's
 // answer, and only that turns absence into deletion (section 10.4).
 func TestSweep_TreatsAnAbsentRootAsNothingFoundRatherThanAFailure(t *testing.T) {
-	lib := newLibrary(t)
+	lib := newTree(t)
 	if err := lib.fsys.Remove(root); err != nil {
 		t.Fatalf("Remove(root): %v", err)
 	}
