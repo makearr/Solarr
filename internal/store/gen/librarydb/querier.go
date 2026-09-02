@@ -60,11 +60,19 @@ type Querier interface {
 	CreateOrganisation(ctx context.Context, arg CreateOrganisationParams) (Organisation, error)
 	// People, organisations, tags and subscriptions. Column lists follow table order.
 	CreatePerson(ctx context.Context, arg CreatePersonParams) (Person, error)
+	// The request workflow's table (ADR-14, stage 12). Carried from stage 1 so approval
+	// is feature work rather than a schema backfill: nothing is monitored or searched
+	// until a request is approved and its desired_item created.
+	CreateRequest(ctx context.Context, arg CreateRequestParams) (Request, error)
 	CreateSubscription(ctx context.Context, arg CreateSubscriptionParams) (Subscription, error)
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	// Identity queries. Column lists follow table order, or sqlc stops reusing models.
 	CreateWork(ctx context.Context, arg CreateWorkParams) (Work, error)
 	CreateWorkPart(ctx context.Context, arg CreateWorkPartParams) (WorkPart, error)
+	// Guarded on the current state so approving (or declining) twice -- a race between
+	// two admins, or a retried request -- reports that nothing changed rather than
+	// silently overwriting who decided it and when.
+	DecideRequest(ctx context.Context, arg DecideRequestParams) (int64, error)
 	// A DEFER is not a failure: the candidate stays cached until it expires (section 10.1).
 	DeleteExpiredCandidates(ctx context.Context, expiresAt int64) error
 	DeleteLibraryPath(ctx context.Context, id int64) error
@@ -114,6 +122,7 @@ type Querier interface {
 	GetPathByLocation(ctx context.Context, arg GetPathByLocationParams) (LibraryPath, error)
 	GetPerson(ctx context.Context, id int64) (Person, error)
 	GetPersonByExternalID(ctx context.Context, arg GetPersonByExternalIDParams) (Person, error)
+	GetRequest(ctx context.Context, id int64) (Request, error)
 	GetTagBySlug(ctx context.Context, slug string) (Tag, error)
 	GetWork(ctx context.Context, id int64) (Work, error)
 	// Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
@@ -168,10 +177,15 @@ type Querier interface {
 	// A vanished path is MISSING, not deleted, until the root is confirmed online
 	// (section 10.4), so the scan lists a root rather than removing from it.
 	ListPathsInRoot(ctx context.Context, arg ListPathsInRootParams) ([]LibraryPath, error)
+	// Oldest first: an approval queue works through its backlog in order. Cursor on id,
+	// never OFFSET (Invariant 32); created_at is not unique, so id is the tie-break.
+	ListPendingRequests(ctx context.Context, arg ListPendingRequestsParams) ([]Request, error)
 	// The whole phash set is 4 MB at 500k files: Hamming distance is brute-forced in
 	// Go, so this hands over every candidate rather than filtering in SQL (ADR-35).
 	ListPerceptualHashes(ctx context.Context) ([]ListPerceptualHashesRow, error)
 	ListRelationshipsFrom(ctx context.Context, arg ListRelationshipsFromParams) ([]Relationship, error)
+	// Newest first: a user's own request history.
+	ListRequestsForUser(ctx context.Context, arg ListRequestsForUserParams) ([]Request, error)
 	// Every chart reads a rollup, never a live aggregate (ADR-28, section 21.12).
 	ListStatRollup(ctx context.Context, arg ListStatRollupParams) ([]StatRollup, error)
 	// "This tag or any descendant" is one join because the closure is materialised.
@@ -196,6 +210,7 @@ type Querier interface {
 	MarkDesiredItemPlanned(ctx context.Context, arg MarkDesiredItemPlannedParams) error
 	MarkHunted(ctx context.Context, arg MarkHuntedParams) error
 	MarkQuarantineRestored(ctx context.Context, arg MarkQuarantineRestoredParams) error
+	MarkRequestFulfilled(ctx context.Context, id int64) (int64, error)
 	NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error)
 	// oldest_searched, the default hunt mode (section 9.3).
 	NextHuntByOldestSearched(ctx context.Context, arg NextHuntByOldestSearchedParams) ([]HuntQueue, error)
