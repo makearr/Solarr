@@ -64,7 +64,7 @@ milestone is **something that works**, not something that is written.
 |---------|-----------|
 | `0.0.x` | Pre-milestone — foundation, store, jobs, API skeleton |
 | `0.1.x` | **Working web interface** |
-| `0.2.x` | **Working music library** |
+| `0.2.x` | **Working music library, usenet only** |
 | `0.3.x` | Working TV library |
 | `0.4.x` | Working movie library |
 | `0.5.x` | Working audiobook library |
@@ -84,6 +84,12 @@ and nothing in the tooling can do it -- there is deliberately no `make major`.
 
 **"Working" is a high bar.** A library type reaches its milestone when it can identify,
 acquire, import and present that media end to end — not when its module compiles.
+
+**`0.2.x` says "usenet only" because it has to.** Torrent support is stage 17 and music is
+predominantly on torrents, so a milestone claiming a working music library without that
+qualification would overstate what it does. The stage order is a deliberate risk and is not
+changed by this; only the claim is. Stage 17 is M effort and can move at any point, and the
+qualification comes off the milestone when it does.
 
 ## What the version is not
 

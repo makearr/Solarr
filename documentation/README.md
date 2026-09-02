@@ -10,6 +10,7 @@ named file, linked from the code by path.
 | [startup-checks.md](startup-checks.md) | How directories are checked at startup, and what is deliberately not checked |
 | [sql-and-sqlc.md](sql-and-sqlc.md) | Writing queries, and the sqlc SQLite constraints that bite silently |
 | [benchmarks.md](benchmarks.md) | The 500k corpus, the ADR-28 targets as tests, and the ADR-5 driver switch |
+| [media-tools.md](media-tools.md) | ADR-30's fpcalc and tagging helper: what Alpine has, what it costs, where ffmpeg falls short |
 
 ## What goes here
 
