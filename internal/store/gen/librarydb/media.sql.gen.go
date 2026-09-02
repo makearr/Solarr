@@ -41,6 +41,40 @@ func (q *Queries) AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) 
 	return result.LastInsertId()
 }
 
+const countLibraryPathsByRootFolder = `-- name: CountLibraryPathsByRootFolder :many
+SELECT root_folder_id, CAST(count(*) AS INTEGER) AS total
+FROM library_path GROUP BY root_folder_id ORDER BY root_folder_id
+`
+
+type CountLibraryPathsByRootFolderRow struct {
+	RootFolderID int64
+	Total        int64
+}
+
+// The root_folder_id half of the ADR-25 orphan check. See CountDesiredItemsByCategory.
+func (q *Queries) CountLibraryPathsByRootFolder(ctx context.Context) ([]CountLibraryPathsByRootFolderRow, error) {
+	rows, err := q.db.QueryContext(ctx, countLibraryPathsByRootFolder)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountLibraryPathsByRootFolderRow{}
+	for rows.Next() {
+		var i CountLibraryPathsByRootFolderRow
+		if err := rows.Scan(&i.RootFolderID, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createMediaObject = `-- name: CreateMediaObject :execlastid
 INSERT INTO media_object (size_bytes, quick_hash, content_hash, oshash, phash,
                           audio_fp, audio_fp_prefix, fingerprinted_at,

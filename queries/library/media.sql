@@ -119,3 +119,8 @@ LIMIT sqlc.arg(page_size);
 
 -- name: DeleteMediaObject :exec
 DELETE FROM media_object WHERE id = ?;
+
+-- The root_folder_id half of the ADR-25 orphan check. See CountDesiredItemsByCategory.
+-- name: CountLibraryPathsByRootFolder :many
+SELECT root_folder_id, CAST(count(*) AS INTEGER) AS total
+FROM library_path GROUP BY root_folder_id ORDER BY root_folder_id;

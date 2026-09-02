@@ -23,6 +23,14 @@ const (
 
 func newQueue(t *testing.T) (*jobs.Queue, *clock.Fake) {
 	t.Helper()
+	queue, _, fake := newQueueWithStore(t)
+	return queue, fake
+}
+
+// newQueueWithStore is newQueue for the tests that need the store itself, which is
+// what History appends through.
+func newQueueWithStore(t *testing.T) (*jobs.Queue, *store.Store, *clock.Fake) {
+	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
 	if err := os.MkdirAll(backups, 0o755); err != nil {
@@ -52,7 +60,7 @@ func newQueue(t *testing.T) (*jobs.Queue, *clock.Fake) {
 		Type: typeImport, Pool: jobs.PoolImport, Mutating: true, MaxAttempts: 3,
 	})
 
-	return jobs.NewQueue(opened, fake, registry, jobs.NoJitter), fake
+	return jobs.NewQueue(opened, fake, registry, jobs.NoJitter), opened, fake
 }
 
 func mustEnqueue(t *testing.T, queue *jobs.Queue, request jobs.Request) jobs.Job {

@@ -22,7 +22,8 @@ var allowedInternalImports = map[string][]string{
 		"internal/apiserver", "internal/auth", "internal/clock", "internal/config",
 		"internal/egress", "internal/events", "internal/fsx", "internal/health",
 		"internal/httpx", "internal/jobs", "internal/library", "internal/privilege",
-		"internal/settings", "internal/store", "internal/webui", "migrations",
+		"internal/recovery", "internal/settings", "internal/store", "internal/webui",
+		"migrations",
 	},
 	"internal/auth":  {"internal/clock", "internal/secrets"},
 	"internal/authz": {"internal/settings"},
@@ -59,7 +60,12 @@ var allowedInternalImports = map[string][]string{
 	"internal/egress":   {"internal/clock", "internal/httpx"},
 	"internal/store":    {"internal/clock", "internal/fsx"},
 	"internal/paginate": {},
-	"internal/secrets":  {},
+	// ADR-15's post-restore pass spans library.db and jobs.db, so it composes their
+	// owning packages rather than reaching into either gen package (section 4.3).
+	"internal/recovery": {
+		"internal/clock", "internal/jobs", "internal/library", "internal/store",
+	},
+	"internal/secrets": {},
 	// config supplies the path-and-expectation problem shape, which section 14.4
 	// requires settings validation to reuse rather than invent a second one.
 	"internal/settings": {

@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/makearr/MediaNexus/internal/fsx"
 )
 
 // minBackupsKept is the retention floor regardless of configuration -- "minimum 3
@@ -25,16 +27,20 @@ type BackupInfo struct {
 }
 
 // ListBackups returns every backup for this database in directory, newest first.
-// At comes from the timestamp embedded in the name, not the file's mtime: mtime is
-// the real filesystem clock, which the clock.Clock seam does not reach, and two
-// backups taken moments apart in a test can otherwise land in the same tick.
 func (s *Store) ListBackups(directory string) ([]BackupInfo, error) {
-	entries, err := s.fs.ReadDir(directory)
+	return ListBackups(s.fs, directory, s.config.Name)
+}
+
+// ListBackups is the same listing without a store, because the database recovery is
+// restoring cannot be opened. At comes from the name, not the file's mtime: mtime is
+// the real filesystem clock, which the clock.Clock seam does not reach.
+func ListBackups(fsys fsx.FS, directory, name string) ([]BackupInfo, error) {
+	entries, err := fsys.ReadDir(directory)
 	if err != nil {
-		return nil, fmt.Errorf("store %s: list backups in %q: %w", s.config.Name, directory, err)
+		return nil, fmt.Errorf("store %s: list backups in %q: %w", name, directory, err)
 	}
 
-	prefix := s.config.Name + ".db."
+	prefix := name + ".db."
 	var found []BackupInfo
 	for _, entry := range entries {
 		if entry.IsDir {
