@@ -42,7 +42,6 @@ security:
   trusted_proxy_header: X-Remote-User
   trusted_proxy_cidrs: [10.0.0.0/8]
 database:
-  driver: modernc
   busy_timeout: 20s
   page_size: 8192
   cache_size_kb: 32768
@@ -205,7 +204,9 @@ func TestParse_ValueRules(t *testing.T) {
 		{"relative path", "version: 1\npaths:\n  db_dir: data/db\n", "paths.db_dir"},
 		{"unknown auth mode", "version: 1\nsecurity:\n  auth_mode: kerberos\n", "security.auth_mode"},
 		{"bad CIDR", "version: 1\nsecurity:\n  auth_mode: local\n  trusted_proxy_cidrs: [10.0.0.0/64]\n", "security.trusted_proxy_cidrs[0]"},
-		{"driver needing CGO", "version: 1\ndatabase:\n  driver: mattn\n", "database.driver"},
+		// The driver is a build tag's choice, so naming one in config.yml is a key
+		// that does not exist rather than a value that is wrong (ADR-5).
+		{"driver named in config", "version: 1\ndatabase:\n  driver: modernc\n", "database.driver"},
 		{"page size not a power of two", "version: 1\ndatabase:\n  page_size: 5000\n", "database.page_size"},
 		{"hard budget below warn", "version: 1\ndatabase:\n  write_warn: 5s\n  write_hard: 1s\n", "database.write_hard"},
 		{"unparseable cron", "version: 1\nbackup:\n  schedule: \"every tuesday\"\n", "backup.schedule"},

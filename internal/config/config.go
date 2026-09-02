@@ -73,7 +73,6 @@ type Security struct {
 
 // Database tunes SQLite (ADR-2, ADR-3).
 type Database struct {
-	Driver      Driver   `yaml:"driver"`
 	BusyTimeout Duration `yaml:"busy_timeout"`
 	// PageSize is applied at creation only and cannot change later (ADR-22).
 	PageSize    int      `yaml:"page_size"`
@@ -139,7 +138,6 @@ func Default() Config {
 			TrustedProxyHeader: "X-Remote-User",
 		},
 		Database: Database{
-			Driver:      DriverModernc,
 			BusyTimeout: Duration(15 * time.Second),
 			PageSize:    4096,
 			CacheSizeKB: 65536,

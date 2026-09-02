@@ -6,15 +6,17 @@ import (
 	"strings"
 )
 
-// buildDSN puts every PRAGMA in the connection string (ADR-2, Invariant 4).
-func buildDSN(config Config, immediateTransactions bool) string {
+// buildDSN puts every PRAGMA in the connection string (ADR-2, Invariant 4). The cache
+// is per connection and passed in, because the checkpointer needs far less of one than
+// a reader does.
+func buildDSN(config Config, cacheSizeKB int, immediateTransactions bool) string {
 	pragmas := []string{
 		"journal_mode(WAL)",
 		"synchronous(NORMAL)",
 		"foreign_keys(ON)",
 		fmt.Sprintf("busy_timeout(%d)", config.BusyTimeout.Milliseconds()),
 		"temp_store(MEMORY)",
-		fmt.Sprintf("cache_size(-%d)", config.CacheSizeKB),
+		fmt.Sprintf("cache_size(-%d)", cacheSizeKB),
 		// Off, because SQLite checkpoints inside whichever transaction crosses the
 		// threshold: checkpointLoop does it on its own schedule instead.
 		"wal_autocheckpoint(0)",

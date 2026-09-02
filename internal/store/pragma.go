@@ -13,7 +13,9 @@ type pragmaExpectation struct {
 	want string
 }
 
-func (s *Store) expectations() []pragmaExpectation {
+// expectations takes the cache size, because it is the one PRAGMA that differs by
+// connection: the checkpointer is given a small one deliberately.
+func (s *Store) expectations(cacheSizeKB int) []pragmaExpectation {
 	return []pragmaExpectation{
 		{"journal_mode", "wal"},
 		{"synchronous", "1"}, // NORMAL
@@ -21,14 +23,20 @@ func (s *Store) expectations() []pragmaExpectation {
 		{"temp_store", "2"}, // MEMORY
 		{"busy_timeout", fmt.Sprint(s.config.BusyTimeout.Milliseconds())},
 		{"page_size", fmt.Sprint(s.config.PageSize)},
-		{"cache_size", fmt.Sprint(-s.config.CacheSizeKB)},
+		{"cache_size", fmt.Sprint(-cacheSizeKB)},
 		{"wal_autocheckpoint", "0"},
 	}
 }
 
-// verifyPragmas checks the write connection and every connection in the read pool.
+// verifyPragmas checks the write connection, the checkpointer's, and every connection
+// in the read pool.
 func (s *Store) verifyPragmas(ctx context.Context) error {
-	if err := verifyOn(ctx, s.write, s.expectations(), s.config.Name, "write"); err != nil {
+	reader := s.expectations(s.config.CacheSizeKB)
+	if err := verifyOn(ctx, s.write, reader, s.config.Name, "write"); err != nil {
+		return err
+	}
+	if err := verifyOn(ctx, s.checkpointConn, s.expectations(checkpointCacheSizeKB),
+		s.config.Name, "checkpoint"); err != nil {
 		return err
 	}
 
@@ -47,7 +55,7 @@ func (s *Store) verifyPragmas(ctx context.Context) error {
 			return fmt.Errorf("store %s: pin read connection %d: %w", s.config.Name, index, err)
 		}
 		pinned = append(pinned, conn)
-		if err := verifyConn(ctx, conn, s.expectations(), s.config.Name, fmt.Sprintf("read[%d]", index)); err != nil {
+		if err := verifyConn(ctx, conn, reader, s.config.Name, fmt.Sprintf("read[%d]", index)); err != nil {
 			return err
 		}
 	}

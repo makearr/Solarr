@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/makearr/MediaNexus/internal/clock"
@@ -30,6 +31,9 @@ const (
 	// Where a checkpoint switches from copying frames to rewinding the file, which
 	// waits for readers. Four times SQLite's own 1000-page threshold.
 	defaultLogSizeLimitBytes = 16 << 20
+	// The checkpointer walks the log rather than querying, so a reader's cache would
+	// be a megabyte per database of nothing (documentation/database-layout.md).
+	checkpointCacheSizeKB = 2048
 )
 
 // ErrClosed reports use of a store that has been closed.
@@ -123,6 +127,10 @@ type Store struct {
 	checkpointConn   *sql.DB
 	checkpointWanted chan struct{}
 	checkpointerDone chan struct{}
+	// Held by whichever of the two paths is checkpointing. Without it they contend
+	// for SQLite's checkpointer lock, and the writer's half-finishes -- which is the
+	// half that has to complete for the log to rewind.
+	checkpointMu sync.Mutex
 
 	logger     *slog.Logger
 	fs         fsx.FS
@@ -151,7 +159,7 @@ func Open(ctx context.Context, c clock.Clock, config Config) (*Store, error) {
 		return nil, err
 	}
 
-	write, err := sql.Open(driverName, buildDSN(config, true))
+	write, err := sql.Open(driverName, buildDSN(config, config.CacheSizeKB, true))
 	if err != nil {
 		return nil, fmt.Errorf("store %s: open write handle: %w", config.Name, err)
 	}
@@ -159,7 +167,7 @@ func Open(ctx context.Context, c clock.Clock, config Config) (*Store, error) {
 	write.SetMaxIdleConns(1)
 	write.SetConnMaxLifetime(0) // a pooled connection carries the PRAGMAs; recycling costs and gains nothing
 
-	read, err := sql.Open(driverName, buildDSN(config, false))
+	read, err := sql.Open(driverName, buildDSN(config, config.CacheSizeKB, false))
 	if err != nil {
 		_ = write.Close()
 		return nil, fmt.Errorf("store %s: open read pool: %w", config.Name, err)
@@ -168,7 +176,7 @@ func Open(ctx context.Context, c clock.Clock, config Config) (*Store, error) {
 	read.SetMaxIdleConns(config.ReadPoolSize)
 	read.SetConnMaxLifetime(0)
 
-	checkpointConn, err := sql.Open(driverName, buildDSN(config, false))
+	checkpointConn, err := sql.Open(driverName, buildDSN(config, checkpointCacheSizeKB, false))
 	if err != nil {
 		_ = write.Close()
 		_ = read.Close()

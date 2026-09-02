@@ -76,6 +76,31 @@ The columns that do this: `work.added_by`, `library_path.root_folder_id`,
 Deleting a referenced row is **refused, not cascaded** (Invariant 41). The references are
 counted first and reported.
 
+## Connections and page cache
+
+Each database has one write connection, a read pool and one checkpointer. SQLite's
+`cache_size` is **per connection**, so a figure meant for the library, applied to all three
+databases, is a ceiling several times what it looks like: 64 MiB across six connections
+each was over a gigabyte on hardware that is often a NAS.
+
+`database.cache_size_kb` in `config.yml` therefore sizes `library.db`, the only one that
+grows. The others take their size and pool from what they hold, in
+`cmd/medianexus/serve.go`:
+
+| Database | Read pool | Page cache | Why |
+|---|---|---|---|
+| `library.db` | 4 | `cache_size_kb` (64 MiB) | The only one at ADR-22 scale |
+| `jobs.db` | 2 | 8 MiB | Small, hot, never queried across 500k rows |
+| `settings.db` | 1 | 2 MiB | Fully cached in Go already (ADR-25) |
+| any checkpointer | — | 2 MiB | Walks the log; a reader's cache would be idle |
+
+That is a ceiling of about 354 MiB, and `TestDatabaseProfiles_KeepTheCacheCeilingInHand`
+fails if a pool or a size pushes it past 384 MiB.
+
+**The driver is not configurable.** It is chosen by a build tag (`internal/store/
+driver_modernc.go` and `driver_ncruces.go`, ADR-5) and reported at startup and in
+`/api/v1/about`. `config.yml` naming one would be a setting that decides nothing.
+
 ## File permissions
 
 Database files are created `0600` before the driver can create them, so they never exist

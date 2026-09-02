@@ -8,3 +8,6 @@ import (
 
 // driverName is the only place the driver is named (ADR-5).
 const driverName = "sqlite"
+
+// DriverName is what this binary was built with, which config.yml does not decide.
+func DriverName() string { return "modernc" }

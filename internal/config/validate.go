@@ -127,11 +127,6 @@ func (s Security) validate() Problems {
 
 func (d Database) validate() Problems {
 	var problems Problems
-
-	if !oneOf(d.Driver, allowedDrivers) {
-		problems = append(problems, newProblem("database.driver", string(d.Driver),
-			"expected one of: "+listOf(allowedDrivers)+" (others need CGO, which ADR-30 forbids)"))
-	}
 	if d.BusyTimeout <= 0 {
 		problems = append(problems, newProblem("database.busy_timeout", d.BusyTimeout.String(),
 			"expected a positive duration"))

@@ -137,13 +137,6 @@ const (
 	AuthNone AuthMode = "none"
 )
 
-// Driver selects the SQLite implementation (ADR-5).
-type Driver string
-
-// DriverModernc is the pure-Go driver, and the only one compiled in: the others ADR-5 names for
-// benchmarking need CGO, which ADR-30 forbids in the shipped binary.
-const DriverModernc Driver = "modernc"
-
 // LogLevel is the slog level.
 type LogLevel string
 
@@ -169,7 +162,6 @@ const (
 var (
 	allowedModes     = []Mode{ModeNormal, ModeObserve, ModeShadow}
 	allowedAuthModes = []AuthMode{AuthLocal, AuthProxy, AuthAPIKeyOnly, AuthNone}
-	allowedDrivers   = []Driver{DriverModernc}
 	allowedLevels    = []LogLevel{LevelDebug, LevelInfo, LevelWarn, LevelError}
 	allowedFormats   = []LogFormat{FormatJSON, FormatText}
 )

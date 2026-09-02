@@ -17,6 +17,8 @@ type BuildInfo struct {
 	// SourceURL points at the Corresponding Source for *this* build (section 13).
 	SourceURL string `json:"source_url"`
 	License   string `json:"license"`
+	// SQLiteDriver is a build tag's doing, not a setting's (ADR-5).
+	SQLiteDriver string `json:"sqlite_driver"`
 
 	// ServerTime and Timezone are filled per response, not at build time: the
 	// status bar shows the clock schedules actually run on, which on a remote

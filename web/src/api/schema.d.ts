@@ -427,6 +427,11 @@ export interface components {
             /** @example AGPL-3.0-or-later */
             license: string;
             /**
+             * @description Which SQLite implementation this binary was built with (ADR-5). A build property, not a setting: it is chosen by a build tag.
+             * @example modernc
+             */
+            sqlite_driver: string;
+            /**
              * Format: date-time
              * @description The server's wall clock at the moment of the response. Schedules, air dates and retention run on this clock, not the viewer's, and on a remote host the two routinely differ.
              */

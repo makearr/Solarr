@@ -144,6 +144,9 @@ type BuildInfo struct {
 	// SourceUrl The Corresponding Source for *this* build. A modified build must not point at upstream.
 	SourceUrl string `json:"source_url"`
 
+	// SqliteDriver Which SQLite implementation this binary was built with (ADR-5). A build property, not a setting: it is chosen by a build tag.
+	SqliteDriver string `json:"sqlite_driver"`
+
 	// Timezone The server's configured zone, from TZ. `UTC` when unset.
 	Timezone *string `json:"timezone,omitempty"`
 	Version  string  `json:"version"`

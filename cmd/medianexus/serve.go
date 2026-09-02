@@ -126,19 +126,19 @@ func slogLevel(level config.LogLevel) slog.Level {
 func (p *process) openDatabases(ctx context.Context) error {
 	wall := clock.NewSystem()
 
-	settingsStore, err := store.Open(ctx, wall, p.storeConfig("settings"))
+	settingsStore, err := store.Open(ctx, wall, p.storeConfig(settingsProfile))
 	if err != nil {
 		return err
 	}
 	p.settings = settingsStore
 
-	jobsStore, err := store.Open(ctx, wall, p.storeConfig("jobs"))
+	jobsStore, err := store.Open(ctx, wall, p.storeConfig(jobsProfile))
 	if err != nil {
 		return err
 	}
 	p.jobs = jobsStore
 
-	libraryStore, err := store.Open(ctx, wall, p.storeConfig("library"))
+	libraryStore, err := store.Open(ctx, wall, p.storeConfig(libraryProfile))
 	if err != nil {
 		return err
 	}
@@ -177,16 +177,40 @@ func (p *process) openDatabases(ctx context.Context) error {
 	return nil
 }
 
-func (p *process) storeConfig(name string) store.Config {
+// databaseProfile sizes one database for what it holds. SQLite's cache is per
+// connection, so a figure meant for the library, applied to all three, is a ceiling
+// several times what anyone asked for (documentation/database-layout.md).
+type databaseProfile struct {
+	name         string
+	readPoolSize int
+	// cacheSizeKB is zero for the database config.yml sizes, which is the library.
+	cacheSizeKB int
+}
+
+var (
+	// The library is the only one at ADR-22 scale and the only one worth tuning.
+	libraryProfile = databaseProfile{name: "library", readPoolSize: 4}
+	// Small, hot and written constantly, but never queried across 500k rows.
+	jobsProfile = databaseProfile{name: "jobs", readPoolSize: 2, cacheSizeKB: 8192}
+	// Fully cached in Go by ADR-25, so its page cache serves startup and little else.
+	settingsProfile = databaseProfile{name: "settings", readPoolSize: 1, cacheSizeKB: 2048}
+)
+
+func (p *process) storeConfig(profile databaseProfile) store.Config {
+	cacheSizeKB := profile.cacheSizeKB
+	if cacheSizeKB == 0 {
+		cacheSizeKB = p.config.Database.CacheSizeKB
+	}
 	return store.Config{
-		Name:        name,
-		Path:        fmt.Sprintf("%s/%s.db", p.config.Paths.DBDir, name),
-		BusyTimeout: p.config.Database.BusyTimeout.AsDuration(),
-		PageSize:    p.config.Database.PageSize,
-		CacheSizeKB: p.config.Database.CacheSizeKB,
-		WriteWarn:   p.config.Database.WriteWarn.AsDuration(),
-		WriteHard:   p.config.Database.WriteHard.AsDuration(),
-		Logger:      p.logger,
+		Name:         profile.name,
+		Path:         fmt.Sprintf("%s/%s.db", p.config.Paths.DBDir, profile.name),
+		ReadPoolSize: profile.readPoolSize,
+		BusyTimeout:  p.config.Database.BusyTimeout.AsDuration(),
+		PageSize:     p.config.Database.PageSize,
+		CacheSizeKB:  cacheSizeKB,
+		WriteWarn:    p.config.Database.WriteWarn.AsDuration(),
+		WriteHard:    p.config.Database.WriteHard.AsDuration(),
+		Logger:       p.logger,
 	}
 }
 
@@ -252,6 +276,7 @@ func (p *process) startServer(ctx context.Context) error {
 		Build: apiserver.BuildInfo{
 			Version: version, Commit: commit, BuildDate: buildDate,
 			SourceURL: sourceURL, License: license,
+			SQLiteDriver: store.DriverName(),
 		},
 		Checker:     health.New(p.settings, p.jobs, p.library),
 		Auth:        authConfig,
@@ -292,6 +317,7 @@ func (p *process) startServer(ctx context.Context) error {
 	p.logger.Info("serving",
 		slog.String("address", server.Address()),
 		slog.String("version", version),
+		slog.String("sqlite_driver", store.DriverName()),
 		slog.String("mode", string(p.config.Mode)))
 
 	select {

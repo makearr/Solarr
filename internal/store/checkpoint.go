@@ -40,6 +40,9 @@ func (s *Store) wantCheckpoint() {
 // runs only once the log has actually outgrown its limit. RESTART and TRUNCATE both
 // wait out every reader, and never catch a writer that does not pause.
 func (s *Store) rewindTheLog() {
+	s.checkpointMu.Lock()
+	defer s.checkpointMu.Unlock()
+
 	if _, err := s.write.Exec("PRAGMA wal_checkpoint(PASSIVE)"); err != nil {
 		s.logger.Warn("rewinding the log", slog.Any("error", err))
 	}
@@ -52,21 +55,27 @@ func (s *Store) checkpointLoop() {
 	defer close(s.checkpointerDone)
 
 	for range s.checkpointWanted {
-		var blocked int
-		var report CheckpointReport
+		s.copyOutTheLog()
+	}
+}
 
-		err := s.checkpointConn.QueryRow("PRAGMA wal_checkpoint(PASSIVE)").
-			Scan(&blocked, &report.WALPages, &report.CheckpointedPages)
-		if err != nil {
-			s.logger.Warn("checkpoint", slog.Any("error", err))
-			continue
-		}
-		// Not a failure: a long read holds frames back and the next one takes them.
-		if blocked != 0 {
-			s.logger.Debug("checkpoint held back by a reader",
-				slog.Int("wal_pages", report.WALPages),
-				slog.Int("checkpointed_pages", report.CheckpointedPages))
-		}
+func (s *Store) copyOutTheLog() {
+	s.checkpointMu.Lock()
+	defer s.checkpointMu.Unlock()
+
+	var blocked int
+	var report CheckpointReport
+	err := s.checkpointConn.QueryRow("PRAGMA wal_checkpoint(PASSIVE)").
+		Scan(&blocked, &report.WALPages, &report.CheckpointedPages)
+	if err != nil {
+		s.logger.Warn("checkpoint", slog.Any("error", err))
+		return
+	}
+	// Not a failure: a long read holds frames back and the next one takes them.
+	if blocked != 0 {
+		s.logger.Debug("checkpoint held back by a reader",
+			slog.Int("wal_pages", report.WALPages),
+			slog.Int("checkpointed_pages", report.CheckpointedPages))
 	}
 }
 
