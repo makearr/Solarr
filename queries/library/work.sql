@@ -20,18 +20,9 @@ FROM work w
 JOIN work_external_id e ON e.work_id = w.id
 WHERE e.provider = ? AND e.external_id = ?;
 
--- Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
--- sort_title is not unique, so a page boundary inside a group would drop or repeat rows.
--- name: ListWorksPage :many
-SELECT id, media_type, canonical_title, sort_title, original_language,
-       year, runtime_ms, added_at, updated_at, added_by
-FROM work
-WHERE (sqlc.arg(media_type) = '' OR media_type = sqlc.arg(media_type))
-  AND (sqlc.arg(after_sort) = ''
-       OR sort_title > sqlc.arg(after_sort)
-       OR (sort_title = sqlc.arg(after_sort) AND id > sqlc.arg(after_id)))
-ORDER BY sort_title, id
-LIMIT sqlc.arg(page_size);
+-- The list surface composes its own WHERE in internal/library/works.go: a filter
+-- written here as an is-it-empty test is not sargable, so SQLite uses no index for that
+-- column and sorts the whole table for every page (documentation/sql-and-sqlc.md).
 
 -- name: UpdateWorkTimestamp :exec
 UPDATE work SET updated_at = ? WHERE id = ?;

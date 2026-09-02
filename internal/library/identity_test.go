@@ -168,54 +168,6 @@ func TestEditionAndWorkResolveIndependently(t *testing.T) {
 
 // Invariant 32, and the trap that has already cost a session: a cursor without
 // an id tie-break silently skips rows when several share a sort value.
-func TestWorkPaginationWalksEveryRowExactlyOnce(t *testing.T) {
-	const total = 250
-	const pageSize = 20
-
-	opened, queries := newLibrary(t)
-	created := make(map[int64]bool, total)
-	for index := range total {
-		// One sort title for all of them, which is the case that breaks.
-		work := createWork(t, opened, "music", "Greatest Hits")
-		created[work.ID] = true
-		_ = index
-	}
-
-	seen := make(map[int64]int, total)
-	afterSort, afterID := "", int64(0)
-	for page := 0; ; page++ {
-		if page > total {
-			t.Fatal("pagination did not terminate; the cursor is not advancing")
-		}
-
-		rows, err := queries.ListWorksPage(t.Context(), librarydb.ListWorksPageParams{
-			MediaType: "", AfterSort: afterSort, AfterID: afterID, PageSize: pageSize,
-		})
-		if err != nil {
-			t.Fatalf("page %d: %v", page, err)
-		}
-		if len(rows) == 0 {
-			break
-		}
-		for _, row := range rows {
-			seen[row.ID]++
-		}
-		last := rows[len(rows)-1]
-		afterSort, afterID = last.SortTitle, last.ID
-	}
-
-	if len(seen) != total {
-		t.Errorf("walked %d distinct works, want %d -- %d skipped",
-			len(seen), total, total-len(seen))
-	}
-	for id, times := range seen {
-		if times != 1 {
-			t.Errorf("work %d returned %d times", id, times)
-		}
-	}
-}
-
-// ADR-41: alternative titles are stored per work and all of them are matched.
 func TestAliasesResolveToTheSameWork(t *testing.T) {
 	opened, queries := newLibrary(t)
 	work := createWork(t, opened, "tv", "Nathan for You")

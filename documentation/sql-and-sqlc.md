@@ -110,6 +110,8 @@ convention. Write `section 5.5`, not `§5.5`, in SQL.
   ORDER BY sort_title, id
   ```
 
+- **A list surface composes its WHERE clause in Go, not in `queries/`.** This is the one
+  place SQL is assembled rather than written, and the reason is measured: see below.
 - **An insert on a table that grows with the library is `:execlastid`, not `:one`.** Returning
   the row costs about four times the insert itself, measured on both drivers; the column count
   is nearly free but the result set is not. A caller wanting the whole row reads it back.
@@ -118,3 +120,34 @@ convention. Write `section 5.5`, not `§5.5`, in SQL.
 - **Never write through the read pool inside a write transaction.** The write connection holds
   the lock, so the second connection blocks against it until the busy timeout expires.
   Everything inside a `store.Write` goes through the `Queries` it is given.
+
+## Optional predicates, and where they are fatal
+
+sqlc gives one static query, so an optional filter has to be written as a test on the
+argument:
+
+```sql
+WHERE (sqlc.arg(media_type) = '' OR media_type = sqlc.arg(media_type))
+```
+
+**That predicate is not sargable.** SQLite cannot know at plan time that the argument is
+non-empty, so it uses no index for that column. Measured against the 500k corpus, with
+this as a list's only filter:
+
+| Query | p50 | Plan |
+|---|---|---|
+| Optional predicate, one filter set | 6.75 ms | `SCAN work` + `USE TEMP B-TREE FOR ORDER BY` |
+| Composed, one filter set | 0.22 ms | `SEARCH work USING INDEX work_type_sort` |
+
+Thirty-one times, and the shape is worse than the ratio: the scan sorts the whole table
+for every page, so it grows with the library rather than with the page.
+
+**It is only fatal when it is the leading filter.** `FindWorksByNormalizedTitle` and
+`FindWorksByClassification` keep theirs, because both drive off an indexed lookup first
+and the optional `media_type` is a residual filter on the handful of rows that survive
+it. Their plans were checked, not assumed.
+
+So: a list surface — anything where the filters *are* the query — composes its WHERE in
+Go with `store.Predicates`, adding only what is set. `internal/library/works.go` is the
+worked example, and `ExplainList` beside it exists so a test can assert the plan rather
+than the timing. Everything else stays sqlc.

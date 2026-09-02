@@ -2,10 +2,14 @@ package fixture_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/clock"
@@ -237,8 +241,47 @@ func TestEnsure_BuildsOnceAndReusesTheSameFile(t *testing.T) {
 func TestEnsure_NamesDifferentSpecsDifferently(t *testing.T) {
 	other := small
 	other.Files = small.Files * 2
-	if small.FileName() == other.FileName() {
-		t.Errorf("both specs name %s, so one corpus would answer for the other", small.FileName())
+
+	first, err := small.FileName()
+	if err != nil {
+		t.Fatalf("FileName: %v", err)
+	}
+	second, err := other.FileName()
+	if err != nil {
+		t.Fatalf("FileName: %v", err)
+	}
+	if first == second {
+		t.Errorf("both specs name %s, so one corpus would answer for the other", first)
+	}
+}
+
+// A migration changes the plans a benchmark measures, and a fixture cached before it
+// would answer for the new schema without saying so. Editing one in place is the case a
+// version number misses, so the name covers the contents.
+func TestEnsure_EditingAMigrationChangesTheName(t *testing.T) {
+	before, err := small.FileName()
+	if err != nil {
+		t.Fatalf("FileName: %v", err)
+	}
+	if !strings.HasPrefix(before, "library-400files-seed7-") {
+		t.Errorf("FileName() = %s, which does not carry the spec", before)
+	}
+
+	owner, err := migrations.Library()
+	if err != nil {
+		t.Fatalf("migrations: %v", err)
+	}
+	if len(owner.Migrations) == 0 {
+		t.Fatal("no library migrations to fingerprint")
+	}
+	// Nothing in the fixture package can edit an embedded file, so the assertion is
+	// that the name is derived from the contents rather than from their count.
+	digest := sha256.New()
+	for _, migration := range owner.Migrations {
+		_, _ = fmt.Fprintf(digest, "%d\n%s\n", migration.Version, migration.Up)
+	}
+	if !strings.Contains(before, hex.EncodeToString(digest.Sum(nil))[:12]) {
+		t.Errorf("FileName() = %s, which does not carry the migrations' fingerprint", before)
 	}
 }
 
