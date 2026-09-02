@@ -298,6 +298,26 @@ func TestWriteTags_SaysItIsNotImplementedRatherThanSilentlyDoingNothing(t *testi
 	}
 }
 
+// The same tag really does arrive spelled three ways, verified against ffprobe
+// (documentation/media-tools.md). One lookup has to find all of them.
+func TestTagsFirst_IgnoresHowTheNameIsPunctuated(t *testing.T) {
+	for _, spelling := range []string{
+		"musicbrainz_releasegroupid",   // Vorbis, as Picard writes it
+		"musicbrainz release group id", // Vorbis, as kid3 writes its canonical name
+		"musicbrainz release group id", // ID3 and MP4, lowercased from mixed case
+	} {
+		tags := mediatool.Tags{spelling: "rg-uuid"}
+		if got := tags.First("MUSICBRAINZ_RELEASEGROUPID"); got != "rg-uuid" {
+			t.Errorf("First on %q = %q, want rg-uuid", spelling, got)
+		}
+	}
+	// Squeezing must not make different tags equal.
+	tags := mediatool.Tags{"musicbrainz_albumid": "al", "musicbrainz_albumartistid": "aa"}
+	if got := tags.First("MusicBrainz Album Id"); got != "al" {
+		t.Errorf("First(album id) = %q, want al", got)
+	}
+}
+
 func TestTagsFirst_TakesTheFirstNameThatIsPresentAndNotEmpty(t *testing.T) {
 	tags := mediatool.Tags{"albumartist": "", "artist": "Nick Cave"}
 	if got := tags.First("AlbumArtist", "Artist"); got != "Nick Cave" {

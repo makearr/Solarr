@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // ErrToolMissing reports a tool that is not on PATH. A missing tool degrades rather
@@ -25,15 +26,35 @@ var ErrWriteUnsupported = errors.New("mediatool: writing tags is not implemented
 // which container it came from.
 type Tags map[string]string
 
-// First returns the value of the first name that is present, which is how one
-// logical field is read across containers that spell it differently.
+// First returns the value of the first name that is present, ignoring how the name
+// is punctuated. One logical tag really is spelled three ways: setting MusicBrainz's
+// release group id through kid3 produces MUSICBRAINZ_RELEASEGROUPID, "MUSICBRAINZ
+// RELEASE GROUP ID" and "MusicBrainz Release Group Id" depending on the container
+// (documentation/media-tools.md), and an alias list would only ever be as complete as
+// the last tagger someone used.
 func (t Tags) First(names ...string) string {
 	for _, name := range names {
-		if value, ok := t[strings.ToLower(name)]; ok && value != "" {
-			return value
+		wanted := squeeze(name)
+		for key, value := range t {
+			if value != "" && squeeze(key) == wanted {
+				return value
+			}
 		}
 	}
 	return ""
+}
+
+// squeeze reduces a tag name to its letters and digits, lowercased, so the three
+// spellings above collapse to one.
+func squeeze(name string) string {
+	var reduced strings.Builder
+	reduced.Grow(len(name))
+	for _, r := range name {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			reduced.WriteRune(unicode.ToLower(r))
+		}
+	}
+	return reduced.String()
 }
 
 // Measured is what the file actually is, as opposed to what a release name claims.
