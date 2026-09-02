@@ -1,5 +1,5 @@
 // Package secrets encrypts credentials at rest and keeps them out of everything that is not the
-// database (ADR-14) (ADR-25, Invariant 40).
+// database (ADR-14, ADR-25, Invariant 40).
 package secrets
 
 import (

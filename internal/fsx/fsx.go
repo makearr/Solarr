@@ -1,5 +1,5 @@
 // Package fsx is the filesystem seam (ADR-17) and the single choke point for path safety
-// (ADR-14, §11.2) (Invariant 20).
+// (ADR-14, §11.2, Invariant 20).
 package fsx
 
 import (

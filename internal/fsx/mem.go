@@ -17,7 +17,7 @@ import (
 // ELOOP rather than a hang.
 const maxSymlinkDepth = 40
 
-// Mem is an in-memory filesystem for tests (ADR-17) (ADR-11).
+// Mem is an in-memory filesystem for tests (ADR-17).
 type Mem struct {
 	mu    sync.RWMutex
 	clock clock.Clock

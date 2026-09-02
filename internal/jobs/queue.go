@@ -236,7 +236,7 @@ func (q *Queue) Renew(ctx context.Context, job Job, owner string, leaseTTL time.
 	return nil
 }
 
-// Visibility narrows a job listing to what a caller may see (ADR-27) (Invariant 36).
+// Visibility narrows a job listing to what a caller may see (ADR-27, Invariant 36).
 type Visibility struct {
 	// Categories the caller may read. A job scoped to any other category is
 	// invisible.

@@ -1,5 +1,5 @@
 // Package settings holds configuration policy: the contents of settings.db, loaded into memory
-// at startup and kept there (ADR-25) (ADR-28, Invariant 41).
+// at startup and kept there (ADR-25, Invariant 41).
 package settings
 
 import "time"

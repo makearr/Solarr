@@ -51,7 +51,7 @@ func (s *Store) Write(ctx context.Context, priority Priority, run func(context.C
 }
 
 // WriteBatched chunks items and submits each chunk as its own queued transaction, so
-// interactive writes interleave between chunks (§4.2) (Invariant 2).
+// interactive writes interleave between chunks (§4.2, Invariant 2).
 func WriteBatched[T any](
 	ctx context.Context,
 	s *Store,

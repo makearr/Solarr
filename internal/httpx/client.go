@@ -17,7 +17,7 @@ const defaultTimeout = 30 * time.Second
 // redirect chain from a user-supplied URL is a probe, not a feature.
 const defaultMaxRedirects = 5
 
-// sourceURL is where the corresponding source lives (AGPL §13) (ADR-29).
+// sourceURL is where the corresponding source lives (AGPL §13).
 const sourceURL = "https://github.com/makearr/MediaNexus"
 
 // UserAgent builds the identifying header. MusicBrainz blocks generic agents, so

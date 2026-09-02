@@ -1,4 +1,4 @@
-// Package clock is the injected time seam (ADR-17) (Invariant 45).
+// Package clock is the injected time seam (ADR-17, Invariant 45).
 package clock
 
 import (
