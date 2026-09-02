@@ -100,6 +100,14 @@ type Counter struct {
 	UpdatedAt int64
 }
 
+type Credit struct {
+	PersonID  int64
+	WorkID    int64
+	Role      string
+	Character string
+	Ord       sql.NullInt64
+}
+
 type DesiredItem struct {
 	ID                  int64
 	WorkID              int64
@@ -233,6 +241,51 @@ type MediaObject struct {
 	VerifiedAt            sql.NullInt64
 }
 
+type Organisation struct {
+	ID         int64
+	Name       string
+	SortName   string
+	Kind       string
+	ParentID   sql.NullInt64
+	Country    sql.NullString
+	FieldsJson sql.NullString
+	Monitored  int64
+}
+
+type OrganisationExternalID struct {
+	Provider       string
+	ExternalID     string
+	OrganisationID int64
+}
+
+type Person struct {
+	ID             int64
+	Name           string
+	SortName       string
+	Disambiguation sql.NullString
+	Kind           sql.NullString
+	Gender         sql.NullString
+	Country        sql.NullString
+	Born           sql.NullString
+	Died           sql.NullString
+	FieldsJson     sql.NullString
+	Monitored      int64
+	AddedAt        int64
+}
+
+type PersonAlias struct {
+	PersonID   int64
+	Alias      string
+	Normalized string
+	Source     string
+}
+
+type PersonExternalID struct {
+	Provider   string
+	ExternalID string
+	PersonID   int64
+}
+
 type Quarantine struct {
 	ID             int64
 	OriginalPath   string
@@ -245,6 +298,15 @@ type Quarantine struct {
 	QuarantinedAt  int64
 	ExpiresAt      int64
 	RestoredAt     sql.NullInt64
+}
+
+type Relationship struct {
+	ID       int64
+	FromType string
+	FromID   int64
+	ToType   string
+	ToID     int64
+	Kind     string
 }
 
 type Request struct {
@@ -260,6 +322,48 @@ type Request struct {
 	DecidedAt     sql.NullInt64
 	DeclineReason sql.NullString
 	CreatedAt     int64
+}
+
+type Subscription struct {
+	ID                   int64
+	SubjectType          string
+	SubjectID            int64
+	MediaTypesJson       string
+	RolesJson            sql.NullString
+	CategoryID           sql.NullInt64
+	ProfileID            sql.NullInt64
+	FiltersJson          sql.NullString
+	MonitorBackCatalogue int64
+	Enabled              int64
+	UserID               sql.NullInt64
+	CreatedAt            int64
+}
+
+type Tag struct {
+	ID          int64
+	Name        string
+	Slug        string
+	ParentID    sql.NullInt64
+	Description sql.NullString
+	Source      string
+}
+
+type TagAlias struct {
+	TagID int64
+	Alias string
+}
+
+type TagAssignment struct {
+	TagID       int64
+	SubjectType string
+	SubjectID   int64
+	Source      string
+}
+
+type TagClosure struct {
+	AncestorID   int64
+	DescendantID int64
+	Depth        int64
 }
 
 type Work struct {
@@ -320,6 +424,12 @@ type WorkField struct {
 	Provider  string
 	Value     sql.NullString
 	FetchedAt int64
+}
+
+type WorkOrganisation struct {
+	WorkID         int64
+	OrganisationID int64
+	Role           string
 }
 
 type WorkRating struct {

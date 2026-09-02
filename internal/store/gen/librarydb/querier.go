@@ -10,35 +10,57 @@ import (
 )
 
 type Querier interface {
+	AddCredit(ctx context.Context, arg AddCreditParams) error
 	AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (LibraryPath, error)
+	AddPersonAlias(ctx context.Context, arg AddPersonAliasParams) error
+	AddRelationship(ctx context.Context, arg AddRelationshipParams) error
+	// The closure is materialised, so inserting a tag inserts its ancestry too.
+	AddTagClosure(ctx context.Context, arg AddTagClosureParams) error
+	// Every tag is its own ancestor at depth zero, so a root tag still matches.
+	AddTagSelfClosure(ctx context.Context, arg AddTagSelfClosureParams) error
 	AddWorkTitle(ctx context.Context, arg AddWorkTitleParams) (WorkTitle, error)
 	// excluded.value is the delta, since that is what the insert carries. A named
 	// argument would be clearer but sqlc does not substitute one inside DO UPDATE:
 	// it emits the literal text and SQLite rejects it.
 	AdjustCounter(ctx context.Context, arg AdjustCounterParams) error
+	AssignTag(ctx context.Context, arg AssignTagParams) error
 	AttachFile(ctx context.Context, arg AttachFileParams) error
 	BlocklistRelease(ctx context.Context, arg BlocklistReleaseParams) (BlocklistedRelease, error)
+	// A provider refresh removes only what that provider assigned, never a user's
+	// own curation (ADR-33).
+	ClearProviderTagAssignments(ctx context.Context, arg ClearProviderTagAssignmentsParams) error
 	ClearWorkClassification(ctx context.Context, arg ClearWorkClassificationParams) error
 	// The truth the reconciliation job compares a counter against.
 	CountDesiredItemsByState(ctx context.Context, categoryID interface{}) ([]CountDesiredItemsByStateRow, error)
 	// Only 'primary' counts: a trailer belongs to the work without satisfying it.
 	CountPrimaryFiles(ctx context.Context, desiredItemID int64) (int64, error)
+	// Coverage: what a monitored person has produced against what is held (ADR-32).
+	CountWorksCreditedTo(ctx context.Context, arg CountWorksCreditedToParams) (int64, error)
 	CreateAcquisition(ctx context.Context, arg CreateAcquisitionParams) (Acquisition, error)
 	// Desired state. Column lists follow table order, or sqlc stops reusing models.
 	CreateDesiredItem(ctx context.Context, arg CreateDesiredItemParams) (DesiredItem, error)
 	CreateEdition(ctx context.Context, arg CreateEditionParams) (Edition, error)
 	CreateMediaObject(ctx context.Context, arg CreateMediaObjectParams) (MediaObject, error)
+	CreateOrganisation(ctx context.Context, arg CreateOrganisationParams) (Organisation, error)
+	// People, organisations, tags and subscriptions. Column lists follow table order.
+	CreatePerson(ctx context.Context, arg CreatePersonParams) (Person, error)
+	CreateSubscription(ctx context.Context, arg CreateSubscriptionParams) (Subscription, error)
+	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	// Identity queries. Column lists follow table order, or sqlc stops reusing models.
 	CreateWork(ctx context.Context, arg CreateWorkParams) (Work, error)
 	// A DEFER is not a failure: the candidate stays cached until it expires (section 10.1).
 	DeleteExpiredCandidates(ctx context.Context, expiresAt int64) error
 	DeleteLibraryPath(ctx context.Context, id int64) error
 	DeleteMediaObject(ctx context.Context, id int64) error
+	DeletePerson(ctx context.Context, id int64) error
 	DeleteQuarantineEntry(ctx context.Context, id int64) error
+	DeleteSubscription(ctx context.Context, id int64) error
 	DeleteWork(ctx context.Context, id int64) error
 	DetachFile(ctx context.Context, arg DetachFileParams) error
 	// The cheap identity check an incremental scan runs before reading a file.
 	FindMediaObjectsByQuickHash(ctx context.Context, quickHash string) ([]MediaObject, error)
+	// A stage name is often the only way to connect a release to a person (ADR-32).
+	FindPeopleByAlias(ctx context.Context, normalized string) ([]Person, error)
 	// Monitoring on an album type is the point: "studio albums, not live".
 	FindWorksByClassification(ctx context.Context, arg FindWorksByClassificationParams) ([]Work, error)
 	// Every stored variant is matched during import, not just the canonical one (ADR-41).
@@ -55,7 +77,11 @@ type Querier interface {
 	GetMediaObject(ctx context.Context, id int64) (MediaObject, error)
 	// oshash is exact identity: the same bytes, with no decoding (ADR-35).
 	GetMediaObjectByOshash(ctx context.Context, oshash sql.NullString) (MediaObject, error)
+	GetOrganisation(ctx context.Context, id int64) (Organisation, error)
 	GetPathByLocation(ctx context.Context, arg GetPathByLocationParams) (LibraryPath, error)
+	GetPerson(ctx context.Context, id int64) (Person, error)
+	GetPersonByExternalID(ctx context.Context, arg GetPersonByExternalIDParams) (Person, error)
+	GetTagBySlug(ctx context.Context, slug string) (Tag, error)
 	GetWork(ctx context.Context, id int64) (Work, error)
 	// Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
 	GetWorkByExternalID(ctx context.Context, arg GetWorkByExternalIDParams) (Work, error)
@@ -64,12 +90,15 @@ type Querier interface {
 	// The pipeline filters against this between dedupe and evaluate (section 10.11).
 	IsBlocklisted(ctx context.Context, arg IsBlocklistedParams) (int64, error)
 	LinkEditionExternalID(ctx context.Context, arg LinkEditionExternalIDParams) error
+	LinkPersonExternalID(ctx context.Context, arg LinkPersonExternalIDParams) error
 	LinkWorkExternalID(ctx context.Context, arg LinkWorkExternalIDParams) error
+	LinkWorkOrganisation(ctx context.Context, arg LinkWorkOrganisationParams) error
 	ListAcquiredFiles(ctx context.Context, acquisitionID int64) ([]AcquisitionFile, error)
 	// Startup reconciliation polls every non-terminal acquisition (section 10.9).
 	ListActiveAcquisitions(ctx context.Context) ([]Acquisition, error)
 	ListBlocklist(ctx context.Context, arg ListBlocklistParams) ([]BlocklistedRelease, error)
 	ListCountersForScope(ctx context.Context, scope string) ([]Counter, error)
+	ListCreditsForWork(ctx context.Context, workID int64) ([]Credit, error)
 	// Every candidate with its full breakdown, newest first (F1, F16).
 	ListDecisionsForItem(ctx context.Context, arg ListDecisionsForItemParams) ([]CandidateDecision, error)
 	// What a file belongs to. A scan needs this to recognise bytes it has seen.
@@ -78,9 +107,14 @@ type Querier interface {
 	// The planner reads the dirty set, not the whole library (ADR-6).
 	ListDirtyDesiredItems(ctx context.Context, arg ListDirtyDesiredItemsParams) ([]DesiredItem, error)
 	ListEditions(ctx context.Context, workID int64) ([]Edition, error)
+	ListEnabledSubscriptions(ctx context.Context) ([]Subscription, error)
 	ListExpiredQuarantine(ctx context.Context, arg ListExpiredQuarantineParams) ([]Quarantine, error)
 	ListFilesForDesiredItem(ctx context.Context, desiredItemID int64) ([]DesiredItemFile, error)
 	ListImportDecisionsNeedingReview(ctx context.Context, limit int64) ([]ImportDecision, error)
+	// "Monitor this studio and everything beneath it" needs the whole subtree, and
+	// imprints and sub-labels are real in every domain (ADR-32).
+	ListOrganisationSubtree(ctx context.Context, id int64) ([]Organisation, error)
+	ListOrganisationsForWork(ctx context.Context, workID int64) ([]WorkOrganisation, error)
 	ListPathsForObject(ctx context.Context, mediaObjectID int64) ([]LibraryPath, error)
 	// A vanished path is MISSING, not deleted, until the root is confirmed online
 	// (section 10.4), so the scan lists a root rather than removing from it.
@@ -88,6 +122,10 @@ type Querier interface {
 	// The whole phash set is 4 MB at 500k files: Hamming distance is brute-forced in
 	// Go, so this hands over every candidate rather than filtering in SQL (ADR-35).
 	ListPerceptualHashes(ctx context.Context) ([]ListPerceptualHashesRow, error)
+	ListRelationshipsFrom(ctx context.Context, arg ListRelationshipsFromParams) ([]Relationship, error)
+	// "This tag or any descendant" is one join because the closure is materialised.
+	ListSubjectsForTagTree(ctx context.Context, arg ListSubjectsForTagTreeParams) ([]ListSubjectsForTagTreeRow, error)
+	ListTagsForSubject(ctx context.Context, arg ListTagsForSubjectParams) ([]TagAssignment, error)
 	// Fingerprint generation is the lowest-priority background work and resumable,
 	// so it asks for the next unfingerprinted rows rather than scanning (ADR-35).
 	ListUnfingerprinted(ctx context.Context, arg ListUnfingerprintedParams) ([]MediaObject, error)
@@ -96,6 +134,9 @@ type Querier interface {
 	ListWorkExternalIDs(ctx context.Context, workID int64) ([]WorkExternalID, error)
 	ListWorkFields(ctx context.Context, workID int64) ([]WorkField, error)
 	ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle, error)
+	// "Htuacmasn as director, not producer" is a role-scoped query, which is why the
+	// role lives on the credit (F13).
+	ListWorksCreditedTo(ctx context.Context, arg ListWorksCreditedToParams) ([]Work, error)
 	// Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
 	// sort_title is not unique, so a page boundary inside a group would drop or repeat rows.
 	ListWorksPage(ctx context.Context, arg ListWorksPageParams) ([]Work, error)
@@ -133,6 +174,7 @@ type Querier interface {
 	// Measured attributes replace claimed ones after probing; the claim is kept so a
 	// mismatch stays visible (ADR-39).
 	SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttributesParams) error
+	SetPersonMonitored(ctx context.Context, arg SetPersonMonitoredParams) error
 	SetWorkClassification(ctx context.Context, arg SetWorkClassificationParams) error
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error
 	SetWorkField(ctx context.Context, arg SetWorkFieldParams) error
