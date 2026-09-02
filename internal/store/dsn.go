@@ -15,6 +15,9 @@ func buildDSN(config Config, immediateTransactions bool) string {
 		fmt.Sprintf("busy_timeout(%d)", config.BusyTimeout.Milliseconds()),
 		"temp_store(MEMORY)",
 		fmt.Sprintf("cache_size(-%d)", config.CacheSizeKB),
+		// Off, because SQLite checkpoints inside whichever transaction crosses the
+		// threshold: checkpointLoop does it on its own schedule instead.
+		"wal_autocheckpoint(0)",
 	}
 
 	parameters := make([]string, 0, len(pragmas)+1)

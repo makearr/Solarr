@@ -24,6 +24,12 @@ const (
 	defaultCacheSizeKB  = 65536
 	defaultWriteWarn    = 50 * time.Millisecond
 	defaultWriteHard    = 2 * time.Second
+	// Measured: a 200-row import batch settles the log at about 1.7 MB at this
+	// interval, against 10 MB and climbing with no checkpoint at all.
+	defaultCheckpointEveryCommits = 64
+	// Where a checkpoint switches from copying frames to rewinding the file, which
+	// waits for readers. Four times SQLite's own 1000-page threshold.
+	defaultLogSizeLimitBytes = 16 << 20
 )
 
 // ErrClosed reports use of a store that has been closed.
@@ -47,6 +53,14 @@ type Config struct {
 	// Invariant 2 is measured against.
 	WriteWarn time.Duration
 	WriteHard time.Duration
+
+	// CheckpointEveryCommits is how many transactions pass before the writer folds
+	// the log back in. Automatic checkpointing is off, so nothing else does it.
+	CheckpointEveryCommits int
+
+	// LogSizeLimitBytes is where a checkpoint starts rewinding the log rather than
+	// only copying out of it.
+	LogSizeLimitBytes int64
 
 	// OnBudgetExceeded is called when a transaction passes WriteHard (Invariant 2).
 	OnBudgetExceeded func(TransactionReport)
@@ -78,6 +92,12 @@ func (c Config) withDefaults() Config {
 	if c.WriteHard <= 0 {
 		c.WriteHard = defaultWriteHard
 	}
+	if c.CheckpointEveryCommits <= 0 {
+		c.CheckpointEveryCommits = defaultCheckpointEveryCommits
+	}
+	if c.LogSizeLimitBytes <= 0 {
+		c.LogSizeLimitBytes = defaultLogSizeLimitBytes
+	}
 	if c.Logger == nil {
 		c.Logger = slog.Default()
 	}
@@ -98,10 +118,19 @@ type Store struct {
 	write *sql.DB
 	read  *sql.DB
 
+	// checkpointConn exists so a checkpoint runs beside the writer instead of in
+	// front of it. It never opens a transaction, so ADR-3's single writer stands.
+	checkpointConn   *sql.DB
+	checkpointWanted chan struct{}
+	checkpointerDone chan struct{}
+
 	logger     *slog.Logger
 	fs         fsx.FS
 	queue      *writeQueue
 	writerDone chan struct{}
+
+	// Owned by the writer goroutine, so it needs no lock.
+	commitsSinceCheckpoint int
 }
 
 // Open opens a database file, creating it if absent, and verifies that the
@@ -139,15 +168,28 @@ func Open(ctx context.Context, c clock.Clock, config Config) (*Store, error) {
 	read.SetMaxIdleConns(config.ReadPoolSize)
 	read.SetConnMaxLifetime(0)
 
+	checkpointConn, err := sql.Open(driverName, buildDSN(config, false))
+	if err != nil {
+		_ = write.Close()
+		_ = read.Close()
+		return nil, fmt.Errorf("store %s: open checkpoint handle: %w", config.Name, err)
+	}
+	checkpointConn.SetMaxOpenConns(1)
+	checkpointConn.SetMaxIdleConns(1)
+	checkpointConn.SetConnMaxLifetime(0)
+
 	store := &Store{
-		config:     config,
-		clock:      c,
-		write:      write,
-		read:       read,
-		logger:     config.Logger.With(slog.String("database", config.Name)),
-		fs:         config.FS,
-		queue:      newWriteQueue(),
-		writerDone: make(chan struct{}),
+		config:           config,
+		clock:            c,
+		write:            write,
+		read:             read,
+		logger:           config.Logger.With(slog.String("database", config.Name)),
+		fs:               config.FS,
+		checkpointConn:   checkpointConn,
+		checkpointWanted: make(chan struct{}, 1),
+		checkpointerDone: make(chan struct{}),
+		queue:            newWriteQueue(),
+		writerDone:       make(chan struct{}),
 	}
 
 	// The write handle goes first: it creates the file, and page_size has to be
@@ -169,6 +211,7 @@ func Open(ctx context.Context, c clock.Clock, config Config) (*Store, error) {
 	}
 
 	go store.writeLoop()
+	go store.checkpointLoop()
 	return store, nil
 }
 
@@ -186,6 +229,10 @@ func (s *Store) Close() error {
 	s.queue.close()
 	<-s.writerDone
 
+	// After the writer, so nothing asks for a checkpoint once the channel is shut.
+	close(s.checkpointWanted)
+	<-s.checkpointerDone
+
 	var errs []error
 	// The read pool closes before the checkpoint.
 	if s.read != nil {
@@ -193,7 +240,12 @@ func (s *Store) Close() error {
 			errs = append(errs, fmt.Errorf("close read pool: %w", err))
 		}
 	}
-	s.checkpoint()
+	if s.checkpointConn != nil {
+		if err := s.checkpointConn.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close checkpoint handle: %w", err))
+		}
+	}
+	s.shutdownMaintenance()
 	if s.write != nil {
 		if err := s.write.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("close write handle: %w", err))
@@ -205,9 +257,9 @@ func (s *Store) Close() error {
 	return nil
 }
 
-// checkpoint truncates the WAL and updates the query planner's statistics on a clean shutdown
-// (section 15.2 step 6).
-func (s *Store) checkpoint() {
+// shutdownMaintenance truncates the WAL and updates the query planner's statistics on a
+// clean shutdown (section 15.2 step 6).
+func (s *Store) shutdownMaintenance() {
 	for _, statement := range []string{"PRAGMA wal_checkpoint(TRUNCATE)", "PRAGMA optimize"} {
 		if _, err := s.write.Exec(statement); err != nil {
 			s.logger.Warn("shutdown maintenance",
@@ -218,6 +270,11 @@ func (s *Store) checkpoint() {
 
 func (s *Store) closeHandles() error {
 	var errs []error
+	if s.checkpointConn != nil {
+		if err := s.checkpointConn.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close checkpoint handle: %w", err))
+		}
+	}
 	if s.read != nil {
 		if err := s.read.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("close read pool: %w", err))
