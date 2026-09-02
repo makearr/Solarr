@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"path/filepath"
 	"time"
@@ -114,6 +115,11 @@ func Open(ctx context.Context, c clock.Clock, config Config) (*Store, error) {
 	config = config.withDefaults()
 	if !filepath.IsAbs(config.Path) {
 		return nil, fmt.Errorf("store %s: path %q must be absolute", config.Name, config.Path)
+	}
+
+	// Created before the driver can, so it never exists world-readable.
+	if err := createRestricted(config); err != nil {
+		return nil, err
 	}
 
 	// Settle the page size before anything makes this a WAL database.
@@ -226,6 +232,26 @@ func (s *Store) closeHandles() error {
 	}
 	if len(errs) > 0 {
 		return fmt.Errorf("store %s: %w", s.config.Name, errors.Join(errs...))
+	}
+	return nil
+}
+
+// createRestricted makes an empty database file at 0600 so the driver opens one
+// that already exists. See documentation/container-runtime.md.
+func createRestricted(config Config) error {
+	if _, err := config.FS.Stat(config.Path); err == nil {
+		// Found, not created: ADR-14 does not enforce a mode on an existing file.
+		return nil
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("store %s: check %s: %w", config.Name, config.Path, err)
+	}
+
+	file, err := config.FS.CreateSecret(config.Path)
+	if err != nil {
+		return fmt.Errorf("store %s: create %s: %w", config.Name, config.Path, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("store %s: close %s: %w", config.Name, config.Path, err)
 	}
 	return nil
 }

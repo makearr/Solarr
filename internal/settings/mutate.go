@@ -36,6 +36,10 @@ func (e *InUseError) Unwrap() error { return ErrInUse }
 
 // CreateCategory adds a category and grants every administrator manage on it (ADR-27).
 func (c *Cache) CreateCategory(ctx context.Context, mediaType, name string, priorityRank int64) (Category, error) {
+	if problems := validateCategory(mediaType, name, priorityRank); len(problems) > 0 {
+		return Category{}, problems
+	}
+
 	administrators := c.administratorIDs()
 
 	var created settingsdb.Category
@@ -96,6 +100,10 @@ func (c *Cache) DeleteCategory(ctx context.Context, id int64) error {
 
 // CreateRootFolder adds a root folder.
 func (c *Cache) CreateRootFolder(ctx context.Context, path, label string) (RootFolder, error) {
+	if problems := validateRootFolder(path); len(problems) > 0 {
+		return RootFolder{}, problems
+	}
+
 	var created settingsdb.RootFolder
 	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		row, err := queries.CreateRootFolder(ctx, settingsdb.CreateRootFolderParams{

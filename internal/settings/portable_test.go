@@ -222,3 +222,45 @@ func attach(t *testing.T, cache *settings.Cache, categoryID, rootID, order, weig
 		t.Fatalf("AttachRootFolder: %v", err)
 	}
 }
+
+// Section 14.4: a value is refused where it is entered, not at the next startup.
+func TestCreateCategory_RefusesAnUnknownMediaType(t *testing.T) {
+	cache, _ := newCache(t)
+
+	if _, err := cache.CreateCategory(t.Context(), "vhs", "Tapes", 10); err == nil {
+		t.Fatal("an unknown media type was accepted")
+	} else if !strings.Contains(err.Error(), "media_type") {
+		t.Errorf("the error should name the field: %v", err)
+	}
+
+	if categories := cache.Snapshot().Categories(); len(categories) != 0 {
+		t.Errorf("%d categories were created by a rejected request", len(categories))
+	}
+}
+
+func TestCreateRootFolder_RefusesARelativePath(t *testing.T) {
+	cache, _ := newCache(t)
+
+	if _, err := cache.CreateRootFolder(t.Context(), "media/music", ""); err == nil {
+		t.Fatal("a relative path was accepted")
+	}
+	if roots := cache.Snapshot().RootFolders(); len(roots) != 0 {
+		t.Errorf("%d root folders were created by a rejected request", len(roots))
+	}
+}
+
+// An import must not be able to introduce what the interface would refuse.
+func TestImport_AppliesTheSameRulesAsTheAPI(t *testing.T) {
+	cache, _ := newCache(t)
+
+	document := settings.Document{
+		Version:    settings.DocumentVersion,
+		Categories: []settings.CategoryEntry{{MediaType: "vhs", Name: "Tapes"}},
+	}
+	if err := cache.Import(t.Context(), document); err == nil {
+		t.Fatal("an import created a category the interface would refuse")
+	}
+	if categories := cache.Snapshot().Categories(); len(categories) != 0 {
+		t.Errorf("%d categories survived a rejected import", len(categories))
+	}
+}

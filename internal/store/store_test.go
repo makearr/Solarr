@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -238,5 +240,35 @@ func TestOpen_ReopeningAPopulatedDatabaseKeepsItsPageSize(t *testing.T) {
 	}
 	if pageSize != 8192 {
 		t.Errorf("page_size = %d after reopening, want 8192", pageSize)
+	}
+}
+
+// settings.db holds the encrypted credentials, so the ciphertext gets the same
+// treatment as the key beside it (ADR-14).
+func TestOpen_CreatesTheDatabaseRestricted(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "settings.db")
+
+	opened, err := store.Open(t.Context(), clock.NewFakeAtEpoch(), store.Config{
+		Name: "settings", Path: path, Logger: slog.New(slog.DiscardHandler),
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { _ = opened.Close() })
+
+	// The write-ahead log and shared-memory files carry the same pages, so a
+	// restricted database with a world-readable WAL protects nothing.
+	for _, name := range []string{"settings.db", "settings.db-wal", "settings.db-shm"} {
+		info, err := os.Stat(filepath.Join(directory, name))
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			t.Fatalf("stat %s: %v", name, err)
+		}
+		if permissions := info.Mode().Perm(); permissions&0o077 != 0 {
+			t.Errorf("%s has mode %04o, readable beyond the owner", name, permissions)
+		}
 	}
 }

@@ -4,9 +4,13 @@ import { api } from "@/api/client";
 import { ListGrid } from "@/list/ListGrid";
 import { ListTable, type Column } from "@/list/ListTable";
 import { useLibraryList } from "@/list/useLibraryList";
+import { useNarrow } from "@/list/useNarrow";
 import type { components } from "@/api/schema";
 
 type Job = components["schemas"]["Job"];
+
+// Five label/value rows plus padding.
+const CARD_HEIGHT = 132;
 
 const COLUMNS: readonly Column<Job>[] = [
   { key: "id", header: "ID", width: "5rem", render: (job) => job.id },
@@ -21,8 +25,10 @@ const COLUMNS: readonly Column<Job>[] = [
 export function Jobs() {
   const [view, setView] = useState<"table" | "grid">("table");
 
+  const narrow = useNarrow();
   const list = useLibraryList<Job>({
     name: "jobs",
+    rowHeight: narrow ? CARD_HEIGHT : undefined,
     filterKeys: ["state"],
     idOf: (job) => job.id,
     topics: ["job"],

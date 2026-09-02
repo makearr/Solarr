@@ -1,5 +1,8 @@
+import { Fragment } from "react";
+
 import type { LibraryList } from "./useLibraryList";
 import type { Id } from "./selection";
+import { useNarrow } from "./useNarrow";
 
 export interface Column<T> {
   readonly key: string;
@@ -21,6 +24,13 @@ export function ListTable<T>({
   idOf: (item: T) => Id;
 }) {
   const template = columns.map((column) => column.width ?? "1fr").join(" ");
+  const narrow = useNarrow();
+
+  // Density is the point of this view and cannot survive the width, so below the
+  // breakpoint the same rows are rendered as cards (section 21.8).
+  if (narrow) {
+    return <CardList list={list} columns={columns} idOf={idOf} />;
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -100,6 +110,55 @@ function LoadingRow({ virtual }: { virtual: { size: number; start: number } }) {
       style={{ height: virtual.size, transform: `translateY(${virtual.start}px)` }}
     >
       Loading more…
+    </div>
+  );
+}
+
+/** The same rows, stacked, for a viewport too narrow for a table. */
+function CardList<T>({
+  list,
+  columns,
+  idOf,
+}: {
+  list: LibraryList<T>;
+  columns: readonly Column<T>[];
+  idOf: (item: T) => Id;
+}) {
+  return (
+    <div ref={list.scrollRef} className="h-full overflow-auto p-2">
+      <div style={{ height: list.totalSize, position: "relative" }}>
+        {list.virtualItems.map((virtual) => {
+          const item = list.items[virtual.index];
+          if (!item) return null;
+
+          const id = idOf(item);
+          const selected = list.isSelected(id);
+          return (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => list.toggle(id)}
+              className={`absolute inset-x-0 block rounded-md border p-3 text-left text-sm ${
+                selected ? "border-accent bg-accent/10" : "border-border-subtle bg-surface"
+              }`}
+              style={{
+                height: virtual.size - 6,
+                transform: `translateY(${virtual.start}px)`,
+              }}
+            >
+              <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-0.5">
+                {columns.map((column) => (
+                  <Fragment key={column.key}>
+                    <dt className="truncate text-xs text-ink-muted">{column.header}</dt>
+                    <dd className="truncate">{column.render(item)}</dd>
+                  </Fragment>
+                ))}
+              </dl>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

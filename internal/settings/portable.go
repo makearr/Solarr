@@ -4,9 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/makearr/MediaNexus/internal/config"
 	"github.com/makearr/MediaNexus/internal/store/gen/settingsdb"
@@ -120,13 +118,12 @@ func (d Document) Validate() config.Problems {
 	knownPaths := make(map[string]bool, len(d.Roots))
 	for index, root := range d.Roots {
 		where := fmt.Sprintf("root_folders[%d]", index)
+		for _, problem := range validateRootFolder(root.Path) {
+			problem.Path = where + "." + problem.Path
+			problems = append(problems, problem)
+		}
+
 		switch {
-		case strings.TrimSpace(root.Path) == "":
-			problems = append(problems, config.Problem{Path: where + ".path", Expectation: "a path"})
-		case !filepath.IsAbs(root.Path):
-			problems = append(problems, config.Problem{
-				Path: where + ".path", Value: root.Path, Expectation: "an absolute path",
-			})
 		case knownPaths[root.Path]:
 			problems = append(problems, config.Problem{
 				Path: where + ".path", Value: root.Path, Expectation: "a path listed once",
@@ -139,11 +136,11 @@ func (d Document) Validate() config.Problems {
 	seenCategories := make(map[string]bool, len(d.Categories))
 	for index, category := range d.Categories {
 		where := fmt.Sprintf("categories[%d]", index)
-		if strings.TrimSpace(category.MediaType) == "" {
-			problems = append(problems, config.Problem{Path: where + ".media_type", Expectation: "a media type"})
-		}
-		if strings.TrimSpace(category.Name) == "" {
-			problems = append(problems, config.Problem{Path: where + ".name", Expectation: "a name"})
+		// The same rule the API path applies, so an import cannot introduce a
+		// category that could not be created through the interface.
+		for _, problem := range validateCategory(category.MediaType, category.Name, category.PriorityRank) {
+			problem.Path = where + "." + problem.Path
+			problems = append(problems, problem)
 		}
 
 		key := category.MediaType + "/" + category.Name
