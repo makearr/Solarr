@@ -15,9 +15,6 @@ import (
 // maxSetupBody bounds what an unauthenticated caller can make the server read.
 const maxSetupBody = 4 << 10
 
-// A floor, not a policy: composition rules produce predictable substitutions.
-const minPasswordLength = 12
-
 // GetSetupStatus reports what the wizard still has to do. Unauthenticated, and
 // reveals only the outstanding steps.
 func (s *Server) GetSetupStatus(w http.ResponseWriter, _ *http.Request) {
@@ -50,9 +47,14 @@ func (s *Server) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request
 			"Bad request", "a username is required")
 		return
 	}
-	if len([]rune(request.Password)) < minPasswordLength {
+	// No length or composition rule. Rules of that shape produce predictable
+	// substitutions rather than strength, and this is a self-hosted install
+	// whose owner is the only person they would constrain. Empty is still
+	// refused: an account nobody can fail to authenticate as is auth_mode none,
+	// which is a deliberate file-level decision, not an empty form field.
+	if request.Password == "" {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the password must be at least 12 characters")
+			"Bad request", "a password is required")
 		return
 	}
 

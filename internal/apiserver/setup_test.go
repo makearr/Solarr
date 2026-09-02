@@ -109,13 +109,30 @@ func TestCreateFirstAdministrator_ClosesPermanently(t *testing.T) {
 	}
 }
 
+// A short password is not weak input. Length and composition rules produce
+// predictable substitutions rather than strength, and on a self-hosted install
+// the only person they constrain is its owner. Empty stays refused: an account
+// nobody can fail to authenticate as is auth_mode none, which is a deliberate
+// decision made in config.yml.
+func TestCreateFirstAdministrator_AcceptsAShortPassword(t *testing.T) {
+	fixture := newSetupFixture(t, nil)
+
+	got := fixture.post(t, "/api/v1/setup/admin", `{"username":"avs","password":"x"}`)
+	if got.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201: a length rule has come back", got.Code)
+	}
+	if users := fixture.cache.Snapshot().Users(); len(users) != 1 {
+		t.Errorf("%d accounts exist, want 1", len(users))
+	}
+}
+
 func TestCreateFirstAdministrator_RejectsWeakInput(t *testing.T) {
 	tests := []struct {
 		name string
 		body string
 	}{
 		{"no username", `{"username":"  ","password":"correct horse battery"}`},
-		{"short password", `{"username":"avs","password":"hunter2"}`},
+		{"no password", `{"username":"avs","password":""}`},
 		{"not json", `not json at all`},
 	}
 

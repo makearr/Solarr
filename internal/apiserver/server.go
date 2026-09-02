@@ -61,6 +61,8 @@ type Config struct {
 	// Timezone is the zone name TZ resolved to. time.Location reports "Local"
 	// once time.Local is replaced, which tells a reader nothing.
 	Timezone string
+	// Egress reports the public address. Optional.
+	Egress EgressReporter
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -81,6 +83,7 @@ type Server struct {
 
 	librarySize LibrarySize
 	timezone    string
+	egress      EgressReporter
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -113,6 +116,7 @@ func New(config Config) (*Server, error) {
 
 		librarySize: config.LibrarySize,
 		timezone:    config.Timezone,
+		egress:      config.Egress,
 		address:     net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -141,6 +145,7 @@ func New(config Config) (*Server, error) {
 			secured.Use(server.authenticate)
 			secured.Get("/me", server.GetMe)
 			secured.Get("/dashboard", server.GetDashboard)
+			secured.Get("/system/egress", server.GetEgress)
 			secured.Get("/jobs", server.routeListJobs)
 			secured.Get("/rootfolders", server.ListRootFolders)
 			secured.Get("/settings/export", server.ExportSettings)

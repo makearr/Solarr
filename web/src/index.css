@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
-/* Dark mode follows a class on <html>, set before first paint by the inline
-   script in index.html. A media-query-only scheme could not express the
-   per-user override that section 21 requires. */
+/* The active theme is a data-theme attribute on <html>, set before first paint
+   by the inline script in index.html. The .dark class rides alongside it so
+   Tailwind's dark: variant still means "a dark theme" rather than "the theme
+   literally called dark". A media query alone could express neither. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* Tokens, not colours, at the point of use. A component asks for
@@ -21,7 +22,11 @@
 }
 
 @layer base {
-  .dark {
+  /* Every theme redefines the same tokens. A component never names a colour, so
+     adding a theme is this block and nothing else. The named dark themes are
+     approximations of a familiar palette, not a claim to be those products. */
+
+  [data-theme="dark"] {
     --color-canvas: oklch(17% 0.006 260);
     --color-surface: oklch(21% 0.007 260);
     --color-border-subtle: oklch(30% 0.008 260);
@@ -32,6 +37,62 @@
     --color-danger: oklch(68% 0.17 27);
     --color-ok: oklch(72% 0.14 150);
     --color-warn: oklch(80% 0.14 75);
+  }
+
+  /* Jellyfin: near-black ground, its blue-to-purple accent. */
+  [data-theme="jellyfin"] {
+    --color-canvas: oklch(14% 0.008 285);
+    --color-surface: oklch(19% 0.012 285);
+    --color-border-subtle: oklch(28% 0.016 285);
+    --color-ink: oklch(96% 0.004 285);
+    --color-ink-muted: oklch(70% 0.012 285);
+    --color-accent: oklch(66% 0.16 305);
+    --color-accent-ink: oklch(14% 0.008 285);
+    --color-danger: oklch(66% 0.18 22);
+    --color-ok: oklch(74% 0.15 165);
+    --color-warn: oklch(80% 0.14 80);
+  }
+
+  /* Arr: the flat blue-grey and cyan of Sonarr and Radarr. */
+  [data-theme="arr"] {
+    --color-canvas: oklch(24% 0.012 250);
+    --color-surface: oklch(29% 0.014 250);
+    --color-border-subtle: oklch(38% 0.016 250);
+    --color-ink: oklch(93% 0.004 250);
+    --color-ink-muted: oklch(70% 0.010 250);
+    --color-accent: oklch(74% 0.13 225);
+    --color-accent-ink: oklch(20% 0.012 250);
+    --color-danger: oklch(64% 0.19 25);
+    --color-ok: oklch(74% 0.15 145);
+    --color-warn: oklch(82% 0.15 85);
+  }
+
+  /* Nord: the arctic palette, lower contrast by design. */
+  [data-theme="nord"] {
+    --color-canvas: oklch(30% 0.020 260);
+    --color-surface: oklch(35% 0.020 258);
+    --color-border-subtle: oklch(43% 0.020 256);
+    --color-ink: oklch(93% 0.010 240);
+    --color-ink-muted: oklch(76% 0.014 245);
+    --color-accent: oklch(74% 0.075 235);
+    --color-accent-ink: oklch(28% 0.020 260);
+    --color-danger: oklch(64% 0.13 20);
+    --color-ok: oklch(76% 0.10 145);
+    --color-warn: oklch(84% 0.10 85);
+  }
+
+  /* Paper: warm and low contrast, for reading in daylight. */
+  [data-theme="paper"] {
+    --color-canvas: oklch(97% 0.010 85);
+    --color-surface: oklch(99% 0.006 85);
+    --color-border-subtle: oklch(89% 0.012 80);
+    --color-ink: oklch(28% 0.014 60);
+    --color-ink-muted: oklch(55% 0.014 65);
+    --color-accent: oklch(52% 0.11 40);
+    --color-accent-ink: oklch(99% 0.006 85);
+    --color-danger: oklch(52% 0.17 27);
+    --color-ok: oklch(56% 0.13 150);
+    --color-warn: oklch(66% 0.13 70);
   }
 
   body {

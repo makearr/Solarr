@@ -20,9 +20,28 @@ type Config struct {
 	Storage   Storage   `yaml:"storage"`
 	Workers   Workers   `yaml:"workers"`
 	Logging   Logging   `yaml:"logging"`
+	Network   Network   `yaml:"network"`
 
 	// Mode is the dry-run level, enforced at the job executor (ADR-20).
 	Mode Mode `yaml:"mode"`
+}
+
+// DefaultPublicIPEndpoint answers with a bare address and nothing else, which
+// keeps the parse trivial and the response too small to carry a surprise.
+const DefaultPublicIPEndpoint = "https://api.ipify.org"
+
+// Network is outbound behaviour that is not a provider's own configuration.
+type Network struct {
+	PublicIPCheck PublicIPCheck `yaml:"public_ip_check"`
+}
+
+// PublicIPCheck asks a third party what address this host connects from. It is
+// the only unprompted outbound call MediaNexus makes, so it is switchable off
+// and names the service it asks.
+type PublicIPCheck struct {
+	Enabled  bool     `yaml:"enabled"`
+	Endpoint string   `yaml:"endpoint"`
+	Interval Duration `yaml:"interval"`
 }
 
 // Server is the HTTP listener.
@@ -144,6 +163,11 @@ func Default() Config {
 		},
 		Workers: Workers{Search: 4, Acquire: 2, Metadata: 4, Import: 1},
 		Logging: Logging{Level: LevelInfo, Format: FormatJSON},
-		Mode:    ModeNormal,
+		Network: Network{PublicIPCheck: PublicIPCheck{
+			Enabled:  true,
+			Endpoint: DefaultPublicIPEndpoint,
+			Interval: Duration(6 * time.Hour),
+		}},
+		Mode: ModeNormal,
 	}
 }

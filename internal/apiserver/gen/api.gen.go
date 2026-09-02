@@ -145,6 +145,21 @@ type DashboardSummary struct {
 	RootFolders []RootFolder  `json:"root_folders"`
 }
 
+// Egress Every field is optional: a check that is switched off, has not run yet or has failed reports nothing rather than a stale or invented address.
+type Egress struct {
+	CheckedAt *time.Time `json:"checked_at,omitempty"`
+
+	// Enabled Whether the check is configured to run at all.
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// Error Why the last attempt failed, when it did.
+	Error    *string `json:"error,omitempty"`
+	PublicIp *string `json:"public_ip,omitempty"`
+
+	// Source The echo service that answered, so the number is attributable.
+	Source *string `json:"source,omitempty"`
+}
+
 // EventTopic defines model for EventTopic.
 type EventTopic string
 
@@ -283,6 +298,9 @@ type SetupStatus struct {
 // LoginJSONBody defines parameters for Login.
 type LoginJSONBody struct {
 	Password string `json:"password"`
+
+	// Remember Keep the session across browser restarts. Unset issues a session cookie that dies when the browser closes; the server-side lifetime is the same either way.
+	Remember *bool  `json:"remember,omitempty"`
 	Username string `json:"username"`
 }
 
@@ -371,6 +389,9 @@ type ServerInterface interface {
 	// Create the administrator account, once.
 	// (POST /setup/admin)
 	CreateFirstAdministrator(w http.ResponseWriter, r *http.Request)
+	// The address this host appears to come from.
+	// (GET /system/egress)
+	GetEgress(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -464,6 +485,12 @@ func (_ Unimplemented) GetSetupStatus(w http.ResponseWriter, r *http.Request) {
 // Create the administrator account, once.
 // (POST /setup/admin)
 func (_ Unimplemented) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The address this host appears to come from.
+// (GET /system/egress)
+func (_ Unimplemented) GetEgress(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -813,6 +840,28 @@ func (siw *ServerInterfaceWrapper) CreateFirstAdministrator(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// GetEgress operation middleware
+func (siw *ServerInterfaceWrapper) GetEgress(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEgress(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -970,6 +1019,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/setup/admin", wrapper.CreateFirstAdministrator)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/system/egress", wrapper.GetEgress)
 	})
 
 	return r

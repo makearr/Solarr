@@ -80,6 +80,26 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BuildInfo" }
 
+  /system/egress:
+    get:
+      operationId: getEgress
+      tags: [system]
+      summary: The address this host appears to come from.
+      description: >-
+        What the outside world sees when MediaNexus connects out, which is the
+        number that matters for whether traffic is leaving past a VPN. Resolved
+        by asking a configurable echo service through httpx, cached, and absent
+        rather than guessed when the check is disabled or has not succeeded.
+        Per-indexer proxies (ADR-47) can egress differently; this is the app's
+        own path out.
+      responses:
+        "200":
+          description: The last successful result, or an empty body when there is none.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Egress" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /dashboard:
     get:
       operationId: getDashboard
@@ -116,6 +136,13 @@ paths:
               properties:
                 username: { type: string }
                 password: { type: string, format: password }
+                remember:
+                  type: boolean
+                  default: false
+                  description: >-
+                    Keep the session across browser restarts. Unset issues a
+                    session cookie that dies when the browser closes; the
+                    server-side lifetime is the same either way.
       responses:
         "200":
           description: Signed in. The session cookie is set on this response.
@@ -547,6 +574,24 @@ components:
     EventTopic:
       type: string
       enum: [job, acquisition, library, notification, pressure]
+
+    Egress:
+      type: object
+      description: >-
+        Every field is optional: a check that is switched off, has not run yet
+        or has failed reports nothing rather than a stale or invented address.
+      properties:
+        public_ip: { type: string, example: "203.0.113.42" }
+        checked_at: { type: string, format: date-time }
+        source:
+          type: string
+          description: The echo service that answered, so the number is attributable.
+        error:
+          type: string
+          description: Why the last attempt failed, when it did.
+        enabled:
+          type: boolean
+          description: Whether the check is configured to run at all.
 
     DashboardSummary:
       type: object

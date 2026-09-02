@@ -3,6 +3,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
+import { Login } from "./Login";
 import { router } from "./router";
 import { Setup } from "./Setup";
 
@@ -19,6 +20,18 @@ export function App() {
       if (error) throw error;
       return data;
     },
+  });
+
+  // Whether this caller has a session. Also how the interface discovers that the
+  // server runs without authentication: there, /me simply answers.
+  const me = useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/me");
+      if (error) throw error;
+      return data;
+    },
+    retry: false,
   });
 
   // After every hook, or React renders fewer hooks on some passes than others.
@@ -39,6 +52,10 @@ export function App() {
   // Not skippable: with no account there is nobody to authenticate as, so the
   // rest of the interface cannot load at all.
   if (setup.data.needs_administrator) return <Setup onDone={() => setSkipped(true)} />;
+
+  if (me.isLoading) return <Splash>Starting…</Splash>;
+  // An account exists but this caller has no session.
+  if (me.error !== null) return <Login />;
 
   // Skippable: without a root folder the library stays empty, but everything
   // else works and the dashboard says what is missing.

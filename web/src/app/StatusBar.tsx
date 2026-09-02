@@ -1,5 +1,8 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Globe } from "lucide-react";
 
+import { api } from "@/api/client";
 import { SKEW_TOLERANCE_MS, useServerClock } from "@/lib/useServerClock";
 import { describe, useNotifications, type Connection } from "@/lib/useNotifications";
 
@@ -10,6 +13,20 @@ export function StatusBar() {
   const { recent, unread, connection, markRead } = useNotifications();
   const clock = useServerClock();
   const [open, setOpen] = useState(false);
+
+  // The address the outside world sees this host connect from, which is what
+  // says whether traffic is leaving past a VPN. Rechecked on the server's own
+  // interval, so this only has to read the cached answer.
+  const egress = useQuery({
+    queryKey: ["egress"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/system/egress");
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
 
   const latest = recent[0];
 
@@ -58,6 +75,19 @@ export function StatusBar() {
         </button>
 
         <div className="ml-auto flex shrink-0 items-center gap-3 text-ink-muted">
+          {egress.data?.public_ip && (
+            <span
+              className="flex items-center gap-1.5 font-mono"
+              title={
+                `Address this host connects out from, via ${egress.data.source ?? "the configured check"}.` +
+                (egress.data.error ? ` Last check failed: ${egress.data.error}` : "")
+              }
+            >
+              <Globe aria-hidden className="size-3" />
+              {egress.data.public_ip}
+              {egress.data.error && <span className="text-warn">stale</span>}
+            </span>
+          )}
           {clock.skewMs !== null && Math.abs(clock.skewMs) > SKEW_TOLERANCE_MS && (
             <span className="text-warn" title="This browser's clock disagrees with the server's">
               clock skew {Math.round(clock.skewMs / 1000)}s

@@ -157,12 +157,15 @@ func Open(ctx context.Context, c clock.Clock, config Config) (*Store, error) {
 
 	// The write handle goes first: it creates the file, and page_size has to be
 	// set before anything writes to it.
+	// closeHandles, never Close: the writer goroutine has not started yet, and
+	// Close waits on writerDone, which only writeLoop ever closes. Calling it
+	// here turns a database that failed to open into a process that hangs.
 	if err := write.PingContext(ctx); err != nil {
-		_ = store.Close()
+		_ = store.closeHandles()
 		return nil, fmt.Errorf("store %s: %w", config.Name, err)
 	}
 	if err := read.PingContext(ctx); err != nil {
-		_ = store.Close()
+		_ = store.closeHandles()
 		return nil, fmt.Errorf("store %s: %w", config.Name, err)
 	}
 	if err := store.verifyPragmas(ctx); err != nil {

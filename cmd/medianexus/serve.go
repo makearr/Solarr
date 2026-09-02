@@ -16,6 +16,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/auth"
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/config"
+	"github.com/makearr/MediaNexus/internal/egress"
 	"github.com/makearr/MediaNexus/internal/events"
 	"github.com/makearr/MediaNexus/internal/fsx"
 	"github.com/makearr/MediaNexus/internal/health"
@@ -225,6 +226,21 @@ func (p *process) startServer(ctx context.Context) error {
 	}
 
 	p.reportRootFolders()
+	p.announceOpenAccess()
+	if err := p.ensureOpenAccessAdministrator(ctx); err != nil {
+		return err
+	}
+
+	check := p.config.Network.PublicIPCheck
+	prober := egress.New(egress.Config{
+		Enabled:  check.Enabled,
+		Endpoint: check.Endpoint,
+		Interval: check.Interval.AsDuration(),
+		Client:   p.publicIPClient(),
+		Clock:    clock.NewSystem(),
+		Logger:   p.logger,
+	})
+	go prober.Run(ctx)
 
 	server, err := apiserver.New(apiserver.Config{
 		Bind:    p.config.Server.Bind,
@@ -245,6 +261,7 @@ func (p *process) startServer(ctx context.Context) error {
 		LibrarySize: library.NewCounters(p.library),
 		// time.Local.String() reports "Local"; the name the operator set is the useful one.
 		Timezone: p.timezone,
+		Egress:   egressStatus{prober: prober},
 	})
 	if err != nil {
 		return err

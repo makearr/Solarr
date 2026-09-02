@@ -15,6 +15,10 @@ import (
 type loginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	// Remember keeps the session across browser restarts. It changes the cookie,
+	// not the server-side lifetime: a session record expires on its own schedule
+	// either way, so forgetting to tick this cannot extend anything.
+	Remember bool `json:"remember"`
 }
 
 // Login exchanges a username and password for a session cookie.
@@ -22,6 +26,11 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	if s.auth.Mode == AuthAPIKeyOnly {
 		writeProblem(w, s.logger, http.StatusForbidden, TypeForbidden,
 			"Login disabled", "this instance is configured for API keys only")
+		return
+	}
+	if s.auth.Mode == AuthNone {
+		writeProblem(w, s.logger, http.StatusForbidden, TypeForbidden,
+			"Login disabled", "this instance runs without authentication")
 		return
 	}
 
@@ -40,7 +49,13 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, s.sessionCookie(s.auth.Sessions.Issue(user.ID), int(s.auth.Sessions.TTL().Seconds()), r))
+	// A session cookie (no Max-Age) dies with the browser, which is what an
+	// unticked "stay signed in" means everywhere else.
+	maxAge := 0
+	if request.Remember {
+		maxAge = int(s.auth.Sessions.TTL().Seconds())
+	}
+	http.SetCookie(w, s.sessionCookie(s.auth.Sessions.Issue(user.ID), maxAge, r))
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{
 		"user_id": user.ID, "username": user.Username, "role": string(user.Role),
 	})
@@ -108,6 +123,7 @@ func (s *Server) sessionCookie(value string, maxAge int, r *http.Request) *http.
 		// Secure only over TLS: a self-hosted instance on plain HTTP inside a
 		// LAN would otherwise silently fail to log in.
 		Secure: r.TLS != nil,
+		// Zero omits Max-Age entirely, making it a session cookie; -1 expires it.
 		MaxAge: maxAge,
 	}
 }
