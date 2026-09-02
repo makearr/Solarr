@@ -11,17 +11,18 @@ import (
 )
 
 // FilesystemRoots checks a candidate library root against a real filesystem.
+//
+// It distinguishes two kinds of wrong, because they belong to different people.
+// A path that is relative, absent or a file is a mistake in what was typed, and
+// is refused. A path that exists but this process cannot write is a statement
+// about ownership on the host, and that is the operator's to decide -- it is
+// reported, and accepted.
 type FilesystemRoots struct {
 	FS fsx.FS
 }
 
-// Check proves the path is absolute, exists, is a directory, and can be written.
-//
-// Writability is proved by writing, not by reading permission bits. A mode that
-// looks correct still fails on a read-only mount, a full filesystem, or a
-// container whose user is not who the volume expects -- and in a container the
-// third is the usual answer (section 14.3).
-func (r FilesystemRoots) Check(path string) error {
+// Validate refuses a path that cannot be a library root at all.
+func (r FilesystemRoots) Validate(path string) error {
 	if path == "" {
 		return errors.New("a path is required")
 	}
@@ -40,10 +41,24 @@ func (r FilesystemRoots) Check(path string) error {
 	if !info.IsDir {
 		return fmt.Errorf("%q is a file, not a folder", path)
 	}
+	return nil
+}
 
+// Writable reports whether the process can write here, and says who owns it if
+// it cannot.
+//
+// MediaNexus does not chown a library root. It holds the 500k files of ADR-22
+// and it is the user's, not ours -- so a mismatch is described rather than
+// corrected, with everything needed to fix it in one line.
+func (r FilesystemRoots) Writable(path string) error {
 	if err := r.probeWritable(path); err != nil {
-		return fmt.Errorf("%q is not writable by this process (%s): %w",
-			path, privilege.IdentityHint(), err)
+		info, statErr := r.FS.Stat(path)
+		if statErr != nil {
+			return err
+		}
+		return fmt.Errorf("%q is owned by uid=%d gid=%d with mode %04o; %s. "+
+			"Either chown it to match, or set PUID and PGID to whoever owns it",
+			path, info.UID, info.GID, info.Mode.Perm(), privilege.IdentityHint())
 	}
 	return nil
 }

@@ -142,6 +142,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/me", server.GetMe)
 			secured.Get("/jobs", server.routeListJobs)
 			secured.Get("/rootfolders", server.ListRootFolders)
+			secured.Get("/settings/export", server.ExportSettings)
+			secured.Post("/settings/import", server.ImportSettings)
 			secured.Post("/rootfolders", server.AddRootFolder)
 			secured.Get("/events", server.routeStreamEvents)
 		})

@@ -26,6 +26,8 @@ tags:
     description: Sessions.
   - name: setup
     description: First-run wizard. Skippable and resumable; a convenience, not a gate.
+  - name: settings
+    description: Configuration, exportable and importable as YAML (F9).
   - name: jobs
     description: The job queue.
   - name: events
@@ -229,6 +231,49 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
 
+  /settings/export:
+    get:
+      operationId: exportSettings
+      tags: [settings]
+      summary: Configuration as round-tripping YAML (F9).
+      description: >-
+        Policy only. Accounts, password hashes and API keys are deliberately
+        absent: an export is attached to bug reports and committed to
+        repositories, so anything in it ends up somewhere public. Identifiers
+        are absent too, so a document from one install applies to another.
+      responses:
+        "200":
+          description: The document.
+          content:
+            application/yaml:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /settings/import:
+    post:
+      operationId: importSettings
+      tags: [settings]
+      summary: Apply a configuration document, entirely or not at all.
+      description: >-
+        The document is validated whole and every problem is reported at once,
+        because an import is arbitrary input and reporting one error per attempt
+        turns a five-mistake file into five round trips. Nothing is written
+        unless all of it is valid -- a partial import leaves settings in a state
+        the user never chose. Merges on natural keys, so applying the same
+        document twice changes nothing the second time.
+      requestBody:
+        required: true
+        content:
+          application/yaml:
+            schema: { type: string }
+      responses:
+        "204":
+          description: Applied.
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /me:
     get:
       operationId: getMe
@@ -414,6 +459,13 @@ components:
           description: >-
             An unmounted root counts as unavailable, never as free space
             (Invariant 20a).
+        writable:
+          type: boolean
+          description: >-
+            Whether this process can write here. False is reported, never
+            enforced: ownership on the host is the operator's to decide, and
+            MediaNexus does not chown a library it did not create. Absent when
+            it has not been probed.
 
     Identity:
       type: object

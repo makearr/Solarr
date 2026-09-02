@@ -164,16 +164,20 @@ func TestGetSetupStatus_IsUnauthenticatedAndMinimal(t *testing.T) {
 	}
 }
 
-// rejectingRoots stands in for a filesystem that refuses.
-type rejectingRoots struct{ err error }
+// stubRoots stands in for a filesystem, so a test can make a path unusable or
+// unwritable without arranging either on disk.
+type stubRoots struct {
+	invalid     error
+	notWritable error
+}
 
-func (r rejectingRoots) Check(string) error { return r.err }
+func (r stubRoots) Validate(string) error { return r.invalid }
+func (r stubRoots) Writable(string) error { return r.notWritable }
 
-// A root folder that cannot be written is the commonest containerised
-// misconfiguration. Accepting it here turns a typo into a mystery at the first
-// import, which is the whole reason the path is probed before it is stored.
+// A path that does not exist is a mistake in what was typed, and is refused --
+// accepting it turns a typo into a mystery at the first import.
 func TestAddRootFolder_RefusesAnUnusablePath(t *testing.T) {
-	fixture := newSetupFixture(t, rejectingRoots{err: errUnusable})
+	fixture := newSetupFixture(t, stubRoots{invalid: errUnusable})
 
 	created := fixture.post(t, "/api/v1/setup/admin",
 		`{"username":"avs","password":"correct horse battery"}`)
@@ -200,3 +204,49 @@ func TestAddRootFolder_RefusesAnUnusablePath(t *testing.T) {
 }
 
 var errUnusable = errors.New("\"/media/music\" does not exist inside the container")
+
+// A folder that exists but is owned by somebody else is not a mistake -- it is a
+// working library with one thing to fix, and whether to fix it is the
+// operator's call. MediaNexus reports it and accepts it, because refusing would
+// mean a library owned by another user could not be configured at all.
+func TestAddRootFolder_AcceptsAndFlagsAnUnwritablePath(t *testing.T) {
+	fixture := newSetupFixture(t, stubRoots{notWritable: errUnwritable})
+
+	created := fixture.post(t, "/api/v1/setup/admin",
+		`{"username":"avs","password":"correct horse battery"}`)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("claim: %d", created.Code)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/rootfolders",
+		strings.NewReader(`{"path":"/media/music"}`))
+	request.Header.Set("Content-Type", "application/json")
+	for _, cookie := range created.Result().Cookies() {
+		request.AddCookie(cookie)
+	}
+	recorder := httptest.NewRecorder()
+	fixture.server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201 -- ownership is the operator's to decide (%s)",
+			recorder.Code, recorder.Body)
+	}
+
+	var body struct {
+		Path     string `json:"path"`
+		Writable *bool  `json:"writable"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body: %v", err)
+	}
+	if body.Writable == nil || *body.Writable {
+		t.Error("the root was stored without being flagged as unwritable")
+	}
+
+	// Stored, so the interface can show it and the operator can act on it.
+	if folders := fixture.cache.Snapshot().RootFolders(); len(folders) != 1 {
+		t.Errorf("%d root folders stored, want 1", len(folders))
+	}
+}
+
+var errUnwritable = errors.New(`"/media/music" is owned by uid=0 gid=0`)

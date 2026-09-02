@@ -94,7 +94,13 @@ func numeric(lookup Lookup, name string, fallback int) (int, error) {
 // process that is not root cannot chown anything anyway.
 func Apply(fsys fsx.FS, identity Identity, directories []string, logger *slog.Logger) (Outcome, error) {
 	if syscall.Geteuid() != 0 {
-		return Outcome{Identity: Identity{UID: syscall.Getuid(), GID: syscall.Getgid()}}, nil
+		current := Identity{UID: syscall.Getuid(), GID: syscall.Getgid()}
+		logger.Info("running unprivileged; PUID and PGID do not apply",
+			slog.Int("uid", current.UID),
+			slog.Int("gid", current.GID),
+			slog.String("note", "started with --user, so nothing was chowned; "+
+				"the volumes must already be owned by this user"))
+		return Outcome{Identity: current}, nil
 	}
 
 	outcome := Outcome{Dropped: true, Identity: identity}
@@ -114,10 +120,12 @@ func Apply(fsys fsx.FS, identity Identity, directories []string, logger *slog.Lo
 		return Outcome{}, err
 	}
 
-	logger.Info("dropped privileges",
+	logger.Info("running as the media user",
 		slog.Int("uid", identity.UID),
 		slog.Int("gid", identity.GID),
-		slog.Any("took_ownership_of", outcome.Chowned))
+		slog.Any("took_ownership_of", outcome.Chowned),
+		slog.String("note", "PUID/PGID set this. Volumes MediaNexus did not create "+
+			"are left alone; mismatches are reported, not corrected"))
 	return outcome, nil
 }
 
