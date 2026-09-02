@@ -65,8 +65,11 @@ const (
 	Comic     MediaType = "comic"
 	Movie     MediaType = "movie"
 	Music     MediaType = "music"
+	News      MediaType = "news"
+	Podcast   MediaType = "podcast"
 	Rom       MediaType = "rom"
 	Tv        MediaType = "tv"
+	Youtube   MediaType = "youtube"
 )
 
 // Defines values for Permission.
@@ -116,7 +119,9 @@ type BuildInfo struct {
 
 // Category defines model for Category.
 type Category struct {
-	Id        int64     `json:"id"`
+	Id int64 `json:"id"`
+
+	// MediaType Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
 	MediaType MediaType `json:"media_type"`
 	Name      string    `json:"name"`
 
@@ -188,7 +193,7 @@ type Me struct {
 	UserId     int64      `json:"user_id"`
 }
 
-// MediaType defines model for MediaType.
+// MediaType Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
 type MediaType string
 
 // Permission `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.

@@ -72,6 +72,9 @@ type MediaAttribute struct {
 	Container      sql.NullString
 	Lossless       sql.NullInt64
 	SampleRate     sql.NullInt64
+	ImageFormat    sql.NullString
+	ColourDepth    sql.NullInt64
+	PageCount      sql.NullInt64
 }
 
 type MediaObject struct {
@@ -119,6 +122,13 @@ type WorkChildTitle struct {
 	Normalized string
 	Language   sql.NullString
 	Provider   sql.NullString
+}
+
+type WorkClassification struct {
+	WorkID int64
+	Kind   string
+	Value  string
+	Source string
 }
 
 type WorkDate struct {

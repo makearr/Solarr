@@ -9,8 +9,12 @@ import (
 	"github.com/makearr/MediaNexus/internal/config"
 )
 
-// MediaTypes are the eight the product plans for (architecture Part I).
-var MediaTypes = []string{"music", "tv", "movie", "audiobook", "book", "adult", "comic", "rom"}
+// MediaTypes are the eleven the product plans for (architecture Part I). Manga,
+// magazines, music videos and adult galleries are categories of these, not types.
+var MediaTypes = []string{
+	"music", "tv", "movie", "audiobook", "book", "adult", "comic", "rom",
+	"podcast", "news", "youtube",
+}
 
 // maxPriorityRank keeps the composite acquisition priority in a sane range (ADR-36).
 const maxPriorityRank = 10_000

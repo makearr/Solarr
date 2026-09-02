@@ -6,21 +6,21 @@ INSERT INTO media_attributes (attr_hash, resolution, source, video_codec, hdr,
                               subtitles, edition_tokens, release_group, proper_repack,
                               video_bitrate, audio_bitrate, overall_bitrate, duration_ms,
                               width, height, frame_rate, scan_type, container,
-                              lossless, sample_rate)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              lossless, sample_rate, image_format, colour_depth, page_count)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (attr_hash) DO UPDATE SET attr_hash = excluded.attr_hash
 RETURNING id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
           audio_channels, bit_depth, languages, subtitles, edition_tokens,
           release_group, proper_repack, video_bitrate, audio_bitrate, overall_bitrate,
           duration_ms, width, height, frame_rate, scan_type, container, lossless,
-          sample_rate;
+          sample_rate, image_format, colour_depth, page_count;
 
 -- name: GetAttributes :one
 SELECT id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
        audio_channels, bit_depth, languages, subtitles, edition_tokens,
        release_group, proper_repack, video_bitrate, audio_bitrate, overall_bitrate,
        duration_ms, width, height, frame_rate, scan_type, container, lossless,
-       sample_rate
+       sample_rate, image_format, colour_depth, page_count
 FROM media_attributes WHERE id = ?;
 
 -- name: CreateMediaObject :one

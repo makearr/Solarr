@@ -47,6 +47,20 @@ func (q *Queries) AddWorkTitle(ctx context.Context, arg AddWorkTitleParams) (Wor
 	return i, err
 }
 
+const clearWorkClassification = `-- name: ClearWorkClassification :exec
+DELETE FROM work_classification WHERE work_id = ? AND kind = ?
+`
+
+type ClearWorkClassificationParams struct {
+	WorkID int64
+	Kind   string
+}
+
+func (q *Queries) ClearWorkClassification(ctx context.Context, arg ClearWorkClassificationParams) error {
+	_, err := q.db.ExecContext(ctx, clearWorkClassification, arg.WorkID, arg.Kind)
+	return err
+}
+
 const createEdition = `-- name: CreateEdition :one
 INSERT INTO edition (work_id, kind, label, year, format, catalogue_number,
                      barcode, runtime_ms, is_default)
@@ -152,6 +166,64 @@ DELETE FROM work WHERE id = ?
 func (q *Queries) DeleteWork(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteWork, id)
 	return err
+}
+
+const findWorksByClassification = `-- name: FindWorksByClassification :many
+SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
+       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by
+FROM work w
+JOIN work_classification c ON c.work_id = w.id
+WHERE c.kind = ?1 AND c.value = ?2
+  AND (?3 = '' OR w.media_type = ?3)
+ORDER BY w.sort_title, w.id
+LIMIT ?4
+`
+
+type FindWorksByClassificationParams struct {
+	Kind      string
+	Value     string
+	MediaType interface{}
+	PageSize  int64
+}
+
+// Monitoring on an album type is the point: "studio albums, not live".
+func (q *Queries) FindWorksByClassification(ctx context.Context, arg FindWorksByClassificationParams) ([]Work, error) {
+	rows, err := q.db.QueryContext(ctx, findWorksByClassification,
+		arg.Kind,
+		arg.Value,
+		arg.MediaType,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Work{}
+	for rows.Next() {
+		var i Work
+		if err := rows.Scan(
+			&i.ID,
+			&i.MediaType,
+			&i.CanonicalTitle,
+			&i.SortTitle,
+			&i.OriginalLanguage,
+			&i.Year,
+			&i.RuntimeMs,
+			&i.AddedAt,
+			&i.UpdatedAt,
+			&i.AddedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const findWorksByNormalizedTitle = `-- name: FindWorksByNormalizedTitle :many
@@ -386,6 +458,39 @@ func (q *Queries) ListEditions(ctx context.Context, workID int64) ([]Edition, er
 	return items, nil
 }
 
+const listWorkClassifications = `-- name: ListWorkClassifications :many
+SELECT work_id, kind, value, source
+FROM work_classification WHERE work_id = ? ORDER BY kind, value
+`
+
+func (q *Queries) ListWorkClassifications(ctx context.Context, workID int64) ([]WorkClassification, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkClassifications, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WorkClassification{}
+	for rows.Next() {
+		var i WorkClassification
+		if err := rows.Scan(
+			&i.WorkID,
+			&i.Kind,
+			&i.Value,
+			&i.Source,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkDates = `-- name: ListWorkDates :many
 SELECT work_id, kind, region, date, source
 FROM work_date WHERE work_id = ? ORDER BY kind, region
@@ -582,6 +687,29 @@ func (q *Queries) ListWorksPage(ctx context.Context, arg ListWorksPageParams) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const setWorkClassification = `-- name: SetWorkClassification :exec
+INSERT INTO work_classification (work_id, kind, value, source)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (work_id, kind, value) DO UPDATE SET source = excluded.source
+`
+
+type SetWorkClassificationParams struct {
+	WorkID int64
+	Kind   string
+	Value  string
+	Source string
+}
+
+func (q *Queries) SetWorkClassification(ctx context.Context, arg SetWorkClassificationParams) error {
+	_, err := q.db.ExecContext(ctx, setWorkClassification,
+		arg.WorkID,
+		arg.Kind,
+		arg.Value,
+		arg.Source,
+	)
+	return err
 }
 
 const setWorkDate = `-- name: SetWorkDate :exec

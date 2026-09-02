@@ -12,6 +12,7 @@ import (
 type Querier interface {
 	AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (LibraryPath, error)
 	AddWorkTitle(ctx context.Context, arg AddWorkTitleParams) (WorkTitle, error)
+	ClearWorkClassification(ctx context.Context, arg ClearWorkClassificationParams) error
 	CreateEdition(ctx context.Context, arg CreateEditionParams) (Edition, error)
 	CreateMediaObject(ctx context.Context, arg CreateMediaObjectParams) (MediaObject, error)
 	// Identity queries. Column lists follow table order, or sqlc stops reusing models.
@@ -21,6 +22,8 @@ type Querier interface {
 	DeleteWork(ctx context.Context, id int64) error
 	// The cheap identity check an incremental scan runs before reading a file.
 	FindMediaObjectsByQuickHash(ctx context.Context, quickHash string) ([]MediaObject, error)
+	// Monitoring on an album type is the point: "studio albums, not live".
+	FindWorksByClassification(ctx context.Context, arg FindWorksByClassificationParams) ([]Work, error)
 	// Every stored variant is matched during import, not just the canonical one (ADR-41).
 	FindWorksByNormalizedTitle(ctx context.Context, arg FindWorksByNormalizedTitleParams) ([]Work, error)
 	GetAttributes(ctx context.Context, id int64) (MediaAttribute, error)
@@ -47,6 +50,7 @@ type Querier interface {
 	// Fingerprint generation is the lowest-priority background work and resumable,
 	// so it asks for the next unfingerprinted rows rather than scanning (ADR-35).
 	ListUnfingerprinted(ctx context.Context, arg ListUnfingerprintedParams) ([]MediaObject, error)
+	ListWorkClassifications(ctx context.Context, workID int64) ([]WorkClassification, error)
 	ListWorkDates(ctx context.Context, workID int64) ([]WorkDate, error)
 	ListWorkExternalIDs(ctx context.Context, workID int64) ([]WorkExternalID, error)
 	ListWorkFields(ctx context.Context, workID int64) ([]WorkField, error)
@@ -58,6 +62,7 @@ type Querier interface {
 	// Measured attributes replace claimed ones after probing; the claim is kept so a
 	// mismatch stays visible (ADR-39).
 	SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttributesParams) error
+	SetWorkClassification(ctx context.Context, arg SetWorkClassificationParams) error
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error
 	SetWorkField(ctx context.Context, arg SetWorkFieldParams) error
 	UpdateWorkTimestamp(ctx context.Context, arg UpdateWorkTimestampParams) error

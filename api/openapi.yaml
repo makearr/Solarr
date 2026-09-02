@@ -500,7 +500,21 @@ components:
 
     MediaType:
       type: string
-      enum: [music, tv, movie, audiobook, book, adult, comic, rom]
+      description: >-
+        Manga, magazines, music videos and adult galleries are categories of
+        these rather than types of their own.
+      enum:
+        - music
+        - tv
+        - movie
+        - audiobook
+        - book
+        - adult
+        - comic
+        - rom
+        - podcast
+        - news
+        - youtube
 
     EventTopic:
       type: string

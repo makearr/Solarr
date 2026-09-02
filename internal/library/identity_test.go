@@ -354,3 +354,109 @@ func TestForeignKeysAreEnforced(t *testing.T) {
 		t.Errorf("rejected for the wrong reason: %v", err)
 	}
 }
+
+// Monitoring on an album type is what Lidarr users actually do ("studio albums,
+// not live"), so the classification has to be a value to filter on.
+func TestClassificationSelectsWorks(t *testing.T) {
+	opened, queries := newLibrary(t)
+	studio := createWork(t, opened, "music", "Tender Prey")
+	live := createWork(t, opened, "music", "Live Seeds")
+
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		for _, entry := range []struct {
+			work  int64
+			kind  string
+			value string
+		}{
+			{studio.ID, "primary", "album"},
+			{live.ID, "primary", "album"},
+			{live.ID, "secondary", "live"},
+		} {
+			if err := q.SetWorkClassification(ctx, librarydb.SetWorkClassificationParams{
+				WorkID: entry.work, Kind: entry.kind, Value: entry.value, Source: "musicbrainz",
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	albums, err := queries.FindWorksByClassification(t.Context(),
+		librarydb.FindWorksByClassificationParams{
+			Kind: "primary", Value: "album", MediaType: "music", PageSize: 10,
+		})
+	if err != nil {
+		t.Fatalf("FindWorksByClassification: %v", err)
+	}
+	if len(albums) != 2 {
+		t.Errorf("%d albums, want 2", len(albums))
+	}
+
+	lives, err := queries.FindWorksByClassification(t.Context(),
+		librarydb.FindWorksByClassificationParams{
+			Kind: "secondary", Value: "live", MediaType: "", PageSize: 10,
+		})
+	if err != nil {
+		t.Fatalf("FindWorksByClassification: %v", err)
+	}
+	if len(lives) != 1 || lives[0].ID != live.ID {
+		t.Errorf("live selection returned %d works, want just %d", len(lives), live.ID)
+	}
+}
+
+// A work carries one primary classification and many secondary ones, which is
+// the shape MusicBrainz and Lidarr both use.
+func TestSecondaryClassificationsAccumulate(t *testing.T) {
+	opened, queries := newLibrary(t)
+	work := createWork(t, opened, "music", "Odds and Sods")
+
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		for _, value := range []string{"compilation", "live"} {
+			if err := q.SetWorkClassification(ctx, librarydb.SetWorkClassificationParams{
+				WorkID: work.ID, Kind: "secondary", Value: value, Source: "musicbrainz",
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	all, err := queries.ListWorkClassifications(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("ListWorkClassifications: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("%d classifications, want both to survive", len(all))
+	}
+}
+
+// Galleries are the first content that is neither audio nor video, and they
+// share the interned attribute table so quality profiles stay on one path.
+func TestImageAttributesInternAlongsideVideo(t *testing.T) {
+	opened, queries := newLibrary(t)
+
+	var gallery librarydb.MediaAttribute
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		row, err := q.InternAttributes(ctx, librarydb.InternAttributesParams{
+			AttrHash:    "gallery-jpeg-40",
+			ImageFormat: sql.NullString{String: "jpeg", Valid: true},
+			PageCount:   sql.NullInt64{Int64: 40, Valid: true},
+			Width:       sql.NullInt64{Int64: 3000, Valid: true},
+			Height:      sql.NullInt64{Int64: 2000, Valid: true},
+		})
+		gallery = row
+		return err
+	})
+
+	stored, err := queries.GetAttributes(t.Context(), gallery.ID)
+	if err != nil {
+		t.Fatalf("GetAttributes: %v", err)
+	}
+	if stored.ImageFormat.String != "jpeg" || stored.PageCount.Int64 != 40 {
+		t.Errorf("image attributes did not round-trip: %+v", stored)
+	}
+	// The audio and video columns stay null, as the image ones do on a video row.
+	if stored.VideoCodec.Valid || stored.DurationMs.Valid {
+		t.Error("a gallery was given video attributes")
+	}
+}

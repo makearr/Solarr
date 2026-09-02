@@ -342,8 +342,11 @@ export interface components {
             name: string;
             permission: components["schemas"]["Permission"];
         };
-        /** @enum {string} */
-        MediaType: "music" | "tv" | "movie" | "audiobook" | "book" | "adult" | "comic" | "rom";
+        /**
+         * @description Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
+         * @enum {string}
+         */
+        MediaType: "music" | "tv" | "movie" | "audiobook" | "book" | "adult" | "comic" | "rom" | "podcast" | "news" | "youtube";
         /** @enum {string} */
         EventTopic: "job" | "acquisition" | "library" | "notification" | "pressure";
         /** @enum {string} */

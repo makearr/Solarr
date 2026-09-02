@@ -186,7 +186,7 @@ SELECT id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
        audio_channels, bit_depth, languages, subtitles, edition_tokens,
        release_group, proper_repack, video_bitrate, audio_bitrate, overall_bitrate,
        duration_ms, width, height, frame_rate, scan_type, container, lossless,
-       sample_rate
+       sample_rate, image_format, colour_depth, page_count
 FROM media_attributes WHERE id = ?
 `
 
@@ -219,6 +219,9 @@ func (q *Queries) GetAttributes(ctx context.Context, id int64) (MediaAttribute, 
 		&i.Container,
 		&i.Lossless,
 		&i.SampleRate,
+		&i.ImageFormat,
+		&i.ColourDepth,
+		&i.PageCount,
 	)
 	return i, err
 }
@@ -318,14 +321,14 @@ INSERT INTO media_attributes (attr_hash, resolution, source, video_codec, hdr,
                               subtitles, edition_tokens, release_group, proper_repack,
                               video_bitrate, audio_bitrate, overall_bitrate, duration_ms,
                               width, height, frame_rate, scan_type, container,
-                              lossless, sample_rate)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              lossless, sample_rate, image_format, colour_depth, page_count)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (attr_hash) DO UPDATE SET attr_hash = excluded.attr_hash
 RETURNING id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
           audio_channels, bit_depth, languages, subtitles, edition_tokens,
           release_group, proper_repack, video_bitrate, audio_bitrate, overall_bitrate,
           duration_ms, width, height, frame_rate, scan_type, container, lossless,
-          sample_rate
+          sample_rate, image_format, colour_depth, page_count
 `
 
 type InternAttributesParams struct {
@@ -353,6 +356,9 @@ type InternAttributesParams struct {
 	Container      sql.NullString
 	Lossless       sql.NullInt64
 	SampleRate     sql.NullInt64
+	ImageFormat    sql.NullString
+	ColourDepth    sql.NullInt64
+	PageCount      sql.NullInt64
 }
 
 // Physical files. Column lists follow table order, or sqlc stops reusing models.
@@ -382,6 +388,9 @@ func (q *Queries) InternAttributes(ctx context.Context, arg InternAttributesPara
 		arg.Container,
 		arg.Lossless,
 		arg.SampleRate,
+		arg.ImageFormat,
+		arg.ColourDepth,
+		arg.PageCount,
 	)
 	var i MediaAttribute
 	err := row.Scan(
@@ -410,6 +419,9 @@ func (q *Queries) InternAttributes(ctx context.Context, arg InternAttributesPara
 		&i.Container,
 		&i.Lossless,
 		&i.SampleRate,
+		&i.ImageFormat,
+		&i.ColourDepth,
+		&i.PageCount,
 	)
 	return i, err
 }

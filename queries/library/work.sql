@@ -118,3 +118,26 @@ ON CONFLICT (work_id, kind, region) DO UPDATE SET
 -- name: ListWorkDates :many
 SELECT work_id, kind, region, date, source
 FROM work_date WHERE work_id = ? ORDER BY kind, region;
+
+-- name: SetWorkClassification :exec
+INSERT INTO work_classification (work_id, kind, value, source)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (work_id, kind, value) DO UPDATE SET source = excluded.source;
+
+-- name: ListWorkClassifications :many
+SELECT work_id, kind, value, source
+FROM work_classification WHERE work_id = ? ORDER BY kind, value;
+
+-- Monitoring on an album type is the point: "studio albums, not live".
+-- name: FindWorksByClassification :many
+SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
+       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by
+FROM work w
+JOIN work_classification c ON c.work_id = w.id
+WHERE c.kind = sqlc.arg(kind) AND c.value = sqlc.arg(value)
+  AND (sqlc.arg(media_type) = '' OR w.media_type = sqlc.arg(media_type))
+ORDER BY w.sort_title, w.id
+LIMIT sqlc.arg(page_size);
+
+-- name: ClearWorkClassification :exec
+DELETE FROM work_classification WHERE work_id = ? AND kind = ?;
