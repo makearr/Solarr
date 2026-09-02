@@ -115,7 +115,8 @@ SELECT scope, metric, value, updated_at FROM counter WHERE scope = ? ORDER BY me
 -- The truth the reconciliation job compares a counter against.
 -- name: CountDesiredItemsByState :many
 SELECT state, COUNT(*) AS total FROM desired_item
-WHERE monitored = 1 AND (sqlc.arg(category_id) = 0 OR category_id = sqlc.arg(category_id))
+WHERE monitored = 1
+  AND (CAST(sqlc.arg(category_id) AS INTEGER) = 0 OR category_id = sqlc.arg(category_id))
 GROUP BY state;
 
 -- name: UpsertHuntQueueEntry :exec

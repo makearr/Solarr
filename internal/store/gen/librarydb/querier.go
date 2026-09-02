@@ -37,7 +37,7 @@ type Querier interface {
 	// looks for, so held and stated counts come back together (ADR-38).
 	CollectionCoverage(ctx context.Context, id int64) (CollectionCoverageRow, error)
 	// The truth the reconciliation job compares a counter against.
-	CountDesiredItemsByState(ctx context.Context, categoryID interface{}) ([]CountDesiredItemsByStateRow, error)
+	CountDesiredItemsByState(ctx context.Context, categoryID int64) ([]CountDesiredItemsByStateRow, error)
 	// Recomputable from the observations, which is why they are kept individually.
 	CountGroupOutcomes(ctx context.Context, arg CountGroupOutcomesParams) ([]CountGroupOutcomesRow, error)
 	// What a SET requires follows the monitored parts, so unmonitoring an episode
