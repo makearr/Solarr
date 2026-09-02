@@ -226,6 +226,9 @@ func (p *process) startServer(ctx context.Context) error {
 	}
 
 	p.reportRootFolders()
+	if err := p.seedAuthPolicy(ctx); err != nil {
+		return err
+	}
 	p.announceOpenAccess()
 	if err := p.ensureOpenAccessAdministrator(ctx); err != nil {
 		return err

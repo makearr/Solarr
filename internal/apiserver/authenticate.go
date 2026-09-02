@@ -64,8 +64,18 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 
 var errNoCredential = errors.New("apiserver: no credential presented")
 
+// authMode is the mode in force now, not the one config.yml booted with. Auth
+// can be switched off from the interface (ADR-21), so this is read per request
+// rather than captured at construction.
+func (s *Server) authMode() AuthMode {
+	if !s.auth.Settings.Snapshot().AuthRequired() {
+		return AuthNone
+	}
+	return s.auth.Mode
+}
+
 func (s *Server) identify(r *http.Request) (settings.User, error) {
-	if s.auth.Mode == AuthNone {
+	if s.authMode() == AuthNone {
 		return s.administrator()
 	}
 	if user, err := s.identifyBySession(r); err == nil {
@@ -93,7 +103,7 @@ func (s *Server) administrator() (settings.User, error) {
 }
 
 func (s *Server) identifyBySession(r *http.Request) (settings.User, error) {
-	if s.auth.Mode == AuthAPIKeyOnly {
+	if s.authMode() == AuthAPIKeyOnly {
 		return settings.User{}, errNoCredential
 	}
 	cookie, err := r.Cookie(auth.SessionCookieName)
@@ -133,7 +143,7 @@ func (s *Server) identifyByAPIKey(r *http.Request) (settings.User, error) {
 }
 
 func (s *Server) identifyByProxy(r *http.Request) (settings.User, error) {
-	if s.auth.Mode != AuthProxy || s.auth.ProxyHeader == "" {
+	if s.authMode() != AuthProxy || s.auth.ProxyHeader == "" {
 		return settings.User{}, errNoCredential
 	}
 	if !s.fromTrustedNetwork(r.RemoteAddr) {

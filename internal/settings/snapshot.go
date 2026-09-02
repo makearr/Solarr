@@ -8,6 +8,8 @@ type Snapshot struct {
 	categories   []Category
 	rootFolders  []RootFolder
 	categoryRoot []CategoryRoot
+	// policy is instance-wide settings by key, read through typed accessors.
+	policy map[string]string
 
 	// Indexes, built once, so a lookup is a map hit rather than a scan.
 	userByID       map[int64]User
@@ -94,8 +96,10 @@ func (s *Snapshot) RootFoldersForCategory(categoryID int64) []RootFolder {
 // newSnapshot builds the indexes. It clones the slices it is given, so a caller
 // keeping a reference cannot mutate a published snapshot.
 func newSnapshot(users []User, categories []Category, rootFolders []RootFolder,
-	attachments []CategoryRoot, access map[int64]map[int64]Permission) *Snapshot {
+	attachments []CategoryRoot, access map[int64]map[int64]Permission,
+	policy map[string]string) *Snapshot {
 	snapshot := &Snapshot{
+		policy:         policy,
 		users:          slices.Clone(users),
 		categories:     slices.Clone(categories),
 		rootFolders:    slices.Clone(rootFolders),

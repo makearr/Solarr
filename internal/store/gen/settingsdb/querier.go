@@ -28,6 +28,7 @@ type Querier interface {
 	DetachRootFolderFromCategory(ctx context.Context, arg DetachRootFolderFromCategoryParams) error
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetCategory(ctx context.Context, id int64) (Category, error)
+	GetInstanceSetting(ctx context.Context, key string) (InstanceSetting, error)
 	GetRootFolder(ctx context.Context, id int64) (RootFolder, error)
 	GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetUserByAPIKeyHashRow, error)
 	// Columns are listed explicitly rather than with *, so adding one cannot
@@ -39,11 +40,14 @@ type Querier interface {
 	ListCategories(ctx context.Context) ([]Category, error)
 	ListCategoryAccessForUser(ctx context.Context, userID int64) ([]UserCategoryAccess, error)
 	ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFolder, error)
+	// Instance-wide policy, seeded from config.yml and changeable afterwards (ADR-21).
+	ListInstanceSettings(ctx context.Context) ([]InstanceSetting, error)
 	ListPreferencesForUser(ctx context.Context, userID int64) ([]UserPreference, error)
 	ListRootFolders(ctx context.Context) ([]RootFolder, error)
 	ListUsers(ctx context.Context) ([]AppUser, error)
 	RevokeCategoryAccess(ctx context.Context, arg RevokeCategoryAccessParams) error
 	SetCategoryAccess(ctx context.Context, arg SetCategoryAccessParams) error
+	SetInstanceSetting(ctx context.Context, arg SetInstanceSettingParams) error
 	SetPreference(ctx context.Context, arg SetPreferenceParams) error
 	SetRootFolderOnline(ctx context.Context, arg SetRootFolderOnlineParams) error
 	SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) error

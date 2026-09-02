@@ -137,6 +137,11 @@ func New(config Config) (*Server, error) {
 
 		// Unauthenticated because before the first account exists there is nobody to authenticate as
 		// (section 21.11).
+		// Unauthenticated for the same reason as /setup: an instance that requires
+		// no login has nobody to authenticate, and both the wizard and the running
+		// interface have to be able to discover that.
+		api.Get("/settings/auth", server.GetAuthPolicy)
+		api.Put("/settings/auth", server.SetAuthPolicy)
 		api.Get("/setup", server.GetSetupStatus)
 		api.Post("/setup/admin", server.CreateFirstAdministrator)
 

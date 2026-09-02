@@ -41,6 +41,12 @@ type CategoryRootFolder struct {
 	AcceptsNew   int64
 }
 
+type InstanceSetting struct {
+	Key       string
+	ValueJson string
+	UpdatedAt int64
+}
+
 type RootFolder struct {
 	ID     int64
 	Path   string

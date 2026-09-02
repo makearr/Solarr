@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
+import { useSetAuthRequired } from "@/lib/useAuthPolicy";
 
 // A convenience, not a gate (section 21.11): every step can be skipped.
 export function Setup({ onDone }: { onDone: () => void }) {
@@ -41,6 +42,7 @@ function CreateAdministrator() {
   const queryClient = useQueryClient();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const openAccess = useSetAuthRequired();
 
   const create = useMutation({
     mutationFn: async () => {
@@ -87,12 +89,35 @@ function CreateAdministrator() {
 
         <button
           type="submit"
-          disabled={!username.trim() || password.length < 12 || create.isPending}
+          disabled={!username.trim() || password === "" || create.isPending}
           className={primaryButtonStyle}
         >
           {create.isPending ? "Creating…" : "Create account"}
         </button>
       </form>
+
+      <div className="mt-4 space-y-2 border-t border-border-subtle pt-4">
+        <p className="text-xs text-ink-muted">
+          Or run without any login. Every request is then served as the administrator, so
+          only do this where something else already controls who can reach the port — a VPN,
+          a reverse proxy that authenticates, or a network you trust. You can turn it back on
+          in Settings, which is also where you create an account afterwards.
+        </p>
+        {openAccess.isError && (
+          <p className="text-xs text-danger">That could not be saved.</p>
+        )}
+        <button
+          type="button"
+          onClick={() => openAccess.mutate({ authRequired: false })}
+          disabled={openAccess.isPending}
+          className="w-full rounded-md border border-border-subtle px-3 py-1.5 text-sm
+                     text-ink-muted hover:text-ink disabled:opacity-50
+                     focus-visible:outline-2 focus-visible:outline-offset-2
+                     focus-visible:outline-accent"
+        >
+          {openAccess.isPending ? "Saving…" : "Continue without a login"}
+        </button>
+      </div>
     </Panel>
   );
 }

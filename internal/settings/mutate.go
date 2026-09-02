@@ -184,6 +184,17 @@ func (c *Cache) DetachRootFolder(ctx context.Context, categoryID, rootFolderID i
 }
 
 // CreateUser adds an account.
+// SetPassword replaces an account's password hash. An empty hash leaves the
+// account unable to sign in, which is what an open-access install stores.
+func (c *Cache) SetPassword(ctx context.Context, userID int64, passwordHash string) error {
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetUserPasswordHash(ctx, settingsdb.SetUserPasswordHashParams{
+			ID:           userID,
+			PasswordHash: sql.NullString{String: passwordHash, Valid: passwordHash != ""},
+		})
+	})
+}
+
 func (c *Cache) CreateUser(ctx context.Context, cl clock.Clock, username, passwordHash string, role Role) (User, error) {
 	var categories []int64
 	if role == RoleAdmin {

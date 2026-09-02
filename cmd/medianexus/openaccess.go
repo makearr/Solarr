@@ -14,18 +14,22 @@ import (
 	"github.com/makearr/MediaNexus/internal/settings"
 )
 
-// openAccessUsername owns an install that asks for no credential.
-const openAccessUsername = "administrator"
+// seedAuthPolicy writes what config.yml asked for, but only on a first run.
+// After that the stored policy is authoritative, so editing config.yml cannot
+// quietly reopen an instance that was closed from the interface (ADR-21).
+func (p *process) seedAuthPolicy(ctx context.Context) error {
+	required := p.config.Security.AuthMode != config.AuthNone
+	return p.cache.SeedAuthRequired(ctx, clock.NewSystem(), required)
+}
 
 // announceOpenAccess says, on every boot, that this instance is unprotected and
-// on which address. Someone who set auth_mode none and forgot has one place the
-// fact is guaranteed to appear.
+// on which address. Someone who turned authentication off and forgot has one
+// place the fact is guaranteed to appear.
 func (p *process) announceOpenAccess() {
-	if p.config.Security.AuthMode != config.AuthNone {
+	if p.cache.Snapshot().AuthRequired() {
 		return
 	}
 	p.logger.Warn("authentication is disabled; every request is served as the administrator",
-		slog.String("auth_mode", string(config.AuthNone)),
 		slog.String("bind", p.config.Server.Bind),
 		slog.Int("port", p.config.Server.Port))
 }
@@ -36,7 +40,7 @@ func (p *process) announceOpenAccess() {
 // no password hash, which is exactly what settings.db already models for an
 // account that does not authenticate by password.
 func (p *process) ensureOpenAccessAdministrator(ctx context.Context) error {
-	if p.config.Security.AuthMode != config.AuthNone {
+	if p.cache.Snapshot().AuthRequired() {
 		return nil
 	}
 	for _, user := range p.cache.Snapshot().Users() {
@@ -45,7 +49,7 @@ func (p *process) ensureOpenAccessAdministrator(ctx context.Context) error {
 		}
 	}
 
-	created, err := p.cache.CreateUser(ctx, clock.NewSystem(), openAccessUsername, "", settings.RoleAdmin)
+	created, err := p.cache.CreateUser(ctx, clock.NewSystem(), apiserver.OpenAccessUsername, "", settings.RoleAdmin)
 	if err != nil {
 		return err
 	}
