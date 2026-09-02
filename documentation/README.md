@@ -9,6 +9,7 @@ named file, linked from the code by path.
 | [coding-standards.md](coding-standards.md) | Style, structure, comments, testing, AI-maintainability |
 | [startup-checks.md](startup-checks.md) | How directories are checked at startup, and what is deliberately not checked |
 | [sql-and-sqlc.md](sql-and-sqlc.md) | Writing queries, and the sqlc SQLite constraints that bite silently |
+| [benchmarks.md](benchmarks.md) | The 500k corpus, the ADR-28 targets as tests, and the ADR-5 driver switch |
 
 ## What goes here
 

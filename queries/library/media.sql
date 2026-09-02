@@ -20,19 +20,16 @@ SELECT id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
        lossless, sample_rate, image_format, colour_depth, page_count
 FROM media_attributes WHERE id = ?;
 
--- name: CreateMediaObject :one
+-- Returning the row costs four times the insert itself at import scale, so this is
+-- execlastid: documentation/benchmarks.md.
+-- name: CreateMediaObject :execlastid
 INSERT INTO media_object (size_bytes, quick_hash, content_hash, oshash, phash,
                           audio_fp, audio_fp_prefix, fingerprinted_at,
                           claimed_attributes_id, measured_attributes_id,
                           attribute_mismatch_json, duration_ms, width, height,
                           video_bitrate, audio_bitrate, overall_bitrate,
                           probe_json, first_seen_at, verified_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
-          audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
-          measured_attributes_id, attribute_mismatch_json, duration_ms, width,
-          height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
-          first_seen_at, verified_at;
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetMediaObject :one
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
@@ -94,11 +91,11 @@ WHERE id = ?;
 -- name: ListPerceptualHashes :many
 SELECT id, phash FROM media_object WHERE phash IS NOT NULL ORDER BY id;
 
--- name: AddLibraryPath :one
+-- The second half of importing a file, and execlastid for the same reason.
+-- name: AddLibraryPath :execlastid
 INSERT INTO library_path (media_object_id, root_folder_id, rel_path, link_kind,
                           is_primary, created_at)
-VALUES (?, ?, ?, ?, ?, ?)
-RETURNING id, media_object_id, root_folder_id, rel_path, link_kind, is_primary, created_at;
+VALUES (?, ?, ?, ?, ?, ?);
 
 -- name: ListPathsForObject :many
 SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary, created_at

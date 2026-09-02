@@ -28,6 +28,10 @@ MOUNT       := -v $(CURDIR):/src -w /src
 CACHE       := -v medianexus-gopath:/go/pkg -v medianexus-gobuild:/.cache/go-build
 GOENV       := -e GOCACHE=/.cache/go-build -e CGO_ENABLED=0 -e HOME=/tmp
 RUN_GO      := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) $(CACHE) $(GOENV) $(GO_IMAGE)
+# ADR-22's scale is 500000; the default keeps an ordinary test run to seconds.
+BENCH_FILES ?=
+RUN_GO_BENCH := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) $(CACHE) $(GOENV) \
+                 -e MEDIANEXUS_BENCH=1 -e MEDIANEXUS_BENCH_FILES=$(BENCH_FILES) $(GO_IMAGE)
 RUN_NODE    := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT)/web -w /src/web \
                  -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
 # The spec lives at the repository root, not under web/, so generation needs a
@@ -35,7 +39,7 @@ RUN_NODE    := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT)/web -w /sr
 RUN_NODE_ROOT := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) \
                  -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
 
-.PHONY: help verify build test race bench lint vet fmt fmt-check sqlc sqlc-check \
+.PHONY: help verify build test race bench bench-drivers lint vet fmt fmt-check sqlc sqlc-check \
         api web web-test web-dev image image-local builder milestone version cache-init clean-cache deps tidy
 
 VERSION     := $(shell tr -d '[:space:]' < VERSION 2>/dev/null || echo 0.0.0)
@@ -79,8 +83,13 @@ race: cache-init  ## Tests with the race detector (needs CGO)
 	docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) $(CACHE) -e GOCACHE=/.cache/go-build -e HOME=/tmp \
 	  $(GO_IMAGE) go test -race -count=1 ./...
 
-bench: cache-init  ## Benchmarks — ADR-28 performance targets
-	$(RUN_GO) go test -run=^$$ -bench=. -benchmem ./...
+# -p 1: packages run one at a time, or a latency figure measures the other packages.
+bench: cache-init  ## Benchmarks and ADR-28 targets. Scale with BENCH_FILES=500000
+	$(RUN_GO_BENCH) go test -count=1 -p 1 -v -run=TestADR28 -bench=. -benchmem -timeout 60m ./...
+
+bench-drivers: cache-init  ## ADR-5: the same measurements under modernc and ncruces
+	$(RUN_GO_BENCH) go test -count=1 -p 1 -v -run=TestADR28 -bench=. -benchmem -timeout 60m ./internal/library/
+	$(RUN_GO_BENCH) go test -count=1 -p 1 -v -tags ncruces -run=TestADR28 -bench=. -benchmem -timeout 60m ./internal/library/
 
 vet: cache-init
 	$(RUN_GO) go vet ./...

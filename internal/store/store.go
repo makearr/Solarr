@@ -12,14 +12,9 @@ import (
 	"path/filepath"
 	"time"
 
-	_ "modernc.org/sqlite" // pure-Go driver, keeps CGO_ENABLED=0 building (ADR-5, ADR-30)
-
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/fsx"
 )
-
-// driverName is the only place the driver is named (ADR-5).
-const driverName = "sqlite"
 
 // Defaults from §14. Every one is overridable through config.yml.
 const (

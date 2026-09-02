@@ -110,6 +110,10 @@ convention. Write `section 5.5`, not `§5.5`, in SQL.
   ORDER BY sort_title, id
   ```
 
+- **An insert on a table that grows with the library is `:execlastid`, not `:one`.** Returning
+  the row costs about four times the insert itself, measured on both drivers; the column count
+  is nearly free but the result set is not. A caller wanting the whole row reads it back.
+  Numbers and method: `documentation/benchmarks.md`.
 - No joins across database files. Compose in Go (architecture section 4.3).
 - **Never write through the read pool inside a write transaction.** The write connection holds
   the lock, so the second connection blocks against it until the busy timeout expires.
