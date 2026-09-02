@@ -94,6 +94,17 @@ convention. Write `section 5.5`, not `§5.5`, in SQL.
   `*ast.ResTarget has nil name`. Alias bare parameters and literals. Where a branch is only a
   constant row, a separate statement is usually clearer than an alias.
 
+- **`table MATCH ?` — FTS5's whole-table match — does not parse.** sqlc's analyzer resolves
+  `table` as a column reference and fails with `column "title_search" does not exist`. Match a
+  specific column instead: `ts.title MATCH ?`. Harmless here since `title` is the FTS5 table's
+  only indexed column anyway (everything else is `UNINDEXED`), so the two forms select
+  identical rows — that stops being true the moment a second indexed column is added, at which
+  point the whole-table form has no sqlc-compatible substitute and the query has to be
+  hand-written outside `queries/`. The hidden `rank` column and `bm25()` both need the same
+  `CAST(... AS REAL)` as any other aggregate, and an `UNINDEXED` column carries no declared
+  type either, so an argument compared against it needs `CAST(sqlc.arg(x) AS TEXT)` or it comes
+  back as `interface{}`. Worked example: `queries/library/search.sql`.
+
 ## Conventions
 
 - One file per domain area, named queries with `-- name: GetWorkByID :one`.

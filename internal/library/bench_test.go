@@ -171,24 +171,23 @@ func TestADR28_ListPageStaysUnderItsTarget(t *testing.T) {
 	assertTarget(t, "library list page", durations, listPageTarget)
 }
 
-// FTS5 is not built yet, so the indexed title lookup stands in: it is the query the
-// search target will be measured against once FTS5 replaces it.
-func TestADR28_TitleLookupStaysUnderTheSearchTarget(t *testing.T) {
+// Migration 0010: the FTS5 index over titles and aliases, measured as search-as-you-type
+// runs it -- a prefix of one word, not the complete title FindWorksByNormalizedTitle
+// needed. Each work in the corpus carries two title_search rows (canonical_title itself
+// plus the fixture's own "canonical" work_title), so this also measures the dedup join.
+func TestADR28_SearchStaysUnderItsTarget(t *testing.T) {
 	timed(t)
 
 	opened := corpus(t)
-	queries := librarydb.New(opened.Read())
-	wanted := sortTitles(t, opened, samples)
+	search := library.NewSearch(opened)
+	wanted := searchPrefixes(t, opened, samples)
 
 	durations := measure(len(wanted), func(index int) {
-		_, err := queries.FindWorksByNormalizedTitle(t.Context(), librarydb.FindWorksByNormalizedTitleParams{
-			Normalized: wanted[index], MediaType: "", PageSize: listPageSize,
-		})
-		if err != nil {
-			t.Fatalf("FindWorksByNormalizedTitle: %v", err)
+		if _, err := search.Works(t.Context(), wanted[index], "", listPageSize); err != nil {
+			t.Fatalf("Works: %v", err)
 		}
 	})
-	assertTarget(t, "title lookup", durations, titleSearchTarget)
+	assertTarget(t, "search", durations, titleSearchTarget)
 }
 
 func TestADR28_ImportBatchCommitStaysUnderItsTarget(t *testing.T) {
@@ -394,12 +393,15 @@ func insertImportedFile(ctx context.Context, queries *librarydb.Queries, serial 
 	return err
 }
 
-func sortTitles(tb testing.TB, opened *store.Store, count int) []string {
+// searchPrefixes returns the first word of a sample of canonical titles -- what a
+// search box holds partway through typing, which is what the FTS5 index is actually
+// measured against (a complete title is the easy case).
+func searchPrefixes(tb testing.TB, opened *store.Store, count int) []string {
 	tb.Helper()
 	rows, err := opened.Read().QueryContext(context.Background(),
-		"SELECT sort_title FROM work ORDER BY id LIMIT ?", count)
+		"SELECT canonical_title FROM work ORDER BY id LIMIT ?", count)
 	if err != nil {
-		tb.Fatalf("read sort titles: %v", err)
+		tb.Fatalf("read canonical titles: %v", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -408,6 +410,9 @@ func sortTitles(tb testing.TB, opened *store.Store, count int) []string {
 		var title string
 		if err := rows.Scan(&title); err != nil {
 			tb.Fatalf("scan: %v", err)
+		}
+		if word, _, ok := strings.Cut(title, " "); ok {
+			title = word
 		}
 		found = append(found, title)
 	}
