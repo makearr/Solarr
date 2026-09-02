@@ -36,6 +36,62 @@ type EditionExternalID struct {
 	Confidence float64
 }
 
+type LibraryPath struct {
+	ID            int64
+	MediaObjectID int64
+	RootFolderID  int64
+	RelPath       string
+	LinkKind      string
+	IsPrimary     int64
+	CreatedAt     int64
+}
+
+type MediaAttribute struct {
+	ID             int64
+	AttrHash       string
+	Resolution     sql.NullString
+	Source         sql.NullString
+	VideoCodec     sql.NullString
+	Hdr            sql.NullString
+	AudioCodec     sql.NullString
+	AudioChannels  sql.NullString
+	BitDepth       sql.NullInt64
+	Languages      sql.NullString
+	Subtitles      sql.NullString
+	EditionTokens  sql.NullString
+	ReleaseGroup   sql.NullString
+	ProperRepack   int64
+	VideoBitrate   sql.NullInt64
+	AudioBitrate   sql.NullInt64
+	OverallBitrate sql.NullInt64
+	DurationMs     sql.NullInt64
+	Width          sql.NullInt64
+	Height         sql.NullInt64
+	FrameRate      sql.NullFloat64
+	ScanType       sql.NullString
+	Container      sql.NullString
+	Lossless       sql.NullInt64
+	SampleRate     sql.NullInt64
+}
+
+type MediaObject struct {
+	ID                    int64
+	SizeBytes             int64
+	QuickHash             string
+	ContentHash           sql.NullString
+	Oshash                sql.NullString
+	Phash                 sql.NullInt64
+	AudioFp               []byte
+	AudioFpPrefix         sql.NullInt64
+	FingerprintedAt       sql.NullInt64
+	ClaimedAttributesID   sql.NullInt64
+	MeasuredAttributesID  sql.NullInt64
+	AttributeMismatchJson sql.NullString
+	ProbeJson             sql.NullString
+	FirstSeenAt           int64
+	VerifiedAt            sql.NullInt64
+}
+
 type Work struct {
 	ID               int64
 	MediaType        string

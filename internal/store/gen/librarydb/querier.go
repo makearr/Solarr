@@ -6,23 +6,47 @@ package librarydb
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
+	AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (LibraryPath, error)
 	AddWorkTitle(ctx context.Context, arg AddWorkTitleParams) (WorkTitle, error)
 	CreateEdition(ctx context.Context, arg CreateEditionParams) (Edition, error)
+	CreateMediaObject(ctx context.Context, arg CreateMediaObjectParams) (MediaObject, error)
 	// Identity queries. Column lists follow table order, or sqlc stops reusing models.
 	CreateWork(ctx context.Context, arg CreateWorkParams) (Work, error)
+	DeleteLibraryPath(ctx context.Context, id int64) error
+	DeleteMediaObject(ctx context.Context, id int64) error
 	DeleteWork(ctx context.Context, id int64) error
+	// The cheap identity check an incremental scan runs before reading a file.
+	FindMediaObjectsByQuickHash(ctx context.Context, quickHash string) ([]MediaObject, error)
 	// Every stored variant is matched during import, not just the canonical one (ADR-41).
 	FindWorksByNormalizedTitle(ctx context.Context, arg FindWorksByNormalizedTitleParams) ([]Work, error)
+	GetAttributes(ctx context.Context, id int64) (MediaAttribute, error)
 	GetEditionByExternalID(ctx context.Context, arg GetEditionByExternalIDParams) (Edition, error)
+	GetMediaObject(ctx context.Context, id int64) (MediaObject, error)
+	// oshash is exact identity: the same bytes, with no decoding (ADR-35).
+	GetMediaObjectByOshash(ctx context.Context, oshash sql.NullString) (MediaObject, error)
+	GetPathByLocation(ctx context.Context, arg GetPathByLocationParams) (LibraryPath, error)
 	GetWork(ctx context.Context, id int64) (Work, error)
 	// Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
 	GetWorkByExternalID(ctx context.Context, arg GetWorkByExternalIDParams) (Work, error)
+	// Physical files. Column lists follow table order, or sqlc stops reusing models.
+	InternAttributes(ctx context.Context, arg InternAttributesParams) (MediaAttribute, error)
 	LinkEditionExternalID(ctx context.Context, arg LinkEditionExternalIDParams) error
 	LinkWorkExternalID(ctx context.Context, arg LinkWorkExternalIDParams) error
 	ListEditions(ctx context.Context, workID int64) ([]Edition, error)
+	ListPathsForObject(ctx context.Context, mediaObjectID int64) ([]LibraryPath, error)
+	// A vanished path is MISSING, not deleted, until the root is confirmed online
+	// (section 10.4), so the scan lists a root rather than removing from it.
+	ListPathsInRoot(ctx context.Context, arg ListPathsInRootParams) ([]LibraryPath, error)
+	// The whole phash set is 4 MB at 500k files: Hamming distance is brute-forced in
+	// Go, so this hands over every candidate rather than filtering in SQL (ADR-35).
+	ListPerceptualHashes(ctx context.Context) ([]ListPerceptualHashesRow, error)
+	// Fingerprint generation is the lowest-priority background work and resumable,
+	// so it asks for the next unfingerprinted rows rather than scanning (ADR-35).
+	ListUnfingerprinted(ctx context.Context, arg ListUnfingerprintedParams) ([]MediaObject, error)
 	ListWorkDates(ctx context.Context, workID int64) ([]WorkDate, error)
 	ListWorkExternalIDs(ctx context.Context, workID int64) ([]WorkExternalID, error)
 	ListWorkFields(ctx context.Context, workID int64) ([]WorkField, error)
@@ -30,6 +54,10 @@ type Querier interface {
 	// Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
 	// sort_title is not unique, so a page boundary inside a group would drop or repeat rows.
 	ListWorksPage(ctx context.Context, arg ListWorksPageParams) ([]Work, error)
+	SetFingerprints(ctx context.Context, arg SetFingerprintsParams) error
+	// Measured attributes replace claimed ones after probing; the claim is kept so a
+	// mismatch stays visible (ADR-39).
+	SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttributesParams) error
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error
 	SetWorkField(ctx context.Context, arg SetWorkFieldParams) error
 	UpdateWorkTimestamp(ctx context.Context, arg UpdateWorkTimestampParams) error
