@@ -10,6 +10,7 @@ import (
 )
 
 type Querier interface {
+	AddCollectionMember(ctx context.Context, arg AddCollectionMemberParams) error
 	AddCredit(ctx context.Context, arg AddCreditParams) error
 	AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (LibraryPath, error)
 	AddPersonAlias(ctx context.Context, arg AddPersonAliasParams) error
@@ -30,13 +31,20 @@ type Querier interface {
 	// own curation (ADR-33).
 	ClearProviderTagAssignments(ctx context.Context, arg ClearProviderTagAssignmentsParams) error
 	ClearWorkClassification(ctx context.Context, arg ClearWorkClassificationParams) error
+	// "You have 4 of 6 Ihaol films" is the first thing library-derived discovery
+	// looks for, so held and stated counts come back together (ADR-38).
+	CollectionCoverage(ctx context.Context, id int64) (CollectionCoverageRow, error)
 	// The truth the reconciliation job compares a counter against.
 	CountDesiredItemsByState(ctx context.Context, categoryID interface{}) ([]CountDesiredItemsByStateRow, error)
+	// Recomputable from the observations, which is why they are kept individually.
+	CountGroupOutcomes(ctx context.Context, arg CountGroupOutcomesParams) ([]CountGroupOutcomesRow, error)
 	// Only 'primary' counts: a trailer belongs to the work without satisfying it.
 	CountPrimaryFiles(ctx context.Context, desiredItemID int64) (int64, error)
 	// Coverage: what a monitored person has produced against what is held (ADR-32).
 	CountWorksCreditedTo(ctx context.Context, arg CountWorksCreditedToParams) (int64, error)
 	CreateAcquisition(ctx context.Context, arg CreateAcquisitionParams) (Acquisition, error)
+	// Collections, the ready queue, artwork, statistics and reputation.
+	CreateCollection(ctx context.Context, arg CreateCollectionParams) (Collection, error)
 	// Desired state. Column lists follow table order, or sqlc stops reusing models.
 	CreateDesiredItem(ctx context.Context, arg CreateDesiredItemParams) (DesiredItem, error)
 	CreateEdition(ctx context.Context, arg CreateEditionParams) (Edition, error)
@@ -56,7 +64,10 @@ type Querier interface {
 	DeleteQuarantineEntry(ctx context.Context, id int64) error
 	DeleteSubscription(ctx context.Context, id int64) error
 	DeleteWork(ctx context.Context, id int64) error
+	DequeueReady(ctx context.Context, candidateID int64) error
 	DetachFile(ctx context.Context, arg DetachFileParams) error
+	// Primed so something dispatches the instant a slot frees (section 10.5).
+	EnqueueReady(ctx context.Context, arg EnqueueReadyParams) error
 	// The cheap identity check an incremental scan runs before reading a file.
 	FindMediaObjectsByQuickHash(ctx context.Context, quickHash string) ([]MediaObject, error)
 	// A stage name is often the only way to connect a release to a person (ADR-32).
@@ -74,6 +85,8 @@ type Querier interface {
 	GetCounter(ctx context.Context, arg GetCounterParams) (Counter, error)
 	GetDesiredItem(ctx context.Context, id int64) (DesiredItem, error)
 	GetEditionByExternalID(ctx context.Context, arg GetEditionByExternalIDParams) (Edition, error)
+	// Scoring reads the bounded value, never the raw rate (ADR-45).
+	GetGroupReputation(ctx context.Context, releaseGroup string) (GroupReputation, error)
 	GetMediaObject(ctx context.Context, id int64) (MediaObject, error)
 	// oshash is exact identity: the same bytes, with no decoding (ADR-35).
 	GetMediaObjectByOshash(ctx context.Context, oshash sql.NullString) (MediaObject, error)
@@ -96,7 +109,10 @@ type Querier interface {
 	ListAcquiredFiles(ctx context.Context, acquisitionID int64) ([]AcquisitionFile, error)
 	// Startup reconciliation polls every non-terminal acquisition (section 10.9).
 	ListActiveAcquisitions(ctx context.Context) ([]Acquisition, error)
+	ListArtworkForSubject(ctx context.Context, arg ListArtworkForSubjectParams) ([]Artwork, error)
 	ListBlocklist(ctx context.Context, arg ListBlocklistParams) ([]BlocklistedRelease, error)
+	ListCollectionMembers(ctx context.Context, collectionID int64) ([]CollectionMember, error)
+	ListCollectionsForWork(ctx context.Context, workID int64) ([]Collection, error)
 	ListCountersForScope(ctx context.Context, scope string) ([]Counter, error)
 	ListCreditsForWork(ctx context.Context, workID int64) ([]Credit, error)
 	// Every candidate with its full breakdown, newest first (F1, F16).
@@ -110,6 +126,7 @@ type Querier interface {
 	ListEnabledSubscriptions(ctx context.Context) ([]Subscription, error)
 	ListExpiredQuarantine(ctx context.Context, arg ListExpiredQuarantineParams) ([]Quarantine, error)
 	ListFilesForDesiredItem(ctx context.Context, desiredItemID int64) ([]DesiredItemFile, error)
+	ListGroupObservations(ctx context.Context, arg ListGroupObservationsParams) ([]GroupObservation, error)
 	ListImportDecisionsNeedingReview(ctx context.Context, limit int64) ([]ImportDecision, error)
 	// "Monitor this studio and everything beneath it" needs the whole subtree, and
 	// imprints and sub-labels are real in every domain (ADR-32).
@@ -123,6 +140,8 @@ type Querier interface {
 	// Go, so this hands over every candidate rather than filtering in SQL (ADR-35).
 	ListPerceptualHashes(ctx context.Context) ([]ListPerceptualHashesRow, error)
 	ListRelationshipsFrom(ctx context.Context, arg ListRelationshipsFromParams) ([]Relationship, error)
+	// Every chart reads a rollup, never a live aggregate (ADR-28, section 21.12).
+	ListStatRollup(ctx context.Context, arg ListStatRollupParams) ([]StatRollup, error)
 	// "This tag or any descendant" is one join because the closure is materialised.
 	ListSubjectsForTagTree(ctx context.Context, arg ListSubjectsForTagTreeParams) ([]ListSubjectsForTagTreeRow, error)
 	ListTagsForSubject(ctx context.Context, arg ListTagsForSubjectParams) ([]TagAssignment, error)
@@ -147,10 +166,13 @@ type Querier interface {
 	NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error)
 	// oldest_searched, the default hunt mode (section 9.3).
 	NextHuntByOldestSearched(ctx context.Context, arg NextHuntByOldestSearchedParams) ([]HuntQueue, error)
+	// Revalidated at dispatch, so an expired entry is never handed to a downloader.
+	NextReady(ctx context.Context, arg NextReadyParams) ([]ReadyQueue, error)
 	// Which search caused this file, and which download produced it (F4, section 12).
 	ProvenanceForObject(ctx context.Context, mediaObjectID sql.NullInt64) ([]ProvenanceForObjectRow, error)
 	// Auto entries expire because indexers repair things; manual ones do not.
 	PurgeExpiredBlocklist(ctx context.Context, expiresAt sql.NullInt64) error
+	PurgeExpiredReady(ctx context.Context, expiresAt int64) error
 	Quarantine(ctx context.Context, arg QuarantineParams) (Quarantine, error)
 	// Quarantined bytes count against the free-space gate, so they are summed per
 	// root rather than assumed to be free (ADR-12).
@@ -160,6 +182,9 @@ type Querier interface {
 	RecomputePresentCount(ctx context.Context, id int64) error
 	RecordAcquiredFile(ctx context.Context, arg RecordAcquiredFileParams) (AcquisitionFile, error)
 	RecordDecision(ctx context.Context, arg RecordDecisionParams) (CandidateDecision, error)
+	// Only content-attributable outcomes count: a full disk is not the group's
+	// fault, and counting it would make reputation measure the environment (ADR-45).
+	RecordGroupObservation(ctx context.Context, arg RecordGroupObservationParams) error
 	RecordImportDecision(ctx context.Context, arg RecordImportDecisionParams) (ImportDecision, error)
 	RemoveFromBlocklist(ctx context.Context, id int64) error
 	RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error
@@ -171,14 +196,17 @@ type Querier interface {
 	// Persisted before bytes move, so a restart resumes rather than restarts (ADR-46).
 	SetDownloadProgress(ctx context.Context, arg SetDownloadProgressParams) error
 	SetFingerprints(ctx context.Context, arg SetFingerprintsParams) error
+	SetGroupReputation(ctx context.Context, arg SetGroupReputationParams) error
 	// Measured attributes replace claimed ones after probing; the claim is kept so a
 	// mismatch stays visible (ADR-39).
 	SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttributesParams) error
 	SetPersonMonitored(ctx context.Context, arg SetPersonMonitoredParams) error
+	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error
 	SetWorkClassification(ctx context.Context, arg SetWorkClassificationParams) error
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error
 	SetWorkField(ctx context.Context, arg SetWorkFieldParams) error
 	UpdateWorkTimestamp(ctx context.Context, arg UpdateWorkTimestampParams) error
+	UpsertArtwork(ctx context.Context, arg UpsertArtworkParams) error
 	// Candidates, decisions and provenance. Column lists follow table order.
 	UpsertCandidate(ctx context.Context, arg UpsertCandidateParams) (Candidate, error)
 	UpsertHuntQueueEntry(ctx context.Context, arg UpsertHuntQueueEntryParams) error

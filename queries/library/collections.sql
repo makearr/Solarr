@@ -1,0 +1,127 @@
+-- Collections, the ready queue, artwork, statistics and reputation.
+
+-- name: CreateCollection :one
+INSERT INTO collection (media_type, name, kind, source, monitored, complete_at, added_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at;
+
+-- name: AddCollectionMember :exec
+INSERT INTO collection_member (collection_id, work_id, ord)
+VALUES (?, ?, ?)
+ON CONFLICT (collection_id, work_id) DO UPDATE SET ord = excluded.ord;
+
+-- name: ListCollectionMembers :many
+SELECT collection_id, work_id, ord
+FROM collection_member WHERE collection_id = ? ORDER BY ord, work_id;
+
+-- "You have 4 of 6 Ihaol films" is the first thing library-derived discovery
+-- looks for, so held and stated counts come back together (ADR-38).
+-- name: CollectionCoverage :one
+SELECT c.id, c.name, c.complete_at,
+       CAST(COUNT(DISTINCT m.work_id) AS INTEGER) AS members,
+       CAST(COUNT(DISTINCT CASE WHEN d.state = 'COMPLETE' THEN m.work_id END) AS INTEGER) AS held
+FROM collection c
+LEFT JOIN collection_member m ON m.collection_id = c.id
+LEFT JOIN desired_item d ON d.work_id = m.work_id
+WHERE c.id = ?
+GROUP BY c.id;
+
+-- name: ListCollectionsForWork :many
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at
+FROM collection c
+JOIN collection_member m ON m.collection_id = c.id
+WHERE m.work_id = ? ORDER BY c.name;
+
+-- Primed so something dispatches the instant a slot frees (section 10.5).
+-- name: EnqueueReady :exec
+INSERT INTO ready_queue (candidate_id, desired_item_id, priority, queued_at,
+                         expires_at, size_bytes)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (candidate_id) DO UPDATE SET
+  priority = excluded.priority,
+  expires_at = excluded.expires_at;
+
+-- Revalidated at dispatch, so an expired entry is never handed to a downloader.
+-- name: NextReady :many
+SELECT candidate_id, desired_item_id, priority, queued_at, expires_at, size_bytes
+FROM ready_queue
+WHERE expires_at > sqlc.arg(now)
+ORDER BY priority DESC, queued_at ASC
+LIMIT sqlc.arg(page_size);
+
+-- name: DequeueReady :exec
+DELETE FROM ready_queue WHERE candidate_id = ?;
+
+-- name: PurgeExpiredReady :exec
+DELETE FROM ready_queue WHERE expires_at <= ?;
+
+-- name: UpsertArtwork :exec
+INSERT INTO artwork (subject_type, subject_id, kind, source_url, cache_key,
+                     width, height, fetched_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (subject_type, subject_id, kind) DO UPDATE SET
+  source_url = excluded.source_url,
+  cache_key = excluded.cache_key,
+  width = excluded.width,
+  height = excluded.height,
+  fetched_at = excluded.fetched_at;
+
+-- name: ListArtworkForSubject :many
+SELECT id, subject_type, subject_id, kind, source_url, cache_key, width, height, fetched_at
+FROM artwork WHERE subject_type = ? AND subject_id = ? ORDER BY kind;
+
+-- name: SetStatRollup :exec
+INSERT INTO stat_rollup (metric, dimension, period, value, count, computed_at)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (metric, dimension, period) DO UPDATE SET
+  value = excluded.value,
+  count = excluded.count,
+  computed_at = excluded.computed_at;
+
+-- Every chart reads a rollup, never a live aggregate (ADR-28, section 21.12).
+-- name: ListStatRollup :many
+SELECT metric, dimension, period, value, count, computed_at
+FROM stat_rollup
+WHERE metric = sqlc.arg(metric) AND period >= sqlc.arg(since)
+ORDER BY period DESC, dimension
+LIMIT sqlc.arg(page_size);
+
+-- Only content-attributable outcomes count: a full disk is not the group's
+-- fault, and counting it would make reputation measure the environment (ADR-45).
+-- name: RecordGroupObservation :exec
+INSERT INTO group_observation (release_group, media_object_id, outcome, cause,
+                               observed_at, was_exploration)
+VALUES (?, ?, ?, ?, ?, ?);
+
+-- name: ListGroupObservations :many
+SELECT id, release_group, media_object_id, outcome, cause, observed_at, was_exploration
+FROM group_observation
+WHERE release_group = ? AND observed_at >= ? ORDER BY observed_at DESC;
+
+-- Recomputable from the observations, which is why they are kept individually.
+-- name: CountGroupOutcomes :many
+SELECT outcome, CAST(COUNT(*) AS INTEGER) AS total
+FROM group_observation
+WHERE release_group = sqlc.arg(release_group)
+  AND cause = 'content'
+  AND observed_at >= sqlc.arg(since)
+GROUP BY outcome;
+
+-- name: SetGroupReputation :exec
+INSERT INTO group_reputation (release_group, samples, raw_success, bounded_success,
+                              corruption_rate, mislabel_rate, last_observed_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (release_group) DO UPDATE SET
+  samples = excluded.samples,
+  raw_success = excluded.raw_success,
+  bounded_success = excluded.bounded_success,
+  corruption_rate = excluded.corruption_rate,
+  mislabel_rate = excluded.mislabel_rate,
+  last_observed_at = excluded.last_observed_at,
+  updated_at = excluded.updated_at;
+
+-- Scoring reads the bounded value, never the raw rate (ADR-45).
+-- name: GetGroupReputation :one
+SELECT release_group, samples, raw_success, bounded_success, corruption_rate,
+       mislabel_rate, last_observed_at, updated_at
+FROM group_reputation WHERE release_group = ?;

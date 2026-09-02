@@ -48,6 +48,18 @@ type AltNumbering struct {
 	AltRef   string
 }
 
+type Artwork struct {
+	ID          int64
+	SubjectType string
+	SubjectID   int64
+	Kind        string
+	SourceUrl   sql.NullString
+	CacheKey    string
+	Width       sql.NullInt64
+	Height      sql.NullInt64
+	FetchedAt   sql.NullInt64
+}
+
 type BlocklistedRelease struct {
 	ID            int64
 	IndexerID     sql.NullInt64
@@ -91,6 +103,29 @@ type CandidateDecision struct {
 	DeferralsJson   sql.NullString
 	MatchConfidence sql.NullFloat64
 	DecidedAt       int64
+}
+
+type Collection struct {
+	ID         int64
+	MediaType  string
+	Name       string
+	Kind       string
+	Source     string
+	Monitored  int64
+	CompleteAt sql.NullInt64
+	AddedAt    int64
+}
+
+type CollectionExternalID struct {
+	Provider     string
+	ExternalID   string
+	CollectionID int64
+}
+
+type CollectionMember struct {
+	CollectionID int64
+	WorkID       int64
+	Ord          sql.NullInt64
 }
 
 type Counter struct {
@@ -156,6 +191,27 @@ type EditionExternalID struct {
 	ExternalID string
 	EditionID  int64
 	Confidence float64
+}
+
+type GroupObservation struct {
+	ID             int64
+	ReleaseGroup   string
+	MediaObjectID  sql.NullInt64
+	Outcome        string
+	Cause          string
+	ObservedAt     int64
+	WasExploration int64
+}
+
+type GroupReputation struct {
+	ReleaseGroup   string
+	Samples        int64
+	RawSuccess     sql.NullFloat64
+	BoundedSuccess sql.NullFloat64
+	CorruptionRate sql.NullFloat64
+	MislabelRate   sql.NullFloat64
+	LastObservedAt sql.NullInt64
+	UpdatedAt      int64
 }
 
 type HuntQueue struct {
@@ -300,6 +356,15 @@ type Quarantine struct {
 	RestoredAt     sql.NullInt64
 }
 
+type ReadyQueue struct {
+	CandidateID   int64
+	DesiredItemID int64
+	Priority      int64
+	QueuedAt      int64
+	ExpiresAt     int64
+	SizeBytes     sql.NullInt64
+}
+
 type Relationship struct {
 	ID       int64
 	FromType string
@@ -322,6 +387,15 @@ type Request struct {
 	DecidedAt     sql.NullInt64
 	DeclineReason sql.NullString
 	CreatedAt     int64
+}
+
+type StatRollup struct {
+	Metric     string
+	Dimension  string
+	Period     int64
+	Value      float64
+	Count      sql.NullInt64
+	ComputedAt int64
 }
 
 type Subscription struct {
