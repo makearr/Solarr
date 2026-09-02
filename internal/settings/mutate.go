@@ -81,6 +81,10 @@ func (c *Cache) DeleteCategory(ctx context.Context, id int64) error {
 	if err != nil {
 		return fmt.Errorf("settings: count access for category %d: %w", id, err)
 	}
+	discoveryJobs, err := c.queries.CountDiscoveryJobsUsingCategory(ctx, sql.NullInt64{Int64: id, Valid: true})
+	if err != nil {
+		return fmt.Errorf("settings: count discovery jobs for category %d: %w", id, err)
+	}
 
 	var references []Reference
 	if roots > 0 {
@@ -88,6 +92,9 @@ func (c *Cache) DeleteCategory(ctx context.Context, id int64) error {
 	}
 	if grants > 0 {
 		references = append(references, Reference{Kind: "user access grants", Count: grants})
+	}
+	if discoveryJobs > 0 {
+		references = append(references, Reference{Kind: "discovery jobs", Count: discoveryJobs})
 	}
 	if len(references) > 0 {
 		return &InUseError{Entity: "category", ID: id, References: references}

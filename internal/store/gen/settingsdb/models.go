@@ -41,6 +41,21 @@ type CategoryRootFolder struct {
 	AcceptsNew   int64
 }
 
+type DiscoveryJob struct {
+	ID          int64
+	Name        string
+	SourceJson  string
+	MediaType   sql.NullString
+	CategoryID  sql.NullInt64
+	FiltersJson string
+	ScoringJson sql.NullString
+	LimitPerRun int64
+	Action      string
+	Schedule    sql.NullString
+	Enabled     int64
+	LastRunAt   sql.NullInt64
+}
+
 type InstanceSetting struct {
 	Key       string
 	ValueJson string
