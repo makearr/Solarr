@@ -39,7 +39,7 @@ func (q *Queries) AdjustCounter(ctx context.Context, arg AdjustCounterParams) er
 const attachFile = `-- name: AttachFile :exec
 INSERT INTO desired_item_file (desired_item_id, media_object_id, role, media_ref, added_at)
 VALUES (?, ?, ?, ?, ?)
-ON CONFLICT (desired_item_id, media_object_id, role) DO NOTHING
+ON CONFLICT (desired_item_id, media_object_id, role, media_ref) DO NOTHING
 `
 
 type AttachFileParams struct {
@@ -201,8 +201,32 @@ type DetachFileParams struct {
 	Role          string
 }
 
+// Removes the file from the item entirely, every part it covered with it.
 func (q *Queries) DetachFile(ctx context.Context, arg DetachFileParams) error {
 	_, err := q.db.ExecContext(ctx, detachFile, arg.DesiredItemID, arg.MediaObjectID, arg.Role)
+	return err
+}
+
+const detachFilePart = `-- name: DetachFilePart :exec
+DELETE FROM desired_item_file
+WHERE desired_item_id = ? AND media_object_id = ? AND role = ? AND media_ref = ?
+`
+
+type DetachFilePartParams struct {
+	DesiredItemID int64
+	MediaObjectID int64
+	Role          string
+	MediaRef      string
+}
+
+// Removes one part's coverage, for a file that turned out to cover less than claimed.
+func (q *Queries) DetachFilePart(ctx context.Context, arg DetachFilePartParams) error {
+	_, err := q.db.ExecContext(ctx, detachFilePart,
+		arg.DesiredItemID,
+		arg.MediaObjectID,
+		arg.Role,
+		arg.MediaRef,
+	)
 	return err
 }
 

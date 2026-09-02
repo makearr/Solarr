@@ -42,15 +42,36 @@ FROM person p
 JOIN person_external_id e ON e.person_id = p.id
 WHERE e.provider = ? AND e.external_id = ?;
 
+-- edition_id and part_id are 0 for a credit on the work itself (Appendix E, D2).
 -- name: AddCredit :exec
-INSERT INTO credit (person_id, work_id, role, character, ord)
-VALUES (?, ?, ?, ?, ?)
-ON CONFLICT (person_id, work_id, role, character) DO UPDATE SET
+INSERT INTO credit (person_id, work_id, edition_id, part_id, role, character, ord)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (person_id, work_id, edition_id, part_id, role, character) DO UPDATE SET
   ord = excluded.ord;
 
+-- The work itself only. A narrator credited on one audiobook edition, or a soloist
+-- on one track, is not a credit on the work and must not appear here.
 -- name: ListCreditsForWork :many
-SELECT person_id, work_id, role, character, ord
-FROM credit WHERE work_id = ? ORDER BY role, ord, person_id;
+SELECT person_id, work_id, edition_id, part_id, role, character, ord
+FROM credit
+WHERE work_id = ? AND edition_id = 0 AND part_id = 0
+ORDER BY role, ord, person_id;
+
+-- name: ListCreditsForEdition :many
+SELECT person_id, work_id, edition_id, part_id, role, character, ord
+FROM credit WHERE edition_id = ? ORDER BY role, ord, person_id;
+
+-- Per-track performers and composers, which is what classical and various-artists
+-- releases need and what a work-level credit cannot express.
+-- name: ListCreditsForPart :many
+SELECT person_id, work_id, edition_id, part_id, role, character, ord
+FROM credit WHERE part_id = ? ORDER BY role, ord, person_id;
+
+-- Every credit anywhere under a work, at any scope. Coverage counts use this;
+-- the work-level listing above deliberately does not.
+-- name: ListAllCreditsUnderWork :many
+SELECT person_id, work_id, edition_id, part_id, role, character, ord
+FROM credit WHERE work_id = ? ORDER BY part_id, edition_id, role, ord, person_id;
 
 -- "Htuacmasn as director, not producer" is a role-scoped query, which is why the
 -- role lives on the credit (F13).

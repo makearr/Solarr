@@ -54,11 +54,17 @@ WHERE id = ?;
 -- name: AttachFile :exec
 INSERT INTO desired_item_file (desired_item_id, media_object_id, role, media_ref, added_at)
 VALUES (?, ?, ?, ?, ?)
-ON CONFLICT (desired_item_id, media_object_id, role) DO NOTHING;
+ON CONFLICT (desired_item_id, media_object_id, role, media_ref) DO NOTHING;
 
+-- Removes the file from the item entirely, every part it covered with it.
 -- name: DetachFile :exec
 DELETE FROM desired_item_file
 WHERE desired_item_id = ? AND media_object_id = ? AND role = ?;
+
+-- Removes one part's coverage, for a file that turned out to cover less than claimed.
+-- name: DetachFilePart :exec
+DELETE FROM desired_item_file
+WHERE desired_item_id = ? AND media_object_id = ? AND role = ? AND media_ref = ?;
 
 -- name: ListFilesForDesiredItem :many
 SELECT desired_item_id, media_object_id, role, media_ref, added_at

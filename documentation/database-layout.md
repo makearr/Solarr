@@ -27,7 +27,7 @@ Everything else is `library.db`. Applying that test:
 `naming_profile`, `consumer_profile`, `language_profile`, `indexer`, `downloader`,
 `metadata_provider`, `discovery_job`, `plugin_state`.
 
-**`library.db`** — identity (`work`, `edition`, titles, external ids), files (`media_object`,
+**`library.db`** — identity (`work`, `work_part`, `edition`, titles, external ids), files (`media_object`,
 `library_path`, `media_attributes`), desired state (`desired_item`, `desired_item_file`,
 `hunt_queue`, `counter`), acquisition (`candidate`, `acquisition`, `blocklisted_release`,
 `quarantine`), people and organisations (`person`, `credit`, `organisation`), tags,

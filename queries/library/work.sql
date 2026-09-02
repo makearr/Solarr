@@ -141,3 +141,77 @@ LIMIT sqlc.arg(page_size);
 
 -- name: ClearWorkClassification :exec
 DELETE FROM work_classification WHERE work_id = ? AND kind = ?;
+
+-- name: CreateWorkPart :one
+INSERT INTO work_part (work_id, media_ref, sort_key, title, runtime_ms, date, monitored)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored;
+
+-- name: GetWorkPart :one
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored
+FROM work_part WHERE id = ?;
+
+-- name: FindWorkPart :one
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored
+FROM work_part WHERE work_id = ? AND media_ref = ?;
+
+-- Ordered by the module's sort key. Core never parses media_ref to order parts.
+-- name: ListWorkParts :many
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored
+FROM work_part WHERE work_id = ? ORDER BY sort_key, id;
+
+-- What a SET requires follows the monitored parts, so unmonitoring an episode
+-- shrinks the season rather than leaving it permanently incomplete (Appendix E, D3).
+-- name: CountMonitoredParts :one
+SELECT CAST(COUNT(*) AS INTEGER) AS monitored_parts
+FROM work_part WHERE work_id = ? AND monitored = 1;
+
+-- name: SetWorkPartMonitored :exec
+UPDATE work_part SET monitored = ? WHERE id = ?;
+
+-- name: DeleteWorkPart :exec
+DELETE FROM work_part WHERE id = ?;
+
+-- name: LinkWorkPartExternalID :exec
+INSERT INTO work_part_external_id (provider, external_id, part_id, confidence)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (provider, external_id, part_id) DO UPDATE SET
+  confidence = excluded.confidence;
+
+-- One recording appears on many albums, so this returns every part sharing the
+-- identifier. That is the cross-album duplicate question (ADR-35).
+-- name: FindPartsByExternalID :many
+SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored
+FROM work_part p
+JOIN work_part_external_id e ON e.part_id = p.id
+WHERE e.provider = ? AND e.external_id = ?
+ORDER BY p.work_id, p.sort_key, p.id;
+
+-- name: ListWorkPartExternalIDs :many
+SELECT provider, external_id, part_id, confidence
+FROM work_part_external_id WHERE part_id = ? ORDER BY provider, external_id;
+
+-- name: AddWorkPartTitle :one
+INSERT INTO work_part_title (part_id, title, normalized, language, provider)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, part_id, title, normalized, language, provider;
+
+-- name: ListWorkPartTitles :many
+SELECT id, part_id, title, normalized, language, provider
+FROM work_part_title WHERE part_id = ? ORDER BY provider, title;
+
+-- name: AddAltNumbering :exec
+INSERT INTO alt_numbering (part_id, scheme, provider, alt_ref)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (part_id, scheme, provider) DO UPDATE SET
+  alt_ref = excluded.alt_ref;
+
+-- Anime absolute numbering: episode 137 of a series resolves to the part that
+-- aired numbers do not name (ADR-41). Scoped to the work, or two series collide.
+-- name: FindPartByAltNumber :one
+SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored
+FROM work_part p
+JOIN alt_numbering a ON a.part_id = p.id
+WHERE p.work_id = sqlc.arg(work_id)
+  AND a.scheme = sqlc.arg(scheme)
+  AND a.alt_ref = sqlc.arg(alt_ref);

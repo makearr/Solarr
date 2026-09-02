@@ -10,6 +10,64 @@ import (
 	"database/sql"
 )
 
+const addAltNumbering = `-- name: AddAltNumbering :exec
+INSERT INTO alt_numbering (part_id, scheme, provider, alt_ref)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (part_id, scheme, provider) DO UPDATE SET
+  alt_ref = excluded.alt_ref
+`
+
+type AddAltNumberingParams struct {
+	PartID   int64
+	Scheme   string
+	Provider string
+	AltRef   string
+}
+
+func (q *Queries) AddAltNumbering(ctx context.Context, arg AddAltNumberingParams) error {
+	_, err := q.db.ExecContext(ctx, addAltNumbering,
+		arg.PartID,
+		arg.Scheme,
+		arg.Provider,
+		arg.AltRef,
+	)
+	return err
+}
+
+const addWorkPartTitle = `-- name: AddWorkPartTitle :one
+INSERT INTO work_part_title (part_id, title, normalized, language, provider)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, part_id, title, normalized, language, provider
+`
+
+type AddWorkPartTitleParams struct {
+	PartID     int64
+	Title      string
+	Normalized string
+	Language   sql.NullString
+	Provider   sql.NullString
+}
+
+func (q *Queries) AddWorkPartTitle(ctx context.Context, arg AddWorkPartTitleParams) (WorkPartTitle, error) {
+	row := q.db.QueryRowContext(ctx, addWorkPartTitle,
+		arg.PartID,
+		arg.Title,
+		arg.Normalized,
+		arg.Language,
+		arg.Provider,
+	)
+	var i WorkPartTitle
+	err := row.Scan(
+		&i.ID,
+		&i.PartID,
+		&i.Title,
+		&i.Normalized,
+		&i.Language,
+		&i.Provider,
+	)
+	return i, err
+}
+
 const addWorkTitle = `-- name: AddWorkTitle :one
 INSERT INTO work_title (work_id, title, normalized, language, kind, source)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -59,6 +117,20 @@ type ClearWorkClassificationParams struct {
 func (q *Queries) ClearWorkClassification(ctx context.Context, arg ClearWorkClassificationParams) error {
 	_, err := q.db.ExecContext(ctx, clearWorkClassification, arg.WorkID, arg.Kind)
 	return err
+}
+
+const countMonitoredParts = `-- name: CountMonitoredParts :one
+SELECT CAST(COUNT(*) AS INTEGER) AS monitored_parts
+FROM work_part WHERE work_id = ? AND monitored = 1
+`
+
+// What a SET requires follows the monitored parts, so unmonitoring an episode
+// shrinks the season rather than leaving it permanently incomplete (Appendix E, D3).
+func (q *Queries) CountMonitoredParts(ctx context.Context, workID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countMonitoredParts, workID)
+	var monitored_parts int64
+	err := row.Scan(&monitored_parts)
+	return monitored_parts, err
 }
 
 const createEdition = `-- name: CreateEdition :one
@@ -159,6 +231,46 @@ func (q *Queries) CreateWork(ctx context.Context, arg CreateWorkParams) (Work, e
 	return i, err
 }
 
+const createWorkPart = `-- name: CreateWorkPart :one
+INSERT INTO work_part (work_id, media_ref, sort_key, title, runtime_ms, date, monitored)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored
+`
+
+type CreateWorkPartParams struct {
+	WorkID    int64
+	MediaRef  string
+	SortKey   string
+	Title     sql.NullString
+	RuntimeMs sql.NullInt64
+	Date      sql.NullString
+	Monitored int64
+}
+
+func (q *Queries) CreateWorkPart(ctx context.Context, arg CreateWorkPartParams) (WorkPart, error) {
+	row := q.db.QueryRowContext(ctx, createWorkPart,
+		arg.WorkID,
+		arg.MediaRef,
+		arg.SortKey,
+		arg.Title,
+		arg.RuntimeMs,
+		arg.Date,
+		arg.Monitored,
+	)
+	var i WorkPart
+	err := row.Scan(
+		&i.ID,
+		&i.WorkID,
+		&i.MediaRef,
+		&i.SortKey,
+		&i.Title,
+		&i.RuntimeMs,
+		&i.Date,
+		&i.Monitored,
+	)
+	return i, err
+}
+
 const deleteWork = `-- name: DeleteWork :exec
 DELETE FROM work WHERE id = ?
 `
@@ -166,6 +278,121 @@ DELETE FROM work WHERE id = ?
 func (q *Queries) DeleteWork(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteWork, id)
 	return err
+}
+
+const deleteWorkPart = `-- name: DeleteWorkPart :exec
+DELETE FROM work_part WHERE id = ?
+`
+
+func (q *Queries) DeleteWorkPart(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteWorkPart, id)
+	return err
+}
+
+const findPartByAltNumber = `-- name: FindPartByAltNumber :one
+SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored
+FROM work_part p
+JOIN alt_numbering a ON a.part_id = p.id
+WHERE p.work_id = ?1
+  AND a.scheme = ?2
+  AND a.alt_ref = ?3
+`
+
+type FindPartByAltNumberParams struct {
+	WorkID int64
+	Scheme string
+	AltRef string
+}
+
+// Anime absolute numbering: episode 137 of a series resolves to the part that
+// aired numbers do not name (ADR-41). Scoped to the work, or two series collide.
+func (q *Queries) FindPartByAltNumber(ctx context.Context, arg FindPartByAltNumberParams) (WorkPart, error) {
+	row := q.db.QueryRowContext(ctx, findPartByAltNumber, arg.WorkID, arg.Scheme, arg.AltRef)
+	var i WorkPart
+	err := row.Scan(
+		&i.ID,
+		&i.WorkID,
+		&i.MediaRef,
+		&i.SortKey,
+		&i.Title,
+		&i.RuntimeMs,
+		&i.Date,
+		&i.Monitored,
+	)
+	return i, err
+}
+
+const findPartsByExternalID = `-- name: FindPartsByExternalID :many
+SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored
+FROM work_part p
+JOIN work_part_external_id e ON e.part_id = p.id
+WHERE e.provider = ? AND e.external_id = ?
+ORDER BY p.work_id, p.sort_key, p.id
+`
+
+type FindPartsByExternalIDParams struct {
+	Provider   string
+	ExternalID string
+}
+
+// One recording appears on many albums, so this returns every part sharing the
+// identifier. That is the cross-album duplicate question (ADR-35).
+func (q *Queries) FindPartsByExternalID(ctx context.Context, arg FindPartsByExternalIDParams) ([]WorkPart, error) {
+	rows, err := q.db.QueryContext(ctx, findPartsByExternalID, arg.Provider, arg.ExternalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WorkPart{}
+	for rows.Next() {
+		var i WorkPart
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkID,
+			&i.MediaRef,
+			&i.SortKey,
+			&i.Title,
+			&i.RuntimeMs,
+			&i.Date,
+			&i.Monitored,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const findWorkPart = `-- name: FindWorkPart :one
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored
+FROM work_part WHERE work_id = ? AND media_ref = ?
+`
+
+type FindWorkPartParams struct {
+	WorkID   int64
+	MediaRef string
+}
+
+func (q *Queries) FindWorkPart(ctx context.Context, arg FindWorkPartParams) (WorkPart, error) {
+	row := q.db.QueryRowContext(ctx, findWorkPart, arg.WorkID, arg.MediaRef)
+	var i WorkPart
+	err := row.Scan(
+		&i.ID,
+		&i.WorkID,
+		&i.MediaRef,
+		&i.SortKey,
+		&i.Title,
+		&i.RuntimeMs,
+		&i.Date,
+		&i.Monitored,
+	)
+	return i, err
 }
 
 const findWorksByClassification = `-- name: FindWorksByClassification :many
@@ -366,6 +593,27 @@ func (q *Queries) GetWorkByExternalID(ctx context.Context, arg GetWorkByExternal
 	return i, err
 }
 
+const getWorkPart = `-- name: GetWorkPart :one
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored
+FROM work_part WHERE id = ?
+`
+
+func (q *Queries) GetWorkPart(ctx context.Context, id int64) (WorkPart, error) {
+	row := q.db.QueryRowContext(ctx, getWorkPart, id)
+	var i WorkPart
+	err := row.Scan(
+		&i.ID,
+		&i.WorkID,
+		&i.MediaRef,
+		&i.SortKey,
+		&i.Title,
+		&i.RuntimeMs,
+		&i.Date,
+		&i.Monitored,
+	)
+	return i, err
+}
+
 const linkEditionExternalID = `-- name: LinkEditionExternalID :exec
 INSERT INTO edition_external_id (provider, external_id, edition_id, confidence)
 VALUES (?, ?, ?, ?)
@@ -414,6 +662,30 @@ func (q *Queries) LinkWorkExternalID(ctx context.Context, arg LinkWorkExternalID
 		arg.WorkID,
 		arg.Confidence,
 		arg.FirstSeenAt,
+	)
+	return err
+}
+
+const linkWorkPartExternalID = `-- name: LinkWorkPartExternalID :exec
+INSERT INTO work_part_external_id (provider, external_id, part_id, confidence)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (provider, external_id, part_id) DO UPDATE SET
+  confidence = excluded.confidence
+`
+
+type LinkWorkPartExternalIDParams struct {
+	Provider   string
+	ExternalID string
+	PartID     int64
+	Confidence float64
+}
+
+func (q *Queries) LinkWorkPartExternalID(ctx context.Context, arg LinkWorkPartExternalIDParams) error {
+	_, err := q.db.ExecContext(ctx, linkWorkPartExternalID,
+		arg.Provider,
+		arg.ExternalID,
+		arg.PartID,
+		arg.Confidence,
 	)
 	return err
 }
@@ -579,6 +851,112 @@ func (q *Queries) ListWorkFields(ctx context.Context, workID int64) ([]WorkField
 			&i.Provider,
 			&i.Value,
 			&i.FetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkPartExternalIDs = `-- name: ListWorkPartExternalIDs :many
+SELECT provider, external_id, part_id, confidence
+FROM work_part_external_id WHERE part_id = ? ORDER BY provider, external_id
+`
+
+func (q *Queries) ListWorkPartExternalIDs(ctx context.Context, partID int64) ([]WorkPartExternalID, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkPartExternalIDs, partID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WorkPartExternalID{}
+	for rows.Next() {
+		var i WorkPartExternalID
+		if err := rows.Scan(
+			&i.Provider,
+			&i.ExternalID,
+			&i.PartID,
+			&i.Confidence,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkPartTitles = `-- name: ListWorkPartTitles :many
+SELECT id, part_id, title, normalized, language, provider
+FROM work_part_title WHERE part_id = ? ORDER BY provider, title
+`
+
+func (q *Queries) ListWorkPartTitles(ctx context.Context, partID int64) ([]WorkPartTitle, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkPartTitles, partID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WorkPartTitle{}
+	for rows.Next() {
+		var i WorkPartTitle
+		if err := rows.Scan(
+			&i.ID,
+			&i.PartID,
+			&i.Title,
+			&i.Normalized,
+			&i.Language,
+			&i.Provider,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkParts = `-- name: ListWorkParts :many
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored
+FROM work_part WHERE work_id = ? ORDER BY sort_key, id
+`
+
+// Ordered by the module's sort key. Core never parses media_ref to order parts.
+func (q *Queries) ListWorkParts(ctx context.Context, workID int64) ([]WorkPart, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkParts, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WorkPart{}
+	for rows.Next() {
+		var i WorkPart
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkID,
+			&i.MediaRef,
+			&i.SortKey,
+			&i.Title,
+			&i.RuntimeMs,
+			&i.Date,
+			&i.Monitored,
 		); err != nil {
 			return nil, err
 		}
@@ -763,6 +1141,20 @@ func (q *Queries) SetWorkField(ctx context.Context, arg SetWorkFieldParams) erro
 		arg.Value,
 		arg.FetchedAt,
 	)
+	return err
+}
+
+const setWorkPartMonitored = `-- name: SetWorkPartMonitored :exec
+UPDATE work_part SET monitored = ? WHERE id = ?
+`
+
+type SetWorkPartMonitoredParams struct {
+	Monitored int64
+	ID        int64
+}
+
+func (q *Queries) SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonitoredParams) error {
+	_, err := q.db.ExecContext(ctx, setWorkPartMonitored, arg.Monitored, arg.ID)
 	return err
 }
 

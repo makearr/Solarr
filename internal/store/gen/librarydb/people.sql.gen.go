@@ -11,24 +11,29 @@ import (
 )
 
 const addCredit = `-- name: AddCredit :exec
-INSERT INTO credit (person_id, work_id, role, character, ord)
-VALUES (?, ?, ?, ?, ?)
-ON CONFLICT (person_id, work_id, role, character) DO UPDATE SET
+INSERT INTO credit (person_id, work_id, edition_id, part_id, role, character, ord)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (person_id, work_id, edition_id, part_id, role, character) DO UPDATE SET
   ord = excluded.ord
 `
 
 type AddCreditParams struct {
 	PersonID  int64
 	WorkID    int64
+	EditionID int64
+	PartID    int64
 	Role      string
 	Character string
 	Ord       sql.NullInt64
 }
 
+// edition_id and part_id are 0 for a credit on the work itself (Appendix E, D2).
 func (q *Queries) AddCredit(ctx context.Context, arg AddCreditParams) error {
 	_, err := q.db.ExecContext(ctx, addCredit,
 		arg.PersonID,
 		arg.WorkID,
+		arg.EditionID,
+		arg.PartID,
 		arg.Role,
 		arg.Character,
 		arg.Ord,
@@ -563,11 +568,127 @@ func (q *Queries) LinkWorkOrganisation(ctx context.Context, arg LinkWorkOrganisa
 	return err
 }
 
-const listCreditsForWork = `-- name: ListCreditsForWork :many
-SELECT person_id, work_id, role, character, ord
-FROM credit WHERE work_id = ? ORDER BY role, ord, person_id
+const listAllCreditsUnderWork = `-- name: ListAllCreditsUnderWork :many
+SELECT person_id, work_id, edition_id, part_id, role, character, ord
+FROM credit WHERE work_id = ? ORDER BY part_id, edition_id, role, ord, person_id
 `
 
+// Every credit anywhere under a work, at any scope. Coverage counts use this;
+// the work-level listing above deliberately does not.
+func (q *Queries) ListAllCreditsUnderWork(ctx context.Context, workID int64) ([]Credit, error) {
+	rows, err := q.db.QueryContext(ctx, listAllCreditsUnderWork, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Credit{}
+	for rows.Next() {
+		var i Credit
+		if err := rows.Scan(
+			&i.PersonID,
+			&i.WorkID,
+			&i.EditionID,
+			&i.PartID,
+			&i.Role,
+			&i.Character,
+			&i.Ord,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCreditsForEdition = `-- name: ListCreditsForEdition :many
+SELECT person_id, work_id, edition_id, part_id, role, character, ord
+FROM credit WHERE edition_id = ? ORDER BY role, ord, person_id
+`
+
+func (q *Queries) ListCreditsForEdition(ctx context.Context, editionID int64) ([]Credit, error) {
+	rows, err := q.db.QueryContext(ctx, listCreditsForEdition, editionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Credit{}
+	for rows.Next() {
+		var i Credit
+		if err := rows.Scan(
+			&i.PersonID,
+			&i.WorkID,
+			&i.EditionID,
+			&i.PartID,
+			&i.Role,
+			&i.Character,
+			&i.Ord,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCreditsForPart = `-- name: ListCreditsForPart :many
+SELECT person_id, work_id, edition_id, part_id, role, character, ord
+FROM credit WHERE part_id = ? ORDER BY role, ord, person_id
+`
+
+// Per-track performers and composers, which is what classical and various-artists
+// releases need and what a work-level credit cannot express.
+func (q *Queries) ListCreditsForPart(ctx context.Context, partID int64) ([]Credit, error) {
+	rows, err := q.db.QueryContext(ctx, listCreditsForPart, partID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Credit{}
+	for rows.Next() {
+		var i Credit
+		if err := rows.Scan(
+			&i.PersonID,
+			&i.WorkID,
+			&i.EditionID,
+			&i.PartID,
+			&i.Role,
+			&i.Character,
+			&i.Ord,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCreditsForWork = `-- name: ListCreditsForWork :many
+SELECT person_id, work_id, edition_id, part_id, role, character, ord
+FROM credit
+WHERE work_id = ? AND edition_id = 0 AND part_id = 0
+ORDER BY role, ord, person_id
+`
+
+// The work itself only. A narrator credited on one audiobook edition, or a soloist
+// on one track, is not a credit on the work and must not appear here.
 func (q *Queries) ListCreditsForWork(ctx context.Context, workID int64) ([]Credit, error) {
 	rows, err := q.db.QueryContext(ctx, listCreditsForWork, workID)
 	if err != nil {
@@ -580,6 +701,8 @@ func (q *Queries) ListCreditsForWork(ctx context.Context, workID int64) ([]Credi
 		if err := rows.Scan(
 			&i.PersonID,
 			&i.WorkID,
+			&i.EditionID,
+			&i.PartID,
 			&i.Role,
 			&i.Character,
 			&i.Ord,
