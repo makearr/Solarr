@@ -62,7 +62,9 @@ var allowedInternalImports = map[string][]string{
 	// ADR-30's external tools. It runs subprocesses and parses their output; it
 	// touches no database and no filesystem of ours.
 	"internal/mediatool": {},
-	"internal/paginate":  {},
+	// The music media type, direct-wired until stage 9 extracts it as a plugin.
+	"internal/music":    {"internal/mediatool", "internal/model"},
+	"internal/paginate": {},
 	// ADR-15's post-restore pass spans library.db and jobs.db, so it composes their
 	// owning packages rather than reaching into either gen package (section 4.3).
 	"internal/recovery": {
