@@ -130,6 +130,11 @@ const (
 	AuthProxy AuthMode = "proxy"
 	// AuthAPIKeyOnly disables interactive login entirely.
 	AuthAPIKeyOnly AuthMode = "apikey_only"
+	// AuthNone serves every request as the administrator, with no credential of
+	// any kind. Deliberate and file-only: nothing in the interface can set it,
+	// because the one setting whose purpose is removing the protection around
+	// the settings screen must not be reachable from inside it.
+	AuthNone AuthMode = "none"
 )
 
 // Driver selects the SQLite implementation (ADR-5).
@@ -163,7 +168,7 @@ const (
 // message, so the two can never disagree.
 var (
 	allowedModes     = []Mode{ModeNormal, ModeObserve, ModeShadow}
-	allowedAuthModes = []AuthMode{AuthLocal, AuthProxy, AuthAPIKeyOnly}
+	allowedAuthModes = []AuthMode{AuthLocal, AuthProxy, AuthAPIKeyOnly, AuthNone}
 	allowedDrivers   = []Driver{DriverModernc}
 	allowedLevels    = []LogLevel{LevelDebug, LevelInfo, LevelWarn, LevelError}
 	allowedFormats   = []LogFormat{FormatJSON, FormatText}

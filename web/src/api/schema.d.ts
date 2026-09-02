@@ -64,6 +64,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system/egress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The address this host appears to come from.
+         * @description What the outside world sees when MediaNexus connects out, which is the number that matters for whether traffic is leaving past a VPN. Resolved by asking a configurable echo service through httpx, cached, and absent rather than guessed when the check is disabled or has not succeeded. Per-indexer proxies (ADR-47) can egress differently; this is the app's own path out.
+         */
+        get: operations["getEgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dashboard": {
         parameters: {
             query?: never;
@@ -379,6 +399,19 @@ export interface components {
         MediaType: "music" | "tv" | "movie" | "audiobook" | "book" | "adult" | "comic" | "rom" | "podcast" | "news" | "youtube";
         /** @enum {string} */
         EventTopic: "job" | "acquisition" | "library" | "notification" | "pressure";
+        /** @description Every field is optional: a check that is switched off, has not run yet or has failed reports nothing rather than a stale or invented address. */
+        Egress: {
+            /** @example 203.0.113.42 */
+            public_ip?: string;
+            /** Format: date-time */
+            checked_at?: string;
+            /** @description The echo service that answered, so the number is attributable. */
+            source?: string;
+            /** @description Why the last attempt failed, when it did. */
+            error?: string;
+            /** @description Whether the check is configured to run at all. */
+            enabled?: boolean;
+        };
         DashboardSummary: {
             root_folders: components["schemas"]["RootFolder"][];
             jobs: components["schemas"]["JobCounts"];
@@ -514,6 +547,27 @@ export interface operations {
             };
         };
     };
+    getEgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The last successful result, or an empty body when there is none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Egress"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
     getDashboard: {
         parameters: {
             query?: never;
@@ -548,6 +602,11 @@ export interface operations {
                     username: string;
                     /** Format: password */
                     password: string;
+                    /**
+                     * @description Keep the session across browser restarts. Unset issues a session cookie that dies when the browser closes; the server-side lifetime is the same either way.
+                     * @default false
+                     */
+                    remember?: boolean;
                 };
             };
         };

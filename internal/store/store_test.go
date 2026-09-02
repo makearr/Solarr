@@ -272,3 +272,37 @@ func TestOpen_CreatesTheDatabaseRestricted(t *testing.T) {
 		}
 	}
 }
+
+// A database that cannot be opened must report that, not hang. Close waits on
+// writerDone, and the writer goroutine does not start until Open succeeds, so an
+// error path that called Close blocked forever. It cost a startup that produced
+// no error, no log line and no listening socket -- only a process to kill.
+//
+// The file has to be present and unreadable as a database: a path that cannot be
+// created at all fails earlier, before the handles the deadlock lives in exist.
+func TestOpenReportsFailureInsteadOfHanging(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "library.db")
+	if err := os.WriteFile(path, []byte("this is not a SQLite database"), 0o600); err != nil {
+		t.Fatalf("write the corrupt file: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		opened, err := store.Open(t.Context(), clock.NewFakeAtEpoch(), store.Config{
+			Name: "library", Path: path, Logger: slog.New(slog.DiscardHandler),
+		})
+		if opened != nil {
+			_ = opened.Close()
+		}
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("opening a corrupt file as a database succeeded")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Open neither returned nor failed: the error path is deadlocked")
+	}
+}

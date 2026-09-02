@@ -29,6 +29,8 @@ const (
 	AuthProxy AuthMode = "proxy"
 	// AuthAPIKeyOnly disables interactive login.
 	AuthAPIKeyOnly AuthMode = "apikey_only"
+	// AuthNone asks for no credential at all (config.AuthNone).
+	AuthNone AuthMode = "none"
 )
 
 // AuthConfig wires authentication.
@@ -63,6 +65,9 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 var errNoCredential = errors.New("apiserver: no credential presented")
 
 func (s *Server) identify(r *http.Request) (settings.User, error) {
+	if s.auth.Mode == AuthNone {
+		return s.administrator()
+	}
 	if user, err := s.identifyBySession(r); err == nil {
 		return user, nil
 	}
@@ -71,6 +76,18 @@ func (s *Server) identify(r *http.Request) (settings.User, error) {
 	}
 	if user, err := s.identifyByProxy(r); err == nil {
 		return user, nil
+	}
+	return settings.User{}, errNoCredential
+}
+
+// administrator is who everyone is when authentication is off. The account is
+// real and created at startup, so user_id on a job or a request still names
+// somebody and multi-user (ADR-27) needs no special case later.
+func (s *Server) administrator() (settings.User, error) {
+	for _, user := range s.auth.Settings.Snapshot().Users() {
+		if user.Role == settings.RoleAdmin {
+			return user, nil
+		}
 	}
 	return settings.User{}, errNoCredential
 }

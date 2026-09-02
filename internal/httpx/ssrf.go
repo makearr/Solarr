@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // BlockReason names why an address was refused. It is a value rather than a
@@ -119,13 +120,29 @@ type Guard struct {
 
 // NewGuard returns a guard. allowedHosts are exact, case-insensitive hostnames
 // exempted from address classification; passing none is the default posture.
+//
+// A nil resolver or dialer means the system's. They were once taken literally,
+// and the nil then surfaced as a segfault inside a background dial -- which
+// takes the process with it, far from the call that caused it.
 func NewGuard(resolver Resolver, dial DialFunc, allowedHosts []string) *Guard {
+	if resolver == nil {
+		resolver = net.DefaultResolver
+	}
+	if dial == nil {
+		dial = (&net.Dialer{Timeout: defaultDialTimeout, KeepAlive: defaultKeepAlive}).DialContext
+	}
 	allowed := make(map[string]struct{}, len(allowedHosts))
 	for _, host := range allowedHosts {
 		allowed[strings.ToLower(host)] = struct{}{}
 	}
 	return &Guard{resolver: resolver, dial: dial, allowedHosts: allowed}
 }
+
+// Bounds for the default dialer, applied only when one is not supplied.
+const (
+	defaultDialTimeout = 10 * time.Second
+	defaultKeepAlive   = 30 * time.Second
+)
 
 // CheckURL rejects a scheme the client will not speak.
 func (g *Guard) CheckURL(target *url.URL) error {

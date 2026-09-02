@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/httpx"
@@ -214,5 +215,22 @@ func recordingDial(target *string) httpx.DialFunc {
 	return func(_ context.Context, _, address string) (net.Conn, error) {
 		*target = address
 		return nil, nil //nolint:nilnil // the caller only inspects the recorded address
+	}
+}
+
+// A nil resolver or dialer must mean the system's, not a nil dereference. Taken
+// literally it segfaults inside a background dial goroutine, which kills the
+// process from a stack that names neither the caller nor the reason.
+func TestNewGuardDefaultsItsResolverAndDialer(t *testing.T) {
+	guard := httpx.NewGuard(nil, nil, nil)
+
+	// Loopback is refused by classification, which proves the resolver ran
+	// rather than panicking on the way to it.
+	_, err := guard.DialContext(t.Context(), "tcp", "localhost:9")
+	if err == nil {
+		t.Fatal("dialling loopback through the guard succeeded")
+	}
+	if strings.Contains(err.Error(), "nil pointer") {
+		t.Errorf("the guard dereferenced a nil resolver: %v", err)
 	}
 }

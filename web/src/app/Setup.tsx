@@ -53,9 +53,6 @@ function CreateAdministrator() {
     onSuccess: () => queryClient.invalidateQueries(),
   });
 
-  // Mirrors the server's floor; a second, different rule would be worse.
-  const tooShort = password.length > 0 && password.length < 12;
-
   return (
     <Panel
       title="Step 1 — Create the administrator"
@@ -76,7 +73,7 @@ function CreateAdministrator() {
             onChange={(event) => setUsername(event.target.value)}
           />
         </Field>
-        <Field label="Password" hint={tooShort ? "At least 12 characters." : undefined}>
+        <Field label="Password">
           <input
             className={inputStyle}
             type="password"

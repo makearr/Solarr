@@ -134,7 +134,11 @@ security:
   # carry this file.
   encryption_key: %s
 
-  # local | proxy | apikey_only
+  # local | proxy | apikey_only | none
+  #
+  # none serves every request as the administrator and asks for no credential at
+  # all. Only ever appropriate where something else already restricts who can
+  # reach the port. Startup says so, loudly, every time.
   auth_mode: local
 
   # Used only when auth_mode is proxy. Setting proxy without trusted_proxy_cidrs
@@ -177,6 +181,15 @@ workers:
   metadata: 4
   # Fixed at 1. One importer at a time is what keeps write latency bounded.
   import: 1
+
+network:
+  # The only outbound call MediaNexus makes on its own. It asks a third party
+  # what address this host connects from, which is what tells you whether
+  # traffic is leaving past a VPN. Set enabled: false and nothing is contacted.
+  public_ip_check:
+    enabled: true
+    endpoint: https://api.ipify.org
+    interval: 6h
 
 logging:
   # debug | info | warn | error

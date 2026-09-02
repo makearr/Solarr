@@ -20,9 +20,9 @@ import (
 var allowedInternalImports = map[string][]string{
 	"cmd/medianexus": {
 		"internal/apiserver", "internal/auth", "internal/clock", "internal/config",
-		"internal/events", "internal/fsx", "internal/health", "internal/jobs",
-		"internal/library", "internal/privilege", "internal/settings", "internal/store",
-		"internal/webui", "migrations",
+		"internal/egress", "internal/events", "internal/fsx", "internal/health",
+		"internal/httpx", "internal/jobs", "internal/library", "internal/privilege",
+		"internal/settings", "internal/store", "internal/webui", "migrations",
 	},
 	"internal/auth":  {"internal/clock", "internal/secrets"},
 	"internal/authz": {"internal/settings"},
@@ -44,6 +44,8 @@ var allowedInternalImports = map[string][]string{
 	"internal/library": {
 		"internal/clock", "internal/paginate", "internal/store", "internal/store/gen/librarydb",
 	},
+	// The only unprompted outbound call, so it needs the one way out (Invariant 28).
+	"internal/egress":   {"internal/clock", "internal/httpx"},
 	"internal/store":    {"internal/clock", "internal/fsx"},
 	"internal/paginate": {},
 	"internal/secrets":  {},
