@@ -103,6 +103,17 @@ type Problems []Problem
 // Error renders §14.1's report: every problem at once, with a closing line
 // making it unambiguous that nothing started.
 func (p Problems) Error() string {
+	return p.Report("config.yml", "Nothing has been started.")
+}
+
+// Report renders the same list under a caller's own heading and closing line.
+//
+// The same problem shape describes a bad config.yml at startup and a bad
+// document handed to F9's import (§14.4), and those are not the same event:
+// telling someone importing settings through the web interface that "config.yml
+// has 4 errors" and that "nothing has been started" names a file they did not
+// touch and a process that is already running.
+func (p Problems) Report(subject, closing string) string {
 	if len(p) == 0 {
 		return "config: no problems"
 	}
@@ -112,11 +123,13 @@ func (p Problems) Error() string {
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Path < sorted[j].Path })
 
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "config.yml: %s\n\n", pluralise(len(sorted), "error"))
+	fmt.Fprintf(&builder, "%s: %s\n\n", subject, pluralise(len(sorted), "error"))
 	for _, problem := range sorted {
 		fmt.Fprintf(&builder, "  %s\n", problem)
 	}
-	builder.WriteString("\nNothing has been started.")
+	if closing != "" {
+		builder.WriteString("\n" + closing)
+	}
 	return builder.String()
 }
 

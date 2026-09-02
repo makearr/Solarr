@@ -210,6 +210,8 @@ func (p *process) startServer(ctx context.Context) error {
 		return err
 	}
 
+	p.reportRootFolders()
+
 	server, err := apiserver.New(apiserver.Config{
 		Bind:    p.config.Server.Bind,
 		Port:    p.config.Server.Port,
@@ -321,4 +323,30 @@ func (p *process) authConfig() (apiserver.AuthConfig, error) {
 		ProxyHeader:   p.config.Security.TrustedProxyHeader,
 		ProxyNetworks: networks,
 	}, nil
+}
+
+// reportRootFolders says, once at startup, whether the library can actually be
+// written -- and then carries on regardless.
+//
+// MediaNexus takes ownership of the directories it creates and no others. A
+// library root belongs to the operator: chowning it would mean rewriting
+// hundreds of thousands of files on every start, and they are not ours to
+// change. Refusing to start would be worse still, because a library that is
+// merely owned by somebody else is a working installation with one thing to fix.
+//
+// So the answer is to say so plainly, with everything needed to fix it, and
+// leave the decision where it belongs.
+func (p *process) reportRootFolders() {
+	roots := apiserver.FilesystemRoots{FS: p.fsys}
+
+	for _, folder := range p.cache.Snapshot().RootFolders() {
+		if err := roots.Validate(folder.Path); err != nil {
+			p.logger.Warn("library root is unusable", "path", folder.Path, "detail", err.Error())
+			continue
+		}
+		if err := roots.Writable(folder.Path); err != nil {
+			p.logger.Warn("library root is not writable; imports into it will fail",
+				"path", folder.Path, "detail", err.Error())
+		}
+	}
 }

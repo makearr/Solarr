@@ -224,6 +224,9 @@ type RootFolder struct {
 	// Online An unmounted root counts as unavailable, never as free space (Invariant 20a).
 	Online bool   `json:"online"`
 	Path   string `json:"path"`
+
+	// Writable Whether this process can write here. False is reported, never enforced: ownership on the host is the operator's to decide, and MediaNexus does not chown a library it did not create. Absent when it has not been probed.
+	Writable *bool `json:"writable,omitempty"`
 }
 
 // SetupStatus defines model for SetupStatus.
@@ -310,6 +313,12 @@ type ServerInterface interface {
 	// Add a library root.
 	// (POST /rootfolders)
 	AddRootFolder(w http.ResponseWriter, r *http.Request)
+	// Configuration as round-tripping YAML (F9).
+	// (GET /settings/export)
+	ExportSettings(w http.ResponseWriter, r *http.Request)
+	// Apply a configuration document, entirely or not at all.
+	// (POST /settings/import)
+	ImportSettings(w http.ResponseWriter, r *http.Request)
 	// What the first-run wizard still has to do.
 	// (GET /setup)
 	GetSetupStatus(w http.ResponseWriter, r *http.Request)
@@ -379,6 +388,18 @@ func (_ Unimplemented) ListRootFolders(w http.ResponseWriter, r *http.Request) {
 // Add a library root.
 // (POST /rootfolders)
 func (_ Unimplemented) AddRootFolder(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Configuration as round-tripping YAML (F9).
+// (GET /settings/export)
+func (_ Unimplemented) ExportSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Apply a configuration document, entirely or not at all.
+// (POST /settings/import)
+func (_ Unimplemented) ImportSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -646,6 +667,50 @@ func (siw *ServerInterfaceWrapper) AddRootFolder(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ExportSettings operation middleware
+func (siw *ServerInterfaceWrapper) ExportSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ImportSettings operation middleware
+func (siw *ServerInterfaceWrapper) ImportSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ImportSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSetupStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetSetupStatus(w http.ResponseWriter, r *http.Request) {
 
@@ -816,6 +881,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/rootfolders", wrapper.AddRootFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/settings/export", wrapper.ExportSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/settings/import", wrapper.ImportSettings)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/setup", wrapper.GetSetupStatus)

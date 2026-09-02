@@ -100,7 +100,12 @@ func (s *Server) ListRootFolders(w http.ResponseWriter, r *http.Request) {
 	folders := s.auth.Settings.Snapshot().RootFolders()
 	views := make([]gen.RootFolder, 0, len(folders))
 	for _, folder := range folders {
-		views = append(views, rootFolderView(folder))
+		view := rootFolderView(folder)
+		if s.roots != nil {
+			writable := s.roots.Writable(folder.Path) == nil
+			view.Writable = &writable
+		}
+		views = append(views, view)
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)
 }
@@ -112,14 +117,7 @@ func (s *Server) ListRootFolders(w http.ResponseWriter, r *http.Request) {
 // deployment, and finding it here rather than at the first import is the
 // difference between a typo and a mystery.
 func (s *Server) AddRootFolder(w http.ResponseWriter, r *http.Request) {
-	access, err := authz.FromContext(r.Context())
-	if err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-	if access.Role() != settings.RoleAdmin {
-		writeProblem(w, s.logger, http.StatusForbidden, TypeForbidden,
-			"Forbidden", "only an administrator may add a root folder")
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 
@@ -137,10 +135,21 @@ func (s *Server) AddRootFolder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	path := strings.TrimSpace(request.Path)
-	if err := s.roots.Check(path); err != nil {
+	if err := s.roots.Validate(path); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
 			"The folder cannot be used", err.Error())
 		return
+	}
+
+	// Not writable is reported, not refused. Ownership on the host is the
+	// operator's decision, and refusing here would mean a library that exists
+	// and is simply owned by someone else could not be configured at all --
+	// while the import that eventually needs to write it is far away in time.
+	writable := true
+	if err := s.roots.Writable(path); err != nil {
+		writable = false
+		s.logger.Warn("root folder is not writable by this process",
+			"path", path, "detail", err.Error())
 	}
 
 	var label string
@@ -153,7 +162,10 @@ func (s *Server) AddRootFolder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusCreated, rootFolderView(created))
+
+	view := rootFolderView(created)
+	view.Writable = &writable
+	writeJSON(w, s.logger, http.StatusCreated, view)
 }
 
 func rootFolderView(folder settings.RootFolder) gen.RootFolder {
@@ -165,12 +177,16 @@ func rootFolderView(folder settings.RootFolder) gen.RootFolder {
 	return view
 }
 
-// RootChecker proves a candidate library root is usable.
+// RootChecker inspects a candidate library root.
 //
 // An interface so apiserver does not reach for the filesystem itself, and so a
 // test can make a path fail without arranging a real unwritable directory.
 type RootChecker interface {
-	Check(path string) error
+	// Validate refuses a path that cannot be a root at all.
+	Validate(path string) error
+	// Writable reports whether this process can write there. A failure is
+	// advisory: it is flagged, never enforced.
+	Writable(path string) error
 }
 
 // ErrNoRootChecker reports a server built without one.

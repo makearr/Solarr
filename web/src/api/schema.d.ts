@@ -162,6 +162,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Configuration as round-tripping YAML (F9).
+         * @description Policy only. Accounts, password hashes and API keys are deliberately absent: an export is attached to bug reports and committed to repositories, so anything in it ends up somewhere public. Identifiers are absent too, so a document from one install applies to another.
+         */
+        get: operations["exportSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply a configuration document, entirely or not at all.
+         * @description The document is validated whole and every problem is reported at once, because an import is arbitrary input and reporting one error per attempt turns a five-mistake file into five round trips. Nothing is written unless all of it is valid -- a partial import leaves settings in a state the user never chose. Merges on natural keys, so applying the same document twice changes nothing the second time.
+         */
+        post: operations["importSettings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me": {
         parameters: {
             query?: never;
@@ -272,6 +312,8 @@ export interface components {
             label?: string;
             /** @description An unmounted root counts as unavailable, never as free space (Invariant 20a). */
             online: boolean;
+            /** @description Whether this process can write here. False is reported, never enforced: ownership on the host is the operator's to decide, and MediaNexus does not chown a library it did not create. Absent when it has not been probed. */
+            writable?: boolean;
         };
         Identity: {
             /** Format: int64 */
@@ -573,6 +615,53 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    exportSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The document. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/yaml": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    importSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/yaml": string;
+            };
+        };
+        responses: {
+            /** @description Applied. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     getMe: {
