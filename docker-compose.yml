@@ -5,7 +5,9 @@ services:
     container_name: medianexus
     restart: unless-stopped
 
-    # Who the application runs as. Set these to whoever owns the volumes below.
+    # Who the application runs as, and who owns everything it writes. Set these
+    # to whoever owns the volumes below. They are always respected; 1000:1000 is
+    # only what happens when they are unset.
     #
     # The container starts as root, takes ownership of /config, drops to this
     # user, and never runs as root again.
@@ -50,8 +52,11 @@ services:
     # root -- so the common case needs no tuning, which is how the *Arr images
     # people are coming from behave.
     #
-    # Hardening is still available and still works; it just is not the default
-    # here. `cap_drop: ALL` needs those four added back, and `user: "1000:1000"`
-    # needs none of them because it never becomes root in the first place -- but
-    # then the volumes must already be owned correctly, since a process that is
-    # not root cannot fix them.
+    # Do not add `user:` here. It is the one thing that stops PUID and PGID
+    # working: the container is then handed to us as somebody else, and changing
+    # uid needs root. MediaNexus says so loudly in the log rather than quietly
+    # running as the wrong user, but it cannot fix it. Set PUID and PGID above
+    # instead -- that is what they are for.
+    #
+    # `cap_drop: ALL` still works if you want it, with CHOWN, DAC_OVERRIDE,
+    # SETUID and SETGID added back.

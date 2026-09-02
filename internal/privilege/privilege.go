@@ -10,6 +10,7 @@ package privilege
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"path/filepath"
@@ -19,9 +20,17 @@ import (
 	"github.com/makearr/MediaNexus/internal/fsx"
 )
 
-// DefaultUID and DefaultGID are the `media` user built into the image. 1000 is
-// the first ordinary account on a Linux system, so on a single-user NAS it is
-// usually already the right answer.
+// DefaultUID and DefaultGID are the `media` user built into the image.
+//
+// They are only what happens when PUID and PGID are unset. Whenever they are
+// set they govern both halves of the question -- the user the process becomes
+// and the ownership it writes -- and nothing else overrides them. 1000 is the
+// first ordinary account on a Linux system, so on a single-user NAS the default
+// is usually already the right answer.
+//
+// This is the only place the default is written. The image deliberately does
+// not declare it as an environment variable, so that a variable being present
+// means somebody asked for it.
 const (
 	DefaultUID = 1000
 	DefaultGID = 1000
@@ -35,6 +44,10 @@ type Lookup func(string) (string, bool)
 type Identity struct {
 	UID int
 	GID int
+	// Requested is true when the operator set PUID or PGID rather than taking
+	// the default. It is the difference between "we chose 1000" and "they asked
+	// for 1000", and only the second is a request that can be disappointed.
+	Requested bool
 }
 
 // Outcome describes what happened, for logging and for tests.
@@ -52,39 +65,36 @@ type Outcome struct {
 // PUID would otherwise run as 1000 and produce a permission failure much later,
 // pointing at the volume rather than at the typo.
 func Resolve(lookup Lookup) (Identity, error) {
-	identity := Identity{UID: DefaultUID, GID: DefaultGID}
-
-	uid, err := numeric(lookup, "PUID", DefaultUID)
+	uid, uidSet, err := numeric(lookup, "PUID", DefaultUID)
 	if err != nil {
 		return Identity{}, err
 	}
-	gid, err := numeric(lookup, "PGID", DefaultGID)
+	gid, gidSet, err := numeric(lookup, "PGID", DefaultGID)
 	if err != nil {
 		return Identity{}, err
 	}
 
-	identity.UID, identity.GID = uid, gid
-	return identity, nil
+	return Identity{UID: uid, GID: gid, Requested: uidSet || gidSet}, nil
 }
 
-func numeric(lookup Lookup, name string, fallback int) (int, error) {
+func numeric(lookup Lookup, name string, fallback int) (int, bool, error) {
 	raw, set := lookup(name)
 	if !set || raw == "" {
-		return fallback, nil
+		return fallback, false, nil
 	}
 
 	value, err := strconv.Atoi(raw)
 	if err != nil {
-		return 0, fmt.Errorf("%s must be a number, got %q", name, raw)
+		return 0, false, fmt.Errorf("%s must be a number, got %q", name, raw)
 	}
 	// 0 would mean "run as root", which this package exists to prevent. Refusing
 	// is safer than honouring it: someone setting PUID=0 is working around a
 	// permission problem that chowning the volume would actually fix.
 	if value <= 0 {
-		return 0, fmt.Errorf("%s must be greater than 0, got %d -- "+
+		return 0, false, fmt.Errorf("%s must be greater than 0, got %d -- "+
 			"MediaNexus does not run as root; set it to the owner of your volumes", name, value)
 	}
-	return value, nil
+	return value, true, nil
 }
 
 // Apply takes ownership of directories and drops to identity.
@@ -95,10 +105,31 @@ func numeric(lookup Lookup, name string, fallback int) (int, error) {
 func Apply(fsys fsx.FS, identity Identity, directories []string, logger *slog.Logger) (Outcome, error) {
 	if syscall.Geteuid() != 0 {
 		current := Identity{UID: syscall.Getuid(), GID: syscall.Getgid()}
-		logger.Info("running unprivileged; PUID and PGID do not apply",
+
+		// PUID and PGID govern both the runtime user and ownership, and this is
+		// the one situation where they cannot: changing uid needs root, and the
+		// container was handed to us as somebody else. That is the container
+		// runtime's decision, not something to paper over -- so when the
+		// operator asked for an identity we cannot deliver, say exactly that
+		// rather than running as a different user in silence.
+		if current.UID != identity.UID || current.GID != identity.GID {
+			logger.Warn("PUID/PGID were set but cannot be applied",
+				slog.Int("requested_uid", identity.UID),
+				slog.Int("requested_gid", identity.GID),
+				slog.Int("running_as_uid", current.UID),
+				slog.Int("running_as_gid", current.GID),
+				slog.String("cause", "the container was started with --user (or runAsUser), "+
+					"so the process is not root and cannot change uid"),
+				slog.String("fix", "remove --user and let PUID/PGID do it, or set --user to "+
+					"match them. Nothing was chowned, so the volumes must already be owned "+
+					"by the user shown above"))
+			return Outcome{Identity: current}, nil
+		}
+
+		logger.Info("running as the requested user; nothing to do",
 			slog.Int("uid", current.UID),
 			slog.Int("gid", current.GID),
-			slog.String("note", "started with --user, so nothing was chowned; "+
+			slog.String("note", "already unprivileged, so no ownership was changed; "+
 				"the volumes must already be owned by this user"))
 		return Outcome{Identity: current}, nil
 	}
@@ -209,4 +240,35 @@ func walk(fsys fsx.FS, path string, identity Identity) error {
 func IdentityHint() string {
 	return fmt.Sprintf("running as uid=%d gid=%d; check PUID/PGID and the directory's owner",
 		syscall.Getuid(), syscall.Getgid())
+}
+
+// WarnIfUnapplicable reports, before anything touches the filesystem, that the
+// requested identity cannot be reached.
+//
+// It exists because of the order things fail in. When the container is started
+// with --user as somebody who does not own /config, the first symptom is
+// "permission denied" while writing config.yml -- which happens before the
+// privilege drop is even attempted, and says nothing about the actual cause.
+// The operator is then debugging a volume when the answer is a flag they
+// passed.
+//
+// Writes to the bootstrap output rather than the logger, because the logger is
+// configured from a file that has not been read yet.
+func WarnIfUnapplicable(identity Identity, out io.Writer) {
+	if syscall.Geteuid() == 0 || !identity.Requested {
+		return
+	}
+	current := Identity{UID: syscall.Getuid(), GID: syscall.Getgid()}
+	if current.UID == identity.UID && current.GID == identity.GID {
+		return
+	}
+
+	// The write is not checked: this is a warning on the way to somewhere else,
+	// and failing to print it is not a reason to stop.
+	_, _ = fmt.Fprintf(out,
+		"warning: PUID=%d PGID=%d were set, but this container is running as uid=%d gid=%d.\n"+
+			"         Changing user needs root, and --user (or runAsUser) already took that\n"+
+			"         away, so PUID and PGID cannot be applied and nothing will be chowned.\n"+
+			"         Remove --user and let PUID/PGID do it, or set --user to match them.\n\n",
+		identity.UID, identity.GID, current.UID, current.GID)
 }

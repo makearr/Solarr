@@ -116,7 +116,15 @@ EXPOSE 8080
 #
 # `--user` still wins. Given one, the process is already unprivileged, skips both
 # the chown and the drop, and runs as whoever was asked for.
-ENV PUID=1000 PGID=1000
+# PUID and PGID are deliberately NOT baked in as environment defaults.
+#
+# The default lives in one place, internal/privilege, and an environment
+# variable that is present means the operator set it. Declaring ENV PUID=1000
+# here would erase that difference, and the process could no longer tell an
+# identity it was asked for from one it picked -- which is exactly what it needs
+# to know to report that a request could not be honoured.
+#
+# Unset, the process runs as media (1000:1000).
 
 # A subcommand of the same static binary, so the image needs no curl or wget.
 # start-period covers migrations on a large database.

@@ -46,6 +46,16 @@ type process struct {
 func serve(ctx context.Context, configPath string, out io.Writer) error {
 	fsys := fsx.NewOS()
 
+	// Resolved before anything is read or written, so an identity that cannot
+	// be reached is reported as itself rather than as whatever fails first --
+	// which, with a --user that does not own /config, is a permission error
+	// while creating config.yml, pointing at the volume instead of the flag.
+	identity, err := privilege.Resolve(os.LookupEnv)
+	if err != nil {
+		return err
+	}
+	privilege.WarnIfUnapplicable(identity, out)
+
 	loaded, err := loadOrCreateConfig(fsys, configPath, out)
 	if err != nil {
 		return err
@@ -61,10 +71,6 @@ func serve(ctx context.Context, configPath string, out io.Writer) error {
 	// user* write here" -- running them as root would answer yes and then the
 	// application would fail as the dropped user, which is precisely the
 	// late-discovered volume failure section 14.3 exists to prevent.
-	identity, err := privilege.Resolve(os.LookupEnv)
-	if err != nil {
-		return err
-	}
 	if _, err := privilege.Apply(fsys, identity, loaded.ManagedDirectories(), logger); err != nil {
 		return err
 	}
