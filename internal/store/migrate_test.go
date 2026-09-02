@@ -303,7 +303,7 @@ func TestBackup_ProducesAnOpenableCopy(t *testing.T) {
 		t.Fatalf("Migrate: %v", err)
 	}
 
-	path, err := fixture.store.Backup(t.Context(), fixture.backupDir)
+	path, err := fixture.store.Backup(t.Context(), fixture.backupDir, store.BackupRotation)
 	if err != nil {
 		t.Fatalf("Backup: %v", err)
 	}
@@ -320,7 +320,7 @@ func TestBackup_ProducesAnOpenableCopy(t *testing.T) {
 
 func TestBackup_RejectsARelativeDirectory(t *testing.T) {
 	fixture := newMigrationFixture(t)
-	if _, err := fixture.store.Backup(t.Context(), "backups"); err == nil {
+	if _, err := fixture.store.Backup(t.Context(), "backups", store.BackupRotation); err == nil {
 		t.Error("Backup accepted a relative directory")
 	}
 }
@@ -329,11 +329,11 @@ func TestBackup_RejectsARelativeDirectory(t *testing.T) {
 func TestBackup_TwoBackupsInTheSameSecondBothSucceed(t *testing.T) {
 	fixture := newMigrationFixture(t)
 
-	first, err := fixture.store.Backup(t.Context(), fixture.backupDir)
+	first, err := fixture.store.Backup(t.Context(), fixture.backupDir, store.BackupRotation)
 	if err != nil {
 		t.Fatalf("first Backup: %v", err)
 	}
-	second, err := fixture.store.Backup(t.Context(), fixture.backupDir)
+	second, err := fixture.store.Backup(t.Context(), fixture.backupDir, store.BackupRotation)
 	if err != nil {
 		t.Fatalf("second Backup at the same instant: %v", err)
 	}

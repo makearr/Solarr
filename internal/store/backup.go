@@ -13,13 +13,26 @@ import (
 // maxBackupDisambiguation caps the search for an unused backup name.
 const maxBackupDisambiguation = 100
 
+// BackupKind says why a backup was taken. Pre-migration backups are kept outside
+// the rotation and never counted against retention (ADR-15), so it has to survive
+// a restart in the filename -- there is nowhere else it is recorded.
+type BackupKind string
+
+const (
+	// BackupRotation is a routine backup, subject to retention.
+	BackupRotation BackupKind = "rotation"
+	// BackupPreMigration runs unconditionally before every schema migration
+	// (Invariant 7) and is kept outside the rotation.
+	BackupPreMigration BackupKind = "premigration"
+)
+
 // Backup writes a consistent copy of the database into directory and returns its path.
-func (s *Store) Backup(ctx context.Context, directory string) (string, error) {
+func (s *Store) Backup(ctx context.Context, directory string, kind BackupKind) (string, error) {
 	if !filepath.IsAbs(directory) {
 		return "", fmt.Errorf("store %s: backup directory %q must be absolute", s.config.Name, directory)
 	}
 
-	path, err := s.unusedBackupPath(directory)
+	path, err := s.unusedBackupPath(directory, kind)
 	if err != nil {
 		return "", err
 	}
@@ -36,10 +49,13 @@ func (s *Store) Backup(ctx context.Context, directory string) (string, error) {
 	return path, nil
 }
 
-// unusedBackupPath finds a free name (ADR-2).
-func (s *Store) unusedBackupPath(directory string) (string, error) {
+// unusedBackupPath finds a free name (ADR-2). The kind is embedded right after the
+// name -- <name>.db.<kind>.<timestamp>[-N] -- so it survives a restart without a
+// separate manifest: retention has to tell a pre-migration backup from a rotation
+// one after the process that wrote it is long gone.
+func (s *Store) unusedBackupPath(directory string, kind BackupKind) (string, error) {
 	stamp := strings.ReplaceAll(s.clock.Now().UTC().Format("2006-01-02T15:04:05Z"), ":", "-")
-	base := filepath.Join(directory, fmt.Sprintf("%s.db.%s", s.config.Name, stamp))
+	base := filepath.Join(directory, fmt.Sprintf("%s.db.%s.%s", s.config.Name, kind, stamp))
 
 	for attempt := range maxBackupDisambiguation {
 		candidate := base
