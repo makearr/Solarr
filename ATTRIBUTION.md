@@ -68,6 +68,8 @@ a user offered the Corresponding Source should be able to see what the binary li
 | `github.com/robfig/cron/v3` | MIT | Cron parsing for `backup.schedule`. The same parser validates at startup and schedules later, so a schedule accepted at boot cannot be rejected by the thing that runs it |
 | `github.com/go-chi/chi/v5` | MIT | HTTP routing. Everything stays an `http.Handler`, so the router owns no part of the code's shape (ADR-31) |
 | `golang.org/x/crypto` | BSD-3-Clause | argon2id password hashing (ADR-14). Not in the standard library, and hand-rolling a password hash is never the right call |
+| `golang.org/x/image` | BSD-3-Clause | High-quality resampling (`draw.CatmullRom`) for section 21.6's artwork pipeline |
+| `github.com/mayahiro/go-webp` | MIT | Pure-Go lossy (VP8) WebP encoder for section 21.6. ADR-30 rules out cgo's libwebp; chosen as the first of three candidates tried, verified by a real encode-then-decode round trip rather than trusting its README |
 
 `modernc.org/sqlite`'s transitive dependencies — `modernc.org/libc`, `modernc.org/memory`, `modernc.org/mathutil`,
 `github.com/remyoudompheng/bigfft`, `github.com/dustin/go-humanize`, `github.com/google/uuid`,

@@ -5,10 +5,12 @@ go 1.27.0
 require (
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/goccy/go-yaml v1.19.2
+	github.com/mayahiro/go-webp v0.3.0
 	github.com/ncruces/go-sqlite3 v0.35.4
 	github.com/oapi-codegen/runtime v1.7.0
 	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/crypto v0.55.0
+	golang.org/x/image v0.45.0
 	modernc.org/sqlite v1.57.0
 )
 
