@@ -264,6 +264,9 @@ func (p *process) startJobs(_ context.Context) error {
 		Mode:   jobs.Mode(p.config.Mode),
 		Logger: p.logger,
 	})
+	if err := p.registerScanJob(registry, executor); err != nil {
+		return err
+	}
 	p.dispatcher = jobs.NewDispatcher(queue, wall, executor, jobs.DispatcherConfig{
 		Sizes: []jobs.PoolSize{
 			{Pool: jobs.PoolSearch, Capacity: p.config.Workers.Search},
@@ -284,6 +287,7 @@ func (p *process) startServer(ctx context.Context) error {
 	}
 
 	p.reportRootFolders()
+	p.enqueueLibraryScans(ctx)
 	if err := p.seedAuthPolicy(ctx); err != nil {
 		return err
 	}

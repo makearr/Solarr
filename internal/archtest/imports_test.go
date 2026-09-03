@@ -21,9 +21,9 @@ var allowedInternalImports = map[string][]string{
 	"cmd/medianexus": {
 		"internal/apiserver", "internal/auth", "internal/clock", "internal/config",
 		"internal/egress", "internal/events", "internal/fsx", "internal/health",
-		"internal/httpx", "internal/jobs", "internal/library", "internal/privilege",
-		"internal/recovery", "internal/settings", "internal/store", "internal/webui",
-		"migrations",
+		"internal/httpx", "internal/jobs", "internal/library", "internal/mediatool",
+		"internal/music", "internal/privilege", "internal/recovery", "internal/scan",
+		"internal/settings", "internal/store", "internal/webui", "migrations",
 	},
 	"internal/auth":  {"internal/clock", "internal/secrets"},
 	"internal/authz": {"internal/settings"},
@@ -52,9 +52,12 @@ var allowedInternalImports = map[string][]string{
 		"internal/clock", "internal/fsx", "internal/store",
 		"internal/store/gen/librarydb", "migrations",
 	},
-	// Owns librarydb, as jobs owns jobsdb and settings owns settingsdb.
+	// Owns librarydb, as jobs owns jobsdb and settings owns settingsdb. fsx is the
+	// quick hash's read of a file's head and tail (section 5.2), nothing else here
+	// touches the filesystem.
 	"internal/library": {
-		"internal/clock", "internal/paginate", "internal/store", "internal/store/gen/librarydb",
+		"internal/clock", "internal/fsx", "internal/paginate", "internal/store",
+		"internal/store/gen/librarydb",
 	},
 	// The only unprompted outbound call, so it needs the one way out (Invariant 28).
 	"internal/egress": {"internal/clock", "internal/httpx"},
@@ -62,8 +65,14 @@ var allowedInternalImports = map[string][]string{
 	// ADR-30's external tools. It runs subprocesses and parses their output; it
 	// touches no database and no filesystem of ours.
 	"internal/mediatool": {},
-	// The music media type, direct-wired until stage 9 extracts it as a plugin.
-	"internal/music":    {"internal/mediatool", "internal/model"},
+	// The music media type, direct-wired until stage 9 extracts it as a plugin. Its
+	// scan.Consumer needs the sweep's own types (scan), root folder paths (settings),
+	// the filesystem seam for the quick hash (fsx) and an injected clock (ADR-17) --
+	// but never store or librarydb directly, which stays library's alone to touch.
+	"internal/music": {
+		"internal/clock", "internal/fsx", "internal/library", "internal/mediatool",
+		"internal/model", "internal/scan", "internal/settings",
+	},
 	"internal/paginate": {},
 	// The section 10.4 sweep: a walk over the filesystem seam and nothing else.
 	// What it finds is persisted by the caller, so it touches no database.
