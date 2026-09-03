@@ -15,22 +15,29 @@ const searchWorks = `-- name: SearchWorks :many
 WITH ranked AS (
   SELECT ts.work_id AS work_id, CAST(MIN(ts.rank) AS REAL) AS score
   FROM title_search ts
-  WHERE ts.title MATCH ?2
-    AND (CAST(?3 AS TEXT) = '' OR ts.media_type = ?3)
+  WHERE ts.title MATCH ?4
+    AND (CAST(?5 AS TEXT) = '' OR ts.media_type = ?5)
   GROUP BY ts.work_id
 )
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
        w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, r.score
 FROM ranked r
 JOIN work w ON w.id = r.work_id
+WHERE ?1 = 0
+   OR r.work_id IN (
+        SELECT work_id FROM work_root_folder
+        WHERE root_folder_id IN (SELECT value FROM json_each(?2))
+      )
 ORDER BY r.score
-LIMIT ?1
+LIMIT ?3
 `
 
 type SearchWorksParams struct {
-	PageSize  int64
-	Query     string
-	MediaType string
+	FilterRootFolders interface{}
+	RootFolderIds     interface{}
+	PageSize          int64
+	Query             string
+	MediaType         string
 }
 
 type SearchWorksRow struct {
@@ -52,8 +59,24 @@ type SearchWorksRow struct {
 // rank wins, so a common alias never crowds out the rest of the results. media_type is
 // filtered on title_search directly, before the join, since MATCH has already cut the
 // candidate set down from the full corpus.
+//
+// ADR-27 category visibility (migration 0012's work_root_folder bridge, same as
+// addRootFolders in internal/library/works.go) is applied as a static predicate here
+// rather than composed in Go: MATCH has already cut ranked down to a handful of rows, so
+// an index on that filter does not matter the way it does for the unfiltered work-table
+// scan composeList guards against. filter_root_folders=0 means unfiltered (root_folder_ids
+// is ignored); =1 filters to root_folder_ids, which is empty when the caller can see
+// nothing, matching zero rows rather than being indistinguishable from unfiltered
+// (json_each of jobs.sql's visible_categories is the precedent for passing a Go slice as
+// a JSON array).
 func (q *Queries) SearchWorks(ctx context.Context, arg SearchWorksParams) ([]SearchWorksRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchWorks, arg.PageSize, arg.Query, arg.MediaType)
+	rows, err := q.db.QueryContext(ctx, searchWorks,
+		arg.FilterRootFolders,
+		arg.RootFolderIds,
+		arg.PageSize,
+		arg.Query,
+		arg.MediaType,
+	)
 	if err != nil {
 		return nil, err
 	}

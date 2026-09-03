@@ -560,6 +560,40 @@ paths:
           $ref: "#/components/responses/Problem"
           description: category_id does not exist, or the caller cannot read it.
 
+  /search:
+    get:
+      operationId: search
+      tags: [library]
+      summary: Ranked cross-media title search (section 21.5), category-filtered (ADR-27).
+      description: >-
+        A work not under a root folder attached to a category the caller can read is
+        excluded, same as `/works`. A capped, ranked array rather than a cursor-paginated
+        page: re-running the same query after data changes can reorder results, so stable
+        cursor pagination is not meaningful here.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Below 2 characters answers 400 rather than searching.
+          schema: { type: string }
+        - name: media_type
+          in: query
+          schema: { type: string, example: "music" }
+        - name: limit
+          in: query
+          description: Sized for an interactive search box, not a browsing page.
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          description: Matches, best first. Empty when nothing matches.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SearchResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /categories:
     get:
       operationId: listCategories
@@ -975,6 +1009,17 @@ components:
           description: >-
             Empty on the last page, which is how a client knows to stop without
             one more request that returns nothing.
+
+    SearchResult:
+      type: object
+      required: [work, score]
+      properties:
+        work: { $ref: "#/components/schemas/Work" }
+        score:
+          type: number
+          description: >-
+            Lower is a better match (bm25 rank, ascending). Not meaningfully comparable
+            across two different queries.
 
     LibraryCategory:
       type: object
