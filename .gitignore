@@ -53,3 +53,7 @@ config.local.yml
 
 # Machine-specific Makefile overrides (DNS, image pins)
 /Makefile.local
+
+# Claude Code harness state, including worktree-isolated subagent checkouts
+# (each a full nested working tree -- never something to commit)
+/.claude/

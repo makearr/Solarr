@@ -275,7 +275,7 @@ func (p *process) storeConfig(profile databaseProfile) store.Config {
 	}
 }
 
-func (p *process) startJobs(_ context.Context) error {
+func (p *process) startJobs(ctx context.Context) error {
 	wall := clock.NewSystem()
 	p.bus = events.NewBus(wall)
 	registry := jobs.NewRegistry()
@@ -291,7 +291,7 @@ func (p *process) startJobs(_ context.Context) error {
 		Mode:   jobs.Mode(p.config.Mode),
 		Logger: p.logger,
 	})
-	if err := p.registerScanJob(registry, executor); err != nil {
+	if err := p.registerScanJob(ctx, registry, executor); err != nil {
 		return err
 	}
 	if err := p.registerEnrichJob(registry, executor); err != nil {
