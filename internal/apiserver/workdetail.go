@@ -14,9 +14,8 @@ import (
 	"github.com/makearr/MediaNexus/internal/authz"
 )
 
-// WorkDetailReader reads one work's full structural detail. Defined here and
-// implemented by the caller, so this package never imports the library store
-// (WorksReader's own doc comment explains the same choice).
+// WorkDetailReader reads one work's full detail (WorksReader's own doc
+// comment explains why this package never imports the library store).
 type WorkDetailReader interface {
 	// GetWorkDetail answers a missing id with an error wrapping sql.ErrNoRows.
 	GetWorkDetail(ctx context.Context, id int64) (WorkDetailRow, error)
@@ -54,9 +53,8 @@ type PartRow struct {
 	ExternalIDs []ExternalIDRow
 }
 
-// WorkDetailRow is a work's full structural detail. RootFolderIDs is not
-// rendered -- GetWork uses it to run the same ADR-27 visibility check
-// ListWorks runs, just against a single item (Invariant 37).
+// WorkDetailRow is a work's full detail. RootFolderIDs is not rendered --
+// GetWork uses it to run ListWorks' ADR-27 visibility check against one item.
 type WorkDetailRow struct {
 	ID            int64
 	MediaType     string
@@ -85,11 +83,8 @@ func (s *Server) routeGetWork(w http.ResponseWriter, r *http.Request) {
 	s.GetWork(w, r, id)
 }
 
-// GetWork answers a work's full structural detail. A work under no root
-// folder the caller can read answers 404, indistinguishable from a work that
-// does not exist at all (Invariant 37) -- there is deliberately no scoring,
-// decision or candidate history here yet; that renders from a persisted
-// Decision object (section 21.3) stage 4's acquisition planner has not built.
+// GetWork answers a work's structural detail; no scoring or Decision content
+// yet (stage 4). A work under no readable root folder answers 404, same as missing.
 func (s *Server) GetWork(w http.ResponseWriter, r *http.Request, id int64) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {

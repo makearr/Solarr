@@ -19,10 +19,8 @@ type PartDetail struct {
 	ExternalIDs []librarydb.WorkPartExternalID
 }
 
-// WorkDetail is the read-only structural view of a work: its own fields, its
-// editions, its parts, and every level's external ids. RootFolderIDs is not
-// display data -- it is what the caller uses to run the ADR-27 visibility
-// check the same way ListWorks does (Invariant 37).
+// WorkDetail is a work's own fields, its editions, its parts, and every
+// level's external ids. RootFolderIDs is not display data, only for ADR-27.
 type WorkDetail struct {
 	Work          librarydb.Work
 	ExternalIDs   []librarydb.WorkExternalID

@@ -8,9 +8,7 @@ type Edition = components["schemas"]["Edition"];
 type WorkPart = components["schemas"]["WorkPart"];
 type ExternalID = components["schemas"]["ExternalID"];
 
-// Read-only structural view (title, editions, parts, external ids per level).
-// No scoring, decision or candidate history: that renders from a persisted
-// Decision object (section 21.3) stage 4's acquisition planner has not built.
+// Read-only: title, editions, parts, external ids. No scoring/Decision yet (stage 4).
 export function WorkDetail() {
   const { id: rawID } = useParams({ strict: false }) as { id?: string };
   const id = rawID !== undefined ? Number(rawID) : undefined;

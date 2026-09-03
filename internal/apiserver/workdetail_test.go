@@ -11,9 +11,8 @@ import (
 	"github.com/makearr/MediaNexus/internal/settings"
 )
 
-// fakeWorkDetailReader mirrors fakeWorksReader: it records the id it was called
-// with and answers a canned row or error, so a test can assert what visibility
-// computed without a real library.db.
+// fakeWorkDetailReader mirrors fakeWorksReader: records the id it was called
+// with and answers a canned row or error, without a real library.db.
 type fakeWorkDetailReader struct {
 	row    apiserver.WorkDetailRow
 	err    error

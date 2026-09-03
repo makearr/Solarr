@@ -8,12 +8,8 @@ import (
 	"github.com/makearr/MediaNexus/internal/library"
 )
 
-// workDetailAdapter satisfies apiserver.WorkDetailReader over library.Works.
-// Neither package imports the other (worksAdapter's doc comment explains why),
-// so something in between has to translate. External id rows are built inline
-// rather than through a shared helper, so this file never has to name a
-// librarydb type -- cmd/medianexus's allowed imports (internal/archtest) do
-// not include internal/store/gen/librarydb.
+// workDetailAdapter satisfies apiserver.WorkDetailReader over library.Works
+// (worksAdapter's doc comment explains the translation).
 type workDetailAdapter struct{ works library.Works }
 
 func (a workDetailAdapter) GetWorkDetail(ctx context.Context, id int64) (apiserver.WorkDetailRow, error) {

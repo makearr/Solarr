@@ -11,10 +11,8 @@ import (
 	"github.com/makearr/MediaNexus/internal/store/gen/librarydb"
 )
 
-// TestWorkDetail_RoundTripsEveryLevel builds a work with an edition, a part and
-// external ids at all three levels plus a root folder link, then asserts Detail
-// reports every field back -- a right shape for the wrong reason is a bug here
-// (section 11), so the whole struct is compared, not one field at a time.
+// Builds a work with an edition, a part and external ids at every level, then
+// asserts Detail reports the whole struct back, not just one field.
 func TestWorkDetail_RoundTripsEveryLevel(t *testing.T) {
 	opened, _ := newLibrary(t)
 	works := library.NewWorks(opened)
