@@ -132,6 +132,78 @@ func TestObserve_IdentifiedFileRegistersPhysicallyAndCreatesAWork(t *testing.T) 
 	}
 }
 
+func TestObserve_ReleaseMBIDCreatesAPlaceholderEdition(t *testing.T) {
+	consumer, opened, fsys := newConsumer(t)
+	content := []byte("katupoken - ki pecezinu - 01 airbag")
+	writeMusicFile(t, fsys, "Katupoken/KI Pecezinu/01 Sesoge.flac", content)
+
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+	batch := []scan.Observed{observedFile("Katupoken/KI Pecezinu/01 Sesoge.flac", int64(len(content)), mediatool.Tags{
+		"album": "KI Pecezinu", "musicbrainz_releasegroupid": releaseGroupMBID,
+		"musicbrainz_albumid": releaseMBID,
+	})}
+
+	if err := consumer.Observe(t.Context(), root, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queries := librarydb.New(opened.Read())
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID,
+	})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v", err)
+	}
+
+	edition, err := queries.GetEditionByExternalID(t.Context(), librarydb.GetEditionByExternalIDParams{
+		Provider: "musicbrainz:release", ExternalID: releaseMBID,
+	})
+	if err != nil {
+		t.Fatalf("GetEditionByExternalID: %v", err)
+	}
+	if edition.WorkID != work.ID {
+		t.Errorf("edition.WorkID = %d, want %d", edition.WorkID, work.ID)
+	}
+	if edition.Kind != "unknown" || edition.Label != releaseMBID {
+		t.Errorf("edition = %+v, want kind=unknown label=%s", edition, releaseMBID)
+	}
+}
+
+// No MUSICBRAINZ_ALBUMID tag means no edition row -- the release-group id alone
+// (or, as here, no id at all beyond the group) says nothing about which pressing.
+func TestObserve_NoReleaseMBIDMeansNoEdition(t *testing.T) {
+	consumer, opened, fsys := newConsumer(t)
+	content := []byte("katupoken - ki pecezinu - 01 airbag, no release id")
+	writeMusicFile(t, fsys, "Katupoken/KI Pecezinu/01 Sesoge.flac", content)
+
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+	batch := []scan.Observed{observedFile("Katupoken/KI Pecezinu/01 Sesoge.flac", int64(len(content)), mediatool.Tags{
+		"album": "KI Pecezinu", "musicbrainz_releasegroupid": releaseGroupMBID,
+	})}
+
+	if err := consumer.Observe(t.Context(), root, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queries := librarydb.New(opened.Read())
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID,
+	})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v", err)
+	}
+	// Checked by listing every edition under the work, not by asking for one
+	// specific external id: a mutation that built an edition keyed on the empty
+	// string instead of skipping it would still pass a check scoped to releaseMBID.
+	editions, err := queries.ListEditions(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("ListEditions: %v", err)
+	}
+	if len(editions) != 0 {
+		t.Errorf("editions = %+v, want none -- no release MBID was present", editions)
+	}
+}
+
 func TestObserve_TwoTracksOfOneAlbumShareOneWork(t *testing.T) {
 	consumer, opened, fsys := newConsumer(t)
 	writeMusicFile(t, fsys, "Katupoken/KI Pecezinu/01 Sesoge.flac", []byte("track one, long enough"))
