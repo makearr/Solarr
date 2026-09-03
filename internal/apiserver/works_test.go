@@ -48,6 +48,7 @@ type worksFixture struct {
 	server       *apiserver.Server
 	cache        *settings.Cache
 	works        *fakeWorksReader
+	workDetail   *fakeWorkDetailReader
 	search       *fakeSearchReader
 	unidentified *fakeUnidentifiedReader
 	clock        *clock.Fake
@@ -92,12 +93,14 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 	}
 
 	works := &fakeWorksReader{}
+	workDetail := &fakeWorkDetailReader{}
 	search := &fakeSearchReader{}
 	unidentified := &fakeUnidentifiedReader{}
 	server, err := apiserver.New(apiserver.Config{
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
 		Checker:      fakeChecker{},
 		Works:        works,
+		WorkDetail:   workDetail,
 		Search:       search,
 		Unidentified: unidentified,
 		LibrarySize:  librarySize,
@@ -114,7 +117,7 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 		t.Fatalf("New: %v", err)
 	}
 	return worksFixture{
-		server: server, cache: cache, works: works, search: search,
+		server: server, cache: cache, works: works, workDetail: workDetail, search: search,
 		unidentified: unidentified, clock: fake,
 	}
 }

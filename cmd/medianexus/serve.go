@@ -361,6 +361,7 @@ func (p *process) startServer(ctx context.Context) error {
 		Roots:        apiserver.FilesystemRoots{FS: p.fsys},
 		LibrarySize:  library.NewCounters(p.library),
 		Works:        worksAdapter{works: library.NewWorks(p.library)},
+		WorkDetail:   workDetailAdapter{works: library.NewWorks(p.library)},
 		Search:       searchAdapter{search: library.NewSearch(p.library)},
 		Unidentified: unidentifiedAdapter{unidentified: library.NewUnidentified(p.library)},
 		// time.Local.String() reports "Local"; the name the operator set is the useful one.

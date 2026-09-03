@@ -737,6 +737,39 @@ func (q *Queries) LinkWorkPartExternalID(ctx context.Context, arg LinkWorkPartEx
 	return err
 }
 
+const listEditionExternalIDs = `-- name: ListEditionExternalIDs :many
+SELECT provider, external_id, edition_id, confidence
+FROM edition_external_id WHERE edition_id = ? ORDER BY provider, external_id
+`
+
+func (q *Queries) ListEditionExternalIDs(ctx context.Context, editionID int64) ([]EditionExternalID, error) {
+	rows, err := q.db.QueryContext(ctx, listEditionExternalIDs, editionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []EditionExternalID{}
+	for rows.Next() {
+		var i EditionExternalID
+		if err := rows.Scan(
+			&i.Provider,
+			&i.ExternalID,
+			&i.EditionID,
+			&i.Confidence,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEditions = `-- name: ListEditions :many
 SELECT id, work_id, kind, label, year, format, catalogue_number,
        barcode, runtime_ms, is_default

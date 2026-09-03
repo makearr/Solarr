@@ -102,6 +102,10 @@ ON CONFLICT (provider, external_id) DO UPDATE SET
   edition_id = excluded.edition_id,
   confidence = excluded.confidence;
 
+-- name: ListEditionExternalIDs :many
+SELECT provider, external_id, edition_id, confidence
+FROM edition_external_id WHERE edition_id = ? ORDER BY provider, external_id;
+
 -- kind='unknown' is the cross-media-type placeholder marker an Identifier chain
 -- leaves behind when it resolves an edition's external id but has no real
 -- metadata yet (internal/library.EditionLink, internal/music's newEditionLink):

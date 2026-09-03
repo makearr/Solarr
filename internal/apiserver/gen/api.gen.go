@@ -182,6 +182,20 @@ type DashboardSummary struct {
 	RootFolders []RootFolder  `json:"root_folders"`
 }
 
+// Edition defines model for Edition.
+type Edition struct {
+	Barcode         *string      `json:"barcode,omitempty"`
+	CatalogueNumber *string      `json:"catalogue_number,omitempty"`
+	ExternalIds     []ExternalID `json:"external_ids"`
+	Format          *string      `json:"format,omitempty"`
+	Id              int64        `json:"id"`
+	IsDefault       bool         `json:"is_default"`
+	Kind            string       `json:"kind"`
+	Label           string       `json:"label"`
+	RuntimeMs       *int64       `json:"runtime_ms,omitempty"`
+	Year            *int         `json:"year,omitempty"`
+}
+
 // Egress Every field is optional: a check that is switched off, has not run yet or has failed reports nothing rather than a stale or invented address.
 type Egress struct {
 	CheckedAt *time.Time `json:"checked_at,omitempty"`
@@ -199,6 +213,12 @@ type Egress struct {
 
 // EventTopic defines model for EventTopic.
 type EventTopic string
+
+// ExternalID One provider's id for a work, edition or part.
+type ExternalID struct {
+	ExternalId string `json:"external_id"`
+	Provider   string `json:"provider"`
+}
 
 // HealthStatus defines model for HealthStatus.
 type HealthStatus struct {
@@ -399,12 +419,40 @@ type Work struct {
 	Year      *int      `json:"year,omitempty"`
 }
 
+// WorkDetail defines model for WorkDetail.
+type WorkDetail struct {
+	AddedAt     time.Time    `json:"added_at"`
+	Editions    []Edition    `json:"editions"`
+	ExternalIds []ExternalID `json:"external_ids"`
+	Id          int64        `json:"id"`
+	Language    *string      `json:"language,omitempty"`
+	MediaType   string       `json:"media_type"`
+	Parts       []WorkPart   `json:"parts"`
+	RuntimeMs   *int64       `json:"runtime_ms,omitempty"`
+	SortTitle   string       `json:"sort_title"`
+	Title       string       `json:"title"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+	Year        *int         `json:"year,omitempty"`
+}
+
 // WorkPage defines model for WorkPage.
 type WorkPage struct {
 	Items []Work `json:"items"`
 
 	// NextCursor Empty on the last page, which is how a client knows to stop without one more request that returns nothing.
 	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
+// WorkPart defines model for WorkPart.
+type WorkPart struct {
+	Date        *string      `json:"date,omitempty"`
+	ExternalIds []ExternalID `json:"external_ids"`
+	Id          int64        `json:"id"`
+	MediaRef    string       `json:"media_ref"`
+	Monitored   bool         `json:"monitored"`
+	RuntimeMs   *int64       `json:"runtime_ms,omitempty"`
+	SortKey     string       `json:"sort_key"`
+	Title       *string      `json:"title,omitempty"`
 }
 
 // LoginJSONBody defines parameters for Login.
@@ -609,6 +657,9 @@ type ServerInterface interface {
 	// A page of the library the caller may see (ADR-27).
 	// (GET /works)
 	ListWorks(w http.ResponseWriter, r *http.Request, params ListWorksParams)
+	// A work's full structural detail: its own fields, editions, parts, and every level's external ids.
+	// (GET /works/{id})
+	GetWork(w http.ResponseWriter, r *http.Request, id int64)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -774,6 +825,12 @@ func (_ Unimplemented) SetUserAccess(w http.ResponseWriter, r *http.Request, id 
 // A page of the library the caller may see (ADR-27).
 // (GET /works)
 func (_ Unimplemented) ListWorks(w http.ResponseWriter, r *http.Request, params ListWorksParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A work's full structural detail: its own fields, editions, parts, and every level's external ids.
+// (GET /works/{id})
+func (_ Unimplemented) GetWork(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1506,6 +1563,39 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetWork operation middleware
+func (siw *ServerInterfaceWrapper) GetWork(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWork(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1699,6 +1789,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works", wrapper.ListWorks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/{id}", wrapper.GetWork)
 	})
 
 	return r

@@ -560,6 +560,35 @@ paths:
           $ref: "#/components/responses/Problem"
           description: category_id does not exist, or the caller cannot read it.
 
+  /works/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getWork
+      tags: [library]
+      summary: >-
+        A work's full structural detail: its own fields, editions, parts, and
+        every level's external ids.
+      description: >-
+        Read-only. There is no scoring, decision or candidate history here yet
+        -- that renders from a persisted Decision object section 21.3
+        describes, which stage 4's acquisition planner has not built. A work
+        not under a root folder attached to a category the caller can read
+        answers 404, indistinguishable from a work that does not exist
+        (Invariant 37).
+      responses:
+        "200":
+          description: The work's detail.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkDetail" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /search:
     get:
       operationId: search
@@ -1050,6 +1079,78 @@ components:
           description: >-
             Empty on the last page, which is how a client knows to stop without
             one more request that returns nothing.
+
+    ExternalID:
+      type: object
+      description: One provider's id for a work, edition or part.
+      required: [provider, external_id]
+      properties:
+        provider: { type: string, example: "musicbrainz:release-group" }
+        external_id: { type: string }
+
+    Edition:
+      type: object
+      required: [id, kind, label, is_default, external_ids]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string, example: "official" }
+        label: { type: string }
+        year: { type: integer }
+        format: { type: string, example: "CD" }
+        catalogue_number: { type: string }
+        barcode: { type: string }
+        runtime_ms: { type: integer, format: int64 }
+        is_default: { type: boolean }
+        external_ids:
+          type: array
+          items: { $ref: "#/components/schemas/ExternalID" }
+
+    WorkPart:
+      type: object
+      required: [id, media_ref, sort_key, monitored, external_ids]
+      properties:
+        id: { type: integer, format: int64 }
+        media_ref: { type: string }
+        sort_key: { type: string }
+        title: { type: string }
+        runtime_ms: { type: integer, format: int64 }
+        date: { type: string }
+        monitored: { type: boolean }
+        external_ids:
+          type: array
+          items: { $ref: "#/components/schemas/ExternalID" }
+
+    WorkDetail:
+      type: object
+      required:
+        - id
+        - media_type
+        - title
+        - sort_title
+        - added_at
+        - updated_at
+        - external_ids
+        - editions
+        - parts
+      properties:
+        id: { type: integer, format: int64 }
+        media_type: { type: string, example: "music" }
+        title: { type: string }
+        sort_title: { type: string }
+        year: { type: integer }
+        runtime_ms: { type: integer, format: int64 }
+        language: { type: string }
+        added_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        external_ids:
+          type: array
+          items: { $ref: "#/components/schemas/ExternalID" }
+        editions:
+          type: array
+          items: { $ref: "#/components/schemas/Edition" }
+        parts:
+          type: array
+          items: { $ref: "#/components/schemas/WorkPart" }
 
     SearchResult:
       type: object

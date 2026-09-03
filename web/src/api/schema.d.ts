@@ -386,6 +386,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * A work's full structural detail: its own fields, editions, parts, and every level's external ids.
+         * @description Read-only. There is no scoring, decision or candidate history here yet -- that renders from a persisted Decision object section 21.3 describes, which stage 4's acquisition planner has not built. A work not under a root folder attached to a category the caller can read answers 404, indistinguishable from a work that does not exist (Invariant 37).
+         */
+        get: operations["getWork"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/search": {
         parameters: {
             query?: never;
@@ -684,6 +706,59 @@ export interface components {
             items: components["schemas"]["Work"][];
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
+        };
+        /** @description One provider's id for a work, edition or part. */
+        ExternalID: {
+            /** @example musicbrainz:release-group */
+            provider: string;
+            external_id: string;
+        };
+        Edition: {
+            /** Format: int64 */
+            id: number;
+            /** @example official */
+            kind: string;
+            label: string;
+            year?: number;
+            /** @example CD */
+            format?: string;
+            catalogue_number?: string;
+            barcode?: string;
+            /** Format: int64 */
+            runtime_ms?: number;
+            is_default: boolean;
+            external_ids: components["schemas"]["ExternalID"][];
+        };
+        WorkPart: {
+            /** Format: int64 */
+            id: number;
+            media_ref: string;
+            sort_key: string;
+            title?: string;
+            /** Format: int64 */
+            runtime_ms?: number;
+            date?: string;
+            monitored: boolean;
+            external_ids: components["schemas"]["ExternalID"][];
+        };
+        WorkDetail: {
+            /** Format: int64 */
+            id: number;
+            /** @example music */
+            media_type: string;
+            title: string;
+            sort_title: string;
+            year?: number;
+            /** Format: int64 */
+            runtime_ms?: number;
+            language?: string;
+            /** Format: date-time */
+            added_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            external_ids: components["schemas"]["ExternalID"][];
+            editions: components["schemas"]["Edition"][];
+            parts: components["schemas"]["WorkPart"][];
         };
         SearchResult: {
             work: components["schemas"]["Work"];
@@ -1334,6 +1409,31 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             /** @description category_id does not exist, or the caller cannot read it. */
+            404: components["responses"]["Problem"];
+        };
+    };
+    getWork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The work's detail. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };
