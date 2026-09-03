@@ -152,3 +152,22 @@ transaction starts the file again.
 writer.** The remaining tail is that checkpoint plus the bulk transaction in front of it.
 ADR-28's 25ms is stated for a workload that pauses to read, hash and probe between
 batches; the benchmark's writer never pauses, so its test guards 30ms and says so.
+
+## Scan batch writes (`library.Physical`, `library.Identity`)
+
+Measured 2026-09-03 against the real 500k-file fixture, one query per file inside a single
+transaction (no bulk SQL), 200 files per batch matching `internal/scan`'s own batch size:
+
+| Batch | p50 | p99 | Limit |
+|---|---|---|---|
+| Register 200 new files (dedupe lookup misses, insert) | 12.2 ms | 17.0 ms | 50 ms |
+| Register 200 already-known paths (dedupe lookup hits) | 2.2 ms | 3.1 ms | 50 ms |
+| Resolve 200 links, all naming a new work (create + link) | 22.6 ms | 31.0 ms | 50 ms |
+
+All three sit well inside the ADR-3 bulk-write budget even in each measurement's worst
+case — every file new, or every link naming a work nothing has seen before, which a real
+scan rarely does (most files in a batch share an album, so most links resolve to a work
+the same transaction already created). No case here approached rewriting this as bulk SQL
+or splitting the two transactions differently; the numbers did not ask for it.
+`TestADR28_ScanRegisterBatch*` and `TestADR28_ScanResolveWorks*` in
+`internal/library/bench_scan_test.go` hold these as tests, not just a report.
