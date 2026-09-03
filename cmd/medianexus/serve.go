@@ -38,6 +38,7 @@ type process struct {
 	settings   *store.Store
 	jobs       *store.Store
 	library    *store.Store
+	metadata   *store.Store
 	queue      *jobs.Queue
 	cache      *settings.Cache
 	bus        *events.Bus
@@ -168,6 +169,22 @@ func (p *process) openDatabases(ctx context.Context) error {
 	}
 	p.cache = cache
 
+	// cache/metadata.db (ADR-2) is disposable -- unlike the three above, a
+	// corrupt copy is the operator's to delete, not OpenChecked's to restore
+	// from a backup that was never rotated for it in the first place.
+	metadataStore, err := store.Open(ctx, wall, p.storeConfig(metadataProfile))
+	if err != nil {
+		return err
+	}
+	p.metadata = metadataStore
+	metadataOwner, err := migrations.Metadata()
+	if err != nil {
+		return err
+	}
+	if err := store.Migrate(ctx, metadataStore, backupDir, metadataOwner); err != nil {
+		return err
+	}
+
 	return p.reconcileRestore(ctx, wall, restored)
 }
 
@@ -219,6 +236,10 @@ type databaseProfile struct {
 	readPoolSize int
 	// cacheSizeKB is zero for the database config.yml sizes, which is the library.
 	cacheSizeKB int
+	// inCacheDir puts the file under Paths.CacheDir instead of Paths.DBDir --
+	// ADR-2 keeps the disposable cache directory separate from the authoritative
+	// databases on purpose.
+	inCacheDir bool
 }
 
 var (
@@ -228,6 +249,8 @@ var (
 	jobsProfile = databaseProfile{name: "jobs", readPoolSize: 2, cacheSizeKB: 8192}
 	// Fully cached in Go by ADR-25, so its page cache serves startup and little else.
 	settingsProfile = databaseProfile{name: "settings", readPoolSize: 1, cacheSizeKB: 2048}
+	// Disposable (ADR-2); small on purpose, the same as settings.
+	metadataProfile = databaseProfile{name: "metadata", readPoolSize: 1, cacheSizeKB: 2048, inCacheDir: true}
 )
 
 func (p *process) storeConfig(profile databaseProfile) store.Config {
@@ -235,9 +258,13 @@ func (p *process) storeConfig(profile databaseProfile) store.Config {
 	if cacheSizeKB == 0 {
 		cacheSizeKB = p.config.Database.CacheSizeKB
 	}
+	directory := p.config.Paths.DBDir
+	if profile.inCacheDir {
+		directory = p.config.Paths.CacheDir
+	}
 	return store.Config{
 		Name:         profile.name,
-		Path:         fmt.Sprintf("%s/%s.db", p.config.Paths.DBDir, profile.name),
+		Path:         fmt.Sprintf("%s/%s.db", directory, profile.name),
 		ReadPoolSize: profile.readPoolSize,
 		BusyTimeout:  p.config.Database.BusyTimeout.AsDuration(),
 		PageSize:     p.config.Database.PageSize,
@@ -267,6 +294,9 @@ func (p *process) startJobs(_ context.Context) error {
 	if err := p.registerScanJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerEnrichJob(registry, executor); err != nil {
+		return err
+	}
 	p.dispatcher = jobs.NewDispatcher(queue, wall, executor, jobs.DispatcherConfig{
 		Sizes: []jobs.PoolSize{
 			{Pool: jobs.PoolSearch, Capacity: p.config.Workers.Search},
@@ -288,6 +318,7 @@ func (p *process) startServer(ctx context.Context) error {
 
 	p.reportRootFolders()
 	p.enqueueLibraryScans(ctx)
+	p.enqueueEnrichment(ctx)
 	if err := p.seedAuthPolicy(ctx); err != nil {
 		return err
 	}
@@ -383,7 +414,7 @@ func (p *process) startServer(ctx context.Context) error {
 // close drains and closes the databases. The write queues drain before their
 // handles close, which is bounded because every transaction is bounded.
 func (p *process) close() {
-	for _, opened := range []*store.Store{p.library, p.jobs, p.settings} {
+	for _, opened := range []*store.Store{p.library, p.jobs, p.settings, p.metadata} {
 		if opened == nil {
 			continue
 		}

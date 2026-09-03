@@ -22,8 +22,9 @@ var allowedInternalImports = map[string][]string{
 		"internal/apiserver", "internal/auth", "internal/clock", "internal/config",
 		"internal/egress", "internal/events", "internal/fsx", "internal/health",
 		"internal/httpx", "internal/jobs", "internal/library", "internal/mediatool",
-		"internal/music", "internal/privilege", "internal/recovery", "internal/scan",
-		"internal/settings", "internal/store", "internal/webui", "migrations",
+		"internal/metacache", "internal/music", "internal/musicbrainz", "internal/privilege",
+		"internal/recovery", "internal/scan", "internal/settings", "internal/store",
+		"internal/webui", "migrations",
 	},
 	"internal/auth":  {"internal/clock", "internal/secrets"},
 	"internal/authz": {"internal/settings"},
@@ -69,9 +70,12 @@ var allowedInternalImports = map[string][]string{
 	// scan.Consumer needs the sweep's own types (scan), root folder paths (settings),
 	// the filesystem seam for the quick hash (fsx) and an injected clock (ADR-17) --
 	// but never store or librarydb directly, which stays library's alone to touch.
+	// The enrichment job adds musicbrainz (ADR-29) and jobs (its own handler,
+	// mirroring scan.Job).
 	"internal/music": {
-		"internal/clock", "internal/fsx", "internal/library", "internal/mediatool",
-		"internal/model", "internal/scan", "internal/settings",
+		"internal/clock", "internal/fsx", "internal/jobs", "internal/library",
+		"internal/mediatool", "internal/model", "internal/musicbrainz", "internal/scan",
+		"internal/settings",
 	},
 	"internal/paginate": {},
 	// The section 10.4 sweep: a walk over the filesystem seam and nothing else.

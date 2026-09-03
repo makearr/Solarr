@@ -41,6 +41,15 @@ ON CONFLICT (provider, external_id) DO UPDATE SET
 SELECT provider, external_id, work_id, confidence, first_seen_at
 FROM work_external_id WHERE work_id = ? ORDER BY provider, external_id;
 
+-- name: GetWorkExternalIDByProvider :one
+SELECT provider, external_id, work_id, confidence, first_seen_at
+FROM work_external_id WHERE work_id = ? AND provider = ?;
+
+-- A work's year is never overwritten once set -- by a person, or by an earlier
+-- enrichment pass -- so this is conditional rather than a plain UPDATE.
+-- name: UpdateWorkYearIfNull :exec
+UPDATE work SET year = ?, updated_at = ? WHERE id = ? AND year IS NULL;
+
 -- name: AddWorkTitle :one
 INSERT INTO work_title (work_id, title, normalized, language, kind, source)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -69,6 +78,11 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, work_id, kind, label, year, format, catalogue_number,
           barcode, runtime_ms, is_default;
 
+-- name: GetEdition :one
+SELECT id, work_id, kind, label, year, format, catalogue_number,
+       barcode, runtime_ms, is_default
+FROM edition WHERE id = ?;
+
 -- name: ListEditions :many
 SELECT id, work_id, kind, label, year, format, catalogue_number,
        barcode, runtime_ms, is_default
@@ -87,6 +101,23 @@ VALUES (?, ?, ?, ?)
 ON CONFLICT (provider, external_id) DO UPDATE SET
   edition_id = excluded.edition_id,
   confidence = excluded.confidence;
+
+-- kind='unknown' is the cross-media-type placeholder marker an Identifier chain
+-- leaves behind when it resolves an edition's external id but has no real
+-- metadata yet (internal/library.EditionLink, internal/music's newEditionLink):
+-- label is that external id itself, chosen so it can never collide with a real
+-- edition's UNIQUE(work_id, kind, label). Once refined, kind changes away from
+-- 'unknown' and the row stops being returned here -- no separate cursor needed,
+-- the query's own result set shrinks as enrichment succeeds.
+-- name: ListPlaceholderEditions :many
+SELECT id, work_id, kind, label, year, format, catalogue_number,
+       barcode, runtime_ms, is_default
+FROM edition WHERE kind = 'unknown' ORDER BY id LIMIT sqlc.arg(page_size);
+
+-- name: UpdateEdition :exec
+UPDATE edition SET kind = ?, year = ?, format = ?, catalogue_number = ?,
+       barcode = ?, runtime_ms = ?
+WHERE id = ?;
 
 -- name: SetWorkField :exec
 INSERT INTO work_field (work_id, field, provider, value, fetched_at)

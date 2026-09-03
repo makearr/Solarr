@@ -122,6 +122,7 @@ type Querier interface {
 	// A dashboard figure is one lookup regardless of library size (ADR-28).
 	GetCounter(ctx context.Context, arg GetCounterParams) (Counter, error)
 	GetDesiredItem(ctx context.Context, id int64) (DesiredItem, error)
+	GetEdition(ctx context.Context, id int64) (Edition, error)
 	GetEditionByExternalID(ctx context.Context, arg GetEditionByExternalIDParams) (Edition, error)
 	// Scoring reads the bounded value, never the raw rate (ADR-45).
 	GetGroupReputation(ctx context.Context, releaseGroup string) (GroupReputation, error)
@@ -140,6 +141,7 @@ type Querier interface {
 	GetWork(ctx context.Context, id int64) (Work, error)
 	// Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
 	GetWorkByExternalID(ctx context.Context, arg GetWorkByExternalIDParams) (Work, error)
+	GetWorkExternalIDByProvider(ctx context.Context, arg GetWorkExternalIDByProviderParams) (WorkExternalID, error)
 	GetWorkPart(ctx context.Context, id int64) (WorkPart, error)
 	// Physical files. Column lists follow table order, or sqlc stops reusing models.
 	InternAttributes(ctx context.Context, arg InternAttributesParams) (MediaAttribute, error)
@@ -196,6 +198,14 @@ type Querier interface {
 	// The whole phash set is 4 MB at 500k files: Hamming distance is brute-forced in
 	// Go, so this hands over every candidate rather than filtering in SQL (ADR-35).
 	ListPerceptualHashes(ctx context.Context) ([]ListPerceptualHashesRow, error)
+	// kind='unknown' is the cross-media-type placeholder marker an Identifier chain
+	// leaves behind when it resolves an edition's external id but has no real
+	// metadata yet (internal/library.EditionLink, internal/music's newEditionLink):
+	// label is that external id itself, chosen so it can never collide with a real
+	// edition's UNIQUE(work_id, kind, label). Once refined, kind changes away from
+	// 'unknown' and the row stops being returned here -- no separate cursor needed,
+	// the query's own result set shrinks as enrichment succeeds.
+	ListPlaceholderEditions(ctx context.Context, pageSize int64) ([]Edition, error)
 	ListRelationshipsFrom(ctx context.Context, arg ListRelationshipsFromParams) ([]Relationship, error)
 	// Newest first: a user's own request history.
 	ListRequestsForUser(ctx context.Context, arg ListRequestsForUserParams) ([]Request, error)
@@ -286,10 +296,14 @@ type Querier interface {
 	// A sweep that starts records only that it started: the watermark must not move
 	// until one finishes, or an interrupted scan would look complete.
 	StartScan(ctx context.Context, arg StartScanParams) error
+	UpdateEdition(ctx context.Context, arg UpdateEditionParams) error
 	// The list surface composes its own WHERE in internal/library/works.go: a filter
 	// written here as an is-it-empty test is not sargable, so SQLite uses no index for that
 	// column and sorts the whole table for every page (documentation/sql-and-sqlc.md).
 	UpdateWorkTimestamp(ctx context.Context, arg UpdateWorkTimestampParams) error
+	// A work's year is never overwritten once set -- by a person, or by an earlier
+	// enrichment pass -- so this is conditional rather than a plain UPDATE.
+	UpdateWorkYearIfNull(ctx context.Context, arg UpdateWorkYearIfNullParams) error
 	UpsertArtwork(ctx context.Context, arg UpsertArtworkParams) error
 	// Candidates, decisions and provenance. Column lists follow table order.
 	UpsertCandidate(ctx context.Context, arg UpsertCandidateParams) (Candidate, error)
