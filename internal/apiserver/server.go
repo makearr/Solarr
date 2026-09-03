@@ -65,6 +65,8 @@ type Config struct {
 	Egress EgressReporter
 	// Works lists the library. Optional: without it, ListWorks answers 503.
 	Works WorksReader
+	// Search ranks the library by title. Optional: without it, Search answers 503.
+	Search SearchReader
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -87,6 +89,7 @@ type Server struct {
 	timezone    string
 	egress      EgressReporter
 	works       WorksReader
+	search      SearchReader
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -121,6 +124,7 @@ func New(config Config) (*Server, error) {
 		timezone:    config.Timezone,
 		egress:      config.Egress,
 		works:       config.Works,
+		search:      config.Search,
 		address:     net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -157,6 +161,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/system/egress", server.GetEgress)
 			secured.Get("/jobs", server.routeListJobs)
 			secured.Get("/works", server.routeListWorks)
+			secured.Get("/search", server.routeSearch)
 			secured.Get("/categories", server.ListCategories)
 			secured.Get("/rootfolders", server.ListRootFolders)
 			secured.Get("/users", server.ListUsers)
@@ -347,6 +352,26 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.ListWorks(w, r, params)
+}
+
+func (s *Server) routeSearch(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	params := gen.SearchParams{Q: query.Get("q")}
+
+	if raw := query.Get("media_type"); raw != "" {
+		params.MediaType = &raw
+	}
+	if raw := query.Get("limit"); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "limit must be a number")
+			return
+		}
+		params.Limit = &limit
+	}
+
+	s.Search(w, r, params)
 }
 
 func (s *Server) routeStreamEvents(w http.ResponseWriter, r *http.Request) {

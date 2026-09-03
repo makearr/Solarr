@@ -386,6 +386,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ranked cross-media title search (section 21.5), category-filtered (ADR-27).
+         * @description A work not under a root folder attached to a category the caller can read is excluded, same as `/works`. A capped, ranked array rather than a cursor-paginated page: re-running the same query after data changes can reorder results, so stable cursor pagination is not meaningful here.
+         */
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories": {
         parameters: {
             query?: never;
@@ -644,6 +664,11 @@ export interface components {
             items: components["schemas"]["Work"][];
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
+        };
+        SearchResult: {
+            work: components["schemas"]["Work"];
+            /** @description Lower is a better match (bm25 rank, ascending). Not meaningfully comparable across two different queries. */
+            score: number;
         };
         /** @description A category as a navigation target: no `permission` field, since the list is already narrowed to what the caller may read (unlike `Me`'s `categories`, which reports the caller's level on each). */
         LibraryCategory: {
@@ -1261,6 +1286,34 @@ export interface operations {
             401: components["responses"]["Problem"];
             /** @description category_id does not exist, or the caller cannot read it. */
             404: components["responses"]["Problem"];
+        };
+    };
+    search: {
+        parameters: {
+            query: {
+                /** @description Below 2 characters answers 400 rather than searching. */
+                q: string;
+                media_type?: string;
+                /** @description Sized for an interactive search box, not a browsing page. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matches, best first. Empty when nothing matches. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResult"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
         };
     };
     listCategories: {

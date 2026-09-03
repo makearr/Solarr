@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -32,15 +33,24 @@ type SearchResult struct {
 
 // Works ranks works whose title or an alias matches query, cross-media-type unless
 // mediaType narrows it (section 21.1's "search across everything"). A work appears at
-// most once even when several of its titles match.
-func (s Search) Works(ctx context.Context, query, mediaType string, pageSize int) ([]SearchResult, error) {
+// most once even when several of its titles match. rootFolderIDs mirrors
+// WorkFilter.RootFolderIDs: nil is unfiltered, a non-nil empty slice matches nothing
+// (ADR-27, the caller translates "no root folder visible" into that before calling).
+func (s Search) Works(ctx context.Context, query, mediaType string, rootFolderIDs []int64, pageSize int) ([]SearchResult, error) {
 	matchQuery, ok := buildMatchQuery(query)
 	if !ok {
 		return nil, ErrQueryTooShort
 	}
 
+	filterRootFolders := rootFolderIDs != nil
+	encodedRootFolderIDs, err := json.Marshal(rootFolderIDs)
+	if err != nil {
+		return nil, fmt.Errorf("library: encode root folder ids: %w", err)
+	}
+
 	rows, err := librarydb.New(s.store.Read()).SearchWorks(ctx, librarydb.SearchWorksParams{
 		Query: matchQuery, MediaType: mediaType, PageSize: int64(pageSize),
+		FilterRootFolders: boolToInt(filterRootFolders), RootFolderIds: string(encodedRootFolderIDs),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: search works: %w", err)
@@ -82,4 +92,11 @@ func buildMatchQuery(raw string) (query string, ok bool) {
 	}
 	escaped := strings.ReplaceAll(trimmed, `"`, `""`)
 	return `"` + escaped + `"*`, true
+}
+
+func boolToInt(value bool) int64 {
+	if value {
+		return 1
+	}
+	return 0
 }

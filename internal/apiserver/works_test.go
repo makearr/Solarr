@@ -48,6 +48,7 @@ type worksFixture struct {
 	server *apiserver.Server
 	cache  *settings.Cache
 	works  *fakeWorksReader
+	search *fakeSearchReader
 	clock  *clock.Fake
 }
 
@@ -82,10 +83,12 @@ func newWorksFixture(t *testing.T) worksFixture {
 	}
 
 	works := &fakeWorksReader{}
+	search := &fakeSearchReader{}
 	server, err := apiserver.New(apiserver.Config{
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
 		Checker: fakeChecker{},
 		Works:   works,
+		Search:  search,
 		Clock:   fake,
 		Logger:  slog.New(slog.DiscardHandler),
 		Auth: apiserver.AuthConfig{
@@ -98,7 +101,7 @@ func newWorksFixture(t *testing.T) worksFixture {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	return worksFixture{server: server, cache: cache, works: works, clock: fake}
+	return worksFixture{server: server, cache: cache, works: works, search: search, clock: fake}
 }
 
 func (f worksFixture) do(request *http.Request) *httptest.ResponseRecorder {

@@ -277,6 +277,16 @@ type Querier interface {
 	// rank wins, so a common alias never crowds out the rest of the results. media_type is
 	// filtered on title_search directly, before the join, since MATCH has already cut the
 	// candidate set down from the full corpus.
+	//
+	// ADR-27 category visibility (migration 0012's work_root_folder bridge, same as
+	// addRootFolders in internal/library/works.go) is applied as a static predicate here
+	// rather than composed in Go: MATCH has already cut ranked down to a handful of rows, so
+	// an index on that filter does not matter the way it does for the unfiltered work-table
+	// scan composeList guards against. filter_root_folders=0 means unfiltered (root_folder_ids
+	// is ignored); =1 filters to root_folder_ids, which is empty when the caller can see
+	// nothing, matching zero rows rather than being indistinguishable from unfiltered
+	// (json_each of jobs.sql's visible_categories is the precedent for passing a Go slice as
+	// a JSON array).
 	SearchWorks(ctx context.Context, arg SearchWorksParams) ([]SearchWorksRow, error)
 	SetAcquisitionPath(ctx context.Context, arg SetAcquisitionPathParams) error
 	SetAcquisitionState(ctx context.Context, arg SetAcquisitionStateParams) error
