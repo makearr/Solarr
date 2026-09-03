@@ -25,6 +25,21 @@ When code is incorporated, record it as:
 
 ---
 
+## Corpus data (not code)
+
+`internal/parse/testdata/releases/seed.jsonl` — the ADR-18 parser golden corpus's seed
+entries use real release-name strings drawn from Lidarr's own public test fixtures
+(`src/NzbDrone.Core.Test/ParserTests/ParserFixture.cs`, `Lidarr/Lidarr`, GPL-3.0). ADR-18
+is explicit that this needs no permission at all ("release names are facts and short
+strings; collecting them raises no licensing concern") and it is not incorporated code —
+recorded here anyway for transparency. **The parser logic itself (`internal/parse/parse.go`)
+is an original implementation, not a port of Lidarr's C# regex parser**: this sandbox could
+not reliably fetch and verify Lidarr's actual source byte-for-byte, so rather than risk an
+inaccurate claim of reuse, the grammar was written from scratch and proven against the real
+input strings above instead. If a future session gets reliable access to port the real
+upstream regex/token tables, that would fall under "Release-name parsing" below and belongs
+in "Incorporated code" once it happens.
+
 ## Sanctioned reuse
 
 Radarr, Sonarr, Lidarr, Readarr, Whisparr and Prowlarr are **GPL-3.0**, which is compatible
