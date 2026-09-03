@@ -21,6 +21,7 @@ type Config struct {
 	Workers   Workers   `yaml:"workers"`
 	Logging   Logging   `yaml:"logging"`
 	Network   Network   `yaml:"network"`
+	Metadata  Metadata  `yaml:"metadata"`
 
 	// Mode is the dry-run level, enforced at the job executor (ADR-20).
 	Mode Mode `yaml:"mode"`
@@ -42,6 +43,31 @@ type PublicIPCheck struct {
 	Enabled  bool     `yaml:"enabled"`
 	Endpoint string   `yaml:"endpoint"`
 	Interval Duration `yaml:"interval"`
+}
+
+// DefaultMusicBrainzBaseURL is the public direct API (ADR-29).
+const DefaultMusicBrainzBaseURL = "https://musicbrainz.org/ws/2"
+
+// DefaultLidarrProxyBaseURL is the Servarr metadata proxy ADR-29 prefers as the
+// first provider -- aggregated, pre-joined, no API key.
+const DefaultLidarrProxyBaseURL = "https://api.lidarr.audio/api/v0.4"
+
+// Metadata is enrichment provider configuration (ADR-29).
+type Metadata struct {
+	MusicBrainz MusicBrainzConfig `yaml:"musicbrainz"`
+}
+
+// MusicBrainzConfig names the two sources ADR-29 tries in order: the Servarr proxy
+// first (preferred, never required), direct MusicBrainz as the fallback the proxy
+// always needs to be able to fall back to. A local mirror substitutes here behind
+// the same base_url with no change anywhere else.
+type MusicBrainzConfig struct {
+	BaseURL string `yaml:"base_url"`
+	// ProxyEnabled toggles trying the proxy first at all. Direct MusicBrainz is
+	// used either way -- it is never optional, since it is what the proxy falls
+	// back to (ADR-13's circuit breaker).
+	ProxyEnabled bool   `yaml:"proxy_enabled"`
+	ProxyBaseURL string `yaml:"proxy_base_url"`
 }
 
 // Server is the HTTP listener.
@@ -165,6 +191,11 @@ func Default() Config {
 			Enabled:  true,
 			Endpoint: DefaultPublicIPEndpoint,
 			Interval: Duration(6 * time.Hour),
+		}},
+		Metadata: Metadata{MusicBrainz: MusicBrainzConfig{
+			BaseURL:      DefaultMusicBrainzBaseURL,
+			ProxyEnabled: true,
+			ProxyBaseURL: DefaultLidarrProxyBaseURL,
 		}},
 		Mode: ModeNormal,
 	}
