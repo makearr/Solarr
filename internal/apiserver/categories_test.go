@@ -1,12 +1,30 @@
 package apiserver_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strconv"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/settings"
 )
+
+// fakeLibrarySize answers canned counter values per scope, so a test can assert
+// ListCategories reads "works"/"files" from exactly the scope key
+// library.CategoryCounters writes to ("category:<id>") without a real library.db.
+type fakeLibrarySize struct {
+	byScope map[string]map[string]int64
+}
+
+func (f fakeLibrarySize) Counters(_ context.Context, scope string) (map[string]int64, error) {
+	values, ok := f.byScope[scope]
+	if !ok {
+		return nil, errors.New("fake: no counters for scope " + scope)
+	}
+	return values, nil
+}
 
 // TestListCategories_ReturnsOnlyGrantedCategories is the core ADR-27
 // guarantee: a category the caller was not granted must never appear, and one
@@ -113,6 +131,67 @@ func TestListCategories_NoGrantsReturnsEmptyArray(t *testing.T) {
 	}
 	if len(body) != 0 {
 		t.Errorf("categories = %v, want empty: this user has no category grants", body)
+	}
+}
+
+// Counts come from the counter table via the scope key
+// library.CategoryCounters writes ("category:<id>"), never a live COUNT.
+func TestListCategories_IncludesCountsFromTheCounterTable(t *testing.T) {
+	librarySize := fakeLibrarySize{byScope: map[string]map[string]int64{}}
+	fixture := newWorksFixtureWithLibrarySize(t, librarySize)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	librarySize.byScope["category:"+strconv.FormatInt(category.ID, 10)] = map[string]int64{
+		"works": 42, "files": 137,
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/categories"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+
+	var body []struct {
+		ID    int64 `json:"id"`
+		Works int   `json:"works"`
+		Files int   `json:"files"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 1 || body[0].Works != 42 || body[0].Files != 137 {
+		t.Errorf("categories = %+v, want works=42 files=137", body)
+	}
+}
+
+// A category the counters sweep has never reconciled must answer 0, not fail
+// the whole list -- one figure being unavailable should not hide navigation.
+func TestListCategories_UnreconciledCategoryAnswersZero(t *testing.T) {
+	librarySize := fakeLibrarySize{byScope: map[string]map[string]int64{}}
+	fixture := newWorksFixtureWithLibrarySize(t, librarySize)
+	if _, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 100); err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/categories"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+
+	var body []struct {
+		Works int `json:"works"`
+		Files int `json:"files"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 1 || body[0].Works != 0 || body[0].Files != 0 {
+		t.Errorf("categories = %+v, want works=0 files=0, not an error", body)
 	}
 }
 

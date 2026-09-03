@@ -52,6 +52,10 @@ type Querier interface {
 	// Only 'primary' counts: a trailer belongs to the work without satisfying it.
 	CountPrimaryFiles(ctx context.Context, desiredItemID int64) (int64, error)
 	CountRollupOutcomes(ctx context.Context, since int64) ([]CountRollupOutcomesRow, error)
+	// The truth a category counter is checked against (library/categorycounts.go): every
+	// root folder's work count in one query, summed per category in Go since library.db
+	// does not know which root folders a category spans (ADR-25).
+	CountWorksByRootFolder(ctx context.Context) ([]CountWorksByRootFolderRow, error)
 	// Coverage: what a monitored person has produced against what is held (ADR-32).
 	CountWorksCreditedTo(ctx context.Context, arg CountWorksCreditedToParams) (int64, error)
 	CreateAcquisition(ctx context.Context, arg CreateAcquisitionParams) (Acquisition, error)

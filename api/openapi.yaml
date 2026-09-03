@@ -1032,6 +1032,13 @@ components:
         id: { type: integer, format: int64 }
         media_type: { type: string, example: "music" }
         name: { type: string }
+        works:
+          type: integer
+          description: >-
+            From the counter table (section 21.12), never a live COUNT. 0 until
+            the reconciliation sweep has run at least once.
+        files:
+          type: integer
 
 # Authenticated by default.
 security:

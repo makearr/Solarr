@@ -9,6 +9,42 @@ import (
 	"context"
 )
 
+const countWorksByRootFolder = `-- name: CountWorksByRootFolder :many
+SELECT root_folder_id, CAST(COUNT(DISTINCT work_id) AS INTEGER) AS total
+FROM work_root_folder GROUP BY root_folder_id ORDER BY root_folder_id
+`
+
+type CountWorksByRootFolderRow struct {
+	RootFolderID int64
+	Total        int64
+}
+
+// The truth a category counter is checked against (library/categorycounts.go): every
+// root folder's work count in one query, summed per category in Go since library.db
+// does not know which root folders a category spans (ADR-25).
+func (q *Queries) CountWorksByRootFolder(ctx context.Context) ([]CountWorksByRootFolderRow, error) {
+	rows, err := q.db.QueryContext(ctx, countWorksByRootFolder)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountWorksByRootFolderRow{}
+	for rows.Next() {
+		var i CountWorksByRootFolderRow
+		if err := rows.Scan(&i.RootFolderID, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const linkWorkRootFolder = `-- name: LinkWorkRootFolder :exec
 
 INSERT INTO work_root_folder (work_id, root_folder_id, first_seen_at)

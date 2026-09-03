@@ -677,6 +677,9 @@ export interface components {
             /** @example music */
             media_type: string;
             name: string;
+            /** @description From the counter table (section 21.12), never a live COUNT. 0 until the reconciliation sweep has run at least once. */
+            works?: number;
+            files?: number;
         };
     };
     responses: {

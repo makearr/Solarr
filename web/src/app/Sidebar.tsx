@@ -92,6 +92,11 @@ function CategoryLink({ category, active }: { category: Category; active: boolea
       >
         <Library aria-hidden className="size-4 shrink-0" />
         <span className="truncate">{category.name}</span>
+        {/* From the counter table (section 21.12), never a live COUNT; 0 until
+            the reconciliation sweep has run at least once. */}
+        {category.works != null && (
+          <span className="ml-auto shrink-0 text-xs text-ink-muted">{category.works}</span>
+        )}
       </Link>
     </li>
   );
