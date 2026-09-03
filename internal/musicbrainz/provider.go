@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/metacache"
@@ -44,10 +45,11 @@ const (
 // without this package needing to ask it first), permanent cache in front so a
 // repeat lookup costs nothing.
 type Provider struct {
-	sources []Source
-	cache   metacache.Cache
-	clock   clock.Clock
-	logger  *slog.Logger
+	sources      []Source
+	cache        metacache.Cache
+	clock        clock.Clock
+	logger       *slog.Logger
+	refreshAfter time.Duration
 }
 
 // Config is what a Provider needs. Sources are tried in order -- ADR-29 puts the
@@ -58,6 +60,9 @@ type Config struct {
 	Cache   metacache.Cache
 	Clock   clock.Clock
 	Logger  *slog.Logger
+	// RefreshAfter is how old a cache entry may be before it is treated as a miss
+	// (ADR-29's staleness policy). Zero means never expire -- today's behaviour.
+	RefreshAfter time.Duration
 }
 
 // New builds a Provider.
@@ -68,6 +73,7 @@ func New(config Config) Provider {
 	}
 	return Provider{
 		sources: config.Sources, cache: config.Cache, clock: config.Clock, logger: logger,
+		refreshAfter: config.RefreshAfter,
 	}
 }
 
@@ -98,11 +104,11 @@ func (p Provider) Album(
 
 func (p Provider) cached(ctx context.Context, releaseGroupMBID, releaseMBID string) (ReleaseGroup, Release, bool) {
 	rgEntry, err := p.cache.Get(ctx, cacheKindReleaseGroup, releaseGroupMBID)
-	if err != nil {
+	if err != nil || p.stale(rgEntry) {
 		return ReleaseGroup{}, Release{}, false
 	}
 	releaseEntry, err := p.cache.Get(ctx, cacheKindRelease, releaseMBID)
-	if err != nil {
+	if err != nil || p.stale(releaseEntry) {
 		return ReleaseGroup{}, Release{}, false
 	}
 
@@ -114,6 +120,13 @@ func (p Provider) cached(ctx context.Context, releaseGroupMBID, releaseMBID stri
 		return ReleaseGroup{}, Release{}, false
 	}
 	return rg, release, true
+}
+
+// stale reports whether entry is old enough to force a re-fetch. RefreshAfter
+// zero means never -- today's permanent-cache behaviour, so existing callers
+// that leave it unset are unaffected.
+func (p Provider) stale(entry metacache.Entry) bool {
+	return p.refreshAfter > 0 && p.clock.Now().Sub(entry.FetchedAt) >= p.refreshAfter
 }
 
 func (p Provider) remember(ctx context.Context, source string, rg ReleaseGroup, release Release) {
