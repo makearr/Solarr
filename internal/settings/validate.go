@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -56,6 +57,41 @@ func validateRootFolder(path string) config.Problems {
 		problems = append(problems, config.Problem{
 			Path: "path", Value: path, Expectation: "an absolute path",
 		})
+	}
+	return problems
+}
+
+// validateQualityProfile checks a quality profile before it is written (ADR-44).
+// This layer only guards what settings.db itself must never hold -- a name and
+// syntactically valid JSON. The rules' actual shape (gates/tiers/scoring, ADR-40)
+// is internal/score's to validate; settings does not import it (this package sits
+// below score in the dependency graph), so a structurally wrong-but-valid-JSON
+// policy is caught only when internal/score first evaluates it, not on write.
+func validateQualityProfile(name, rulesJSON, upgradeJSON string) config.Problems {
+	var problems config.Problems
+	if strings.TrimSpace(name) == "" {
+		problems = append(problems, config.Problem{Path: "name", Expectation: "a name"})
+	}
+	if !json.Valid([]byte(rulesJSON)) {
+		problems = append(problems, config.Problem{
+			Path: "rules", Value: rulesJSON, Expectation: "valid JSON",
+		})
+	}
+	if !json.Valid([]byte(upgradeJSON)) {
+		problems = append(problems, config.Problem{
+			Path: "upgrade", Value: upgradeJSON, Expectation: "valid JSON",
+		})
+	}
+	return problems
+}
+
+// validateLanguageProfile checks a language profile before it is written. An
+// empty preferred/required list is valid -- section 19.8 gives adult and music
+// categories no language policy at all.
+func validateLanguageProfile(name string) config.Problems {
+	var problems config.Problems
+	if strings.TrimSpace(name) == "" {
+		problems = append(problems, config.Problem{Path: "name", Expectation: "a name"})
 	}
 	return problems
 }

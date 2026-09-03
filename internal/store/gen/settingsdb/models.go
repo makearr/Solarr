@@ -27,10 +27,12 @@ type AppUser struct {
 }
 
 type Category struct {
-	ID           int64
-	MediaType    string
-	Name         string
-	PriorityRank int64
+	ID                int64
+	MediaType         string
+	Name              string
+	PriorityRank      int64
+	QualityProfileID  sql.NullInt64
+	LanguageProfileID sql.NullInt64
 }
 
 type CategoryRootFolder struct {
@@ -60,6 +62,24 @@ type InstanceSetting struct {
 	Key       string
 	ValueJson string
 	UpdatedAt int64
+}
+
+type LanguageProfile struct {
+	ID                    int64
+	Name                  string
+	AudioPreferredJson    string
+	AudioRequiredJson     sql.NullString
+	SubtitlePreferredJson sql.NullString
+	SubtitleRequiredJson  sql.NullString
+	PreferOriginalAudio   int64
+	RejectDubbed          int64
+}
+
+type QualityProfile struct {
+	ID          int64
+	Name        string
+	RulesJson   string
+	UpgradeJson string
 }
 
 type RootFolder struct {

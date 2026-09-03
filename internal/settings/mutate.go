@@ -3,6 +3,7 @@ package settings
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -103,6 +104,236 @@ func (c *Cache) DeleteCategory(ctx context.Context, id int64) error {
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		return queries.DeleteCategory(ctx, id)
 	})
+}
+
+// CreateQualityProfile adds a quality profile (ADR-40). Deep validation of
+// rulesJSON's shape belongs to internal/score, the only package that interprets
+// it; this layer checks only what settings.db itself must never hold: a name and
+// syntactically valid JSON (ADR-44 -- a bad policy must be refused on write, not
+// discovered later at startup).
+func (c *Cache) CreateQualityProfile(ctx context.Context, name, rulesJSON, upgradeJSON string) (QualityProfile, error) {
+	if problems := validateQualityProfile(name, rulesJSON, upgradeJSON); len(problems) > 0 {
+		return QualityProfile{}, problems
+	}
+
+	var created settingsdb.QualityProfile
+	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		row, err := queries.CreateQualityProfile(ctx, settingsdb.CreateQualityProfileParams{
+			Name: name, RulesJson: rulesJSON, UpgradeJson: upgradeJSON,
+		})
+		created = row
+		return err
+	})
+	if err != nil {
+		return QualityProfile{}, fmt.Errorf("settings: create quality profile %q: %w", name, err)
+	}
+	return QualityProfile{ID: created.ID, Name: created.Name, RulesJSON: created.RulesJson,
+		UpgradeJSON: created.UpgradeJson}, nil
+}
+
+// UpdateQualityProfile replaces a quality profile's policy.
+func (c *Cache) UpdateQualityProfile(ctx context.Context, id int64, name, rulesJSON, upgradeJSON string) error {
+	if _, found := c.Snapshot().QualityProfile(id); !found {
+		return fmt.Errorf("%w: quality profile %d", ErrNotFound, id)
+	}
+	if problems := validateQualityProfile(name, rulesJSON, upgradeJSON); len(problems) > 0 {
+		return problems
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.UpdateQualityProfile(ctx, settingsdb.UpdateQualityProfileParams{
+			Name: name, RulesJson: rulesJSON, UpgradeJson: upgradeJSON, ID: id,
+		})
+	})
+}
+
+// DeleteQualityProfile removes a quality profile, or refuses and says which
+// categories still default to it. A desired_item in library.db may also still
+// reference it (ADR-25 forbids the cross-database FK that would let this check
+// see that) -- not yet possible to create, since desired_item creation for music
+// is itself blocked on this profile system existing at all.
+func (c *Cache) DeleteQualityProfile(ctx context.Context, id int64) error {
+	if _, found := c.Snapshot().QualityProfile(id); !found {
+		return fmt.Errorf("%w: quality profile %d", ErrNotFound, id)
+	}
+	categories, err := c.queries.CountCategoriesUsingQualityProfile(ctx, sql.NullInt64{Int64: id, Valid: true})
+	if err != nil {
+		return fmt.Errorf("settings: count categories for quality profile %d: %w", id, err)
+	}
+	if categories > 0 {
+		return &InUseError{Entity: "quality profile", ID: id,
+			References: []Reference{{Kind: "categories", Count: categories}}}
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.DeleteQualityProfile(ctx, id)
+	})
+}
+
+// CreateLanguageProfile adds a language profile (section 19.8).
+func (c *Cache) CreateLanguageProfile(ctx context.Context, profile LanguageProfile) (LanguageProfile, error) {
+	if problems := validateLanguageProfile(profile.Name); len(problems) > 0 {
+		return LanguageProfile{}, problems
+	}
+	audioPreferred, err := encodeStringArray(profile.AudioPreferred)
+	if err != nil {
+		return LanguageProfile{}, fmt.Errorf("settings: encode audio_preferred: %w", err)
+	}
+	audioRequired, err := encodeOptionalStringArray(profile.AudioRequired)
+	if err != nil {
+		return LanguageProfile{}, fmt.Errorf("settings: encode audio_required: %w", err)
+	}
+	subtitlePreferred, err := encodeOptionalStringArray(profile.SubtitlePreferred)
+	if err != nil {
+		return LanguageProfile{}, fmt.Errorf("settings: encode subtitle_preferred: %w", err)
+	}
+	subtitleRequired, err := encodeOptionalStringArray(profile.SubtitleRequired)
+	if err != nil {
+		return LanguageProfile{}, fmt.Errorf("settings: encode subtitle_required: %w", err)
+	}
+
+	var created settingsdb.LanguageProfile
+	err = c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		row, err := queries.CreateLanguageProfile(ctx, settingsdb.CreateLanguageProfileParams{
+			Name:                  profile.Name,
+			AudioPreferredJson:    audioPreferred,
+			AudioRequiredJson:     audioRequired,
+			SubtitlePreferredJson: subtitlePreferred,
+			SubtitleRequiredJson:  subtitleRequired,
+			PreferOriginalAudio:   boolToInt(profile.PreferOriginalAudio),
+			RejectDubbed:          boolToInt(profile.RejectDubbed),
+		})
+		created = row
+		return err
+	})
+	if err != nil {
+		return LanguageProfile{}, fmt.Errorf("settings: create language profile %q: %w", profile.Name, err)
+	}
+	saved, found := c.Snapshot().LanguageProfile(created.ID)
+	if !found {
+		return LanguageProfile{}, fmt.Errorf("settings: language profile %d vanished after create", created.ID)
+	}
+	return saved, nil
+}
+
+// UpdateLanguageProfile replaces a language profile's policy.
+func (c *Cache) UpdateLanguageProfile(ctx context.Context, id int64, profile LanguageProfile) error {
+	if _, found := c.Snapshot().LanguageProfile(id); !found {
+		return fmt.Errorf("%w: language profile %d", ErrNotFound, id)
+	}
+	if problems := validateLanguageProfile(profile.Name); len(problems) > 0 {
+		return problems
+	}
+	audioPreferred, err := encodeStringArray(profile.AudioPreferred)
+	if err != nil {
+		return fmt.Errorf("settings: encode audio_preferred: %w", err)
+	}
+	audioRequired, err := encodeOptionalStringArray(profile.AudioRequired)
+	if err != nil {
+		return fmt.Errorf("settings: encode audio_required: %w", err)
+	}
+	subtitlePreferred, err := encodeOptionalStringArray(profile.SubtitlePreferred)
+	if err != nil {
+		return fmt.Errorf("settings: encode subtitle_preferred: %w", err)
+	}
+	subtitleRequired, err := encodeOptionalStringArray(profile.SubtitleRequired)
+	if err != nil {
+		return fmt.Errorf("settings: encode subtitle_required: %w", err)
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.UpdateLanguageProfile(ctx, settingsdb.UpdateLanguageProfileParams{
+			Name:                  profile.Name,
+			AudioPreferredJson:    audioPreferred,
+			AudioRequiredJson:     audioRequired,
+			SubtitlePreferredJson: subtitlePreferred,
+			SubtitleRequiredJson:  subtitleRequired,
+			PreferOriginalAudio:   boolToInt(profile.PreferOriginalAudio),
+			RejectDubbed:          boolToInt(profile.RejectDubbed),
+			ID:                    id,
+		})
+	})
+}
+
+// DeleteLanguageProfile removes a language profile, or refuses and says which
+// categories still default to it.
+func (c *Cache) DeleteLanguageProfile(ctx context.Context, id int64) error {
+	if _, found := c.Snapshot().LanguageProfile(id); !found {
+		return fmt.Errorf("%w: language profile %d", ErrNotFound, id)
+	}
+	categories, err := c.queries.CountCategoriesUsingLanguageProfile(ctx, sql.NullInt64{Int64: id, Valid: true})
+	if err != nil {
+		return fmt.Errorf("settings: count categories for language profile %d: %w", id, err)
+	}
+	if categories > 0 {
+		return &InUseError{Entity: "language profile", ID: id,
+			References: []Reference{{Kind: "categories", Count: categories}}}
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.DeleteLanguageProfile(ctx, id)
+	})
+}
+
+// SetCategoryQualityProfile sets or clears (nil) a category's default quality profile.
+func (c *Cache) SetCategoryQualityProfile(ctx context.Context, categoryID int64, profileID *int64) error {
+	snapshot := c.Snapshot()
+	if _, found := snapshot.Category(categoryID); !found {
+		return fmt.Errorf("%w: category %d", ErrNotFound, categoryID)
+	}
+	if profileID != nil {
+		if _, found := snapshot.QualityProfile(*profileID); !found {
+			return fmt.Errorf("%w: quality profile %d", ErrNotFound, *profileID)
+		}
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetCategoryQualityProfile(ctx, settingsdb.SetCategoryQualityProfileParams{
+			QualityProfileID: int64PtrToNull(profileID), ID: categoryID,
+		})
+	})
+}
+
+// SetCategoryLanguageProfile sets or clears (nil) a category's default language profile.
+func (c *Cache) SetCategoryLanguageProfile(ctx context.Context, categoryID int64, profileID *int64) error {
+	snapshot := c.Snapshot()
+	if _, found := snapshot.Category(categoryID); !found {
+		return fmt.Errorf("%w: category %d", ErrNotFound, categoryID)
+	}
+	if profileID != nil {
+		if _, found := snapshot.LanguageProfile(*profileID); !found {
+			return fmt.Errorf("%w: language profile %d", ErrNotFound, *profileID)
+		}
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetCategoryLanguageProfile(ctx, settingsdb.SetCategoryLanguageProfileParams{
+			LanguageProfileID: int64PtrToNull(profileID), ID: categoryID,
+		})
+	})
+}
+
+func int64PtrToNull(id *int64) sql.NullInt64 {
+	if id == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: *id, Valid: true}
+}
+
+func encodeStringArray(values []string) (string, error) {
+	if values == nil {
+		values = []string{}
+	}
+	raw, err := json.Marshal(values)
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
+}
+
+func encodeOptionalStringArray(values []string) (sql.NullString, error) {
+	if len(values) == 0 {
+		return sql.NullString{}, nil
+	}
+	raw, err := json.Marshal(values)
+	if err != nil {
+		return sql.NullString{}, err
+	}
+	return sql.NullString{String: string(raw), Valid: true}, nil
 }
 
 // CreateRootFolder adds a root folder.

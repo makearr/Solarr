@@ -4,19 +4,23 @@ import "slices"
 
 // Snapshot is an immutable view of settings.db (ADR-25).
 type Snapshot struct {
-	users        []User
-	categories   []Category
-	rootFolders  []RootFolder
-	categoryRoot []CategoryRoot
+	users            []User
+	categories       []Category
+	rootFolders      []RootFolder
+	categoryRoot     []CategoryRoot
+	qualityProfiles  []QualityProfile
+	languageProfiles []LanguageProfile
 	// policy is instance-wide settings by key, read through typed accessors.
 	policy map[string]string
 
 	// Indexes, built once, so a lookup is a map hit rather than a scan.
-	userByID       map[int64]User
-	userByUsername map[string]User
-	categoryByID   map[int64]Category
-	rootFolderByID map[int64]RootFolder
-	accessByUser   map[int64]map[int64]Permission
+	userByID            map[int64]User
+	userByUsername      map[string]User
+	categoryByID        map[int64]Category
+	rootFolderByID      map[int64]RootFolder
+	accessByUser        map[int64]map[int64]Permission
+	qualityProfileByID  map[int64]QualityProfile
+	languageProfileByID map[int64]LanguageProfile
 }
 
 // Users returns every account, ordered by username.
@@ -54,6 +58,24 @@ func (s *Snapshot) Category(id int64) (Category, bool) {
 func (s *Snapshot) RootFolder(id int64) (RootFolder, bool) {
 	folder, found := s.rootFolderByID[id]
 	return folder, found
+}
+
+// QualityProfiles returns every quality profile, ordered by name.
+func (s *Snapshot) QualityProfiles() []QualityProfile { return s.qualityProfiles }
+
+// QualityProfile looks up a quality profile by id.
+func (s *Snapshot) QualityProfile(id int64) (QualityProfile, bool) {
+	profile, found := s.qualityProfileByID[id]
+	return profile, found
+}
+
+// LanguageProfiles returns every language profile, ordered by name.
+func (s *Snapshot) LanguageProfiles() []LanguageProfile { return s.languageProfiles }
+
+// LanguageProfile looks up a language profile by id.
+func (s *Snapshot) LanguageProfile(id int64) (LanguageProfile, bool) {
+	profile, found := s.languageProfileByID[id]
+	return profile, found
 }
 
 // Permission reports what a user may do in a category. An absent grant is None:
@@ -97,18 +119,23 @@ func (s *Snapshot) RootFoldersForCategory(categoryID int64) []RootFolder {
 // keeping a reference cannot mutate a published snapshot.
 func newSnapshot(users []User, categories []Category, rootFolders []RootFolder,
 	attachments []CategoryRoot, access map[int64]map[int64]Permission,
+	qualityProfiles []QualityProfile, languageProfiles []LanguageProfile,
 	policy map[string]string) *Snapshot {
 	snapshot := &Snapshot{
-		policy:         policy,
-		users:          slices.Clone(users),
-		categories:     slices.Clone(categories),
-		rootFolders:    slices.Clone(rootFolders),
-		categoryRoot:   slices.Clone(attachments),
-		userByID:       make(map[int64]User, len(users)),
-		userByUsername: make(map[string]User, len(users)),
-		categoryByID:   make(map[int64]Category, len(categories)),
-		rootFolderByID: make(map[int64]RootFolder, len(rootFolders)),
-		accessByUser:   access,
+		policy:              policy,
+		users:               slices.Clone(users),
+		categories:          slices.Clone(categories),
+		rootFolders:         slices.Clone(rootFolders),
+		categoryRoot:        slices.Clone(attachments),
+		qualityProfiles:     slices.Clone(qualityProfiles),
+		languageProfiles:    slices.Clone(languageProfiles),
+		userByID:            make(map[int64]User, len(users)),
+		userByUsername:      make(map[string]User, len(users)),
+		categoryByID:        make(map[int64]Category, len(categories)),
+		rootFolderByID:      make(map[int64]RootFolder, len(rootFolders)),
+		accessByUser:        access,
+		qualityProfileByID:  make(map[int64]QualityProfile, len(qualityProfiles)),
+		languageProfileByID: make(map[int64]LanguageProfile, len(languageProfiles)),
 	}
 	for _, user := range snapshot.users {
 		snapshot.userByID[user.ID] = user
@@ -119,6 +146,12 @@ func newSnapshot(users []User, categories []Category, rootFolders []RootFolder,
 	}
 	for _, folder := range snapshot.rootFolders {
 		snapshot.rootFolderByID[folder.ID] = folder
+	}
+	for _, profile := range snapshot.qualityProfiles {
+		snapshot.qualityProfileByID[profile.ID] = profile
+	}
+	for _, profile := range snapshot.languageProfiles {
+		snapshot.languageProfileByID[profile.ID] = profile
 	}
 	return snapshot
 }

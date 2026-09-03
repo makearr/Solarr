@@ -80,6 +80,35 @@ type Category struct {
 	// PriorityRank feeds the composite acquisition priority (ADR-36). Lower is
 	// more important.
 	PriorityRank int64
+	// QualityProfileID and LanguageProfileID are nil until a profile is chosen;
+	// both are section 19.1/19.8 category-level defaults, not requirements.
+	QualityProfileID  *int64
+	LanguageProfileID *int64
+}
+
+// QualityProfile is ADR-40's policy, evaluated by internal/score: hard gates, then
+// lexicographic tiers, then an additive score. RulesJSON and UpgradeJSON are kept
+// as raw JSON here -- internal/score owns the parsed shape, since it is the only
+// package that interprets them.
+type QualityProfile struct {
+	ID          int64
+	Name        string
+	RulesJSON   string
+	UpgradeJSON string
+}
+
+// LanguageProfile is section 19.8's policy: language is its own axis, belonging to
+// a category rather than a media type. Required is any_of semantics -- at least one
+// listed language must be present, evaluated from the probe, never the release name.
+type LanguageProfile struct {
+	ID                  int64
+	Name                string
+	AudioPreferred      []string
+	AudioRequired       []string
+	SubtitlePreferred   []string
+	SubtitleRequired    []string
+	PreferOriginalAudio bool
+	RejectDubbed        bool
 }
 
 // RootFolder is a directory the library is stored in.

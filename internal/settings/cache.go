@@ -3,6 +3,7 @@ package settings
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -103,6 +104,14 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("settings: list category access: %w", err)
 	}
+	qualityProfiles, err := c.queries.ListQualityProfiles(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list quality profiles: %w", err)
+	}
+	languageProfiles, err := c.queries.ListLanguageProfiles(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list language profiles: %w", err)
+	}
 
 	stored, err := c.queries.ListInstanceSettings(ctx)
 	if err != nil {
@@ -121,12 +130,19 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 		access[grant.UserID][grant.CategoryID] = Permission(grant.Permission)
 	}
 
+	convertedLanguageProfiles, err := convertLanguageProfiles(languageProfiles)
+	if err != nil {
+		return nil, err
+	}
+
 	return newSnapshot(
 		convertUsers(users),
 		convertCategories(categories),
 		convertRootFolders(rootFolders),
 		convertAttachments(attachments),
 		access,
+		convertQualityProfiles(qualityProfiles),
+		convertedLanguageProfiles,
 		policy,
 	), nil
 }
@@ -152,13 +168,86 @@ func convertCategories(rows []settingsdb.Category) []Category {
 	categories := make([]Category, 0, len(rows))
 	for _, row := range rows {
 		categories = append(categories, Category{
-			ID:           row.ID,
-			MediaType:    row.MediaType,
-			Name:         row.Name,
-			PriorityRank: row.PriorityRank,
+			ID:                row.ID,
+			MediaType:         row.MediaType,
+			Name:              row.Name,
+			PriorityRank:      row.PriorityRank,
+			QualityProfileID:  nullInt64Ptr(row.QualityProfileID),
+			LanguageProfileID: nullInt64Ptr(row.LanguageProfileID),
 		})
 	}
 	return categories
+}
+
+// nullInt64Ptr turns a nullable database column into the pointer form the
+// snapshot's typed accessors use, since "not set" and "set to zero" must stay
+// distinguishable.
+func nullInt64Ptr(v sql.NullInt64) *int64 {
+	if !v.Valid {
+		return nil
+	}
+	id := v.Int64
+	return &id
+}
+
+func convertQualityProfiles(rows []settingsdb.QualityProfile) []QualityProfile {
+	profiles := make([]QualityProfile, 0, len(rows))
+	for _, row := range rows {
+		profiles = append(profiles, QualityProfile{
+			ID:          row.ID,
+			Name:        row.Name,
+			RulesJSON:   row.RulesJson,
+			UpgradeJSON: row.UpgradeJson,
+		})
+	}
+	return profiles
+}
+
+func convertLanguageProfiles(rows []settingsdb.LanguageProfile) ([]LanguageProfile, error) {
+	profiles := make([]LanguageProfile, 0, len(rows))
+	for _, row := range rows {
+		audioPreferred, err := decodeStringArray(row.AudioPreferredJson)
+		if err != nil {
+			return nil, fmt.Errorf("settings: language profile %q audio_preferred: %w", row.Name, err)
+		}
+		audioRequired, err := decodeStringArray(row.AudioRequiredJson.String)
+		if err != nil {
+			return nil, fmt.Errorf("settings: language profile %q audio_required: %w", row.Name, err)
+		}
+		subtitlePreferred, err := decodeStringArray(row.SubtitlePreferredJson.String)
+		if err != nil {
+			return nil, fmt.Errorf("settings: language profile %q subtitle_preferred: %w", row.Name, err)
+		}
+		subtitleRequired, err := decodeStringArray(row.SubtitleRequiredJson.String)
+		if err != nil {
+			return nil, fmt.Errorf("settings: language profile %q subtitle_required: %w", row.Name, err)
+		}
+		profiles = append(profiles, LanguageProfile{
+			ID:                  row.ID,
+			Name:                row.Name,
+			AudioPreferred:      audioPreferred,
+			AudioRequired:       audioRequired,
+			SubtitlePreferred:   subtitlePreferred,
+			SubtitleRequired:    subtitleRequired,
+			PreferOriginalAudio: row.PreferOriginalAudio != 0,
+			RejectDubbed:        row.RejectDubbed != 0,
+		})
+	}
+	return profiles, nil
+}
+
+// decodeStringArray reads a nullable JSON array column. An empty string (the
+// column's SQL NULL) means "no list", not "empty JSON" -- json.Unmarshal is
+// never asked to parse an empty string.
+func decodeStringArray(raw string) ([]string, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	var values []string
+	if err := json.Unmarshal([]byte(raw), &values); err != nil {
+		return nil, err
+	}
+	return values, nil
 }
 
 func convertRootFolders(rows []settingsdb.RootFolder) []RootFolder {

@@ -11,6 +11,9 @@ import (
 
 type Querier interface {
 	AttachRootFolderToCategory(ctx context.Context, arg AttachRootFolderToCategoryParams) error
+	CountCategoriesUsingLanguageProfile(ctx context.Context, languageProfileID sql.NullInt64) (int64, error)
+	// Invariant 41: deleting a profile in use is refused with a count of what references it.
+	CountCategoriesUsingQualityProfile(ctx context.Context, qualityProfileID sql.NullInt64) (int64, error)
 	// Invariant 41: deleting an entity in use is refused with a count of what
 	// references it, so the user gets a reason rather than a constraint violation.
 	CountCategoriesUsingRootFolder(ctx context.Context, rootFolderID int64) (int64, error)
@@ -24,12 +27,16 @@ type Querier interface {
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	// Autonomous discovery jobs (ADR-38). Policy, so this stays in settings.db.
 	CreateDiscoveryJob(ctx context.Context, arg CreateDiscoveryJobParams) (DiscoveryJob, error)
+	CreateLanguageProfile(ctx context.Context, arg CreateLanguageProfileParams) (LanguageProfile, error)
+	CreateQualityProfile(ctx context.Context, arg CreateQualityProfileParams) (QualityProfile, error)
 	CreateRootFolder(ctx context.Context, arg CreateRootFolderParams) (RootFolder, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (AppUser, error)
 	DeleteAPIKey(ctx context.Context, id int64) error
 	DeleteCategory(ctx context.Context, id int64) error
 	DeleteDiscoveryJob(ctx context.Context, id int64) error
+	DeleteLanguageProfile(ctx context.Context, id int64) error
 	DeletePreference(ctx context.Context, arg DeletePreferenceParams) error
+	DeleteQualityProfile(ctx context.Context, id int64) error
 	DeleteRootFolder(ctx context.Context, id int64) error
 	DeleteUser(ctx context.Context, id int64) error
 	DetachRootFolderFromCategory(ctx context.Context, arg DetachRootFolderFromCategoryParams) error
@@ -37,6 +44,8 @@ type Querier interface {
 	GetCategory(ctx context.Context, id int64) (Category, error)
 	GetDiscoveryJob(ctx context.Context, id int64) (DiscoveryJob, error)
 	GetInstanceSetting(ctx context.Context, key string) (InstanceSetting, error)
+	GetLanguageProfile(ctx context.Context, id int64) (LanguageProfile, error)
+	GetQualityProfile(ctx context.Context, id int64) (QualityProfile, error)
 	GetRootFolder(ctx context.Context, id int64) (RootFolder, error)
 	GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetUserByAPIKeyHashRow, error)
 	// Columns are listed explicitly rather than with *, so adding one cannot
@@ -53,12 +62,17 @@ type Querier interface {
 	ListEnabledDiscoveryJobs(ctx context.Context) ([]DiscoveryJob, error)
 	// Instance-wide policy, seeded from config.yml and changeable afterwards (ADR-21).
 	ListInstanceSettings(ctx context.Context) ([]InstanceSetting, error)
+	ListLanguageProfiles(ctx context.Context) ([]LanguageProfile, error)
 	ListPreferencesForUser(ctx context.Context, userID int64) ([]UserPreference, error)
+	// Quality and language profiles (ADR-40, section 19.8).
+	ListQualityProfiles(ctx context.Context) ([]QualityProfile, error)
 	ListRootFolders(ctx context.Context) ([]RootFolder, error)
 	ListUsers(ctx context.Context) ([]AppUser, error)
 	RecordDiscoveryJobRun(ctx context.Context, arg RecordDiscoveryJobRunParams) error
 	RevokeCategoryAccess(ctx context.Context, arg RevokeCategoryAccessParams) error
 	SetCategoryAccess(ctx context.Context, arg SetCategoryAccessParams) error
+	SetCategoryLanguageProfile(ctx context.Context, arg SetCategoryLanguageProfileParams) error
+	SetCategoryQualityProfile(ctx context.Context, arg SetCategoryQualityProfileParams) error
 	// The enable transition on its own: this is the "preview before enabling" gate, a
 	// deliberate act distinct from editing a job's policy.
 	SetDiscoveryJobEnabled(ctx context.Context, arg SetDiscoveryJobEnabledParams) error
@@ -71,6 +85,8 @@ type Querier interface {
 	TouchAPIKey(ctx context.Context, arg TouchAPIKeyParams) error
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) error
 	UpdateDiscoveryJob(ctx context.Context, arg UpdateDiscoveryJobParams) error
+	UpdateLanguageProfile(ctx context.Context, arg UpdateLanguageProfileParams) error
+	UpdateQualityProfile(ctx context.Context, arg UpdateQualityProfileParams) error
 }
 
 var _ Querier = (*Queries)(nil)
