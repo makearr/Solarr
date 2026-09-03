@@ -29,9 +29,10 @@ func (p *process) registerScanJob(registry *jobs.Registry, executor *jobs.Execut
 	if err := registry.Register(scan.Definition); err != nil {
 		return err
 	}
+	physical := library.NewPhysical(p.library)
 	consumer := music.NewConsumer(music.ConsumerConfig{
 		FS:       p.fsys,
-		Physical: library.NewPhysical(p.library),
+		Physical: physical,
 		Identity: library.NewIdentity(p.library),
 		Clock:    clock.NewSystem(),
 		Logger:   p.logger,
@@ -42,6 +43,7 @@ func (p *process) registerScanJob(registry *jobs.Registry, executor *jobs.Execut
 		Roots:    cacheRoots{cache: p.cache},
 		Tool:     mediatool.New(nil, 0),
 		Consumer: consumer,
+		Physical: physical,
 		Clock:    clock.NewSystem(),
 		Logger:   p.logger,
 		Include:  scan.IsAudio,

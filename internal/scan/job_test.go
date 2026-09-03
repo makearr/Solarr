@@ -2,6 +2,7 @@ package scan_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -20,6 +21,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/scan"
 	"github.com/makearr/MediaNexus/internal/settings"
 	"github.com/makearr/MediaNexus/internal/store"
+	"github.com/makearr/MediaNexus/internal/store/gen/librarydb"
 	"github.com/makearr/MediaNexus/migrations"
 )
 
@@ -173,9 +175,52 @@ func (f *jobFixture) job(t *testing.T, include func(string) bool) *scan.Job {
 	t.Helper()
 	return scan.NewJob(scan.Config{
 		FS: f.fsys, Scans: library.NewScans(f.store), Roots: f.roots,
-		Tool: f.tool, Consumer: f.recorder, Clock: f.clock,
-		Logger: slog.New(slog.DiscardHandler), Include: include,
+		Tool: f.tool, Consumer: f.recorder, Physical: library.NewPhysical(f.store),
+		Clock: f.clock, Logger: slog.New(slog.DiscardHandler), Include: include,
 	})
+}
+
+// stalePath inserts a library_path row directly, bypassing the sweep entirely, so a
+// test can plant something for the mark-missing pass to find without it ever being a
+// file the walk would see. lastSeenAt is Unix seconds.
+func (f *jobFixture) stalePath(t *testing.T, relPath string, lastSeenAt int64) int64 {
+	t.Helper()
+	var id int64
+	err := f.store.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(f.store.Read()).WithTx(tx)
+		objectID, err := queries.CreateMediaObject(ctx, librarydb.CreateMediaObjectParams{
+			SizeBytes: 1, QuickHash: relPath, FirstSeenAt: lastSeenAt,
+		})
+		if err != nil {
+			return err
+		}
+		id, err = queries.AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+			MediaObjectID: objectID, RootFolderID: 1, RelPath: relPath,
+			LinkKind: "primary", IsPrimary: 1, CreatedAt: lastSeenAt, LastSeenAt: lastSeenAt,
+		})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("stalePath(%q): %v", relPath, err)
+	}
+	return id
+}
+
+// missingSince reads back whether one library_path is currently marked missing.
+func (f *jobFixture) missingSince(t *testing.T, pathID int64) sql.NullInt64 {
+	t.Helper()
+	all, err := librarydb.New(f.store.Read()).ListPathsInRoot(t.Context(),
+		librarydb.ListPathsInRootParams{RootFolderID: 1, AfterID: 0, PageSize: 1000})
+	if err != nil {
+		t.Fatalf("ListPathsInRoot: %v", err)
+	}
+	for _, row := range all {
+		if row.ID == pathID {
+			return row.MissingSince
+		}
+	}
+	t.Fatalf("path %d not found", pathID)
+	return sql.NullInt64{}
 }
 
 func (f *jobFixture) run(t *testing.T, handler *scan.Job, payload scan.Payload) error {
@@ -401,6 +446,46 @@ func TestIsAudio_AcceptsTheContainersStageThreeReads(t *testing.T) {
 		if scan.IsAudio(relPath) {
 			t.Errorf("IsAudio(%q) = true", relPath)
 		}
+	}
+}
+
+// The safety-critical behaviour of the whole feature (section 10.4): only a full
+// sweep visited every directory, so only a full sweep is evidence that a path it
+// never touched is actually gone.
+func TestJob_FullSweepMarksStalePathsMissing(t *testing.T) {
+	fixture := newJobFixture(t, "a/01.flac")
+	// Planted directly, well before the sweep runs, at a location the walk never
+	// visits -- the walk finishing without seeing it is exactly what should mark it.
+	staleID := fixture.stalePath(t, "gone/vanished.flac", fixture.clock.Now().Unix())
+	handler := fixture.job(t, scan.IsAudio)
+
+	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, Full: true}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if missing := fixture.missingSince(t, staleID); !missing.Valid {
+		t.Error("a path the full sweep never saw again was not marked missing")
+	}
+}
+
+// An incremental sweep can skip whole directories whose mtime did not move, so a
+// path it did not re-observe is not evidence of anything -- marking it missing here
+// would be wrong, not merely unhelpful.
+func TestJob_IncrementalSweepDoesNotMarkPathsMissing(t *testing.T) {
+	fixture := newJobFixture(t, "a/01.flac")
+	handler := fixture.job(t, scan.IsAudio)
+	// A completed full sweep first, so the second run is a genuine incremental one.
+	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, Full: true}); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+
+	staleID := fixture.stalePath(t, "gone/vanished.flac", fixture.clock.Now().Unix())
+	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1}); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+
+	if missing := fixture.missingSince(t, staleID); missing.Valid {
+		t.Error("an incremental sweep marked a path missing, but it never re-examined that directory")
 	}
 }
 

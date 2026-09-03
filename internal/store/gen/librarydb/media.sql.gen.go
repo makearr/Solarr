@@ -12,8 +12,8 @@ import (
 
 const addLibraryPath = `-- name: AddLibraryPath :execlastid
 INSERT INTO library_path (media_object_id, root_folder_id, rel_path, link_kind,
-                          is_primary, created_at)
-VALUES (?, ?, ?, ?, ?, ?)
+                          is_primary, created_at, last_seen_at, missing_since)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type AddLibraryPathParams struct {
@@ -23,6 +23,8 @@ type AddLibraryPathParams struct {
 	LinkKind      string
 	IsPrimary     int64
 	CreatedAt     int64
+	LastSeenAt    int64
+	MissingSince  sql.NullInt64
 }
 
 // The second half of importing a file, and execlastid for the same reason.
@@ -34,6 +36,8 @@ func (q *Queries) AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) 
 		arg.LinkKind,
 		arg.IsPrimary,
 		arg.CreatedAt,
+		arg.LastSeenAt,
+		arg.MissingSince,
 	)
 	if err != nil {
 		return 0, err
@@ -328,7 +332,8 @@ func (q *Queries) GetMediaObjectByOshash(ctx context.Context, oshash sql.NullStr
 }
 
 const getPathByLocation = `-- name: GetPathByLocation :one
-SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary, created_at
+SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary,
+       created_at, last_seen_at, missing_since
 FROM library_path WHERE root_folder_id = ? AND rel_path = ?
 `
 
@@ -348,6 +353,8 @@ func (q *Queries) GetPathByLocation(ctx context.Context, arg GetPathByLocationPa
 		&i.LinkKind,
 		&i.IsPrimary,
 		&i.CreatedAt,
+		&i.LastSeenAt,
+		&i.MissingSince,
 	)
 	return i, err
 }
@@ -445,7 +452,8 @@ func (q *Queries) InternAttributes(ctx context.Context, arg InternAttributesPara
 }
 
 const listPathsForObject = `-- name: ListPathsForObject :many
-SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary, created_at
+SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary,
+       created_at, last_seen_at, missing_since
 FROM library_path WHERE media_object_id = ? ORDER BY is_primary DESC, id
 `
 
@@ -466,6 +474,8 @@ func (q *Queries) ListPathsForObject(ctx context.Context, mediaObjectID int64) (
 			&i.LinkKind,
 			&i.IsPrimary,
 			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.MissingSince,
 		); err != nil {
 			return nil, err
 		}
@@ -481,7 +491,8 @@ func (q *Queries) ListPathsForObject(ctx context.Context, mediaObjectID int64) (
 }
 
 const listPathsInRoot = `-- name: ListPathsInRoot :many
-SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary, created_at
+SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary,
+       created_at, last_seen_at, missing_since
 FROM library_path
 WHERE root_folder_id = ?1 AND id > ?2
 ORDER BY id
@@ -513,6 +524,8 @@ func (q *Queries) ListPathsInRoot(ctx context.Context, arg ListPathsInRootParams
 			&i.LinkKind,
 			&i.IsPrimary,
 			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.MissingSince,
 		); err != nil {
 			return nil, err
 		}
@@ -625,6 +638,37 @@ func (q *Queries) ListUnfingerprinted(ctx context.Context, arg ListUnfingerprint
 	return items, nil
 }
 
+const markLibraryPathsMissing = `-- name: MarkLibraryPathsMissing :execrows
+UPDATE library_path SET missing_since = ?
+WHERE id IN (
+  SELECT p.id FROM library_path p
+  WHERE p.root_folder_id = ? AND p.last_seen_at < ? AND p.missing_since IS NULL
+  LIMIT ?
+)
+`
+
+type MarkLibraryPathsMissingParams struct {
+	MissingSince sql.NullInt64
+	RootFolderID int64
+	LastSeenAt   int64
+	Limit        int64
+}
+
+// Bounded per Invariant 2: the caller loops this until a pass affects zero rows,
+// never one UPDATE over the whole root.
+func (q *Queries) MarkLibraryPathsMissing(ctx context.Context, arg MarkLibraryPathsMissingParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markLibraryPathsMissing,
+		arg.MissingSince,
+		arg.RootFolderID,
+		arg.LastSeenAt,
+		arg.Limit,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setFingerprints = `-- name: SetFingerprints :exec
 UPDATE media_object
 SET oshash = ?, phash = ?, audio_fp = ?, audio_fp_prefix = ?, fingerprinted_at = ?
@@ -692,5 +736,22 @@ func (q *Queries) SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttr
 		arg.VerifiedAt,
 		arg.ID,
 	)
+	return err
+}
+
+const touchLibraryPath = `-- name: TouchLibraryPath :exec
+UPDATE library_path SET last_seen_at = ?, missing_since = NULL WHERE id = ?
+`
+
+type TouchLibraryPathParams struct {
+	LastSeenAt int64
+	ID         int64
+}
+
+// Re-observing a known path proves it is still present, and clears any earlier
+// missing mark (section 10.4): a file coming back is exactly the case this exists
+// for.
+func (q *Queries) TouchLibraryPath(ctx context.Context, arg TouchLibraryPathParams) error {
+	_, err := q.db.ExecContext(ctx, touchLibraryPath, arg.LastSeenAt, arg.ID)
 	return err
 }

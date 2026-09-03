@@ -240,6 +240,9 @@ type Querier interface {
 	// it stops reporting rows once nothing is left clean.
 	MarkDesiredItemsDirtyBatch(ctx context.Context, batchSize int64) (int64, error)
 	MarkHunted(ctx context.Context, arg MarkHuntedParams) error
+	// Bounded per Invariant 2: the caller loops this until a pass affects zero rows,
+	// never one UPDATE over the whole root.
+	MarkLibraryPathsMissing(ctx context.Context, arg MarkLibraryPathsMissingParams) (int64, error)
 	MarkQuarantineRestored(ctx context.Context, arg MarkQuarantineRestoredParams) error
 	MarkRequestFulfilled(ctx context.Context, id int64) (int64, error)
 	NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error)
@@ -299,6 +302,10 @@ type Querier interface {
 	// A sweep that starts records only that it started: the watermark must not move
 	// until one finishes, or an interrupted scan would look complete.
 	StartScan(ctx context.Context, arg StartScanParams) error
+	// Re-observing a known path proves it is still present, and clears any earlier
+	// missing mark (section 10.4): a file coming back is exactly the case this exists
+	// for.
+	TouchLibraryPath(ctx context.Context, arg TouchLibraryPathParams) error
 	UpdateEdition(ctx context.Context, arg UpdateEditionParams) error
 	// The list surface composes its own WHERE in internal/library/works.go: a filter
 	// written here as an is-it-empty test is not sargable, so SQLite uses no index for that
