@@ -140,7 +140,7 @@ func (c Consumer) identifyBatch(
 		links = append(links, library.WorkLink{
 			Provider: result.Best.ExternalID.Provider, ExternalID: result.Best.ExternalID.ExternalID,
 			Confidence: result.Best.ExternalID.Confidence, Work: newWorkIdentity(one),
-			Edition: newEditionLink(one),
+			Edition: newEditionLink(one), RootFolderID: rootFolderID,
 		})
 	}
 	return links, identified

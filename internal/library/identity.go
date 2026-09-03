@@ -32,6 +32,11 @@ type WorkLink struct {
 	// Edition is optional: when set, an edition is resolved (or created) under the
 	// work this link resolves to, in the same transaction.
 	Edition *EditionLink
+	// RootFolderID records which root folder this link's identifying file came
+	// from (work_root_folder) -- the temporary bridge category filtering uses
+	// until desired_item exists for music (migration 0012's comment). Zero means
+	// the caller has no root folder to report.
+	RootFolderID int64
 }
 
 // EditionIdentity is what an edition should look like if one has to be created.
@@ -87,6 +92,13 @@ func resolveWork(
 	if link.Edition != nil {
 		if _, _, err := resolveEdition(ctx, queries, workID, *link.Edition); err != nil {
 			return 0, false, fmt.Errorf("edition: %w", err)
+		}
+	}
+	if link.RootFolderID != 0 {
+		if err := queries.LinkWorkRootFolder(ctx, librarydb.LinkWorkRootFolderParams{
+			WorkID: workID, RootFolderID: link.RootFolderID, FirstSeenAt: at.Unix(),
+		}); err != nil {
+			return 0, false, fmt.Errorf("root folder: %w", err)
 		}
 	}
 	return workID, created, nil

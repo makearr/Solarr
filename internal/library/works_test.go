@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/library"
+	"github.com/makearr/MediaNexus/internal/store"
 	"github.com/makearr/MediaNexus/internal/store/gen/librarydb"
 )
 
@@ -67,6 +68,60 @@ func TestListWorks_FiltersCombineWithAnd(t *testing.T) {
 	}
 	if len(page) != 1 || page[0].ID != wanted.ID {
 		t.Errorf("got %d works, want only %d: the two filters must both apply", len(page), wanted.ID)
+	}
+}
+
+func linkRootFolder(t *testing.T, opened *store.Store, workID, rootFolderID int64) {
+	t.Helper()
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.LinkWorkRootFolder(ctx, librarydb.LinkWorkRootFolderParams{
+			WorkID: workID, RootFolderID: rootFolderID, FirstSeenAt: firstSeen.Unix(),
+		})
+	})
+}
+
+func TestListWorks_RootFolderFilterNarrowsToLinkedWorks(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+
+	inRoot1 := createWork(t, opened, "music", "amber rivers")
+	inRoot2 := createWork(t, opened, "music", "broken signals")
+	linkRootFolder(t, opened, inRoot1.ID, 1)
+	linkRootFolder(t, opened, inRoot2.ID, 2)
+
+	page, err := works.List(t.Context(), library.WorkFilter{RootFolderIDs: []int64{1}}, library.WorkCursor{}, 100)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(page) != 1 || page[0].ID != inRoot1.ID {
+		t.Errorf("got %+v, want only the work linked to root folder 1", page)
+	}
+}
+
+// A nil filter must be unfiltered, but a non-nil empty slice -- "the caller has no
+// visible root folders at all" -- must match nothing. The two are easy to conflate
+// since len() cannot distinguish them.
+func TestListWorks_EmptyNonNilRootFolderFilterMatchesNothing(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+
+	work := createWork(t, opened, "music", "amber rivers")
+	linkRootFolder(t, opened, work.ID, 1)
+
+	nilFiltered, err := works.List(t.Context(), library.WorkFilter{RootFolderIDs: nil}, library.WorkCursor{}, 100)
+	if err != nil {
+		t.Fatalf("List (nil): %v", err)
+	}
+	if len(nilFiltered) != 1 {
+		t.Errorf("nil RootFolderIDs excluded a row, want unfiltered: got %+v", nilFiltered)
+	}
+
+	emptyFiltered, err := works.List(t.Context(), library.WorkFilter{RootFolderIDs: []int64{}}, library.WorkCursor{}, 100)
+	if err != nil {
+		t.Fatalf("List (empty): %v", err)
+	}
+	if len(emptyFiltered) != 0 {
+		t.Errorf("empty non-nil RootFolderIDs = %+v, want nothing visible to mean nothing returned", emptyFiltered)
 	}
 }
 

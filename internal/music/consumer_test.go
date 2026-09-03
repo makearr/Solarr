@@ -130,6 +130,17 @@ func TestObserve_IdentifiedFileRegistersPhysicallyAndCreatesAWork(t *testing.T) 
 	if work.MediaType != "music" || work.CanonicalTitle != "KI Pecezinu" {
 		t.Errorf("work = %+v, want music/KI Pecezinu", work)
 	}
+
+	// The temporary bridge category filtering needs (library.WorkFilter's
+	// RootFolderIDs) until desired_item exists for music: the root folder this
+	// file was scanned from must be recorded against the work it resolved to.
+	roots, err := library.NewIdentity(opened).RootFoldersForWork(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("RootFoldersForWork: %v", err)
+	}
+	if len(roots) != 1 || roots[0] != 1 {
+		t.Errorf("RootFoldersForWork = %v, want [1]", roots)
+	}
 }
 
 func TestObserve_ReleaseMBIDCreatesAPlaceholderEdition(t *testing.T) {
