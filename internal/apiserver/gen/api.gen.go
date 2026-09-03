@@ -262,9 +262,13 @@ type JobState string
 
 // LibraryCategory A category as a navigation target: no `permission` field, since the list is already narrowed to what the caller may read (unlike `Me`'s `categories`, which reports the caller's level on each).
 type LibraryCategory struct {
+	Files     *int   `json:"files,omitempty"`
 	Id        int64  `json:"id"`
 	MediaType string `json:"media_type"`
 	Name      string `json:"name"`
+
+	// Works From the counter table (section 21.12), never a live COUNT. 0 until the reconciliation sweep has run at least once.
+	Works *int `json:"works,omitempty"`
 }
 
 // LibraryCounts Read from the `counter` table, never aggregated live (section 21.12, ADR-28). Absent counters report zero, so an empty library and an uncounted one look the same until the reconciliation job has run.

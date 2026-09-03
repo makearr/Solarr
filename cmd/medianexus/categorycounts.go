@@ -1,0 +1,84 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+
+	"github.com/makearr/MediaNexus/internal/clock"
+	"github.com/makearr/MediaNexus/internal/jobs"
+	"github.com/makearr/MediaNexus/internal/library"
+	"github.com/makearr/MediaNexus/internal/settings"
+)
+
+// categoryCountsJobType is the registered type of the category-counter sweep.
+const categoryCountsJobType = jobs.Type("library.reconcile_category_counts")
+
+// categoryCountsActionKey deduplicates the sweep: global, not per-category, so at
+// most one may be active at a time (Invariant 16), the same shape music.EnrichJob
+// uses for its own global sweep.
+const categoryCountsActionKey = "library.reconcile_category_counts"
+
+var categoryCountsDefinition = jobs.Definition{
+	Type: categoryCountsJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3,
+}
+
+// categoryCountsJob recomputes every category's "works"/"files" counters
+// (internal/library.CategoryCounters) from whichever categories and root folders
+// settings.db currently declares -- wiring only, so it lives here rather than in
+// internal/library, which does not know settings.db exists at all (ADR-25).
+type categoryCountsJob struct {
+	counters library.CategoryCounters
+	cache    *settings.Cache
+	logger   *slog.Logger
+}
+
+func (j categoryCountsJob) Run(ctx context.Context, _ jobs.Job) error {
+	snapshot := j.cache.Snapshot()
+
+	rootsByCategory := make(map[int64][]int64)
+	for _, categoryRoot := range snapshot.CategoryRoots() {
+		rootsByCategory[categoryRoot.CategoryID] = append(rootsByCategory[categoryRoot.CategoryID], categoryRoot.RootFolderID)
+	}
+
+	categories := snapshot.Categories()
+	scopes := make([]library.CategoryScope, len(categories))
+	for index, category := range categories {
+		scopes[index] = library.CategoryScope{CategoryID: category.ID, RootFolderIDs: rootsByCategory[category.ID]}
+	}
+
+	corrections, err := j.counters.Reconcile(ctx, scopes)
+	if err != nil {
+		return fmt.Errorf("reconcile category counters: %w", err)
+	}
+	j.logger.Info("category counters reconciled",
+		slog.Int("categories", len(scopes)), slog.Int("corrections", len(corrections)))
+	return nil
+}
+
+// registerCategoryCountsJob wires the sweep into the registry and the executor.
+func (p *process) registerCategoryCountsJob(registry *jobs.Registry, executor *jobs.Executor) error {
+	if err := registry.Register(categoryCountsDefinition); err != nil {
+		return err
+	}
+	job := categoryCountsJob{
+		counters: library.NewCategoryCounters(p.library, clock.NewSystem()),
+		cache:    p.cache,
+		logger:   p.logger,
+	}
+	executor.Handle(categoryCountsJobType, job)
+	return nil
+}
+
+// enqueueCategoryCounts submits one sweep, once at startup -- there is no
+// scheduler yet, the same gap enqueueLibraryScans and enqueueEnrichment already
+// carry, so a category's counts go stale as the library changes until the next
+// restart repopulates them.
+func (p *process) enqueueCategoryCounts(ctx context.Context) {
+	if _, err := p.queue.Enqueue(ctx, jobs.Request{
+		Type: categoryCountsJobType, ActionKey: categoryCountsActionKey, Priority: jobs.PriorityLow,
+		Payload: []byte("{}"),
+	}); err != nil {
+		p.logger.Warn("enqueue category counters", slog.Any("error", err))
+	}
+}

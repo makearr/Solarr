@@ -54,6 +54,14 @@ type worksFixture struct {
 
 func newWorksFixture(t *testing.T) worksFixture {
 	t.Helper()
+	return newWorksFixtureWithLibrarySize(t, nil)
+}
+
+// newWorksFixtureWithLibrarySize is newWorksFixture plus an injectable
+// LibrarySize, for tests asserting on the counters ListCategories reads
+// (categories_test.go) without every other worksFixture caller needing one.
+func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibrarySize) worksFixture {
+	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
 	if err := os.MkdirAll(backups, 0o755); err != nil {
@@ -86,11 +94,12 @@ func newWorksFixture(t *testing.T) worksFixture {
 	search := &fakeSearchReader{}
 	server, err := apiserver.New(apiserver.Config{
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
-		Checker: fakeChecker{},
-		Works:   works,
-		Search:  search,
-		Clock:   fake,
-		Logger:  slog.New(slog.DiscardHandler),
+		Checker:     fakeChecker{},
+		Works:       works,
+		Search:      search,
+		LibrarySize: librarySize,
+		Clock:       fake,
+		Logger:      slog.New(slog.DiscardHandler),
 		Auth: apiserver.AuthConfig{
 			Mode:     apiserver.AuthLocal,
 			Sessions: auth.NewSessions([]byte("0123456789abcdef0123456789abcdef"), fake, time.Hour),
