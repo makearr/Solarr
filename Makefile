@@ -40,7 +40,7 @@ RUN_NODE_ROOT := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) \
                  -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
 
 .PHONY: help verify build test race bench bench-drivers lint vet fmt fmt-check sqlc sqlc-check \
-        api web web-test web-dev image image-local builder milestone version cache-init clean-cache deps tidy
+        api web web-test web-dev image image-local builder binfmt milestone version cache-init clean-cache deps tidy
 
 VERSION     := $(shell tr -d '[:space:]' < VERSION 2>/dev/null || echo 0.0.0)
 COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -154,6 +154,7 @@ image:      ## Release build: multi-arch, push to ghcr, bump, changelog, tag, pu
 	  echo "Install it (Debian/Ubuntu: 'apt install docker-buildx'), then re-run."; \
 	  echo "Use 'make image-local' for a single-arch image without it."; \
 	  exit 1; }
+	@$(MAKE) --no-print-directory binfmt
 	@$(MAKE) --no-print-directory builder
 	@# A release image must correspond to a commit, or the About page (AGPL §13)
 	@# claims a source revision that does not describe the running binary.
@@ -192,6 +193,11 @@ builder:    ## Create the multi-arch builder if it does not exist
 	@docker buildx inspect $(BUILDER) >/dev/null 2>&1 || { \
 	  echo "creating the $(BUILDER) buildx builder"; \
 	  docker buildx create --name $(BUILDER) --driver docker-container --bootstrap >/dev/null; }
+
+binfmt:     ## Register qemu emulators for cross-arch builds (needed once per build host)
+	@# The runtime stage's apk install (ADR-30's fpcalc/ffprobe) means a real multi-arch
+	@# build emulates every non-native platform; without this the arm64 stage fails.
+	@docker run --privileged --rm tonistiigi/binfmt --install all >/dev/null
 
 clean-cache:
 	-docker volume rm medianexus-gopath medianexus-gobuild medianexus-npm
