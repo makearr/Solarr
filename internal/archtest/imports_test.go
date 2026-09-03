@@ -90,8 +90,9 @@ var allowedInternalImports = map[string][]string{
 	// mirroring scan.Job).
 	"internal/music": {
 		"internal/artwork", "internal/clock", "internal/fsx", "internal/httpx",
-		"internal/jobs", "internal/library", "internal/mediatool", "internal/model",
-		"internal/musicbrainz", "internal/scan", "internal/settings",
+		"internal/jobs", "internal/library", "internal/match", "internal/mediatool",
+		"internal/model", "internal/musicbrainz", "internal/parse", "internal/scan",
+		"internal/settings",
 	},
 	"internal/paginate": {},
 	// The section 10.4 sweep: a walk over the filesystem seam and nothing else.

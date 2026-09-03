@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/library"
 	"github.com/makearr/MediaNexus/internal/mediatool"
 	"github.com/makearr/MediaNexus/internal/music"
+	"github.com/makearr/MediaNexus/internal/musicbrainz"
 	"github.com/makearr/MediaNexus/internal/paginate"
 	"github.com/makearr/MediaNexus/internal/scan"
 	"github.com/makearr/MediaNexus/internal/settings"
@@ -270,6 +271,64 @@ func TestObserve_NoMBIDStillRegistersThePhysicalFileButNoWork(t *testing.T) {
 	}
 	if len(works) != 0 {
 		t.Errorf("work count = %d, want 0 -- nothing here carries an identity", len(works))
+	}
+}
+
+// With a Searcher configured, a file with real ARTIST/ALBUM tags but no MBID at
+// all -- most scene-released music -- still resolves to a work, through
+// SearchIdentifier rather than MBIDIdentifier.
+func TestObserve_SearchIdentifierResolvesAFileWithNoMBIDWhenASearcherIsConfigured(t *testing.T) {
+	directory := t.TempDir()
+	backups := filepath.Join(directory, "backups")
+	if err := os.MkdirAll(backups, 0o755); err != nil {
+		t.Fatalf("create backup directory: %v", err)
+	}
+	fake := clock.NewFakeAtEpoch()
+	opened, err := store.Open(t.Context(), fake, store.Config{
+		Name: "library", Path: filepath.Join(directory, "library.db"), Logger: slog.New(slog.DiscardHandler),
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { _ = opened.Close() })
+	owner, err := migrations.Library()
+	if err != nil {
+		t.Fatalf("migrations: %v", err)
+	}
+	if err := store.Migrate(t.Context(), opened, backups, owner); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+	fsys := fsx.NewMem(fake)
+	if err := fsys.MkdirAll(testRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	consumer := music.NewConsumer(music.ConsumerConfig{
+		FS: fsys, Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened),
+		Unidentified: library.NewUnidentified(opened), Search: &fakeSearcher{
+			matches: []musicbrainz.ReleaseGroupMatch{
+				{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: releaseGroupMBID, Title: "The Sezo Siluko"},
+					ArtistCredit: "Vutu Doci"},
+			},
+		},
+		Clock: fake, Logger: slog.New(slog.DiscardHandler),
+	})
+
+	content := []byte("a scene-release FLAC, tagged but with no MusicBrainz ids")
+	writeMusicFile(t, fsys, "Vutu Doci-The Sezo Siluko-WEB-FLAC-2018-TiMES/01 Moving.flac", content)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+	batch := []scan.Observed{observedFile("Vutu Doci-The Sezo Siluko-WEB-FLAC-2018-TiMES/01 Moving.flac",
+		int64(len(content)), mediatool.Tags{"artist": "Vutu Doci", "album": "The Sezo Siluko", "date": "1978"})}
+
+	if err := consumer.Observe(t.Context(), root, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queries := librarydb.New(opened.Read())
+	if _, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID,
+	}); err != nil {
+		t.Fatalf("GetWorkByExternalID: %v, want the search match resolved to a work", err)
 	}
 }
 

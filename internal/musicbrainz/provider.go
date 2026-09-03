@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/makearr/MediaNexus/internal/clock"
@@ -38,6 +39,9 @@ const (
 	// for this package's two entities.
 	cacheKindReleaseGroup = "musicbrainz:release-group"
 	cacheKindRelease      = "musicbrainz:release"
+	// cacheKindSearch is a text search's result set, keyed on searchCacheKey
+	// rather than an MBID -- there is no id to key it on until a search answers.
+	cacheKindSearch = "musicbrainz:search"
 )
 
 // Provider is ADR-29 end to end: try each source in priority order, falling
@@ -100,6 +104,74 @@ func (p Provider) Album(
 	}
 	return ReleaseGroup{}, Release{}, fmt.Errorf("musicbrainz: no source answered for %s/%s: %w",
 		releaseGroupMBID, releaseMBID, errors.Join(errs...))
+}
+
+// Search answers a text search for release groups matching artist and title,
+// cache first. Only sources that implement Searcher are tried -- ADR-29's proxy
+// does not (Searcher's own doc comment), so this silently has fewer sources than
+// Album does, never an error for that reason alone. priority is accepted for the
+// same not-yet-scheduled reason as Album's.
+func (p Provider) Search(
+	ctx context.Context, _ Priority, artist, title string, limit int,
+) ([]ReleaseGroupMatch, error) {
+	key := searchCacheKey(artist, title, limit)
+	if matches, ok := p.cachedSearch(ctx, key); ok {
+		return matches, nil
+	}
+
+	var errs []error
+	for _, source := range p.sources {
+		searcher, ok := source.(Searcher)
+		if !ok {
+			continue
+		}
+		matches, err := searcher.SearchReleaseGroups(ctx, artist, title, limit)
+		if err != nil {
+			p.logger.WarnContext(ctx, "musicbrainz source search failed",
+				slog.String("source", source.Name()), slog.Any("error", err))
+			errs = append(errs, err)
+			continue
+		}
+		p.rememberSearch(ctx, source.Name(), key, matches)
+		return matches, nil
+	}
+	if len(errs) == 0 {
+		// No configured source can search at all -- a wiring gap, not a failed
+		// lookup, so the caller's chain treats it exactly like "found nothing".
+		return nil, nil
+	}
+	return nil, fmt.Errorf("musicbrainz: no source answered search %q/%q: %w", artist, title, errors.Join(errs...))
+}
+
+// searchCacheKey normalises a search so "Vutu Doci"/"vutu doci" share one cache
+// entry -- the query itself is already case-insensitive, no reason the cache
+// should be stricter than the thing it is caching.
+func searchCacheKey(artist, title string, limit int) string {
+	return fmt.Sprintf("%s\x1f%s\x1f%d",
+		strings.ToLower(strings.TrimSpace(artist)), strings.ToLower(strings.TrimSpace(title)), limit)
+}
+
+func (p Provider) cachedSearch(ctx context.Context, key string) ([]ReleaseGroupMatch, bool) {
+	entry, err := p.cache.Get(ctx, cacheKindSearch, key)
+	if err != nil || p.stale(entry) {
+		return nil, false
+	}
+	var matches []ReleaseGroupMatch
+	if json.Unmarshal([]byte(entry.Body), &matches) != nil {
+		return nil, false
+	}
+	return matches, true
+}
+
+func (p Provider) rememberSearch(ctx context.Context, source, key string, matches []ReleaseGroupMatch) {
+	body, err := json.Marshal(matches)
+	if err != nil {
+		return
+	}
+	if err := p.cache.Set(ctx, cacheKindSearch, key,
+		metacache.Entry{Source: source, Body: string(body), FetchedAt: p.clock.Now()}); err != nil {
+		p.logger.WarnContext(ctx, "musicbrainz: search cache write failed", slog.Any("error", err))
+	}
 }
 
 func (p Provider) cached(ctx context.Context, releaseGroupMBID, releaseMBID string) (ReleaseGroup, Release, bool) {

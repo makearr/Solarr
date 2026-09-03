@@ -32,11 +32,13 @@ func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, 
 	tool := mediatool.New(nil, 0)
 	reportToolReadiness(ctx, tool, p.logger)
 	physical := library.NewPhysical(p.library)
+	provider := p.musicBrainzProvider()
 	consumer := music.NewConsumer(music.ConsumerConfig{
 		FS:           p.fsys,
 		Physical:     physical,
 		Identity:     library.NewIdentity(p.library),
 		Unidentified: library.NewUnidentified(p.library),
+		Search:       provider,
 		Clock:        clock.NewSystem(),
 		Logger:       p.logger,
 	})

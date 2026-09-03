@@ -15,10 +15,12 @@ import (
 	"github.com/makearr/MediaNexus/internal/settings"
 )
 
-// DefaultAcceptThreshold and DefaultAmbiguityThreshold tune the ADR-24 chain for the
-// one strategy stage 3 has. An embedded MBID is either present, at 0.95/0.85/0.70
-// (identifier.go), or the file identifies as nothing yet -- there is nothing cheaper
-// to stop the chain early for and nothing else registered to be ambiguous against.
+// DefaultAcceptThreshold and DefaultAmbiguityThreshold tune the ADR-24 chain.
+// MBIDIdentifier's confidences (0.95/0.85/0.70, identifier.go) all clear
+// AcceptThreshold, so a tagged file never pays for a search; SearchIdentifier's
+// ceiling (0.65, search_identifier.go) stays below it, so a search match never
+// stops the chain early either -- it can only be the final answer, not a shortcut
+// past a strategy that might still find a real MBID.
 const (
 	DefaultAcceptThreshold    = 0.9
 	DefaultAmbiguityThreshold = 0.6
@@ -34,19 +36,25 @@ type Consumer struct {
 	physical     library.Physical
 	identity     library.Identity
 	unidentified library.Unidentified
+	search       Searcher
 	clock        clock.Clock
 	chain        model.ChainConfig
 	logger       *slog.Logger
 }
 
-// ConsumerConfig is what a Consumer needs. Every field is required except Chain and
-// Logger.
+// ConsumerConfig is what a Consumer needs. Every field is required except Chain,
+// Search and Logger.
 type ConsumerConfig struct {
 	FS           fsx.FS
 	Physical     library.Physical
 	Identity     library.Identity
 	Unidentified library.Unidentified
-	Clock        clock.Clock
+	// Search adds the ADR-24 "parse" strategy (SearchIdentifier) to the chain,
+	// for a file MBIDIdentifier cannot answer at all. Nil leaves the chain at the
+	// one strategy stage 3 shipped with -- a media type or test with no metadata
+	// provider configured is unaffected.
+	Search Searcher
+	Clock  clock.Clock
 	// Chain tunes RunChain (model.ChainConfig). The zero value takes the package
 	// defaults above.
 	Chain  model.ChainConfig
@@ -67,8 +75,8 @@ func NewConsumer(config ConsumerConfig) Consumer {
 	}
 	return Consumer{
 		fsys: config.FS, physical: config.Physical, identity: config.Identity,
-		unidentified: config.Unidentified,
-		clock:        config.Clock, chain: chain, logger: logger,
+		unidentified: config.Unidentified, search: config.Search,
+		clock: config.Clock, chain: chain, logger: logger,
 	}
 }
 
@@ -107,7 +115,11 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, batch [
 		return fmt.Errorf("music: %w", err)
 	}
 
-	identifiers := []model.Identifier{NewMBIDIdentifier(tagSourceFor(root, readable))}
+	tags := tagSourceFor(root, readable)
+	identifiers := []model.Identifier{NewMBIDIdentifier(tags)}
+	if c.search != nil {
+		identifiers = append(identifiers, NewSearchIdentifier(SearchIdentifierConfig{Tags: tags, Search: c.search}))
+	}
 	links, queued, resolved := c.identifyBatch(ctx, root.ID, readable, mediaObjectIDs, identifiers)
 	if err := c.identity.ResolveWorks(ctx, now, links); err != nil {
 		return fmt.Errorf("music: %w", err)

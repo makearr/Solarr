@@ -73,3 +73,19 @@ type Source interface {
 	Name() string
 	Album(ctx context.Context, releaseGroupMBID, releaseMBID string) (ReleaseGroup, Release, error)
 }
+
+// ReleaseGroupMatch is one search result: a plausible release group plus the
+// credited artist name(s), which internal/parse's Identity does not carry an
+// MBID for and a caller needs to weigh a match against (section 10.2).
+type ReleaseGroupMatch struct {
+	ReleaseGroup
+	ArtistCredit string
+}
+
+// Searcher is an optional Source capability -- text search, not MBID lookup.
+// Not every Source implements it: ADR-29's Servarr proxy shape is unverified
+// for search (only direct musicbrainz.org has been confirmed live), so
+// Provider.Search only ever tries sources that assert this interface.
+type Searcher interface {
+	SearchReleaseGroups(ctx context.Context, artist, title string, limit int) ([]ReleaseGroupMatch, error)
+}

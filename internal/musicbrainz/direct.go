@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 
 	"github.com/makearr/MediaNexus/internal/httpx"
@@ -60,6 +61,60 @@ func (d direct) releaseGroup(ctx context.Context, mbid string) (ReleaseGroup, er
 		MBID: parsed.ID, Title: parsed.Title,
 		PrimaryType: parsed.PrimaryType, FirstReleaseDate: parsed.FirstReleaseDate,
 	}, nil
+}
+
+// directSearchResponse is musicbrainz.org's release-group search JSON
+// (`/release-group/?query=...`) -- verified against a real live response.
+type directSearchResponse struct {
+	ReleaseGroups []directSearchReleaseGroup `json:"release-groups"`
+}
+
+type directSearchReleaseGroup struct {
+	ID               string `json:"id"`
+	Title            string `json:"title"`
+	PrimaryType      string `json:"primary-type"`
+	FirstReleaseDate string `json:"first-release-date"`
+	ArtistCredit     []struct {
+		Name string `json:"name"`
+	} `json:"artist-credit"`
+}
+
+// SearchReleaseGroups implements Searcher against musicbrainz.org's Lucene search
+// endpoint, scoped to artist and release-group (album) title -- the two fields a
+// caller with no MBID at all can actually claim to know (section 10.2).
+func (d direct) SearchReleaseGroups(ctx context.Context, artist, title string, limit int) ([]ReleaseGroupMatch, error) {
+	query := fmt.Sprintf(`artist:%s AND releasegroup:%s`, luceneQuoted(artist), luceneQuoted(title))
+	requestURL := fmt.Sprintf("%s/release-group/?query=%s&fmt=json&limit=%d",
+		d.baseURL, url.QueryEscape(query), limit)
+
+	var parsed directSearchResponse
+	if err := getJSON(ctx, d.client, requestURL, &parsed); err != nil {
+		return nil, fmt.Errorf("musicbrainz: search release-group %q/%q: %w", artist, title, err)
+	}
+
+	matches := make([]ReleaseGroupMatch, len(parsed.ReleaseGroups))
+	for i, rg := range parsed.ReleaseGroups {
+		var creditNames []string
+		for _, credit := range rg.ArtistCredit {
+			creditNames = append(creditNames, credit.Name)
+		}
+		matches[i] = ReleaseGroupMatch{
+			ReleaseGroup: ReleaseGroup{
+				MBID: rg.ID, Title: rg.Title,
+				PrimaryType: rg.PrimaryType, FirstReleaseDate: rg.FirstReleaseDate,
+			},
+			ArtistCredit: strings.Join(creditNames, " & "),
+		}
+	}
+	return matches, nil
+}
+
+// luceneQuoted wraps a value in double quotes for a MusicBrainz Lucene query,
+// escaping the two characters that would otherwise break out of the quoted
+// phrase or be read as Lucene operators.
+func luceneQuoted(value string) string {
+	escaped := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(value)
+	return `"` + escaped + `"`
 }
 
 // directRelease is musicbrainz.org's release JSON with inc=recordings+labels+media.

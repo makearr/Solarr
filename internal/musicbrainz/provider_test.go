@@ -61,6 +61,25 @@ func (f *fakeSource) Album(context.Context, string, string) (musicbrainz.Release
 	return f.rg, f.rel, nil
 }
 
+// fakeSearchSource is a fakeSource that also implements Searcher, so Provider.Search
+// has something in the source list that qualifies for the type assertion.
+type fakeSearchSource struct {
+	fakeSource
+	matches     []musicbrainz.ReleaseGroupMatch
+	searchErr   error
+	searchCalls int
+}
+
+func (f *fakeSearchSource) SearchReleaseGroups(
+	context.Context, string, string, int,
+) ([]musicbrainz.ReleaseGroupMatch, error) {
+	f.searchCalls++
+	if f.searchErr != nil {
+		return nil, f.searchErr
+	}
+	return f.matches, nil
+}
+
 func newProvider(t *testing.T, sources ...musicbrainz.Source) musicbrainz.Provider {
 	t.Helper()
 	return musicbrainz.New(musicbrainz.Config{
@@ -222,6 +241,72 @@ func TestProvider_ZeroRefreshAfterNeverExpires(t *testing.T) {
 	}
 	if direct.calls != 1 {
 		t.Errorf("source called %d times, want exactly 1 -- RefreshAfter: 0 must never expire", direct.calls)
+	}
+}
+
+func TestProvider_SearchSkipsSourcesThatDoNotImplementSearcher(t *testing.T) {
+	proxy := &fakeSource{name: "proxy"} // no Searcher
+	direct := &fakeSearchSource{fakeSource: fakeSource{name: "direct"},
+		matches: []musicbrainz.ReleaseGroupMatch{{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg1"}}}}
+	provider := newProvider(t, proxy, direct)
+
+	matches, err := provider.Search(t.Context(), musicbrainz.PriorityIdentify, "Vutu Doci", "The Sezo Siluko", 5)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(matches) != 1 || matches[0].MBID != "rg1" {
+		t.Errorf("matches = %+v, want the one Searcher-capable source's answer", matches)
+	}
+	if direct.searchCalls != 1 {
+		t.Errorf("searchCalls = %d, want 1", direct.searchCalls)
+	}
+}
+
+// A provider with no Searcher-capable source at all must answer "nothing found",
+// not an error -- Search is an optional capability, and a caller with no source
+// configured for it should behave exactly like a search that found nothing.
+func TestProvider_SearchWithNoSearcherCapableSourceFindsNothing(t *testing.T) {
+	proxy := &fakeSource{name: "proxy"}
+	provider := newProvider(t, proxy)
+
+	matches, err := provider.Search(t.Context(), musicbrainz.PriorityIdentify, "Vutu Doci", "The Sezo Siluko", 5)
+	if err != nil {
+		t.Fatalf("Search: %v, want no error when nothing can search at all", err)
+	}
+	if matches != nil {
+		t.Errorf("matches = %+v, want nil", matches)
+	}
+}
+
+func TestProvider_SearchErrorsWhenEverySearcherFails(t *testing.T) {
+	direct := &fakeSearchSource{fakeSource: fakeSource{name: "direct"}, searchErr: errors.New("search down")}
+	provider := newProvider(t, direct)
+
+	if _, err := provider.Search(t.Context(), musicbrainz.PriorityIdentify, "Vutu Doci", "The Sezo Siluko", 5); err == nil {
+		t.Fatal("Search succeeded although the only Searcher-capable source failed")
+	}
+}
+
+// A second search for the same artist/title, differently cased and spaced, must
+// still hit the cache -- the query itself is case-insensitive, the cache should
+// not be stricter than the thing it caches.
+func TestProvider_ASecondSearchIsServedFromCache(t *testing.T) {
+	direct := &fakeSearchSource{fakeSource: fakeSource{name: "direct"},
+		matches: []musicbrainz.ReleaseGroupMatch{{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg1", Title: "The Sezo Siluko"}}}}
+	provider := newProvider(t, direct)
+
+	if _, err := provider.Search(t.Context(), musicbrainz.PriorityIdentify, "Vutu Doci", "The Sezo Siluko", 5); err != nil {
+		t.Fatalf("first Search: %v", err)
+	}
+	matches, err := provider.Search(t.Context(), musicbrainz.PriorityIdentify, "  vutu doci  ", "the sezo siluko", 5)
+	if err != nil {
+		t.Fatalf("second Search: %v", err)
+	}
+	if direct.searchCalls != 1 {
+		t.Errorf("searchCalls = %d, want 1 -- the second search should hit the cache", direct.searchCalls)
+	}
+	if len(matches) != 1 || matches[0].MBID != "rg1" {
+		t.Errorf("matches = %+v, want the first search's cached result", matches)
 	}
 }
 
