@@ -47,6 +47,41 @@ func TestParseWithEnv_OverridesAFileValue(t *testing.T) {
 	}
 }
 
+// A string override is literal text, not YAML source: a value starting with a
+// YAML-special character (here *, a cron wildcard and also YAML's alias-reference
+// syntax) must not be misread as document syntax. Found live: MEDIANEXUS_BACKUP_
+// SCHEDULE="* * * * *" crashed startup with "undefined alias name" before this was
+// fixed to assign string-kind fields directly rather than route them through
+// yaml.Unmarshal.
+func TestParseWithEnv_ACronScheduleStartingWithAsteriskIsNotYAML(t *testing.T) {
+	parsed, err := config.ParseWithEnv(
+		[]byte("version: 1\n"),
+		env("MEDIANEXUS_BACKUP_SCHEDULE", "* * * * *"))
+	if err != nil {
+		t.Fatalf("ParseWithEnv: %v", err)
+	}
+	if parsed.Backup.Schedule != "* * * * *" {
+		t.Errorf("Backup.Schedule = %q, want the literal override", parsed.Backup.Schedule)
+	}
+}
+
+// The asterisk is not special-cased; no YAML-special leading character is. Uses a
+// field with no format validation of its own (unlike backup.schedule's cron check
+// above), so this is purely about the raw text reaching the field unmangled.
+func TestParseWithEnv_OtherYAMLSpecialCharactersAreAlsoLiteral(t *testing.T) {
+	cases := []string{"&anchor-like", "!tag-like", "[not-a-list]", "{not-a-map}"}
+	for _, value := range cases {
+		parsed, err := config.ParseWithEnv(
+			[]byte("version: 1\n"), env("MEDIANEXUS_SECURITY_TRUSTED_PROXY_HEADER", value))
+		if err != nil {
+			t.Fatalf("ParseWithEnv(%q): %v", value, err)
+		}
+		if parsed.Security.TrustedProxyHeader != value {
+			t.Errorf("TrustedProxyHeader = %q, want the literal %q", parsed.Security.TrustedProxyHeader, value)
+		}
+	}
+}
+
 func TestParseWithEnv_LeavesUnsetValuesAlone(t *testing.T) {
 	parsed, err := config.ParseWithEnv(
 		[]byte("version: 1\nserver:\n  port: 8080\n"),
@@ -167,16 +202,27 @@ func TestParseWithEnv_AgreeingAliasAndCanonicalNameIsFine(t *testing.T) {
 	}
 }
 
-func TestParseWithEnv_AMalformedSecretDoesNotEchoTheValue(t *testing.T) {
-	// A YAML parser quotes the offending source text back, so redacting the
-	// Value field alone leaves the secret in the explanation (Invariant 61).
-	_, err := config.ParseWithEnv([]byte("version: 1\n"), env(
-		"MEDIANEXUS_SECURITY_ENCRYPTION_KEY", "[S3CR3T: valid: yaml",
+// A malformed encryption key set via env var passes ParseWithEnv unrejected --
+// consistent with the file path, which never validated the key's format at parse
+// time either. What Invariant 61 actually requires -- the secret never appears in
+// an error -- is DecodeKey's job at first use (serve.go), and it redacts
+// unconditionally regardless of what made the key invalid.
+func TestParseWithEnv_AMalformedSecretPassesThroughLiterally(t *testing.T) {
+	parsed, err := config.ParseWithEnv([]byte("version: 1\n"), env(
+		"MEDIANEXUS_SECURITY_ENCRYPTION_KEY", "S3CR3T-not-a-valid-key",
 	))
-	if err == nil {
-		t.Fatal("the malformed key was accepted")
+	if err != nil {
+		t.Fatalf("ParseWithEnv: %v", err)
 	}
-	if strings.Contains(err.Error(), "S3CR3T") {
-		t.Errorf("the encryption key appeared in the error:\n%s", err)
+	if parsed.Security.EncryptionKey != "S3CR3T-not-a-valid-key" {
+		t.Errorf("EncryptionKey = %q, want the literal override", parsed.Security.EncryptionKey)
+	}
+
+	_, decodeErr := config.DecodeKey(parsed.Security.EncryptionKey)
+	if decodeErr == nil {
+		t.Fatal("DecodeKey accepted a malformed key")
+	}
+	if strings.Contains(decodeErr.Error(), "S3CR3T") {
+		t.Errorf("the encryption key appeared in DecodeKey's error:\n%s", decodeErr)
 	}
 }
