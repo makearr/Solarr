@@ -386,6 +386,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every category the caller may read (ADR-27).
+         * @description Unpaginated: category counts are small (dozens, not thousands), so a plain array is correct and simpler than cursor machinery. In the caller's snapshot order (Invariant 36).
+         */
+        get: operations["listCategories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events": {
         parameters: {
             query?: never;
@@ -624,6 +644,14 @@ export interface components {
             items: components["schemas"]["Work"][];
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
+        };
+        /** @description A category as a navigation target: no `permission` field, since the list is already narrowed to what the caller may read (unlike `Me`'s `categories`, which reports the caller's level on each). */
+        LibraryCategory: {
+            /** Format: int64 */
+            id: number;
+            /** @example music */
+            media_type: string;
+            name: string;
         };
     };
     responses: {
@@ -1233,6 +1261,27 @@ export interface operations {
             401: components["responses"]["Problem"];
             /** @description category_id does not exist, or the caller cannot read it. */
             404: components["responses"]["Problem"];
+        };
+    };
+    listCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The categories. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryCategory"][];
+                };
+            };
+            401: components["responses"]["Problem"];
         };
     };
     streamEvents: {
