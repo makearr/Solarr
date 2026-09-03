@@ -55,7 +55,10 @@ FROM alpine:3
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
 
-# fpcalc and the tagging helper arrive with MediaTool at stage 3 (ADR-30).
+# fpcalc (chromaprint) and ffprobe (ffmpeg) for MediaTool (ADR-30); the tagging
+# helper stays out, still deferred (documentation/media-tools.md). Reintroduces
+# the RUN the comment above avoided -- no way to apk-install without one.
+RUN apk add --no-cache ffmpeg chromaprint
 
 COPY --from=build /out/medianexus /usr/local/bin/medianexus
 

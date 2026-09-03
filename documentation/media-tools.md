@@ -5,10 +5,11 @@ implementation into the **image** instead: acoustic fingerprinting and tag writi
 are invoked as batched subprocesses through one `MediaTool` interface, which lands with
 stage 3.
 
-Nothing here is in the Dockerfile yet. An image should not carry tools nothing calls. This
-page records what was verified, so stage 3 starts from measurements rather than from
-hoping the base image can supply them — finding out later would mean changing the base
-after it has been published.
+`ffmpeg` and `chromaprint` are in the Dockerfile's runtime stage (`fpcalc`/`ffprobe`); the
+tagging helper is still not, per the still-undecided write path below. This page records
+what was verified, so the choice started from measurements rather than from hoping the base
+image could supply them — finding out later would have meant changing the base after it had
+been published.
 
 ## What Alpine has, verified against `alpine:3.24.1`
 
