@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/makearr/MediaNexus/internal/store"
 	"github.com/makearr/MediaNexus/internal/store/gen/librarydb"
@@ -23,6 +24,13 @@ type WorkFilter struct {
 	// TitlePrefix matches the start of the sort title, which is already normalised
 	// for ordering.
 	TitlePrefix string
+	// RootFolderIDs restricts the list to works work_root_folder recorded against
+	// any of these root folders -- the temporary bridge category filtering uses
+	// (migration 0012's comment) until desired_item exists for music. Nil means
+	// unfiltered, distinct from an empty non-nil slice, which matches nothing --
+	// callers translate "no root folder is visible" into an empty result rather
+	// than an unfiltered one themselves.
+	RootFolderIDs []int64
 }
 
 // WorkCursor is a position in the list: the sort title, plus the id to break ties.
@@ -52,6 +60,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	predicates.AddIf(filter.YearFrom != 0, "year >= ?", filter.YearFrom)
 	predicates.AddIf(filter.YearTo != 0, "year <= ?", filter.YearTo)
 	addPrefix(&predicates, filter.TitlePrefix)
+	addRootFolders(&predicates, filter.RootFolderIDs)
 	predicates.AddIf(after.SortTitle != "" || after.ID != 0,
 		"(sort_title > ? OR (sort_title = ? AND id > ?))",
 		after.SortTitle, after.SortTitle, after.ID)
@@ -89,6 +98,27 @@ func prefixUpperBound(prefix string) (string, bool) {
 		return string(raw[:index+1]), true
 	}
 	return "", false
+}
+
+// addRootFolders restricts to works seen under any of ids. nil means the filter
+// was not asked for; a non-nil empty slice ("nothing is visible") deliberately
+// matches no rows rather than being indistinguishable from unfiltered.
+func addRootFolders(predicates *store.Predicates, ids []int64) {
+	if ids == nil {
+		return
+	}
+	if len(ids) == 0 {
+		predicates.Add("0 = 1")
+		return
+	}
+	placeholders := make([]string, len(ids))
+	arguments := make([]any, len(ids))
+	for index, id := range ids {
+		placeholders[index] = "?"
+		arguments[index] = id
+	}
+	predicates.Add("id IN (SELECT work_id FROM work_root_folder WHERE root_folder_id IN ("+
+		strings.Join(placeholders, ",")+"))", arguments...)
 }
 
 // List returns one page of the library list.

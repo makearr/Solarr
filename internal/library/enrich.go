@@ -38,6 +38,17 @@ func (i Identity) PlaceholderEditions(ctx context.Context, limit int) ([]Placeho
 	return out, nil
 }
 
+// RootFoldersForWork lists the root folders work_root_folder recorded for a work
+// (identity.go's resolveWork writes it as a side effect of ResolveWorks). The
+// temporary bridge category filtering uses until desired_item exists for music.
+func (i Identity) RootFoldersForWork(ctx context.Context, workID int64) ([]int64, error) {
+	ids, err := librarydb.New(i.store.Read()).ListRootFoldersForWork(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: root folders for work: %w", err)
+	}
+	return ids, nil
+}
+
 // WorkExternalID looks up a work's external id under one provider, or ok=false if
 // the work carries none from that provider.
 func (i Identity) WorkExternalID(ctx context.Context, workID int64, provider string) (externalID string, ok bool, err error) {

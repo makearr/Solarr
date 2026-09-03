@@ -557,6 +557,12 @@ type WorkRating struct {
 	FetchedAt int64
 }
 
+type WorkRootFolder struct {
+	WorkID       int64
+	RootFolderID int64
+	FirstSeenAt  int64
+}
+
 type WorkTitle struct {
 	ID         int64
 	WorkID     int64

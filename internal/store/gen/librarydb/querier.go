@@ -152,6 +152,8 @@ type Querier interface {
 	LinkWorkExternalID(ctx context.Context, arg LinkWorkExternalIDParams) error
 	LinkWorkOrganisation(ctx context.Context, arg LinkWorkOrganisationParams) error
 	LinkWorkPartExternalID(ctx context.Context, arg LinkWorkPartExternalIDParams) error
+	// Temporary bridge until desired_item exists for music (see the migration comment).
+	LinkWorkRootFolder(ctx context.Context, arg LinkWorkRootFolderParams) error
 	ListAcquiredFiles(ctx context.Context, acquisitionID int64) ([]AcquisitionFile, error)
 	// Startup reconciliation polls every non-terminal acquisition (section 10.9).
 	ListActiveAcquisitions(ctx context.Context) ([]Acquisition, error)
@@ -209,6 +211,7 @@ type Querier interface {
 	ListRelationshipsFrom(ctx context.Context, arg ListRelationshipsFromParams) ([]Relationship, error)
 	// Newest first: a user's own request history.
 	ListRequestsForUser(ctx context.Context, arg ListRequestsForUserParams) ([]Request, error)
+	ListRootFoldersForWork(ctx context.Context, workID int64) ([]int64, error)
 	ListScanStates(ctx context.Context) ([]ScanState, error)
 	// Every chart reads a rollup, never a live aggregate (ADR-28, section 21.12).
 	ListStatRollup(ctx context.Context, arg ListStatRollupParams) ([]StatRollup, error)
