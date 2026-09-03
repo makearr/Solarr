@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { api } from "@/api/client";
+import { useSidebarCollapsed } from "@/list/useNarrow";
 import type { components } from "@/api/schema";
 
 import { ThemeToggle } from "./ThemeToggle";
@@ -29,6 +30,9 @@ export function Sidebar() {
   const path = useRouterState({ select: (state) => state.location.pathname });
   const search = useSearch({ strict: false }) as Record<string, unknown>;
   const activeCategoryId = typeof search.category_id === "string" ? search.category_id : null;
+  // Section 21.8's 700-1100px row: icons only, no decision panel to make room
+  // for yet (that lands with a persisted Decision, stage 4+).
+  const collapsed = useSidebarCollapsed();
 
   const categories = useQuery({
     queryKey: ["categories"],
@@ -42,10 +46,12 @@ export function Sidebar() {
   return (
     <nav
       aria-label="Sections"
-      className="flex w-48 shrink-0 flex-col border-r border-border-subtle bg-surface"
+      className={`flex shrink-0 flex-col border-r border-border-subtle bg-surface ${
+        collapsed ? "w-14" : "w-48"
+      }`}
     >
-      <div className="flex items-center justify-between gap-2 px-4 py-3">
-        <span className="text-sm font-semibold tracking-tight">MediaNexus</span>
+      <div className={`flex items-center gap-2 px-4 py-3 ${collapsed ? "justify-center" : "justify-between"}`}>
+        {!collapsed && <span className="text-sm font-semibold tracking-tight">MediaNexus</span>}
         <ThemeToggle />
       </div>
 
@@ -57,12 +63,9 @@ export function Sidebar() {
             to === "/" ? path === "/" : path.startsWith(to) && activeCategoryId === null;
           return (
             <li key={to}>
-              <Link
-                to={to}
-                className={sectionLinkClass(active)}
-              >
+              <Link to={to} title={collapsed ? label : undefined} className={sectionLinkClass(active, collapsed)}>
                 <Icon aria-hidden className="size-4 shrink-0" />
-                {label}
+                {!collapsed && label}
               </Link>
             </li>
           );
@@ -71,16 +74,19 @@ export function Sidebar() {
 
       {categories.data && categories.data.length > 0 && (
         <>
-          <div className="px-4 pt-4 pb-1 text-xs font-medium uppercase tracking-wide
-                           text-ink-muted">
-            Categories
-          </div>
+          {!collapsed && (
+            <div className="px-4 pt-4 pb-1 text-xs font-medium uppercase tracking-wide
+                             text-ink-muted">
+              Categories
+            </div>
+          )}
           <ul className="flex flex-col gap-0.5 px-2">
             {categories.data.map((category) => (
               <CategoryLink
                 key={category.id}
                 category={category}
                 active={path.startsWith("/library") && activeCategoryId === String(category.id)}
+                collapsed={collapsed}
               />
             ))}
           </ul>
@@ -90,19 +96,28 @@ export function Sidebar() {
   );
 }
 
-function CategoryLink({ category, active }: { category: Category; active: boolean }) {
+function CategoryLink({
+  category,
+  active,
+  collapsed,
+}: {
+  category: Category;
+  active: boolean;
+  collapsed: boolean;
+}) {
   return (
     <li>
       <Link
         to="/library"
         search={{ category_id: String(category.id) }}
-        className={sectionLinkClass(active)}
+        title={collapsed ? category.name : undefined}
+        className={sectionLinkClass(active, collapsed)}
       >
         <Library aria-hidden className="size-4 shrink-0" />
-        <span className="truncate">{category.name}</span>
+        {!collapsed && <span className="truncate">{category.name}</span>}
         {/* From the counter table (section 21.12), never a live COUNT; 0 until
             the reconciliation sweep has run at least once. */}
-        {category.works != null && (
+        {!collapsed && category.works != null && (
           <span className="ml-auto shrink-0 text-xs text-ink-muted">{category.works}</span>
         )}
       </Link>
@@ -110,10 +125,10 @@ function CategoryLink({ category, active }: { category: Category; active: boolea
   );
 }
 
-function sectionLinkClass(active: boolean) {
+function sectionLinkClass(active: boolean, collapsed: boolean) {
   return `flex items-center gap-2 rounded-md px-2 py-1.5 text-sm
           focus-visible:outline-2 focus-visible:outline-offset-2
-          focus-visible:outline-accent ${
+          focus-visible:outline-accent ${collapsed ? "justify-center" : ""} ${
             active
               ? "bg-accent text-accent-ink"
               : "text-ink-muted hover:bg-canvas hover:text-ink"
