@@ -11,6 +11,7 @@ import { Library } from "./Library";
 import { Settings } from "./Settings";
 import { Shell } from "./Shell";
 import { Unidentified } from "./Unidentified";
+import { WorkDetail } from "./WorkDetail";
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -25,6 +26,7 @@ const rootRoute = createRootRoute({
 const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/", component: Dashboard }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library", component: Library }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/works/$id", component: WorkDetail }),
   createRoute({ getParentRoute: () => rootRoute, path: "/unidentified", component: Unidentified }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity", component: Activity }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: Settings }),

@@ -65,6 +65,9 @@ type Config struct {
 	Egress EgressReporter
 	// Works lists the library. Optional: without it, ListWorks answers 503.
 	Works WorksReader
+	// WorkDetail reads one work's full structural detail. Optional: without
+	// it, GetWork answers 503.
+	WorkDetail WorkDetailReader
 	// Search ranks the library by title. Optional: without it, Search answers 503.
 	Search SearchReader
 	// Unidentified lists F29's manual identification queue. Optional: without
@@ -92,6 +95,7 @@ type Server struct {
 	timezone     string
 	egress       EgressReporter
 	works        WorksReader
+	workDetail   WorkDetailReader
 	search       SearchReader
 	unidentified UnidentifiedReader
 
@@ -128,6 +132,7 @@ func New(config Config) (*Server, error) {
 		timezone:     config.Timezone,
 		egress:       config.Egress,
 		works:        config.Works,
+		workDetail:   config.WorkDetail,
 		search:       config.Search,
 		unidentified: config.Unidentified,
 		address:      net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
@@ -166,6 +171,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/system/egress", server.GetEgress)
 			secured.Get("/jobs", server.routeListJobs)
 			secured.Get("/works", server.routeListWorks)
+			secured.Get("/works/{id}", server.routeGetWork)
 			secured.Get("/library/unidentified", server.routeListUnidentified)
 			secured.Get("/search", server.routeSearch)
 			secured.Get("/categories", server.ListCategories)

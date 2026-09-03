@@ -187,6 +187,7 @@ type Querier interface {
 	ListDesiredItemsForWork(ctx context.Context, workID int64) ([]DesiredItem, error)
 	// The planner reads the dirty set, not the whole library (ADR-6).
 	ListDirtyDesiredItems(ctx context.Context, arg ListDirtyDesiredItemsParams) ([]DesiredItem, error)
+	ListEditionExternalIDs(ctx context.Context, editionID int64) ([]EditionExternalID, error)
 	ListEditions(ctx context.Context, workID int64) ([]Edition, error)
 	ListEnabledSubscriptions(ctx context.Context) ([]Subscription, error)
 	ListExpiredQuarantine(ctx context.Context, arg ListExpiredQuarantineParams) ([]Quarantine, error)

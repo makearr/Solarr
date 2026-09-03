@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { Link } from "@tanstack/react-router";
+
 import { api } from "@/api/client";
 import { ListGrid } from "@/list/ListGrid";
 import { ListTable, type Column } from "@/list/ListTable";
@@ -14,7 +16,15 @@ type Work = components["schemas"]["Work"];
 const CARD_HEIGHT = 68;
 
 const COLUMNS: readonly Column<Work>[] = [
-  { key: "title", header: "Title", render: (work) => work.title },
+  {
+    key: "title",
+    header: "Title",
+    render: (work) => (
+      <Link to="/works/$id" params={{ id: String(work.id) }} className="hover:underline">
+        {work.title}
+      </Link>
+    ),
+  },
   { key: "media_type", header: "Type", width: "8rem", render: (work) => work.media_type },
   { key: "year", header: "Year", width: "6rem", render: (work) => work.year ?? "" },
   { key: "added_at", header: "Added", width: "12rem", render: (work) => work.added_at },
