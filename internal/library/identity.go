@@ -29,6 +29,26 @@ type WorkLink struct {
 	// mapping (ADR-8), not the chain's confidence in having read it correctly.
 	Confidence float64
 	Work       WorkIdentity
+	// Edition is optional: when set, an edition is resolved (or created) under the
+	// work this link resolves to, in the same transaction.
+	Edition *EditionLink
+}
+
+// EditionIdentity is what an edition should look like if one has to be created.
+// Naming only, exactly like WorkIdentity.
+type EditionIdentity struct {
+	Kind  string
+	Label string
+}
+
+// EditionLink is one edition's resolved identity -- an edition_external_id row to
+// find or create, scoped to whatever work its WorkLink resolves to.
+type EditionLink struct {
+	Provider   string
+	ExternalID string
+	// Confidence is the provider's own confidence in the mapping, as WorkLink's.
+	Confidence float64
+	Edition    EditionIdentity
 }
 
 // Identity resolves external ids to works (ADR-24's "core owns the chain, a strategy
@@ -60,6 +80,21 @@ func (i Identity) ResolveWorks(ctx context.Context, at time.Time, links []WorkLi
 func resolveWork(
 	ctx context.Context, queries *librarydb.Queries, at time.Time, link WorkLink,
 ) (workID int64, created bool, err error) {
+	workID, created, err = findOrCreateWork(ctx, queries, at, link)
+	if err != nil {
+		return 0, false, err
+	}
+	if link.Edition != nil {
+		if _, _, err := resolveEdition(ctx, queries, workID, *link.Edition); err != nil {
+			return 0, false, fmt.Errorf("edition: %w", err)
+		}
+	}
+	return workID, created, nil
+}
+
+func findOrCreateWork(
+	ctx context.Context, queries *librarydb.Queries, at time.Time, link WorkLink,
+) (workID int64, created bool, err error) {
 	existing, err := queries.GetWorkByExternalID(ctx, librarydb.GetWorkByExternalIDParams{
 		Provider: link.Provider, ExternalID: link.ExternalID,
 	})
@@ -84,4 +119,35 @@ func resolveWork(
 		return 0, false, fmt.Errorf("link external id: %w", err)
 	}
 	return work.ID, true, nil
+}
+
+// resolveEdition finds or creates the edition behind link's (Provider, ExternalID),
+// scoped to workID -- the same find-then-create shape as findOrCreateWork, one level
+// down ADR-7's Work -> Edition -> File chain.
+func resolveEdition(
+	ctx context.Context, queries *librarydb.Queries, workID int64, link EditionLink,
+) (editionID int64, created bool, err error) {
+	existing, err := queries.GetEditionByExternalID(ctx, librarydb.GetEditionByExternalIDParams{
+		Provider: link.Provider, ExternalID: link.ExternalID,
+	})
+	if err == nil {
+		return existing.ID, false, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, false, fmt.Errorf("look up: %w", err)
+	}
+
+	edition, err := queries.CreateEdition(ctx, librarydb.CreateEditionParams{
+		WorkID: workID, Kind: link.Edition.Kind, Label: link.Edition.Label, IsDefault: 0,
+	})
+	if err != nil {
+		return 0, false, fmt.Errorf("create edition: %w", err)
+	}
+	if err := queries.LinkEditionExternalID(ctx, librarydb.LinkEditionExternalIDParams{
+		Provider: link.Provider, ExternalID: link.ExternalID, EditionID: edition.ID,
+		Confidence: link.Confidence,
+	}); err != nil {
+		return 0, false, fmt.Errorf("link external id: %w", err)
+	}
+	return edition.ID, true, nil
 }

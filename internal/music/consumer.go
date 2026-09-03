@@ -140,6 +140,7 @@ func (c Consumer) identifyBatch(
 		links = append(links, library.WorkLink{
 			Provider: result.Best.ExternalID.Provider, ExternalID: result.Best.ExternalID.ExternalID,
 			Confidence: result.Best.ExternalID.Confidence, Work: newWorkIdentity(one),
+			Edition: newEditionLink(one),
 		})
 	}
 	return links, identified
@@ -167,4 +168,21 @@ func newWorkIdentity(observed scan.Observed) library.WorkIdentity {
 		title = albumTitleFallback(observed.File.RelPath)
 	}
 	return library.WorkIdentity{MediaType: "music", CanonicalTitle: title, SortTitle: sortTitle(title)}
+}
+
+// newEditionLink resolves the release (edition-level) MBID, when the file carries
+// one, into a placeholder edition -- kind "unknown", label the release MBID itself.
+// A guessed human label risks colliding with a real edition's UNIQUE(work_id, kind,
+// label) once the MusicBrainz provider exists; an MBID as its own label cannot,
+// since no real label is ever a UUID, and the provider updates this row in place
+// rather than needing to create a second one.
+func newEditionLink(observed scan.Observed) *library.EditionLink {
+	release := ReadMBIDs(observed.Probe.Tags).Release
+	if release == "" {
+		return nil
+	}
+	return &library.EditionLink{
+		Provider: ProviderRelease, ExternalID: release, Confidence: 1.0,
+		Edition: library.EditionIdentity{Kind: "unknown", Label: release},
+	}
 }
