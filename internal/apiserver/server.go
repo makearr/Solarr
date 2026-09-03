@@ -157,6 +157,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/system/egress", server.GetEgress)
 			secured.Get("/jobs", server.routeListJobs)
 			secured.Get("/works", server.routeListWorks)
+			secured.Get("/categories", server.ListCategories)
 			secured.Get("/rootfolders", server.ListRootFolders)
 			secured.Get("/users", server.ListUsers)
 			secured.Post("/users", server.CreateUser)

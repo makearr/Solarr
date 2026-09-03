@@ -1,10 +1,15 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState, useSearch } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { Activity, LayoutDashboard, Library, Settings, type LucideIcon } from "lucide-react";
+
+import { api } from "@/api/client";
+import type { components } from "@/api/schema";
 
 import { ThemeToggle } from "./ThemeToggle";
 
-/** The sidebar lists categories, not media types (section 21.1). Until
- *  categories exist it lists the sections that do. */
+type Category = components["schemas"]["LibraryCategory"];
+
+/** Fixed sections: not categories, so not driven by /categories (section 21.1). */
 const SECTIONS: readonly { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/library", label: "Library", icon: Library },
@@ -14,6 +19,17 @@ const SECTIONS: readonly { to: string; label: string; icon: LucideIcon }[] = [
 
 export function Sidebar() {
   const path = useRouterState({ select: (state) => state.location.pathname });
+  const search = useSearch({ strict: false }) as Record<string, unknown>;
+  const activeCategoryId = typeof search.category_id === "string" ? search.category_id : null;
+
+  const categories = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/categories");
+      if (error) throw error;
+      return data;
+    },
+  });
 
   return (
     <nav
@@ -29,18 +45,13 @@ export function Sidebar() {
         {SECTIONS.map(({ to, label, icon: Icon }) => {
           // Every other route is a prefix match, so a detail page keeps its
           // section highlighted; "/" would otherwise match everything.
-          const active = to === "/" ? path === "/" : path.startsWith(to);
+          const active =
+            to === "/" ? path === "/" : path.startsWith(to) && activeCategoryId === null;
           return (
             <li key={to}>
               <Link
                 to={to}
-                className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm
-                            focus-visible:outline-2 focus-visible:outline-offset-2
-                            focus-visible:outline-accent ${
-                              active
-                                ? "bg-accent text-accent-ink"
-                                : "text-ink-muted hover:bg-canvas hover:text-ink"
-                            }`}
+                className={sectionLinkClass(active)}
               >
                 <Icon aria-hidden className="size-4 shrink-0" />
                 {label}
@@ -49,6 +60,49 @@ export function Sidebar() {
           );
         })}
       </ul>
+
+      {categories.data && categories.data.length > 0 && (
+        <>
+          <div className="px-4 pt-4 pb-1 text-xs font-medium uppercase tracking-wide
+                           text-ink-muted">
+            Categories
+          </div>
+          <ul className="flex flex-col gap-0.5 px-2">
+            {categories.data.map((category) => (
+              <CategoryLink
+                key={category.id}
+                category={category}
+                active={path.startsWith("/library") && activeCategoryId === String(category.id)}
+              />
+            ))}
+          </ul>
+        </>
+      )}
     </nav>
   );
+}
+
+function CategoryLink({ category, active }: { category: Category; active: boolean }) {
+  return (
+    <li>
+      <Link
+        to="/library"
+        search={{ category_id: String(category.id) }}
+        className={sectionLinkClass(active)}
+      >
+        <Library aria-hidden className="size-4 shrink-0" />
+        <span className="truncate">{category.name}</span>
+      </Link>
+    </li>
+  );
+}
+
+function sectionLinkClass(active: boolean) {
+  return `flex items-center gap-2 rounded-md px-2 py-1.5 text-sm
+          focus-visible:outline-2 focus-visible:outline-offset-2
+          focus-visible:outline-accent ${
+            active
+              ? "bg-accent text-accent-ink"
+              : "text-ink-muted hover:bg-canvas hover:text-ink"
+          }`;
 }

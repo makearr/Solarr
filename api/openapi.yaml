@@ -560,6 +560,25 @@ paths:
           $ref: "#/components/responses/Problem"
           description: category_id does not exist, or the caller cannot read it.
 
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [library]
+      summary: Every category the caller may read (ADR-27).
+      description: >-
+        Unpaginated: category counts are small (dozens, not thousands), so a
+        plain array is correct and simpler than cursor machinery. In the
+        caller's snapshot order (Invariant 36).
+      responses:
+        "200":
+          description: The categories.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LibraryCategory" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /events:
     get:
       operationId: streamEvents
@@ -956,6 +975,18 @@ components:
           description: >-
             Empty on the last page, which is how a client knows to stop without
             one more request that returns nothing.
+
+    LibraryCategory:
+      type: object
+      description: >-
+        A category as a navigation target: no `permission` field, since the
+        list is already narrowed to what the caller may read (unlike `Me`'s
+        `categories`, which reports the caller's level on each).
+      required: [id, media_type, name]
+      properties:
+        id: { type: integer, format: int64 }
+        media_type: { type: string, example: "music" }
+        name: { type: string }
 
 # Authenticated by default.
 security:

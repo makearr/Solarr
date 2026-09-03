@@ -20,9 +20,8 @@ const COLUMNS: readonly Column<Work>[] = [
   { key: "added_at", header: "Added", width: "12rem", render: (work) => work.added_at },
 ];
 
-// No filter keys yet: category scoping happens server-side (ADR-27) and there is
-// no sidebar to drive a further one from (private/notes.md, "kept separate").
-const FILTER_KEYS: readonly string[] = [];
+// category_id narrows to one category (ADR-27); the sidebar links here with it set.
+const FILTER_KEYS: readonly string[] = ["category_id"];
 
 export function Library() {
   const [view, setView] = useState<"table" | "grid">("table");
@@ -33,9 +32,16 @@ export function Library() {
       name: "works",
       rowHeight: narrow ? CARD_HEIGHT : undefined,
       idOf: (work) => work.id,
-      fetchPage: async ({ cursor, signal }) => {
+      fetchPage: async ({ cursor, query, signal }) => {
+        const categoryId = query.filters.category_id;
         const { data, error } = await api.GET("/works", {
-          params: { query: { cursor, limit: 100 } },
+          params: {
+            query: {
+              cursor,
+              limit: 100,
+              category_id: categoryId ? Number(categoryId) : undefined,
+            },
+          },
           signal,
         });
         if (error) throw error;
