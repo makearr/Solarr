@@ -25,10 +25,12 @@ func (c cacheRoots) RootFolder(id int64) (settings.RootFolder, bool) {
 // the executor: the library sweep, its music consumer, and the tools it probes files
 // with. The registry entry is required before Enqueue will accept the type at all
 // (Queue.Enqueue looks the definition up to route it).
-func (p *process) registerScanJob(registry *jobs.Registry, executor *jobs.Executor) error {
+func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, executor *jobs.Executor) error {
 	if err := registry.Register(scan.Definition); err != nil {
 		return err
 	}
+	tool := mediatool.New(nil, 0)
+	reportToolReadiness(ctx, tool, p.logger)
 	physical := library.NewPhysical(p.library)
 	consumer := music.NewConsumer(music.ConsumerConfig{
 		FS:           p.fsys,
@@ -42,7 +44,7 @@ func (p *process) registerScanJob(registry *jobs.Registry, executor *jobs.Execut
 		FS:       p.fsys,
 		Scans:    library.NewScans(p.library),
 		Roots:    cacheRoots{cache: p.cache},
-		Tool:     mediatool.New(nil, 0),
+		Tool:     tool,
 		Consumer: consumer,
 		Physical: physical,
 		Clock:    clock.NewSystem(),
@@ -51,6 +53,18 @@ func (p *process) registerScanJob(registry *jobs.Registry, executor *jobs.Execut
 	})
 	executor.Handle(scan.JobType, job)
 	return nil
+}
+
+// reportToolReadiness logs what ADR-30's external tools are missing, once, at
+// startup -- the same "reported, never enforced" shape section 20.2 already uses
+// for host permissions: every scanned file would otherwise fail its own probe
+// individually, which finds the same fact one file at a time instead of once,
+// loudly, before the first scan even runs.
+func reportToolReadiness(ctx context.Context, tool mediatool.Tool, logger *slog.Logger) {
+	if err := tool.Available(ctx); err != nil {
+		logger.Warn("media tools unavailable; file identification will fail until they are installed",
+			slog.Any("error", err))
+	}
 }
 
 // enqueueLibraryScans submits an incremental sweep for every online root folder
