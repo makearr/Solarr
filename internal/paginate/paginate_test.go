@@ -39,6 +39,51 @@ func TestDecode_RejectsGarbage(t *testing.T) {
 	}
 }
 
+func TestTextCursor_RoundTrips(t *testing.T) {
+	original := paginate.TextCursor{Sort: "amber rivers", ID: 4711}
+
+	decoded, err := paginate.DecodeText(original.Encode())
+	if err != nil {
+		t.Fatalf("DecodeText: %v", err)
+	}
+	if decoded != original {
+		t.Errorf("DecodeText(Encode(%+v)) = %+v", original, decoded)
+	}
+}
+
+// The sort value is arbitrary text and may itself contain ':', the id's own
+// separator -- encoding puts the (always-numeric) id first specifically so a
+// colon inside the title survives instead of truncating it.
+func TestTextCursor_SortValueMayContainTheSeparator(t *testing.T) {
+	original := paginate.TextCursor{Sort: "artist: the album", ID: 9}
+
+	decoded, err := paginate.DecodeText(original.Encode())
+	if err != nil {
+		t.Fatalf("DecodeText: %v", err)
+	}
+	if decoded.Sort != original.Sort {
+		t.Errorf("Sort = %q, want %q", decoded.Sort, original.Sort)
+	}
+}
+
+func TestDecodeText_EmptyIsTheStart(t *testing.T) {
+	cursor, err := paginate.DecodeText("")
+	if err != nil {
+		t.Fatalf("DecodeText(\"\") = %v, want nil", err)
+	}
+	if !cursor.Zero() {
+		t.Errorf("DecodeText(\"\") = %+v, want the zero cursor", cursor)
+	}
+}
+
+func TestDecodeText_RejectsGarbage(t *testing.T) {
+	for _, raw := range []string{"not base64!!", "bm90LWEtY3Vyc29y", "eDp5"} {
+		if _, err := paginate.DecodeText(raw); !errors.Is(err, paginate.ErrBadCursor) {
+			t.Errorf("DecodeText(%q) = %v, want ErrBadCursor", raw, err)
+		}
+	}
+}
+
 func TestClampLimit(t *testing.T) {
 	cases := map[int]int{
 		0:    paginate.DefaultLimit, // an unset query parameter

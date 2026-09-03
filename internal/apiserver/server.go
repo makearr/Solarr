@@ -63,6 +63,8 @@ type Config struct {
 	Timezone string
 	// Egress reports the public address. Optional.
 	Egress EgressReporter
+	// Works lists the library. Optional: without it, ListWorks answers 503.
+	Works WorksReader
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -84,6 +86,7 @@ type Server struct {
 	librarySize LibrarySize
 	timezone    string
 	egress      EgressReporter
+	works       WorksReader
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -117,6 +120,7 @@ func New(config Config) (*Server, error) {
 		librarySize: config.LibrarySize,
 		timezone:    config.Timezone,
 		egress:      config.Egress,
+		works:       config.Works,
 		address:     net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -152,6 +156,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/dashboard", server.GetDashboard)
 			secured.Get("/system/egress", server.GetEgress)
 			secured.Get("/jobs", server.routeListJobs)
+			secured.Get("/works", server.routeListWorks)
 			secured.Get("/rootfolders", server.ListRootFolders)
 			secured.Get("/users", server.ListUsers)
 			secured.Post("/users", server.CreateUser)
@@ -312,6 +317,35 @@ func (s *Server) routeListJobs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.ListJobs(w, r, params)
+}
+
+func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	var params gen.ListWorksParams
+
+	if raw := query.Get("cursor"); raw != "" {
+		params.Cursor = &raw
+	}
+	if raw := query.Get("limit"); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "limit must be a number")
+			return
+		}
+		params.Limit = &limit
+	}
+	if raw := query.Get("category_id"); raw != "" {
+		categoryID, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "category_id must be a number")
+			return
+		}
+		params.CategoryId = &categoryID
+	}
+
+	s.ListWorks(w, r, params)
 }
 
 func (s *Server) routeStreamEvents(w http.ResponseWriter, r *http.Request) {

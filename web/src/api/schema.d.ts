@@ -366,6 +366,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A page of the library the caller may see (ADR-27).
+         * @description Category-filtered: a work not under a root folder attached to a category the caller can read is excluded, never 403 -- it simply is not in the list (Invariant 37's "hidden means absent", applied to a listing rather than a single item).
+         */
+        get: operations["listWorks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events": {
         parameters: {
             query?: never;
@@ -584,6 +604,24 @@ export interface components {
         };
         JobPage: {
             items: components["schemas"]["Job"][];
+            /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
+            next_cursor?: string;
+        };
+        Work: {
+            /** Format: int64 */
+            id: number;
+            /** @example music */
+            media_type: string;
+            title: string;
+            sort_title: string;
+            year?: number;
+            /** Format: date-time */
+            added_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        WorkPage: {
+            items: components["schemas"]["Work"][];
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
         };
@@ -1165,6 +1203,36 @@ export interface operations {
             401: components["responses"]["Problem"];
             /** @description The job queue is not running. */
             503: components["responses"]["Problem"];
+        };
+    };
+    listWorks: {
+        parameters: {
+            query?: {
+                /** @description From `next_cursor` of the previous page. Absent on the first page. There is no offset parameter and there will not be one. */
+                cursor?: string;
+                limit?: number;
+                /** @description Narrows to one category. Naming a category the caller cannot read answers 404, matching a single-item lookup (Invariant 37) rather than a filter that silently returns nothing. */
+                category_id?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            /** @description category_id does not exist, or the caller cannot read it. */
+            404: components["responses"]["Problem"];
         };
     };
     streamEvents: {
