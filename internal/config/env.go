@@ -58,7 +58,7 @@ func applyEnv(config *Config, lookup Lookup) Problems {
 		}
 
 		field := fieldByPath(settings, leaf.index)
-		if err := yaml.Unmarshal([]byte(canonicalValue), field.Addr().Interface()); err != nil {
+		if err := setField(field, canonicalValue); err != nil {
 			detail := fmt.Sprintf("set by %s: %v", canonical, err)
 			if isSecretPath(leaf.path) {
 				detail = fmt.Sprintf("set by %s: %s", canonical, redactedParseFailure)
@@ -67,6 +67,22 @@ func applyEnv(config *Config, lookup Lookup) Problems {
 		}
 	}
 	return problems
+}
+
+// setField assigns an environment variable's raw text to field. A string-kind field
+// (including named types like LogLevel) takes the text directly: an env var is
+// already a literal value, not YAML source, and routing it through yaml.Unmarshal
+// misreads any value starting with a YAML-special character (*, &, !, [, { and more)
+// as document syntax -- "* * * * *" for a cron schedule is exactly such a value,
+// since a leading * is YAML's alias-reference syntax. Every other kind (Duration,
+// Bytes, bool, int, ...) keeps the YAML path, which is where their type coercion and
+// custom UnmarshalYAML methods live.
+func setField(field reflect.Value, value string) error {
+	if field.Kind() == reflect.String {
+		field.SetString(value)
+		return nil
+	}
+	return yaml.Unmarshal([]byte(value), field.Addr().Interface())
 }
 
 func aliasFor(path string) string {
