@@ -46,6 +46,9 @@ var allowedInternalImports = map[string][]string{
 	// Pure domain types (architecture section 6): no I/O, so it depends on nothing
 	// of ours.
 	"internal/model": {},
+	// ADR-18's parser: pure string-to-struct, no I/O, so it depends on nothing but
+	// the attribute vocabulary it shares with future scorers via model.Attributes.
+	"internal/parse": {"internal/model"},
 	// Field-level provider merge (ADR-8): no I/O, the caller fetches rows and
 	// priority order.
 	"internal/metaresolve": {},
