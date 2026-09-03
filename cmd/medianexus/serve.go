@@ -342,6 +342,10 @@ func (p *process) startServer(ctx context.Context) error {
 	stopping, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	if err := p.startBackupSchedules(stopping); err != nil {
+		return err
+	}
+
 	dispatcherDone := make(chan struct{})
 	go func() {
 		defer close(dispatcherDone)
