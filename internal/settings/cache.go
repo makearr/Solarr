@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -28,6 +29,28 @@ type Cache struct {
 	current atomic.Pointer[Snapshot]
 	// rebuilding serialises build-and-publish.
 	rebuilding sync.Mutex
+	// backupOnChange is optional (EnableBackupOnChange): without it, a write never
+	// backs up settings.db.
+	backupOnChange *backupOnChange
+	logger         *slog.Logger
+}
+
+// backupOnChange is config.Backup's settings_on_change policy, in the form Cache
+// needs to act on it (ADR-25: settings.db is tiny and precious).
+type backupOnChange struct {
+	dir  string
+	keep int
+}
+
+// EnableBackupOnChange makes every successful write back settings.db up and prune to
+// keep, best-effort: a failed backup is logged, never returned to the caller whose
+// settings change already committed. Without calling this, Cache never backs up on
+// its own -- a plain NewCache never does, which is what every existing caller gets.
+func (c *Cache) EnableBackupOnChange(dir string, keep int, logger *slog.Logger) {
+	c.backupOnChange = &backupOnChange{dir: dir, keep: keep}
+	if logger != nil {
+		c.logger = logger
+	}
 }
 
 // NewCache builds a cache and loads it.
@@ -35,6 +58,7 @@ func NewCache(ctx context.Context, settingsStore *store.Store) (*Cache, error) {
 	cache := &Cache{
 		store:   settingsStore,
 		queries: settingsdb.New(settingsStore.Read()),
+		logger:  slog.Default(),
 	}
 	if err := cache.Reload(ctx); err != nil {
 		return nil, err
@@ -173,5 +197,25 @@ func (c *Cache) write(ctx context.Context, mutate func(context.Context, *setting
 	if err != nil {
 		return err
 	}
-	return c.Reload(ctx)
+	if err := c.Reload(ctx); err != nil {
+		return err
+	}
+	c.backupIfEnabled(ctx)
+	return nil
+}
+
+// backupIfEnabled runs EnableBackupOnChange's policy. Best-effort: the settings
+// change already committed and reloaded, so a backup failure is logged and does not
+// unwind it.
+func (c *Cache) backupIfEnabled(ctx context.Context) {
+	if c.backupOnChange == nil {
+		return
+	}
+	if _, err := c.store.Backup(ctx, c.backupOnChange.dir, store.BackupRotation); err != nil {
+		c.logger.Error("settings backup on change failed", slog.Any("error", err))
+		return
+	}
+	if _, err := c.store.PruneBackups(c.backupOnChange.dir, c.backupOnChange.keep); err != nil {
+		c.logger.Error("settings backup rotation failed", slog.Any("error", err))
+	}
 }
