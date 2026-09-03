@@ -506,6 +506,30 @@ func (q *Queries) FindWorksByNormalizedTitle(ctx context.Context, arg FindWorksB
 	return items, nil
 }
 
+const getEdition = `-- name: GetEdition :one
+SELECT id, work_id, kind, label, year, format, catalogue_number,
+       barcode, runtime_ms, is_default
+FROM edition WHERE id = ?
+`
+
+func (q *Queries) GetEdition(ctx context.Context, id int64) (Edition, error) {
+	row := q.db.QueryRowContext(ctx, getEdition, id)
+	var i Edition
+	err := row.Scan(
+		&i.ID,
+		&i.WorkID,
+		&i.Kind,
+		&i.Label,
+		&i.Year,
+		&i.Format,
+		&i.CatalogueNumber,
+		&i.Barcode,
+		&i.RuntimeMs,
+		&i.IsDefault,
+	)
+	return i, err
+}
+
 const getEditionByExternalID = `-- name: GetEditionByExternalID :one
 SELECT e.id, e.work_id, e.kind, e.label, e.year, e.format, e.catalogue_number,
        e.barcode, e.runtime_ms, e.is_default
@@ -589,6 +613,29 @@ func (q *Queries) GetWorkByExternalID(ctx context.Context, arg GetWorkByExternal
 		&i.AddedAt,
 		&i.UpdatedAt,
 		&i.AddedBy,
+	)
+	return i, err
+}
+
+const getWorkExternalIDByProvider = `-- name: GetWorkExternalIDByProvider :one
+SELECT provider, external_id, work_id, confidence, first_seen_at
+FROM work_external_id WHERE work_id = ? AND provider = ?
+`
+
+type GetWorkExternalIDByProviderParams struct {
+	WorkID   int64
+	Provider string
+}
+
+func (q *Queries) GetWorkExternalIDByProvider(ctx context.Context, arg GetWorkExternalIDByProviderParams) (WorkExternalID, error) {
+	row := q.db.QueryRowContext(ctx, getWorkExternalIDByProvider, arg.WorkID, arg.Provider)
+	var i WorkExternalID
+	err := row.Scan(
+		&i.Provider,
+		&i.ExternalID,
+		&i.WorkID,
+		&i.Confidence,
+		&i.FirstSeenAt,
 	)
 	return i, err
 }
@@ -698,6 +745,53 @@ FROM edition WHERE work_id = ? ORDER BY is_default DESC, year, label
 
 func (q *Queries) ListEditions(ctx context.Context, workID int64) ([]Edition, error) {
 	rows, err := q.db.QueryContext(ctx, listEditions, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Edition{}
+	for rows.Next() {
+		var i Edition
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkID,
+			&i.Kind,
+			&i.Label,
+			&i.Year,
+			&i.Format,
+			&i.CatalogueNumber,
+			&i.Barcode,
+			&i.RuntimeMs,
+			&i.IsDefault,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPlaceholderEditions = `-- name: ListPlaceholderEditions :many
+SELECT id, work_id, kind, label, year, format, catalogue_number,
+       barcode, runtime_ms, is_default
+FROM edition WHERE kind = 'unknown' ORDER BY id LIMIT ?1
+`
+
+// kind='unknown' is the cross-media-type placeholder marker an Identifier chain
+// leaves behind when it resolves an edition's external id but has no real
+// metadata yet (internal/library.EditionLink, internal/music's newEditionLink):
+// label is that external id itself, chosen so it can never collide with a real
+// edition's UNIQUE(work_id, kind, label). Once refined, kind changes away from
+// 'unknown' and the row stops being returned here -- no separate cursor needed,
+// the query's own result set shrinks as enrichment succeeds.
+func (q *Queries) ListPlaceholderEditions(ctx context.Context, pageSize int64) ([]Edition, error) {
+	rows, err := q.db.QueryContext(ctx, listPlaceholderEditions, pageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -1098,6 +1192,35 @@ func (q *Queries) SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonit
 	return err
 }
 
+const updateEdition = `-- name: UpdateEdition :exec
+UPDATE edition SET kind = ?, year = ?, format = ?, catalogue_number = ?,
+       barcode = ?, runtime_ms = ?
+WHERE id = ?
+`
+
+type UpdateEditionParams struct {
+	Kind            string
+	Year            sql.NullInt64
+	Format          sql.NullString
+	CatalogueNumber sql.NullString
+	Barcode         sql.NullString
+	RuntimeMs       sql.NullInt64
+	ID              int64
+}
+
+func (q *Queries) UpdateEdition(ctx context.Context, arg UpdateEditionParams) error {
+	_, err := q.db.ExecContext(ctx, updateEdition,
+		arg.Kind,
+		arg.Year,
+		arg.Format,
+		arg.CatalogueNumber,
+		arg.Barcode,
+		arg.RuntimeMs,
+		arg.ID,
+	)
+	return err
+}
+
 const updateWorkTimestamp = `-- name: UpdateWorkTimestamp :exec
 
 UPDATE work SET updated_at = ? WHERE id = ?
@@ -1113,5 +1236,22 @@ type UpdateWorkTimestampParams struct {
 // column and sorts the whole table for every page (documentation/sql-and-sqlc.md).
 func (q *Queries) UpdateWorkTimestamp(ctx context.Context, arg UpdateWorkTimestampParams) error {
 	_, err := q.db.ExecContext(ctx, updateWorkTimestamp, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const updateWorkYearIfNull = `-- name: UpdateWorkYearIfNull :exec
+UPDATE work SET year = ?, updated_at = ? WHERE id = ? AND year IS NULL
+`
+
+type UpdateWorkYearIfNullParams struct {
+	Year      sql.NullInt64
+	UpdatedAt int64
+	ID        int64
+}
+
+// A work's year is never overwritten once set -- by a person, or by an earlier
+// enrichment pass -- so this is conditional rather than a plain UPDATE.
+func (q *Queries) UpdateWorkYearIfNull(ctx context.Context, arg UpdateWorkYearIfNullParams) error {
+	_, err := q.db.ExecContext(ctx, updateWorkYearIfNull, arg.Year, arg.UpdatedAt, arg.ID)
 	return err
 }

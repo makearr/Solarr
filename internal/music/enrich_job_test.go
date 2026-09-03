@@ -1,0 +1,227 @@
+package music_test
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/makearr/MediaNexus/internal/clock"
+	"github.com/makearr/MediaNexus/internal/jobs"
+	"github.com/makearr/MediaNexus/internal/library"
+	"github.com/makearr/MediaNexus/internal/metacache"
+	"github.com/makearr/MediaNexus/internal/music"
+	"github.com/makearr/MediaNexus/internal/musicbrainz"
+	"github.com/makearr/MediaNexus/internal/store"
+	"github.com/makearr/MediaNexus/internal/store/gen/librarydb"
+	"github.com/makearr/MediaNexus/migrations"
+)
+
+// fakeSource answers one canned Album per test, so enrich_job_test.go can pin
+// exactly what refinementFor (unexported) does with a realistic MusicBrainz
+// answer, through EnrichJob's own black-box behaviour -- the same indirection
+// title.go's sortTitle/albumTitleFallback already rely on Consumer's tests for.
+type fakeSource struct {
+	rg      musicbrainz.ReleaseGroup
+	release musicbrainz.Release
+	err     error
+	calls   int
+}
+
+func (f *fakeSource) Name() string { return "fake" }
+func (f *fakeSource) Album(context.Context, string, string) (musicbrainz.ReleaseGroup, musicbrainz.Release, error) {
+	f.calls++
+	return f.rg, f.release, f.err
+}
+
+func newEnrichJob(t *testing.T, source *fakeSource) (*music.EnrichJob, *store.Store, *librarydb.Queries) {
+	t.Helper()
+	directory := t.TempDir()
+	backups := filepath.Join(directory, "backups")
+	if err := os.MkdirAll(backups, 0o755); err != nil {
+		t.Fatalf("create backup directory: %v", err)
+	}
+	fake := clock.NewFakeAtEpoch()
+
+	libraryStore, err := store.Open(t.Context(), fake, store.Config{
+		Name: "library", Path: filepath.Join(directory, "library.db"),
+		Logger: slog.New(slog.DiscardHandler),
+	})
+	if err != nil {
+		t.Fatalf("Open library: %v", err)
+	}
+	t.Cleanup(func() { _ = libraryStore.Close() })
+	libraryOwner, err := migrations.Library()
+	if err != nil {
+		t.Fatalf("migrations.Library: %v", err)
+	}
+	if err := store.Migrate(t.Context(), libraryStore, backups, libraryOwner); err != nil {
+		t.Fatalf("Migrate library: %v", err)
+	}
+
+	metadataStore, err := store.Open(t.Context(), fake, store.Config{
+		Name: "metadata", Path: filepath.Join(directory, "metadata.db"),
+		Logger: slog.New(slog.DiscardHandler),
+	})
+	if err != nil {
+		t.Fatalf("Open metadata: %v", err)
+	}
+	t.Cleanup(func() { _ = metadataStore.Close() })
+	metadataOwner, err := migrations.Metadata()
+	if err != nil {
+		t.Fatalf("migrations.Metadata: %v", err)
+	}
+	if err := store.Migrate(t.Context(), metadataStore, backups, metadataOwner); err != nil {
+		t.Fatalf("Migrate metadata: %v", err)
+	}
+
+	identity := library.NewIdentity(libraryStore)
+	provider := musicbrainz.New(musicbrainz.Config{
+		Sources: []musicbrainz.Source{source}, Cache: metacache.New(metadataStore),
+		Clock: fake, Logger: slog.New(slog.DiscardHandler),
+	})
+	job := music.NewEnrichJob(music.EnrichJobConfig{
+		Identity: identity, Provider: provider, Clock: fake, Logger: slog.New(slog.DiscardHandler),
+	})
+	return job, libraryStore, librarydb.New(libraryStore.Read())
+}
+
+func createPlaceholder(t *testing.T, opened *store.Store, releaseGroupMBID, releaseMBID string) {
+	t.Helper()
+	identity := library.NewIdentity(opened)
+	err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: music.ProviderReleaseGroup, ExternalID: releaseGroupMBID, Confidence: 1.0,
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "KI Pecezinu", SortTitle: "ki pecezinu"},
+		Edition: &library.EditionLink{
+			Provider: music.ProviderRelease, ExternalID: releaseMBID, Confidence: 1.0,
+			Edition: library.EditionIdentity{Kind: "unknown", Label: releaseMBID},
+		},
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+}
+
+var firstSeen = clock.NewFakeAtEpoch().Now()
+
+func TestEnrichJob_RefinesAPlaceholderEditionEndToEnd(t *testing.T) {
+	source := &fakeSource{
+		rg: musicbrainz.ReleaseGroup{
+			MBID: "rg-1", Title: "KI Pecezinu", PrimaryType: "Album", FirstReleaseDate: "1997-05-21",
+		},
+		release: musicbrainz.Release{
+			// Status arrives already lowercased -- that is a Source's contract
+			// (types.go), verified for both real sources in direct_test.go and
+			// proxy_test.go; this fake stands in for a compliant one.
+			MBID: "rel-1", Title: "KI Pecezinu", Status: "official", Date: "1997-06-16",
+			CatalogueNumber: "CDNODATA02", Barcode: "724385502125",
+			Media: []musicbrainz.Medium{{
+				Position: 1, Format: "CD",
+				Tracks: []musicbrainz.Track{
+					{Position: 1, Title: "Sesoge", DurationMs: 284400, RecordingMBID: "rec-1"},
+					{Position: 2, Title: "Zosidedu Bukerez", DurationMs: 383000, RecordingMBID: "rec-2"},
+				},
+			}},
+		},
+	}
+	job, opened, queries := newEnrichJob(t, source)
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if source.calls != 1 {
+		t.Errorf("source called %d times, want 1", source.calls)
+	}
+
+	edition, err := queries.GetEditionByExternalID(t.Context(), librarydb.GetEditionByExternalIDParams{
+		Provider: music.ProviderRelease, ExternalID: "rel-1",
+	})
+	if err != nil {
+		t.Fatalf("GetEditionByExternalID: %v", err)
+	}
+	// status lowercased into kind, real fields written, and the total runtime
+	// summed across every track -- refinementFor's whole job, asserted as
+	// whole values rather than piecemeal.
+	if edition.Kind != "official" {
+		t.Errorf("Kind = %q, want the lowercased status", edition.Kind)
+	}
+	if edition.Format.String != "CD" || edition.CatalogueNumber.String != "CDNODATA02" || edition.Barcode.String != "724385502125" {
+		t.Errorf("edition = %+v, want the release's own fields", edition)
+	}
+	if !edition.Year.Valid || edition.Year.Int64 != 1997 {
+		t.Errorf("Year = %+v, want 1997 parsed from 1997-06-16", edition.Year)
+	}
+	if !edition.RuntimeMs.Valid || edition.RuntimeMs.Int64 != 284400+383000 {
+		t.Errorf("RuntimeMs = %+v, want the two tracks summed", edition.RuntimeMs)
+	}
+
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-1",
+	})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v", err)
+	}
+	if !work.Year.Valid || work.Year.Int64 != 1997 {
+		t.Errorf("work.Year = %+v, want 1997 parsed from the release group's first-release-date", work.Year)
+	}
+
+	parts, err := queries.ListWorkParts(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("ListWorkParts: %v", err)
+	}
+	if len(parts) != 2 {
+		t.Fatalf("ListWorkParts = %+v, want the two tracks", parts)
+	}
+	if parts[0].MediaRef != "disc1:track1" || parts[0].Title.String != "Sesoge" {
+		t.Errorf("part 1 = %+v, want disc1:track1 'Sesoge'", parts[0])
+	}
+	if parts[0].SortKey >= parts[1].SortKey {
+		t.Errorf("sort keys %q, %q not in track order", parts[0].SortKey, parts[1].SortKey)
+	}
+
+	recording, err := queries.FindPartsByExternalID(t.Context(), librarydb.FindPartsByExternalIDParams{
+		Provider: music.ProviderRecording, ExternalID: "rec-1",
+	})
+	if err != nil {
+		t.Fatalf("FindPartsByExternalID: %v", err)
+	}
+	if len(recording) != 1 {
+		t.Errorf("FindPartsByExternalID(rec-1) = %+v, want exactly the Sesoge part", recording)
+	}
+
+	// The whole point of PlaceholderEditions shrinking on its own: nothing is
+	// left to enrich, so a second run must not call the source again.
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	if source.calls != 1 {
+		t.Errorf("source called %d times after a second run, want still 1 -- nothing left to enrich", source.calls)
+	}
+}
+
+// A source failure on one edition must not stop the sweep from finishing --
+// per-edition isolation, exactly like Consumer.identifyBatch's own "log and
+// continue" (internal/music/consumer.go).
+func TestEnrichJob_ASourceFailureIsolatesToOneEdition(t *testing.T) {
+	source := &fakeSource{err: errors.New("musicbrainz unavailable")}
+	job, opened, _ := newEnrichJob(t, source)
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	identity := library.NewIdentity(opened)
+	remaining, err := identity.PlaceholderEditions(t.Context(), 10)
+	if err != nil {
+		t.Fatalf("PlaceholderEditions: %v", err)
+	}
+	// Still a placeholder: the failed edition is left for the next run, not
+	// abandoned or half-written.
+	if len(remaining) != 1 {
+		t.Errorf("PlaceholderEditions = %+v, want the failed edition still waiting", remaining)
+	}
+}
