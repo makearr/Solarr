@@ -48,6 +48,74 @@ func TestDocument_RoundTrips(t *testing.T) {
 	}
 }
 
+// Profiles are policy too (ADR-40, section 19.8), so they round-trip the same way
+// categories and roots do -- including a category's assignment to one of each.
+func TestDocument_RoundTrips_IncludesProfiles(t *testing.T) {
+	cache, _ := newCache(t)
+
+	quality, err := cache.CreateQualityProfile(t.Context(), "lossless",
+		`{"compare":["lossless"]}`, `{"min_delta":15}`)
+	if err != nil {
+		t.Fatalf("CreateQualityProfile: %v", err)
+	}
+	language, err := cache.CreateLanguageProfile(t.Context(), settings.LanguageProfile{
+		Name: "english", AudioPreferred: []string{"en"}, AudioRequired: []string{"en", "de"},
+	})
+	if err != nil {
+		t.Fatalf("CreateLanguageProfile: %v", err)
+	}
+	music := mustCategory(t, cache, "music", "Music", 10)
+	if err := cache.SetCategoryQualityProfile(t.Context(), music.ID, &quality.ID); err != nil {
+		t.Fatalf("SetCategoryQualityProfile: %v", err)
+	}
+	if err := cache.SetCategoryLanguageProfile(t.Context(), music.ID, &language.ID); err != nil {
+		t.Fatalf("SetCategoryLanguageProfile: %v", err)
+	}
+
+	exported := cache.Export()
+	encoded, err := yaml.Marshal(exported)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded settings.Document
+	if err := yaml.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if problems := decoded.Validate(); len(problems) > 0 {
+		t.Fatalf("our own export does not validate: %v", problems)
+	}
+
+	fresh, _ := newCache(t)
+	if err := fresh.Import(t.Context(), decoded); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	if got := fresh.Export(); !equalDocuments(got, exported) {
+		t.Errorf("round trip changed the configuration:\n got %+v\nwant %+v", got, exported)
+	}
+
+	category, ok := fresh.Snapshot().Category(fresh.Snapshot().Categories()[0].ID)
+	if !ok || category.QualityProfileID == nil || category.LanguageProfileID == nil {
+		t.Fatalf("imported category did not carry its profile assignments: %+v", category)
+	}
+}
+
+// A category naming a profile the document itself never declares would import
+// with a silently missing policy -- the same rule an undeclared root already gets.
+func TestImport_RefusesACategoryReferencingAnUndeclaredProfile(t *testing.T) {
+	document := settings.Document{
+		Version: settings.DocumentVersion,
+		Categories: []settings.CategoryEntry{
+			{MediaType: "music", Name: "Music", QualityProfile: "lossless"},
+		},
+	}
+
+	problems := document.Validate()
+	if len(problems) == 0 {
+		t.Fatal("a category referencing an undeclared quality profile was accepted")
+	}
+}
+
 // A file that reshuffles itself on every export is unusable in version control.
 func TestExport_IsStableAcrossCalls(t *testing.T) {
 	cache, _ := newCache(t)

@@ -13,17 +13,42 @@ import (
 // Document is configuration a person can read, diff and share (F9). Policy
 // only, matched on natural keys. See documentation/configuration-export.md.
 type Document struct {
-	Version    int             `yaml:"version"`
-	Categories []CategoryEntry `yaml:"categories,omitempty"`
-	Roots      []RootEntry     `yaml:"root_folders,omitempty"`
+	Version          int                    `yaml:"version"`
+	Categories       []CategoryEntry        `yaml:"categories,omitempty"`
+	Roots            []RootEntry            `yaml:"root_folders,omitempty"`
+	QualityProfiles  []QualityProfileEntry  `yaml:"quality_profiles,omitempty"`
+	LanguageProfiles []LanguageProfileEntry `yaml:"language_profiles,omitempty"`
 }
 
 // CategoryEntry is one category and the roots attached to it.
 type CategoryEntry struct {
-	MediaType    string         `yaml:"media_type"`
-	Name         string         `yaml:"name"`
-	PriorityRank int64          `yaml:"priority_rank"`
-	Roots        []AttachedRoot `yaml:"roots,omitempty"`
+	MediaType       string         `yaml:"media_type"`
+	Name            string         `yaml:"name"`
+	PriorityRank    int64          `yaml:"priority_rank"`
+	Roots           []AttachedRoot `yaml:"roots,omitempty"`
+	QualityProfile  string         `yaml:"quality_profile,omitempty"`
+	LanguageProfile string         `yaml:"language_profile,omitempty"`
+}
+
+// QualityProfileEntry is one ADR-40 profile. Rules and Upgrade stay opaque JSON
+// text rather than nested YAML -- internal/score, not settings, owns that shape,
+// and settings must not need updating every time it grows a field.
+type QualityProfileEntry struct {
+	Name    string `yaml:"name"`
+	Rules   string `yaml:"rules"`
+	Upgrade string `yaml:"upgrade"`
+}
+
+// LanguageProfileEntry is one section 19.8 profile. Its fields are simple and
+// fixed, so unlike QualityProfileEntry they round-trip as native YAML.
+type LanguageProfileEntry struct {
+	Name                string   `yaml:"name"`
+	AudioPreferred      []string `yaml:"audio_preferred,omitempty"`
+	AudioRequired       []string `yaml:"audio_required,omitempty"`
+	SubtitlePreferred   []string `yaml:"subtitle_preferred,omitempty"`
+	SubtitleRequired    []string `yaml:"subtitle_required,omitempty"`
+	PreferOriginalAudio bool     `yaml:"prefer_original_audio,omitempty"`
+	RejectDubbed        bool     `yaml:"reject_dubbed,omitempty"`
 }
 
 // AttachedRoot names a root by path, so the attachment survives the export.
@@ -62,12 +87,42 @@ func (c *Cache) Export() Document {
 		return document.Roots[i].Path < document.Roots[j].Path
 	})
 
+	qualityNameByID := make(map[int64]string, len(snapshot.QualityProfiles()))
+	for _, profile := range snapshot.QualityProfiles() {
+		qualityNameByID[profile.ID] = profile.Name
+		document.QualityProfiles = append(document.QualityProfiles, QualityProfileEntry{
+			Name: profile.Name, Rules: profile.RulesJSON, Upgrade: profile.UpgradeJSON,
+		})
+	}
+	sort.Slice(document.QualityProfiles, func(i, j int) bool {
+		return document.QualityProfiles[i].Name < document.QualityProfiles[j].Name
+	})
+
+	languageNameByID := make(map[int64]string, len(snapshot.LanguageProfiles()))
+	for _, profile := range snapshot.LanguageProfiles() {
+		languageNameByID[profile.ID] = profile.Name
+		document.LanguageProfiles = append(document.LanguageProfiles, LanguageProfileEntry{
+			Name: profile.Name, AudioPreferred: profile.AudioPreferred, AudioRequired: profile.AudioRequired,
+			SubtitlePreferred: profile.SubtitlePreferred, SubtitleRequired: profile.SubtitleRequired,
+			PreferOriginalAudio: profile.PreferOriginalAudio, RejectDubbed: profile.RejectDubbed,
+		})
+	}
+	sort.Slice(document.LanguageProfiles, func(i, j int) bool {
+		return document.LanguageProfiles[i].Name < document.LanguageProfiles[j].Name
+	})
+
 	attachments := snapshot.CategoryRoots()
 	for _, category := range snapshot.Categories() {
 		entry := CategoryEntry{
 			MediaType:    category.MediaType,
 			Name:         category.Name,
 			PriorityRank: category.PriorityRank,
+		}
+		if category.QualityProfileID != nil {
+			entry.QualityProfile = qualityNameByID[*category.QualityProfileID]
+		}
+		if category.LanguageProfileID != nil {
+			entry.LanguageProfile = languageNameByID[*category.LanguageProfileID]
 		}
 		for _, attachment := range attachments {
 			if attachment.CategoryID != category.ID {
@@ -133,6 +188,36 @@ func (d Document) Validate() config.Problems {
 		}
 	}
 
+	knownQualityProfiles := make(map[string]bool, len(d.QualityProfiles))
+	for index, profile := range d.QualityProfiles {
+		where := fmt.Sprintf("quality_profiles[%d]", index)
+		for _, problem := range validateQualityProfile(profile.Name, profile.Rules, profile.Upgrade) {
+			problem.Path = where + "." + problem.Path
+			problems = append(problems, problem)
+		}
+		if knownQualityProfiles[profile.Name] {
+			problems = append(problems, config.Problem{
+				Path: where, Value: profile.Name, Expectation: "a quality profile listed once",
+			})
+		}
+		knownQualityProfiles[profile.Name] = true
+	}
+
+	knownLanguageProfiles := make(map[string]bool, len(d.LanguageProfiles))
+	for index, profile := range d.LanguageProfiles {
+		where := fmt.Sprintf("language_profiles[%d]", index)
+		for _, problem := range validateLanguageProfile(profile.Name) {
+			problem.Path = where + "." + problem.Path
+			problems = append(problems, problem)
+		}
+		if knownLanguageProfiles[profile.Name] {
+			problems = append(problems, config.Problem{
+				Path: where, Value: profile.Name, Expectation: "a language profile listed once",
+			})
+		}
+		knownLanguageProfiles[profile.Name] = true
+	}
+
 	seenCategories := make(map[string]bool, len(d.Categories))
 	for index, category := range d.Categories {
 		where := fmt.Sprintf("categories[%d]", index)
@@ -161,6 +246,18 @@ func (d Document) Validate() config.Problems {
 				})
 			}
 		}
+		if category.QualityProfile != "" && !knownQualityProfiles[category.QualityProfile] {
+			problems = append(problems, config.Problem{
+				Path: where + ".quality_profile", Value: category.QualityProfile,
+				Expectation: "a name also listed under quality_profiles",
+			})
+		}
+		if category.LanguageProfile != "" && !knownLanguageProfiles[category.LanguageProfile] {
+			problems = append(problems, config.Problem{
+				Path: where + ".language_profile", Value: category.LanguageProfile,
+				Expectation: "a name also listed under language_profiles",
+			})
+		}
 	}
 
 	return problems
@@ -184,8 +281,64 @@ func (c *Cache) Import(ctx context.Context, document Document) error {
 	for _, category := range snapshot.Categories() {
 		categoryIDByKey[category.MediaType+"/"+category.Name] = category.ID
 	}
+	qualityIDByName := make(map[string]int64)
+	for _, profile := range snapshot.QualityProfiles() {
+		qualityIDByName[profile.Name] = profile.ID
+	}
+	languageIDByName := make(map[string]int64)
+	for _, profile := range snapshot.LanguageProfiles() {
+		languageIDByName[profile.Name] = profile.ID
+	}
 
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		for _, profile := range document.QualityProfiles {
+			if _, exists := qualityIDByName[profile.Name]; exists {
+				continue
+			}
+			created, err := queries.CreateQualityProfile(ctx, settingsdb.CreateQualityProfileParams{
+				Name: profile.Name, RulesJson: profile.Rules, UpgradeJson: profile.Upgrade,
+			})
+			if err != nil {
+				return fmt.Errorf("quality profile %q: %w", profile.Name, err)
+			}
+			qualityIDByName[profile.Name] = created.ID
+		}
+
+		for _, profile := range document.LanguageProfiles {
+			if _, exists := languageIDByName[profile.Name]; exists {
+				continue
+			}
+			audioPreferred, err := encodeStringArray(profile.AudioPreferred)
+			if err != nil {
+				return fmt.Errorf("language profile %q: %w", profile.Name, err)
+			}
+			audioRequired, err := encodeOptionalStringArray(profile.AudioRequired)
+			if err != nil {
+				return fmt.Errorf("language profile %q: %w", profile.Name, err)
+			}
+			subtitlePreferred, err := encodeOptionalStringArray(profile.SubtitlePreferred)
+			if err != nil {
+				return fmt.Errorf("language profile %q: %w", profile.Name, err)
+			}
+			subtitleRequired, err := encodeOptionalStringArray(profile.SubtitleRequired)
+			if err != nil {
+				return fmt.Errorf("language profile %q: %w", profile.Name, err)
+			}
+			created, err := queries.CreateLanguageProfile(ctx, settingsdb.CreateLanguageProfileParams{
+				Name:                  profile.Name,
+				AudioPreferredJson:    audioPreferred,
+				AudioRequiredJson:     audioRequired,
+				SubtitlePreferredJson: subtitlePreferred,
+				SubtitleRequiredJson:  subtitleRequired,
+				PreferOriginalAudio:   boolToInt(profile.PreferOriginalAudio),
+				RejectDubbed:          boolToInt(profile.RejectDubbed),
+			})
+			if err != nil {
+				return fmt.Errorf("language profile %q: %w", profile.Name, err)
+			}
+			languageIDByName[profile.Name] = created.ID
+		}
+
 		for _, root := range document.Roots {
 			if _, exists := rootIDByPath[root.Path]; exists {
 				continue
@@ -233,6 +386,23 @@ func (c *Cache) Import(ctx context.Context, document Document) error {
 						AcceptsNew: boolToInt(attached.AcceptsNew),
 					}); err != nil {
 					return fmt.Errorf("category %q root %q: %w", key, attached.Path, err)
+				}
+			}
+
+			if category.QualityProfile != "" {
+				if err := queries.SetCategoryQualityProfile(ctx, settingsdb.SetCategoryQualityProfileParams{
+					QualityProfileID: sql.NullInt64{Int64: qualityIDByName[category.QualityProfile], Valid: true},
+					ID:               id,
+				}); err != nil {
+					return fmt.Errorf("category %q quality profile: %w", key, err)
+				}
+			}
+			if category.LanguageProfile != "" {
+				if err := queries.SetCategoryLanguageProfile(ctx, settingsdb.SetCategoryLanguageProfileParams{
+					LanguageProfileID: sql.NullInt64{Int64: languageIDByName[category.LanguageProfile], Valid: true},
+					ID:                id,
+				}); err != nil {
+					return fmt.Errorf("category %q language profile: %w", key, err)
 				}
 			}
 		}
