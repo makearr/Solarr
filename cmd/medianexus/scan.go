@@ -31,11 +31,12 @@ func (p *process) registerScanJob(registry *jobs.Registry, executor *jobs.Execut
 	}
 	physical := library.NewPhysical(p.library)
 	consumer := music.NewConsumer(music.ConsumerConfig{
-		FS:       p.fsys,
-		Physical: physical,
-		Identity: library.NewIdentity(p.library),
-		Clock:    clock.NewSystem(),
-		Logger:   p.logger,
+		FS:           p.fsys,
+		Physical:     physical,
+		Identity:     library.NewIdentity(p.library),
+		Unidentified: library.NewUnidentified(p.library),
+		Clock:        clock.NewSystem(),
+		Logger:       p.logger,
 	})
 	job := scan.NewJob(scan.Config{
 		FS:       p.fsys,

@@ -234,6 +234,15 @@ type HuntQueue struct {
 	SearchCount    int64
 }
 
+type IdentificationQueue struct {
+	MediaObjectID  int64
+	RootFolderID   int64
+	RelPath        string
+	CandidatesJson string
+	FirstSeenAt    int64
+	LastSeenAt     int64
+}
+
 type ImportDecision struct {
 	ID                int64
 	DesiredItemID     int64

@@ -1,6 +1,13 @@
 import { Link, useRouterState, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, LayoutDashboard, Library, Settings, type LucideIcon } from "lucide-react";
+import {
+  Activity,
+  HelpCircle,
+  LayoutDashboard,
+  Library,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -13,6 +20,7 @@ type Category = components["schemas"]["LibraryCategory"];
 const SECTIONS: readonly { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/library", label: "Library", icon: Library },
+  { to: "/unidentified", label: "Unidentified", icon: HelpCircle },
   { to: "/activity", label: "Activity", icon: Activity },
   { to: "/settings", label: "Settings", icon: Settings },
 ];

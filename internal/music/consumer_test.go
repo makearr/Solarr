@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/library"
 	"github.com/makearr/MediaNexus/internal/mediatool"
 	"github.com/makearr/MediaNexus/internal/music"
+	"github.com/makearr/MediaNexus/internal/paginate"
 	"github.com/makearr/MediaNexus/internal/scan"
 	"github.com/makearr/MediaNexus/internal/settings"
 	"github.com/makearr/MediaNexus/internal/store"
@@ -60,7 +61,8 @@ func newConsumer(t *testing.T) (music.Consumer, *store.Store, *fsx.Mem) {
 
 	consumer := music.NewConsumer(music.ConsumerConfig{
 		FS: fsys, Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened),
-		Clock: fake, Logger: slog.New(slog.DiscardHandler),
+		Unidentified: library.NewUnidentified(opened),
+		Clock:        fake, Logger: slog.New(slog.DiscardHandler),
 	})
 	return consumer, opened, fsys
 }
@@ -319,5 +321,63 @@ func TestObserve_MissingAlbumTagFallsBackToTheDirectoryName(t *testing.T) {
 	}
 	if work.CanonicalTitle != "Zor A" {
 		t.Errorf("CanonicalTitle = %q, want the directory name %q", work.CanonicalTitle, "Zor A")
+	}
+}
+
+// F29: a file the chain could not resolve at all is queued for manual
+// identification, not silently dropped.
+func TestObserve_UnresolvedFileIsQueuedForManualIdentification(t *testing.T) {
+	consumer, opened, fsys := newConsumer(t)
+	content := []byte("an unidentified file, tagged with nothing useful")
+	writeMusicFile(t, fsys, "Unsorted/track.mp3", content)
+
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+	batch := []scan.Observed{observedFile("Unsorted/track.mp3", int64(len(content)), mediatool.Tags{})}
+
+	if err := consumer.Observe(t.Context(), root, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	rows, err := library.NewUnidentified(opened).List(t.Context(), nil, paginate.Cursor{}, 50)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("queue = %+v, want exactly one entry", rows)
+	}
+	if rows[0].RelPath != "Unsorted/track.mp3" || rows[0].RootFolderID != 1 {
+		t.Errorf("queued entry = %+v, want Unsorted/track.mp3 under root 1", rows[0])
+	}
+	if len(rows[0].Candidates) != 0 {
+		t.Errorf("Candidates = %+v, want none -- nothing in the file matched anything", rows[0].Candidates)
+	}
+}
+
+// F29: a file that later resolves (a rescan after it was re-tagged, e.g.) must
+// leave the queue -- it is not history, only what still needs a human.
+func TestObserve_ResolvingOnASecondSweepClearsTheQueueEntry(t *testing.T) {
+	consumer, opened, fsys := newConsumer(t)
+	content := []byte("first untagged, then tagged")
+	writeMusicFile(t, fsys, "Unsorted/track.mp3", content)
+
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+	untagged := []scan.Observed{observedFile("Unsorted/track.mp3", int64(len(content)), mediatool.Tags{})}
+	if err := consumer.Observe(t.Context(), root, untagged); err != nil {
+		t.Fatalf("Observe (untagged): %v", err)
+	}
+
+	tagged := []scan.Observed{observedFile("Unsorted/track.mp3", int64(len(content)), mediatool.Tags{
+		"album": "KI Pecezinu", "musicbrainz_releasegroupid": releaseGroupMBID,
+	})}
+	if err := consumer.Observe(t.Context(), root, tagged); err != nil {
+		t.Fatalf("Observe (tagged): %v", err)
+	}
+
+	rows, err := library.NewUnidentified(opened).List(t.Context(), nil, paginate.Cursor{}, 50)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("queue = %+v, want empty -- the second sweep resolved it", rows)
 	}
 }

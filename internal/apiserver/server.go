@@ -67,6 +67,9 @@ type Config struct {
 	Works WorksReader
 	// Search ranks the library by title. Optional: without it, Search answers 503.
 	Search SearchReader
+	// Unidentified lists F29's manual identification queue. Optional: without
+	// it, ListUnidentified answers 503.
+	Unidentified UnidentifiedReader
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -85,11 +88,12 @@ type Server struct {
 	roots   RootChecker
 	address string
 
-	librarySize LibrarySize
-	timezone    string
-	egress      EgressReporter
-	works       WorksReader
-	search      SearchReader
+	librarySize  LibrarySize
+	timezone     string
+	egress       EgressReporter
+	works        WorksReader
+	search       SearchReader
+	unidentified UnidentifiedReader
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -120,12 +124,13 @@ func New(config Config) (*Server, error) {
 		webui:   config.WebUI,
 		roots:   config.Roots,
 
-		librarySize: config.LibrarySize,
-		timezone:    config.Timezone,
-		egress:      config.Egress,
-		works:       config.Works,
-		search:      config.Search,
-		address:     net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
+		librarySize:  config.LibrarySize,
+		timezone:     config.Timezone,
+		egress:       config.Egress,
+		works:        config.Works,
+		search:       config.Search,
+		unidentified: config.Unidentified,
+		address:      net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
 	router := chi.NewRouter()
@@ -161,6 +166,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/system/egress", server.GetEgress)
 			secured.Get("/jobs", server.routeListJobs)
 			secured.Get("/works", server.routeListWorks)
+			secured.Get("/library/unidentified", server.routeListUnidentified)
 			secured.Get("/search", server.routeSearch)
 			secured.Get("/categories", server.ListCategories)
 			secured.Get("/rootfolders", server.ListRootFolders)
@@ -352,6 +358,35 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.ListWorks(w, r, params)
+}
+
+func (s *Server) routeListUnidentified(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	var params gen.ListUnidentifiedParams
+
+	if raw := query.Get("cursor"); raw != "" {
+		params.Cursor = &raw
+	}
+	if raw := query.Get("limit"); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "limit must be a number")
+			return
+		}
+		params.Limit = &limit
+	}
+	if raw := query.Get("category_id"); raw != "" {
+		categoryID, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "category_id must be a number")
+			return
+		}
+		params.CategoryId = &categoryID
+	}
+
+	s.ListUnidentified(w, r, params)
 }
 
 func (s *Server) routeSearch(w http.ResponseWriter, r *http.Request) {
