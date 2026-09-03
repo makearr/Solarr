@@ -256,6 +256,8 @@ type LibraryPath struct {
 	LinkKind      string
 	IsPrimary     int64
 	CreatedAt     int64
+	LastSeenAt    int64
+	MissingSince  sql.NullInt64
 }
 
 type MediaAttribute struct {

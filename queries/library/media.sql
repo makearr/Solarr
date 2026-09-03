@@ -94,15 +94,17 @@ SELECT id, phash FROM media_object WHERE phash IS NOT NULL ORDER BY id;
 -- The second half of importing a file, and execlastid for the same reason.
 -- name: AddLibraryPath :execlastid
 INSERT INTO library_path (media_object_id, root_folder_id, rel_path, link_kind,
-                          is_primary, created_at)
-VALUES (?, ?, ?, ?, ?, ?);
+                          is_primary, created_at, last_seen_at, missing_since)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: ListPathsForObject :many
-SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary, created_at
+SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary,
+       created_at, last_seen_at, missing_since
 FROM library_path WHERE media_object_id = ? ORDER BY is_primary DESC, id;
 
 -- name: GetPathByLocation :one
-SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary, created_at
+SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary,
+       created_at, last_seen_at, missing_since
 FROM library_path WHERE root_folder_id = ? AND rel_path = ?;
 
 -- name: DeleteLibraryPath :exec
@@ -111,11 +113,28 @@ DELETE FROM library_path WHERE id = ?;
 -- A vanished path is MISSING, not deleted, until the root is confirmed online
 -- (section 10.4), so the scan lists a root rather than removing from it.
 -- name: ListPathsInRoot :many
-SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary, created_at
+SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary,
+       created_at, last_seen_at, missing_since
 FROM library_path
 WHERE root_folder_id = sqlc.arg(root_folder_id) AND id > sqlc.arg(after_id)
 ORDER BY id
 LIMIT sqlc.arg(page_size);
+
+-- Re-observing a known path proves it is still present, and clears any earlier
+-- missing mark (section 10.4): a file coming back is exactly the case this exists
+-- for.
+-- name: TouchLibraryPath :exec
+UPDATE library_path SET last_seen_at = ?, missing_since = NULL WHERE id = ?;
+
+-- Bounded per Invariant 2: the caller loops this until a pass affects zero rows,
+-- never one UPDATE over the whole root.
+-- name: MarkLibraryPathsMissing :execrows
+UPDATE library_path SET missing_since = ?
+WHERE id IN (
+  SELECT p.id FROM library_path p
+  WHERE p.root_folder_id = ? AND p.last_seen_at < ? AND p.missing_since IS NULL
+  LIMIT ?
+);
 
 -- name: DeleteMediaObject :exec
 DELETE FROM media_object WHERE id = ?;

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/fsx"
@@ -66,6 +67,7 @@ type Job struct {
 	roots    Roots
 	tool     mediatool.Tool
 	consumer Consumer
+	physical library.Physical
 	clock    clock.Clock
 	logger   *slog.Logger
 
@@ -80,6 +82,7 @@ type Config struct {
 	Roots    Roots
 	Tool     mediatool.Tool
 	Consumer Consumer
+	Physical library.Physical
 	Clock    clock.Clock
 	Logger   *slog.Logger
 	Include  func(relPath string) bool
@@ -97,6 +100,7 @@ func NewJob(config Config) *Job {
 		roots:    config.Roots,
 		tool:     config.Tool,
 		consumer: config.Consumer,
+		physical: config.Physical,
 		clock:    config.Clock,
 		logger:   logger,
 		include:  config.Include,
@@ -157,7 +161,30 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		slog.Int("files_found", result.FilesFound),
 		slog.Int("directories_read", result.DirectoriesRead),
 		slog.Int("directories_visited", result.DirectoriesVisited))
+
+	// Only a full sweep visited every directory, so only a full sweep is evidence
+	// that a path it did not re-observe is actually gone (section 10.4). An
+	// incremental sweep skips directories whose mtime did not move and would
+	// wrongly mark their contents missing.
+	if payload.Full {
+		j.markMissing(ctx, root, result.State.SweptThrough)
+	}
 	return nil
+}
+
+// markMissing is best-effort cleanup, not the sweep's core job: a failure here does
+// not undo an otherwise-successful sweep, so it is logged rather than returned.
+func (j *Job) markMissing(ctx context.Context, root settings.RootFolder, sweptThrough time.Time) {
+	marked, err := j.physical.MarkMissing(ctx, root.ID, sweptThrough)
+	if err != nil {
+		j.logger.Warn("mark missing failed",
+			slog.Int64("root_folder_id", root.ID), slog.String("path", root.Path),
+			slog.Any("error", err))
+		return
+	}
+	j.logger.Info("library paths marked missing",
+		slog.Int64("root_folder_id", root.ID), slog.String("path", root.Path),
+		slog.Int("marked", marked))
 }
 
 // batch probes one directory's files in a single mediatool call and hands the result

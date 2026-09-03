@@ -98,6 +98,13 @@ func registerOne(
 		RootFolderID: rootFolderID, RelPath: file.RelPath,
 	})
 	if err == nil {
+		// Re-observing a known path is what proves it is still present (section
+		// 10.4), whether or not it was ever marked missing.
+		if err := queries.TouchLibraryPath(ctx, librarydb.TouchLibraryPathParams{
+			LastSeenAt: file.FirstSeenAt.Unix(), ID: existing.ID,
+		}); err != nil {
+			return 0, fmt.Errorf("touch path: %w", err)
+		}
 		return existing.MediaObjectID, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -112,6 +119,7 @@ func registerOne(
 	if _, err := queries.AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
 		MediaObjectID: mediaObjectID, RootFolderID: rootFolderID, RelPath: file.RelPath,
 		LinkKind: "primary", IsPrimary: 1, CreatedAt: file.FirstSeenAt.Unix(),
+		LastSeenAt: file.FirstSeenAt.Unix(),
 	}); err != nil {
 		return 0, fmt.Errorf("add path: %w", err)
 	}
@@ -140,4 +148,33 @@ func findOrCreateObject(ctx context.Context, queries *librarydb.Queries, file Ph
 		return 0, fmt.Errorf("create media object: %w", err)
 	}
 	return created, nil
+}
+
+// MarkMissing marks every library_path in rootFolderID not observed since before as
+// missing (section 10.4). Callers must only pass before from a completed *full*
+// sweep's start time -- an incremental sweep can skip whole directories, so a path it
+// never looked at is not evidence of absence.
+func (p Physical) MarkMissing(ctx context.Context, rootFolderID int64, before time.Time) (int, error) {
+	beforeUnix := before.Unix()
+	total := 0
+	for {
+		var changed int64
+		err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			var batchErr error
+			changed, batchErr = librarydb.New(tx).MarkLibraryPathsMissing(ctx, librarydb.MarkLibraryPathsMissingParams{
+				MissingSince: sql.NullInt64{Int64: beforeUnix, Valid: true},
+				RootFolderID: rootFolderID, LastSeenAt: beforeUnix, Limit: dirtyBatchSize,
+			})
+			return batchErr
+		})
+		if err != nil {
+			return total, fmt.Errorf("library: mark missing: %w", err)
+		}
+		// Each batch narrows what the next one matches, so a batch that changes
+		// nothing means nothing is left to mark.
+		if changed == 0 {
+			return total, nil
+		}
+		total += int(changed)
+	}
 }
