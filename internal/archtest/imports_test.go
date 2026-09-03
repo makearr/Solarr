@@ -78,6 +78,9 @@ var allowedInternalImports = map[string][]string{
 	// ADR-30's external tools. It runs subprocesses and parses their output; it
 	// touches no database and no filesystem of ours.
 	"internal/mediatool": {},
+	// Section 21.6's resize-and-encode step: pure image processing (stdlib image
+	// package plus a pure-Go WebP encoder dependency), no I/O of its own.
+	"internal/artwork": {},
 	// The music media type, direct-wired until stage 9 extracts it as a plugin. Its
 	// scan.Consumer needs the sweep's own types (scan), root folder paths (settings),
 	// the filesystem seam for the quick hash (fsx) and an injected clock (ADR-17) --
