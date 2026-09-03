@@ -428,6 +428,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/score/simulate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * F6: paste a release title, see how it would score against a profile -- no candidate, no acquisition, no side effects.
+         * @description Parses title with the ADR-18 release-name parser and evaluates the result against quality_profile_id (and, if given, language_profile_id) through the ADR-40 interpreter. Since there is no real file to probe, the parser's claims stand in for measured facts -- this shows what the title implies, not a guarantee of what a real download would measure (ADR-39). preferred_release_groups substitutes a scoring rule's "$preferred" placeholder, the same allowlist a real evaluation would use.
+         */
+        post: operations["simulateScore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/library/unidentified": {
         parameters: {
             query?: never;
@@ -801,6 +821,76 @@ export interface components {
             /** @description From the counter table (section 21.12), never a live COUNT. 0 until the reconciliation sweep has run at least once. */
             works?: number;
             files?: number;
+        };
+        /** @description A hard requirement, evaluated before any comparison (ADR-40 stage 1). */
+        GateResult: {
+            /** @example audio_language */
+            gate: string;
+            passed: boolean;
+            /** @example any of [en de] */
+            wanted: string;
+            /** @example ru */
+            got: string;
+        };
+        /** @description One compare-list dimension's position (ADR-40 stage 2). Equal rank between two candidates means this dimension did not decide. */
+        TierValue: {
+            /** @example video_codec */
+            dimension: string;
+            /** @description Lower is better. */
+            rank: number;
+            /** @example hevc */
+            label: string;
+            detail: string;
+        };
+        /** @description One additive-stage contribution (ADR-40 stage 3). Breaks ties only. */
+        ScoreComponent: {
+            /** @example preferred-groups */
+            rule: string;
+            label: string;
+            delta: number;
+        };
+        /** @description One failed gate, as data rather than a formatted string (ADR-10). */
+        Rejection: {
+            rule: string;
+            field: string;
+            wanted: string;
+            got: string;
+        };
+        /** @description A reason this candidate is not actionable yet. */
+        Deferral: {
+            reason: string;
+        };
+        /** @description ADR-10: reasons are the result, never a side channel. score is derived from components, never computed separately, so the explanation and the decision cannot drift apart. */
+        Decision: {
+            /** @enum {string} */
+            outcome: "ACCEPT" | "REJECT" | "DEFER";
+            gates: components["schemas"]["GateResult"][];
+            quality: components["schemas"]["TierValue"][];
+            components: components["schemas"]["ScoreComponent"][];
+            rejections: components["schemas"]["Rejection"][];
+            deferrals: components["schemas"]["Deferral"][];
+            /** @description Decision.Score() -- the sum of components. */
+            score: number;
+        };
+        /** @description internal/parse's own reading of the pasted title, shown so a simulation is not a black box. */
+        ParsedTitle: {
+            artist?: string;
+            album?: string;
+            year?: number;
+            /** @example flac */
+            format?: string;
+            bitrate_kbps?: number;
+            source?: string;
+            edition?: string;
+            release_group?: string;
+            /** @description Never 1.0 -- a tag says what a tagger believed, a parse says what a name implies. */
+            confidence: number;
+            /** @description Trailing tokens nothing claimed (ADR-18's corpus-growth signal). */
+            unparsed?: string[];
+        };
+        ScoreSimulation: {
+            parsed: components["schemas"]["ParsedTitle"];
+            decision: components["schemas"]["Decision"];
         };
     };
     responses: {
@@ -1463,6 +1553,42 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+        };
+    };
+    simulateScore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @example Artist - Album (2024) [FLAC] */
+                    title: string;
+                    /** Format: int64 */
+                    quality_profile_id: number;
+                    /** Format: int64 */
+                    language_profile_id?: number;
+                    preferred_release_groups?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description The parse and the resulting decision. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScoreSimulation"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            /** @description quality_profile_id or language_profile_id does not exist. */
+            404: components["responses"]["Problem"];
         };
     };
     listUnidentified: {

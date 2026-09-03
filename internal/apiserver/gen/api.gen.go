@@ -26,6 +26,13 @@ const (
 	AuthPolicyConfiguredModeProxy      AuthPolicyConfiguredMode = "proxy"
 )
 
+// Defines values for DecisionOutcome.
+const (
+	ACCEPT DecisionOutcome = "ACCEPT"
+	DEFER  DecisionOutcome = "DEFER"
+	REJECT DecisionOutcome = "REJECT"
+)
+
 // Defines values for EventTopic.
 const (
 	EventTopicAcquisition  EventTopic = "acquisition"
@@ -182,6 +189,27 @@ type DashboardSummary struct {
 	RootFolders []RootFolder  `json:"root_folders"`
 }
 
+// Decision ADR-10: reasons are the result, never a side channel. score is derived from components, never computed separately, so the explanation and the decision cannot drift apart.
+type Decision struct {
+	Components []ScoreComponent `json:"components"`
+	Deferrals  []Deferral       `json:"deferrals"`
+	Gates      []GateResult     `json:"gates"`
+	Outcome    DecisionOutcome  `json:"outcome"`
+	Quality    []TierValue      `json:"quality"`
+	Rejections []Rejection      `json:"rejections"`
+
+	// Score Decision.Score() -- the sum of components.
+	Score float32 `json:"score"`
+}
+
+// DecisionOutcome defines model for Decision.Outcome.
+type DecisionOutcome string
+
+// Deferral A reason this candidate is not actionable yet.
+type Deferral struct {
+	Reason string `json:"reason"`
+}
+
 // Edition defines model for Edition.
 type Edition struct {
 	Barcode         *string      `json:"barcode,omitempty"`
@@ -218,6 +246,14 @@ type EventTopic string
 type ExternalID struct {
 	ExternalId string `json:"external_id"`
 	Provider   string `json:"provider"`
+}
+
+// GateResult A hard requirement, evaluated before any comparison (ADR-40 stage 1).
+type GateResult struct {
+	Gate   string `json:"gate"`
+	Got    string `json:"got"`
+	Passed bool   `json:"passed"`
+	Wanted string `json:"wanted"`
 }
 
 // HealthStatus defines model for HealthStatus.
@@ -317,6 +353,24 @@ type Me struct {
 // MediaType Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
 type MediaType string
 
+// ParsedTitle internal/parse's own reading of the pasted title, shown so a simulation is not a black box.
+type ParsedTitle struct {
+	Album       *string `json:"album,omitempty"`
+	Artist      *string `json:"artist,omitempty"`
+	BitrateKbps *int    `json:"bitrate_kbps,omitempty"`
+
+	// Confidence Never 1.0 -- a tag says what a tagger believed, a parse says what a name implies.
+	Confidence   float32 `json:"confidence"`
+	Edition      *string `json:"edition,omitempty"`
+	Format       *string `json:"format,omitempty"`
+	ReleaseGroup *string `json:"release_group,omitempty"`
+	Source       *string `json:"source,omitempty"`
+
+	// Unparsed Trailing tokens nothing claimed (ADR-18's corpus-growth signal).
+	Unparsed *[]string `json:"unparsed,omitempty"`
+	Year     *int      `json:"year,omitempty"`
+}
+
 // Permission `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.
 type Permission string
 
@@ -339,6 +393,14 @@ type ReadyStatus struct {
 // ReadyStatusStatus defines model for ReadyStatus.Status.
 type ReadyStatusStatus string
 
+// Rejection One failed gate, as data rather than a formatted string (ADR-10).
+type Rejection struct {
+	Field  string `json:"field"`
+	Got    string `json:"got"`
+	Rule   string `json:"rule"`
+	Wanted string `json:"wanted"`
+}
+
 // Role defines model for Role.
 type Role string
 
@@ -355,6 +417,22 @@ type RootFolder struct {
 	Writable *bool `json:"writable,omitempty"`
 }
 
+// ScoreComponent One additive-stage contribution (ADR-40 stage 3). Breaks ties only.
+type ScoreComponent struct {
+	Delta float32 `json:"delta"`
+	Label string  `json:"label"`
+	Rule  string  `json:"rule"`
+}
+
+// ScoreSimulation defines model for ScoreSimulation.
+type ScoreSimulation struct {
+	// Decision ADR-10: reasons are the result, never a side channel. score is derived from components, never computed separately, so the explanation and the decision cannot drift apart.
+	Decision Decision `json:"decision"`
+
+	// Parsed internal/parse's own reading of the pasted title, shown so a simulation is not a black box.
+	Parsed ParsedTitle `json:"parsed"`
+}
+
 // SearchResult defines model for SearchResult.
 type SearchResult struct {
 	// Score Lower is a better match (bm25 rank, ascending). Not meaningfully comparable across two different queries.
@@ -368,6 +446,16 @@ type SetupStatus struct {
 
 	// NeedsAdministrator True while no account exists, which is the only time setup can be claimed.
 	NeedsAdministrator bool `json:"needs_administrator"`
+}
+
+// TierValue One compare-list dimension's position (ADR-40 stage 2). Equal rank between two candidates means this dimension did not decide.
+type TierValue struct {
+	Detail    string `json:"detail"`
+	Dimension string `json:"dimension"`
+	Label     string `json:"label"`
+
+	// Rank Lower is better.
+	Rank int `json:"rank"`
 }
 
 // UnidentifiedCandidate One ranked candidate the ADR-24 chain found but was not confident enough to resolve automatically -- RunChain's merged Candidates, best first. Empty on a file that matched nothing at all.
@@ -497,6 +585,14 @@ type AddRootFolderJSONBody struct {
 	Path  string  `json:"path"`
 }
 
+// SimulateScoreJSONBody defines parameters for SimulateScore.
+type SimulateScoreJSONBody struct {
+	LanguageProfileId      *int64    `json:"language_profile_id,omitempty"`
+	PreferredReleaseGroups *[]string `json:"preferred_release_groups,omitempty"`
+	QualityProfileId       int64     `json:"quality_profile_id"`
+	Title                  string    `json:"title"`
+}
+
 // SearchParams defines parameters for Search.
 type SearchParams struct {
 	// Q Below 2 characters answers 400 rather than searching.
@@ -559,6 +655,9 @@ type LoginJSONRequestBody LoginJSONBody
 // AddRootFolderJSONRequestBody defines body for AddRootFolder for application/json ContentType.
 type AddRootFolderJSONRequestBody AddRootFolderJSONBody
 
+// SimulateScoreJSONRequestBody defines body for SimulateScore for application/json ContentType.
+type SimulateScoreJSONRequestBody SimulateScoreJSONBody
+
 // SetAuthPolicyJSONRequestBody defines body for SetAuthPolicy for application/json ContentType.
 type SetAuthPolicyJSONRequestBody SetAuthPolicyJSONBody
 
@@ -615,6 +714,9 @@ type ServerInterface interface {
 	// Add a library root.
 	// (POST /rootfolders)
 	AddRootFolder(w http.ResponseWriter, r *http.Request)
+	// F6: paste a release title, see how it would score against a profile -- no candidate, no acquisition, no side effects.
+	// (POST /score/simulate)
+	SimulateScore(w http.ResponseWriter, r *http.Request)
 	// Ranked cross-media title search (section 21.5), category-filtered (ADR-27).
 	// (GET /search)
 	Search(w http.ResponseWriter, r *http.Request, params SearchParams)
@@ -741,6 +843,12 @@ func (_ Unimplemented) ListRootFolders(w http.ResponseWriter, r *http.Request) {
 // Add a library root.
 // (POST /rootfolders)
 func (_ Unimplemented) AddRootFolder(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// F6: paste a release title, see how it would score against a profile -- no candidate, no acquisition, no side effects.
+// (POST /score/simulate)
+func (_ Unimplemented) SimulateScore(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1172,6 +1280,28 @@ func (siw *ServerInterfaceWrapper) AddRootFolder(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AddRootFolder(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SimulateScore operation middleware
+func (siw *ServerInterfaceWrapper) SimulateScore(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SimulateScore(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1747,6 +1877,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/rootfolders", wrapper.AddRootFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/score/simulate", wrapper.SimulateScore)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/search", wrapper.Search)

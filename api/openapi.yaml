@@ -25,6 +25,8 @@ tags:
     description: The job queue.
   - name: events
     description: The server-sent event stream.
+  - name: scoring
+    description: ADR-40's quality/language interpreter.
 
 paths:
   /health:
@@ -623,6 +625,47 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /score/simulate:
+    post:
+      operationId: simulateScore
+      tags: [scoring]
+      summary: >-
+        F6: paste a release title, see how it would score against a profile --
+        no candidate, no acquisition, no side effects.
+      description: >-
+        Parses title with the ADR-18 release-name parser and evaluates the
+        result against quality_profile_id (and, if given, language_profile_id)
+        through the ADR-40 interpreter. Since there is no real file to probe,
+        the parser's claims stand in for measured facts -- this shows what the
+        title implies, not a guarantee of what a real download would measure
+        (ADR-39). preferred_release_groups substitutes a scoring rule's
+        "$preferred" placeholder, the same allowlist a real evaluation would use.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, quality_profile_id]
+              properties:
+                title: { type: string, example: "Artist - Album (2024) [FLAC]" }
+                quality_profile_id: { type: integer, format: int64 }
+                language_profile_id: { type: integer, format: int64 }
+                preferred_release_groups:
+                  type: array
+                  items: { type: string }
+      responses:
+        "200":
+          description: The parse and the resulting decision.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScoreSimulation" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: quality_profile_id or language_profile_id does not exist.
+
   /library/unidentified:
     get:
       operationId: listUnidentified
@@ -1220,6 +1263,110 @@ components:
             the reconciliation sweep has run at least once.
         files:
           type: integer
+
+    GateResult:
+      type: object
+      description: A hard requirement, evaluated before any comparison (ADR-40 stage 1).
+      required: [gate, passed, wanted, got]
+      properties:
+        gate: { type: string, example: "audio_language" }
+        passed: { type: boolean }
+        wanted: { type: string, example: "any of [en de]" }
+        got: { type: string, example: "ru" }
+
+    TierValue:
+      type: object
+      description: >-
+        One compare-list dimension's position (ADR-40 stage 2). Equal rank
+        between two candidates means this dimension did not decide.
+      required: [dimension, rank, label, detail]
+      properties:
+        dimension: { type: string, example: "video_codec" }
+        rank: { type: integer, description: Lower is better. }
+        label: { type: string, example: "hevc" }
+        detail: { type: string }
+
+    ScoreComponent:
+      type: object
+      description: One additive-stage contribution (ADR-40 stage 3). Breaks ties only.
+      required: [rule, label, delta]
+      properties:
+        rule: { type: string, example: "preferred-groups" }
+        label: { type: string }
+        delta: { type: number }
+
+    Rejection:
+      type: object
+      description: One failed gate, as data rather than a formatted string (ADR-10).
+      required: [rule, field, wanted, got]
+      properties:
+        rule: { type: string }
+        field: { type: string }
+        wanted: { type: string }
+        got: { type: string }
+
+    Deferral:
+      type: object
+      description: A reason this candidate is not actionable yet.
+      required: [reason]
+      properties:
+        reason: { type: string }
+
+    Decision:
+      type: object
+      description: >-
+        ADR-10: reasons are the result, never a side channel. score is derived
+        from components, never computed separately, so the explanation and the
+        decision cannot drift apart.
+      required: [outcome, gates, quality, components, rejections, deferrals, score]
+      properties:
+        outcome: { type: string, enum: [ACCEPT, REJECT, DEFER] }
+        gates:
+          type: array
+          items: { $ref: "#/components/schemas/GateResult" }
+        quality:
+          type: array
+          items: { $ref: "#/components/schemas/TierValue" }
+        components:
+          type: array
+          items: { $ref: "#/components/schemas/ScoreComponent" }
+        rejections:
+          type: array
+          items: { $ref: "#/components/schemas/Rejection" }
+        deferrals:
+          type: array
+          items: { $ref: "#/components/schemas/Deferral" }
+        score:
+          type: number
+          description: Decision.Score() -- the sum of components.
+
+    ParsedTitle:
+      type: object
+      description: internal/parse's own reading of the pasted title, shown so a simulation is not a black box.
+      required: [confidence]
+      properties:
+        artist: { type: string }
+        album: { type: string }
+        year: { type: integer }
+        format: { type: string, example: "flac" }
+        bitrate_kbps: { type: integer }
+        source: { type: string }
+        edition: { type: string }
+        release_group: { type: string }
+        confidence:
+          type: number
+          description: Never 1.0 -- a tag says what a tagger believed, a parse says what a name implies.
+        unparsed:
+          type: array
+          items: { type: string }
+          description: Trailing tokens nothing claimed (ADR-18's corpus-growth signal).
+
+    ScoreSimulation:
+      type: object
+      required: [parsed, decision]
+      properties:
+        parsed: { $ref: "#/components/schemas/ParsedTitle" }
+        decision: { $ref: "#/components/schemas/Decision" }
 
 # Authenticated by default.
 security:

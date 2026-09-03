@@ -174,6 +174,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/works/{id}", server.routeGetWork)
 			secured.Get("/library/unidentified", server.routeListUnidentified)
 			secured.Get("/search", server.routeSearch)
+			secured.Post("/score/simulate", server.SimulateScore)
 			secured.Get("/categories", server.ListCategories)
 			secured.Get("/rootfolders", server.ListRootFolders)
 			secured.Get("/users", server.ListUsers)
