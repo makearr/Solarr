@@ -1,13 +1,13 @@
 package settings
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/makearr/MediaNexus/internal/config"
+	"github.com/makearr/MediaNexus/internal/score"
 )
 
 // MediaTypes are the eleven the product plans for (architecture Part I). Manga,
@@ -61,25 +61,26 @@ func validateRootFolder(path string) config.Problems {
 	return problems
 }
 
-// validateQualityProfile checks a quality profile before it is written (ADR-44).
-// This layer only guards what settings.db itself must never hold -- a name and
-// syntactically valid JSON. The rules' actual shape (gates/tiers/scoring, ADR-40)
-// is internal/score's to validate; settings does not import it (this package sits
-// below score in the dependency graph), so a structurally wrong-but-valid-JSON
-// policy is caught only when internal/score first evaluates it, not on write.
+// validateQualityProfile checks a quality profile before it is written (ADR-44):
+// a name, and rules/upgrade JSON that actually decodes as ADR-40's shape --
+// internal/score.Parse/ParseUpgrade own that shape, so a typo like `"compare":
+// "resolution"` (a string where the schema wants a list) is caught here, not only
+// a first evaluation. The interpreter itself never rejects an unknown dimension
+// or field name -- an unmeasured/unlisted one just contributes no evidence, by
+// design -- so there is no stricter semantic check to add beyond decoding cleanly.
 func validateQualityProfile(name, rulesJSON, upgradeJSON string) config.Problems {
 	var problems config.Problems
 	if strings.TrimSpace(name) == "" {
 		problems = append(problems, config.Problem{Path: "name", Expectation: "a name"})
 	}
-	if !json.Valid([]byte(rulesJSON)) {
+	if _, err := score.Parse([]byte(rulesJSON)); err != nil {
 		problems = append(problems, config.Problem{
-			Path: "rules", Value: rulesJSON, Expectation: "valid JSON",
+			Path: "rules", Value: rulesJSON, Expectation: fmt.Sprintf("ADR-40's rule shape: %v", err),
 		})
 	}
-	if !json.Valid([]byte(upgradeJSON)) {
+	if _, err := score.ParseUpgrade([]byte(upgradeJSON)); err != nil {
 		problems = append(problems, config.Problem{
-			Path: "upgrade", Value: upgradeJSON, Expectation: "valid JSON",
+			Path: "upgrade", Value: upgradeJSON, Expectation: fmt.Sprintf("ADR-40's upgrade shape: %v", err),
 		})
 	}
 	return problems

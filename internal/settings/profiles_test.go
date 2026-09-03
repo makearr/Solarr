@@ -34,6 +34,18 @@ func TestCreateQualityProfile_RejectsInvalidJSON(t *testing.T) {
 	}
 }
 
+// A quality profile can be syntactically valid JSON and still not be ADR-40's
+// shape -- score.Parse, not just json.Valid, is what has to catch this.
+func TestCreateQualityProfile_RejectsValidJSONThatIsNotADR40Shape(t *testing.T) {
+	cache, _ := newCache(t)
+
+	_, err := cache.CreateQualityProfile(t.Context(), "wrong-shape",
+		`{"compare":"resolution"}`, `{}`)
+	if err == nil {
+		t.Fatal("CreateQualityProfile succeeded, want it refused: compare must be a list, not a string")
+	}
+}
+
 func TestCreateQualityProfile_RejectsEmptyName(t *testing.T) {
 	cache, _ := newCache(t)
 
