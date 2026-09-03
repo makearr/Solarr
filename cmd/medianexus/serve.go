@@ -297,6 +297,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerEnrichJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerArtworkJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerCategoryCountsJob(registry, executor); err != nil {
 		return err
 	}
@@ -322,6 +325,7 @@ func (p *process) startServer(ctx context.Context) error {
 	p.reportRootFolders()
 	p.enqueueLibraryScans(ctx)
 	p.enqueueEnrichment(ctx)
+	p.enqueueArtwork(ctx)
 	p.enqueueCategoryCounts(ctx)
 	if err := p.seedAuthPolicy(ctx); err != nil {
 		return err

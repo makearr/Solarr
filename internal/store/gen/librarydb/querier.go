@@ -245,6 +245,15 @@ type Querier interface {
 	// "Htuacmasn as director, not producer" is a role-scoped query, which is why the
 	// role lives on the credit (F13).
 	ListWorksCreditedTo(ctx context.Context, arg ListWorksCreditedToParams) ([]Work, error)
+	// Cover art attaches to the work (subject_type='work'), but Cover Art Archive is
+	// queried by release (edition) MBID -- any refined (kind != 'unknown') edition
+	// with one is a usable source. is_default is never set to 1 anywhere in this
+	// codebase today (found writing this query), so the lowest edition id per work
+	// is the deterministic tie-break instead, not a real "preferred edition" signal.
+	// 'musicbrainz:release' must match internal/music.ProviderRelease -- the
+	// release-group id (internal/music.ProviderReleaseGroup) identifies the work,
+	// not the edition, and is the wrong id for this API (section 19.6's tag table).
+	ListWorksNeedingArtwork(ctx context.Context, pageSize int64) ([]ListWorksNeedingArtworkRow, error)
 	MarkDesiredItemDirty(ctx context.Context, id int64) error
 	MarkDesiredItemPlanned(ctx context.Context, arg MarkDesiredItemPlannedParams) error
 	// After a restore the planner has to re-evaluate everything (ADR-15). Batched so no

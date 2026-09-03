@@ -89,9 +89,9 @@ var allowedInternalImports = map[string][]string{
 	// The enrichment job adds musicbrainz (ADR-29) and jobs (its own handler,
 	// mirroring scan.Job).
 	"internal/music": {
-		"internal/clock", "internal/fsx", "internal/jobs", "internal/library",
-		"internal/mediatool", "internal/model", "internal/musicbrainz", "internal/scan",
-		"internal/settings",
+		"internal/artwork", "internal/clock", "internal/fsx", "internal/httpx",
+		"internal/jobs", "internal/library", "internal/mediatool", "internal/model",
+		"internal/musicbrainz", "internal/scan", "internal/settings",
 	},
 	"internal/paginate": {},
 	// The section 10.4 sweep: a walk over the filesystem seam and nothing else.

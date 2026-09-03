@@ -406,6 +406,59 @@ func (q *Queries) ListStatRollup(ctx context.Context, arg ListStatRollupParams) 
 	return items, nil
 }
 
+const listWorksNeedingArtwork = `-- name: ListWorksNeedingArtwork :many
+SELECT e.work_id AS work_id, x.external_id AS release_mbid
+FROM edition e
+JOIN edition_external_id x ON x.edition_id = e.id AND x.provider = 'musicbrainz:release'
+WHERE e.kind != 'unknown'
+  AND e.id = (
+    SELECT MIN(e2.id) FROM edition e2
+    JOIN edition_external_id x2 ON x2.edition_id = e2.id AND x2.provider = 'musicbrainz:release'
+    WHERE e2.work_id = e.work_id AND e2.kind != 'unknown'
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = e.work_id AND a.kind = 'cover'
+  )
+ORDER BY e.work_id
+LIMIT ?1
+`
+
+type ListWorksNeedingArtworkRow struct {
+	WorkID      int64
+	ReleaseMbid string
+}
+
+// Cover art attaches to the work (subject_type='work'), but Cover Art Archive is
+// queried by release (edition) MBID -- any refined (kind != 'unknown') edition
+// with one is a usable source. is_default is never set to 1 anywhere in this
+// codebase today (found writing this query), so the lowest edition id per work
+// is the deterministic tie-break instead, not a real "preferred edition" signal.
+// 'musicbrainz:release' must match internal/music.ProviderRelease -- the
+// release-group id (internal/music.ProviderReleaseGroup) identifies the work,
+// not the edition, and is the wrong id for this API (section 19.6's tag table).
+func (q *Queries) ListWorksNeedingArtwork(ctx context.Context, pageSize int64) ([]ListWorksNeedingArtworkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorksNeedingArtwork, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorksNeedingArtworkRow{}
+	for rows.Next() {
+		var i ListWorksNeedingArtworkRow
+		if err := rows.Scan(&i.WorkID, &i.ReleaseMbid); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const nextReady = `-- name: NextReady :many
 SELECT candidate_id, desired_item_id, priority, queued_at, expires_at, size_bytes
 FROM ready_queue
