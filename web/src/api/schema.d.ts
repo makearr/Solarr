@@ -406,6 +406,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/library/unidentified": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Files a scan recorded that the ADR-24 chain could not confidently resolve (F29's manual identification queue).
+         * @description Oldest-queued first. Category-filtered the same way `/works` and `/search` are -- a file under a root folder attached to a category the caller cannot read is excluded, never 403. A file leaves the queue the moment a later sweep resolves it; this is not history.
+         */
+        get: operations["listUnidentified"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories": {
         parameters: {
             query?: never;
@@ -669,6 +689,32 @@ export interface components {
             work: components["schemas"]["Work"];
             /** @description Lower is a better match (bm25 rank, ascending). Not meaningfully comparable across two different queries. */
             score: number;
+        };
+        /** @description One ranked candidate the ADR-24 chain found but was not confident enough to resolve automatically -- RunChain's merged Candidates, best first. Empty on a file that matched nothing at all. */
+        UnidentifiedCandidate: {
+            /** @example embedded-tag */
+            strategy: string;
+            /** @example musicbrainz:release-group */
+            provider?: string;
+            external_id?: string;
+            confidence: number;
+        };
+        UnidentifiedFile: {
+            /** Format: int64 */
+            media_object_id: number;
+            /** Format: int64 */
+            root_folder_id: number;
+            rel_path: string;
+            candidates: components["schemas"]["UnidentifiedCandidate"][];
+            /** Format: date-time */
+            first_seen_at: string;
+            /** Format: date-time */
+            last_seen_at: string;
+        };
+        UnidentifiedPage: {
+            items: components["schemas"]["UnidentifiedFile"][];
+            /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
+            next_cursor?: string;
         };
         /** @description A category as a navigation target: no `permission` field, since the list is already narrowed to what the caller may read (unlike `Me`'s `categories`, which reports the caller's level on each). */
         LibraryCategory: {
@@ -1317,6 +1363,36 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+        };
+    };
+    listUnidentified: {
+        parameters: {
+            query?: {
+                /** @description From `next_cursor` of the previous page. Absent on the first page. There is no offset parameter and there will not be one. */
+                cursor?: string;
+                limit?: number;
+                /** @description Narrows to one category. Naming a category the caller cannot read answers 404, matching a single-item lookup (Invariant 37) rather than a filter that silently returns nothing. */
+                category_id?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnidentifiedPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            /** @description category_id does not exist, or the caller cannot read it. */
+            404: components["responses"]["Problem"];
         };
     };
     listCategories: {

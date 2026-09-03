@@ -594,6 +594,47 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /library/unidentified:
+    get:
+      operationId: listUnidentified
+      tags: [library]
+      summary: >-
+        Files a scan recorded that the ADR-24 chain could not confidently
+        resolve (F29's manual identification queue).
+      description: >-
+        Oldest-queued first. Category-filtered the same way `/works` and
+        `/search` are -- a file under a root folder attached to a category
+        the caller cannot read is excluded, never 403. A file leaves the
+        queue the moment a later sweep resolves it; this is not history.
+      parameters:
+        - name: cursor
+          in: query
+          description: >-
+            From `next_cursor` of the previous page. Absent on the first page.
+            There is no offset parameter and there will not be one.
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: category_id
+          in: query
+          description: >-
+            Narrows to one category. Naming a category the caller cannot read
+            answers 404, matching a single-item lookup (Invariant 37) rather
+            than a filter that silently returns nothing.
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnidentifiedPage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: category_id does not exist, or the caller cannot read it.
+
   /categories:
     get:
       operationId: listCategories
@@ -1020,6 +1061,45 @@ components:
           description: >-
             Lower is a better match (bm25 rank, ascending). Not meaningfully comparable
             across two different queries.
+
+    UnidentifiedCandidate:
+      type: object
+      description: >-
+        One ranked candidate the ADR-24 chain found but was not confident
+        enough to resolve automatically -- RunChain's merged Candidates,
+        best first. Empty on a file that matched nothing at all.
+      required: [strategy, confidence]
+      properties:
+        strategy: { type: string, example: "embedded-tag" }
+        provider: { type: string, example: "musicbrainz:release-group" }
+        external_id: { type: string }
+        confidence: { type: number }
+
+    UnidentifiedFile:
+      type: object
+      required: [media_object_id, root_folder_id, rel_path, candidates, first_seen_at, last_seen_at]
+      properties:
+        media_object_id: { type: integer, format: int64 }
+        root_folder_id: { type: integer, format: int64 }
+        rel_path: { type: string }
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/UnidentifiedCandidate" }
+        first_seen_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+
+    UnidentifiedPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/UnidentifiedFile" }
+        next_cursor:
+          type: string
+          description: >-
+            Empty on the last page, which is how a client knows to stop without
+            one more request that returns nothing.
 
     LibraryCategory:
       type: object

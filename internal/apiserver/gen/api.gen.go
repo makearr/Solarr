@@ -350,6 +350,32 @@ type SetupStatus struct {
 	NeedsAdministrator bool `json:"needs_administrator"`
 }
 
+// UnidentifiedCandidate One ranked candidate the ADR-24 chain found but was not confident enough to resolve automatically -- RunChain's merged Candidates, best first. Empty on a file that matched nothing at all.
+type UnidentifiedCandidate struct {
+	Confidence float32 `json:"confidence"`
+	ExternalId *string `json:"external_id,omitempty"`
+	Provider   *string `json:"provider,omitempty"`
+	Strategy   string  `json:"strategy"`
+}
+
+// UnidentifiedFile defines model for UnidentifiedFile.
+type UnidentifiedFile struct {
+	Candidates    []UnidentifiedCandidate `json:"candidates"`
+	FirstSeenAt   time.Time               `json:"first_seen_at"`
+	LastSeenAt    time.Time               `json:"last_seen_at"`
+	MediaObjectId int64                   `json:"media_object_id"`
+	RelPath       string                  `json:"rel_path"`
+	RootFolderId  int64                   `json:"root_folder_id"`
+}
+
+// UnidentifiedPage defines model for UnidentifiedPage.
+type UnidentifiedPage struct {
+	Items []UnidentifiedFile `json:"items"`
+
+	// NextCursor Empty on the last page, which is how a client knows to stop without one more request that returns nothing.
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
 // UserAccount defines model for UserAccount.
 type UserAccount struct {
 	Access    []CategoryGrant `json:"access"`
@@ -405,6 +431,16 @@ type ListJobsParams struct {
 
 	// State An unrecognised state is rejected rather than returning nothing.
 	State *JobState `form:"state,omitempty" json:"state,omitempty"`
+}
+
+// ListUnidentifiedParams defines parameters for ListUnidentified.
+type ListUnidentifiedParams struct {
+	// Cursor From `next_cursor` of the previous page. Absent on the first page. There is no offset parameter and there will not be one.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// CategoryId Narrows to one category. Naming a category the caller cannot read answers 404, matching a single-item lookup (Invariant 37) rather than a filter that silently returns nothing.
+	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
 }
 
 // AddRootFolderJSONBody defines parameters for AddRootFolder.
@@ -516,6 +552,9 @@ type ServerInterface interface {
 	// A page of jobs the caller may see.
 	// (GET /jobs)
 	ListJobs(w http.ResponseWriter, r *http.Request, params ListJobsParams)
+	// Files a scan recorded that the ADR-24 chain could not confidently resolve (F29's manual identification queue).
+	// (GET /library/unidentified)
+	ListUnidentified(w http.ResponseWriter, r *http.Request, params ListUnidentifiedParams)
 	// Who the caller is and what they may see.
 	// (GET /me)
 	GetMe(w http.ResponseWriter, r *http.Request)
@@ -621,6 +660,12 @@ func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
 // A page of jobs the caller may see.
 // (GET /jobs)
 func (_ Unimplemented) ListJobs(w http.ResponseWriter, r *http.Request, params ListJobsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Files a scan recorded that the ADR-24 chain could not confidently resolve (F29's manual identification queue).
+// (GET /library/unidentified)
+func (_ Unimplemented) ListUnidentified(w http.ResponseWriter, r *http.Request, params ListUnidentifiedParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -939,6 +984,57 @@ func (siw *ServerInterfaceWrapper) ListJobs(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListJobs(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListUnidentified operation middleware
+func (siw *ServerInterfaceWrapper) ListUnidentified(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListUnidentifiedParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "category_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListUnidentified(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1546,6 +1642,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/jobs", wrapper.ListJobs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/library/unidentified", wrapper.ListUnidentified)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/me", wrapper.GetMe)

@@ -92,6 +92,9 @@ type Querier interface {
 	// A root that is removed from configuration leaves no progress behind.
 	DeleteScanState(ctx context.Context, rootFolderID int64) error
 	DeleteSubscription(ctx context.Context, id int64) error
+	// A file that resolves on a later sweep leaves the queue entirely -- there is no
+	// "resolved" state to keep around.
+	DeleteUnidentified(ctx context.Context, mediaObjectID int64) error
 	DeleteWork(ctx context.Context, id int64) error
 	DeleteWorkPart(ctx context.Context, id int64) error
 	DequeueReady(ctx context.Context, candidateID int64) error
@@ -225,6 +228,10 @@ type Querier interface {
 	// Fingerprint generation is the lowest-priority background work and resumable,
 	// so it asks for the next unfingerprinted rows rather than scanning (ADR-35).
 	ListUnfingerprinted(ctx context.Context, arg ListUnfingerprintedParams) ([]MediaObject, error)
+	// filter_root_folders=0 means unfiltered; =1 filters to root_folder_ids, which is
+	// empty when the caller can see nothing -- same ADR-27 shape as search.sql's
+	// SearchWorks, json_each passing a Go slice as a JSON array.
+	ListUnidentified(ctx context.Context, arg ListUnidentifiedParams) ([]IdentificationQueue, error)
 	ListWorkClassifications(ctx context.Context, workID int64) ([]WorkClassification, error)
 	ListWorkDates(ctx context.Context, workID int64) ([]WorkDate, error)
 	ListWorkExternalIDs(ctx context.Context, workID int64) ([]WorkExternalID, error)
@@ -332,6 +339,9 @@ type Querier interface {
 	// Candidates, decisions and provenance. Column lists follow table order.
 	UpsertCandidate(ctx context.Context, arg UpsertCandidateParams) (Candidate, error)
 	UpsertHuntQueueEntry(ctx context.Context, arg UpsertHuntQueueEntryParams) error
+	// F29: the manual identification queue (migration 0014). Column lists follow table
+	// order, or sqlc stops reusing models.
+	UpsertUnidentified(ctx context.Context, arg UpsertUnidentifiedParams) error
 }
 
 var _ Querier = (*Queries)(nil)

@@ -24,25 +24,29 @@ const (
 	DefaultAmbiguityThreshold = 0.6
 )
 
-// Consumer records what a scan found: media_object and library_path rows always, and
-// -- when the MBID chain resolves one -- the work it identifies. It implements
-// scan.Consumer, direct-wired the way the rest of internal/music is until stage 9.
+// Consumer records what a scan found: media_object and library_path rows always,
+// the work it identifies when the MBID chain resolves one, and -- when it does
+// not -- an F29 manual-identification-queue entry with whatever candidates the
+// chain did find. It implements scan.Consumer, direct-wired the way the rest of
+// internal/music is until stage 9.
 type Consumer struct {
-	fsys     fsx.FS
-	physical library.Physical
-	identity library.Identity
-	clock    clock.Clock
-	chain    model.ChainConfig
-	logger   *slog.Logger
+	fsys         fsx.FS
+	physical     library.Physical
+	identity     library.Identity
+	unidentified library.Unidentified
+	clock        clock.Clock
+	chain        model.ChainConfig
+	logger       *slog.Logger
 }
 
 // ConsumerConfig is what a Consumer needs. Every field is required except Chain and
 // Logger.
 type ConsumerConfig struct {
-	FS       fsx.FS
-	Physical library.Physical
-	Identity library.Identity
-	Clock    clock.Clock
+	FS           fsx.FS
+	Physical     library.Physical
+	Identity     library.Identity
+	Unidentified library.Unidentified
+	Clock        clock.Clock
 	// Chain tunes RunChain (model.ChainConfig). The zero value takes the package
 	// defaults above.
 	Chain  model.ChainConfig
@@ -63,7 +67,8 @@ func NewConsumer(config ConsumerConfig) Consumer {
 	}
 	return Consumer{
 		fsys: config.FS, physical: config.Physical, identity: config.Identity,
-		clock: config.Clock, chain: chain, logger: logger,
+		unidentified: config.Unidentified,
+		clock:        config.Clock, chain: chain, logger: logger,
 	}
 }
 
@@ -103,47 +108,68 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, batch [
 	}
 
 	identifiers := []model.Identifier{NewMBIDIdentifier(tagSourceFor(root, readable))}
-	links, identified := c.identifyBatch(ctx, root.ID, readable, mediaObjectIDs, identifiers)
+	links, queued, resolved := c.identifyBatch(ctx, root.ID, readable, mediaObjectIDs, identifiers)
 	if err := c.identity.ResolveWorks(ctx, now, links); err != nil {
+		return fmt.Errorf("music: %w", err)
+	}
+	if err := c.unidentified.Record(ctx, queued); err != nil {
+		return fmt.Errorf("music: %w", err)
+	}
+	// A file that resolves this sweep may have been queued by an earlier one --
+	// clearing is a no-op otherwise, so this runs unconditionally rather than
+	// tracking which ids were ever queued.
+	if err := c.unidentified.Clear(ctx, resolved); err != nil {
 		return fmt.Errorf("music: %w", err)
 	}
 
 	c.logger.Info("scan batch recorded",
 		slog.Int64("root_folder_id", root.ID), slog.Int("files", len(readable)),
-		slog.Int("identified", identified))
+		slog.Int("identified", len(links)), slog.Int("queued", len(queued)))
 	return nil
 }
 
+// identifyBatch runs the ADR-24 chain per file. links is what resolved and should
+// be written to the library; queued is every file whose merged result did not
+// clear AmbiguityThreshold, bound for the F29 manual identification queue with
+// whatever candidates RunChain still found; resolved is the media_object ids that
+// did identify, so a previously queued entry for one of them can be cleared.
 func (c Consumer) identifyBatch(
 	ctx context.Context, rootFolderID int64, observed []scan.Observed, mediaObjectIDs []int64,
 	identifiers []model.Identifier,
-) ([]library.WorkLink, int) {
-	var links []library.WorkLink
-	identified := 0
+) (links []library.WorkLink, queued []library.QueueEntry, resolved []int64) {
+	now := c.clock.Now().Unix()
 	for index, one := range observed {
+		mediaObjectID := mediaObjectIDs[index]
 		fileRef := model.FileRef{
-			MediaObjectID: mediaObjectIDs[index], RootFolderID: rootFolderID, RelPath: one.File.RelPath,
+			MediaObjectID: mediaObjectID, RootFolderID: rootFolderID, RelPath: one.File.RelPath,
 		}
 		result, err := model.RunChain(ctx, identifiers, fileRef, c.chain)
 		if err != nil {
 			// A strategy failing to run is not a reason to fail the whole batch --
-			// this file simply stays unidentified for the next sweep to retry.
+			// this file simply stays unidentified for the next sweep to retry, and
+			// is not queued: a transient failure is not evidence there is nothing
+			// to find, so it should not display "no candidates" until it is.
 			c.logger.Warn("identify failed", slog.String("path", one.File.RelPath), slog.Any("error", err))
 			continue
 		}
 		// Best.ExternalID is unset only if a future strategy resolves straight to a
-		// local WorkID (ADR-24); none does yet, so there is nothing to link there.
+		// local WorkID (ADR-24); none does yet, so there is nothing to link there --
+		// treated the same as an unresolved chain below.
 		if result.Best == nil || result.Best.ExternalID == nil {
+			queued = append(queued, library.QueueEntry{
+				MediaObjectID: mediaObjectID, RootFolderID: rootFolderID, RelPath: one.File.RelPath,
+				Candidates: result.Candidates, At: now,
+			})
 			continue
 		}
-		identified++
+		resolved = append(resolved, mediaObjectID)
 		links = append(links, library.WorkLink{
 			Provider: result.Best.ExternalID.Provider, ExternalID: result.Best.ExternalID.ExternalID,
 			Confidence: result.Best.ExternalID.Confidence, Work: newWorkIdentity(one),
 			Edition: newEditionLink(one), RootFolderID: rootFolderID,
 		})
 	}
-	return links, identified
+	return links, queued, resolved
 }
 
 // tagSourceFor answers the chain's tag lookups from what the scan already probed --

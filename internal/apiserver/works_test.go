@@ -45,11 +45,12 @@ func (f *fakeWorksReader) ListWorks(
 // grants) to a Server backed by a fakeWorksReader, so category visibility runs
 // through the real repository layer while the library answer stays a fake.
 type worksFixture struct {
-	server *apiserver.Server
-	cache  *settings.Cache
-	works  *fakeWorksReader
-	search *fakeSearchReader
-	clock  *clock.Fake
+	server       *apiserver.Server
+	cache        *settings.Cache
+	works        *fakeWorksReader
+	search       *fakeSearchReader
+	unidentified *fakeUnidentifiedReader
+	clock        *clock.Fake
 }
 
 func newWorksFixture(t *testing.T) worksFixture {
@@ -92,14 +93,16 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 
 	works := &fakeWorksReader{}
 	search := &fakeSearchReader{}
+	unidentified := &fakeUnidentifiedReader{}
 	server, err := apiserver.New(apiserver.Config{
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
-		Checker:     fakeChecker{},
-		Works:       works,
-		Search:      search,
-		LibrarySize: librarySize,
-		Clock:       fake,
-		Logger:      slog.New(slog.DiscardHandler),
+		Checker:      fakeChecker{},
+		Works:        works,
+		Search:       search,
+		Unidentified: unidentified,
+		LibrarySize:  librarySize,
+		Clock:        fake,
+		Logger:       slog.New(slog.DiscardHandler),
 		Auth: apiserver.AuthConfig{
 			Mode:     apiserver.AuthLocal,
 			Sessions: auth.NewSessions([]byte("0123456789abcdef0123456789abcdef"), fake, time.Hour),
@@ -110,7 +113,10 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	return worksFixture{server: server, cache: cache, works: works, search: search, clock: fake}
+	return worksFixture{
+		server: server, cache: cache, works: works, search: search,
+		unidentified: unidentified, clock: fake,
+	}
 }
 
 func (f worksFixture) do(request *http.Request) *httptest.ResponseRecorder {

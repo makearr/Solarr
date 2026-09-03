@@ -22,9 +22,9 @@ var allowedInternalImports = map[string][]string{
 		"internal/apiserver", "internal/auth", "internal/clock", "internal/config",
 		"internal/egress", "internal/events", "internal/fsx", "internal/health",
 		"internal/httpx", "internal/jobs", "internal/library", "internal/mediatool",
-		"internal/metacache", "internal/music", "internal/musicbrainz", "internal/privilege",
-		"internal/recovery", "internal/scan", "internal/settings", "internal/store",
-		"internal/webui", "migrations",
+		"internal/metacache", "internal/music", "internal/musicbrainz", "internal/paginate",
+		"internal/privilege", "internal/recovery", "internal/scan", "internal/settings",
+		"internal/store", "internal/webui", "migrations",
 	},
 	"internal/auth":  {"internal/clock", "internal/secrets"},
 	"internal/authz": {"internal/settings"},
@@ -55,10 +55,12 @@ var allowedInternalImports = map[string][]string{
 	},
 	// Owns librarydb, as jobs owns jobsdb and settings owns settingsdb. fsx is the
 	// quick hash's read of a file's head and tail (section 5.2), nothing else here
-	// touches the filesystem.
+	// touches the filesystem. model is F29's queue entry shape (model.Identification,
+	// the ADR-24 chain's own candidate type) -- model has no dependencies of its own,
+	// so this stays a downward arrow like every other entry here.
 	"internal/library": {
-		"internal/clock", "internal/fsx", "internal/paginate", "internal/store",
-		"internal/store/gen/librarydb",
+		"internal/clock", "internal/fsx", "internal/model", "internal/paginate",
+		"internal/store", "internal/store/gen/librarydb",
 	},
 	// The only unprompted outbound call, so it needs the one way out (Invariant 28).
 	"internal/egress": {"internal/clock", "internal/httpx"},
