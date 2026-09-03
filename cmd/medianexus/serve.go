@@ -356,6 +356,7 @@ func (p *process) startServer(ctx context.Context) error {
 		WebUI:       webui.Handler(),
 		Roots:       apiserver.FilesystemRoots{FS: p.fsys},
 		LibrarySize: library.NewCounters(p.library),
+		Works:       worksAdapter{works: library.NewWorks(p.library)},
 		// time.Local.String() reports "Local"; the name the operator set is the useful one.
 		Timezone: p.timezone,
 		Egress:   egressStatus{prober: prober},

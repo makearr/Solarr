@@ -344,6 +344,25 @@ type UserAccount struct {
 	Username    string `json:"username"`
 }
 
+// Work defines model for Work.
+type Work struct {
+	AddedAt   time.Time `json:"added_at"`
+	Id        int64     `json:"id"`
+	MediaType string    `json:"media_type"`
+	SortTitle string    `json:"sort_title"`
+	Title     string    `json:"title"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Year      *int      `json:"year,omitempty"`
+}
+
+// WorkPage defines model for WorkPage.
+type WorkPage struct {
+	Items []Work `json:"items"`
+
+	// NextCursor Empty on the last page, which is how a client knows to stop without one more request that returns nothing.
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
 // LoginJSONBody defines parameters for Login.
 type LoginJSONBody struct {
 	Password string `json:"password"`
@@ -410,6 +429,16 @@ type SetUserAccessJSONBody struct {
 
 	// Permission `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.
 	Permission Permission `json:"permission"`
+}
+
+// ListWorksParams defines parameters for ListWorks.
+type ListWorksParams struct {
+	// Cursor From `next_cursor` of the previous page. Absent on the first page. There is no offset parameter and there will not be one.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// CategoryId Narrows to one category. Naming a category the caller cannot read answers 404, matching a single-item lookup (Invariant 37) rather than a filter that silently returns nothing.
+	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
 }
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
@@ -504,6 +533,9 @@ type ServerInterface interface {
 	// Grant or change access to one category.
 	// (PUT /users/{id}/access)
 	SetUserAccess(w http.ResponseWriter, r *http.Request, id int64)
+	// A page of the library the caller may see (ADR-27).
+	// (GET /works)
+	ListWorks(w http.ResponseWriter, r *http.Request, params ListWorksParams)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -645,6 +677,12 @@ func (_ Unimplemented) UpdateUser(w http.ResponseWriter, r *http.Request, id int
 // Grant or change access to one category.
 // (PUT /users/{id}/access)
 func (_ Unimplemented) SetUserAccess(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A page of the library the caller may see (ADR-27).
+// (GET /works)
+func (_ Unimplemented) ListWorks(w http.ResponseWriter, r *http.Request, params ListWorksParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1195,6 +1233,57 @@ func (siw *ServerInterfaceWrapper) SetUserAccess(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ListWorks operation middleware
+func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWorksParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "category_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWorks(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1376,6 +1465,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/users/{id}/access", wrapper.SetUserAccess)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works", wrapper.ListWorks)
 	})
 
 	return r

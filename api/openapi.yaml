@@ -521,6 +521,45 @@ paths:
           $ref: "#/components/responses/Problem"
           description: The job queue is not running.
 
+  /works:
+    get:
+      operationId: listWorks
+      tags: [library]
+      summary: A page of the library the caller may see (ADR-27).
+      description: >-
+        Category-filtered: a work not under a root folder attached to a category
+        the caller can read is excluded, never 403 -- it simply is not in the
+        list (Invariant 37's "hidden means absent", applied to a listing rather
+        than a single item).
+      parameters:
+        - name: cursor
+          in: query
+          description: >-
+            From `next_cursor` of the previous page. Absent on the first page.
+            There is no offset parameter and there will not be one.
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: category_id
+          in: query
+          description: >-
+            Narrows to one category. Naming a category the caller cannot read
+            answers 404, matching a single-item lookup (Invariant 37) rather
+            than a filter that silently returns nothing.
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkPage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: category_id does not exist, or the caller cannot read it.
+
   /events:
     get:
       operationId: streamEvents
@@ -887,6 +926,31 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/Job" }
+        next_cursor:
+          type: string
+          description: >-
+            Empty on the last page, which is how a client knows to stop without
+            one more request that returns nothing.
+
+    Work:
+      type: object
+      required: [id, media_type, title, sort_title, added_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        media_type: { type: string, example: "music" }
+        title: { type: string }
+        sort_title: { type: string }
+        year: { type: integer }
+        added_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    WorkPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Work" }
         next_cursor:
           type: string
           description: >-
