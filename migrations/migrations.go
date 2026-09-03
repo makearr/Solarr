@@ -14,7 +14,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/store"
 )
 
-//go:embed settings/*.sql jobs/*.sql library/*.sql
+//go:embed settings/*.sql jobs/*.sql library/*.sql metadata/*.sql
 var files embed.FS
 
 // Settings returns the migration set for settings.db.
@@ -25,6 +25,10 @@ func Jobs() (store.Owner, error) { return owner("jobs") }
 
 // Library returns the migration set for library.db.
 func Library() (store.Owner, error) { return owner("library") }
+
+// Metadata returns the migration set for cache/metadata.db (ADR-2). Disposable, but
+// still schema-owned and versioned the same way as the three authoritative databases.
+func Metadata() (store.Owner, error) { return owner("metadata") }
 
 func owner(directory string) (store.Owner, error) {
 	loaded, err := load(directory)
