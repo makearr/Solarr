@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/metacache"
@@ -66,6 +67,23 @@ func newProvider(t *testing.T, sources ...musicbrainz.Source) musicbrainz.Provid
 		Sources: sources, Cache: newTestCache(t), Clock: clock.NewFakeAtEpoch(),
 		Logger: slog.New(slog.DiscardHandler),
 	})
+}
+
+// newRefreshingProvider is newProvider plus a RefreshAfter policy, and the fake
+// clock and cache behind it exposed -- the clock so a test can advance past the
+// refresh interval, the cache so a test can seed entries at a specific FetchedAt
+// directly rather than only through Album's own writes.
+func newRefreshingProvider(
+	t *testing.T, refreshAfter time.Duration, sources ...musicbrainz.Source,
+) (musicbrainz.Provider, *clock.Fake, metacache.Cache) {
+	t.Helper()
+	fake := clock.NewFakeAtEpoch()
+	cache := newTestCache(t)
+	provider := musicbrainz.New(musicbrainz.Config{
+		Sources: sources, Cache: cache, Clock: fake,
+		Logger: slog.New(slog.DiscardHandler), RefreshAfter: refreshAfter,
+	})
+	return provider, fake, cache
 }
 
 func TestProvider_FallsThroughToTheNextSourceOnFailure(t *testing.T) {
@@ -141,5 +159,108 @@ func TestProvider_APartialCacheHitStillFetchesTheGenuineMiss(t *testing.T) {
 	}
 	if release.MBID != "rel2" {
 		t.Errorf("Release = %+v, want rel2's own data, not rel1's cached entry", release)
+	}
+}
+
+// A lookup still inside RefreshAfter is served from cache, same as the permanent
+// cache's own test above -- naming RefreshAfter explicitly so the policy itself,
+// not just the accidental default, is under test.
+func TestProvider_ALookupWithinRefreshAfterIsServedFromCache(t *testing.T) {
+	direct := &fakeSource{name: "direct", rg: musicbrainz.ReleaseGroup{MBID: "rg1", Title: "KI Pecezinu"},
+		rel: musicbrainz.Release{MBID: "rel1", Title: "KI Pecezinu"}}
+	provider, fake, _ := newRefreshingProvider(t, 90*24*time.Hour, direct)
+
+	if _, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "rg1", "rel1"); err != nil {
+		t.Fatalf("first Album: %v", err)
+	}
+	fake.Advance(89 * 24 * time.Hour)
+	if _, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "rg1", "rel1"); err != nil {
+		t.Fatalf("second Album: %v", err)
+	}
+	if direct.calls != 1 {
+		t.Errorf("source called %d times, want exactly 1 -- the entry is not stale yet", direct.calls)
+	}
+}
+
+// Once an entry has aged past RefreshAfter, a lookup must treat it as a miss:
+// a real source call, and the cache updated with a new FetchedAt.
+func TestProvider_ALookupPastRefreshAfterRefetchesAndUpdatesFetchedAt(t *testing.T) {
+	direct := &fakeSource{name: "direct", rg: musicbrainz.ReleaseGroup{MBID: "rg1", Title: "KI Pecezinu"},
+		rel: musicbrainz.Release{MBID: "rel1", Title: "KI Pecezinu"}}
+	provider, fake, _ := newRefreshingProvider(t, 90*24*time.Hour, direct)
+
+	if _, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "rg1", "rel1"); err != nil {
+		t.Fatalf("first Album: %v", err)
+	}
+	fake.Advance(90 * 24 * time.Hour)
+	direct.rg.Title = "KI Pecezinu (Remastered)"
+	rg, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "rg1", "rel1")
+	if err != nil {
+		t.Fatalf("second Album: %v", err)
+	}
+	if direct.calls != 2 {
+		t.Errorf("source called %d times, want 2 -- the stale entry must be re-fetched", direct.calls)
+	}
+	if rg.Title != "KI Pecezinu (Remastered)" {
+		t.Errorf("Title = %q, want the fresh fetch's answer, not the stale cached one", rg.Title)
+	}
+}
+
+// RefreshAfter's zero value must mean "never expire" -- the pre-existing
+// permanent-cache behaviour every caller that does not set the field relies on.
+func TestProvider_ZeroRefreshAfterNeverExpires(t *testing.T) {
+	direct := &fakeSource{name: "direct", rg: musicbrainz.ReleaseGroup{MBID: "rg1", Title: "KI Pecezinu"},
+		rel: musicbrainz.Release{MBID: "rel1", Title: "KI Pecezinu"}}
+	provider, fake, _ := newRefreshingProvider(t, 0, direct)
+
+	if _, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "rg1", "rel1"); err != nil {
+		t.Fatalf("first Album: %v", err)
+	}
+	fake.Advance(100 * 365 * 24 * time.Hour)
+	if _, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "rg1", "rel1"); err != nil {
+		t.Fatalf("second Album: %v", err)
+	}
+	if direct.calls != 1 {
+		t.Errorf("source called %d times, want exactly 1 -- RefreshAfter: 0 must never expire", direct.calls)
+	}
+}
+
+// The release-group half and the release half share one all-or-nothing decision,
+// consistent with the existing missing-entry case above (a missing entry on
+// either side already forces a full re-fetch, no partial optimisation): a stale
+// entry on either side must do the same, even when the other side is still
+// fresh. Partial re-fetch is out of scope -- an accepted inefficiency. Ages are
+// seeded directly through the cache (rather than through two Album calls, which
+// would always leave both entries the same age) to get a genuinely asymmetric
+// starting point: the release-group entry 90 days old (stale), the release entry
+// only 1 day old (fresh).
+func TestProvider_OneStaleEntryForcesAFullRefetchOfBoth(t *testing.T) {
+	direct := &fakeSource{name: "direct", rg: musicbrainz.ReleaseGroup{MBID: "rg1", Title: "KI Pecezinu (Remastered)"},
+		rel: musicbrainz.Release{MBID: "rel1", Title: "KI Pecezinu (Remastered)"}}
+	provider, fake, cache := newRefreshingProvider(t, 90*24*time.Hour, direct)
+
+	if err := cache.Set(t.Context(), "musicbrainz:release-group", "rg1",
+		metacache.Entry{Source: "direct", Body: `{"MBID":"rg1","Title":"KI Pecezinu"}`, FetchedAt: fake.Now()}); err != nil {
+		t.Fatalf("seed release-group entry: %v", err)
+	}
+	fake.Advance(89 * 24 * time.Hour)
+	if err := cache.Set(t.Context(), "musicbrainz:release", "rel1",
+		metacache.Entry{Source: "direct", Body: `{"MBID":"rel1","Title":"KI Pecezinu"}`, FetchedAt: fake.Now()}); err != nil {
+		t.Fatalf("seed release entry: %v", err)
+	}
+	fake.Advance(24 * time.Hour)
+	// Now: release-group entry is 90 days old (stale), release entry is 1 day old (fresh).
+
+	rg, release, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "rg1", "rel1")
+	if err != nil {
+		t.Fatalf("Album: %v", err)
+	}
+	if direct.calls != 1 {
+		t.Errorf("source called %d times, want 1 -- a stale release-group entry must force"+
+			" a full re-fetch even though the release entry alone is still fresh", direct.calls)
+	}
+	if rg.Title != "KI Pecezinu (Remastered)" || release.Title != "KI Pecezinu (Remastered)" {
+		t.Errorf("rg=%+v release=%+v, want both entities replaced by the re-fetch, not the"+
+			" fresh release entry surviving on its own", rg, release)
 	}
 }

@@ -68,6 +68,9 @@ type MusicBrainzConfig struct {
 	// back to (ADR-13's circuit breaker).
 	ProxyEnabled bool   `yaml:"proxy_enabled"`
 	ProxyBaseURL string `yaml:"proxy_base_url"`
+	// RefreshAfter is ADR-29's staleness policy: how old a cached answer may get
+	// before it is re-fetched instead of served as-is.
+	RefreshAfter Duration `yaml:"refresh_after"`
 }
 
 // Server is the HTTP listener.
@@ -196,6 +199,7 @@ func Default() Config {
 			BaseURL:      DefaultMusicBrainzBaseURL,
 			ProxyEnabled: true,
 			ProxyBaseURL: DefaultLidarrProxyBaseURL,
+			RefreshAfter: Duration(90 * 24 * time.Hour),
 		}},
 		Mode: ModeNormal,
 	}

@@ -69,6 +69,7 @@ func (p *process) musicBrainzProvider() musicbrainz.Provider {
 
 	return musicbrainz.New(musicbrainz.Config{
 		Sources: sources, Cache: metacache.New(p.metadata), Clock: wall, Logger: p.logger,
+		RefreshAfter: config.RefreshAfter.AsDuration(),
 	})
 }
 
