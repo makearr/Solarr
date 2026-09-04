@@ -488,6 +488,7 @@ type Work struct {
 	AddedAt          int64
 	UpdatedAt        int64
 	AddedBy          sql.NullInt64
+	Description      sql.NullString
 }
 
 type WorkCertification struct {

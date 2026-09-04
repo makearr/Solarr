@@ -145,9 +145,11 @@ func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEd
 		return fmt.Errorf("refine: %w", err)
 	}
 
-	// Best-effort: a credit or genre that fails to resolve is not a reason to
-	// fail an edition that otherwise refined correctly. Logged, not returned.
+	// Best-effort: a credit, genre or description that fails to resolve is not
+	// a reason to fail an edition that otherwise refined correctly. Logged,
+	// not returned.
 	j.enrichCreditsAndGenres(ctx, edition.WorkID, rg)
+	j.enrichDescription(ctx, edition.WorkID, rg)
 	return nil
 }
 
@@ -180,6 +182,36 @@ func (j *EnrichJob) enrichCreditsAndGenres(ctx context.Context, workID int64, rg
 	}
 	if err := j.people.AssignGenres(ctx, workID, genres); err != nil {
 		j.logger.WarnContext(ctx, "assign genres failed", slog.Int64("work_id", workID), slog.Any("error", err))
+	}
+}
+
+// enrichDescription writes the work's own description from the release
+// group's Wikidata QID -- a real Wikipedia extract when the album has an
+// English Wikipedia article (proven live for well-known albums: Katupoken's
+// "KI Pecezinu", Dipa Cogaf's "The Fura Husu of the Teke"), Wikidata's short
+// description otherwise, nothing at all when there is no linked Wikidata
+// entity -- MusicBrainz's release-group annotation, checked as an
+// alternative source, turned out empty for every real album tested while
+// building this, so it is not used.
+func (j *EnrichJob) enrichDescription(ctx context.Context, workID int64, rg musicbrainz.ReleaseGroup) {
+	if j.biography == nil || rg.WikidataQID == "" {
+		return
+	}
+	bio, err := j.biography.Biography(ctx, rg.WikidataQID)
+	if err != nil {
+		j.logger.WarnContext(ctx, "work description lookup failed",
+			slog.String("qid", rg.WikidataQID), slog.Any("error", err))
+		return
+	}
+	description := bio.Extract
+	if description == "" {
+		description = bio.Description
+	}
+	if description == "" {
+		return
+	}
+	if err := j.identity.SetWorkDescription(ctx, j.clock.Now().Unix(), workID, description); err != nil {
+		j.logger.WarnContext(ctx, "set work description failed", slog.Int64("work_id", workID), slog.Any("error", err))
 	}
 }
 

@@ -187,7 +187,7 @@ INSERT INTO work (media_type, canonical_title, sort_title, original_language,
                   year, runtime_ms, added_at, updated_at, added_by)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, media_type, canonical_title, sort_title, original_language,
-          year, runtime_ms, added_at, updated_at, added_by
+          year, runtime_ms, added_at, updated_at, added_by, description
 `
 
 type CreateWorkParams struct {
@@ -227,6 +227,7 @@ func (q *Queries) CreateWork(ctx context.Context, arg CreateWorkParams) (Work, e
 		&i.AddedAt,
 		&i.UpdatedAt,
 		&i.AddedBy,
+		&i.Description,
 	)
 	return i, err
 }
@@ -397,7 +398,7 @@ func (q *Queries) FindWorkPart(ctx context.Context, arg FindWorkPartParams) (Wor
 
 const findWorksByClassification = `-- name: FindWorksByClassification :many
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
-       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by
+       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description
 FROM work w
 JOIN work_classification c ON c.work_id = w.id
 WHERE c.kind = ?1 AND c.value = ?2
@@ -439,6 +440,7 @@ func (q *Queries) FindWorksByClassification(ctx context.Context, arg FindWorksBy
 			&i.AddedAt,
 			&i.UpdatedAt,
 			&i.AddedBy,
+			&i.Description,
 		); err != nil {
 			return nil, err
 		}
@@ -455,7 +457,7 @@ func (q *Queries) FindWorksByClassification(ctx context.Context, arg FindWorksBy
 
 const findWorksByNormalizedTitle = `-- name: FindWorksByNormalizedTitle :many
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
-       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by
+       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description
 FROM work w
 JOIN work_title t ON t.work_id = w.id
 WHERE t.normalized = ?1
@@ -492,6 +494,7 @@ func (q *Queries) FindWorksByNormalizedTitle(ctx context.Context, arg FindWorksB
 			&i.AddedAt,
 			&i.UpdatedAt,
 			&i.AddedBy,
+			&i.Description,
 		); err != nil {
 			return nil, err
 		}
@@ -563,7 +566,7 @@ func (q *Queries) GetEditionByExternalID(ctx context.Context, arg GetEditionByEx
 
 const getWork = `-- name: GetWork :one
 SELECT id, media_type, canonical_title, sort_title, original_language,
-       year, runtime_ms, added_at, updated_at, added_by
+       year, runtime_ms, added_at, updated_at, added_by, description
 FROM work WHERE id = ?
 `
 
@@ -581,13 +584,14 @@ func (q *Queries) GetWork(ctx context.Context, id int64) (Work, error) {
 		&i.AddedAt,
 		&i.UpdatedAt,
 		&i.AddedBy,
+		&i.Description,
 	)
 	return i, err
 }
 
 const getWorkByExternalID = `-- name: GetWorkByExternalID :one
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
-       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by
+       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description
 FROM work w
 JOIN work_external_id e ON e.work_id = w.id
 WHERE e.provider = ? AND e.external_id = ?
@@ -613,6 +617,7 @@ func (q *Queries) GetWorkByExternalID(ctx context.Context, arg GetWorkByExternal
 		&i.AddedAt,
 		&i.UpdatedAt,
 		&i.AddedBy,
+		&i.Description,
 	)
 	return i, err
 }
@@ -1181,6 +1186,23 @@ func (q *Queries) SetWorkDate(ctx context.Context, arg SetWorkDateParams) error 
 		arg.Date,
 		arg.Source,
 	)
+	return err
+}
+
+const setWorkDescription = `-- name: SetWorkDescription :exec
+UPDATE work SET description = ?, updated_at = ? WHERE id = ?
+`
+
+type SetWorkDescriptionParams struct {
+	Description sql.NullString
+	UpdatedAt   int64
+	ID          int64
+}
+
+// Unlike year, unconditional: nothing else writes a work's description yet,
+// so there is no earlier value worth protecting.
+func (q *Queries) SetWorkDescription(ctx context.Context, arg SetWorkDescriptionParams) error {
+	_, err := q.db.ExecContext(ctx, setWorkDescription, arg.Description, arg.UpdatedAt, arg.ID)
 	return err
 }
 

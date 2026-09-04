@@ -42,9 +42,30 @@ func (d direct) Album(ctx context.Context, releaseGroupMBID, releaseMBID string)
 	return rg, release, nil
 }
 
+// directRelation is the "relations" shape both the release-group and artist
+// lookups share (inc=url-rels), used only to find the "wikidata" one.
+type directRelation struct {
+	Type string `json:"type"`
+	URL  struct {
+		Resource string `json:"resource"`
+	} `json:"url"`
+}
+
+// wikidataQIDFromRelations finds the "wikidata" URL relation, if any -- the
+// same extraction Artist and releaseGroup both need.
+func wikidataQIDFromRelations(relations []directRelation) string {
+	for _, relation := range relations {
+		if relation.Type == "wikidata" {
+			return wikidataQID(relation.URL.Resource)
+		}
+	}
+	return ""
+}
+
 // directReleaseGroup is musicbrainz.org's release-group JSON with
-// inc=artist-credits+genres -- ArtistCredit and Genres need that inc, every
-// other field is already in the default response.
+// inc=artist-credits+genres+url-rels -- ArtistCredit, Genres and the
+// WikidataQID need those incs, every other field is already in the default
+// response.
 type directReleaseGroup struct {
 	ID               string `json:"id"`
 	Title            string `json:"title"`
@@ -60,11 +81,12 @@ type directReleaseGroup struct {
 		Name  string `json:"name"`
 		Count int    `json:"count"`
 	} `json:"genres"`
+	Relations []directRelation `json:"relations"`
 }
 
 func (d direct) releaseGroup(ctx context.Context, mbid string) (ReleaseGroup, error) {
 	var parsed directReleaseGroup
-	url := fmt.Sprintf("%s/release-group/%s?fmt=json&inc=artist-credits+genres", d.baseURL, mbid)
+	url := fmt.Sprintf("%s/release-group/%s?fmt=json&inc=artist-credits+genres+url-rels", d.baseURL, mbid)
 	if err := getJSON(ctx, d.client, url, &parsed); err != nil {
 		return ReleaseGroup{}, fmt.Errorf("musicbrainz: release-group %s: %w", mbid, err)
 	}
@@ -82,6 +104,7 @@ func (d direct) releaseGroup(ctx context.Context, mbid string) (ReleaseGroup, er
 		MBID: parsed.ID, Title: parsed.Title,
 		PrimaryType: parsed.PrimaryType, FirstReleaseDate: parsed.FirstReleaseDate,
 		ArtistCredit: credits, Genres: genres,
+		WikidataQID: wikidataQIDFromRelations(parsed.Relations),
 	}, nil
 }
 
@@ -105,12 +128,7 @@ type directArtist struct {
 		Begin string `json:"begin"`
 		End   string `json:"end"`
 	} `json:"life-span"`
-	Relations []struct {
-		Type string `json:"type"`
-		URL  struct {
-			Resource string `json:"resource"`
-		} `json:"url"`
-	} `json:"relations"`
+	Relations []directRelation `json:"relations"`
 }
 
 // Artist implements ArtistLookup: full artist detail, including the Wikidata
@@ -123,19 +141,13 @@ func (d direct) Artist(ctx context.Context, mbid string) (Artist, error) {
 		return Artist{}, fmt.Errorf("musicbrainz: artist %s: %w", mbid, err)
 	}
 
-	artist := Artist{
+	return Artist{
 		MBID: parsed.ID, Name: parsed.Name, SortName: parsed.SortName,
 		Disambiguation: parsed.Disambiguation, Type: parsed.Type, Gender: parsed.Gender,
 		Country: parsed.Country, Area: parsed.Area.Name, BeginArea: parsed.BeginArea.Name,
 		Born: parsed.LifeSpan.Begin, Died: parsed.LifeSpan.End,
-	}
-	for _, relation := range parsed.Relations {
-		if relation.Type == "wikidata" {
-			artist.WikidataQID = wikidataQID(relation.URL.Resource)
-			break
-		}
-	}
-	return artist, nil
+		WikidataQID: wikidataQIDFromRelations(parsed.Relations),
+	}, nil
 }
 
 // wikidataQID extracts "Q636" from "https://www.wikidata.org/wiki/Q636" --

@@ -37,6 +37,10 @@ const directReleaseGroupBody = `{
   "genres": [
     {"name": "alternative rock", "count": 25},
     {"name": "art rock", "count": 13}
+  ],
+  "relations": [
+    {"type": "discogs", "url": {"resource": "https://www.discogs.com/master/25438"}},
+    {"type": "wikidata", "url": {"resource": "https://www.wikidata.org/wiki/Q202996"}}
   ]
 }`
 
@@ -70,7 +74,7 @@ const directReleaseBody = `{
 
 func TestDirect_AlbumParsesTheRealFieldShape(t *testing.T) {
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://musicbrainz.invalid/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres": {
+		"https://musicbrainz.invalid/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres+url-rels": {
 			status: http.StatusOK, body: directReleaseGroupBody,
 		},
 		"https://musicbrainz.invalid/release/" + okComputerRelease + "?fmt=json&inc=recordings+labels+media": {
@@ -94,6 +98,9 @@ func TestDirect_AlbumParsesTheRealFieldShape(t *testing.T) {
 	}
 	if len(rg.Genres) != 2 || rg.Genres[0].Name != "alternative rock" || rg.Genres[0].Count != 25 {
 		t.Errorf("Genres = %+v, want alternative rock first with its vote count", rg.Genres)
+	}
+	if rg.WikidataQID != "Q202996" {
+		t.Errorf("WikidataQID = %q, want Q202996 extracted from the wikidata relation, ignoring the discogs one", rg.WikidataQID)
 	}
 	if release.Status != "official" {
 		t.Errorf("Status = %q, want lowercased %q", release.Status, "official")

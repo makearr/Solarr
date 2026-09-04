@@ -133,6 +133,24 @@ func (i Identity) RefineEdition(
 	})
 }
 
+// SetWorkDescription writes a work's free-text description, unconditionally
+// (unlike the year in RefineEdition, nothing else writes this column yet, so
+// there is no earlier value to protect). A separate method, not folded into
+// RefineEdition: the description is work-level, sourced independently
+// (Wikidata, not the release group's own fields), and not every enrichment
+// pass has one to write.
+func (i Identity) SetWorkDescription(ctx context.Context, at, workID int64, description string) error {
+	err := i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetWorkDescription(ctx, librarydb.SetWorkDescriptionParams{
+			ID: workID, Description: nullString(description), UpdatedAt: at,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: set work %d description: %w", workID, err)
+	}
+	return nil
+}
+
 func resolvePart(ctx context.Context, queries *librarydb.Queries, workID int64, part PartIdentity) error {
 	partID, err := findOrCreatePart(ctx, queries, workID, part)
 	if err != nil {

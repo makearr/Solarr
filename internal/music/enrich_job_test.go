@@ -378,6 +378,39 @@ func TestEnrichJob_ResolvesABiographyFromTheArtistsWikidataQID(t *testing.T) {
 	}
 }
 
+// The release group's own Wikidata QID (distinct from the artist's) becomes
+// the work's description.
+func TestEnrichJob_ResolvesAWorkDescriptionFromTheReleaseGroupsWikidataQID(t *testing.T) {
+	source := &fakeArtistSource{
+		fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{
+				MBID: "rg-1", Title: "The Fura Husu of the Teke", PrimaryType: "Album",
+				WikidataQID: "Q150901",
+			},
+			release: musicbrainz.Release{MBID: "rel-1", Title: "The Fura Husu of the Teke", Status: "official"},
+		},
+	}
+	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{
+		"Q150901": {Description: "1973 studio album by Dipa Cogaf", Extract: "The Fura Husu of the Teke is..."},
+	}}
+	job, opened, queries := newEnrichJobWithBiographer(t, source, biographer)
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-1",
+	})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v", err)
+	}
+	if !work.Description.Valid || work.Description.String != "The Fura Husu of the Teke is..." {
+		t.Errorf("Description = %+v, want the Wikipedia extract", work.Description)
+	}
+}
+
 // No Biographer configured at all (nil, the default) must not fail
 // resolveArtist -- MusicBrainz's own facts are still a complete person.
 func TestEnrichJob_WithNoBiographerConfiguredStillResolvesThePerson(t *testing.T) {

@@ -130,6 +130,25 @@ func TestRefineEdition_WorkYearIsSetOnlyWhenStillNull(t *testing.T) {
 	}
 }
 
+func TestSetWorkDescription_WritesTheDescription(t *testing.T) {
+	opened, queries := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	workID, _ := createPlaceholderEdition(t, queries, identity, "rg-description-1", "release-description-1")
+
+	if err := identity.SetWorkDescription(t.Context(), firstSeen.Unix(), workID,
+		"The Fura Husu of the Teke is..."); err != nil {
+		t.Fatalf("SetWorkDescription: %v", err)
+	}
+
+	work, err := queries.GetWork(t.Context(), workID)
+	if err != nil {
+		t.Fatalf("GetWork: %v", err)
+	}
+	if !work.Description.Valid || work.Description.String != "The Fura Husu of the Teke is..." {
+		t.Errorf("Description = %+v, want the description written", work.Description)
+	}
+}
+
 func TestRefineEdition_CreatesPartsAndLinksTheirExternalID(t *testing.T) {
 	opened, queries := newLibrary(t)
 	identity := library.NewIdentity(opened)

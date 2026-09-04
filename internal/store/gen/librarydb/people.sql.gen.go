@@ -973,17 +973,30 @@ type ListWorksCreditedToParams struct {
 	Role     interface{}
 }
 
+type ListWorksCreditedToRow struct {
+	ID               int64
+	MediaType        string
+	CanonicalTitle   string
+	SortTitle        string
+	OriginalLanguage sql.NullString
+	Year             sql.NullInt64
+	RuntimeMs        sql.NullInt64
+	AddedAt          int64
+	UpdatedAt        int64
+	AddedBy          sql.NullInt64
+}
+
 // "Htuacmasn as director, not producer" is a role-scoped query, which is why the
 // role lives on the credit (F13).
-func (q *Queries) ListWorksCreditedTo(ctx context.Context, arg ListWorksCreditedToParams) ([]Work, error) {
+func (q *Queries) ListWorksCreditedTo(ctx context.Context, arg ListWorksCreditedToParams) ([]ListWorksCreditedToRow, error) {
 	rows, err := q.db.QueryContext(ctx, listWorksCreditedTo, arg.PersonID, arg.Role)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Work{}
+	items := []ListWorksCreditedToRow{}
 	for rows.Next() {
-		var i Work
+		var i ListWorksCreditedToRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.MediaType,

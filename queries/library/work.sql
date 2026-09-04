@@ -5,17 +5,17 @@ INSERT INTO work (media_type, canonical_title, sort_title, original_language,
                   year, runtime_ms, added_at, updated_at, added_by)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, media_type, canonical_title, sort_title, original_language,
-          year, runtime_ms, added_at, updated_at, added_by;
+          year, runtime_ms, added_at, updated_at, added_by, description;
 
 -- name: GetWork :one
 SELECT id, media_type, canonical_title, sort_title, original_language,
-       year, runtime_ms, added_at, updated_at, added_by
+       year, runtime_ms, added_at, updated_at, added_by, description
 FROM work WHERE id = ?;
 
 -- Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
 -- name: GetWorkByExternalID :one
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
-       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by
+       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description
 FROM work w
 JOIN work_external_id e ON e.work_id = w.id
 WHERE e.provider = ? AND e.external_id = ?;
@@ -50,6 +50,11 @@ FROM work_external_id WHERE work_id = ? AND provider = ?;
 -- name: UpdateWorkYearIfNull :exec
 UPDATE work SET year = ?, updated_at = ? WHERE id = ? AND year IS NULL;
 
+-- Unlike year, unconditional: nothing else writes a work's description yet,
+-- so there is no earlier value worth protecting.
+-- name: SetWorkDescription :exec
+UPDATE work SET description = ?, updated_at = ? WHERE id = ?;
+
 -- name: AddWorkTitle :one
 INSERT INTO work_title (work_id, title, normalized, language, kind, source)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -62,7 +67,7 @@ FROM work_title WHERE work_id = ? ORDER BY kind, title;
 -- Every stored variant is matched during import, not just the canonical one (ADR-41).
 -- name: FindWorksByNormalizedTitle :many
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
-       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by
+       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description
 FROM work w
 JOIN work_title t ON t.work_id = w.id
 WHERE t.normalized = sqlc.arg(normalized)
@@ -157,7 +162,7 @@ FROM work_classification WHERE work_id = ? ORDER BY kind, value;
 -- Monitoring on an album type is the point: "studio albums, not live".
 -- name: FindWorksByClassification :many
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
-       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by
+       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description
 FROM work w
 JOIN work_classification c ON c.work_id = w.id
 WHERE c.kind = sqlc.arg(kind) AND c.value = sqlc.arg(value)

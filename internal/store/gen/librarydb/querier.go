@@ -245,7 +245,7 @@ type Querier interface {
 	ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle, error)
 	// "Htuacmasn as director, not producer" is a role-scoped query, which is why the
 	// role lives on the credit (F13).
-	ListWorksCreditedTo(ctx context.Context, arg ListWorksCreditedToParams) ([]Work, error)
+	ListWorksCreditedTo(ctx context.Context, arg ListWorksCreditedToParams) ([]ListWorksCreditedToRow, error)
 	// Cover art attaches to the work (subject_type='work'), but Cover Art Archive is
 	// queried by release (edition) MBID -- any refined (kind != 'unknown') edition
 	// with one is a usable source. is_default is never set to 1 anywhere in this
@@ -329,6 +329,9 @@ type Querier interface {
 	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error
 	SetWorkClassification(ctx context.Context, arg SetWorkClassificationParams) error
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error
+	// Unlike year, unconditional: nothing else writes a work's description yet,
+	// so there is no earlier value worth protecting.
+	SetWorkDescription(ctx context.Context, arg SetWorkDescriptionParams) error
 	SetWorkField(ctx context.Context, arg SetWorkFieldParams) error
 	SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonitoredParams) error
 	// A sweep that starts records only that it started: the watermark must not move
