@@ -3,6 +3,11 @@
 Build numbers advance on each successful image build; see
 `documentation/versioning.md`.
 
+## 0.0.21 — 2026-09-04
+
+- Add the naming template engine, live-verified against the real library (todo 4.5)
+
+
 ## 0.0.20 — 2026-09-04
 
 - Generalize quality-profile targets beyond bitrate (ADR-40 amendment, todo 4.3)
