@@ -253,14 +253,20 @@ func decodeStringArray(raw string) ([]string, error) {
 func convertRootFolders(rows []settingsdb.RootFolder) []RootFolder {
 	folders := make([]RootFolder, 0, len(rows))
 	for _, row := range rows {
-		folders = append(folders, RootFolder{
-			ID:     row.ID,
-			Path:   row.Path,
-			Label:  row.Label.String,
-			Online: row.Online != 0,
-		})
+		folders = append(folders, convertRootFolder(row))
 	}
 	return folders
+}
+
+func convertRootFolder(row settingsdb.RootFolder) RootFolder {
+	return RootFolder{
+		ID: row.ID, Path: row.Path, Label: row.Label.String, Online: row.Online != 0,
+		Writable: row.Writable != 0, WritableReason: row.WritableReason.String,
+		ReadOnly: row.ReadOnly != 0, AllowRename: row.AllowRename != 0,
+		TotalBytes: nullInt64Ptr(row.TotalBytes), FreeBytes: nullInt64Ptr(row.FreeBytes),
+		MinFreeBytes: row.MinFreeBytes, CapacityCheckedAt: nullInt64Ptr(row.CapacityCheckedAt),
+		FSID: row.FsID.String, CapabilitiesJSON: row.CapabilitiesJson.String,
+	}
 }
 
 func convertAttachments(rows []settingsdb.CategoryRootFolder) []CategoryRoot {

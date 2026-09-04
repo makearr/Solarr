@@ -18,21 +18,49 @@ UPDATE category SET name = ?, priority_rank = ? WHERE id = ?;
 DELETE FROM category WHERE id = ?;
 
 -- name: ListRootFolders :many
-SELECT id, path, label, online FROM root_folder ORDER BY path;
+SELECT id, path, label, online, writable, writable_reason, read_only, allow_rename,
+       total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json
+FROM root_folder ORDER BY path;
 
 -- name: GetRootFolder :one
-SELECT id, path, label, online FROM root_folder WHERE id = ?;
+SELECT id, path, label, online, writable, writable_reason, read_only, allow_rename,
+       total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json
+FROM root_folder WHERE id = ?;
 
 -- name: CreateRootFolder :one
 INSERT INTO root_folder (path, label, online)
 VALUES (?, ?, ?)
-RETURNING id, path, label, online;
+RETURNING id, path, label, online, writable, writable_reason, read_only, allow_rename,
+          total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json;
 
 -- name: SetRootFolderOnline :exec
 UPDATE root_folder SET online = ? WHERE id = ?;
 
+-- name: SetRootFolderPolicy :exec
+-- read_only and allow_rename are the user's own policy (section 11.7,
+-- Invariant 69); min_free_bytes is their reserve. Kept separate from
+-- SetRootFolderCapacity below, which only the capacity job ever calls.
+UPDATE root_folder SET read_only = ?, allow_rename = ?, min_free_bytes = ? WHERE id = ?;
+
+-- name: SetRootFolderCapacity :exec
+-- The capacity-polling job's own write: everything it probes, in one
+-- statement, so a root's reading is never partially updated.
+UPDATE root_folder
+SET writable = ?, writable_reason = ?, total_bytes = ?, free_bytes = ?,
+    capacity_checked_at = ?, fs_id = ?, capabilities_json = ?
+WHERE id = ?;
+
 -- name: DeleteRootFolder :exec
 DELETE FROM root_folder WHERE id = ?;
+
+-- name: GetPlacementAffinity :one
+SELECT root_folder_id FROM placement_affinity WHERE category_id = ? AND affinity_key = ?;
+
+-- name: SetPlacementAffinity :exec
+INSERT INTO placement_affinity (category_id, affinity_key, root_folder_id, updated_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (category_id, affinity_key) DO UPDATE
+  SET root_folder_id = excluded.root_folder_id, updated_at = excluded.updated_at;
 
 -- name: ListCategoryRootFolders :many
 SELECT category_id, root_folder_id, ord, weight, accepts_new

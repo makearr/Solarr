@@ -75,6 +75,13 @@ type LanguageProfile struct {
 	RejectDubbed          int64
 }
 
+type PlacementAffinity struct {
+	CategoryID   int64
+	AffinityKey  string
+	RootFolderID int64
+	UpdatedAt    int64
+}
+
 type QualityProfile struct {
 	ID          int64
 	Name        string
@@ -83,10 +90,20 @@ type QualityProfile struct {
 }
 
 type RootFolder struct {
-	ID     int64
-	Path   string
-	Label  sql.NullString
-	Online int64
+	ID                int64
+	Path              string
+	Label             sql.NullString
+	Online            int64
+	Writable          int64
+	WritableReason    sql.NullString
+	ReadOnly          int64
+	AllowRename       int64
+	TotalBytes        sql.NullInt64
+	FreeBytes         sql.NullInt64
+	MinFreeBytes      int64
+	CapacityCheckedAt sql.NullInt64
+	FsID              sql.NullString
+	CapabilitiesJson  sql.NullString
 }
 
 type UserCategoryAccess struct {

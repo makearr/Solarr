@@ -2,6 +2,7 @@ package fsx
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -89,6 +90,19 @@ func (OS) ReadDir(path string) ([]DirEntry, error) {
 // Resolve expands symlinks in the part of path that exists and keeps the rest
 // verbatim, so a destination can be checked for containment before it is created.
 func (OS) Resolve(path string) (string, error) { return resolveExisting(path) }
+
+// DiskUsage reports what statfs(2) says about the filesystem holding path.
+// free is Bavail (blocks available to an unprivileged process), not Bfree
+// (raw free blocks): root's own reserve is never this process's to place
+// into.
+func (OS) DiskUsage(path string) (totalBytes, freeBytes int64, err error) {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(path, &stat); err != nil {
+		return 0, 0, fmt.Errorf("fsx: disk usage %s: %w", path, err)
+	}
+	blockSize := stat.Bsize
+	return int64(stat.Blocks) * blockSize, int64(stat.Bavail) * blockSize, nil
+}
 
 func resolveExisting(path string) (string, error) {
 	cleaned := filepath.Clean(path)

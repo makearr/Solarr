@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/makearr/MediaNexus/internal/config"
@@ -59,6 +60,19 @@ func validateRootFolder(path string) config.Problems {
 		})
 	}
 	return problems
+}
+
+// validateRootFolderPolicy checks a root folder's user-set placement policy
+// before it is written (ADR-44) -- readOnly and allowRename are plain bools,
+// nothing to validate about either.
+func validateRootFolderPolicy(minFreeBytes int64) config.Problems {
+	if minFreeBytes < 0 {
+		return config.Problems{{
+			Path: "min_free_bytes", Value: strconv.FormatInt(minFreeBytes, 10),
+			Expectation: "zero or a positive number of bytes",
+		}}
+	}
+	return nil
 }
 
 // validateQualityProfile checks a quality profile before it is written (ADR-44):

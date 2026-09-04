@@ -25,6 +25,9 @@ type Mem struct {
 
 	reflinkSupported  bool
 	hardlinkSupported bool
+
+	diskTotalBytes int64
+	diskFreeBytes  int64
 }
 
 type memNode struct {
@@ -50,12 +53,23 @@ type memContent struct {
 }
 
 // NewMem returns an empty filesystem containing only the root directory.
+// defaultDiskTotalBytes and defaultDiskFreeBytes are arbitrary but large
+// enough that an unconfigured test never mistakes the fake for a full disk;
+// SetDiskUsage overrides them for a test that cares about a specific value.
+const (
+	defaultDiskTotalBytes = 1 << 40 // 1 TiB
+	defaultDiskFreeBytes  = 1 << 39 // 512 GiB
+)
+
+// NewMem returns the in-memory fake, rooted at "/".
 func NewMem(c clock.Clock) *Mem {
 	m := &Mem{
 		clock:             c,
 		nodes:             make(map[string]*memNode),
 		reflinkSupported:  true,
 		hardlinkSupported: true,
+		diskTotalBytes:    defaultDiskTotalBytes,
+		diskFreeBytes:     defaultDiskFreeBytes,
 	}
 	m.nodes["/"] = &memNode{isDir: true, mode: fs.ModeDir | 0o755, modTime: m.now(), uid: -1, gid: -1}
 	return m
@@ -67,6 +81,23 @@ func (m *Mem) SetReflinkSupported(supported bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.reflinkSupported = supported
+}
+
+// SetDiskUsage stands in for statfs(2): there is no real disk backing a Mem,
+// so a test that cares about a specific total/free reading sets it here.
+func (m *Mem) SetDiskUsage(totalBytes, freeBytes int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.diskTotalBytes, m.diskFreeBytes = totalBytes, freeBytes
+}
+
+// DiskUsage returns whatever SetDiskUsage last set, or the default if it was
+// never called -- path is unused, since a Mem simulates exactly one
+// filesystem regardless of how many paths are asked about.
+func (m *Mem) DiskUsage(string) (totalBytes, freeBytes int64, err error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.diskTotalBytes, m.diskFreeBytes, nil
 }
 
 // SetHardlinkSupported switches hardlinking on or off, standing in for two paths

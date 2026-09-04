@@ -45,6 +45,7 @@ type Querier interface {
 	GetDiscoveryJob(ctx context.Context, id int64) (DiscoveryJob, error)
 	GetInstanceSetting(ctx context.Context, key string) (InstanceSetting, error)
 	GetLanguageProfile(ctx context.Context, id int64) (LanguageProfile, error)
+	GetPlacementAffinity(ctx context.Context, arg GetPlacementAffinityParams) (int64, error)
 	GetQualityProfile(ctx context.Context, id int64) (QualityProfile, error)
 	GetRootFolder(ctx context.Context, id int64) (RootFolder, error)
 	GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetUserByAPIKeyHashRow, error)
@@ -77,8 +78,16 @@ type Querier interface {
 	// deliberate act distinct from editing a job's policy.
 	SetDiscoveryJobEnabled(ctx context.Context, arg SetDiscoveryJobEnabledParams) error
 	SetInstanceSetting(ctx context.Context, arg SetInstanceSettingParams) error
+	SetPlacementAffinity(ctx context.Context, arg SetPlacementAffinityParams) error
 	SetPreference(ctx context.Context, arg SetPreferenceParams) error
+	// The capacity-polling job's own write: everything it probes, in one
+	// statement, so a root's reading is never partially updated.
+	SetRootFolderCapacity(ctx context.Context, arg SetRootFolderCapacityParams) error
 	SetRootFolderOnline(ctx context.Context, arg SetRootFolderOnlineParams) error
+	// read_only and allow_rename are the user's own policy (section 11.7,
+	// Invariant 69); min_free_bytes is their reserve. Kept separate from
+	// SetRootFolderCapacity below, which only the capacity job ever calls.
+	SetRootFolderPolicy(ctx context.Context, arg SetRootFolderPolicyParams) error
 	SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) error
 	SetUserRole(ctx context.Context, arg SetUserRoleParams) error
 	SetUserTier(ctx context.Context, arg SetUserTierParams) error

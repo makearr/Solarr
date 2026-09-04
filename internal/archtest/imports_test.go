@@ -23,8 +23,9 @@ var allowedInternalImports = map[string][]string{
 		"internal/egress", "internal/events", "internal/fsx", "internal/health",
 		"internal/httpx", "internal/jobs", "internal/library", "internal/mediatool",
 		"internal/metacache", "internal/music", "internal/musicbrainz", "internal/paginate",
-		"internal/privilege", "internal/probe", "internal/recovery", "internal/scan", "internal/settings",
-		"internal/store", "internal/webui", "internal/wikidata", "migrations",
+		"internal/capacity", "internal/privilege", "internal/probe", "internal/recovery",
+		"internal/scan", "internal/settings", "internal/store", "internal/webui",
+		"internal/wikidata", "migrations",
 	},
 	"internal/auth":  {"internal/clock", "internal/secrets"},
 	"internal/authz": {"internal/settings"},
@@ -86,6 +87,13 @@ var allowedInternalImports = map[string][]string{
 	// building only, no I/O of its own. fsx is the one dependency, for the
 	// ADR-14 sanitiser choke point every rendered component passes through.
 	"internal/naming": {"internal/fsx"},
+	// Section 11.7's root-folder chooser: pure ranking logic over candidates
+	// the caller already fetched, no I/O and no settings.db of its own --
+	// the same separation internal/score keeps from internal/settings.
+	"internal/placement": {},
+	// Section 11.7's capacity-polling job: probes every configured root via
+	// fsx and writes what it found back to settings.db.
+	"internal/capacity": {"internal/clock", "internal/fsx", "internal/jobs", "internal/settings"},
 	// The music media type, direct-wired until stage 9 extracts it as a plugin. Its
 	// scan.Consumer needs the sweep's own types (scan), root folder paths (settings),
 	// the filesystem seam for the quick hash (fsx) and an injected clock (ADR-17) --

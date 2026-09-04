@@ -111,7 +111,10 @@ type LanguageProfile struct {
 	RejectDubbed        bool
 }
 
-// RootFolder is a directory the library is stored in.
+// RootFolder is a directory the library is stored in. Section 11.7's three
+// separate concepts, never conflated: Writable is a probed fact, ReadOnly is
+// the user's own policy, AcceptsNew (CategoryRoot, per category) is
+// draining -- none of the three is derived from either of the others.
 type RootFolder struct {
 	ID    int64
 	Path  string
@@ -119,6 +122,33 @@ type RootFolder struct {
 	// Online is false for an unmounted or unreachable root, which counts as
 	// unavailable rather than as free space (Invariant 20a).
 	Online bool
+	// Writable is probed, never set by hand -- true until the capacity job
+	// finds otherwise, so a freshly created root is not treated as broken
+	// before it has ever been checked.
+	Writable       bool
+	WritableReason string
+	// ReadOnly means "this is curated, look but do not touch": blocks new
+	// placement, upgrade-in-place and tag write-back, and blocks renaming
+	// unless AllowRename is also set (Invariant 69). It blocks nothing on
+	// the read side.
+	ReadOnly    bool
+	AllowRename bool
+	// TotalBytes and FreeBytes are nil until the capacity job has run once.
+	TotalBytes *int64
+	FreeBytes  *int64
+	// MinFreeBytes is the user's own reserve: placement.Resolve refuses a
+	// root once FreeBytes minus an item's size would fall below this.
+	MinFreeBytes int64
+	// CapacityCheckedAt is nil until the capacity job has run once; a nil
+	// or stale reading is the caller's signal to refresh before relying on
+	// TotalBytes/FreeBytes/Writable for a placement decision.
+	CapacityCheckedAt *int64
+	// FSID identifies the filesystem this root lives on, for ADR-11's
+	// reflink/hardlink tiebreak -- empty until the capacity job runs.
+	FSID string
+	// CapabilitiesJSON is deliberately not typed further here (section
+	// 11.7): which filesystem capabilities matter is expected to grow.
+	CapabilitiesJSON string
 }
 
 // CategoryRoot attaches a root folder to a category (§11.7).

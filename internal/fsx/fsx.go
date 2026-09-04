@@ -87,4 +87,10 @@ type FS interface {
 	// Resolve returns path with all symlinks expanded. Components that do not
 	// exist yet are kept as given, so a path can be resolved before it is created.
 	Resolve(path string) (string, error)
+
+	// DiskUsage reports the filesystem holding path's total and free bytes
+	// (section 11.7: capacity is polled, not assumed). free is what is
+	// actually available to this process, not raw free blocks -- root's
+	// reserved blocks are not this process's to place into.
+	DiskUsage(path string) (totalBytes, freeBytes int64, err error)
 }

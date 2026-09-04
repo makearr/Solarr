@@ -101,7 +101,8 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 const createRootFolder = `-- name: CreateRootFolder :one
 INSERT INTO root_folder (path, label, online)
 VALUES (?, ?, ?)
-RETURNING id, path, label, online
+RETURNING id, path, label, online, writable, writable_reason, read_only, allow_rename,
+          total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json
 `
 
 type CreateRootFolderParams struct {
@@ -118,6 +119,16 @@ func (q *Queries) CreateRootFolder(ctx context.Context, arg CreateRootFolderPara
 		&i.Path,
 		&i.Label,
 		&i.Online,
+		&i.Writable,
+		&i.WritableReason,
+		&i.ReadOnly,
+		&i.AllowRename,
+		&i.TotalBytes,
+		&i.FreeBytes,
+		&i.MinFreeBytes,
+		&i.CapacityCheckedAt,
+		&i.FsID,
+		&i.CapabilitiesJson,
 	)
 	return i, err
 }
@@ -173,8 +184,26 @@ func (q *Queries) GetCategory(ctx context.Context, id int64) (Category, error) {
 	return i, err
 }
 
+const getPlacementAffinity = `-- name: GetPlacementAffinity :one
+SELECT root_folder_id FROM placement_affinity WHERE category_id = ? AND affinity_key = ?
+`
+
+type GetPlacementAffinityParams struct {
+	CategoryID  int64
+	AffinityKey string
+}
+
+func (q *Queries) GetPlacementAffinity(ctx context.Context, arg GetPlacementAffinityParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getPlacementAffinity, arg.CategoryID, arg.AffinityKey)
+	var root_folder_id int64
+	err := row.Scan(&root_folder_id)
+	return root_folder_id, err
+}
+
 const getRootFolder = `-- name: GetRootFolder :one
-SELECT id, path, label, online FROM root_folder WHERE id = ?
+SELECT id, path, label, online, writable, writable_reason, read_only, allow_rename,
+       total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json
+FROM root_folder WHERE id = ?
 `
 
 func (q *Queries) GetRootFolder(ctx context.Context, id int64) (RootFolder, error) {
@@ -185,6 +214,16 @@ func (q *Queries) GetRootFolder(ctx context.Context, id int64) (RootFolder, erro
 		&i.Path,
 		&i.Label,
 		&i.Online,
+		&i.Writable,
+		&i.WritableReason,
+		&i.ReadOnly,
+		&i.AllowRename,
+		&i.TotalBytes,
+		&i.FreeBytes,
+		&i.MinFreeBytes,
+		&i.CapacityCheckedAt,
+		&i.FsID,
+		&i.CapabilitiesJson,
 	)
 	return i, err
 }
@@ -259,7 +298,9 @@ func (q *Queries) ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFo
 }
 
 const listRootFolders = `-- name: ListRootFolders :many
-SELECT id, path, label, online FROM root_folder ORDER BY path
+SELECT id, path, label, online, writable, writable_reason, read_only, allow_rename,
+       total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json
+FROM root_folder ORDER BY path
 `
 
 func (q *Queries) ListRootFolders(ctx context.Context) ([]RootFolder, error) {
@@ -276,6 +317,16 @@ func (q *Queries) ListRootFolders(ctx context.Context) ([]RootFolder, error) {
 			&i.Path,
 			&i.Label,
 			&i.Online,
+			&i.Writable,
+			&i.WritableReason,
+			&i.ReadOnly,
+			&i.AllowRename,
+			&i.TotalBytes,
+			&i.FreeBytes,
+			&i.MinFreeBytes,
+			&i.CapacityCheckedAt,
+			&i.FsID,
+			&i.CapabilitiesJson,
 		); err != nil {
 			return nil, err
 		}
@@ -290,6 +341,64 @@ func (q *Queries) ListRootFolders(ctx context.Context) ([]RootFolder, error) {
 	return items, nil
 }
 
+const setPlacementAffinity = `-- name: SetPlacementAffinity :exec
+INSERT INTO placement_affinity (category_id, affinity_key, root_folder_id, updated_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (category_id, affinity_key) DO UPDATE
+  SET root_folder_id = excluded.root_folder_id, updated_at = excluded.updated_at
+`
+
+type SetPlacementAffinityParams struct {
+	CategoryID   int64
+	AffinityKey  string
+	RootFolderID int64
+	UpdatedAt    int64
+}
+
+func (q *Queries) SetPlacementAffinity(ctx context.Context, arg SetPlacementAffinityParams) error {
+	_, err := q.db.ExecContext(ctx, setPlacementAffinity,
+		arg.CategoryID,
+		arg.AffinityKey,
+		arg.RootFolderID,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
+const setRootFolderCapacity = `-- name: SetRootFolderCapacity :exec
+UPDATE root_folder
+SET writable = ?, writable_reason = ?, total_bytes = ?, free_bytes = ?,
+    capacity_checked_at = ?, fs_id = ?, capabilities_json = ?
+WHERE id = ?
+`
+
+type SetRootFolderCapacityParams struct {
+	Writable          int64
+	WritableReason    sql.NullString
+	TotalBytes        sql.NullInt64
+	FreeBytes         sql.NullInt64
+	CapacityCheckedAt sql.NullInt64
+	FsID              sql.NullString
+	CapabilitiesJson  sql.NullString
+	ID                int64
+}
+
+// The capacity-polling job's own write: everything it probes, in one
+// statement, so a root's reading is never partially updated.
+func (q *Queries) SetRootFolderCapacity(ctx context.Context, arg SetRootFolderCapacityParams) error {
+	_, err := q.db.ExecContext(ctx, setRootFolderCapacity,
+		arg.Writable,
+		arg.WritableReason,
+		arg.TotalBytes,
+		arg.FreeBytes,
+		arg.CapacityCheckedAt,
+		arg.FsID,
+		arg.CapabilitiesJson,
+		arg.ID,
+	)
+	return err
+}
+
 const setRootFolderOnline = `-- name: SetRootFolderOnline :exec
 UPDATE root_folder SET online = ? WHERE id = ?
 `
@@ -301,6 +410,30 @@ type SetRootFolderOnlineParams struct {
 
 func (q *Queries) SetRootFolderOnline(ctx context.Context, arg SetRootFolderOnlineParams) error {
 	_, err := q.db.ExecContext(ctx, setRootFolderOnline, arg.Online, arg.ID)
+	return err
+}
+
+const setRootFolderPolicy = `-- name: SetRootFolderPolicy :exec
+UPDATE root_folder SET read_only = ?, allow_rename = ?, min_free_bytes = ? WHERE id = ?
+`
+
+type SetRootFolderPolicyParams struct {
+	ReadOnly     int64
+	AllowRename  int64
+	MinFreeBytes int64
+	ID           int64
+}
+
+// read_only and allow_rename are the user's own policy (section 11.7,
+// Invariant 69); min_free_bytes is their reserve. Kept separate from
+// SetRootFolderCapacity below, which only the capacity job ever calls.
+func (q *Queries) SetRootFolderPolicy(ctx context.Context, arg SetRootFolderPolicyParams) error {
+	_, err := q.db.ExecContext(ctx, setRootFolderPolicy,
+		arg.ReadOnly,
+		arg.AllowRename,
+		arg.MinFreeBytes,
+		arg.ID,
+	)
 	return err
 }
 

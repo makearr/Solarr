@@ -355,8 +355,86 @@ func (c *Cache) CreateRootFolder(ctx context.Context, path, label string) (RootF
 	if err != nil {
 		return RootFolder{}, fmt.Errorf("settings: create root folder %q: %w", path, err)
 	}
-	return RootFolder{ID: created.ID, Path: created.Path, Label: created.Label.String,
-		Online: created.Online != 0}, nil
+	return convertRootFolder(created), nil
+}
+
+// SetRootFolderPolicy writes the user's own placement policy for one root
+// (section 11.7, Invariant 69) -- read_only, allow_rename and the reserve.
+// Never touched by the capacity job, which only ever writes probed facts
+// via SetRootFolderCapacity.
+func (c *Cache) SetRootFolderPolicy(ctx context.Context, id int64, readOnly, allowRename bool, minFreeBytes int64) error {
+	if _, found := c.Snapshot().RootFolder(id); !found {
+		return fmt.Errorf("%w: root folder %d", ErrNotFound, id)
+	}
+	if problems := validateRootFolderPolicy(minFreeBytes); len(problems) > 0 {
+		return problems
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetRootFolderPolicy(ctx, settingsdb.SetRootFolderPolicyParams{
+			ReadOnly: boolToInt(readOnly), AllowRename: boolToInt(allowRename),
+			MinFreeBytes: minFreeBytes, ID: id,
+		})
+	})
+}
+
+// RootFolderCapacity is everything a capacity probe found about one root,
+// for SetRootFolderCapacity -- grouped so the job that calls it (the only
+// writer of these columns) passes one value rather than seven positional
+// ones.
+type RootFolderCapacity struct {
+	Writable         bool
+	WritableReason   string
+	TotalBytes       int64
+	FreeBytes        int64
+	CheckedAt        int64
+	FSID             string
+	CapabilitiesJSON string
+}
+
+// SetRootFolderCapacity records what the capacity-polling job found --
+// section 11.7: "capacity is polled, not assumed". The only writer of
+// writable/total_bytes/free_bytes/fs_id; user policy lives in
+// SetRootFolderPolicy instead, so the two paths can never race each other's
+// columns.
+func (c *Cache) SetRootFolderCapacity(ctx context.Context, id int64, capacity RootFolderCapacity) error {
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetRootFolderCapacity(ctx, settingsdb.SetRootFolderCapacityParams{
+			Writable:          boolToInt(capacity.Writable),
+			WritableReason:    sql.NullString{String: capacity.WritableReason, Valid: capacity.WritableReason != ""},
+			TotalBytes:        sql.NullInt64{Int64: capacity.TotalBytes, Valid: true},
+			FreeBytes:         sql.NullInt64{Int64: capacity.FreeBytes, Valid: true},
+			CapacityCheckedAt: sql.NullInt64{Int64: capacity.CheckedAt, Valid: true},
+			FsID:              sql.NullString{String: capacity.FSID, Valid: capacity.FSID != ""},
+			CapabilitiesJson:  sql.NullString{String: capacity.CapabilitiesJSON, Valid: capacity.CapabilitiesJSON != ""},
+			ID:                id,
+		})
+	})
+}
+
+// PlacementAffinity answers what an affinity key last resolved to (section
+// 11.7's COMMIT step) -- placement.Resolve is pure, so this lookup and
+// SetPlacementAffinity below are what a caller runs around it.
+func (c *Cache) PlacementAffinity(ctx context.Context, categoryID int64, affinityKey string) (int64, bool, error) {
+	rootFolderID, err := c.queries.GetPlacementAffinity(ctx, settingsdb.GetPlacementAffinityParams{
+		CategoryID: categoryID, AffinityKey: affinityKey,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("settings: placement affinity %q: %w", affinityKey, err)
+	}
+	return rootFolderID, true, nil
+}
+
+// SetPlacementAffinity commits Resolve's choice for an affinity key, so the
+// next item sharing it lands on the same root.
+func (c *Cache) SetPlacementAffinity(ctx context.Context, categoryID int64, affinityKey string, rootFolderID, updatedAt int64) error {
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetPlacementAffinity(ctx, settingsdb.SetPlacementAffinityParams{
+			CategoryID: categoryID, AffinityKey: affinityKey, RootFolderID: rootFolderID, UpdatedAt: updatedAt,
+		})
+	})
 }
 
 // DeleteRootFolder removes a root folder, or refuses and says which categories

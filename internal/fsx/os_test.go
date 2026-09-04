@@ -85,6 +85,27 @@ func TestOS_ChangingADirectorysEntriesMovesItsModificationTime(t *testing.T) {
 	}
 }
 
+// TestOS_DiskUsageReportsSaneValues cannot assert an exact figure -- the test
+// runner's own disk is whatever it is -- but total and free must both be
+// positive and free must never exceed total, which a bad statfs field
+// mapping (blocks vs bytes, Bfree vs Bavail) would violate immediately.
+func TestOS_DiskUsageReportsSaneValues(t *testing.T) {
+	fsys := fsx.NewOS()
+	total, free, err := fsys.DiskUsage(t.TempDir())
+	if err != nil {
+		t.Fatalf("DiskUsage: %v", err)
+	}
+	if total <= 0 {
+		t.Errorf("total = %d, want > 0", total)
+	}
+	if free < 0 {
+		t.Errorf("free = %d, want >= 0", free)
+	}
+	if free > total {
+		t.Errorf("free = %d exceeds total = %d", free, total)
+	}
+}
+
 func writeOS(t *testing.T, fsys fsx.FS, path string) {
 	t.Helper()
 	file, err := fsys.Create(path)

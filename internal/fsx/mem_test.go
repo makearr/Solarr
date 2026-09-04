@@ -258,6 +258,30 @@ func TestMem_ChangingADirectorysEntriesMovesItsModificationTime(t *testing.T) {
 	}
 }
 
+func TestMem_DiskUsageDefaultsUntilSet(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	total, free, err := fsys.DiskUsage("/library")
+	if err != nil {
+		t.Fatalf("DiskUsage: %v", err)
+	}
+	if total <= 0 || free <= 0 {
+		t.Errorf("total=%d free=%d, want both positive defaults", total, free)
+	}
+}
+
+func TestMem_SetDiskUsageOverridesTheDefault(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	fsys.SetDiskUsage(2_000, 500)
+
+	total, free, err := fsys.DiskUsage("/library")
+	if err != nil {
+		t.Fatalf("DiskUsage: %v", err)
+	}
+	if total != 2_000 || free != 500 {
+		t.Errorf("DiskUsage = (%d, %d), want (2000, 500)", total, free)
+	}
+}
+
 func writeMem(t *testing.T, fsys fsx.FS, path string) {
 	t.Helper()
 	file, err := fsys.Create(path)
