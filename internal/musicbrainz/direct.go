@@ -206,6 +206,59 @@ func (d direct) SearchReleaseGroups(ctx context.Context, artist, title string, l
 	return matches, nil
 }
 
+// directBrowseResponse is musicbrainz.org's release-group browse JSON
+// (`/release-group?artist=...`), which differs from the search endpoint's
+// shape by name only -- both list "release-groups", but browsing also
+// reports the total count so paging can stop without an extra request.
+type directBrowseResponse struct {
+	ReleaseGroupCount int                        `json:"release-group-count"`
+	ReleaseGroups     []directBrowseReleaseGroup `json:"release-groups"`
+}
+
+type directBrowseReleaseGroup struct {
+	ID               string   `json:"id"`
+	Title            string   `json:"title"`
+	PrimaryType      string   `json:"primary-type"`
+	SecondaryTypes   []string `json:"secondary-types"`
+	FirstReleaseDate string   `json:"first-release-date"`
+}
+
+// artistReleaseGroupsPageSize is musicbrainz.org's own per-request maximum.
+const artistReleaseGroupsPageSize = 100
+
+// artistReleaseGroupsMaxPages bounds a pathological discography (a
+// various-artists series, or a prolific bootleg-heavy artist, can run into
+// the thousands) rather than looping against a real API without a ceiling.
+const artistReleaseGroupsMaxPages = 20
+
+// ArtistReleaseGroups implements Discography by browsing musicbrainz.org's
+// release-group endpoint, paging until either a page comes back short or the
+// reported total is reached.
+func (d direct) ArtistReleaseGroups(ctx context.Context, artistMBID string) ([]ReleaseGroup, error) {
+	var all []ReleaseGroup
+	for page := 0; page < artistReleaseGroupsMaxPages; page++ {
+		offset := page * artistReleaseGroupsPageSize
+		requestURL := fmt.Sprintf("%s/release-group?artist=%s&limit=%d&offset=%d&fmt=json",
+			d.baseURL, url.QueryEscape(artistMBID), artistReleaseGroupsPageSize, offset)
+
+		var parsed directBrowseResponse
+		if err := getJSON(ctx, d.client, requestURL, &parsed); err != nil {
+			return nil, fmt.Errorf("musicbrainz: artist release groups %s: %w", artistMBID, err)
+		}
+		for _, rg := range parsed.ReleaseGroups {
+			all = append(all, ReleaseGroup{
+				MBID: rg.ID, Title: rg.Title, PrimaryType: rg.PrimaryType,
+				SecondaryTypes: rg.SecondaryTypes, FirstReleaseDate: rg.FirstReleaseDate,
+			})
+		}
+		if len(parsed.ReleaseGroups) < artistReleaseGroupsPageSize ||
+			offset+len(parsed.ReleaseGroups) >= parsed.ReleaseGroupCount {
+			break
+		}
+	}
+	return all, nil
+}
+
 // luceneQuoted wraps a value in double quotes for a MusicBrainz Lucene query,
 // escaping the two characters that would otherwise break out of the quoted
 // phrase or be read as Lucene operators.

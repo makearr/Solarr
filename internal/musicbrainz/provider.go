@@ -44,6 +44,11 @@ const (
 	cacheKindSearch = "musicbrainz:search"
 	// cacheKindArtist is one artist's own detail, keyed on their MBID.
 	cacheKindArtist = "musicbrainz:artist"
+	// cacheKindDiscography is one artist's full release-group list, keyed on
+	// their MBID -- refreshed by the same RefreshAfter policy as everything
+	// else, since a discography grows over time unlike a release group's own
+	// fixed facts.
+	cacheKindDiscography = "musicbrainz:discography"
 )
 
 // Provider is ADR-29 end to end: try each source in priority order, falling
@@ -173,6 +178,59 @@ func (p Provider) Artist(ctx context.Context, _ Priority, mbid string) (Artist, 
 		return Artist{}, fmt.Errorf("musicbrainz: no source can look up an artist (mbid %s)", mbid)
 	}
 	return Artist{}, fmt.Errorf("musicbrainz: no source answered artist %s: %w", mbid, errors.Join(errs...))
+}
+
+// ArtistReleaseGroups answers an artist's full discography, cache-first. Only
+// sources that implement Discography are tried, same reasoning as Search and
+// Artist.
+func (p Provider) ArtistReleaseGroups(ctx context.Context, _ Priority, artistMBID string) ([]ReleaseGroup, error) {
+	if groups, ok := p.cachedDiscography(ctx, artistMBID); ok {
+		return groups, nil
+	}
+
+	var errs []error
+	for _, source := range p.sources {
+		discography, ok := source.(Discography)
+		if !ok {
+			continue
+		}
+		groups, err := discography.ArtistReleaseGroups(ctx, artistMBID)
+		if err != nil {
+			p.logger.WarnContext(ctx, "musicbrainz source discography failed",
+				slog.String("source", source.Name()), slog.Any("error", err))
+			errs = append(errs, err)
+			continue
+		}
+		p.rememberDiscography(ctx, source.Name(), artistMBID, groups)
+		return groups, nil
+	}
+	if len(errs) == 0 {
+		return nil, fmt.Errorf("musicbrainz: no source can browse a discography (artist %s)", artistMBID)
+	}
+	return nil, fmt.Errorf("musicbrainz: no source answered discography %s: %w", artistMBID, errors.Join(errs...))
+}
+
+func (p Provider) cachedDiscography(ctx context.Context, artistMBID string) ([]ReleaseGroup, bool) {
+	entry, err := p.cache.Get(ctx, cacheKindDiscography, artistMBID)
+	if err != nil || p.stale(entry) {
+		return nil, false
+	}
+	var groups []ReleaseGroup
+	if json.Unmarshal([]byte(entry.Body), &groups) != nil {
+		return nil, false
+	}
+	return groups, true
+}
+
+func (p Provider) rememberDiscography(ctx context.Context, source, artistMBID string, groups []ReleaseGroup) {
+	body, err := json.Marshal(groups)
+	if err != nil {
+		return
+	}
+	if err := p.cache.Set(ctx, cacheKindDiscography, artistMBID,
+		metacache.Entry{Source: source, Body: string(body), FetchedAt: p.clock.Now()}); err != nil {
+		p.logger.WarnContext(ctx, "musicbrainz: discography cache write failed", slog.Any("error", err))
+	}
 }
 
 func (p Provider) cachedArtist(ctx context.Context, mbid string) (Artist, bool) {

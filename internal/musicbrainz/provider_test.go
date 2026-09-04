@@ -97,6 +97,21 @@ func (f *fakeArtistLookupSource) Artist(context.Context, string) (musicbrainz.Ar
 	return f.artist, nil
 }
 
+type fakeDiscographySource struct {
+	fakeSource
+	groups           []musicbrainz.ReleaseGroup
+	discographyErr   error
+	discographyCalls int
+}
+
+func (f *fakeDiscographySource) ArtistReleaseGroups(context.Context, string) ([]musicbrainz.ReleaseGroup, error) {
+	f.discographyCalls++
+	if f.discographyErr != nil {
+		return nil, f.discographyErr
+	}
+	return f.groups, nil
+}
+
 func newProvider(t *testing.T, sources ...musicbrainz.Source) musicbrainz.Provider {
 	t.Helper()
 	return musicbrainz.New(musicbrainz.Config{
@@ -380,6 +395,53 @@ func TestProvider_ASecondArtistLookupIsServedFromCache(t *testing.T) {
 	}
 	if artist.Name != "Vutu Doci" {
 		t.Errorf("Artist = %+v, want the first lookup's cached result", artist)
+	}
+}
+
+func TestProvider_ArtistReleaseGroupsSkipsSourcesThatDoNotImplementDiscography(t *testing.T) {
+	proxy := &fakeSource{name: "proxy"} // no Discography
+	direct := &fakeDiscographySource{fakeSource: fakeSource{name: "direct"},
+		groups: []musicbrainz.ReleaseGroup{{MBID: "rg-1", Title: "KI Pecezinu"}}}
+	provider := newProvider(t, proxy, direct)
+
+	groups, err := provider.ArtistReleaseGroups(t.Context(), musicbrainz.PriorityBackfill, "artist-1")
+	if err != nil {
+		t.Fatalf("ArtistReleaseGroups: %v", err)
+	}
+	if len(groups) != 1 || groups[0].Title != "KI Pecezinu" {
+		t.Errorf("groups = %+v, want the one Discography-capable source's answer", groups)
+	}
+	if direct.discographyCalls != 1 {
+		t.Errorf("discographyCalls = %d, want 1", direct.discographyCalls)
+	}
+}
+
+func TestProvider_ArtistReleaseGroupsErrorsWhenNoSourceCanBrowse(t *testing.T) {
+	proxy := &fakeSource{name: "proxy"}
+	provider := newProvider(t, proxy)
+
+	if _, err := provider.ArtistReleaseGroups(t.Context(), musicbrainz.PriorityBackfill, "artist-1"); err == nil {
+		t.Fatal("ArtistReleaseGroups succeeded with no Discography-capable source configured")
+	}
+}
+
+func TestProvider_ASecondArtistReleaseGroupsLookupIsServedFromCache(t *testing.T) {
+	direct := &fakeDiscographySource{fakeSource: fakeSource{name: "direct"},
+		groups: []musicbrainz.ReleaseGroup{{MBID: "rg-1", Title: "KI Pecezinu"}}}
+	provider := newProvider(t, direct)
+
+	if _, err := provider.ArtistReleaseGroups(t.Context(), musicbrainz.PriorityBackfill, "artist-1"); err != nil {
+		t.Fatalf("first ArtistReleaseGroups: %v", err)
+	}
+	groups, err := provider.ArtistReleaseGroups(t.Context(), musicbrainz.PriorityBackfill, "artist-1")
+	if err != nil {
+		t.Fatalf("second ArtistReleaseGroups: %v", err)
+	}
+	if direct.discographyCalls != 1 {
+		t.Errorf("discographyCalls = %d, want 1 -- the second lookup should hit the cache", direct.discographyCalls)
+	}
+	if len(groups) != 1 || groups[0].Title != "KI Pecezinu" {
+		t.Errorf("groups = %+v, want the first lookup's cached result", groups)
 	}
 }
 

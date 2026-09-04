@@ -283,3 +283,103 @@ func TestDirect_AlbumFailsWhenTheReleaseGroupCallFails(t *testing.T) {
 		t.Fatal("Album succeeded with no response configured for either call")
 	}
 }
+
+const radioheadMBID = "d6f6e536-85f7-4d04-8327-66db2e835786"
+
+// Trimmed from a real live response (fetched while designing this method,
+// `curl "https://musicbrainz.org/ws/2/release-group?artist=<mbid>...&fmt=json"`),
+// same discipline as the payloads above -- secondary-types included, since
+// subscription.expand's default filters (compilation/live/remix/dj-mix/
+// mixtape) are the whole reason this method exists.
+const directBrowseBody = `{
+  "release-group-count": 585,
+  "release-group-offset": 0,
+  "release-groups": [
+    {"id": "04e9a8bd-175f-44a1-83a0-17d5e9fbd116", "title": "KI Pecezinu",
+     "primary-type": "Album", "first-release-date": "1997-05-21", "secondary-types": []},
+    {"id": "6aa370c6-9c87-4876-8b87-bf94050e40c8", "title": "Live in Fefobo (September 2016)",
+     "primary-type": "Album", "first-release-date": "2016-09-25", "secondary-types": ["Live"]},
+    {"id": "54a971b3-cd73-43a7-8983-94fe26dfd9c0", "title": "Greenhouse Effect vs. Katupoken",
+     "primary-type": "Album", "first-release-date": "2004-01-01", "secondary-types": ["Remix"]}
+  ]
+}`
+
+func TestDirect_ArtistReleaseGroupsParsesTheRealFieldShapeIncludingSecondaryTypes(t *testing.T) {
+	requestURL := "https://musicbrainz.invalid/release-group?artist=" + radioheadMBID + "&limit=100&offset=0&fmt=json"
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		requestURL: {status: http.StatusOK, body: directBrowseBody},
+	}}
+	client := newTestClient(t, transport, musicbrainz.DirectName)
+	source := discographyFor(t, musicbrainz.NewDirect(client, "https://musicbrainz.invalid"))
+
+	groups, err := source.ArtistReleaseGroups(t.Context(), radioheadMBID)
+	if err != nil {
+		t.Fatalf("ArtistReleaseGroups: %v", err)
+	}
+	if len(groups) != 3 {
+		t.Fatalf("groups = %+v, want 3", groups)
+	}
+	if groups[0].Title != "KI Pecezinu" || len(groups[0].SecondaryTypes) != 0 {
+		t.Errorf("groups[0] = %+v, want KI Pecezinu with no secondary types", groups[0])
+	}
+	if groups[1].SecondaryTypes == nil || groups[1].SecondaryTypes[0] != "Live" {
+		t.Errorf("groups[1].SecondaryTypes = %v, want [Live]", groups[1].SecondaryTypes)
+	}
+	if groups[2].SecondaryTypes == nil || groups[2].SecondaryTypes[0] != "Remix" {
+		t.Errorf("groups[2].SecondaryTypes = %v, want [Remix]", groups[2].SecondaryTypes)
+	}
+	if len(transport.requested) != 1 {
+		t.Errorf("requested = %v, want paging to stop after one short page", transport.requested)
+	}
+}
+
+func TestDirect_ArtistReleaseGroupsPagesUntilAShortPage(t *testing.T) {
+	fullPage := make([]byte, 0, 8192)
+	fullPage = append(fullPage, `{"release-group-count": 150, "release-groups": [`...)
+	for i := range 100 {
+		if i > 0 {
+			fullPage = append(fullPage, ',')
+		}
+		fullPage = append(fullPage,
+			[]byte(`{"id": "00000000-0000-0000-0000-00000000`+twoDigits(i)+`", "title": "Page One"}`)...)
+	}
+	fullPage = append(fullPage, `]}`...)
+
+	page0 := "https://musicbrainz.invalid/release-group?artist=" + radioheadMBID + "&limit=100&offset=0&fmt=json"
+	page1 := "https://musicbrainz.invalid/release-group?artist=" + radioheadMBID + "&limit=100&offset=100&fmt=json"
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		page0: {status: http.StatusOK, body: string(fullPage)},
+		page1: {status: http.StatusOK, body: `{"release-group-count": 150, "release-groups": [` +
+			`{"id": "11111111-1111-1111-1111-111111111111", "title": "Page Two"}]}`},
+	}}
+	client := newTestClient(t, transport, musicbrainz.DirectName)
+	source := discographyFor(t, musicbrainz.NewDirect(client, "https://musicbrainz.invalid"))
+
+	groups, err := source.ArtistReleaseGroups(t.Context(), radioheadMBID)
+	if err != nil {
+		t.Fatalf("ArtistReleaseGroups: %v", err)
+	}
+	if len(groups) != 101 {
+		t.Fatalf("groups = %d, want 101 across two pages", len(groups))
+	}
+	if len(transport.requested) != 2 {
+		t.Errorf("requested %d pages, want exactly 2", len(transport.requested))
+	}
+}
+
+func twoDigits(n int) string {
+	if n < 10 {
+		return "0" + string(rune('0'+n))
+	}
+	return string(rune('0'+n/10)) + string(rune('0'+n%10))
+}
+
+// discographyFor asserts a Source also implements Discography.
+func discographyFor(t *testing.T, source musicbrainz.Source) musicbrainz.Discography {
+	t.Helper()
+	discography, ok := source.(musicbrainz.Discography)
+	if !ok {
+		t.Fatalf("%T does not implement Discography", source)
+	}
+	return discography
+}

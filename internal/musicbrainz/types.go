@@ -19,6 +19,10 @@ type ReleaseGroup struct {
 	// FirstReleaseDate is a partial date (YYYY, YYYY-MM or YYYY-MM-DD), exactly
 	// as MusicBrainz's own work_date convention allows.
 	FirstReleaseDate string
+	// SecondaryTypes is MusicBrainz's own vocabulary ("Compilation", "Live",
+	// "Remix", "DJ-mix", "Mixtape/Street", "Soundtrack", ...), stored as-is --
+	// what subscription.expand (section 19.6) filters a discography on.
+	SecondaryTypes []string
 	// ArtistCredit is who the release group credits, in credit order --
 	// ADR-32's role="artist" credit (§19.5's "role-rich credits").
 	ArtistCredit []ArtistCredit
@@ -146,4 +150,14 @@ type Searcher interface {
 // unverified live.
 type ArtistLookup interface {
 	Artist(ctx context.Context, mbid string) (Artist, error)
+}
+
+// Discography is an optional Source capability: every release group credited
+// to an artist, browsed rather than looked up one release group at a time --
+// what subscription.expand (section 19.6, todo 4.4) needs to decide, per
+// release group, whether it is admitted. Not every Source implements it --
+// same reasoning as Searcher and ArtistLookup, ADR-29's proxy shape is
+// unverified live for this.
+type Discography interface {
+	ArtistReleaseGroups(ctx context.Context, artistMBID string) ([]ReleaseGroup, error)
 }
