@@ -24,6 +24,7 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 	}
 	job := music.NewEnrichJob(music.EnrichJobConfig{
 		Identity: library.NewIdentity(p.library),
+		People:   library.NewPeople(p.library),
 		Provider: p.musicBrainzProvider(),
 		Clock:    clock.NewSystem(),
 		Logger:   p.logger,

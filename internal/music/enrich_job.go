@@ -18,6 +18,12 @@ const EnrichJobType = jobs.Type("music.enrich")
 // one may be active at a time (Invariant 16) the same way a per-root scan is.
 const EnrichActionKey = "music.enrich"
 
+// CreditRoleArtist is the one credit role this pass writes -- a release
+// group's own artist-credit. Role-rich credits beyond "artist" (producer,
+// composer, songwriter) need MusicBrainz's relationship data, real scope of
+// its own (architecture.md's §19.5, deliberately not attempted this pass).
+const CreditRoleArtist = "artist"
+
 // EnrichDefinition declares how enrichment behaves: background, low priority,
 // retried on transient failure, never blocking anything a user is waiting on.
 var EnrichDefinition = jobs.Definition{
@@ -36,6 +42,7 @@ const enrichBatchSize = 20
 // the rest of internal/music is until stage 9.
 type EnrichJob struct {
 	identity library.Identity
+	people   library.People
 	provider musicbrainz.Provider
 	clock    clock.Clock
 	logger   *slog.Logger
@@ -44,6 +51,7 @@ type EnrichJob struct {
 // EnrichJobConfig is what an EnrichJob needs. Every field is required except Logger.
 type EnrichJobConfig struct {
 	Identity library.Identity
+	People   library.People
 	Provider musicbrainz.Provider
 	Clock    clock.Clock
 	Logger   *slog.Logger
@@ -56,7 +64,8 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 		logger = slog.Default()
 	}
 	return &EnrichJob{
-		identity: config.Identity, provider: config.Provider, clock: config.Clock, logger: logger,
+		identity: config.Identity, people: config.People, provider: config.Provider,
+		clock: config.Clock, logger: logger,
 	}
 }
 
@@ -122,7 +131,73 @@ func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEd
 		edition.EditionID, edition.WorkID, workYear, refinement, parts); err != nil {
 		return fmt.Errorf("refine: %w", err)
 	}
+
+	// Best-effort: a credit or genre that fails to resolve is not a reason to
+	// fail an edition that otherwise refined correctly. Logged, not returned.
+	j.enrichCreditsAndGenres(ctx, edition.WorkID, rg)
 	return nil
+}
+
+// enrichCreditsAndGenres populates ADR-32's role="artist" credits and ADR-33's
+// genre tags from the same release group Album already fetched -- no extra
+// request for the genres (inc=genres rides along with artist-credits), one
+// more request per distinct artist for their own bio facts (Provider.Artist
+// caches permanently, so a prolific artist only ever costs one real lookup
+// across every edition of theirs this sweep touches).
+func (j *EnrichJob) enrichCreditsAndGenres(ctx context.Context, workID int64, rg musicbrainz.ReleaseGroup) {
+	for index, credit := range rg.ArtistCredit {
+		personID, err := j.resolveArtist(ctx, credit)
+		if err != nil {
+			j.logger.WarnContext(ctx, "artist credit resolve failed",
+				slog.String("mbid", credit.MBID), slog.Any("error", err))
+			continue
+		}
+		if err := j.people.AddCredit(ctx, workID, personID, CreditRoleArtist, index); err != nil {
+			j.logger.WarnContext(ctx, "add credit failed",
+				slog.Int64("work_id", workID), slog.Int64("person_id", personID), slog.Any("error", err))
+		}
+	}
+
+	if len(rg.Genres) == 0 {
+		return
+	}
+	genres := make([]library.GenreLink, len(rg.Genres))
+	for index, genre := range rg.Genres {
+		genres[index] = library.GenreLink{Name: genre.Name}
+	}
+	if err := j.people.AssignGenres(ctx, workID, genres); err != nil {
+		j.logger.WarnContext(ctx, "assign genres failed", slog.Int64("work_id", workID), slog.Any("error", err))
+	}
+}
+
+// resolveArtist finds or creates the person behind one release-group credit.
+// A failed Artist lookup still resolves a person from the name and id the
+// artist-credit itself already carries -- thinner than a full bio, but a
+// credit worth having is worth having even without one.
+func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.ArtistCredit) (int64, error) {
+	if credit.MBID == "" {
+		return 0, fmt.Errorf("artist credit %q has no id", credit.Name)
+	}
+
+	artist, err := j.provider.Artist(ctx, musicbrainz.PriorityEnrich, credit.MBID)
+	if err != nil {
+		j.logger.WarnContext(ctx, "artist detail lookup failed",
+			slog.String("mbid", credit.MBID), slog.Any("error", err))
+		artist = musicbrainz.Artist{MBID: credit.MBID, Name: credit.Name, SortName: credit.Name}
+	}
+
+	sortName := artist.SortName
+	if sortName == "" {
+		sortName = artist.Name
+	}
+	return j.people.ResolvePerson(ctx, j.clock.Now(), library.PersonLink{
+		Provider: ProviderArtist, ExternalID: artist.MBID,
+		Person: library.PersonIdentity{
+			Name: artist.Name, SortName: sortName, Disambiguation: artist.Disambiguation,
+			Kind: artist.Type, Gender: artist.Gender, Country: artist.Country,
+			Born: artist.Born, Died: artist.Died,
+		},
+	})
 }
 
 // EnqueueEnrichment submits one sweep, deduplicated by EnrichActionKey.

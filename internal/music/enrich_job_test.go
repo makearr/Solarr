@@ -36,7 +36,24 @@ func (f *fakeSource) Album(context.Context, string, string) (musicbrainz.Release
 	return f.rg, f.release, f.err
 }
 
-func newEnrichJob(t *testing.T, source *fakeSource) (*music.EnrichJob, *store.Store, *librarydb.Queries) {
+// fakeArtistSource is a fakeSource that also implements ArtistLookup, so
+// EnrichJob has something to resolve a real artist's bio facts against.
+type fakeArtistSource struct {
+	fakeSource
+	artists     map[string]musicbrainz.Artist
+	artistCalls int
+}
+
+func (f *fakeArtistSource) Artist(_ context.Context, mbid string) (musicbrainz.Artist, error) {
+	f.artistCalls++
+	artist, ok := f.artists[mbid]
+	if !ok {
+		return musicbrainz.Artist{}, errors.New("no such artist")
+	}
+	return artist, nil
+}
+
+func newEnrichJob(t *testing.T, source musicbrainz.Source) (*music.EnrichJob, *store.Store, *librarydb.Queries) {
 	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
@@ -83,7 +100,8 @@ func newEnrichJob(t *testing.T, source *fakeSource) (*music.EnrichJob, *store.St
 		Clock: fake, Logger: slog.New(slog.DiscardHandler),
 	})
 	job := music.NewEnrichJob(music.EnrichJobConfig{
-		Identity: identity, Provider: provider, Clock: fake, Logger: slog.New(slog.DiscardHandler),
+		Identity: identity, People: library.NewPeople(libraryStore), Provider: provider,
+		Clock: fake, Logger: slog.New(slog.DiscardHandler),
 	})
 	return job, libraryStore, librarydb.New(libraryStore.Read())
 }
@@ -199,6 +217,101 @@ func TestEnrichJob_RefinesAPlaceholderEditionEndToEnd(t *testing.T) {
 	}
 	if source.calls != 1 {
 		t.Errorf("source called %d times after a second run, want still 1 -- nothing left to enrich", source.calls)
+	}
+}
+
+// The whole credits/genres pipeline, end to end: a release group's own
+// artist-credit and genres (both fetched in the same Album call, no separate
+// request) become a real person, a real work-level credit, and real tags.
+func TestEnrichJob_PopulatesCreditsAndGenres(t *testing.T) {
+	source := &fakeArtistSource{
+		fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{
+				MBID: "rg-1", Title: "KI Pecezinu", PrimaryType: "Album", FirstReleaseDate: "1997-05-21",
+				ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "artist-1", Name: "Katupoken"}},
+				Genres:       []musicbrainz.Genre{{Name: "alternative rock", Count: 25}},
+			},
+			release: musicbrainz.Release{MBID: "rel-1", Title: "KI Pecezinu", Status: "official"},
+		},
+		artists: map[string]musicbrainz.Artist{
+			"artist-1": {MBID: "artist-1", Name: "Katupoken", SortName: "Katupoken", Type: "Group", Country: "GB"},
+		},
+	}
+	job, opened, queries := newEnrichJob(t, source)
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if source.artistCalls != 1 {
+		t.Errorf("artistCalls = %d, want 1", source.artistCalls)
+	}
+
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-1",
+	})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v", err)
+	}
+
+	person, err := queries.GetPersonByExternalID(t.Context(), librarydb.GetPersonByExternalIDParams{
+		Provider: music.ProviderArtist, ExternalID: "artist-1",
+	})
+	if err != nil {
+		t.Fatalf("GetPersonByExternalID: %v", err)
+	}
+	if person.Name != "Katupoken" || person.Country.String != "GB" {
+		t.Errorf("person = %+v, want Katupoken's own fields from the Artist lookup", person)
+	}
+
+	credits, err := queries.ListCreditsForWork(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("ListCreditsForWork: %v", err)
+	}
+	if len(credits) != 1 || credits[0].PersonID != person.ID || credits[0].Role != music.CreditRoleArtist {
+		t.Errorf("credits = %+v, want one artist credit for %d", credits, person.ID)
+	}
+
+	tags, err := queries.ListTagsForSubject(t.Context(), librarydb.ListTagsForSubjectParams{
+		SubjectType: "work", SubjectID: work.ID,
+	})
+	if err != nil {
+		t.Fatalf("ListTagsForSubject: %v", err)
+	}
+	if len(tags) != 1 || tags[0].Source != "musicbrainz" {
+		t.Errorf("tags = %+v, want the one genre tag, source musicbrainz", tags)
+	}
+}
+
+// An artist detail lookup failing must not lose the credit entirely -- a
+// person resolved from the bare name/id the artist-credit itself carries is
+// still worth having.
+func TestEnrichJob_AFailedArtistLookupStillResolvesAThinnerPerson(t *testing.T) {
+	source := &fakeArtistSource{
+		fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{
+				MBID: "rg-1", Title: "KI Pecezinu", PrimaryType: "Album",
+				ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "artist-1", Name: "Katupoken"}},
+			},
+			release: musicbrainz.Release{MBID: "rel-1", Title: "KI Pecezinu", Status: "official"},
+		},
+		artists: map[string]musicbrainz.Artist{}, // no entry: the Artist lookup fails
+	}
+	job, opened, queries := newEnrichJob(t, source)
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	person, err := queries.GetPersonByExternalID(t.Context(), librarydb.GetPersonByExternalIDParams{
+		Provider: music.ProviderArtist, ExternalID: "artist-1",
+	})
+	if err != nil {
+		t.Fatalf("GetPersonByExternalID: %v, want the thinner person resolved anyway", err)
+	}
+	if person.Name != "Katupoken" {
+		t.Errorf("person.Name = %q, want Katupoken from the bare artist-credit", person.Name)
 	}
 }
 
