@@ -68,9 +68,13 @@ type Measured struct {
 	AudioCodec     string
 	VideoCodec     string
 	SampleRate     int
-	Channels       int
-	Width          int
-	Height         int
+	// BitDepth is 0 when ffprobe reports none -- meaningful for a lossless
+	// codec (FLAC, ALAC, WAV); a lossy codec decodes to float internally and
+	// has no real bit depth to report (ADR-39's measured-attributes list).
+	BitDepth int
+	Channels int
+	Width    int
+	Height   int
 }
 
 // Probe is one file, as one invocation reported it.

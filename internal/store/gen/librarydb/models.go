@@ -292,6 +292,9 @@ type MediaAttribute struct {
 	ImageFormat   sql.NullString
 	ColourDepth   sql.NullInt64
 	PageCount     sql.NullInt64
+	BitrateKbps   sql.NullInt64
+	BitrateMode   sql.NullString
+	VbrPreset     sql.NullString
 }
 
 type MediaObject struct {

@@ -45,14 +45,12 @@ var (
 	vbrPresetRe   = regexp.MustCompile(`(?i)^v[0-9]$`)
 	discCountRe   = regexp.MustCompile(`(?i)^(\d+)\s*cd$`)
 	// bitDepthRe and sampleRateRe are the two other technical claims real WEB/FLAC
-	// scene tags carry bare, alongside bitrate ("24BIT", "96KHZ", "44.1KHZ").
-	// Recognised so they strip out of the album title -- found leaking into it
-	// during this project's own live verification pass -- but not yet recorded as
-	// a claim of their own: model.Attributes has no bit-depth/sample-rate field
-	// yet (BitrateKbps' own precedent), which is real scope of its own, not folded
-	// in here.
+	// scene tags carry bare, alongside bitrate ("24BIT", "96KHZ", "44.1KHZ") --
+	// found leaking into the album title during this project's own live
+	// verification pass, and now recorded on model.Attributes as their own claims
+	// (todo 4.2), not just stripped.
 	bitDepthRe   = regexp.MustCompile(`^(8|16|24|32)bit$`)
-	sampleRateRe = regexp.MustCompile(`^\d+(\.\d+)?khz$`)
+	sampleRateRe = regexp.MustCompile(`^(\d+(?:\.\d+)?)khz$`)
 	bracketRe    = regexp.MustCompile(`\(([^()]*)\)|\[([^\[\]]*)\]|\{([^{}]*)\}`)
 	splitDashRe  = regexp.MustCompile(`\s+-\s+`)
 	// dashRunRe collapses two or more dashes left adjacent by noise-bracket
@@ -182,8 +180,10 @@ func Parse(title string) Result {
 
 	attributes := model.Attributes{
 		Format: claims.format, Lossless: claims.lossless, BitrateKbps: claims.bitrateKbps,
+		BitrateMode: claims.bitrateMode, VBRPreset: claims.vbrPreset,
 		Source: claims.source, Edition: claims.edition, ReleaseGroup: group,
-		Discs: claims.discs, BitDepth: claims.bitDepth, ProperRepack: properRepack,
+		Discs: claims.discs, BitDepth: claims.bitDepth, SampleRate: claims.sampleRate,
+		ProperRepack: properRepack,
 	}
 
 	return Result{
@@ -195,10 +195,10 @@ func Parse(title string) Result {
 
 // claimSet accumulates what bracket, segment and tail-token classification found.
 type claimSet struct {
-	year, yearEnd, bitrateKbps, discs, bitDepth int
-	format, source, edition                     string
-	lossless                                    bool
-	unparsed                                    []string
+	year, yearEnd, bitrateKbps, discs, bitDepth, sampleRate int
+	format, source, edition, bitrateMode, vbrPreset         string
+	lossless                                                bool
+	unparsed                                                []string
 }
 
 // extractBrackets removes every (...)/[...]/{...} group that classifies as noise
@@ -477,12 +477,15 @@ func claimField(field string, claims *claimSet) bool {
 	case bitrateWordRe.MatchString(field):
 		matches := bitrateWordRe.FindStringSubmatch(field)
 		claims.bitrateKbps, _ = strconv.Atoi(matches[1])
+		claims.bitrateMode = "cbr"
 		return true
 	case bareBitrates[field] != 0:
 		claims.bitrateKbps = bareBitrates[field]
+		claims.bitrateMode = "cbr"
 		return true
 	case vbrPresetRe.MatchString(field):
-		claims.bitrateKbps = -1 // VBR: a preset, not a fixed rate; negative marks "variable"
+		claims.bitrateMode = "vbr"
+		claims.vbrPreset = strings.ToUpper(field)
 		return true
 	case discCountRe.MatchString(field):
 		matches := discCountRe.FindStringSubmatch(field)
@@ -493,8 +496,9 @@ func claimField(field string, claims *claimSet) bool {
 		claims.bitDepth, _ = strconv.Atoi(matches[1])
 		return true
 	case sampleRateRe.MatchString(field):
-		// Recognised and consumed, not recorded -- model.Attributes has no
-		// sample-rate field yet (todo 4.2's fuller Container/SampleRate split).
+		matches := sampleRateRe.FindStringSubmatch(field)
+		khz, _ := strconv.ParseFloat(matches[1], 64)
+		claims.sampleRate = int(khz * 1000)
 		return true
 	case barcodeRe.MatchString(field):
 		// An EAN/UPC run: recognised and discarded, not recorded -- see

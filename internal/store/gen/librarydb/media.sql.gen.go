@@ -79,6 +79,46 @@ func (q *Queries) CountLibraryPathsByRootFolder(ctx context.Context) ([]CountLib
 	return items, nil
 }
 
+const countMeasuredByRootFolder = `-- name: CountMeasuredByRootFolder :many
+SELECT lp.root_folder_id, CAST(count(*) AS INTEGER) AS total
+FROM library_path lp
+JOIN media_object o ON o.id = lp.media_object_id
+WHERE o.measured_attributes_id IS NOT NULL
+GROUP BY lp.root_folder_id
+ORDER BY lp.root_folder_id
+`
+
+type CountMeasuredByRootFolderRow struct {
+	RootFolderID int64
+	Total        int64
+}
+
+// Probe coverage, the same per-root shape CountLibraryPathsByRootFolder already
+// answers for the denominator (library.CategoryCounters' own precedent) --
+// "probed" is the numerator a coverage counter reconciles against it.
+func (q *Queries) CountMeasuredByRootFolder(ctx context.Context) ([]CountMeasuredByRootFolderRow, error) {
+	rows, err := q.db.QueryContext(ctx, countMeasuredByRootFolder)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountMeasuredByRootFolderRow{}
+	for rows.Next() {
+		var i CountMeasuredByRootFolderRow
+		if err := rows.Scan(&i.RootFolderID, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createMediaObject = `-- name: CreateMediaObject :execlastid
 INSERT INTO media_object (size_bytes, quick_hash, content_hash, oshash, phash,
                           audio_fp, audio_fp_prefix, fingerprinted_at,
@@ -220,7 +260,8 @@ const getAttributes = `-- name: GetAttributes :one
 SELECT id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
        audio_channels, bit_depth, languages, subtitles, edition_tokens,
        release_group, proper_repack, frame_rate, scan_type, container,
-       lossless, sample_rate, image_format, colour_depth, page_count
+       lossless, sample_rate, image_format, colour_depth, page_count,
+       bitrate_kbps, bitrate_mode, vbr_preset
 FROM media_attributes WHERE id = ?
 `
 
@@ -250,6 +291,9 @@ func (q *Queries) GetAttributes(ctx context.Context, id int64) (MediaAttribute, 
 		&i.ImageFormat,
 		&i.ColourDepth,
 		&i.PageCount,
+		&i.BitrateKbps,
+		&i.BitrateMode,
+		&i.VbrPreset,
 	)
 	return i, err
 }
@@ -365,13 +409,15 @@ INSERT INTO media_attributes (attr_hash, resolution, source, video_codec, hdr,
                               audio_codec, audio_channels, bit_depth, languages,
                               subtitles, edition_tokens, release_group, proper_repack,
                               frame_rate, scan_type, container, lossless, sample_rate,
-                              image_format, colour_depth, page_count)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              image_format, colour_depth, page_count, bitrate_kbps,
+                              bitrate_mode, vbr_preset)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (attr_hash) DO UPDATE SET attr_hash = excluded.attr_hash
 RETURNING id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
           audio_channels, bit_depth, languages, subtitles, edition_tokens,
           release_group, proper_repack, frame_rate, scan_type, container,
-          lossless, sample_rate, image_format, colour_depth, page_count
+          lossless, sample_rate, image_format, colour_depth, page_count,
+          bitrate_kbps, bitrate_mode, vbr_preset
 `
 
 type InternAttributesParams struct {
@@ -396,6 +442,9 @@ type InternAttributesParams struct {
 	ImageFormat   sql.NullString
 	ColourDepth   sql.NullInt64
 	PageCount     sql.NullInt64
+	BitrateKbps   sql.NullInt64
+	BitrateMode   sql.NullString
+	VbrPreset     sql.NullString
 }
 
 // Physical files. Column lists follow table order, or sqlc stops reusing models.
@@ -422,6 +471,9 @@ func (q *Queries) InternAttributes(ctx context.Context, arg InternAttributesPara
 		arg.ImageFormat,
 		arg.ColourDepth,
 		arg.PageCount,
+		arg.BitrateKbps,
+		arg.BitrateMode,
+		arg.VbrPreset,
 	)
 	var i MediaAttribute
 	err := row.Scan(
@@ -447,6 +499,9 @@ func (q *Queries) InternAttributes(ctx context.Context, arg InternAttributesPara
 		&i.ImageFormat,
 		&i.ColourDepth,
 		&i.PageCount,
+		&i.BitrateKbps,
+		&i.BitrateMode,
+		&i.VbrPreset,
 	)
 	return i, err
 }
@@ -624,6 +679,61 @@ func (q *Queries) ListUnfingerprinted(ctx context.Context, arg ListUnfingerprint
 			&i.ProbeJson,
 			&i.FirstSeenAt,
 			&i.VerifiedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUnmeasured = `-- name: ListUnmeasured :many
+SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
+WHERE o.measured_attributes_id IS NULL AND o.id > ?1
+ORDER BY o.id
+LIMIT ?2
+`
+
+type ListUnmeasuredParams struct {
+	AfterID  int64
+	PageSize int64
+}
+
+type ListUnmeasuredRow struct {
+	ID           int64
+	SizeBytes    int64
+	RootFolderID int64
+	RelPath      string
+}
+
+// The measured half of ADR-39 is the lowest-priority background work, resumable
+// the same way fingerprinting is (todo 4.2): a cursor on media_object.id rather
+// than re-deriving "unmeasured" from scratch, so a file that fails its probe
+// this run does not block the cursor from ever reaching what comes after it.
+// The join to library_path is within library.db, not across databases --
+// both tables live here, so it does not run into the no-cross-DB-join rule.
+func (q *Queries) ListUnmeasured(ctx context.Context, arg ListUnmeasuredParams) ([]ListUnmeasuredRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUnmeasured, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUnmeasuredRow{}
+	for rows.Next() {
+		var i ListUnmeasuredRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SizeBytes,
+			&i.RootFolderID,
+			&i.RelPath,
 		); err != nil {
 			return nil, err
 		}

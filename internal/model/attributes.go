@@ -13,8 +13,30 @@ type Attributes struct {
 	// Lossless is derived from Format, not asserted independently, so the two can
 	// never disagree.
 	Lossless bool
-	// BitrateKbps is 0 when unknown or when Lossless makes it meaningless.
+	// BitrateKbps is 0 when unknown, when Lossless makes it meaningless, or when
+	// BitrateMode is "vbr" without a named preset -- a fixed number and "variable"
+	// are different claims, kept in separate fields rather than the negative-value
+	// sentinel this package used before todo 4.2 added BitrateMode.
 	BitrateKbps int
+	// BitrateMode is "cbr" or "vbr" when the name states or implies one, empty
+	// otherwise. A bare numeric claim ("-320-") implies "cbr"; a named preset
+	// ("V0", "V2") implies "vbr".
+	BitrateMode string
+	// VBRPreset is the literal preset token ("V0", "V2") when BitrateMode is
+	// "vbr" and the release named one -- empty for a bare "VBR" claim with no
+	// preset, or when BitrateMode is not "vbr" at all.
+	VBRPreset string
+	// SampleRate in Hz, 0 when unstated. Lidarr's own SampleSizeRegex has no
+	// sample-rate concept at all (ADR-18's port expands the model); a bare
+	// "96KHZ"/"44.1KHZ" token was previously recognised and discarded, not
+	// recorded -- todo 4.2 gives it a field to land on.
+	SampleRate int
+	// Container is empty unless a release name states one distinct from its
+	// codec (e.g. an M4A container around an AAC or ALAC stream). No release
+	// name in this project's corpus has been found doing so yet; the field
+	// exists so a future one does not need another model change, the same
+	// shape SampleRate carried before this one.
+	Container string
 	// Source is where the release claims to originate: "cd", "web", "vinyl",
 	// "cassette" -- empty when unstated.
 	Source string

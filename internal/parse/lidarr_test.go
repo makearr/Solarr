@@ -95,3 +95,42 @@ func TestCleanArtistName(t *testing.T) {
 		t.Errorf("CleanArtistName(%q) = %q, want %q -- a filler word at either edge is never stripped", "The The", got, "thethe")
 	}
 }
+
+// TestParse_SampleRateIsClaimed ports todo 4.2: a bare sample-rate token
+// ("96KHZ", "44.1KHZ") is now recorded on model.Attributes.SampleRate in Hz,
+// not just stripped from the album title.
+func TestParse_SampleRateIsClaimed(t *testing.T) {
+	cases := map[string]int{
+		"The Zegabab-Muvohem And Zetave-24BIT-96KHZ-WEB-FLAC-2025-OBZEN":     96000,
+		"Gohudo Cosicatebi-Citus On Vokeva-24BIT-192KHZ-WEB-FLAC-2003-TiMES": 192000,
+	}
+	for input, want := range cases {
+		if got := parse.Parse(input).Attributes.SampleRate; got != want {
+			t.Errorf("Parse(%q).Attributes.SampleRate = %d, want %d", input, got, want)
+		}
+	}
+}
+
+// TestParse_BitrateModeAndVBRPreset ports todo 4.2's split of the old
+// negative-BitrateKbps sentinel into explicit fields: a bare numeric claim
+// implies "cbr", a named preset implies "vbr" and records the preset itself.
+func TestParse_BitrateModeAndVBRPreset(t *testing.T) {
+	result := parse.Parse("A.I. - Zal & Binesu [2007/MP3/V0(VBR)]")
+	if result.Attributes.BitrateMode != "vbr" {
+		t.Errorf("BitrateMode = %q, want \"vbr\"", result.Attributes.BitrateMode)
+	}
+	if result.Attributes.VBRPreset != "V0" {
+		t.Errorf("VBRPreset = %q, want \"V0\"", result.Attributes.VBRPreset)
+	}
+	if result.Attributes.BitrateKbps != 0 {
+		t.Errorf("BitrateKbps = %d, want 0 -- a VBR preset is not a fixed rate", result.Attributes.BitrateKbps)
+	}
+
+	cbr := parse.Parse("Jay-Z - 4:44 (Deluxe Edition) (2017) 320")
+	if cbr.Attributes.BitrateMode != "cbr" {
+		t.Errorf("BitrateMode = %q, want \"cbr\"", cbr.Attributes.BitrateMode)
+	}
+	if cbr.Attributes.BitrateKbps != 320 {
+		t.Errorf("BitrateKbps = %d, want 320", cbr.Attributes.BitrateKbps)
+	}
+}

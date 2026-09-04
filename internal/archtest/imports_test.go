@@ -23,7 +23,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/egress", "internal/events", "internal/fsx", "internal/health",
 		"internal/httpx", "internal/jobs", "internal/library", "internal/mediatool",
 		"internal/metacache", "internal/music", "internal/musicbrainz", "internal/paginate",
-		"internal/privilege", "internal/recovery", "internal/scan", "internal/settings",
+		"internal/privilege", "internal/probe", "internal/recovery", "internal/scan", "internal/settings",
 		"internal/store", "internal/webui", "internal/wikidata", "migrations",
 	},
 	"internal/auth":  {"internal/clock", "internal/secrets"},
@@ -102,6 +102,15 @@ var allowedInternalImports = map[string][]string{
 	"internal/scan": {
 		"internal/clock", "internal/fsx", "internal/jobs", "internal/library",
 		"internal/mediatool", "internal/settings",
+	},
+	// ADR-39's measured-half sweep: its own job handler, the same shape as
+	// internal/scan's -- a Roots lookup for path resolution, mediatool to
+	// probe with, library to record what it found. Deliberately separate
+	// from internal/scan (todo 4.2, confirmed with the user), so it imports
+	// no more than scan itself does.
+	"internal/probe": {
+		"internal/clock", "internal/jobs", "internal/library", "internal/mediatool",
+		"internal/settings",
 	},
 	// ADR-15's post-restore pass spans library.db and jobs.db, so it composes their
 	// owning packages rather than reaching into either gen package (section 4.3).

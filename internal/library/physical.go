@@ -150,6 +150,98 @@ func findOrCreateObject(ctx context.Context, queries *librarydb.Queries, file Ph
 	return created, nil
 }
 
+// UnmeasuredFile is one media_object still waiting for ADR-39's measured half,
+// with the primary path a probe needs to actually read it.
+type UnmeasuredFile struct {
+	MediaObjectID int64
+	RootFolderID  int64
+	RelPath       string
+}
+
+// ListUnmeasured pages through every media_object with no measured_attributes_id
+// yet, oldest id first -- the same resumable-by-cursor shape ListUnfingerprinted
+// already uses (ADR-35), so a file that fails its probe this run does not block
+// the cursor from reaching what comes after it.
+func (p Physical) ListUnmeasured(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
+	rows, err := librarydb.New(p.store.Read()).ListUnmeasured(ctx, librarydb.ListUnmeasuredParams{
+		AfterID: afterID, PageSize: pageSize,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: list unmeasured: %w", err)
+	}
+	files := make([]UnmeasuredFile, len(rows))
+	for index, row := range rows {
+		files[index] = UnmeasuredFile{
+			MediaObjectID: row.ID, RootFolderID: row.RootFolderID, RelPath: row.RelPath,
+		}
+	}
+	return files, nil
+}
+
+// ClaimedAttributesFor answers the claimed half of ADR-39 for one file, when
+// there is one -- the claimed side is not wired up from a release name yet
+// (todo 4.2's own remaining item), so found is false for every file today,
+// but the read path exists and is exercised so that wiring is a producer
+// change only, not a new consumer too.
+func (p Physical) ClaimedAttributesFor(ctx context.Context, mediaObjectID int64) (AttributeClaim, bool, error) {
+	queries := librarydb.New(p.store.Read())
+	object, err := queries.GetMediaObject(ctx, mediaObjectID)
+	if err != nil {
+		return AttributeClaim{}, false, fmt.Errorf("library: get media object: %w", err)
+	}
+	if !object.ClaimedAttributesID.Valid {
+		return AttributeClaim{}, false, nil
+	}
+	row, err := queries.GetAttributes(ctx, object.ClaimedAttributesID.Int64)
+	if err != nil {
+		return AttributeClaim{}, false, fmt.Errorf("library: get claimed attributes: %w", err)
+	}
+	return attributeClaimFromRow(row), true, nil
+}
+
+// MeasuredScalars are the per-file facts media_object stores directly rather
+// than through the interned media_attributes row -- unique per file, so
+// interning them would give one attributes row per object (media_object's own
+// comment on why).
+type MeasuredScalars struct {
+	DurationMs                                 int64
+	Width, Height                              int
+	VideoBitrate, AudioBitrate, OverallBitrate int64
+	ProbeJSON                                  string
+}
+
+// RecordMeasured writes ADR-39's measured half for one file: interning claim
+// into media_attributes and pointing media_object at it, in one transaction so
+// a crash between the two never leaves media_object referencing a row that was
+// never actually committed. mismatchJSON is empty when there is no claimed
+// side yet to compare against (todo 4.2: claimed-side wiring from a release
+// name is not built yet, so this is the common case today).
+func (p Physical) RecordMeasured(
+	ctx context.Context, mediaObjectID int64, claim AttributeClaim, scalars MeasuredScalars,
+	mismatchJSON string, verifiedAt int64,
+) error {
+	return p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		attrRow, err := queries.InternAttributes(ctx, internParams(claim))
+		if err != nil {
+			return fmt.Errorf("intern measured attributes: %w", err)
+		}
+		return queries.SetMeasuredAttributes(ctx, librarydb.SetMeasuredAttributesParams{
+			MeasuredAttributesID:  sql.NullInt64{Int64: attrRow.ID, Valid: true},
+			AttributeMismatchJson: nullString(mismatchJSON),
+			DurationMs:            sql.NullInt64{Int64: scalars.DurationMs, Valid: scalars.DurationMs > 0},
+			Width:                 sql.NullInt64{Int64: int64(scalars.Width), Valid: scalars.Width > 0},
+			Height:                sql.NullInt64{Int64: int64(scalars.Height), Valid: scalars.Height > 0},
+			VideoBitrate:          sql.NullInt64{Int64: scalars.VideoBitrate, Valid: scalars.VideoBitrate > 0},
+			AudioBitrate:          sql.NullInt64{Int64: scalars.AudioBitrate, Valid: scalars.AudioBitrate > 0},
+			OverallBitrate:        sql.NullInt64{Int64: scalars.OverallBitrate, Valid: scalars.OverallBitrate > 0},
+			ProbeJson:             nullString(scalars.ProbeJSON),
+			VerifiedAt:            sql.NullInt64{Int64: verifiedAt, Valid: true},
+			ID:                    mediaObjectID,
+		})
+	})
+}
+
 // MarkMissing marks every library_path in rootFolderID not observed since before as
 // missing (section 10.4). Callers must only pass before from a completed *full*
 // sweep's start time -- an incremental sweep can skip whole directories, so a path it

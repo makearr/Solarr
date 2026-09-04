@@ -7,7 +7,7 @@
 {"input":"Hupo Pufetiha - Dagu Vo Hivu (1965) [EAC-FLAC]","artist":"Hupo Pufetiha","album":"Dagu Vo Hivu","year":1965,"format":"flac","lossless":true,"min_confidence":0.9}
 {"input":"The Cimuhon Tozali - The Very Best Of '75-'94 (1995) {FLAC}","artist":"The Cimuhon Tozali","album":"The Very Best Of '75-'94","year":1995,"format":"flac","lossless":true,"min_confidence":0.9}
 {"input":"Vonan-No_Hopub_II-CD-FLAC-2014-FORSAKEN","artist":"Vonan","album":"No Hopub II","year":2014,"format":"flac","lossless":true,"source":"cd","release_group":"FORSAKEN","min_confidence":0.9}
-{"input":"A.I. - Zal & Binesu [2007/MP3/V0(VBR)]","artist":"A.I.","album":"Zal & Binesu","year":2007,"format":"mp3","bitrate_kbps":-1,"min_confidence":0.9}
+{"input":"A.I. - Zal & Binesu [2007/MP3/V0(VBR)]","artist":"A.I.","album":"Zal & Binesu","year":2007,"format":"mp3","min_confidence":0.9}
 {"input":"Jay-Z - 4:44 (Deluxe Edition) (2017) 320","artist":"Jay-Z","album":"4:44","year":2017,"bitrate_kbps":320,"edition":"deluxe edition","min_confidence":0.9}
 {"input":"VA - DOP Ripov Tusa I Nufo Nupil 96 (2017) [Mp3~Kbps]","artist":"VA","album":"DOP Ripov Tusa I Nufo Nupil 96","year":2017,"format":"mp3","various_artists":true,"min_confidence":0.9}
 {"input":"Vemum - The Nezuseta Best Of Vemum(2011)[mp3]","artist":"Vemum","album":"The Nezuseta Best Of Vemum","year":2011,"format":"mp3","min_confidence":0.9}

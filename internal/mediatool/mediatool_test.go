@@ -110,6 +110,25 @@ func TestReadTags_ReportsWhatWasMeasuredNotWhatWasClaimed(t *testing.T) {
 	}
 }
 
+// TestReadTags_ReportsBitDepthWhenFfprobeHasOne (todo 4.2): ffprobe's own
+// bits_per_raw_sample is the one field that gives a real, measured bit depth,
+// distinct from a release name's claim -- meaningful for a lossless stream,
+// absent for a lossy one that decodes to float internally.
+func TestReadTags_ReportsBitDepthWhenFfprobeHasOne(t *testing.T) {
+	runner := &fakeRunner{respond: probeReplying(`{
+	  "streams": [{"codec_name":"flac","codec_type":"audio","bit_rate":"705600",
+	               "sample_rate":"44100","channels":2,"bits_per_raw_sample":"24"}],
+	  "format": {"format_name":"flac","bit_rate":"705600"}
+	}`)}
+	probes, err := mediatool.New(runner, 1).ReadTags(t.Context(), []string{"/music/a.flac"})
+	if err != nil {
+		t.Fatalf("ReadTags: %v", err)
+	}
+	if probes[0].Measured.BitDepth != 24 {
+		t.Errorf("BitDepth = %d, want 24", probes[0].Measured.BitDepth)
+	}
+}
+
 // Vorbis comments land at format level and are the authoritative copy, so a
 // same-named stream tag must not shadow them.
 func TestReadTags_PrefersAFormatTagOverAStreamTagOfTheSameName(t *testing.T) {

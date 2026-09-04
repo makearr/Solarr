@@ -185,15 +185,16 @@ type ffprobeOutput struct {
 		Tags       map[string]string `json:"tags"`
 	} `json:"format"`
 	Streams []struct {
-		CodecName  string            `json:"codec_name"`
-		CodecType  string            `json:"codec_type"`
-		BitRate    string            `json:"bit_rate"`
-		Duration   string            `json:"duration"`
-		SampleRate string            `json:"sample_rate"`
-		Channels   int               `json:"channels"`
-		Width      int               `json:"width"`
-		Height     int               `json:"height"`
-		Tags       map[string]string `json:"tags"`
+		CodecName        string            `json:"codec_name"`
+		CodecType        string            `json:"codec_type"`
+		BitRate          string            `json:"bit_rate"`
+		Duration         string            `json:"duration"`
+		SampleRate       string            `json:"sample_rate"`
+		BitsPerRawSample string            `json:"bits_per_raw_sample"`
+		Channels         int               `json:"channels"`
+		Width            int               `json:"width"`
+		Height           int               `json:"height"`
+		Tags             map[string]string `json:"tags"`
 	} `json:"streams"`
 }
 
@@ -219,6 +220,7 @@ func parseProbe(output []byte) (Probe, error) {
 				measured.AudioCodec = stream.CodecName
 				measured.AudioBitrate = parseInt(stream.BitRate)
 				measured.SampleRate = int(parseInt(stream.SampleRate))
+				measured.BitDepth = int(parseInt(stream.BitsPerRawSample))
 				measured.Channels = stream.Channels
 			}
 		case "video":

@@ -46,6 +46,10 @@ type Querier interface {
 	CountGroupOutcomes(ctx context.Context, arg CountGroupOutcomesParams) ([]CountGroupOutcomesRow, error)
 	// The root_folder_id half of the ADR-25 orphan check. See CountDesiredItemsByCategory.
 	CountLibraryPathsByRootFolder(ctx context.Context) ([]CountLibraryPathsByRootFolderRow, error)
+	// Probe coverage, the same per-root shape CountLibraryPathsByRootFolder already
+	// answers for the denominator (library.CategoryCounters' own precedent) --
+	// "probed" is the numerator a coverage counter reconciles against it.
+	CountMeasuredByRootFolder(ctx context.Context) ([]CountMeasuredByRootFolderRow, error)
 	// What a SET requires follows the monitored parts, so unmonitoring an episode
 	// shrinks the season rather than leaving it permanently incomplete (Appendix E, D3).
 	CountMonitoredParts(ctx context.Context, workID int64) (int64, error)
@@ -242,6 +246,13 @@ type Querier interface {
 	// empty when the caller can see nothing -- same ADR-27 shape as search.sql's
 	// SearchWorks, json_each passing a Go slice as a JSON array.
 	ListUnidentified(ctx context.Context, arg ListUnidentifiedParams) ([]IdentificationQueue, error)
+	// The measured half of ADR-39 is the lowest-priority background work, resumable
+	// the same way fingerprinting is (todo 4.2): a cursor on media_object.id rather
+	// than re-deriving "unmeasured" from scratch, so a file that fails its probe
+	// this run does not block the cursor from ever reaching what comes after it.
+	// The join to library_path is within library.db, not across databases --
+	// both tables live here, so it does not run into the no-cross-DB-join rule.
+	ListUnmeasured(ctx context.Context, arg ListUnmeasuredParams) ([]ListUnmeasuredRow, error)
 	ListWorkClassifications(ctx context.Context, workID int64) ([]WorkClassification, error)
 	ListWorkDates(ctx context.Context, workID int64) ([]WorkDate, error)
 	ListWorkExternalIDs(ctx context.Context, workID int64) ([]WorkExternalID, error)

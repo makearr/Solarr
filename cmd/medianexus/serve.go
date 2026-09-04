@@ -304,6 +304,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerCategoryCountsJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerProbeJob(registry, executor); err != nil {
+		return err
+	}
 	p.dispatcher = jobs.NewDispatcher(queue, wall, executor, jobs.DispatcherConfig{
 		Sizes: []jobs.PoolSize{
 			{Pool: jobs.PoolSearch, Capacity: p.config.Workers.Search},
@@ -328,6 +331,7 @@ func (p *process) startServer(ctx context.Context) error {
 	p.enqueueEnrichment(ctx)
 	p.enqueueArtwork(ctx)
 	p.enqueueCategoryCounts(ctx)
+	p.enqueueProbe(ctx)
 	if err := p.seedAuthPolicy(ctx); err != nil {
 		return err
 	}
