@@ -165,6 +165,8 @@ type Querier interface {
 	ListAcquiredFiles(ctx context.Context, acquisitionID int64) ([]AcquisitionFile, error)
 	// Startup reconciliation polls every non-terminal acquisition (section 10.9).
 	ListActiveAcquisitions(ctx context.Context) ([]Acquisition, error)
+	// The person detail page's own need: every alias this person is known by.
+	ListAliasesForPerson(ctx context.Context, personID int64) ([]string, error)
 	// Every credit anywhere under a work, at any scope. Coverage counts use this;
 	// the work-level listing above deliberately does not.
 	ListAllCreditsUnderWork(ctx context.Context, workID int64) ([]Credit, error)

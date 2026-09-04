@@ -204,6 +204,124 @@ func slugify(name string) string {
 	return strings.TrimSuffix(b.String(), "-")
 }
 
+// PersonDetail is a person's own fields, every alias they are known by, their
+// biography (decoded back out of fields_json), and their discography -- every
+// work credited to them, any role (architecture.md's own GET /people/{id}
+// sketch: "incl. coverage per media type"). Coverage itself (held vs missing
+// vs upgradable) reuses Satisfaction, which needs desired_item populated for
+// music -- not yet true (migration 0012's work_root_folder bridge exists
+// precisely because it isn't), so this pass answers the discography half only.
+type PersonDetail struct {
+	Person      librarydb.Person
+	Aliases     []string
+	Biography   string
+	Discography []librarydb.ListWorksCreditedToRow
+}
+
+// Detail composes one person's full detail. A missing id surfaces
+// sql.ErrNoRows through GetPerson, wrapped: callers use errors.Is to detect it.
+func (p People) Detail(ctx context.Context, id int64) (PersonDetail, error) {
+	queries := librarydb.New(p.store.Read())
+
+	person, err := queries.GetPerson(ctx, id)
+	if err != nil {
+		return PersonDetail{}, fmt.Errorf("library: person detail: get person: %w", err)
+	}
+
+	aliases, err := queries.ListAliasesForPerson(ctx, id)
+	if err != nil {
+		return PersonDetail{}, fmt.Errorf("library: person detail: aliases: %w", err)
+	}
+
+	discography, err := queries.ListWorksCreditedTo(ctx, librarydb.ListWorksCreditedToParams{
+		PersonID: id, Role: "",
+	})
+	if err != nil {
+		return PersonDetail{}, fmt.Errorf("library: person detail: discography: %w", err)
+	}
+
+	return PersonDetail{
+		Person: person, Aliases: aliases, Biography: biographyFromFields(person.FieldsJson),
+		Discography: discography,
+	}, nil
+}
+
+// SubscriptionRequest is what a caller supplies to subscribe to a person
+// (ADR-32): media types x roles, optionally the whole back catalogue.
+type SubscriptionRequest struct {
+	MediaTypes           []string
+	Roles                []string
+	MonitorBackCatalogue bool
+}
+
+// Subscribe records a subscription and marks the person monitored, in one
+// transaction -- ADR-32: "adding a performer monitors their scenes regardless
+// of studio". CategoryID and ProfileID are deliberately left unset: both are
+// acquisition-planner concerns (which category's profile decides what to
+// grab), and there is no acquisition planner for music yet.
+func (p People) Subscribe(
+	ctx context.Context, at time.Time, personID, userID int64, request SubscriptionRequest,
+) (int64, error) {
+	mediaTypesJSON, err := json.Marshal(request.MediaTypes)
+	if err != nil {
+		return 0, fmt.Errorf("library: subscribe: encode media types: %w", err)
+	}
+	var rolesJSON sql.NullString
+	if len(request.Roles) > 0 {
+		encoded, err := json.Marshal(request.Roles)
+		if err != nil {
+			return 0, fmt.Errorf("library: subscribe: encode roles: %w", err)
+		}
+		rolesJSON = sql.NullString{String: string(encoded), Valid: true}
+	}
+
+	var subscriptionID int64
+	err = p.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		// subscription.subject_id is a polymorphic reference with no FK to
+		// enforce it (person, organisation and tag all share the column) --
+		// without this check, subscribing to a nonexistent person would
+		// silently succeed rather than reporting sql.ErrNoRows.
+		if _, err := queries.GetPerson(ctx, personID); err != nil {
+			return err
+		}
+		monitorBackCatalogue := int64(0)
+		if request.MonitorBackCatalogue {
+			monitorBackCatalogue = 1
+		}
+		subscription, err := queries.CreateSubscription(ctx, librarydb.CreateSubscriptionParams{
+			SubjectType: "person", SubjectID: personID,
+			MediaTypesJson: string(mediaTypesJSON), RolesJson: rolesJSON,
+			MonitorBackCatalogue: monitorBackCatalogue, Enabled: 1,
+			UserID: sql.NullInt64{Int64: userID, Valid: userID != 0}, CreatedAt: at.Unix(),
+		})
+		if err != nil {
+			return fmt.Errorf("create subscription: %w", err)
+		}
+		subscriptionID = subscription.ID
+		return queries.SetPersonMonitored(ctx, librarydb.SetPersonMonitoredParams{Monitored: 1, ID: personID})
+	})
+	if err != nil {
+		return 0, fmt.Errorf("library: subscribe person %d: %w", personID, err)
+	}
+	return subscriptionID, nil
+}
+
+// biographyFromFields decodes fields_json back out, empty when there is none
+// or it does not decode -- a row this package itself wrote should always
+// decode, so a failure here is treated as "no biography" rather than a hard
+// error, the same reasoning musicbrainz.Provider's own cache uses.
+func biographyFromFields(raw sql.NullString) string {
+	if !raw.Valid {
+		return ""
+	}
+	var fields personFields
+	if json.Unmarshal([]byte(raw.String), &fields) != nil {
+		return ""
+	}
+	return fields.Biography
+}
+
 // personFields is fields_json's shape -- extension data with no dedicated
 // column (ADR-23's pattern), currently just the one field a biography needs.
 type personFields struct {

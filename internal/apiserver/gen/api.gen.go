@@ -388,6 +388,56 @@ type ParsedTitle struct {
 // Permission `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.
 type Permission string
 
+// Person A person, first-class and monitorable in their own right (ADR-32).
+type Person struct {
+	Born           *string `json:"born,omitempty"`
+	Country        *string `json:"country,omitempty"`
+	Died           *string `json:"died,omitempty"`
+	Disambiguation *string `json:"disambiguation,omitempty"`
+	Gender         *string `json:"gender,omitempty"`
+	Id             int64   `json:"id"`
+	Kind           *string `json:"kind,omitempty"`
+	Monitored      bool    `json:"monitored"`
+	Name           string  `json:"name"`
+	SortName       string  `json:"sort_name"`
+}
+
+// PersonDetail defines model for PersonDetail.
+type PersonDetail struct {
+	Aliases []string `json:"aliases"`
+
+	// Biography A Wikidata-sourced extract, when available (ADR-8).
+	Biography      *string      `json:"biography,omitempty"`
+	Born           *string      `json:"born,omitempty"`
+	Country        *string      `json:"country,omitempty"`
+	Died           *string      `json:"died,omitempty"`
+	Disambiguation *string      `json:"disambiguation,omitempty"`
+	Discography    []PersonWork `json:"discography"`
+	Gender         *string      `json:"gender,omitempty"`
+	Id             int64        `json:"id"`
+	Kind           *string      `json:"kind,omitempty"`
+	Monitored      bool         `json:"monitored"`
+	Name           string       `json:"name"`
+	SortName       string       `json:"sort_name"`
+}
+
+// PersonPage defines model for PersonPage.
+type PersonPage struct {
+	Items []Person `json:"items"`
+
+	// NextCursor Empty on the last page, which is how a client knows to stop without one more request that returns nothing.
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
+// PersonWork One work in a person's discography.
+type PersonWork struct {
+	Id        int64  `json:"id"`
+	MediaType string `json:"media_type"`
+	SortTitle string `json:"sort_title"`
+	Title     string `json:"title"`
+	Year      *int   `json:"year,omitempty"`
+}
+
 // Problem RFC 7807. Every error uses this, including 404 and 405.
 type Problem struct {
 	Detail *string     `json:"detail,omitempty"`
@@ -601,6 +651,26 @@ type ListUnidentifiedParams struct {
 	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
 }
 
+// ListPeopleParams defines parameters for ListPeople.
+type ListPeopleParams struct {
+	// Cursor From `next_cursor` of the previous page. Absent on the first page.
+	Cursor    *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit     *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Monitored *bool   `form:"monitored,omitempty" json:"monitored,omitempty"`
+
+	// Q Matches the start of the sort name.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+}
+
+// SubscribePersonJSONBody defines parameters for SubscribePerson.
+type SubscribePersonJSONBody struct {
+	MediaTypes           []string `json:"media_types"`
+	MonitorBackCatalogue *bool    `json:"monitor_back_catalogue,omitempty"`
+
+	// Roles Empty or absent means any role.
+	Roles *[]string `json:"roles,omitempty"`
+}
+
 // AddRootFolderJSONBody defines parameters for AddRootFolder.
 type AddRootFolderJSONBody struct {
 	Label *string `json:"label,omitempty"`
@@ -682,6 +752,9 @@ type GetWorkArtworkParamsSize string
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody LoginJSONBody
 
+// SubscribePersonJSONRequestBody defines body for SubscribePerson for application/json ContentType.
+type SubscribePersonJSONRequestBody SubscribePersonJSONBody
+
 // AddRootFolderJSONRequestBody defines body for AddRootFolder for application/json ContentType.
 type AddRootFolderJSONRequestBody AddRootFolderJSONBody
 
@@ -735,6 +808,15 @@ type ServerInterface interface {
 	// Who the caller is and what they may see.
 	// (GET /me)
 	GetMe(w http.ResponseWriter, r *http.Request)
+	// A page of people (ADR-32) -- first-class monitorable entities, not just credits.
+	// (GET /people)
+	ListPeople(w http.ResponseWriter, r *http.Request, params ListPeopleParams)
+	// A person's full detail, including their discography.
+	// (GET /people/{id})
+	GetPerson(w http.ResponseWriter, r *http.Request, id int64)
+	// Subscribe to a person (ADR-32) -- media types x roles x filters.
+	// (POST /people/{id}/subscribe)
+	SubscribePerson(w http.ResponseWriter, r *http.Request, id int64)
 	// Readiness.
 	// (GET /ready)
 	GetReady(w http.ResponseWriter, r *http.Request)
@@ -858,6 +940,24 @@ func (_ Unimplemented) ListUnidentified(w http.ResponseWriter, r *http.Request, 
 // Who the caller is and what they may see.
 // (GET /me)
 func (_ Unimplemented) GetMe(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A page of people (ADR-32) -- first-class monitorable entities, not just credits.
+// (GET /people)
+func (_ Unimplemented) ListPeople(w http.ResponseWriter, r *http.Request, params ListPeopleParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A person's full detail, including their discography.
+// (GET /people/{id})
+func (_ Unimplemented) GetPerson(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Subscribe to a person (ADR-32) -- media types x roles x filters.
+// (POST /people/{id}/subscribe)
+func (_ Unimplemented) SubscribePerson(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1261,6 +1361,131 @@ func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPeople operation middleware
+func (siw *ServerInterfaceWrapper) ListPeople(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPeopleParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "monitored" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "monitored", r.URL.Query(), &params.Monitored)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "monitored", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPeople(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPerson operation middleware
+func (siw *ServerInterfaceWrapper) GetPerson(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPerson(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SubscribePerson operation middleware
+func (siw *ServerInterfaceWrapper) SubscribePerson(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SubscribePerson(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1951,6 +2176,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/me", wrapper.GetMe)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/people", wrapper.ListPeople)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/people/{id}", wrapper.GetPerson)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/people/{id}/subscribe", wrapper.SubscribePerson)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/ready", wrapper.GetReady)

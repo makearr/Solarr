@@ -81,6 +81,12 @@ type Config struct {
 	// Required together with Artwork -- meaningless alone.
 	FS        fsx.FS
 	ImagesDir string
+	// People lists and reads people (ADR-32). Optional: without it, the people
+	// endpoints answer 503.
+	People PeopleReader
+	// PeopleSubscriber subscribes a caller to a person. Optional: without it,
+	// SubscribePerson answers 503.
+	PeopleSubscriber PeopleSubscriber
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -99,16 +105,18 @@ type Server struct {
 	roots   RootChecker
 	address string
 
-	librarySize  LibrarySize
-	timezone     string
-	egress       EgressReporter
-	works        WorksReader
-	workDetail   WorkDetailReader
-	search       SearchReader
-	unidentified UnidentifiedReader
-	artwork      ArtworkReader
-	fsys         fsx.FS
-	imagesDir    string
+	librarySize      LibrarySize
+	timezone         string
+	egress           EgressReporter
+	works            WorksReader
+	workDetail       WorkDetailReader
+	search           SearchReader
+	unidentified     UnidentifiedReader
+	artwork          ArtworkReader
+	fsys             fsx.FS
+	imagesDir        string
+	people           PeopleReader
+	peopleSubscriber PeopleSubscriber
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -139,17 +147,19 @@ func New(config Config) (*Server, error) {
 		webui:   config.WebUI,
 		roots:   config.Roots,
 
-		librarySize:  config.LibrarySize,
-		timezone:     config.Timezone,
-		egress:       config.Egress,
-		works:        config.Works,
-		workDetail:   config.WorkDetail,
-		search:       config.Search,
-		unidentified: config.Unidentified,
-		artwork:      config.Artwork,
-		fsys:         config.FS,
-		imagesDir:    config.ImagesDir,
-		address:      net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
+		librarySize:      config.LibrarySize,
+		timezone:         config.Timezone,
+		egress:           config.Egress,
+		works:            config.Works,
+		workDetail:       config.WorkDetail,
+		search:           config.Search,
+		unidentified:     config.Unidentified,
+		artwork:          config.Artwork,
+		fsys:             config.FS,
+		imagesDir:        config.ImagesDir,
+		people:           config.People,
+		peopleSubscriber: config.PeopleSubscriber,
+		address:          net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
 	router := chi.NewRouter()
@@ -191,6 +201,9 @@ func New(config Config) (*Server, error) {
 			secured.Get("/search", server.routeSearch)
 			secured.Post("/score/simulate", server.SimulateScore)
 			secured.Get("/categories", server.ListCategories)
+			secured.Get("/people", server.routeListPeople)
+			secured.Get("/people/{id}", server.routeGetPerson)
+			secured.Post("/people/{id}/subscribe", server.routeSubscribePerson)
 			secured.Get("/rootfolders", server.ListRootFolders)
 			secured.Get("/users", server.ListUsers)
 			secured.Post("/users", server.CreateUser)

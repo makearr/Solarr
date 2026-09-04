@@ -22,6 +22,10 @@ ON CONFLICT (person_id, alias) DO UPDATE SET
   normalized = excluded.normalized,
   source = excluded.source;
 
+-- The person detail page's own need: every alias this person is known by.
+-- name: ListAliasesForPerson :many
+SELECT alias FROM person_alias WHERE person_id = ? ORDER BY alias;
+
 -- A stage name is often the only way to connect a release to a person (ADR-32).
 -- name: FindPeopleByAlias :many
 SELECT p.id, p.name, p.sort_name, p.disambiguation, p.kind, p.gender, p.country,

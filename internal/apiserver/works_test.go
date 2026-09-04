@@ -57,6 +57,8 @@ type worksFixture struct {
 	search       *fakeSearchReader
 	unidentified *fakeUnidentifiedReader
 	artwork      *fakeArtworkReader
+	people       *fakePeopleReader
+	subscriber   *fakePeopleSubscriber
 	fsys         *fsx.Mem
 	clock        *clock.Fake
 }
@@ -104,20 +106,24 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 	search := &fakeSearchReader{}
 	unidentified := &fakeUnidentifiedReader{}
 	artwork := &fakeArtworkReader{}
+	people := &fakePeopleReader{}
+	subscriber := &fakePeopleSubscriber{}
 	fsys := fsx.NewMem(fake)
 	server, err := apiserver.New(apiserver.Config{
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
-		Checker:      fakeChecker{},
-		Works:        works,
-		WorkDetail:   workDetail,
-		Search:       search,
-		Unidentified: unidentified,
-		Artwork:      artwork,
-		FS:           fsys,
-		ImagesDir:    testImagesDir,
-		LibrarySize:  librarySize,
-		Clock:        fake,
-		Logger:       slog.New(slog.DiscardHandler),
+		Checker:          fakeChecker{},
+		Works:            works,
+		WorkDetail:       workDetail,
+		Search:           search,
+		Unidentified:     unidentified,
+		Artwork:          artwork,
+		People:           people,
+		PeopleSubscriber: subscriber,
+		FS:               fsys,
+		ImagesDir:        testImagesDir,
+		LibrarySize:      librarySize,
+		Clock:            fake,
+		Logger:           slog.New(slog.DiscardHandler),
 		Auth: apiserver.AuthConfig{
 			Mode:     apiserver.AuthLocal,
 			Sessions: auth.NewSessions([]byte("0123456789abcdef0123456789abcdef"), fake, time.Hour),
@@ -130,7 +136,8 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 	}
 	return worksFixture{
 		server: server, cache: cache, works: works, workDetail: workDetail, search: search,
-		unidentified: unidentified, artwork: artwork, fsys: fsys, clock: fake,
+		unidentified: unidentified, artwork: artwork, people: people, subscriber: subscriber,
+		fsys: fsys, clock: fake,
 	}
 }
 

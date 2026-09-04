@@ -756,6 +756,98 @@ paths:
                 items: { $ref: "#/components/schemas/LibraryCategory" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /people:
+    get:
+      operationId: listPeople
+      tags: [people]
+      summary: A page of people (ADR-32) -- first-class monitorable entities, not just credits.
+      parameters:
+        - name: cursor
+          in: query
+          description: >-
+            From `next_cursor` of the previous page. Absent on the first page.
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: monitored
+          in: query
+          schema: { type: boolean }
+        - name: q
+          in: query
+          description: Matches the start of the sort name.
+          schema: { type: string }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PersonPage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /people/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getPerson
+      tags: [people]
+      summary: A person's full detail, including their discography.
+      description: >-
+        Coverage (held vs missing vs upgradable, architecture.md's own
+        sketch) is not included -- it reuses Satisfaction, which needs
+        desired_item populated for music, not yet true. discography lists
+        every work credited to them, any role.
+      responses:
+        "200":
+          description: The person's detail.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PersonDetail" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /people/{id}/subscribe:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: subscribePerson
+      tags: [people]
+      summary: Subscribe to a person (ADR-32) -- media types x roles x filters.
+      description: >-
+        Marks the person monitored (ADR-32: "adding a performer monitors
+        their scenes regardless of studio"). Back-catalogue is an explicit
+        choice, never implied.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [media_types]
+              properties:
+                media_types:
+                  type: array
+                  items: { type: string }
+                  example: ["music"]
+                roles:
+                  type: array
+                  items: { type: string }
+                  description: Empty or absent means any role.
+                monitor_back_catalogue: { type: boolean, default: false }
+      responses:
+        "204": { description: Subscribed. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /events:
     get:
       operationId: streamEvents
@@ -1152,6 +1244,62 @@ components:
           description: >-
             Empty on the last page, which is how a client knows to stop without
             one more request that returns nothing.
+
+    Person:
+      type: object
+      description: A person, first-class and monitorable in their own right (ADR-32).
+      required: [id, name, sort_name, monitored]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        sort_name: { type: string }
+        disambiguation: { type: string }
+        kind: { type: string, example: "Person" }
+        gender: { type: string }
+        country: { type: string }
+        born: { type: string, example: "1958-07-30" }
+        died: { type: string }
+        monitored: { type: boolean }
+
+    PersonPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Person" }
+        next_cursor:
+          type: string
+          description: >-
+            Empty on the last page, which is how a client knows to stop without
+            one more request that returns nothing.
+
+    PersonWork:
+      type: object
+      description: One work in a person's discography.
+      required: [id, media_type, title, sort_title]
+      properties:
+        id: { type: integer, format: int64 }
+        media_type: { type: string, example: "music" }
+        title: { type: string }
+        sort_title: { type: string }
+        year: { type: integer }
+
+    PersonDetail:
+      allOf:
+        - $ref: "#/components/schemas/Person"
+        - type: object
+          required: [aliases, discography]
+          properties:
+            biography:
+              type: string
+              description: A Wikidata-sourced extract, when available (ADR-8).
+            aliases:
+              type: array
+              items: { type: string }
+            discography:
+              type: array
+              items: { $ref: "#/components/schemas/PersonWork" }
 
     ExternalID:
       type: object

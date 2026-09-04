@@ -510,6 +510,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A page of people (ADR-32) -- first-class monitorable entities, not just credits. */
+        get: operations["listPeople"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * A person's full detail, including their discography.
+         * @description Coverage (held vs missing vs upgradable, architecture.md's own sketch) is not included -- it reuses Satisfaction, which needs desired_item populated for music, not yet true. discography lists every work credited to them, any role.
+         */
+        get: operations["getPerson"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/{id}/subscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Subscribe to a person (ADR-32) -- media types x roles x filters.
+         * @description Marks the person monitored (ADR-32: "adding a performer monitors their scenes regardless of studio"). Back-catalogue is an explicit choice, never implied.
+         */
+        post: operations["subscribePerson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events": {
         parameters: {
             query?: never;
@@ -748,6 +809,43 @@ export interface components {
             items: components["schemas"]["Work"][];
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
+        };
+        /** @description A person, first-class and monitorable in their own right (ADR-32). */
+        Person: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            sort_name: string;
+            disambiguation?: string;
+            /** @example Person */
+            kind?: string;
+            gender?: string;
+            country?: string;
+            /** @example 1958-07-30 */
+            born?: string;
+            died?: string;
+            monitored: boolean;
+        };
+        PersonPage: {
+            items: components["schemas"]["Person"][];
+            /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
+            next_cursor?: string;
+        };
+        /** @description One work in a person's discography. */
+        PersonWork: {
+            /** Format: int64 */
+            id: number;
+            /** @example music */
+            media_type: string;
+            title: string;
+            sort_title: string;
+            year?: number;
+        };
+        PersonDetail: components["schemas"]["Person"] & {
+            /** @description A Wikidata-sourced extract, when available (ADR-8). */
+            biography?: string;
+            aliases: string[];
+            discography: components["schemas"]["PersonWork"][];
         };
         /** @description One provider's id for a work, edition or part. */
         ExternalID: {
@@ -1703,6 +1801,96 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+        };
+    };
+    listPeople: {
+        parameters: {
+            query?: {
+                /** @description From `next_cursor` of the previous page. Absent on the first page. */
+                cursor?: string;
+                limit?: number;
+                monitored?: boolean;
+                /** @description Matches the start of the sort name. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+        };
+    };
+    getPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The person's detail. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    subscribePerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @example [
+                     *       "music"
+                     *     ] */
+                    media_types: string[];
+                    /** @description Empty or absent means any role. */
+                    roles?: string[];
+                    /** @default false */
+                    monitor_back_catalogue?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Subscribed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     streamEvents: {

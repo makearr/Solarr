@@ -568,6 +568,34 @@ func (q *Queries) LinkWorkOrganisation(ctx context.Context, arg LinkWorkOrganisa
 	return err
 }
 
+const listAliasesForPerson = `-- name: ListAliasesForPerson :many
+SELECT alias FROM person_alias WHERE person_id = ? ORDER BY alias
+`
+
+// The person detail page's own need: every alias this person is known by.
+func (q *Queries) ListAliasesForPerson(ctx context.Context, personID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listAliasesForPerson, personID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var alias string
+		if err := rows.Scan(&alias); err != nil {
+			return nil, err
+		}
+		items = append(items, alias)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAllCreditsUnderWork = `-- name: ListAllCreditsUnderWork :many
 SELECT person_id, work_id, edition_id, part_id, role, character, ord
 FROM credit WHERE work_id = ? ORDER BY part_id, edition_id, role, ord, person_id
