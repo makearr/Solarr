@@ -12,6 +12,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/metacache"
 	"github.com/makearr/MediaNexus/internal/music"
 	"github.com/makearr/MediaNexus/internal/musicbrainz"
+	"github.com/makearr/MediaNexus/internal/wikidata"
 )
 
 // registerEnrichJob wires the background metadata sweep into the registry and the
@@ -23,14 +24,40 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 		return err
 	}
 	job := music.NewEnrichJob(music.EnrichJobConfig{
-		Identity: library.NewIdentity(p.library),
-		People:   library.NewPeople(p.library),
-		Provider: p.musicBrainzProvider(),
-		Clock:    clock.NewSystem(),
-		Logger:   p.logger,
+		Identity:  library.NewIdentity(p.library),
+		People:    library.NewPeople(p.library),
+		Provider:  p.musicBrainzProvider(),
+		Biography: p.wikidataFetcher(),
+		Clock:     clock.NewSystem(),
+		Logger:    p.logger,
 	})
 	executor.Handle(music.EnrichJobType, job)
 	return nil
+}
+
+// wikidataFetcher builds ADR-8's biography lookup: two hosts, two ADR-13
+// rate-limit/breaker buckets, neither shared with MusicBrainz's own (a
+// Wikidata or Wikipedia outage must never count against the MusicBrainz
+// breaker, and vice versa).
+func (p *process) wikidataFetcher() music.Biographer {
+	wall := clock.NewSystem()
+	guard := httpx.NewGuard(nil, nil, nil)
+	agent := httpx.UserAgent(version)
+
+	newHostClient := func(providerName string) *httpx.Client {
+		limiter := httpx.NewLimiter(wall, httpx.Config{
+			Providers: map[string]httpx.Limits{providerName: {MinInterval: time.Second}},
+		}, nil)
+		breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
+		return httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
+			Provider: providerName, UserAgent: agent,
+		})
+	}
+
+	return wikidata.New(wikidata.Config{
+		WikidataClient:  newHostClient("wikidata"),
+		WikipediaClient: newHostClient("wikipedia"),
+	})
 }
 
 // musicBrainzProvider builds ADR-29's provider: one shared rate-limit and circuit

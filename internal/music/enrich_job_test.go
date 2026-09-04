@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/clock"
@@ -16,6 +17,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/musicbrainz"
 	"github.com/makearr/MediaNexus/internal/store"
 	"github.com/makearr/MediaNexus/internal/store/gen/librarydb"
+	"github.com/makearr/MediaNexus/internal/wikidata"
 	"github.com/makearr/MediaNexus/migrations"
 )
 
@@ -53,7 +55,29 @@ func (f *fakeArtistSource) Artist(_ context.Context, mbid string) (musicbrainz.A
 	return artist, nil
 }
 
+// fakeBiographer answers a canned biography per QID, or an error for an
+// unlisted one.
+type fakeBiographer struct {
+	biographies map[string]wikidata.Biography
+	calls       int
+}
+
+func (f *fakeBiographer) Biography(_ context.Context, qid string) (wikidata.Biography, error) {
+	f.calls++
+	bio, ok := f.biographies[qid]
+	if !ok {
+		return wikidata.Biography{}, errors.New("no such entity")
+	}
+	return bio, nil
+}
+
 func newEnrichJob(t *testing.T, source musicbrainz.Source) (*music.EnrichJob, *store.Store, *librarydb.Queries) {
+	return newEnrichJobWithBiographer(t, source, nil)
+}
+
+func newEnrichJobWithBiographer(
+	t *testing.T, source musicbrainz.Source, biographer music.Biographer,
+) (*music.EnrichJob, *store.Store, *librarydb.Queries) {
 	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
@@ -101,7 +125,7 @@ func newEnrichJob(t *testing.T, source musicbrainz.Source) (*music.EnrichJob, *s
 	})
 	job := music.NewEnrichJob(music.EnrichJobConfig{
 		Identity: identity, People: library.NewPeople(libraryStore), Provider: provider,
-		Clock: fake, Logger: slog.New(slog.DiscardHandler),
+		Biography: biographer, Clock: fake, Logger: slog.New(slog.DiscardHandler),
 	})
 	return job, libraryStore, librarydb.New(libraryStore.Read())
 }
@@ -312,6 +336,78 @@ func TestEnrichJob_AFailedArtistLookupStillResolvesAThinnerPerson(t *testing.T) 
 	}
 	if person.Name != "Katupoken" {
 		t.Errorf("person.Name = %q, want Katupoken from the bare artist-credit", person.Name)
+	}
+}
+
+// The Wikidata QID an Artist lookup carries becomes a real biography --
+// preferring the Wikipedia extract over Wikidata's own short description.
+func TestEnrichJob_ResolvesABiographyFromTheArtistsWikidataQID(t *testing.T) {
+	source := &fakeArtistSource{
+		fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{
+				MBID: "rg-1", Title: "The Sezo Siluko", PrimaryType: "Album",
+				ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "artist-1", Name: "Vutu Doci"}},
+			},
+			release: musicbrainz.Release{MBID: "rel-1", Title: "The Sezo Siluko", Status: "official"},
+		},
+		artists: map[string]musicbrainz.Artist{
+			"artist-1": {MBID: "artist-1", Name: "Vutu Doci", SortName: "Bush, Vutu", WikidataQID: "Q636"},
+		},
+	}
+	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{
+		"Q636": {Description: "English singer (born 1958)", Extract: "Catherine Bush is an English singer."},
+	}}
+	job, opened, queries := newEnrichJobWithBiographer(t, source, biographer)
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if biographer.calls != 1 {
+		t.Errorf("Biography called %d times, want 1", biographer.calls)
+	}
+
+	person, err := queries.GetPersonByExternalID(t.Context(), librarydb.GetPersonByExternalIDParams{
+		Provider: music.ProviderArtist, ExternalID: "artist-1",
+	})
+	if err != nil {
+		t.Fatalf("GetPersonByExternalID: %v", err)
+	}
+	if !person.FieldsJson.Valid || !strings.Contains(person.FieldsJson.String, "Catherine Bush is an English singer") {
+		t.Errorf("fields_json = %+v, want the Wikipedia extract, not just the short description", person.FieldsJson)
+	}
+}
+
+// No Biographer configured at all (nil, the default) must not fail
+// resolveArtist -- MusicBrainz's own facts are still a complete person.
+func TestEnrichJob_WithNoBiographerConfiguredStillResolvesThePerson(t *testing.T) {
+	source := &fakeArtistSource{
+		fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{
+				MBID: "rg-1", Title: "The Sezo Siluko", PrimaryType: "Album",
+				ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "artist-1", Name: "Vutu Doci"}},
+			},
+			release: musicbrainz.Release{MBID: "rel-1", Title: "The Sezo Siluko", Status: "official"},
+		},
+		artists: map[string]musicbrainz.Artist{
+			"artist-1": {MBID: "artist-1", Name: "Vutu Doci", SortName: "Bush, Vutu", WikidataQID: "Q636"},
+		},
+	}
+	job, opened, queries := newEnrichJob(t, source) // biographer nil
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	person, err := queries.GetPersonByExternalID(t.Context(), librarydb.GetPersonByExternalIDParams{
+		Provider: music.ProviderArtist, ExternalID: "artist-1",
+	})
+	if err != nil {
+		t.Fatalf("GetPersonByExternalID: %v", err)
+	}
+	if person.Name != "Vutu Doci" {
+		t.Errorf("person.Name = %q, want Vutu Doci resolved with no biography", person.Name)
 	}
 }
 

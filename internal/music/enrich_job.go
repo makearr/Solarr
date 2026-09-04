@@ -9,7 +9,16 @@ import (
 	"github.com/makearr/MediaNexus/internal/jobs"
 	"github.com/makearr/MediaNexus/internal/library"
 	"github.com/makearr/MediaNexus/internal/musicbrainz"
+	"github.com/makearr/MediaNexus/internal/wikidata"
 )
+
+// Biographer is what EnrichJob needs to turn a Wikidata QID into a real
+// biography (ADR-8's cross-provider bridge) -- internal/wikidata.Fetcher's
+// own method, named here so this package never imports wikidata for more
+// than the one type its return value needs.
+type Biographer interface {
+	Biography(ctx context.Context, qid string) (wikidata.Biography, error)
+}
 
 // EnrichJobType is the registered type of the background enrichment sweep.
 const EnrichJobType = jobs.Type("music.enrich")
@@ -41,20 +50,24 @@ const enrichBatchSize = 20
 // real metadata, and populates the parts (tracks) under it. Direct-wired the way
 // the rest of internal/music is until stage 9.
 type EnrichJob struct {
-	identity library.Identity
-	people   library.People
-	provider musicbrainz.Provider
-	clock    clock.Clock
-	logger   *slog.Logger
+	identity  library.Identity
+	people    library.People
+	provider  musicbrainz.Provider
+	biography Biographer
+	clock     clock.Clock
+	logger    *slog.Logger
 }
 
-// EnrichJobConfig is what an EnrichJob needs. Every field is required except Logger.
+// EnrichJobConfig is what an EnrichJob needs. Every field is required except
+// Biography and Logger -- a nil Biography resolves people with MusicBrainz's
+// own facts only, no prose biography.
 type EnrichJobConfig struct {
-	Identity library.Identity
-	People   library.People
-	Provider musicbrainz.Provider
-	Clock    clock.Clock
-	Logger   *slog.Logger
+	Identity  library.Identity
+	People    library.People
+	Provider  musicbrainz.Provider
+	Biography Biographer
+	Clock     clock.Clock
+	Logger    *slog.Logger
 }
 
 // NewEnrichJob builds the handler.
@@ -65,7 +78,7 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 	}
 	return &EnrichJob{
 		identity: config.Identity, people: config.People, provider: config.Provider,
-		clock: config.Clock, logger: logger,
+		biography: config.Biography, clock: config.Clock, logger: logger,
 	}
 }
 
@@ -195,9 +208,30 @@ func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.Artist
 		Person: library.PersonIdentity{
 			Name: artist.Name, SortName: sortName, Disambiguation: artist.Disambiguation,
 			Kind: artist.Type, Gender: artist.Gender, Country: artist.Country,
-			Born: artist.Born, Died: artist.Died,
+			Born: artist.Born, Died: artist.Died, Biography: j.biographyFor(ctx, artist),
 		},
 	})
+}
+
+// biographyFor answers real prose when it can: a Wikipedia extract, or
+// Wikidata's own short description as a fallback, empty when neither is
+// available -- j.biography is nil, the artist has no Wikidata QID, or the
+// lookup itself failed. Never fails resolveArtist over this: a person is
+// still worth having with no biography at all.
+func (j *EnrichJob) biographyFor(ctx context.Context, artist musicbrainz.Artist) string {
+	if j.biography == nil || artist.WikidataQID == "" {
+		return ""
+	}
+	bio, err := j.biography.Biography(ctx, artist.WikidataQID)
+	if err != nil {
+		j.logger.WarnContext(ctx, "biography lookup failed",
+			slog.String("qid", artist.WikidataQID), slog.Any("error", err))
+		return ""
+	}
+	if bio.Extract != "" {
+		return bio.Extract
+	}
+	return bio.Description
 }
 
 // EnqueueEnrichment submits one sweep, deduplicated by EnrichActionKey.
