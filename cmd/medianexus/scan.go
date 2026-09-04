@@ -29,6 +29,18 @@ func (c cacheCategories) Category(id int64) (settings.Category, bool) {
 	return c.cache.Snapshot().Category(id)
 }
 
+// CategoryForMediaType implements music.CategoryFinder: the first category
+// configured for a media type, for a caller with no root folder to inherit
+// one from the way a scan does (subscription.expand's own need).
+func (c cacheCategories) CategoryForMediaType(mediaType string) (settings.Category, bool) {
+	for _, category := range c.cache.Snapshot().Categories() {
+		if category.MediaType == mediaType {
+			return category, true
+		}
+	}
+	return settings.Category{}, false
+}
+
 // registerScanJob wires the first job handler in the codebase into the registry and
 // the executor: the library sweep, its music consumer, and the tools it probes files
 // with. The registry entry is required before Enqueue will accept the type at all

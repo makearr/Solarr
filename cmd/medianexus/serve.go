@@ -316,6 +316,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerCapacityJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerSubscriptionExpandJob(registry, executor); err != nil {
+		return err
+	}
 	p.dispatcher = jobs.NewDispatcher(queue, wall, executor, jobs.DispatcherConfig{
 		Sizes: []jobs.PoolSize{
 			{Pool: jobs.PoolSearch, Capacity: p.config.Workers.Search},
@@ -338,6 +341,7 @@ func (p *process) startServer(ctx context.Context) error {
 	p.reportRootFolders()
 	p.enqueueLibraryScans(ctx)
 	p.enqueueEnrichment(ctx)
+	p.enqueueSubscriptionExpand(ctx)
 	p.enqueueArtwork(ctx)
 	p.enqueueCategoryCounts(ctx)
 	p.enqueueProbe(ctx)

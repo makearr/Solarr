@@ -219,6 +219,9 @@ type Querier interface {
 	// The whole phash set is 4 MB at 500k files: Hamming distance is brute-forced in
 	// Go, so this hands over every candidate rather than filtering in SQL (ADR-35).
 	ListPerceptualHashes(ctx context.Context) ([]ListPerceptualHashesRow, error)
+	// What subscription.expand needs to go from a subscribed person back to the
+	// provider id their discography is browsed by.
+	ListPersonExternalIDs(ctx context.Context, personID int64) ([]PersonExternalID, error)
 	// kind='unknown' is the cross-media-type placeholder marker an Identifier chain
 	// leaves behind when it resolves an edition's external id but has no real
 	// metadata yet (internal/library.EditionLink, internal/music's newEditionLink):

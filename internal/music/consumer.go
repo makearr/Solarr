@@ -34,6 +34,14 @@ type Categories interface {
 	Category(id int64) (settings.Category, bool)
 }
 
+// CategoryFinder resolves which category a media type's own discovery should
+// use when nothing more specific is configured -- subscription.expand's own
+// need (a subscription has no root folder to inherit a category from the way
+// a scan does), distinct from Categories' by-id lookup.
+type CategoryFinder interface {
+	CategoryForMediaType(mediaType string) (settings.Category, bool)
+}
+
 // Consumer records what a scan found: media_object and library_path rows always,
 // the work it identifies when the MBID chain resolves one, and -- when it does
 // not -- an F29 manual-identification-queue entry with whatever candidates the

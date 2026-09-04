@@ -46,6 +46,12 @@ FROM person p
 JOIN person_external_id e ON e.person_id = p.id
 WHERE e.provider = ? AND e.external_id = ?;
 
+-- What subscription.expand needs to go from a subscribed person back to the
+-- provider id their discography is browsed by.
+-- name: ListPersonExternalIDs :many
+SELECT provider, external_id, person_id
+FROM person_external_id WHERE person_id = ? ORDER BY provider;
+
 -- edition_id and part_id are 0 for a credit on the work itself (Appendix E, D2).
 -- name: AddCredit :exec
 INSERT INTO credit (person_id, work_id, edition_id, part_id, role, character, ord)

@@ -909,6 +909,36 @@ func (q *Queries) ListOrganisationsForWork(ctx context.Context, workID int64) ([
 	return items, nil
 }
 
+const listPersonExternalIDs = `-- name: ListPersonExternalIDs :many
+SELECT provider, external_id, person_id
+FROM person_external_id WHERE person_id = ? ORDER BY provider
+`
+
+// What subscription.expand needs to go from a subscribed person back to the
+// provider id their discography is browsed by.
+func (q *Queries) ListPersonExternalIDs(ctx context.Context, personID int64) ([]PersonExternalID, error) {
+	rows, err := q.db.QueryContext(ctx, listPersonExternalIDs, personID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PersonExternalID{}
+	for rows.Next() {
+		var i PersonExternalID
+		if err := rows.Scan(&i.Provider, &i.ExternalID, &i.PersonID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRelationshipsFrom = `-- name: ListRelationshipsFrom :many
 SELECT id, from_type, from_id, to_type, to_id, kind
 FROM relationship WHERE from_type = ? AND from_id = ? ORDER BY kind, to_id
