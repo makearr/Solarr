@@ -865,6 +865,36 @@ func (q *Queries) SetDesiredItemAvailability(ctx context.Context, arg SetDesired
 	return err
 }
 
+const setDesiredItemMonitored = `-- name: SetDesiredItemMonitored :exec
+UPDATE desired_item SET monitored = ?, dirty = 1 WHERE id = ?
+`
+
+type SetDesiredItemMonitoredParams struct {
+	Monitored int64
+	ID        int64
+}
+
+func (q *Queries) SetDesiredItemMonitored(ctx context.Context, arg SetDesiredItemMonitoredParams) error {
+	_, err := q.db.ExecContext(ctx, setDesiredItemMonitored, arg.Monitored, arg.ID)
+	return err
+}
+
+const setDesiredItemRequiredCount = `-- name: SetDesiredItemRequiredCount :exec
+UPDATE desired_item SET required_count = ?, dirty = 1 WHERE id = ?
+`
+
+type SetDesiredItemRequiredCountParams struct {
+	RequiredCount sql.NullInt64
+	ID            int64
+}
+
+// Re-derived after enrichment adds work_part rows, or a per-track monitor
+// toggle changes how many of them count (Appendix E, D3's shape, one level up).
+func (q *Queries) SetDesiredItemRequiredCount(ctx context.Context, arg SetDesiredItemRequiredCountParams) error {
+	_, err := q.db.ExecContext(ctx, setDesiredItemRequiredCount, arg.RequiredCount, arg.ID)
+	return err
+}
+
 const setDesiredItemState = `-- name: SetDesiredItemState :exec
 UPDATE desired_item SET state = ?, present_count = ?, dirty = 1 WHERE id = ?
 `

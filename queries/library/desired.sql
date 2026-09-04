@@ -43,6 +43,14 @@ WHERE id = ? AND generation = sqlc.arg(generation);
 -- name: MarkDesiredItemDirty :exec
 UPDATE desired_item SET dirty = 1 WHERE id = ?;
 
+-- name: SetDesiredItemMonitored :exec
+UPDATE desired_item SET monitored = ?, dirty = 1 WHERE id = ?;
+
+-- Re-derived after enrichment adds work_part rows, or a per-track monitor
+-- toggle changes how many of them count (Appendix E, D3's shape, one level up).
+-- name: SetDesiredItemRequiredCount :exec
+UPDATE desired_item SET required_count = ?, dirty = 1 WHERE id = ?;
+
 -- name: SetDesiredItemState :exec
 UPDATE desired_item SET state = ?, present_count = ?, dirty = 1 WHERE id = ?;
 

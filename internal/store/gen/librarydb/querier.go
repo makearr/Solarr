@@ -333,6 +333,10 @@ type Querier interface {
 	SetAcquisitionState(ctx context.Context, arg SetAcquisitionStateParams) error
 	SetCounter(ctx context.Context, arg SetCounterParams) error
 	SetDesiredItemAvailability(ctx context.Context, arg SetDesiredItemAvailabilityParams) error
+	SetDesiredItemMonitored(ctx context.Context, arg SetDesiredItemMonitoredParams) error
+	// Re-derived after enrichment adds work_part rows, or a per-track monitor
+	// toggle changes how many of them count (Appendix E, D3's shape, one level up).
+	SetDesiredItemRequiredCount(ctx context.Context, arg SetDesiredItemRequiredCountParams) error
 	SetDesiredItemState(ctx context.Context, arg SetDesiredItemStateParams) error
 	// Persisted before bytes move, so a restart resumes rather than restarts (ADR-46).
 	SetDownloadProgress(ctx context.Context, arg SetDownloadProgressParams) error

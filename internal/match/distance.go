@@ -122,16 +122,32 @@ func titleDistance(claimed, candidate string) (DistancePart, bool) {
 	if claimed == "" || candidate == "" {
 		return DistancePart{}, false
 	}
-	normalizedClaimed, normalizedCandidate := normalizeTitle(claimed), normalizeTitle(candidate)
-	tokenSimilarity := jaccardWords(normalizedClaimed, normalizedCandidate)
-	jaroWinklerSimilarity := jaroWinkler(normalizedClaimed, normalizedCandidate)
-
-	similarity, method := tokenSimilarity, "token-set"
-	if jaroWinklerSimilarity > similarity {
-		similarity, method = jaroWinklerSimilarity, "jaro-winkler"
-	}
+	similarity, method := bestTitleSimilarity(claimed, candidate)
 	return DistancePart{Dimension: DimensionTitle, Distance: 1 - similarity,
 		Detail: fmt.Sprintf("title %.2f %s", similarity, method)}, true
+}
+
+// bestTitleSimilarity is the shared "best of token-set overlap and Jaro-Winkler"
+// comparison behind both titleDistance and TitleSimilarity.
+func bestTitleSimilarity(a, b string) (score float64, method string) {
+	normalizedA, normalizedB := normalizeTitle(a), normalizeTitle(b)
+	tokenSimilarity := jaccardWords(normalizedA, normalizedB)
+	jaroWinklerSimilarity := jaroWinkler(normalizedA, normalizedB)
+
+	if jaroWinklerSimilarity > tokenSimilarity {
+		return jaroWinklerSimilarity, "jaro-winkler"
+	}
+	return tokenSimilarity, "token-set"
+}
+
+// TitleSimilarity is section 10.2's title comparison (the better of token-set
+// overlap and Jaro-Winkler similarity, over case/accent/punctuation-normalised
+// titles), exported for a caller matching two titles directly rather than through
+// Compute's full Distance -- internal/music's tracklist alignment (section 19.6)
+// is the first of these.
+func TitleSimilarity(a, b string) float64 {
+	score, _ := bestTitleSimilarity(a, b)
+	return score
 }
 
 // yearDistanceScale is how many years apart before the year dimension saturates
