@@ -3,8 +3,6 @@ package music
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/makearr/MediaNexus/internal/match"
 	"github.com/makearr/MediaNexus/internal/mediatool"
@@ -96,7 +94,7 @@ func (s SearchIdentifier) Identify(ctx context.Context, file model.FileRef) ([]m
 		return nil, fmt.Errorf("music: read tags for %s: %w", file.RelPath, err)
 	}
 
-	artist, album, year := claimedIdentity(tags, file.RelPath)
+	artist, album := claimedIdentity(tags, file.RelPath)
 	if artist == "" || album == "" {
 		return nil, nil
 	}
@@ -112,15 +110,20 @@ func (s SearchIdentifier) Identify(ctx context.Context, file model.FileRef) ([]m
 		return nil, nil
 	}
 
-	claimed := match.Claimed{Identity: match.Identity{Title: combinedTitle(artist, album), Year: year}}
+	// Year is deliberately left out of this comparison, proven against real scene
+	// rips rather than assumed: a release group's FirstReleaseDate is the
+	// *original* release year, while a file's own DATE tag (or a year parsed from
+	// the release folder name) is usually the year of *this particular* pressing
+	// -- a remaster or WEB reissue tagged 2018 for a 1978 album, say. Comparing
+	// them as if they were the same field turned a perfect title match into a
+	// rejected one. Year belongs to an edition (ADR-7), not a release group, and
+	// this identifier only ever searches at release-group (work) level.
+	claimed := match.Claimed{Identity: match.Identity{Title: combinedTitle(artist, album)}}
 	candidates := make([]match.Candidate, len(matches))
 	for index, one := range matches {
 		candidates[index] = match.Candidate{
-			ID: one.MBID,
-			Identity: match.Identity{
-				Title: combinedTitle(one.ArtistCredit, one.Title),
-				Year:  yearOf(one.FirstReleaseDate),
-			},
+			ID:       one.MBID,
+			Identity: match.Identity{Title: combinedTitle(one.ArtistCredit, one.Title)},
 		}
 	}
 
@@ -169,13 +172,11 @@ func evidenceForDistance(distance match.Distance) []model.MatchEvidence {
 // when present (more reliable than a filename guess), the release-folder name
 // through internal/parse otherwise -- ADR-41's "path is evidence" for a file with
 // no usable tags at all.
-func claimedIdentity(tags mediatool.Tags, relPath string) (artist, album string, year int) {
+func claimedIdentity(tags mediatool.Tags, relPath string) (artist, album string) {
 	artist = tags.First("albumartist", "album_artist", "artist")
 	album = tags.First("album")
-	year = yearOf(tags.First("originaldate", "date", "year"))
-
 	if artist != "" && album != "" {
-		return artist, album, year
+		return artist, cleanAlbumTag(album)
 	}
 
 	parsed := parse.Parse(albumTitleFallback(relPath)).Identity
@@ -185,10 +186,21 @@ func claimedIdentity(tags mediatool.Tags, relPath string) (artist, album string,
 	if album == "" {
 		album = parsed.Album
 	}
-	if year == 0 {
-		year = parsed.Year
+	return artist, album
+}
+
+// cleanAlbumTag strips edition/technical noise a tagger baked directly into the
+// ALBUM tag itself, not just the release folder name -- found against a real
+// "Nogih Zeni (Mono Remastered)" tag during this project's own verification pass,
+// which MusicBrainz's own exact-phrase search treats as a literally different,
+// nonexistent title. Reuses internal/parse's own bracket/noise classification
+// (it handles a bare title exactly like a one-segment release name) rather than
+// duplicating it; falls back to the raw tag if cleaning empties it out.
+func cleanAlbumTag(album string) string {
+	if cleaned := parse.Parse(album).Identity.Album; cleaned != "" {
+		return cleaned
 	}
-	return artist, album, year
+	return album
 }
 
 // combinedTitle folds artist and album into one string. internal/match's Identity
@@ -200,18 +212,4 @@ func combinedTitle(artist, title string) string {
 		return title
 	}
 	return artist + " - " + title
-}
-
-// yearOf reads a four-digit year off the front of a MusicBrainz partial date
-// (YYYY, YYYY-MM or YYYY-MM-DD) or a bare tag value. 0 when nothing parses.
-func yearOf(value string) int {
-	value = strings.TrimSpace(value)
-	if len(value) < 4 {
-		return 0
-	}
-	year, err := strconv.Atoi(value[:4])
-	if err != nil {
-		return 0
-	}
-	return year
 }

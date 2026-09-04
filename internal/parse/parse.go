@@ -44,8 +44,17 @@ var (
 	bitrateWordRe = regexp.MustCompile(`(?i)^(\d{2,3})\s*k(bps)?$`)
 	vbrPresetRe   = regexp.MustCompile(`(?i)^v[0-9]$`)
 	discCountRe   = regexp.MustCompile(`(?i)^(\d+)\s*cd$`)
-	bracketRe     = regexp.MustCompile(`\(([^()]*)\)|\[([^\[\]]*)\]|\{([^{}]*)\}`)
-	splitDashRe   = regexp.MustCompile(`\s+-\s+`)
+	// bitDepthRe and sampleRateRe are the two other technical claims real WEB/FLAC
+	// scene tags carry bare, alongside bitrate ("24BIT", "96KHZ", "44.1KHZ").
+	// Recognised so they strip out of the album title -- found leaking into it
+	// during this project's own live verification pass -- but not yet recorded as
+	// a claim of their own: model.Attributes has no bit-depth/sample-rate field
+	// yet (BitrateKbps' own precedent), which is real scope of its own, not folded
+	// in here.
+	bitDepthRe   = regexp.MustCompile(`^(8|16|24|32)bit$`)
+	sampleRateRe = regexp.MustCompile(`^\d+(\.\d+)?khz$`)
+	bracketRe    = regexp.MustCompile(`\(([^()]*)\)|\[([^\[\]]*)\]|\{([^{}]*)\}`)
+	splitDashRe  = regexp.MustCompile(`\s+-\s+`)
 	// bracketTokenRe splits bracket contents on any separator scene names pack
 	// into one bracket ("[2007/MP3/V0(VBR)]", "[Mp3~Kbps]") -- not just whitespace.
 	bracketTokenRe = regexp.MustCompile(`[/~(),-]+`)
@@ -59,13 +68,21 @@ var bareBitrates = map[string]int{"128": 128, "160": 160, "192": 192, "224": 224
 
 var losslessFormats = map[string]bool{"flac": true, "alac": true, "ape": true, "wav": true}
 var lossyFormats = map[string]bool{"mp3": true, "aac": true, "m4a": true, "ogg": true, "opus": true, "wma": true}
-var sourceWords = map[string]bool{"cd": true, "web": true, "vinyl": true, "cassette": true, "sacd": true, "cdrip": true}
+var sourceWords = map[string]bool{
+	"cd": true, "web": true, "vinyl": true, "cassette": true, "sacd": true,
+	"cdrip": true, "lp": true,
+}
 
 // editionWords mark a bracket or segment as noise to strip, not part of the
-// album's identity: a reissue label, not a different work.
-var editionWords = []string{
-	"edition", "deluxe", "remaster", "album", "single", "ep", "promo",
-	"anniversary", "bonus", "expanded", "itunes", "lossless", "tracks",
+// album's identity: a reissue label, not a different work. Matched whole-word
+// (isNoise tokenizes first) -- "ep" as a raw substring matches inside
+// "Mesofisak", which is exactly the bug that made this a set of whole words
+// rather than a Contains check.
+var editionWords = map[string]bool{
+	"edition": true, "deluxe": true, "remaster": true, "remastered": true,
+	"album": true, "albums": true, "single": true, "ep": true, "promo": true,
+	"anniversary": true, "bonus": true, "expanded": true, "itunes": true,
+	"lossless": true, "tracks": true,
 }
 
 // creditPrefixes mark a collaborator credit, stripped the same way as an edition
@@ -171,13 +188,21 @@ func isNoise(phrase string, claims *claimSet) bool {
 		}
 	}
 	if !noise {
-		for _, word := range editionWords {
-			if strings.Contains(lower, word) {
-				noise = true
-				if claims.edition == "" {
-					claims.edition = lower
+		// Whole-word membership, never strings.Contains on the raw phrase: "ep"
+		// substring-matched inside "Mesofisak" and silently classified an entire
+		// album title as edition noise, found against a real release name during
+		// this project's own verification pass. Tokenised the same two-step way
+		// (bracketTokenRe then Fields) as the vocabulary loop just below, so a
+		// "/"-joined bracket like "[1993/FLAC/Lossless/Log]" still splits into
+		// real words rather than one compound token that matches nothing.
+		for _, token := range bracketTokenRe.Split(lower, -1) {
+			for _, word := range strings.Fields(token) {
+				if editionWords[word] {
+					noise = true
+					if claims.edition == "" {
+						claims.edition = lower
+					}
 				}
-				break
 			}
 		}
 	}
@@ -342,6 +367,9 @@ func claimField(field string, claims *claimSet) bool {
 	case discCountRe.MatchString(field):
 		matches := discCountRe.FindStringSubmatch(field)
 		claims.discs, _ = strconv.Atoi(matches[1])
+		return true
+	case bitDepthRe.MatchString(field), sampleRateRe.MatchString(field):
+		// Recognised and consumed, not recorded -- see bitDepthRe's doc comment.
 		return true
 	default:
 		return false

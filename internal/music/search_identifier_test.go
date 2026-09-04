@@ -12,17 +12,20 @@ import (
 )
 
 // fakeSearcher answers a fixed set of matches (or a fixed error) for any query,
-// and counts calls so a test can assert whether it was asked at all.
+// counts calls so a test can assert whether it was asked at all, and records the
+// last artist/album it was actually asked with.
 type fakeSearcher struct {
-	matches []musicbrainz.ReleaseGroupMatch
-	err     error
-	calls   int
+	matches               []musicbrainz.ReleaseGroupMatch
+	err                   error
+	calls                 int
+	lastArtist, lastAlbum string
 }
 
 func (f *fakeSearcher) Search(
-	context.Context, musicbrainz.Priority, string, string, int,
+	_ context.Context, _ musicbrainz.Priority, artist, album string, _ int,
 ) ([]musicbrainz.ReleaseGroupMatch, error) {
 	f.calls++
+	f.lastArtist, f.lastAlbum = artist, album
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -70,6 +73,29 @@ func TestSearchIdentify_ACleanMatchResolvesAboveAmbiguityThresholdButBelowAnyTag
 	}
 }
 
+// Regression: a real-world WEB reissue tagged with its own release year (2018,
+// say) must still resolve against the original release group, whose
+// FirstReleaseDate is the *original* release year (1978) -- year must never be
+// compared here at all, or a perfect title match gets rejected over a field that
+// was never describing the same thing on both sides (edition year vs. work year,
+// ADR-7). Found against a real MusicBrainz response during this project's own
+// verification pass (Vutu Doci's "The Sezo Siluko").
+func TestSearchIdentify_AReissueYearDoesNotBreakAnOtherwiseCleanTitleMatch(t *testing.T) {
+	searcher := &fakeSearcher{matches: []musicbrainz.ReleaseGroupMatch{
+		{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg1", Title: "The Sezo Siluko", FirstReleaseDate: "1978-01-12"},
+			ArtistCredit: "Vutu Doci"},
+	}}
+	found := searchIdentify(t, mediatool.Tags{"artist": "Vutu Doci", "album": "The Sezo Siluko", "date": "2018"},
+		"Vutu Doci-The Sezo Siluko-Remastered-24BIT-WEB-FLAC-2018-TiMES/01-vutu_doci-moving.flac", searcher)
+
+	if len(found) != 1 || found[0].ExternalID.ExternalID != "rg1" {
+		t.Fatalf("got %+v, want the release group to resolve despite the 1978-vs-2018 year gap", found)
+	}
+	if found[0].Confidence < 0.6 {
+		t.Errorf("Confidence = %.2f, want a clean title match to still clear the ambiguity threshold", found[0].Confidence)
+	}
+}
+
 // Two candidates too close to call must not resolve automatically: every
 // candidate still comes back (for F29's manual queue) but none at a confidence
 // that could win the chain outright.
@@ -88,6 +114,26 @@ func TestSearchIdentify_AmbiguousCandidatesStayBelowTheAmbiguityThreshold(t *tes
 		if one.Confidence >= 0.6 {
 			t.Errorf("Confidence = %.2f for an ambiguous pair, want it below the 0.6 auto-resolve threshold", one.Confidence)
 		}
+	}
+}
+
+// Regression, found live against a real WEB reissue during this project's own
+// verification pass: the ALBUM tag itself, not just the release folder name, can
+// carry a remaster suffix ("Nogih Zeni (Mono Remastered)"). Searched literally,
+// MusicBrainz's own search returns zero results for that exact phrase --
+// claimedIdentity must clean the tag the same way it would a folder name.
+func TestSearchIdentify_CleansAnEditionSuffixBakedIntoTheAlbumTagItself(t *testing.T) {
+	searcher := &fakeSearcher{matches: []musicbrainz.ReleaseGroupMatch{
+		{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg1", Title: "Nogih Zeni"}, ArtistCredit: "The Zegabab"},
+	}}
+	found := searchIdentify(t, mediatool.Tags{"artist": "The Zegabab", "album": "Nogih Zeni (Mono Remastered)"},
+		"The Zegabab-Nogih Zeni [Mono Remastered]-WEB-2026-QUAVER/01-the_zegabab-road_runner.mp3", searcher)
+
+	if searcher.lastAlbum != "Nogih Zeni" {
+		t.Errorf("searched for album %q, want the tag's edition suffix stripped first", searcher.lastAlbum)
+	}
+	if len(found) != 1 || found[0].ExternalID.ExternalID != "rg1" {
+		t.Fatalf("got %+v, want the cleaned album tag to resolve against the real release", found)
 	}
 }
 
