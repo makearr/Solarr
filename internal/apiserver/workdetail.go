@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -61,6 +62,15 @@ type CreditRow struct {
 	Role       string
 }
 
+// WantedRow is the work's own album-level SET desired_item, when one exists.
+type WantedRow struct {
+	ID            int64
+	Monitored     bool
+	RequiredCount *int64
+	PresentCount  int64
+	State         string
+}
+
 // WorkDetailRow is a work's full detail. RootFolderIDs is not rendered --
 // GetWork uses it to run ListWorks' ADR-27 visibility check against one item.
 type WorkDetailRow struct {
@@ -81,6 +91,23 @@ type WorkDetailRow struct {
 	Credits       []CreditRow
 	Genres        []string
 	RootFolderIDs []int64
+	// Wanted is nil when nothing has ever wanted this album.
+	Wanted *WantedRow
+}
+
+// WorksMonitor toggles monitored state at the album and part level (section
+// 19.6). Defined here and implemented by the caller, same reasoning as
+// WorksReader's own doc comment.
+type WorksMonitor interface {
+	// SetWorkMonitored ensures the album-level SET item exists when
+	// monitored is true (creating it on first use), or unmonitors an
+	// existing one when false -- a no-op if none exists yet. Answers a
+	// missing work id with an error wrapping sql.ErrNoRows.
+	SetWorkMonitored(ctx context.Context, workID int64, monitored bool) (WantedRow, error)
+	// SetPartMonitored toggles one part's monitored flag and recomputes
+	// every album item over the work. Answers a missing work or part id
+	// with an error wrapping sql.ErrNoRows.
+	SetPartMonitored(ctx context.Context, workID, partID int64, monitored bool) error
 }
 
 // routeGetWork parses the id path parameter, mirroring routeUser: a malformed
@@ -133,6 +160,136 @@ func (s *Server) GetWork(w http.ResponseWriter, r *http.Request, id int64) {
 	writeJSON(w, s.logger, http.StatusOK, buildWorkDetailView(row))
 }
 
+// routeSetWorkMonitored parses the id path parameter, mirroring routeGetWork.
+func (s *Server) routeSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a work id must be a number")
+		return
+	}
+	s.SetWorkMonitored(w, r, id)
+}
+
+// SetWorkMonitored toggles a work's album-level monitored state. The
+// request body is decoded here, not by a generated wrapper, same as
+// SubscribePerson/ImportSettings (ADR-31).
+func (s *Server) SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.workDetail == nil || s.worksMonitor == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "monitoring is not available")
+		return
+	}
+
+	var body gen.SetWorkMonitoredJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "the request body could not be read")
+		return
+	}
+
+	if !s.workVisible(w, r, access, id) {
+		return
+	}
+
+	wanted, err := s.worksMonitor.SetWorkMonitored(r.Context(), id, body.Monitored)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, buildWantedView(wanted))
+}
+
+// routeSetPartMonitored parses id and partId, mirroring routeSetWorkMonitored.
+func (s *Server) routeSetPartMonitored(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a work id must be a number")
+		return
+	}
+	partID, err := strconv.ParseInt(chi.URLParam(r, "partId"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a part id must be a number")
+		return
+	}
+	s.SetPartMonitored(w, r, id, partID)
+}
+
+// SetPartMonitored toggles one part's monitored state.
+func (s *Server) SetPartMonitored(w http.ResponseWriter, r *http.Request, id, partID int64) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.workDetail == nil || s.worksMonitor == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "monitoring is not available")
+		return
+	}
+
+	var body gen.SetPartMonitoredJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "the request body could not be read")
+		return
+	}
+
+	if !s.workVisible(w, r, access, id) {
+		return
+	}
+
+	if err := s.worksMonitor.SetPartMonitored(r.Context(), id, partID, body.Monitored); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such part")
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// workVisible runs GetWork's own ADR-27 visibility check against id, writing
+// a 404 (indistinguishable from missing, Invariant 37) and returning false
+// when the work is not visible to the caller -- shared so a mutation can
+// never be reached for a work the caller could not even read.
+func (s *Server) workVisible(w http.ResponseWriter, r *http.Request, access authz.Access, id int64) bool {
+	row, err := s.workDetail.GetWorkDetail(r.Context(), id)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
+		return false
+	}
+	if err != nil {
+		writeError(w, s.logger, err)
+		return false
+	}
+	rootFolderIDs, err := s.visibleRootFolders(access, nil)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return false
+	}
+	if !sharesAnID(rootFolderIDs, row.RootFolderIDs) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
+		return false
+	}
+	return true
+}
+
+func buildWantedView(row WantedRow) gen.Wanted {
+	return gen.Wanted{
+		Id: row.ID, Monitored: row.Monitored, RequiredCount: row.RequiredCount,
+		PresentCount: row.PresentCount, State: gen.WantedState(row.State),
+	}
+}
+
 // sharesAnID reports whether a and b have any element in common.
 func sharesAnID(a, b []int64) bool {
 	seen := make(map[int64]struct{}, len(a))
@@ -148,7 +305,7 @@ func sharesAnID(a, b []int64) bool {
 }
 
 func buildWorkDetailView(row WorkDetailRow) gen.WorkDetail {
-	return gen.WorkDetail{
+	view := gen.WorkDetail{
 		Id: row.ID, MediaType: row.MediaType, Title: row.Title, SortTitle: row.SortTitle,
 		Year: yearOf(row.Year), RuntimeMs: row.RuntimeMs, Language: row.Language,
 		Description: row.Description, OnDisk: row.OnDisk,
@@ -159,6 +316,11 @@ func buildWorkDetailView(row WorkDetailRow) gen.WorkDetail {
 		Credits:     buildCreditViews(row.Credits),
 		Genres:      row.Genres,
 	}
+	if row.Wanted != nil {
+		wanted := buildWantedView(*row.Wanted)
+		view.Wanted = &wanted
+	}
+	return view
 }
 
 func buildCreditViews(rows []CreditRow) []gen.Credit {

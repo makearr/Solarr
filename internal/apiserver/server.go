@@ -69,6 +69,10 @@ type Config struct {
 	// WorkDetail reads one work's full structural detail. Optional: without
 	// it, GetWork answers 503.
 	WorkDetail WorkDetailReader
+	// WorksMonitor toggles monitored state at the album and part level
+	// (section 19.6). Optional: without it, SetWorkMonitored/SetPartMonitored
+	// answer 503.
+	WorksMonitor WorksMonitor
 	// Search ranks the library by title. Optional: without it, Search answers 503.
 	Search SearchReader
 	// Unidentified lists F29's manual identification queue. Optional: without
@@ -110,6 +114,7 @@ type Server struct {
 	egress           EgressReporter
 	works            WorksReader
 	workDetail       WorkDetailReader
+	worksMonitor     WorksMonitor
 	search           SearchReader
 	unidentified     UnidentifiedReader
 	artwork          ArtworkReader
@@ -152,6 +157,7 @@ func New(config Config) (*Server, error) {
 		egress:           config.Egress,
 		works:            config.Works,
 		workDetail:       config.WorkDetail,
+		worksMonitor:     config.WorksMonitor,
 		search:           config.Search,
 		unidentified:     config.Unidentified,
 		artwork:          config.Artwork,
@@ -196,6 +202,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/jobs", server.routeListJobs)
 			secured.Get("/works", server.routeListWorks)
 			secured.Get("/works/{id}", server.routeGetWork)
+			secured.Post("/works/{id}/monitor", server.routeSetWorkMonitored)
+			secured.Post("/works/{id}/parts/{partId}/monitor", server.routeSetPartMonitored)
 			secured.Get("/works/{id}/artwork", server.routeGetWorkArtwork)
 			secured.Get("/library/unidentified", server.routeListUnidentified)
 			secured.Get("/search", server.routeSearch)

@@ -1,6 +1,7 @@
 package library_test
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"testing"
@@ -184,6 +185,28 @@ func TestSetPartMonitored_UnmonitoringATrackShrinksRequiredCount(t *testing.T) {
 	}
 	if updated.State != "COMPLETE" {
 		t.Errorf("want COMPLETE once the only monitored track is covered, got %s", updated.State)
+	}
+}
+
+func TestSetPartMonitored_RejectsAPartFromAnotherWork(t *testing.T) {
+	opened, _ := newLibrary(t)
+	desired := library.NewDesired(opened)
+	workA := createWork(t, opened, "music", "Album A")
+	workB := createWork(t, opened, "music", "Album B")
+	partOfB := createPart(t, opened, workB.ID, "disc1:track1", "00010001", "Track One")
+
+	if err := desired.SetPartMonitored(t.Context(), workA.ID, partOfB.ID, false); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("want sql.ErrNoRows for a part belonging to a different work, got %v", err)
+	}
+}
+
+func TestSetPartMonitored_RejectsAMissingPart(t *testing.T) {
+	opened, _ := newLibrary(t)
+	desired := library.NewDesired(opened)
+	work := createWork(t, opened, "music", "Album A")
+
+	if err := desired.SetPartMonitored(t.Context(), work.ID, 99999, false); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("want sql.ErrNoRows for a nonexistent part, got %v", err)
 	}
 }
 

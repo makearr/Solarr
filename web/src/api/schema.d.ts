@@ -408,6 +408,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/monitor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Monitor or unmonitor a work at the album level (section 19.6).
+         * @description Always ensures the work's album-level SET desired_item exists (creating it on first use, monitored or not) and sets its monitored flag either way -- an explicit "not interested" is worth recording the same way a category's monitor_discovered policy would. Never deletes the item (Invariant 71): a later scan or subscription pass finds it and leaves it exactly as the user set it.
+         */
+        post: operations["setWorkMonitored"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/works/{id}/parts/{partId}/monitor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                partId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Monitor or unmonitor a single part (track) of a work.
+         * @description Toggles work_part.monitored and recomputes every album-level SET item over the work in the same transaction: unmonitoring a bonus track shrinks the album's required_count rather than holding it PARTIAL forever (Appendix E D3).
+         */
+        post: operations["setPartMonitored"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}/artwork": {
         parameters: {
             query?: never;
@@ -891,6 +936,21 @@ export interface components {
             /** @example artist */
             role: string;
         };
+        /** @description The work's own album-level SET desired_item (section 19.6) -- what makes "9 of 12 tracks" a fact rather than on_disk's coarse badge. */
+        Wanted: {
+            /** Format: int64 */
+            id: number;
+            monitored: boolean;
+            /**
+             * Format: int64
+             * @description Null until a tracklist has been enriched -- never a guessed zero.
+             */
+            required_count?: number | null;
+            /** Format: int64 */
+            present_count: number;
+            /** @enum {string} */
+            state: "MISSING" | "PARTIAL" | "COMPLETE" | "UPGRADABLE";
+        };
         WorkDetail: {
             /** Format: int64 */
             id: number;
@@ -915,6 +975,8 @@ export interface components {
             credits: components["schemas"]["Credit"][];
             genres: string[];
             parts: components["schemas"]["WorkPart"][];
+            /** @description Null when nothing has ever wanted this album -- no scan, no subscription, no request. */
+            wanted?: components["schemas"]["Wanted"] | null;
         };
         SearchResult: {
             work: components["schemas"]["Work"];
@@ -1660,6 +1722,67 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WorkDetail"];
                 };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setWorkMonitored: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    monitored: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The album's wanted state after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Wanted"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setPartMonitored: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                partId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    monitored: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];

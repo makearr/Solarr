@@ -163,6 +163,42 @@ func TestWorkDetail_OnDiskReflectsRootFolderLinkage(t *testing.T) {
 	}
 }
 
+func TestWorkDetail_WantedIsNilUntilSomethingWantsTheAlbum(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	desired := library.NewDesired(opened)
+	work := createWork(t, opened, "music", "KI Pecezinu")
+
+	unwanted, err := works.Detail(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("Detail: %v", err)
+	}
+	if unwanted.Wanted != nil {
+		t.Errorf("Wanted = %+v, want nil before anything wants this album", unwanted.Wanted)
+	}
+
+	item, err := desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{
+		WorkID: work.ID, CategoryID: 1, ProfileID: 1, Monitored: true,
+	})
+	if err != nil {
+		t.Fatalf("EnsureAlbumItem: %v", err)
+	}
+
+	wanted, err := works.Detail(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("Detail: %v", err)
+	}
+	if wanted.Wanted == nil {
+		t.Fatal("Wanted = nil, want the album item just created")
+	}
+	if wanted.Wanted.ID != item.ID || !wanted.Wanted.Monitored || wanted.Wanted.State != "MISSING" {
+		t.Errorf("Wanted = %+v, unexpected shape", wanted.Wanted)
+	}
+	if wanted.Wanted.RequiredCount != nil {
+		t.Errorf("RequiredCount = %v, want nil before any work_part exists", wanted.Wanted.RequiredCount)
+	}
+}
+
 func TestWorkDetail_MissingWorkReportsNoRows(t *testing.T) {
 	opened, _ := newLibrary(t)
 	works := library.NewWorks(opened)

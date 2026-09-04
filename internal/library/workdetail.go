@@ -27,6 +27,17 @@ type Credit struct {
 	Role       string
 }
 
+// WantedAlbum is the work's own album-level SET desired_item, when one
+// exists (section 19.6) -- what makes "9 of 12 tracks" a fact rather than
+// OnDisk's coarse badge.
+type WantedAlbum struct {
+	ID            int64
+	Monitored     bool
+	RequiredCount *int64
+	PresentCount  int64
+	State         string
+}
+
 // WorkDetail is a work's own fields, its editions, its parts, its credits and
 // genre tags, and every level's external ids. RootFolderIDs doubles as
 // display data (OnDisk, section 21.3) and the ADR-27 visibility check.
@@ -38,6 +49,9 @@ type WorkDetail struct {
 	Credits       []Credit
 	Genres        []string
 	RootFolderIDs []int64
+	// Wanted is nil when nothing has ever wanted this album -- no scan, no
+	// subscription, no user request.
+	Wanted *WantedAlbum
 }
 
 // OnDisk reports whether this work is linked to any root folder at all
@@ -116,8 +130,26 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 		genres[index] = row.TagName
 	}
 
+	items, err := queries.ListDesiredItemsForWork(ctx, id)
+	if err != nil {
+		return WorkDetail{}, fmt.Errorf("library: work detail: desired items: %w", err)
+	}
+	var wanted *WantedAlbum
+	for _, item := range items {
+		if item.SatisfactionKind == "SET" && !item.EditionID.Valid && item.MediaRef == "" {
+			wanted = &WantedAlbum{
+				ID: item.ID, Monitored: item.Monitored == 1, PresentCount: item.PresentCount, State: item.State,
+			}
+			if item.RequiredCount.Valid {
+				wanted.RequiredCount = &item.RequiredCount.Int64
+			}
+			break
+		}
+	}
+
 	return WorkDetail{
 		Work: work, ExternalIDs: externalIDs, Editions: editionDetails,
 		Parts: partDetails, Credits: credits, Genres: genres, RootFolderIDs: rootFolderIDs,
+		Wanted: wanted,
 	}, nil
 }

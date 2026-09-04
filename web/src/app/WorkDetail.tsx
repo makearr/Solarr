@@ -1,5 +1,5 @@
 import { useParams, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -9,12 +9,15 @@ type Edition = components["schemas"]["Edition"];
 type WorkPart = components["schemas"]["WorkPart"];
 type ExternalID = components["schemas"]["ExternalID"];
 type Credit = components["schemas"]["Credit"];
+type Wanted = components["schemas"]["Wanted"];
 
-// Read-only: title, release date, on-disk status, credits, genres, description,
-// editions, parts. No scoring/Decision yet (stage 4).
+// Title, release date, credits, genres, description, editions, parts read
+// straight from the work; monitoring (album and per-part) is the one write
+// surface (section 19.6). No scoring/Decision yet (stage 4).
 export function WorkDetail() {
   const { id: rawID } = useParams({ strict: false }) as { id?: string };
   const id = rawID !== undefined ? Number(rawID) : undefined;
+  const queryClient = useQueryClient();
 
   const detail = useQuery({
     queryKey: ["work", id],
@@ -26,6 +29,32 @@ export function WorkDetail() {
       if (error) throw error;
       return data;
     },
+  });
+
+  const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["work", id] });
+
+  const setMonitored = useMutation({
+    mutationFn: async (monitored: boolean) => {
+      if (id === undefined) return;
+      const { error } = await api.POST("/works/{id}/monitor", {
+        params: { path: { id } },
+        body: { monitored },
+      });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const setPartMonitored = useMutation({
+    mutationFn: async ({ partId, monitored }: { partId: number; monitored: boolean }) => {
+      if (id === undefined) return;
+      const { error } = await api.POST("/works/{id}/parts/{partId}/monitor", {
+        params: { path: { id, partId } },
+        body: { monitored },
+      });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
   });
 
   if (id === undefined) return <Message>No work id in the URL.</Message>;
@@ -46,12 +75,27 @@ export function WorkDetail() {
             size="full"
             className="h-40 w-40 shrink-0 rounded-lg object-cover"
           />
-          <div className="flex flex-col gap-1.5 pt-1">
-            <h1 className="text-lg font-semibold">{work.title}</h1>
-            <p className="text-sm text-ink-muted">
-              {work.year ? `Released ${work.year}` : "Release date unknown"}
-            </p>
-            <OnDiskBadge onDisk={work.on_disk} />
+          <div className="flex flex-1 items-start justify-between gap-4 pt-1">
+            <div className="flex flex-col gap-1.5">
+              <h1 className="text-lg font-semibold">{work.title}</h1>
+              <p className="text-sm text-ink-muted">
+                {work.year ? `Released ${work.year}` : "Release date unknown"}
+              </p>
+              <WantedBadge wanted={work.wanted} onDisk={work.on_disk} />
+            </div>
+            <button
+              type="button"
+              disabled={setMonitored.isPending}
+              onClick={() => setMonitored.mutate(!(work.wanted?.monitored ?? false))}
+              className="shrink-0 rounded-md border border-border-subtle px-3 py-1.5 text-sm
+                         enabled:hover:bg-surface disabled:cursor-default disabled:text-ink-muted"
+            >
+              {work.wanted?.monitored
+                ? "Monitored"
+                : setMonitored.isPending
+                  ? "…"
+                  : "Monitor"}
+            </button>
           </div>
         </header>
 
@@ -99,7 +143,14 @@ export function WorkDetail() {
                          border-border-subtle bg-surface"
             >
               {work.parts.map((part) => (
-                <PartRow key={part.id} part={part} />
+                <PartRow
+                  key={part.id}
+                  part={part}
+                  pending={setPartMonitored.isPending}
+                  onToggleMonitored={(monitored) =>
+                    setPartMonitored.mutate({ partId: part.id, monitored })
+                  }
+                />
               ))}
             </ul>
           </Section>
@@ -112,6 +163,40 @@ export function WorkDetail() {
         )}
       </div>
     </div>
+  );
+}
+
+// WantedBadge renders the real per-track fact (section 19.6's "9 of 12
+// tracks") once something has ever wanted this album, falling back to
+// on_disk's coarser badge otherwise.
+function WantedBadge({
+  wanted,
+  onDisk,
+}: {
+  wanted: Wanted | null | undefined;
+  onDisk: boolean;
+}) {
+  if (!wanted) return <OnDiskBadge onDisk={onDisk} />;
+
+  const label =
+    wanted.required_count != null
+      ? `${wanted.present_count} of ${wanted.required_count} tracks`
+      : wanted.state === "COMPLETE"
+        ? "Complete"
+        : wanted.present_count > 0
+          ? `${wanted.present_count} tracks`
+          : "Missing";
+
+  return (
+    <span
+      className={`w-fit rounded-full border px-2 py-0.5 text-xs ${
+        wanted.state === "COMPLETE"
+          ? "border-current text-accent"
+          : "border-border-subtle text-ink-muted"
+      }`}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -187,9 +272,30 @@ function EditionCard({ edition }: { edition: Edition }) {
   );
 }
 
-function PartRow({ part }: { part: WorkPart }) {
+function PartRow({
+  part,
+  pending,
+  onToggleMonitored,
+}: {
+  part: WorkPart;
+  pending: boolean;
+  onToggleMonitored: (monitored: boolean) => void;
+}) {
   return (
     <li className="flex items-center gap-3 px-3 py-2 text-sm">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={part.monitored}
+        aria-label={part.monitored ? "Unmonitor this track" : "Monitor this track"}
+        disabled={pending}
+        onClick={() => onToggleMonitored(!part.monitored)}
+        className={`h-3.5 w-3.5 shrink-0 rounded-sm border disabled:cursor-default ${
+          part.monitored
+            ? "border-accent bg-accent"
+            : "border-border-subtle bg-transparent"
+        }`}
+      />
       <span className="w-10 shrink-0 font-mono text-xs text-ink-muted">{part.sort_key}</span>
       <span className="truncate">{part.title ?? part.media_ref}</span>
       {part.runtime_ms != null && (

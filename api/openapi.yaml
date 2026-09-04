@@ -600,6 +600,76 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/{id}/monitor:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: setWorkMonitored
+      tags: [library]
+      summary: Monitor or unmonitor a work at the album level (section 19.6).
+      description: >-
+        Always ensures the work's album-level SET desired_item exists
+        (creating it on first use, monitored or not) and sets its monitored
+        flag either way -- an explicit "not interested" is worth recording
+        the same way a category's monitor_discovered policy would. Never
+        deletes the item (Invariant 71): a later scan or subscription pass
+        finds it and leaves it exactly as the user set it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [monitored]
+              properties:
+                monitored: { type: boolean }
+      responses:
+        "200":
+          description: The album's wanted state after the change.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Wanted" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /works/{id}/parts/{partId}/monitor:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: partId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: setPartMonitored
+      tags: [library]
+      summary: Monitor or unmonitor a single part (track) of a work.
+      description: >-
+        Toggles work_part.monitored and recomputes every album-level SET
+        item over the work in the same transaction: unmonitoring a bonus
+        track shrinks the album's required_count rather than holding it
+        PARTIAL forever (Appendix E D3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [monitored]
+              properties:
+                monitored: { type: boolean }
+      responses:
+        "204": { description: Updated. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/artwork:
     parameters:
       - name: id
@@ -1364,6 +1434,23 @@ components:
         person_name: { type: string }
         role: { type: string, example: "artist" }
 
+    Wanted:
+      type: object
+      description: >-
+        The work's own album-level SET desired_item (section 19.6) -- what
+        makes "9 of 12 tracks" a fact rather than on_disk's coarse badge.
+      required: [id, monitored, present_count, state]
+      properties:
+        id: { type: integer, format: int64 }
+        monitored: { type: boolean }
+        required_count:
+          type: integer
+          format: int64
+          nullable: true
+          description: Null until a tracklist has been enriched -- never a guessed zero.
+        present_count: { type: integer, format: int64 }
+        state: { type: string, enum: [MISSING, PARTIAL, COMPLETE, UPGRADABLE] }
+
     WorkDetail:
       type: object
       required:
@@ -1417,6 +1504,10 @@ components:
         parts:
           type: array
           items: { $ref: "#/components/schemas/WorkPart" }
+        wanted:
+          allOf: [{ $ref: "#/components/schemas/Wanted" }]
+          nullable: true
+          description: Null when nothing has ever wanted this album -- no scan, no subscription, no request.
 
     SearchResult:
       type: object

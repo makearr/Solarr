@@ -48,6 +48,13 @@ func (a workDetailAdapter) GetWorkDetail(ctx context.Context, id int64) (apiserv
 	if detail.Work.Description.Valid {
 		row.Description = &detail.Work.Description.String
 	}
+	if detail.Wanted != nil {
+		row.Wanted = &apiserver.WantedRow{
+			ID: detail.Wanted.ID, Monitored: detail.Wanted.Monitored,
+			RequiredCount: detail.Wanted.RequiredCount, PresentCount: detail.Wanted.PresentCount,
+			State: detail.Wanted.State,
+		}
+	}
 	return row, nil
 }
 

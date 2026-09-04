@@ -119,6 +119,14 @@ const (
 	Readonly Role = "readonly"
 )
 
+// Defines values for WantedState.
+const (
+	COMPLETE   WantedState = "COMPLETE"
+	MISSING    WantedState = "MISSING"
+	PARTIAL    WantedState = "PARTIAL"
+	UPGRADABLE WantedState = "UPGRADABLE"
+)
+
 // Defines values for ListWorksParamsSort.
 const (
 	Added ListWorksParamsSort = "added"
@@ -573,6 +581,20 @@ type UserAccount struct {
 	Username    string `json:"username"`
 }
 
+// Wanted The work's own album-level SET desired_item (section 19.6) -- what makes "9 of 12 tracks" a fact rather than on_disk's coarse badge.
+type Wanted struct {
+	Id           int64 `json:"id"`
+	Monitored    bool  `json:"monitored"`
+	PresentCount int64 `json:"present_count"`
+
+	// RequiredCount Null until a tracklist has been enriched -- never a guessed zero.
+	RequiredCount *int64      `json:"required_count"`
+	State         WantedState `json:"state"`
+}
+
+// WantedState defines model for Wanted.State.
+type WantedState string
+
 // Work defines model for Work.
 type Work struct {
 	AddedAt time.Time `json:"added_at"`
@@ -608,7 +630,10 @@ type WorkDetail struct {
 	SortTitle string     `json:"sort_title"`
 	Title     string     `json:"title"`
 	UpdatedAt time.Time  `json:"updated_at"`
-	Year      *int       `json:"year,omitempty"`
+
+	// Wanted Null when nothing has ever wanted this album -- no scan, no subscription, no request.
+	Wanted *Wanted `json:"wanted"`
+	Year   *int    `json:"year,omitempty"`
 }
 
 // WorkPage defines model for WorkPage.
@@ -775,6 +800,16 @@ type GetWorkArtworkParams struct {
 // GetWorkArtworkParamsSize defines parameters for GetWorkArtwork.
 type GetWorkArtworkParamsSize string
 
+// SetWorkMonitoredJSONBody defines parameters for SetWorkMonitored.
+type SetWorkMonitoredJSONBody struct {
+	Monitored bool `json:"monitored"`
+}
+
+// SetPartMonitoredJSONBody defines parameters for SetPartMonitored.
+type SetPartMonitoredJSONBody struct {
+	Monitored bool `json:"monitored"`
+}
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody LoginJSONBody
 
@@ -801,6 +836,12 @@ type UpdateUserJSONRequestBody UpdateUserJSONBody
 
 // SetUserAccessJSONRequestBody defines body for SetUserAccess for application/json ContentType.
 type SetUserAccessJSONRequestBody SetUserAccessJSONBody
+
+// SetWorkMonitoredJSONRequestBody defines body for SetWorkMonitored for application/json ContentType.
+type SetWorkMonitoredJSONRequestBody SetWorkMonitoredJSONBody
+
+// SetPartMonitoredJSONRequestBody defines body for SetPartMonitored for application/json ContentType.
+type SetPartMonitoredJSONRequestBody SetPartMonitoredJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -903,6 +944,12 @@ type ServerInterface interface {
 	// A work's cached cover art (section 21.6), if any has been fetched yet.
 	// (GET /works/{id}/artwork)
 	GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64, params GetWorkArtworkParams)
+	// Monitor or unmonitor a work at the album level (section 19.6).
+	// (POST /works/{id}/monitor)
+	SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64)
+	// Monitor or unmonitor a single part (track) of a work.
+	// (POST /works/{id}/parts/{partId}/monitor)
+	SetPartMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -1104,6 +1151,18 @@ func (_ Unimplemented) GetWork(w http.ResponseWriter, r *http.Request, id int64)
 // A work's cached cover art (section 21.6), if any has been fetched yet.
 // (GET /works/{id}/artwork)
 func (_ Unimplemented) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64, params GetWorkArtworkParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Monitor or unmonitor a work at the album level (section 19.6).
+// (POST /works/{id}/monitor)
+func (_ Unimplemented) SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Monitor or unmonitor a single part (track) of a work.
+// (POST /works/{id}/parts/{partId}/monitor)
+func (_ Unimplemented) SetPartMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2076,6 +2135,81 @@ func (siw *ServerInterfaceWrapper) GetWorkArtwork(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// SetWorkMonitored operation middleware
+func (siw *ServerInterfaceWrapper) SetWorkMonitored(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetWorkMonitored(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetPartMonitored operation middleware
+func (siw *ServerInterfaceWrapper) SetPartMonitored(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "partId" -------------
+	var partId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "partId", chi.URLParam(r, "partId"), &partId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "partId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetPartMonitored(w, r, id, partId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -2287,6 +2421,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/{id}/artwork", wrapper.GetWorkArtwork)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/monitor", wrapper.SetWorkMonitored)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/monitor", wrapper.SetPartMonitored)
 	})
 
 	return r

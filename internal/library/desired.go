@@ -162,6 +162,16 @@ func (d Desired) SetItemMonitored(ctx context.Context, itemID int64, monitored b
 func (d Desired) SetPartMonitored(ctx context.Context, workID, partID int64, monitored bool) error {
 	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
+		// SetWorkPartMonitored is a bare UPDATE ... WHERE id = ? -- it would
+		// silently affect zero rows for a bogus or cross-work id rather than
+		// erroring, so existence and ownership are checked here first.
+		part, err := queries.GetWorkPart(ctx, partID)
+		if err != nil {
+			return fmt.Errorf("get part: %w", err)
+		}
+		if part.WorkID != workID {
+			return sql.ErrNoRows
+		}
 		if err := queries.SetWorkPartMonitored(ctx,
 			librarydb.SetWorkPartMonitoredParams{Monitored: boolToInt(monitored), ID: partID}); err != nil {
 			return fmt.Errorf("set part monitored: %w", err)
