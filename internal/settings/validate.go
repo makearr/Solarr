@@ -46,6 +46,16 @@ func validateCategory(mediaType, name string, priorityRank int64) config.Problem
 	return problems
 }
 
+func validateMonitorDiscovered(policy string) config.Problems {
+	switch policy {
+	case MonitorDiscoveredMonitored, MonitorDiscoveredUnmonitored, MonitorDiscoveredNone:
+		return nil
+	default:
+		return config.Problems{{Path: "monitor_discovered", Value: policy,
+			Expectation: "one of monitored, unmonitored, none"}}
+	}
+}
+
 // validateRootFolder checks a library root before it is written. Whether the
 // path is writable is reported elsewhere and never refused.
 func validateRootFolder(path string) config.Problems {

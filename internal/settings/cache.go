@@ -174,6 +174,7 @@ func convertCategories(rows []settingsdb.Category) []Category {
 			PriorityRank:      row.PriorityRank,
 			QualityProfileID:  nullInt64Ptr(row.QualityProfileID),
 			LanguageProfileID: nullInt64Ptr(row.LanguageProfileID),
+			MonitorDiscovered: row.MonitorDiscovered,
 		})
 	}
 	return categories

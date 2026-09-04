@@ -25,6 +25,11 @@ type WorkIdentity struct {
 type WorkLink struct {
 	Provider   string
 	ExternalID string
+	// MediaObjectID is the file that resolved this link, for a caller that
+	// wants to know which work each of its files ended up under (ResolveWorks'
+	// returned ids line up with links positionally). Zero means the caller has
+	// no single file to attribute this link to.
+	MediaObjectID int64
 	// Confidence is the provider's own confidence in the (Provider, ExternalID)-to-work
 	// mapping (ADR-8), not the chain's confidence in having read it correctly.
 	Confidence float64
@@ -66,20 +71,29 @@ func NewIdentity(opened *store.Store) Identity { return Identity{store: opened} 
 // ResolveWorks finds or creates the work behind each link's (Provider, ExternalID),
 // linking it when new, all in one transaction (Invariant 2). A link naming a pair
 // already resolved earlier in the same batch reuses that work rather than creating a
-// second one: writes are visible to reads within the same transaction.
-func (i Identity) ResolveWorks(ctx context.Context, at time.Time, links []WorkLink) error {
+// second one: writes are visible to reads within the same transaction. The
+// returned ids line up with links, positionally, so a caller that also carries
+// each link's MediaObjectID can pair a file back to the work it resolved to.
+func (i Identity) ResolveWorks(ctx context.Context, at time.Time, links []WorkLink) ([]int64, error) {
 	if len(links) == 0 {
-		return nil
+		return nil, nil
 	}
-	return i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+	workIDs := make([]int64, len(links))
+	err := i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
-		for _, link := range links {
-			if _, _, err := resolveWork(ctx, queries, at, link); err != nil {
+		for index, link := range links {
+			workID, _, err := resolveWork(ctx, queries, at, link)
+			if err != nil {
 				return fmt.Errorf("library: resolve work %s:%s: %w", link.Provider, link.ExternalID, err)
 			}
+			workIDs[index] = workID
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return workIDs, nil
 }
 
 func resolveWork(

@@ -84,7 +84,18 @@ type Category struct {
 	// both are section 19.1/19.8 category-level defaults, not requirements.
 	QualityProfileID  *int64
 	LanguageProfileID *int64
+	// MonitorDiscovered governs what a scan does with an album it finds on
+	// disk that nobody asked for: "monitored" (default), "unmonitored", or
+	// "none" at all (section 19.6, todo 4.4).
+	MonitorDiscovered string
 }
+
+// Monitor-discovered policy values (section 19.6).
+const (
+	MonitorDiscoveredMonitored   = "monitored"
+	MonitorDiscoveredUnmonitored = "unmonitored"
+	MonitorDiscoveredNone        = "none"
+)
 
 // QualityProfile is ADR-40's policy, evaluated by internal/score: hard gates, then
 // lexicographic tiers, then an additive score. RulesJSON and UpgradeJSON are kept

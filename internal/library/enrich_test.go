@@ -9,7 +9,7 @@ import (
 
 func createPlaceholderEdition(t *testing.T, opened *librarydb.Queries, identity library.Identity, releaseGroupID, releaseID string) (workID, editionID int64) {
 	t.Helper()
-	err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+	_, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
 		Provider: "musicbrainz:release-group", ExternalID: releaseGroupID, Confidence: 1.0,
 		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "KI Pecezinu", SortTitle: "ki pecezinu"},
 		Edition: &library.EditionLink{

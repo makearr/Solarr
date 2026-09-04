@@ -33,6 +33,7 @@ type Category struct {
 	PriorityRank      int64
 	QualityProfileID  sql.NullInt64
 	LanguageProfileID sql.NullInt64
+	MonitorDiscovered string
 }
 
 type CategoryRootFolder struct {

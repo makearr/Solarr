@@ -69,18 +69,20 @@ func (f *fakeTool) Fingerprint(context.Context, []string) ([]mediatool.Fingerpri
 
 // recorder is the Consumer under test's stand-in for library.db.
 type recorder struct {
-	seen      []scan.Observed
-	batches   int
-	failAfter int
-	failure   error
+	seen            []scan.Observed
+	seenCategoryIDs []int64
+	batches         int
+	failAfter       int
+	failure         error
 }
 
-func (r *recorder) Observe(_ context.Context, _ settings.RootFolder, batch []scan.Observed) error {
+func (r *recorder) Observe(_ context.Context, _ settings.RootFolder, categoryID int64, batch []scan.Observed) error {
 	if r.failure != nil && r.batches >= r.failAfter {
 		return r.failure
 	}
 	r.batches++
 	r.seen = append(r.seen, batch...)
+	r.seenCategoryIDs = append(r.seenCategoryIDs, categoryID)
 	return nil
 }
 
@@ -277,6 +279,27 @@ func TestJob_SweepsProbesAndRecordsTheWatermark(t *testing.T) {
 	}
 	if progress.FilesFound != 3 {
 		t.Errorf("FilesFound = %d, want 3", progress.FilesFound)
+	}
+}
+
+// The category a scan is scoped to travels through to the consumer, batch by
+// batch -- todo 4.4's desired-item discovery needs it to know which policy
+// (category.monitor_discovered) governs what it finds.
+func TestJob_CarriesTheCategoryIDThroughToTheConsumer(t *testing.T) {
+	fixture := newJobFixture(t, "Nick Cave/Tender Prey/01.flac")
+	handler := fixture.job(t, scan.IsAudio)
+
+	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, CategoryID: 7, Full: true}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	for _, seen := range fixture.recorder.seenCategoryIDs {
+		if seen != 7 {
+			t.Errorf("consumer saw category %d, want 7", seen)
+		}
+	}
+	if len(fixture.recorder.seenCategoryIDs) == 0 {
+		t.Fatal("consumer was never called")
 	}
 }
 

@@ -32,6 +32,12 @@ type Payload struct {
 	// Full ignores the watermark and reads every directory, for a first scan or a
 	// library whose timestamps are not to be trusted.
 	Full bool `json:"full"`
+	// CategoryID is which category this scan run is scoped to -- a root can in
+	// principle belong to several, so the enqueuer (which already knows) states
+	// it rather than the job guessing. The consumer looks the category's own
+	// policy up fresh at run time rather than trusting a value baked in at
+	// enqueue time, the same "ask, don't cache" discipline Roots already uses.
+	CategoryID int64 `json:"category_id"`
 }
 
 // ActionKeyFor deduplicates scans of one root: at most one may be active at a time
@@ -51,7 +57,7 @@ type Observed struct {
 // in library.db is its job, not the scan's: the scan decides what changed, and
 // deciding what a file *is* is the ADR-24 chain's question.
 type Consumer interface {
-	Observe(ctx context.Context, root settings.RootFolder, batch []Observed) error
+	Observe(ctx context.Context, root settings.RootFolder, categoryID int64, batch []Observed) error
 }
 
 // Roots resolves a root folder. They are settings.db policy (ADR-25), so the job
@@ -140,7 +146,9 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	state := State{SweptThrough: progress.SweptThrough, Cursor: progress.Cursor}
 	result, err := j.sweeper.Sweep(ctx, root.Path, state,
 		Options{Full: payload.Full, Include: j.include},
-		func(ctx context.Context, batch Batch) error { return j.batch(ctx, root, batch) })
+		func(ctx context.Context, batch Batch) error {
+			return j.batch(ctx, root, payload.CategoryID, batch)
+		})
 	if err != nil {
 		// Nothing to record: each batch persisted its own cursor as it committed,
 		// which is also what survives the process simply being killed.
@@ -190,7 +198,7 @@ func (j *Job) markMissing(ctx context.Context, root settings.RootFolder, sweptTh
 // batch probes one directory's files in a single mediatool call and hands the result
 // on. The cursor advances only after the consumer has committed, which is what makes
 // a restart resume rather than lose a batch.
-func (j *Job) batch(ctx context.Context, root settings.RootFolder, batch Batch) error {
+func (j *Job) batch(ctx context.Context, root settings.RootFolder, categoryID int64, batch Batch) error {
 	paths := make([]string, len(batch.Files))
 	for index, file := range batch.Files {
 		paths[index] = path.Join(root.Path, file.RelPath)
@@ -222,7 +230,7 @@ func (j *Job) batch(ctx context.Context, root settings.RootFolder, batch Batch) 
 			slog.Int("unreadable", unreadable), slog.Int("of", len(batch.Files)))
 	}
 
-	if err := j.consumer.Observe(ctx, root, observed); err != nil {
+	if err := j.consumer.Observe(ctx, root, categoryID, observed); err != nil {
 		return err
 	}
 	return j.scans.Advance(ctx, root.ID, batch.Directory)
@@ -244,9 +252,10 @@ func IsAudio(relPath string) bool {
 	return false
 }
 
-// Enqueue submits a scan of one root, deduplicated by ActionKeyFor.
-func Enqueue(ctx context.Context, queue *jobs.Queue, rootFolderID int64, full bool) (jobs.EnqueueResult, error) {
-	payload, err := json.Marshal(Payload{RootFolderID: rootFolderID, Full: full})
+// Enqueue submits a scan of one root, scoped to categoryID, deduplicated by
+// ActionKeyFor.
+func Enqueue(ctx context.Context, queue *jobs.Queue, rootFolderID, categoryID int64, full bool) (jobs.EnqueueResult, error) {
+	payload, err := json.Marshal(Payload{RootFolderID: rootFolderID, CategoryID: categoryID, Full: full})
 	if err != nil {
 		return jobs.EnqueueResult{}, fmt.Errorf("scan: encode payload: %w", err)
 	}

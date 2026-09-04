@@ -46,6 +46,9 @@ type process struct {
 	dispatcher *jobs.Dispatcher
 	server     *apiserver.Server
 	timezone   string
+	// defaultQualityProfileID is ensureDefaultQualityProfile's fallback,
+	// used when a category has none of its own configured (todo 4.4).
+	defaultQualityProfileID int64
 }
 
 // serve is the startup sequence of architecture section 15.1, in order.
@@ -84,6 +87,9 @@ func serve(ctx context.Context, configPath string, out io.Writer) error {
 	defer running.close()
 
 	if err := running.openDatabases(ctx); err != nil {
+		return err
+	}
+	if err := running.ensureDefaultQualityProfile(ctx); err != nil {
 		return err
 	}
 	if err := running.startJobs(ctx); err != nil {

@@ -105,7 +105,7 @@ func TestObserve_IdentifiedFileRegistersPhysicallyAndCreatesAWork(t *testing.T) 
 		"album": "KI Pecezinu", "musicbrainz_releasegroupid": releaseGroupMBID,
 	})}
 
-	if err := consumer.Observe(t.Context(), root, batch); err != nil {
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
 		t.Fatalf("Observe: %v", err)
 	}
 
@@ -157,7 +157,7 @@ func TestObserve_ReleaseMBIDCreatesAPlaceholderEdition(t *testing.T) {
 		"musicbrainz_albumid": releaseMBID,
 	})}
 
-	if err := consumer.Observe(t.Context(), root, batch); err != nil {
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
 		t.Fatalf("Observe: %v", err)
 	}
 
@@ -195,7 +195,7 @@ func TestObserve_NoReleaseMBIDMeansNoEdition(t *testing.T) {
 		"album": "KI Pecezinu", "musicbrainz_releasegroupid": releaseGroupMBID,
 	})}
 
-	if err := consumer.Observe(t.Context(), root, batch); err != nil {
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
 		t.Fatalf("Observe: %v", err)
 	}
 
@@ -233,7 +233,7 @@ func TestObserve_TwoTracksOfOneAlbumShareOneWork(t *testing.T) {
 		}),
 	}
 
-	if err := consumer.Observe(t.Context(), root, batch); err != nil {
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
 		t.Fatalf("Observe: %v", err)
 	}
 
@@ -254,7 +254,7 @@ func TestObserve_NoMBIDStillRegistersThePhysicalFileButNoWork(t *testing.T) {
 	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
 	batch := []scan.Observed{observedFile("Unsorted/track.mp3", int64(len(content)), mediatool.Tags{})}
 
-	if err := consumer.Observe(t.Context(), root, batch); err != nil {
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
 		t.Fatalf("Observe: %v", err)
 	}
 
@@ -320,7 +320,7 @@ func TestObserve_SearchIdentifierResolvesAFileWithNoMBIDWhenASearcherIsConfigure
 	batch := []scan.Observed{observedFile("Vutu Doci-The Sezo Siluko-WEB-FLAC-2018-TiMES/01 Moving.flac",
 		int64(len(content)), mediatool.Tags{"artist": "Vutu Doci", "album": "The Sezo Siluko", "date": "1978"})}
 
-	if err := consumer.Observe(t.Context(), root, batch); err != nil {
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
 		t.Fatalf("Observe: %v", err)
 	}
 
@@ -343,7 +343,7 @@ func TestObserve_UnreadableProbeIsSkippedEntirely(t *testing.T) {
 		Probe: mediatool.Probe{Err: os.ErrPermission},
 	}}
 
-	if err := consumer.Observe(t.Context(), root, batch); err != nil {
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
 		t.Fatalf("Observe: %v", err)
 	}
 
@@ -367,7 +367,7 @@ func TestObserve_MissingAlbumTagFallsBackToTheDirectoryName(t *testing.T) {
 		"musicbrainz_releasegroupid": releaseGroupMBID,
 	})}
 
-	if err := consumer.Observe(t.Context(), root, batch); err != nil {
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
 		t.Fatalf("Observe: %v", err)
 	}
 
@@ -393,7 +393,7 @@ func TestObserve_UnresolvedFileIsQueuedForManualIdentification(t *testing.T) {
 	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
 	batch := []scan.Observed{observedFile("Unsorted/track.mp3", int64(len(content)), mediatool.Tags{})}
 
-	if err := consumer.Observe(t.Context(), root, batch); err != nil {
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
 		t.Fatalf("Observe: %v", err)
 	}
 
@@ -421,14 +421,14 @@ func TestObserve_ResolvingOnASecondSweepClearsTheQueueEntry(t *testing.T) {
 
 	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
 	untagged := []scan.Observed{observedFile("Unsorted/track.mp3", int64(len(content)), mediatool.Tags{})}
-	if err := consumer.Observe(t.Context(), root, untagged); err != nil {
+	if err := consumer.Observe(t.Context(), root, 0, untagged); err != nil {
 		t.Fatalf("Observe (untagged): %v", err)
 	}
 
 	tagged := []scan.Observed{observedFile("Unsorted/track.mp3", int64(len(content)), mediatool.Tags{
 		"album": "KI Pecezinu", "musicbrainz_releasegroupid": releaseGroupMBID,
 	})}
-	if err := consumer.Observe(t.Context(), root, tagged); err != nil {
+	if err := consumer.Observe(t.Context(), root, 0, tagged); err != nil {
 		t.Fatalf("Observe (tagged): %v", err)
 	}
 

@@ -96,7 +96,7 @@ func TestADR28_ScanResolveWorksStaysUnderItsTarget(t *testing.T) {
 				},
 			}
 		}
-		if err := identity.ResolveWorks(t.Context(), at, links); err != nil {
+		if _, err := identity.ResolveWorks(t.Context(), at, links); err != nil {
 			t.Fatalf("ResolveWorks: %v", err)
 		}
 	})

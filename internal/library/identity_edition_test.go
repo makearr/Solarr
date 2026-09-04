@@ -11,7 +11,7 @@ func TestResolveWorks_UnknownEditionExternalIDCreatesAnEdition(t *testing.T) {
 	opened, queries := newLibrary(t)
 	identity := library.NewIdentity(opened)
 
-	err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+	_, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
 		Provider: "musicbrainz:release-group", ExternalID: "rg-1", Confidence: 1.0,
 		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "KI Pecezinu", SortTitle: "ki pecezinu"},
 		Edition: &library.EditionLink{
@@ -57,7 +57,7 @@ func TestResolveWorks_RepeatedEditionExternalIDReusesTheSameEdition(t *testing.T
 		},
 	}
 
-	if err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{link, link}); err != nil {
+	if _, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{link, link}); err != nil {
 		t.Fatalf("ResolveWorks: %v", err)
 	}
 
@@ -82,7 +82,7 @@ func TestResolveWorks_NoEditionMeansNoEditionRow(t *testing.T) {
 	opened, queries := newLibrary(t)
 	identity := library.NewIdentity(opened)
 
-	err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+	_, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
 		Provider: "musicbrainz:release-group", ExternalID: "rg-1", Confidence: 1.0,
 		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "KI Pecezinu", SortTitle: "ki pecezinu"},
 	}})

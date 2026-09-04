@@ -21,6 +21,14 @@ func (c cacheRoots) RootFolder(id int64) (settings.RootFolder, bool) {
 	return c.cache.Snapshot().RootFolder(id)
 }
 
+// cacheCategories adapts the settings snapshot to music.Categories, the same
+// "ask fresh, never cache" shape as cacheRoots.
+type cacheCategories struct{ cache *settings.Cache }
+
+func (c cacheCategories) Category(id int64) (settings.Category, bool) {
+	return c.cache.Snapshot().Category(id)
+}
+
 // registerScanJob wires the first job handler in the codebase into the registry and
 // the executor: the library sweep, its music consumer, and the tools it probes files
 // with. The registry entry is required before Enqueue will accept the type at all
@@ -33,6 +41,7 @@ func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, 
 	reportToolReadiness(ctx, tool, p.logger)
 	physical := library.NewPhysical(p.library)
 	provider := p.musicBrainzProvider()
+	desired := library.NewDesired(p.library)
 	consumer := music.NewConsumer(music.ConsumerConfig{
 		FS:           p.fsys,
 		Physical:     physical,
@@ -41,6 +50,11 @@ func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, 
 		Search:       provider,
 		Clock:        clock.NewSystem(),
 		Logger:       p.logger,
+		Desired:      &desired,
+		Categories:   cacheCategories{cache: p.cache},
+		// The user's own default when they haven't configured one for the
+		// category yet -- ensureDefaultQualityProfile seeded it at startup.
+		DefaultProfileID: p.defaultQualityProfileID,
 	})
 	job := scan.NewJob(scan.Config{
 		FS:       p.fsys,
@@ -83,7 +97,7 @@ func (p *process) enqueueLibraryScans(ctx context.Context) {
 			if !root.Online {
 				continue
 			}
-			if _, err := scan.Enqueue(ctx, p.queue, root.ID, false); err != nil {
+			if _, err := scan.Enqueue(ctx, p.queue, root.ID, category.ID, false); err != nil {
 				p.logger.Warn("enqueue library scan",
 					slog.Int64("root_folder_id", root.ID), slog.Any("error", err))
 			}

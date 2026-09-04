@@ -12,7 +12,7 @@ import (
 // not the bare "musicbrainz" its own doc comment first (wrongly) assumed.
 func refineWithReleaseMBID(t *testing.T, identity library.Identity, releaseGroupID, releaseMBID string) int64 {
 	t.Helper()
-	err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+	_, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
 		Provider: "musicbrainz:release-group", ExternalID: releaseGroupID, Confidence: 1.0,
 		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "KI Pecezinu", SortTitle: "ki pecezinu"},
 		Edition: &library.EditionLink{
@@ -62,7 +62,7 @@ func TestNeedingArtwork_ExcludesAPlaceholderEdition(t *testing.T) {
 	identity := library.NewIdentity(opened)
 	artworks := library.NewArtworks(opened)
 
-	err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+	_, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
 		Provider: "musicbrainz:release-group", ExternalID: "rg-artwork-2", Confidence: 1.0,
 		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Zor A", SortTitle: "zor a"},
 		Edition: &library.EditionLink{

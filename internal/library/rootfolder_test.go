@@ -11,7 +11,7 @@ func TestResolveWorks_RecordsTheRootFolderLink(t *testing.T) {
 	opened, queries := newLibrary(t)
 	identity := library.NewIdentity(opened)
 
-	err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+	_, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
 		Provider: "musicbrainz:release-group", ExternalID: "rg-1", Confidence: 1.0,
 		Work:         library.WorkIdentity{MediaType: "music", CanonicalTitle: "KI Pecezinu", SortTitle: "ki pecezinu"},
 		RootFolderID: 7,
@@ -48,10 +48,10 @@ func TestResolveWorks_RootFolderLinkIsIdempotent(t *testing.T) {
 		Work:         library.WorkIdentity{MediaType: "music", CanonicalTitle: "KI Pecezinu", SortTitle: "ki pecezinu"},
 		RootFolderID: 7,
 	}
-	if err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{link}); err != nil {
+	if _, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{link}); err != nil {
 		t.Fatalf("ResolveWorks (first): %v", err)
 	}
-	if err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{link}); err != nil {
+	if _, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{link}); err != nil {
 		t.Fatalf("ResolveWorks (second): %v", err)
 	}
 
@@ -83,7 +83,7 @@ func TestResolveWorks_AWorkCanBeLinkedToSeveralRootFolders(t *testing.T) {
 	first, second := base, base
 	first.RootFolderID = 7
 	second.RootFolderID = 9
-	if err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{first, second}); err != nil {
+	if _, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{first, second}); err != nil {
 		t.Fatalf("ResolveWorks: %v", err)
 	}
 

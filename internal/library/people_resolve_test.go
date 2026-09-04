@@ -11,7 +11,7 @@ import (
 // same ResolveWorks path a real Identifier chain uses.
 func newWorkForCredits(t *testing.T, identity library.Identity, queries *librarydb.Queries, externalID string) int64 {
 	t.Helper()
-	err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+	_, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
 		Provider: "musicbrainz:release-group", ExternalID: externalID, Confidence: 1.0,
 		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "KI Pecezinu", SortTitle: "ki pecezinu"},
 	}})

@@ -65,7 +65,23 @@ func (c *Cache) CreateCategory(ctx context.Context, mediaType, name string, prio
 		return Category{}, fmt.Errorf("settings: create category %q: %w", name, err)
 	}
 	return Category{ID: created.ID, MediaType: created.MediaType, Name: created.Name,
-		PriorityRank: created.PriorityRank}, nil
+		PriorityRank: created.PriorityRank, MonitorDiscovered: created.MonitorDiscovered}, nil
+}
+
+// SetCategoryMonitorDiscovered sets what a scan does with an album it finds on
+// disk that nobody asked for (section 19.6, todo 4.4) -- chosen per category,
+// not globally, so the live and test libraries can differ.
+func (c *Cache) SetCategoryMonitorDiscovered(ctx context.Context, id int64, policy string) error {
+	if _, found := c.Snapshot().Category(id); !found {
+		return fmt.Errorf("%w: category %d", ErrNotFound, id)
+	}
+	if problems := validateMonitorDiscovered(policy); len(problems) > 0 {
+		return problems
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetCategoryMonitorDiscovered(ctx,
+			settingsdb.SetCategoryMonitorDiscoveredParams{MonitorDiscovered: policy, ID: id})
+	})
 }
 
 // DeleteCategory removes a category, or refuses and says what still uses it (Invariant 41).

@@ -12,7 +12,7 @@ func TestResolveWorks_UnknownExternalIDCreatesAWork(t *testing.T) {
 	opened, queries := newLibrary(t)
 	identity := library.NewIdentity(opened)
 
-	err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+	_, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
 		Provider: "musicbrainz:release-group", ExternalID: "rg-1", Confidence: 1.0,
 		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "KI Pecezinu", SortTitle: "ki pecezinu"},
 	}})
@@ -42,7 +42,7 @@ func TestResolveWorks_RepeatedExternalIDReusesTheSameWork(t *testing.T) {
 		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "KI Pecezinu", SortTitle: "ki pecezinu"},
 	}
 
-	if err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{link, link}); err != nil {
+	if _, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{link, link}); err != nil {
 		t.Fatalf("ResolveWorks: %v", err)
 	}
 	assertWorkCount(t, opened, 1)
@@ -58,10 +58,10 @@ func TestResolveWorks_AlreadyResolvedExternalIDIsIdempotent(t *testing.T) {
 		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "KI Pecezinu", SortTitle: "ki pecezinu"},
 	}
 
-	if err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{link}); err != nil {
+	if _, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{link}); err != nil {
 		t.Fatalf("ResolveWorks (first): %v", err)
 	}
-	if err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{link}); err != nil {
+	if _, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{link}); err != nil {
 		t.Fatalf("ResolveWorks (second): %v", err)
 	}
 	assertWorkCount(t, opened, 1)
@@ -71,7 +71,7 @@ func TestResolveWorks_DifferentExternalIDsCreateDifferentWorks(t *testing.T) {
 	opened, _ := newLibrary(t)
 	identity := library.NewIdentity(opened)
 
-	err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{
+	_, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{
 		{Provider: "musicbrainz:release-group", ExternalID: "rg-1", Confidence: 1.0,
 			Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "KI Pecezinu", SortTitle: "ki pecezinu"}},
 		{Provider: "musicbrainz:release-group", ExternalID: "rg-2", Confidence: 1.0,
@@ -87,7 +87,7 @@ func TestResolveWorks_EmptyBatchIsANoop(t *testing.T) {
 	opened, _ := newLibrary(t)
 	identity := library.NewIdentity(opened)
 
-	if err := identity.ResolveWorks(t.Context(), firstSeen, nil); err != nil {
+	if _, err := identity.ResolveWorks(t.Context(), firstSeen, nil); err != nil {
 		t.Fatalf("ResolveWorks: %v", err)
 	}
 	assertWorkCount(t, opened, 0)

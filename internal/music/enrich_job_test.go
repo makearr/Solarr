@@ -133,7 +133,7 @@ func newEnrichJobWithBiographer(
 func createPlaceholder(t *testing.T, opened *store.Store, releaseGroupMBID, releaseMBID string) {
 	t.Helper()
 	identity := library.NewIdentity(opened)
-	err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+	_, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
 		Provider: music.ProviderReleaseGroup, ExternalID: releaseGroupMBID, Confidence: 1.0,
 		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "KI Pecezinu", SortTitle: "ki pecezinu"},
 		Edition: &library.EditionLink{

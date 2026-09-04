@@ -58,6 +58,33 @@ func (p *process) ensureOpenAccessAdministrator(ctx context.Context) error {
 	return nil
 }
 
+// defaultQualityProfileName is the permissive, no-op profile
+// ensureDefaultQualityProfile seeds: no hard gates, no tiers, no targets --
+// every candidate passes and nothing is ever scored an upgrade over another.
+// It exists only so a scan can write a schema-valid desired_item.profile_id
+// for a category nobody has configured a real profile for yet (todo 4.4);
+// picking a real quality profile from several is 4.3's follow-up UI, not this.
+const defaultQualityProfileName = "Unconfigured (accepts anything)"
+
+// ensureDefaultQualityProfile creates the fallback profile discovery-created
+// desired items use when their category has none of its own configured, the
+// same "create once, on the first boot that needs it" shape as
+// ensureOpenAccessAdministrator.
+func (p *process) ensureDefaultQualityProfile(ctx context.Context) error {
+	for _, profile := range p.cache.Snapshot().QualityProfiles() {
+		if profile.Name == defaultQualityProfileName {
+			p.defaultQualityProfileID = profile.ID
+			return nil
+		}
+	}
+	created, err := p.cache.CreateQualityProfile(ctx, defaultQualityProfileName, "{}", "{}")
+	if err != nil {
+		return err
+	}
+	p.defaultQualityProfileID = created.ID
+	return nil
+}
+
 // egressStatus adapts the prober to the interface apiserver defines, so neither
 // package has to know about the other.
 type egressStatus struct {

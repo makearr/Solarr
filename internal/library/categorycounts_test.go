@@ -24,7 +24,7 @@ func TestCategoryCounters_CountsWorksAndFilesForTheScopedRoots(t *testing.T) {
 		Provider: "test", ExternalID: "c", Confidence: 1,
 		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "C", SortTitle: "c"}, RootFolderID: 2,
 	}
-	if err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{workA, workB, workOther}); err != nil {
+	if _, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{workA, workB, workOther}); err != nil {
 		t.Fatalf("ResolveWorks: %v", err)
 	}
 
@@ -70,7 +70,7 @@ func TestCategoryCounters_ACategorySpanningSeveralRootsSumsThem(t *testing.T) {
 		{Provider: "test", ExternalID: "b", Confidence: 1,
 			Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "B", SortTitle: "b"}, RootFolderID: 2},
 	}
-	if err := identity.ResolveWorks(t.Context(), firstSeen, links); err != nil {
+	if _, err := identity.ResolveWorks(t.Context(), firstSeen, links); err != nil {
 		t.Fatalf("ResolveWorks: %v", err)
 	}
 
@@ -92,7 +92,7 @@ func TestCategoryCounters_UnchangedCountsProduceNoCorrections(t *testing.T) {
 	identity := library.NewIdentity(opened)
 	counters := library.NewCategoryCounters(opened, clock.NewFakeAtEpoch())
 
-	if err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+	if _, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
 		Provider: "test", ExternalID: "a", Confidence: 1,
 		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "A", SortTitle: "a"}, RootFolderID: 1,
 	}}); err != nil {

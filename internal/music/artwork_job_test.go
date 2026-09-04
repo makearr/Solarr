@@ -178,7 +178,7 @@ func TestArtworkJob_SkipsAReleaseWithNoCoverArtWithoutFailing(t *testing.T) {
 
 func refineWithReleaseMBIDForArtworkJob(t *testing.T, identity library.Identity, releaseGroupMBID, releaseMBID string) int64 {
 	t.Helper()
-	err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+	_, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
 		Provider: music.ProviderReleaseGroup, ExternalID: releaseGroupMBID, Confidence: 1.0,
 		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "KI Pecezinu", SortTitle: "ki pecezinu"},
 		Edition: &library.EditionLink{
