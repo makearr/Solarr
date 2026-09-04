@@ -28,6 +28,10 @@ type CategoryEntry struct {
 	Roots           []AttachedRoot `yaml:"roots,omitempty"`
 	QualityProfile  string         `yaml:"quality_profile,omitempty"`
 	LanguageProfile string         `yaml:"language_profile,omitempty"`
+	// MonitorDiscovered is section 19.6's policy: what a scan does with an
+	// album it finds that nobody asked for. Empty on import means the
+	// column's own default (monitored) applies.
+	MonitorDiscovered string `yaml:"monitor_discovered,omitempty"`
 }
 
 // QualityProfileEntry is one ADR-40 profile. Rules and Upgrade stay opaque JSON
@@ -114,9 +118,10 @@ func (c *Cache) Export() Document {
 	attachments := snapshot.CategoryRoots()
 	for _, category := range snapshot.Categories() {
 		entry := CategoryEntry{
-			MediaType:    category.MediaType,
-			Name:         category.Name,
-			PriorityRank: category.PriorityRank,
+			MediaType:         category.MediaType,
+			Name:              category.Name,
+			PriorityRank:      category.PriorityRank,
+			MonitorDiscovered: category.MonitorDiscovered,
 		}
 		if category.QualityProfileID != nil {
 			entry.QualityProfile = qualityNameByID[*category.QualityProfileID]
@@ -258,6 +263,9 @@ func (d Document) Validate() config.Problems {
 				Expectation: "a name also listed under language_profiles",
 			})
 		}
+		if category.MonitorDiscovered != "" {
+			problems = append(problems, validateMonitorDiscovered(category.MonitorDiscovered)...)
+		}
 	}
 
 	return problems
@@ -395,6 +403,13 @@ func (c *Cache) Import(ctx context.Context, document Document) error {
 					ID:               id,
 				}); err != nil {
 					return fmt.Errorf("category %q quality profile: %w", key, err)
+				}
+			}
+			if category.MonitorDiscovered != "" {
+				if err := queries.SetCategoryMonitorDiscovered(ctx, settingsdb.SetCategoryMonitorDiscoveredParams{
+					MonitorDiscovered: category.MonitorDiscovered, ID: id,
+				}); err != nil {
+					return fmt.Errorf("category %q monitor_discovered: %w", key, err)
 				}
 			}
 			if category.LanguageProfile != "" {
