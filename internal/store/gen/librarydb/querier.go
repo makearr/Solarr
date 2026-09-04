@@ -124,6 +124,7 @@ type Querier interface {
 	GetAcquisition(ctx context.Context, id int64) (Acquisition, error)
 	// Identity is the client reference; the path is re-read on every poll.
 	GetAcquisitionByClientRef(ctx context.Context, arg GetAcquisitionByClientRefParams) (Acquisition, error)
+	GetArtwork(ctx context.Context, arg GetArtworkParams) (string, error)
 	GetAttributes(ctx context.Context, id int64) (MediaAttribute, error)
 	GetCandidate(ctx context.Context, id int64) (Candidate, error)
 	// A dashboard figure is one lookup regardless of library size (ADR-28).

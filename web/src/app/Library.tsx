@@ -9,13 +9,26 @@ import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
 import { useNarrow } from "@/list/useNarrow";
 import type { components } from "@/api/schema";
+import { CoverArt } from "./CoverArt";
 
 type Work = components["schemas"]["Work"];
 
 // Title plus a year/media-type line, padding included.
 const CARD_HEIGHT = 68;
+// A 32px thumbnail plus padding, for a table row.
+const TABLE_ROW_HEIGHT = 44;
+// A 48px thumbnail beside two text lines, for a grid card.
+const GRID_CARD_HEIGHT = 64;
 
 const COLUMNS: readonly Column<Work>[] = [
+  {
+    key: "cover",
+    header: "",
+    width: "3rem",
+    render: (work) => (
+      <CoverArt workId={work.id} title={work.title} size="thumb" className="h-8 w-8 rounded object-cover" />
+    ),
+  },
   {
     key: "title",
     header: "Title",
@@ -40,7 +53,7 @@ export function Library() {
   const list = useLibraryList<Work>(
     {
       name: "works",
-      rowHeight: narrow ? CARD_HEIGHT : undefined,
+      rowHeight: narrow ? CARD_HEIGHT : view === "grid" ? GRID_CARD_HEIGHT : TABLE_ROW_HEIGHT,
       idOf: (work) => work.id,
       fetchPage: async ({ cursor, query, signal }) => {
         const categoryId = query.filters.category_id;
@@ -107,11 +120,19 @@ export function Library() {
               list={list}
               idOf={(work) => work.id}
               renderCard={(work) => (
-                <span className="flex w-full flex-col gap-0.5">
-                  <span className="truncate font-medium">{work.title}</span>
-                  <span className="text-ink-muted">
-                    {work.media_type}
-                    {work.year ? ` · ${work.year}` : ""}
+                <span className="flex w-full items-center gap-3">
+                  <CoverArt
+                    workId={work.id}
+                    title={work.title}
+                    size="thumb"
+                    className="h-12 w-12 shrink-0 rounded object-cover"
+                  />
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="truncate font-medium">{work.title}</span>
+                    <span className="text-ink-muted">
+                      {work.media_type}
+                      {work.year ? ` · ${work.year}` : ""}
+                    </span>
                   </span>
                 </span>
               )}

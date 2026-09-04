@@ -408,6 +408,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/artwork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * A work's cached cover art (section 21.6), if any has been fetched yet.
+         * @description WebP bytes straight from the on-disk cache ArtworkJob wrote -- never fetched live, never re-encoded per request. 404 both when the work is not visible to the caller (ADR-27, indistinguishable from missing) and when no cover has been recorded yet; a client cannot and need not tell the two apart.
+         */
+        get: operations["getWorkArtwork"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/search": {
         parameters: {
             query?: never;
@@ -1520,6 +1542,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getWorkArtwork: {
+        parameters: {
+            query?: {
+                size?: "thumb" | "small" | "full";
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/webp": string;
                 };
             };
             400: components["responses"]["Problem"];

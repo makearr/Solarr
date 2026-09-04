@@ -591,6 +591,36 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/{id}/artwork:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getWorkArtwork
+      tags: [library]
+      summary: A work's cached cover art (section 21.6), if any has been fetched yet.
+      description: >-
+        WebP bytes straight from the on-disk cache ArtworkJob wrote -- never
+        fetched live, never re-encoded per request. 404 both when the work is
+        not visible to the caller (ADR-27, indistinguishable from missing) and
+        when no cover has been recorded yet; a client cannot and need not tell
+        the two apart.
+      parameters:
+        - name: size
+          in: query
+          schema: { type: string, enum: [thumb, small, full], default: small }
+      responses:
+        "200":
+          description: The image.
+          content:
+            image/webp:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /search:
     get:
       operationId: search

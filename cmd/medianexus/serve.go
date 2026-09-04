@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -368,6 +369,9 @@ func (p *process) startServer(ctx context.Context) error {
 		WorkDetail:   workDetailAdapter{works: library.NewWorks(p.library)},
 		Search:       searchAdapter{search: library.NewSearch(p.library)},
 		Unidentified: unidentifiedAdapter{unidentified: library.NewUnidentified(p.library)},
+		Artwork:      artworkAdapter{artworks: library.NewArtworks(p.library)},
+		FS:           p.fsys,
+		ImagesDir:    filepath.Join(p.config.Paths.CacheDir, "images"),
 		// time.Local.String() reports "Local"; the name the operator set is the useful one.
 		Timezone: p.timezone,
 		Egress:   egressStatus{prober: prober},

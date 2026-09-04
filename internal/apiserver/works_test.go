@@ -17,10 +17,15 @@ import (
 	"github.com/makearr/MediaNexus/internal/apiserver"
 	"github.com/makearr/MediaNexus/internal/auth"
 	"github.com/makearr/MediaNexus/internal/clock"
+	"github.com/makearr/MediaNexus/internal/fsx"
 	"github.com/makearr/MediaNexus/internal/settings"
 	"github.com/makearr/MediaNexus/internal/store"
 	"github.com/makearr/MediaNexus/migrations"
 )
+
+// testImagesDir is the fixture's fixed cover art cache directory, inside the
+// in-memory filesystem every worksFixture gets.
+const testImagesDir = "/images"
 
 // fakeWorksReader records the filter it was called with and answers canned rows,
 // so a test can assert what category visibility computed without a real library.db.
@@ -51,6 +56,8 @@ type worksFixture struct {
 	workDetail   *fakeWorkDetailReader
 	search       *fakeSearchReader
 	unidentified *fakeUnidentifiedReader
+	artwork      *fakeArtworkReader
+	fsys         *fsx.Mem
 	clock        *clock.Fake
 }
 
@@ -96,6 +103,8 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 	workDetail := &fakeWorkDetailReader{}
 	search := &fakeSearchReader{}
 	unidentified := &fakeUnidentifiedReader{}
+	artwork := &fakeArtworkReader{}
+	fsys := fsx.NewMem(fake)
 	server, err := apiserver.New(apiserver.Config{
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
 		Checker:      fakeChecker{},
@@ -103,6 +112,9 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 		WorkDetail:   workDetail,
 		Search:       search,
 		Unidentified: unidentified,
+		Artwork:      artwork,
+		FS:           fsys,
+		ImagesDir:    testImagesDir,
 		LibrarySize:  librarySize,
 		Clock:        fake,
 		Logger:       slog.New(slog.DiscardHandler),
@@ -118,7 +130,7 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 	}
 	return worksFixture{
 		server: server, cache: cache, works: works, workDetail: workDetail, search: search,
-		unidentified: unidentified, clock: fake,
+		unidentified: unidentified, artwork: artwork, fsys: fsys, clock: fake,
 	}
 }
 

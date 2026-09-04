@@ -119,6 +119,13 @@ const (
 	Readonly Role = "readonly"
 )
 
+// Defines values for GetWorkArtworkParamsSize.
+const (
+	Full  GetWorkArtworkParamsSize = "full"
+	Small GetWorkArtworkParamsSize = "small"
+	Thumb GetWorkArtworkParamsSize = "thumb"
+)
+
 // AuthPolicy defines model for AuthPolicy.
 type AuthPolicy struct {
 	// Administrator The account a login would use, when one exists. Shown rather than asked for: turning a login on sets a password on this account.
@@ -649,6 +656,14 @@ type ListWorksParams struct {
 	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
 }
 
+// GetWorkArtworkParams defines parameters for GetWorkArtwork.
+type GetWorkArtworkParams struct {
+	Size *GetWorkArtworkParamsSize `form:"size,omitempty" json:"size,omitempty"`
+}
+
+// GetWorkArtworkParamsSize defines parameters for GetWorkArtwork.
+type GetWorkArtworkParamsSize string
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody LoginJSONBody
 
@@ -762,6 +777,9 @@ type ServerInterface interface {
 	// A work's full structural detail: its own fields, editions, parts, and every level's external ids.
 	// (GET /works/{id})
 	GetWork(w http.ResponseWriter, r *http.Request, id int64)
+	// A work's cached cover art (section 21.6), if any has been fetched yet.
+	// (GET /works/{id}/artwork)
+	GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64, params GetWorkArtworkParams)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -939,6 +957,12 @@ func (_ Unimplemented) ListWorks(w http.ResponseWriter, r *http.Request, params 
 // A work's full structural detail: its own fields, editions, parts, and every level's external ids.
 // (GET /works/{id})
 func (_ Unimplemented) GetWork(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A work's cached cover art (section 21.6), if any has been fetched yet.
+// (GET /works/{id}/artwork)
+func (_ Unimplemented) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64, params GetWorkArtworkParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1726,6 +1750,50 @@ func (siw *ServerInterfaceWrapper) GetWork(w http.ResponseWriter, r *http.Reques
 	handler.ServeHTTP(w, r)
 }
 
+// GetWorkArtwork operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkArtwork(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetWorkArtworkParams
+
+	// ------------- Optional query parameter "size" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "size", r.URL.Query(), &params.Size)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "size", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkArtwork(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1925,6 +1993,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/{id}", wrapper.GetWork)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/{id}/artwork", wrapper.GetWorkArtwork)
 	})
 
 	return r

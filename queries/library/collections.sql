@@ -70,6 +70,9 @@ ON CONFLICT (subject_type, subject_id, kind) DO UPDATE SET
 SELECT id, subject_type, subject_id, kind, source_url, cache_key, width, height, fetched_at
 FROM artwork WHERE subject_type = ? AND subject_id = ? ORDER BY kind;
 
+-- name: GetArtwork :one
+SELECT cache_key FROM artwork WHERE subject_type = ? AND subject_id = ? AND kind = ?;
+
 -- Cover art attaches to the work (subject_type='work'), but Cover Art Archive is
 -- queried by release (edition) MBID -- any refined (kind != 'unknown') edition
 -- with one is a usable source. is_default is never set to 1 anywhere in this

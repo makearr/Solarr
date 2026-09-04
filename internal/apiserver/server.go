@@ -17,6 +17,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/apiserver/gen"
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/events"
+	"github.com/makearr/MediaNexus/internal/fsx"
 	"github.com/makearr/MediaNexus/internal/jobs"
 )
 
@@ -73,6 +74,13 @@ type Config struct {
 	// Unidentified lists F29's manual identification queue. Optional: without
 	// it, ListUnidentified answers 503.
 	Unidentified UnidentifiedReader
+	// Artwork reads a work's cached cover art. Optional: without it,
+	// GetWorkArtwork answers 503.
+	Artwork ArtworkReader
+	// FS and ImagesDir locate the on-disk cover art cache ArtworkJob writes to.
+	// Required together with Artwork -- meaningless alone.
+	FS        fsx.FS
+	ImagesDir string
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -98,6 +106,9 @@ type Server struct {
 	workDetail   WorkDetailReader
 	search       SearchReader
 	unidentified UnidentifiedReader
+	artwork      ArtworkReader
+	fsys         fsx.FS
+	imagesDir    string
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -135,6 +146,9 @@ func New(config Config) (*Server, error) {
 		workDetail:   config.WorkDetail,
 		search:       config.Search,
 		unidentified: config.Unidentified,
+		artwork:      config.Artwork,
+		fsys:         config.FS,
+		imagesDir:    config.ImagesDir,
 		address:      net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -172,6 +186,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/jobs", server.routeListJobs)
 			secured.Get("/works", server.routeListWorks)
 			secured.Get("/works/{id}", server.routeGetWork)
+			secured.Get("/works/{id}/artwork", server.routeGetWorkArtwork)
 			secured.Get("/library/unidentified", server.routeListUnidentified)
 			secured.Get("/search", server.routeSearch)
 			secured.Post("/score/simulate", server.SimulateScore)

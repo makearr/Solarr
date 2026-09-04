@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { CoverArt } from "./CoverArt";
 
 type Edition = components["schemas"]["Edition"];
 type WorkPart = components["schemas"]["WorkPart"];
@@ -36,12 +37,20 @@ export function WorkDetail() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
-        <header className="flex flex-col gap-1">
-          <h1 className="text-lg font-semibold">{work.title}</h1>
-          <p className="text-sm text-ink-muted">
-            {work.media_type}
-            {work.year ? ` · ${work.year}` : ""}
-          </p>
+        <header className="flex items-start gap-4">
+          <CoverArt
+            workId={work.id}
+            title={work.title}
+            size="full"
+            className="h-40 w-40 shrink-0 rounded-lg object-cover"
+          />
+          <div className="flex flex-col gap-1 pt-1">
+            <h1 className="text-lg font-semibold">{work.title}</h1>
+            <p className="text-sm text-ink-muted">
+              {work.media_type}
+              {work.year ? ` · ${work.year}` : ""}
+            </p>
+          </div>
         </header>
 
         {work.external_ids.length > 0 && (

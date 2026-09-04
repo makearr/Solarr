@@ -186,6 +186,23 @@ func (q *Queries) EnqueueReady(ctx context.Context, arg EnqueueReadyParams) erro
 	return err
 }
 
+const getArtwork = `-- name: GetArtwork :one
+SELECT cache_key FROM artwork WHERE subject_type = ? AND subject_id = ? AND kind = ?
+`
+
+type GetArtworkParams struct {
+	SubjectType string
+	SubjectID   int64
+	Kind        string
+}
+
+func (q *Queries) GetArtwork(ctx context.Context, arg GetArtworkParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, getArtwork, arg.SubjectType, arg.SubjectID, arg.Kind)
+	var cache_key string
+	err := row.Scan(&cache_key)
+	return cache_key, err
+}
+
 const getGroupReputation = `-- name: GetGroupReputation :one
 SELECT release_group, samples, raw_success, bounded_success, corruption_rate,
        mislabel_rate, last_observed_at, updated_at

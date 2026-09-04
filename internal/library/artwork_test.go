@@ -84,6 +84,41 @@ func TestNeedingArtwork_ExcludesAPlaceholderEdition(t *testing.T) {
 	}
 }
 
+func TestGetForWork_NotFoundWhenNoCoverIsRecorded(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	artworks := library.NewArtworks(opened)
+	workID := refineWithReleaseMBID(t, identity, "rg-artwork-4", "release-artwork-4")
+
+	got, err := artworks.GetForWork(t.Context(), workID)
+	if err != nil {
+		t.Fatalf("GetForWork: %v", err)
+	}
+	if got.Found {
+		t.Errorf("GetForWork = %+v, want Found=false before ArtworkJob has recorded anything", got)
+	}
+}
+
+func TestGetForWork_AnswersTheRecordedCacheKey(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	artworks := library.NewArtworks(opened)
+	workID := refineWithReleaseMBID(t, identity, "rg-artwork-5", "release-artwork-5")
+
+	if err := artworks.Record(t.Context(), workID, "https://example.test/cover.jpg",
+		"work-artwork-5-cover", 1000, 1000, firstSeen.Unix()); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	got, err := artworks.GetForWork(t.Context(), workID)
+	if err != nil {
+		t.Fatalf("GetForWork: %v", err)
+	}
+	if !got.Found || got.CacheKey != "work-artwork-5-cover" {
+		t.Errorf("GetForWork = %+v, want the recorded cache key", got)
+	}
+}
+
 func TestRecord_RemovesTheWorkFromNeedingArtwork(t *testing.T) {
 	opened, _ := newLibrary(t)
 	identity := library.NewIdentity(opened)

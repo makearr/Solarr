@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/makearr/MediaNexus/internal/store"
@@ -42,6 +43,39 @@ func (a Artworks) NeedingArtwork(ctx context.Context, pageSize int64) ([]Artwork
 		candidates[i] = ArtworkCandidate{WorkID: row.WorkID, ReleaseMBID: row.ReleaseMbid}
 	}
 	return candidates, nil
+}
+
+// WorkArtwork is what a caller needs to serve a work's cover art file itself:
+// the cache key ArtworkJob wrote it under, and the root folders it must check
+// the caller can see (the same ADR-27 visibility GetWorkDetail already applies,
+// reused here rather than requiring a full work-detail fetch just to serve an
+// image).
+type WorkArtwork struct {
+	CacheKey      string
+	Found         bool
+	RootFolderIDs []int64
+}
+
+// GetForWork answers a work's recorded cover art, if any. Found is false (not
+// an error) when the work has no cover recorded yet -- the common case for a
+// work still waiting on ArtworkJob, not a failure.
+func (a Artworks) GetForWork(ctx context.Context, workID int64) (WorkArtwork, error) {
+	queries := librarydb.New(a.store.Read())
+	rootFolderIDs, err := queries.ListRootFoldersForWork(ctx, workID)
+	if err != nil {
+		return WorkArtwork{}, fmt.Errorf("library: root folders for work %d: %w", workID, err)
+	}
+
+	cacheKey, err := queries.GetArtwork(ctx, librarydb.GetArtworkParams{
+		SubjectType: "work", SubjectID: workID, Kind: artworkKindCover,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return WorkArtwork{RootFolderIDs: rootFolderIDs}, nil
+	}
+	if err != nil {
+		return WorkArtwork{}, fmt.Errorf("library: artwork for work %d: %w", workID, err)
+	}
+	return WorkArtwork{CacheKey: cacheKey, Found: true, RootFolderIDs: rootFolderIDs}, nil
 }
 
 // Record upserts the cover art row for a work (ADR-2: the row is persistent, the

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"path/filepath"
 
+	"github.com/makearr/MediaNexus/internal/apiserver"
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/httpx"
 	"github.com/makearr/MediaNexus/internal/jobs"
@@ -12,6 +13,19 @@ import (
 	"github.com/makearr/MediaNexus/internal/music"
 	"github.com/makearr/MediaNexus/internal/musicbrainz"
 )
+
+// artworkAdapter satisfies apiserver.ArtworkReader over library.Artworks.
+type artworkAdapter struct{ artworks library.Artworks }
+
+func (a artworkAdapter) GetWorkArtwork(ctx context.Context, workID int64) (apiserver.WorkArtworkRow, error) {
+	found, err := a.artworks.GetForWork(ctx, workID)
+	if err != nil {
+		return apiserver.WorkArtworkRow{}, err
+	}
+	return apiserver.WorkArtworkRow{
+		CacheKey: found.CacheKey, Found: found.Found, RootFolderIDs: found.RootFolderIDs,
+	}, nil
+}
 
 // coverArtBaseURL is fixed, not configurable: unlike MusicBrainz (ADR-29's proxy
 // vs direct choice), Cover Art Archive has no alternative endpoint or auth to
