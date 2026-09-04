@@ -3,6 +3,11 @@
 Build numbers advance on each successful image build; see
 `documentation/versioning.md`.
 
+## 0.0.19 — 2026-09-04
+
+- Wire the measured half of ADR-39 attributes (todo 4.2)
+
+
 ## 0.0.18 — 2026-09-04
 
 - Port Lidarr's release-name parser and quality vocabulary (ADR-18, todo 4.1)
