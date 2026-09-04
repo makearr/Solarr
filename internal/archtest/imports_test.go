@@ -82,6 +82,10 @@ var allowedInternalImports = map[string][]string{
 	// Section 21.6's resize-and-encode step: pure image processing (stdlib image
 	// package plus a pure-Go WebP encoder dependency), no I/O of its own.
 	"internal/artwork": {},
+	// Section 11.8's path template compiler/renderer: parsing and string
+	// building only, no I/O of its own. fsx is the one dependency, for the
+	// ADR-14 sanitiser choke point every rendered component passes through.
+	"internal/naming": {"internal/fsx"},
 	// The music media type, direct-wired until stage 9 extracts it as a plugin. Its
 	// scan.Consumer needs the sweep's own types (scan), root folder paths (settings),
 	// the filesystem seam for the quick hash (fsx) and an injected clock (ADR-17) --
@@ -91,8 +95,8 @@ var allowedInternalImports = map[string][]string{
 	"internal/music": {
 		"internal/artwork", "internal/clock", "internal/fsx", "internal/httpx",
 		"internal/jobs", "internal/library", "internal/match", "internal/mediatool",
-		"internal/model", "internal/musicbrainz", "internal/parse", "internal/scan",
-		"internal/settings", "internal/wikidata",
+		"internal/model", "internal/musicbrainz", "internal/naming", "internal/parse",
+		"internal/scan", "internal/settings", "internal/wikidata",
 	},
 	"internal/paginate": {},
 	// The section 10.4 sweep: a walk over the filesystem seam and nothing else.
