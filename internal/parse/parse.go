@@ -55,6 +55,13 @@ var (
 	sampleRateRe = regexp.MustCompile(`^\d+(\.\d+)?khz$`)
 	bracketRe    = regexp.MustCompile(`\(([^()]*)\)|\[([^\[\]]*)\]|\{([^{}]*)\}`)
 	splitDashRe  = regexp.MustCompile(`\s+-\s+`)
+	// dashRunRe collapses two or more dashes left adjacent by noise-bracket
+	// removal (a bracket whose own contents contain a dash, e.g. "[WEB-AAC]",
+	// leaves "Love-" + " " + "-" + " " + "-TDS" behind) into one -- otherwise
+	// the gap reads as the human " - " artist/album separator and corrupts
+	// the split, the same class of bug the WEBFLAC-token decision below guards
+	// against, found this time against a real download-folder release name.
+	dashRunRe = regexp.MustCompile(`(?:\s*-\s*){2,}`)
 	// bracketTokenRe splits bracket contents on any separator scene names pack
 	// into one bracket ("[2007/MP3/V0(VBR)]", "[Mp3~Kbps]") -- not just whitespace.
 	bracketTokenRe = regexp.MustCompile(`[/~(),-]+`)
@@ -66,11 +73,21 @@ var (
 // conventions, not copied from any single upstream source (see ATTRIBUTION.md).
 var bareBitrates = map[string]int{"128": 128, "160": 160, "192": 192, "224": 224, "256": 256, "320": 320}
 
-var losslessFormats = map[string]bool{"flac": true, "alac": true, "ape": true, "wav": true}
-var lossyFormats = map[string]bool{"mp3": true, "aac": true, "m4a": true, "ogg": true, "opus": true, "wma": true}
-var sourceWords = map[string]bool{
-	"cd": true, "web": true, "vinyl": true, "cassette": true, "sacd": true,
-	"cdrip": true, "lp": true,
+// losslessFormats and lossyFormats map a recognised codec token to its
+// canonical name -- "tr24" is a scene alias for FLAC (Lidarr's CodecRegex
+// treats it identically), so it aliases rather than storing "tr24" literally.
+var losslessFormats = map[string]string{"flac": "flac", "alac": "alac", "ape": "ape", "wav": "wav", "tr24": "flac"}
+var lossyFormats = map[string]string{"mp3": "mp3", "aac": "aac", "m4a": "m4a", "ogg": "ogg", "opus": "opus", "wma": "wma"}
+
+// sourceWords maps a recognised source token to its canonical value -- most
+// map to themselves, but scene abbreviations found against this project's own
+// real download folder (ADR-18 corpus growth, 2026-09-04) alias to the same
+// canonical source a spelled-out release would use: "VLS" (Vinyl Single) to
+// "vinyl", "CDM"/"CDS" (CD Maxi/Single) to "cd".
+var sourceWords = map[string]string{
+	"cd": "cd", "web": "web", "vinyl": "vinyl", "cassette": "cassette",
+	"sacd": "sacd", "cdrip": "cdrip", "lp": "lp",
+	"vls": "vinyl", "cdm": "cd", "cds": "cd",
 }
 
 // editionWords mark a bracket or segment as noise to strip, not part of the
@@ -83,6 +100,10 @@ var editionWords = map[string]bool{
 	"album": true, "albums": true, "single": true, "ep": true, "promo": true,
 	"anniversary": true, "bonus": true, "expanded": true, "itunes": true,
 	"lossless": true, "tracks": true,
+	// Found missing against this project's own real download folder --
+	// "Limited Edition" and "Legacy Edition" are as common as "Deluxe
+	// Edition" but were only ever half-recognised (the "edition" half).
+	"limited": true, "legacy": true, "collectors": true, "collector's": true,
 }
 
 // creditPrefixes mark a collaborator credit, stripped the same way as an edition
@@ -105,11 +126,34 @@ func collapseSpaces(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-// Parse decides what a release name identifies and claims about itself.
+// Parse decides what a release name identifies and claims about itself. The
+// pipeline order mirrors Lidarr's own ParseAlbumTitle (ADR-18's port): reject
+// outright hashed junk, remove the file extension, strip the media-type-
+// independent noise regexes, normalise an embedded air date, extract the
+// release group from the (still uncleaned) release title, then run this
+// project's own artist/album segmentation -- kept because it is measurably
+// more accurate than Lidarr's literal ReportAlbumTitleRegex cascade on real
+// scene names (ATTRIBUTION.md records why).
 func Parse(title string) Result {
+	releaseTitle := removeFileExtension(title)
+	if isHashedRelease(releaseTitle) {
+		return Result{Confidence: 0, Unparsed: []string{releaseTitle}}
+	}
+
+	group := extractReleaseGroup(stripArtistPrefixForGroup(releaseTitle))
+	properRepack := isProperRepack(releaseTitle)
+
+	simple := simpleTitleRe.ReplaceAllString(releaseTitle, "")
+	simple = websitePrefixRe.ReplaceAllString(simple, "")
+	simple = websitePostfixRe.ReplaceAllString(simple, "")
+	simple = cleanTorrentSuffixRe.ReplaceAllString(simple, "")
+	simple = normalizeAirDate(simple)
+	simple = normalizeSixDigitAirDate(simple)
+
 	claims := &claimSet{}
 
-	core := extractBrackets(title, claims)
+	core := extractBrackets(simple, group, claims)
+	core = dashRunRe.ReplaceAllString(core, "-")
 	core = strings.TrimSpace(strings.ReplaceAll(core, "_", " "))
 
 	var artist string
@@ -125,7 +169,7 @@ func Parse(title string) Result {
 	}
 
 	artist = collapseSpaces(artist)
-	album := collapseSpaces(resolveAlbum(albumSegments, claims))
+	album := collapseSpaces(resolveAlbum(albumSegments, group, claims))
 
 	identity := Identity{Artist: artist, Album: album, Year: claims.year, YearEnd: claims.yearEnd}
 	if variousArtistsNames[strings.ToLower(strings.TrimSpace(artist))] {
@@ -138,8 +182,8 @@ func Parse(title string) Result {
 
 	attributes := model.Attributes{
 		Format: claims.format, Lossless: claims.lossless, BitrateKbps: claims.bitrateKbps,
-		Source: claims.source, Edition: claims.edition, ReleaseGroup: claims.releaseGroup,
-		Discs: claims.discs,
+		Source: claims.source, Edition: claims.edition, ReleaseGroup: group,
+		Discs: claims.discs, BitDepth: claims.bitDepth, ProperRepack: properRepack,
 	}
 
 	return Result{
@@ -151,19 +195,24 @@ func Parse(title string) Result {
 
 // claimSet accumulates what bracket, segment and tail-token classification found.
 type claimSet struct {
-	year, yearEnd, bitrateKbps, discs int
-	format, source, edition           string
-	releaseGroup                      string
-	lossless                          bool
-	unparsed                          []string
+	year, yearEnd, bitrateKbps, discs, bitDepth int
+	format, source, edition                     string
+	lossless                                    bool
+	unparsed                                    []string
 }
 
 // extractBrackets removes every (...)/[...]/{...} group that classifies as noise
-// (edition marker, credit, technical claim); a group that classifies as neither is
-// left in place, since it is plausibly part of the title itself (e.g. "(Skit)").
-func extractBrackets(title string, claims *claimSet) string {
+// (edition marker, credit, technical claim, or the release group itself --
+// e.g. a real "[PMEDIA]" tag, found redundantly surviving into the album title
+// even once correctly extracted as the group elsewhere); a group that
+// classifies as none of those is left in place, since it is plausibly part of
+// the title itself (e.g. "(Skit)").
+func extractBrackets(title, group string, claims *claimSet) string {
 	return bracketRe.ReplaceAllStringFunc(title, func(match string) string {
 		inner := match[1 : len(match)-1]
+		if group != "" && strings.EqualFold(strings.TrimSpace(inner), group) {
+			return " "
+		}
 		if isNoise(inner, claims) {
 			return " "
 		}
@@ -229,15 +278,28 @@ func splitUnspacedDash(s string) []string {
 	return strings.Split(s, "-")
 }
 
-// resolveAlbum turns the segments after the artist into an album title.
-// Whole-phrase segment noise checking only applies once there is more than one
-// segment: a single, unsplit remainder is exactly the case stripTrailingTokens
-// exists for (a title followed by space-separated technical words), and
-// segment-level isNoise's substring matching is unsound run directly against an
-// arbitrary title phrase -- "Random Album Title" contains "album".
-func resolveAlbum(segments []string, claims *claimSet) string {
+// resolveAlbum turns the segments after the artist into an album title. group
+// is the release group already extracted by the ADR-18 port's
+// extractReleaseGroup, from the uncleaned release title -- passed in so
+// stripNoiseSegments can recognise and drop it by value instead of guessing at
+// segment level (see its own doc comment for why that guess used to disagree
+// with the real port on an ambiguous case). Whole-phrase segment noise
+// checking only applies once there is more than one segment: a single,
+// unsplit remainder is exactly the case stripTrailingTokens exists for (a
+// title followed by space-separated technical words), and segment-level
+// isNoise's substring matching is unsound run directly against an arbitrary
+// title phrase -- "Random Album Title" contains "album". A lone remainder is
+// first checked for a plain-dash scene-tag tail (findUnspacedTagRun) glued on
+// after the artist was already split off by " - ", e.g. an EAN-barcoded WEB
+// release ("Title-5021732472793-WEB-2024-Group").
+func resolveAlbum(segments []string, group string, claims *claimSet) string {
+	if len(segments) == 1 {
+		if head, tail, ok := findUnspacedTagRun(segments[0]); ok {
+			segments = append([]string{head}, tail...)
+		}
+	}
 	if len(segments) > 1 {
-		segments = stripNoiseSegments(segments, claims)
+		segments = stripNoiseSegments(segments, group, claims)
 		// "Artist-Year-Album-Group" puts the year right after the artist, not
 		// at the end -- the only technical field this codebase has seen lead
 		// rather than trail, so it is the only one checked at the front.
@@ -250,61 +312,119 @@ func resolveAlbum(segments []string, claims *claimSet) string {
 }
 
 // stripNoiseSegments drops whole trailing segments that are entirely noise (a
-// technical claim or an edition marker), working from the end, and stops at the
-// first segment that is genuinely part of the title. The true last field in a
-// scene name is usually the release group, which by definition matches no
-// vocabulary of its own -- so it is only recognised by looking one segment
-// further in: if the segment beside it does carry a real claim, the group tag is
-// real evidence too, the same context-justified shape stripTrailingTokens uses
-// for a trailing debris word.
-func stripNoiseSegments(segments []string, claims *claimSet) []string {
+// technical claim or an edition marker), working from the end, and stops at
+// the first segment that is genuinely part of the title. The true last field
+// in a scene name is usually the release group: rather than guess at it here
+// (the previous "does the segment beside it carry a real claim" heuristic
+// disagreed with the actual Lidarr port on "Gotabam Bih-2007-The Sebitikoda
+// Hopin-MEM" vs "Gotabam Bih-The Sebitikoda Hopin-2007-FTD" -- ATTRIBUTION.md),
+// it is dropped by exact match against group, the value extractReleaseGroup
+// already computed from the uncleaned title.
+// stripNoiseSegments works from the end, one whole dash segment at a time:
+// each is run through stripTrailingTokens' own word-level trim, and a segment
+// that trims to nothing is noise in its entirety and dropped so the scan can
+// continue into the one before it. The first segment that trims to something
+// non-empty is the real title boundary -- its trimmed form replaces it, and
+// the scan stops there, since everything before it is assumed to be genuine
+// title content (a segment can be "Live At Begonobavuni Setesevug September
+// 20 1968", where only the trailing "1968" is a claim; word-level trimming
+// keeps the rest instead of discarding the whole segment for one embedded
+// year, the bug a whole-segment any-word-matches rule had).
+func stripNoiseSegments(segments []string, group string, claims *claimSet) []string {
 	end := len(segments)
-	if end >= 2 && claims.releaseGroup == "" {
-		last := strings.TrimSpace(segments[end-1])
-		prior := strings.TrimSpace(segments[end-2])
-		if !isNoise(last, &claimSet{}) && isNoise(prior, &claimSet{}) && isPlausibleGroupTag(last) {
-			claims.releaseGroup = last
+	if end >= 1 && group != "" {
+		// The group is expected to be this segment's own first word --
+		// EqualFold on the whole segment missed "ENRiCH iNT" ("iNT" marking
+		// an internal/scene-only release, not part of the group itself),
+		// found against this project's own real download folder.
+		lastWords := strings.Fields(strings.TrimSpace(segments[end-1]))
+		if len(lastWords) > 0 && strings.EqualFold(lastWords[0], group) {
 			end--
 		}
 	}
 	for end > 0 {
-		if !isNoise(strings.TrimSpace(segments[end-1]), claims) {
-			break
+		trimmed := stripTrailingTokens(strings.TrimSpace(segments[end-1]), claims)
+		if trimmed != "" {
+			return append(append([]string{}, segments[:end-1]...), trimmed)
 		}
 		end--
 	}
 	return segments[:end]
 }
 
-// stripTrailingTokens removes recognised technical words from the end of the
-// album string in two passes: a single context-justified debris word (a trailing
-// token that means nothing on its own but directly follows one that does, e.g.
-// "... 192kbps RIP" -- RIP is dropped because 192kbps is real evidence beside
-// it), then a contiguous vocabulary strip from the new end. Unlike
-// stripNoiseSegments, this never guesses a release group -- word-level debris is
-// too easily a real title word for that heuristic to be safe here.
+// stripTrailingTokens removes recognised technical and edition words from the
+// end of the album string in two passes: a single context-justified debris
+// word (a trailing token that means nothing on its own but directly follows
+// one that does, e.g. "... 192kbps RIP" -- RIP is dropped because 192kbps is
+// real evidence beside it), then a contiguous vocabulary strip from the new
+// end. Unlike group extraction, this never guesses a release group --
+// word-level debris is too easily a real title word for that heuristic to be
+// safe here.
 func stripTrailingTokens(s string, claims *claimSet) string {
 	words := strings.Fields(s)
 	if len(words) >= 2 {
 		last := strings.ToLower(strings.Trim(words[len(words)-1], ",."))
 		secondLast := strings.ToLower(strings.Trim(words[len(words)-2], ",."))
-		if !isVocabWord(last) && isVocabWord(secondLast) && isPlausibleGroupTag(words[len(words)-1]) {
+		if !isVocabWord(last) && isStrictVocabWord(secondLast) && isPlausibleGroupTag(words[len(words)-1]) {
 			words = words[:len(words)-1]
 		}
 	}
 
 	end := len(words)
+	recognizedAny := false
+	var trimmedEdition []string // collected back-to-front, reversed below
 	for end > 0 {
 		field := strings.ToLower(strings.Trim(words[end-1], ",."))
+		if editionWords[field] {
+			trimmedEdition = append(trimmedEdition, field)
+			end--
+			recognizedAny = true
+			continue
+		}
 		if !claimField(field, claims) {
 			break
 		}
 		end--
+		recognizedAny = true
+	}
+	// A short digit-fused-with-letters leftover beside something already
+	// recognised ("12INCH" beside "VINYL", found against this project's own
+	// real library) is a technical descriptor too, not title prose -- but
+	// only once real evidence already justified trimming this phrase at all,
+	// so an unrelated segment with nothing recognised is left untouched.
+	for recognizedAny && end > 0 {
+		field := strings.ToLower(strings.Trim(words[end-1], ",."))
+		if !compoundTechnicalTokenRe.MatchString(field) {
+			break
+		}
+		end--
+	}
+	if len(trimmedEdition) > 0 && claims.edition == "" {
+		for i, j := 0, len(trimmedEdition)-1; i < j; i, j = i+1, j-1 {
+			trimmedEdition[i], trimmedEdition[j] = trimmedEdition[j], trimmedEdition[i]
+		}
+		claims.edition = strings.Join(trimmedEdition, " ")
 	}
 	return strings.TrimSpace(strings.Join(words[:end], " "))
 }
 
+var compoundTechnicalTokenRe = regexp.MustCompile(`(?i)^\d+[a-z]+$`)
+
+// isVocabWord reports whether a single lowercased word is recognised
+// vocabulary -- either a technical claim (claimField) or an edition marker.
 func isVocabWord(field string) bool {
+	if editionWords[field] {
+		return true
+	}
+	return isStrictVocabWord(field)
+}
+
+// isStrictVocabWord checks only claimField's technical vocabulary, excluding
+// edition words -- used by the debris-word heuristic, where a common English
+// word like "album" or "single" beside an unrecognised token is nowhere near
+// as strong evidence as an actual bitrate or year, and treating it as such
+// misread "Random Album Title" as debris after "Album" (ATTRIBUTION.md).
+func isStrictVocabWord(field string) bool {
 	probe := &claimSet{}
 	return claimField(field, probe)
 }
@@ -328,14 +448,14 @@ func claimField(field string, claims *claimSet) bool {
 	switch {
 	case field == "":
 		return true // an empty split artefact, not a real token
-	case losslessFormats[field]:
-		claims.format, claims.lossless = field, true
+	case losslessFormats[field] != "":
+		claims.format, claims.lossless = losslessFormats[field], true
 		return true
-	case lossyFormats[field]:
-		claims.format = field
+	case lossyFormats[field] != "":
+		claims.format = lossyFormats[field]
 		return true
-	case sourceWords[field]:
-		claims.source = field
+	case sourceWords[field] != "":
+		claims.source = sourceWords[field]
 		return true
 	case yearRangeRe.MatchString(field):
 		matches := yearRangeRe.FindStringSubmatch(field)
@@ -368,8 +488,17 @@ func claimField(field string, claims *claimSet) bool {
 		matches := discCountRe.FindStringSubmatch(field)
 		claims.discs, _ = strconv.Atoi(matches[1])
 		return true
-	case bitDepthRe.MatchString(field), sampleRateRe.MatchString(field):
-		// Recognised and consumed, not recorded -- see bitDepthRe's doc comment.
+	case bitDepthRe.MatchString(field):
+		matches := bitDepthRe.FindStringSubmatch(field)
+		claims.bitDepth, _ = strconv.Atoi(matches[1])
+		return true
+	case sampleRateRe.MatchString(field):
+		// Recognised and consumed, not recorded -- model.Attributes has no
+		// sample-rate field yet (todo 4.2's fuller Container/SampleRate split).
+		return true
+	case barcodeRe.MatchString(field):
+		// An EAN/UPC run: recognised and discarded, not recorded -- see
+		// barcodeRe's own doc comment in lidarr.go.
 		return true
 	default:
 		return false

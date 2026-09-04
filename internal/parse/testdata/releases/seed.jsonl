@@ -16,7 +16,7 @@
 {"input":"Vap.Edition-One.Love-CD-FLAC-2017-MrFlac","artist":"Vap.Edition","album":"One.Love","year":2017,"format":"flac","lossless":true,"source":"cd","release_group":"MrFlac","min_confidence":0.9}
 {"input":"Rokipefin-Us and Zomu-HOZ-2005-HOZ","artist":"Rokipefin","album":"Us and Zomu HOZ","year":2005,"release_group":"HOZ","min_confidence":0.9}
 {"input":"Nabise - Vohopes's Tivilute (1995) (FLAC Lossless)","artist":"Nabise","album":"Vohopes's Tivilute","year":1995,"format":"flac","lossless":true,"edition":"flac lossless","min_confidence":0.9}
-{"input":"Gotabam Bih-2007-The Sebitikoda Hopin-MEM","artist":"Gotabam Bih","album":"The Sebitikoda Hopin MEM","year":2007,"min_confidence":0.9}
+{"input":"Gotabam Bih-2007-The Sebitikoda Hopin-MEM","artist":"Gotabam Bih","album":"The Sebitikoda Hopin","year":2007,"release_group":"MEM","min_confidence":0.9}
 {"input":"Gotabam Bih-The Sebitikoda Hopin-2007-MEM","artist":"Gotabam Bih","album":"The Sebitikoda Hopin","year":2007,"release_group":"MEM","min_confidence":0.9}
 {"input":"Bovo Thugs-n-Sabedup - NAR5: The Pecet's Hevos (2010) [Album] [FLAC]","artist":"Bovo Thugs-n-Sabedup","album":"NAR5: The Pecet's Hevos","year":2010,"format":"flac","lossless":true,"edition":"album","min_confidence":0.9}
 {"input":"Vupuh of Vesetekepi (Deluxe Edition)","artist":"","album":"Vupuh of Vesetekepi","edition":"deluxe edition","min_confidence":0.1,"max_confidence":0.3}
@@ -31,7 +31,7 @@
 {"input":"SUKE - The Love Dutefofu 1998 2CD 192kbps RIP","artist":"SUKE","album":"The Love Dutefofu","year":1998,"bitrate_kbps":192,"discs":2,"min_confidence":0.9}
 {"input":"Gemu Codub Sa - Live Cimos Gulofip 2016 (2017) MP3 192kbps","artist":"Gemu Codub Sa","album":"Live Cimos Gulofip","year":2016,"year_end":2017,"format":"mp3","bitrate_kbps":192,"min_confidence":0.9}
 {"input":"Zos Mefarada - Studio Discography 1969-1982 (10 albums)(flac)","artist":"Zos Mefarada","album":"Discography","year":1969,"year_end":1982,"format":"flac","lossless":true,"edition":"10 albums","discography":true,"min_confidence":0.9}
-{"input":"Tulap Vinuma - Complete Discography [1989] [Anthology]","artist":"Tulap Vinuma","album":"Discography","year":1989,"discography":true,"min_confidence":0.9}
+{"input":"Tulap Vinuma - Complete Discography [1989] [Anthology]","artist":"Tulap Vinuma","album":"Discography","year":1989,"discography":true,"release_group":"Anthology","min_confidence":0.9}
 {"input":"(Bosav Pusob) Heci - Discography(46 CD) [1985 - 2015]","artist":"(Bosav Pusob) Heci","album":"Discography","year":1985,"year_end":2015,"source":"cd","discography":true,"min_confidence":0.9}
 {"input":"(Zotohizi Vurimuzufur Cese) [CD] Norok Somigef - From The Nunad - 2017, FLAC","artist":"(Zotohizi Vurimuzufur Cese) Norok Somigef","album":"From The Nunad","year":2017,"format":"flac","lossless":true,"source":"cd","min_confidence":0.9}
 {"input":"Zeracab - RizelAfacEsemud (Deluxe Edition) (2017) 320","artist":"Zeracab","album":"RizelAfacEsemud","year":2017,"bitrate_kbps":320,"edition":"deluxe edition","min_confidence":0.9}

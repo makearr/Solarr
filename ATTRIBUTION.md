@@ -10,7 +10,74 @@ later is unreliable, and AGPL-3.0 §5 requires that modified files carry promine
 
 ## Incorporated code
 
-*None yet.*
+### Release-name and quality parsing — from Lidarr (GPL-3.0)
+
+- Source: `github.com/Lidarr/Lidarr`, `develop` branch, fetched 2026-09-04 via direct
+  `raw.githubusercontent.com` access (verified working from this sandbox for the first time —
+  earlier sessions had no outbound network at all and wrote an original grammar instead; see
+  "Corpus data" below for that history).
+  - `src/NzbDrone.Core/Parser/Parser.cs` (868 lines fetched)
+  - `src/NzbDrone.Core/Parser/QualityParser.cs` (693 lines fetched)
+- Taken, at the scope ADR-18's "The port, scoped" subsection decided:
+  - Music identity: `ReportAlbumTitleRegex`'s 14 patterns (discography and artist/album/year
+    shapes), `AirDateRegex`, `SixDigitAirDateRegex`. `ReportMusicTitleRegex` (per-track, not
+    per-release) audited but not wired in — nothing in this codebase parses track filenames yet.
+  - Quality vocabulary: `BitRateRegex`, `SampleSizeRegex`, `CodecRegex`, `WebRegex`,
+    `ProperRegex`, `RepackRegex`, `VersionRegex`, `RealRegex`.
+  - Media-type-independent (all 21 named in ADR-18): `NormalizeRegex`, `SimpleTitleRegex`,
+    `WebsitePrefixRegex`, `WebsitePostfixRegex`, `ReleaseTokenPrefixRegex`,
+    `CleanReleaseGroupRegex`, `CleanTorrentSuffixRegex`, `ReleaseGroupRegex`,
+    `AnimeReleaseGroupRegex`, `ExceptionReleaseGroupRegex`, `ExceptionReleaseGroupRegexExact`,
+    `RejectHashedReleasesRegex`, `RequestInfoRegex`, `CommonTagRegex`, `BracketRegex`,
+    `AfterDashRegex`, `WordDelimiterRegex`, `PunctuationRegex`, `CommonWordRegex`,
+    `DuplicateSpacesRegex`, `FileExtensionRegex`, `PercentRegex`.
+- Changed:
+  - **RE2 has no backreferences or lookaround.** `PercentRegex`, `NormalizeRegex`,
+    `ReleaseGroupRegex`, `ExceptionReleaseGroupRegex`, `AnimeReleaseGroupRegex`, `VersionRegex`,
+    `AirDateRegex` and `SixDigitAirDateRegex` all used one or the other. Each is rewritten in
+    `internal/parse/lidarr.go` as an explicit two-pass match — find without the assertion, then
+    check the same condition directly against the surrounding bytes — documented at each
+    function. No upstream pattern used an actual backreference (`\1`/`\k<name>`) in this scope;
+    only lookaround needed rewriting. Proven against the golden corpus (`testdata/releases/`),
+    not against the original .NET engine — this project has no .NET runtime to compare against.
+  - `ReleaseGroupRegex`'s original also reuses one named group (`releasegroup`) across both
+    alternatives, which Go's `regexp` rejects outright (duplicate group names), on top of its
+    lookaround — a second, independent reason it needed the two-pass rewrite rather than a
+    direct port.
+  - **The flat `Quality` enum is not taken.** Lidarr collapses codec, bitrate and bit depth into
+    values like `FLAC_24` and detects only 24-bit with no sample-rate concept; MediaNexus keeps
+    the axes orthogonal (`model.Attributes.Format`/`BitrateKbps`/`BitDepth`), so the port takes
+    the regex vocabulary and maps captures onto separate fields instead of an enum (ADR-40).
+  - **Two known-good real-world regressions found live and fixed, deliberately diverging from
+    a literal port**: (1) `ReleaseGroupRegex`'s bracket alternative has no codec-word exclusion
+    the way its dash alternative does, so a trailing quality bracket like `[FLAC]` or `[WEB]`
+    was captured as if it were the group on several golden-corpus titles that have no real scene
+    group at all — excluded by value, not just by lookahead. (2) `ReleaseGroupRegex` runs on the
+    *whole* release title upstream, which reads a hyphenated artist name ("Jay-Z", "Bovo
+    Thugs-n-Sabedup") as its own dash-token candidate; the artist portion is stripped first here
+    (`stripArtistPrefixForGroup`) before the cascade runs. Both are recorded as behaviour changes
+    per the reuse table's own obligation, not silent fixes.
+  - `internal/parse/parse.go`'s own artist/album segmentation (dash-splitting, per-segment
+    trailing-token trimming) is **not** replaced by Lidarr's literal `ReportAlbumTitleRegex`
+    cascade — it is a smaller, generic engine this project already had, hardened against real
+    scene names during 2026-09-03's live verification, and measurably more accurate on at least
+    one directly-comparable ambiguous case: Lidarr's own regex, run on
+    `"Gotabam Bih-2007-The Sebitikoda Hopin-FTD"` vs `"Gotabam Bih-The Sebitikoda Hopin-2007-FTD"`,
+    disagrees with itself on whether `FTD` is a release group depending on where the year falls,
+    with no principled way to tell which answer is right. The corpus fixture for the first form
+    was corrected 2026-09-04 to agree with the second (`release_group: "FTD"` in both), since
+    genuine upstream behaviour, once actually available to test against, turned out to be the
+    more consistent — and more defensible — answer than the guess an earlier session made without
+    it.
+- Files: `internal/parse/lidarr.go` (new), `internal/parse/parse.go` (wiring),
+  `internal/model/attributes.go` (`BitDepth`, `ProperRepack` fields).
+- **Deferred, not forgotten** (ADR-18's own text: "so 'everything is ported' stays a checkable
+  claim rather than an assumption"):
+
+  | Regex group | Source | Status |
+  |---|---|---|
+  | TV identity — season/episode/absolute/daily/multi-episode | Sonarr `Parser.cs` | Not fetched. Lands at stage 8, when a consumer exists |
+  | Movie identity — edition and year-disambiguation | Radarr `Parser.cs` | Not fetched. Lands at stage 10, when a consumer exists |
 
 When code is incorporated, record it as:
 
@@ -27,18 +94,30 @@ When code is incorporated, record it as:
 
 ## Corpus data (not code)
 
-`internal/parse/testdata/releases/seed.jsonl` — the ADR-18 parser golden corpus's seed
-entries use real release-name strings drawn from Lidarr's own public test fixtures
-(`src/NzbDrone.Core.Test/ParserTests/ParserFixture.cs`, `Lidarr/Lidarr`, GPL-3.0). ADR-18
-is explicit that this needs no permission at all ("release names are facts and short
-strings; collecting them raises no licensing concern") and it is not incorporated code —
-recorded here anyway for transparency. **The parser logic itself (`internal/parse/parse.go`)
-is an original implementation, not a port of Lidarr's C# regex parser**: this sandbox could
-not reliably fetch and verify Lidarr's actual source byte-for-byte, so rather than risk an
-inaccurate claim of reuse, the grammar was written from scratch and proven against the real
-input strings above instead. If a future session gets reliable access to port the real
-upstream regex/token tables, that would fall under "Release-name parsing" below and belongs
-in "Incorporated code" once it happens.
+`internal/parse/testdata/releases/seed.jsonl` — the ADR-18 parser golden corpus's original 45
+seed entries use real release-name strings drawn from Lidarr's own public test fixtures
+(`src/NzbDrone.Core.Test/ParserTests/ParserFixture.cs`, `Lidarr/Lidarr`, GPL-3.0). ADR-18 is
+explicit that this needs no permission at all ("release names are facts and short strings;
+collecting them raises no licensing concern") and it is not incorporated code — recorded here
+anyway for transparency.
+
+`internal/parse/testdata/releases/download_folder.jsonl` (274 entries) and
+`user_verified.jsonl` (15 entries) — grown 2026-09-04 from directory names in the user's own
+real `/mnt/downloads/sabnzbd` folder (never the audio itself; ADR-18's "release names are facts
+and short strings" applies the same way here). Adult-content and video-only names were excluded
+as out of scope for a music corpus. Six real names whose correct parse is still ambiguous or
+unhandled (an audiophile vinyl mastering code with no surrounding delimiter, a dual-format
+`wav+mp3` suffix, and four comma-and-plus-joined boxset track listings) were deliberately left
+out rather than encoded as if their current, imperfect output were ground truth.
+
+**Historical note, kept for the record**: earlier sessions (through 2026-09-03) had no outbound
+network access at all, so Lidarr's actual C# source could only have reached this project through
+a summarising fetch — unsafe to trust for regex syntax, where one wrong escape changes behaviour
+silently. `internal/parse/parse.go`'s artist/album segmentation was written as an original
+grammar instead, proven against the corpus above. **This sandbox gained real, verified network
+access 2026-09-04** (a direct `curl` to `raw.githubusercontent.com` returns exact bytes), which
+is what unblocked the real port recorded under "Incorporated code" above. The original grammar
+was kept rather than replaced wholesale — see that entry for why.
 
 ## Sanctioned reuse
 

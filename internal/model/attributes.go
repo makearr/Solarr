@@ -25,4 +25,11 @@ type Attributes struct {
 	ReleaseGroup string
 	// Discs is 0 for an unstated (implicitly single-disc) release.
 	Discs int
+	// BitDepth is 0 when unstated. ADR-18's parser port expands Lidarr's
+	// 24-bit-only detection to whatever depth the name actually claims.
+	BitDepth int
+	// ProperRepack mirrors media_attributes.proper_repack's measured-side
+	// namesake (ADR-39): the release name flags itself a corrected re-release
+	// ("PROPER", "REPACK", "REAL", or an explicit version bump).
+	ProperRepack bool
 }
