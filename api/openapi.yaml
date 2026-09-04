@@ -670,6 +670,47 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/bulk/monitor:
+    post:
+      operationId: bulkSetWorkMonitored
+      tags: [library]
+      summary: Monitor or unmonitor every work matching a selection (section 21.7).
+      description: >-
+        Selection is a query, never a list of ids fetched client-side: either
+        explicit ids, or the category currently being browsed plus excluded
+        ids ("select all matching" minus what the user deselected). preview:
+        true only counts what would be affected, changing nothing -- the
+        consequences preview section 21.7 requires before a bulk action
+        commits. A work outside every root folder the caller can read is
+        never matched, id or no id (ADR-27).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [monitored]
+              properties:
+                ids:
+                  type: array
+                  items: { type: integer, format: int64 }
+                  description: Explicit ids ("select all matching" was never used). Takes precedence over category_id/excluded_ids when non-empty.
+                category_id: { type: integer, format: int64 }
+                excluded_ids:
+                  type: array
+                  items: { type: integer, format: int64 }
+                monitored: { type: boolean }
+                preview: { type: boolean, default: false }
+      responses:
+        "200":
+          description: How many works matched (and, unless preview, were changed).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/artwork:
     parameters:
       - name: id
@@ -1433,6 +1474,13 @@ components:
         person_id: { type: integer, format: int64 }
         person_name: { type: string }
         role: { type: string, example: "artist" }
+
+    BulkResult:
+      type: object
+      description: How many rows a bulk action (section 21.7) matched, and, unless it was a preview, changed.
+      required: [count]
+      properties:
+        count: { type: integer, format: int64 }
 
     Wanted:
       type: object

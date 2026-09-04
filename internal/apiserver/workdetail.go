@@ -99,15 +99,22 @@ type WorkDetailRow struct {
 // 19.6). Defined here and implemented by the caller, same reasoning as
 // WorksReader's own doc comment.
 type WorksMonitor interface {
-	// SetWorkMonitored ensures the album-level SET item exists when
-	// monitored is true (creating it on first use), or unmonitors an
-	// existing one when false -- a no-op if none exists yet. Answers a
-	// missing work id with an error wrapping sql.ErrNoRows.
+	// SetWorkMonitored always ensures the album-level SET item exists
+	// (creating it on first use, monitored or not) and sets its monitored
+	// flag either way. Answers a missing work id with an error wrapping
+	// sql.ErrNoRows.
 	SetWorkMonitored(ctx context.Context, workID int64, monitored bool) (WantedRow, error)
 	// SetPartMonitored toggles one part's monitored flag and recomputes
 	// every album item over the work. Answers a missing work or part id
 	// with an error wrapping sql.ErrNoRows.
 	SetPartMonitored(ctx context.Context, workID, partID int64, monitored bool) error
+	// BulkSetMonitored is SetWorkMonitored over a selection (section 21.7):
+	// every work visible under rootFolderIDs whose id is in ids (when
+	// non-empty) or is not in excludedIDs otherwise. Always returns how
+	// many works matched; when preview is true nothing is changed.
+	BulkSetMonitored(
+		ctx context.Context, rootFolderIDs, ids, excludedIDs []int64, monitored, preview bool,
+	) (int64, error)
 }
 
 // routeGetWork parses the id path parameter, mirroring routeUser: a malformed
@@ -255,6 +262,45 @@ func (s *Server) SetPartMonitored(w http.ResponseWriter, r *http.Request, id, pa
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// BulkSetWorkMonitored is SetWorkMonitored over a selection (section 21.7):
+// "bulk selection is a query, never a list of ids". Visibility is enforced
+// by resolving rootFolderIDs from the caller's own access before the
+// selection is ever interpreted, the same visibleRootFolders call ListWorks
+// makes -- a work outside it is never matched, explicit id or not.
+func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.worksMonitor == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "monitoring is not available")
+		return
+	}
+
+	var body gen.BulkSetWorkMonitoredJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "the request body could not be read")
+		return
+	}
+
+	rootFolderIDs, err := s.visibleRootFolders(access, body.CategoryId)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+
+	count, err := s.worksMonitor.BulkSetMonitored(r.Context(), rootFolderIDs,
+		derefOr(body.Ids, nil), derefOr(body.ExcludedIds, nil), body.Monitored, derefOr(body.Preview, false))
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.BulkResult{Count: count})
 }
 
 // workVisible runs GetWork's own ADR-27 visibility check against id, writing

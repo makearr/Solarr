@@ -453,6 +453,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/bulk/monitor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Monitor or unmonitor every work matching a selection (section 21.7).
+         * @description Selection is a query, never a list of ids fetched client-side: either explicit ids, or the category currently being browsed plus excluded ids ("select all matching" minus what the user deselected). preview: true only counts what would be affected, changing nothing -- the consequences preview section 21.7 requires before a bulk action commits. A work outside every root folder the caller can read is never matched, id or no id (ADR-27).
+         */
+        post: operations["bulkSetWorkMonitored"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}/artwork": {
         parameters: {
             query?: never;
@@ -935,6 +955,11 @@ export interface components {
             person_name: string;
             /** @example artist */
             role: string;
+        };
+        /** @description How many rows a bulk action (section 21.7) matched, and, unless it was a preview, changed. */
+        BulkResult: {
+            /** Format: int64 */
+            count: number;
         };
         /** @description The work's own album-level SET desired_item (section 19.6) -- what makes "9 of 12 tracks" a fact rather than on_disk's coarse badge. */
         Wanted: {
@@ -1783,6 +1808,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    bulkSetWorkMonitored: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Explicit ids ("select all matching" was never used). Takes precedence over category_id/excluded_ids when non-empty. */
+                    ids?: number[];
+                    /** Format: int64 */
+                    category_id?: number;
+                    excluded_ids?: number[];
+                    monitored: boolean;
+                    /** @default false */
+                    preview?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description How many works matched (and, unless preview, were changed). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResult"];
+                };
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];

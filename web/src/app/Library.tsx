@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { Link } from "@tanstack/react-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import { ListGrid } from "@/list/ListGrid";
@@ -8,10 +9,38 @@ import { ListTable, type Column } from "@/list/ListTable";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
 import { useNarrow } from "@/list/useNarrow";
+import type { SelectionRequest } from "@/list/selection";
 import type { components } from "@/api/schema";
 import { CoverArt } from "./CoverArt";
 
 type Work = components["schemas"]["Work"];
+
+// The request body isn't a named schema component (it's inline in
+// openapi.yaml), so openapi-typescript has nothing to hang a name on --
+// spelled out directly rather than reached for through api.POST's own types.
+interface BulkMonitorBody {
+  ids?: number[];
+  category_id?: number;
+  excluded_ids?: number[];
+  monitored: boolean;
+  preview?: boolean;
+}
+
+// Selection is a query, never a fetched list of ids (section 21.7) -- the
+// request carries either explicit ids or the current filter plus what the
+// user deselected from "select all matching".
+function bulkBody(request: SelectionRequest, monitored: boolean, preview: boolean): BulkMonitorBody {
+  if (request.kind === "ids") {
+    return { ids: request.ids, monitored, preview };
+  }
+  const categoryId = request.filters.category_id;
+  return {
+    category_id: categoryId ? Number(categoryId) : undefined,
+    excluded_ids: request.excluded,
+    monitored,
+    preview,
+  };
+}
 type WorkSort = "title" | "year" | "added";
 
 // Title plus a year/media-type line, padding included.
@@ -107,6 +136,8 @@ export function Library() {
   const [view, setView] = useState<"table" | "grid">("table");
   const [visibleColumns, setVisibleColumns] = useState<OptionalColumn[]>(loadVisibleColumns);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [confirm, setConfirm] = useState<{ monitored: boolean; count: number } | null>(null);
+  const queryClient = useQueryClient();
 
   const narrow = useNarrow();
   const list = useLibraryList<Work>(
@@ -149,6 +180,40 @@ export function Library() {
     });
   };
 
+  // Preview first (section 21.7's consequences preview): "select all
+  // matching" never has a client-known count, so the real number a bulk
+  // action would touch has to come from the server before it commits.
+  const bulkPreview = useMutation({
+    mutationFn: async (monitored: boolean) => {
+      const request = list.selectionRequest;
+      if (!request) return null;
+      const { data, error } = await api.POST("/works/bulk/monitor", {
+        body: bulkBody(request, monitored, true),
+      });
+      if (error) throw error;
+      return data ?? null;
+    },
+    onSuccess: (result, monitored) => {
+      if (result) setConfirm({ monitored, count: result.count });
+    },
+  });
+
+  const bulkApply = useMutation({
+    mutationFn: async () => {
+      const request = list.selectionRequest;
+      if (!request || !confirm) return;
+      const { error } = await api.POST("/works/bulk/monitor", {
+        body: bulkBody(request, confirm.monitored, false),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setConfirm(null);
+      list.clearSelection();
+      void queryClient.invalidateQueries({ queryKey: ["works"] });
+    },
+  });
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
@@ -160,7 +225,30 @@ export function Library() {
               <span className="text-ink-muted">
                 {list.selectionCount === null ? "All matching" : `${list.selectionCount} selected`}
               </span>
-              <button type="button" onClick={list.clearSelection} className={quietButton}>
+              <button
+                type="button"
+                disabled={bulkPreview.isPending || bulkApply.isPending}
+                onClick={() => bulkPreview.mutate(true)}
+                className={quietButton}
+              >
+                Monitor
+              </button>
+              <button
+                type="button"
+                disabled={bulkPreview.isPending || bulkApply.isPending}
+                onClick={() => bulkPreview.mutate(false)}
+                className={quietButton}
+              >
+                Unmonitor
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirm(null);
+                  list.clearSelection();
+                }}
+                className={quietButton}
+              >
                 Clear
               </button>
             </>
@@ -199,6 +287,30 @@ export function Library() {
           </button>
         </div>
       </div>
+
+      {confirm && (
+        <div
+          className="flex shrink-0 items-center gap-3 border-b border-border-subtle
+                     bg-surface px-4 py-2 text-xs"
+        >
+          <span>
+            {confirm.monitored ? "Monitor" : "Unmonitor"} {confirm.count}{" "}
+            {confirm.count === 1 ? "work" : "works"}?
+          </span>
+          <button
+            type="button"
+            disabled={bulkApply.isPending}
+            onClick={() => bulkApply.mutate()}
+            className="rounded-md border border-current px-2 py-1 text-accent
+                       enabled:hover:bg-accent/10 disabled:cursor-default disabled:opacity-50"
+          >
+            {bulkApply.isPending ? "Applying…" : "Confirm"}
+          </button>
+          <button type="button" onClick={() => setConfirm(null)} className={quietButton}>
+            Cancel
+          </button>
+        </div>
+      )}
 
       <div className="min-h-0 flex-1">
         {list.isLoading && <Message>Loading the library…</Message>}

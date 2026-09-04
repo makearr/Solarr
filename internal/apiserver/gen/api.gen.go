@@ -187,6 +187,11 @@ type BuildInfo struct {
 	Version  string  `json:"version"`
 }
 
+// BulkResult How many rows a bulk action (section 21.7) matched, and, unless it was a preview, changed.
+type BulkResult struct {
+	Count int64 `json:"count"`
+}
+
 // Category defines model for Category.
 type Category struct {
 	Id int64 `json:"id"`
@@ -792,6 +797,17 @@ type ListWorksParamsSort string
 // ListWorksParamsDir defines parameters for ListWorks.
 type ListWorksParamsDir string
 
+// BulkSetWorkMonitoredJSONBody defines parameters for BulkSetWorkMonitored.
+type BulkSetWorkMonitoredJSONBody struct {
+	CategoryId  *int64   `json:"category_id,omitempty"`
+	ExcludedIds *[]int64 `json:"excluded_ids,omitempty"`
+
+	// Ids Explicit ids ("select all matching" was never used). Takes precedence over category_id/excluded_ids when non-empty.
+	Ids       *[]int64 `json:"ids,omitempty"`
+	Monitored bool     `json:"monitored"`
+	Preview   *bool    `json:"preview,omitempty"`
+}
+
 // GetWorkArtworkParams defines parameters for GetWorkArtwork.
 type GetWorkArtworkParams struct {
 	Size *GetWorkArtworkParamsSize `form:"size,omitempty" json:"size,omitempty"`
@@ -836,6 +852,9 @@ type UpdateUserJSONRequestBody UpdateUserJSONBody
 
 // SetUserAccessJSONRequestBody defines body for SetUserAccess for application/json ContentType.
 type SetUserAccessJSONRequestBody SetUserAccessJSONBody
+
+// BulkSetWorkMonitoredJSONRequestBody defines body for BulkSetWorkMonitored for application/json ContentType.
+type BulkSetWorkMonitoredJSONRequestBody BulkSetWorkMonitoredJSONBody
 
 // SetWorkMonitoredJSONRequestBody defines body for SetWorkMonitored for application/json ContentType.
 type SetWorkMonitoredJSONRequestBody SetWorkMonitoredJSONBody
@@ -938,6 +957,9 @@ type ServerInterface interface {
 	// A page of the library the caller may see (ADR-27).
 	// (GET /works)
 	ListWorks(w http.ResponseWriter, r *http.Request, params ListWorksParams)
+	// Monitor or unmonitor every work matching a selection (section 21.7).
+	// (POST /works/bulk/monitor)
+	BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request)
 	// A work's full structural detail: its own fields, editions, parts, and every level's external ids.
 	// (GET /works/{id})
 	GetWork(w http.ResponseWriter, r *http.Request, id int64)
@@ -1139,6 +1161,12 @@ func (_ Unimplemented) SetUserAccess(w http.ResponseWriter, r *http.Request, id 
 // A page of the library the caller may see (ADR-27).
 // (GET /works)
 func (_ Unimplemented) ListWorks(w http.ResponseWriter, r *http.Request, params ListWorksParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Monitor or unmonitor every work matching a selection (section 21.7).
+// (POST /works/bulk/monitor)
+func (_ Unimplemented) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2058,6 +2086,28 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// BulkSetWorkMonitored operation middleware
+func (siw *ServerInterfaceWrapper) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BulkSetWorkMonitored(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetWork operation middleware
 func (siw *ServerInterfaceWrapper) GetWork(w http.ResponseWriter, r *http.Request) {
 
@@ -2415,6 +2465,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works", wrapper.ListWorks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/bulk/monitor", wrapper.BulkSetWorkMonitored)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/{id}", wrapper.GetWork)

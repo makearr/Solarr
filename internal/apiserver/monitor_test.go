@@ -22,6 +22,15 @@ type fakeWorksMonitor struct {
 	lastPartMonitored *bool
 	setWorkCalls      int
 	setPartCalls      int
+
+	bulkCount             int64
+	bulkErr               error
+	lastBulkRootFolderIDs []int64
+	lastBulkIDs           []int64
+	lastBulkExcludedIDs   []int64
+	lastBulkMonitored     *bool
+	lastBulkPreview       *bool
+	bulkCalls             int
 }
 
 func (f *fakeWorksMonitor) SetWorkMonitored(_ context.Context, _ int64, monitored bool) (apiserver.WantedRow, error) {
@@ -38,6 +47,21 @@ func (f *fakeWorksMonitor) SetPartMonitored(_ context.Context, _, partID int64, 
 	f.lastPartID = partID
 	f.lastPartMonitored = &monitored
 	return f.err
+}
+
+func (f *fakeWorksMonitor) BulkSetMonitored(
+	_ context.Context, rootFolderIDs, ids, excludedIDs []int64, monitored, preview bool,
+) (int64, error) {
+	f.bulkCalls++
+	f.lastBulkRootFolderIDs = rootFolderIDs
+	f.lastBulkIDs = ids
+	f.lastBulkExcludedIDs = excludedIDs
+	f.lastBulkMonitored = &monitored
+	f.lastBulkPreview = &preview
+	if f.bulkErr != nil {
+		return 0, f.bulkErr
+	}
+	return f.bulkCount, nil
 }
 
 func visibleWorksFixture(t *testing.T) (worksFixture, []*http.Cookie) {
@@ -152,5 +176,80 @@ func TestSetPartMonitored_MissingPartAnswers404(t *testing.T) {
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/1/parts/999/monitor", `{"monitored":false}`))
 	if recorder.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", recorder.Code)
+	}
+}
+
+func TestBulkSetWorkMonitored_ResolvesCategoryAndForwardsTheSelection(t *testing.T) {
+	fixture, cookies := visibleWorksFixture(t)
+	fixture.worksMonitor.bulkCount = 7
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/bulk/monitor",
+		`{"category_id":1,"excluded_ids":[3,4],"monitored":true}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+
+	if fixture.worksMonitor.bulkCalls != 1 {
+		t.Fatalf("bulkCalls = %d, want 1", fixture.worksMonitor.bulkCalls)
+	}
+	if len(fixture.worksMonitor.lastBulkRootFolderIDs) == 0 {
+		t.Error("want the category resolved to at least one root folder id")
+	}
+	if len(fixture.worksMonitor.lastBulkIDs) != 0 {
+		t.Errorf("ids = %v, want none -- this was a query selection", fixture.worksMonitor.lastBulkIDs)
+	}
+	if diff := []int64{3, 4}; len(fixture.worksMonitor.lastBulkExcludedIDs) != len(diff) {
+		t.Errorf("excludedIDs = %v, want %v", fixture.worksMonitor.lastBulkExcludedIDs, diff)
+	}
+	if fixture.worksMonitor.lastBulkMonitored == nil || !*fixture.worksMonitor.lastBulkMonitored {
+		t.Error("want monitored=true forwarded")
+	}
+	if fixture.worksMonitor.lastBulkPreview == nil || *fixture.worksMonitor.lastBulkPreview {
+		t.Error("want preview=false (the default) forwarded")
+	}
+
+	var body struct {
+		Count int64 `json:"count"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Count != 7 {
+		t.Errorf("count = %d, want 7", body.Count)
+	}
+}
+
+func TestBulkSetWorkMonitored_ExplicitIDsForwardAsAnIDSelection(t *testing.T) {
+	fixture, cookies := visibleWorksFixture(t)
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/bulk/monitor",
+		`{"ids":[1,2,3],"monitored":false,"preview":true}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if diff := []int64{1, 2, 3}; len(fixture.worksMonitor.lastBulkIDs) != len(diff) {
+		t.Errorf("ids = %v, want %v", fixture.worksMonitor.lastBulkIDs, diff)
+	}
+	if fixture.worksMonitor.lastBulkPreview == nil || !*fixture.worksMonitor.lastBulkPreview {
+		t.Error("want preview=true forwarded")
+	}
+}
+
+// A category the caller cannot read must not resolve to any root folder ids
+// -- ADR-27, the same authz.ErrNotVisible ListWorks/GetWork already answer
+// 404 for.
+func TestBulkSetWorkMonitored_UnreadableCategoryAnswers404(t *testing.T) {
+	fixture := newWorksFixture(t)
+	_, _ = fixture.createCategoryWithRoot(t, "Private Stash", "/media/private")
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/bulk/monitor",
+		`{"category_id":1,"monitored":true}`))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", recorder.Code)
+	}
+	if fixture.worksMonitor.bulkCalls != 0 {
+		t.Error("BulkSetMonitored must not be reached for a category the caller cannot read")
 	}
 }

@@ -388,6 +388,7 @@ func (p *process) startServer(ctx context.Context) error {
 		WorksMonitor: worksMonitorAdapter{
 			works: library.NewWorks(p.library), desired: library.NewDesired(p.library),
 			categories: cacheCategories{cache: p.cache}, defaultProfileID: p.defaultQualityProfileID,
+			logger: p.logger,
 		},
 		Search:           searchAdapter{search: library.NewSearch(p.library)},
 		Unidentified:     unidentifiedAdapter{unidentified: library.NewUnidentified(p.library)},

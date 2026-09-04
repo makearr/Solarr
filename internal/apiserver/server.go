@@ -202,6 +202,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/jobs", server.routeListJobs)
 			secured.Get("/works", server.routeListWorks)
 			secured.Get("/works/{id}", server.routeGetWork)
+			secured.Post("/works/bulk/monitor", server.BulkSetWorkMonitored)
 			secured.Post("/works/{id}/monitor", server.routeSetWorkMonitored)
 			secured.Post("/works/{id}/parts/{partId}/monitor", server.routeSetPartMonitored)
 			secured.Get("/works/{id}/artwork", server.routeGetWorkArtwork)
