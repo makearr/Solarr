@@ -19,15 +19,36 @@ type PartDetail struct {
 	ExternalIDs []librarydb.WorkPartExternalID
 }
 
-// WorkDetail is a work's own fields, its editions, its parts, and every
-// level's external ids. RootFolderIDs is not display data, only for ADR-27.
+// Credit is one work-level credit, with the person's own name -- the work
+// detail page has no use for a bare person id.
+type Credit struct {
+	PersonID   int64
+	PersonName string
+	Role       string
+}
+
+// WorkDetail is a work's own fields, its editions, its parts, its credits and
+// genre tags, and every level's external ids. RootFolderIDs doubles as
+// display data (OnDisk, section 21.3) and the ADR-27 visibility check.
 type WorkDetail struct {
 	Work          librarydb.Work
 	ExternalIDs   []librarydb.WorkExternalID
 	Editions      []EditionDetail
 	Parts         []PartDetail
+	Credits       []Credit
+	Genres        []string
 	RootFolderIDs []int64
 }
+
+// OnDisk reports whether this work is linked to any root folder at all
+// (work_root_folder, migration 0012's bridge) -- the coarsest possible
+// "is there really a file for this" signal available today. Per-track
+// presence needs a real media_object-to-work_part link that does not exist
+// yet (work_part is populated from a provider's tracklist, never linked to
+// the files a scan actually found) -- real scope of its own, not attempted
+// here rather than approximated with something that could show wrong counts
+// on a root folder shared by several works.
+func (d WorkDetail) OnDisk() bool { return len(d.RootFolderIDs) > 0 }
 
 // Detail composes one work's full structural detail. A missing id surfaces
 // sql.ErrNoRows through GetWork, wrapped: callers use errors.Is to detect it.
@@ -75,8 +96,28 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 		return WorkDetail{}, fmt.Errorf("library: work detail: root folders: %w", err)
 	}
 
+	creditRows, err := queries.ListCreditsForWorkWithPerson(ctx, id)
+	if err != nil {
+		return WorkDetail{}, fmt.Errorf("library: work detail: credits: %w", err)
+	}
+	credits := make([]Credit, len(creditRows))
+	for index, row := range creditRows {
+		credits[index] = Credit{PersonID: row.PersonID, PersonName: row.PersonName, Role: row.Role}
+	}
+
+	tagRows, err := queries.ListTagsForSubjectWithName(ctx, librarydb.ListTagsForSubjectWithNameParams{
+		SubjectType: "work", SubjectID: id,
+	})
+	if err != nil {
+		return WorkDetail{}, fmt.Errorf("library: work detail: genres: %w", err)
+	}
+	genres := make([]string, len(tagRows))
+	for index, row := range tagRows {
+		genres[index] = row.TagName
+	}
+
 	return WorkDetail{
 		Work: work, ExternalIDs: externalIDs, Editions: editionDetails,
-		Parts: partDetails, RootFolderIDs: rootFolderIDs,
+		Parts: partDetails, Credits: credits, Genres: genres, RootFolderIDs: rootFolderIDs,
 	}, nil
 }

@@ -57,6 +57,16 @@ FROM credit
 WHERE work_id = ? AND edition_id = 0 AND part_id = 0
 ORDER BY role, ord, person_id;
 
+-- The work detail page's own need: a credit is not useful to display without
+-- the person's name, and a second round-trip per credit is not worth saving
+-- a join for.
+-- name: ListCreditsForWorkWithPerson :many
+SELECT c.person_id, c.role, c.ord, p.name AS person_name
+FROM credit c
+JOIN person p ON p.id = c.person_id
+WHERE c.work_id = ? AND c.edition_id = 0 AND c.part_id = 0
+ORDER BY c.role, c.ord, p.sort_name;
+
 -- name: ListCreditsForEdition :many
 SELECT person_id, work_id, edition_id, part_id, role, character, ord
 FROM credit WHERE edition_id = ? ORDER BY role, ord, person_id;
@@ -157,6 +167,14 @@ WHERE subject_type = ? AND subject_id = ? AND source = ?;
 -- name: ListTagsForSubject :many
 SELECT tag_id, subject_type, subject_id, source
 FROM tag_assignment WHERE subject_type = ? AND subject_id = ? ORDER BY tag_id, source;
+
+-- The work detail page's own need, same reasoning as ListCreditsForWorkWithPerson.
+-- name: ListTagsForSubjectWithName :many
+SELECT t.id AS tag_id, t.name AS tag_name
+FROM tag_assignment a
+JOIN tag t ON t.id = a.tag_id
+WHERE a.subject_type = ? AND a.subject_id = ?
+ORDER BY t.name;
 
 -- "This tag or any descendant" is one join because the closure is materialised.
 -- name: ListSubjectsForTagTree :many

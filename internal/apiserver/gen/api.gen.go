@@ -186,6 +186,13 @@ type CategoryGrant struct {
 	Permission Permission `json:"permission"`
 }
 
+// Credit One work-level credit (ADR-32) -- the person's own name, so a client never needs a second round-trip just to display it.
+type Credit struct {
+	PersonId   int64  `json:"person_id"`
+	PersonName string `json:"person_name"`
+	Role       string `json:"role"`
+}
+
 // DashboardSummary defines model for DashboardSummary.
 type DashboardSummary struct {
 	// Jobs Live counts over jobs.db, which retention keeps bounded.
@@ -516,18 +523,26 @@ type Work struct {
 
 // WorkDetail defines model for WorkDetail.
 type WorkDetail struct {
-	AddedAt     time.Time    `json:"added_at"`
+	AddedAt time.Time `json:"added_at"`
+	Credits []Credit  `json:"credits"`
+
+	// Description A Wikidata-sourced summary, when the work has a linked Wikidata entity (ADR-8). Absent otherwise -- MusicBrainz itself carries no such field.
+	Description *string      `json:"description,omitempty"`
 	Editions    []Edition    `json:"editions"`
 	ExternalIds []ExternalID `json:"external_ids"`
+	Genres      []string     `json:"genres"`
 	Id          int64        `json:"id"`
 	Language    *string      `json:"language,omitempty"`
 	MediaType   string       `json:"media_type"`
-	Parts       []WorkPart   `json:"parts"`
-	RuntimeMs   *int64       `json:"runtime_ms,omitempty"`
-	SortTitle   string       `json:"sort_title"`
-	Title       string       `json:"title"`
-	UpdatedAt   time.Time    `json:"updated_at"`
-	Year        *int         `json:"year,omitempty"`
+
+	// OnDisk Whether this work is linked to any root folder at all. The coarsest possible "is there really a file for this" signal -- per-track presence needs a media_object-to-work_part link this project does not have yet.
+	OnDisk    bool       `json:"on_disk"`
+	Parts     []WorkPart `json:"parts"`
+	RuntimeMs *int64     `json:"runtime_ms,omitempty"`
+	SortTitle string     `json:"sort_title"`
+	Title     string     `json:"title"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	Year      *int       `json:"year,omitempty"`
 }
 
 // WorkPage defines model for WorkPage.

@@ -1193,6 +1193,15 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ExternalID" }
 
+    Credit:
+      type: object
+      description: One work-level credit (ADR-32) -- the person's own name, so a client never needs a second round-trip just to display it.
+      required: [person_id, person_name, role]
+      properties:
+        person_id: { type: integer, format: int64 }
+        person_name: { type: string }
+        role: { type: string, example: "artist" }
+
     WorkDetail:
       type: object
       required:
@@ -1200,11 +1209,14 @@ components:
         - media_type
         - title
         - sort_title
+        - on_disk
         - added_at
         - updated_at
         - external_ids
         - editions
         - parts
+        - credits
+        - genres
       properties:
         id: { type: integer, format: int64 }
         media_type: { type: string, example: "music" }
@@ -1213,6 +1225,19 @@ components:
         year: { type: integer }
         runtime_ms: { type: integer, format: int64 }
         language: { type: string }
+        description:
+          type: string
+          description: >-
+            A Wikidata-sourced summary, when the work has a linked Wikidata
+            entity (ADR-8). Absent otherwise -- MusicBrainz itself carries no
+            such field.
+        on_disk:
+          type: boolean
+          description: >-
+            Whether this work is linked to any root folder at all. The
+            coarsest possible "is there really a file for this" signal --
+            per-track presence needs a media_object-to-work_part link this
+            project does not have yet.
         added_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         external_ids:
@@ -1221,6 +1246,12 @@ components:
         editions:
           type: array
           items: { $ref: "#/components/schemas/Edition" }
+        credits:
+          type: array
+          items: { $ref: "#/components/schemas/Credit" }
+        genres:
+          type: array
+          items: { type: string }
         parts:
           type: array
           items: { $ref: "#/components/schemas/WorkPart" }

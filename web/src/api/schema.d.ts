@@ -783,6 +783,14 @@ export interface components {
             monitored: boolean;
             external_ids: components["schemas"]["ExternalID"][];
         };
+        /** @description One work-level credit (ADR-32) -- the person's own name, so a client never needs a second round-trip just to display it. */
+        Credit: {
+            /** Format: int64 */
+            person_id: number;
+            person_name: string;
+            /** @example artist */
+            role: string;
+        };
         WorkDetail: {
             /** Format: int64 */
             id: number;
@@ -794,12 +802,18 @@ export interface components {
             /** Format: int64 */
             runtime_ms?: number;
             language?: string;
+            /** @description A Wikidata-sourced summary, when the work has a linked Wikidata entity (ADR-8). Absent otherwise -- MusicBrainz itself carries no such field. */
+            description?: string;
+            /** @description Whether this work is linked to any root folder at all. The coarsest possible "is there really a file for this" signal -- per-track presence needs a media_object-to-work_part link this project does not have yet. */
+            on_disk: boolean;
             /** Format: date-time */
             added_at: string;
             /** Format: date-time */
             updated_at: string;
             external_ids: components["schemas"]["ExternalID"][];
             editions: components["schemas"]["Edition"][];
+            credits: components["schemas"]["Credit"][];
+            genres: string[];
             parts: components["schemas"]["WorkPart"][];
         };
         SearchResult: {

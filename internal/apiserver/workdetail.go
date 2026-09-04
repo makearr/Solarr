@@ -53,6 +53,14 @@ type PartRow struct {
 	ExternalIDs []ExternalIDRow
 }
 
+// CreditRow is one work-level credit, the person's own name included so a
+// client never needs a second round-trip just to display it.
+type CreditRow struct {
+	PersonID   int64
+	PersonName string
+	Role       string
+}
+
 // WorkDetailRow is a work's full detail. RootFolderIDs is not rendered --
 // GetWork uses it to run ListWorks' ADR-27 visibility check against one item.
 type WorkDetailRow struct {
@@ -63,11 +71,15 @@ type WorkDetailRow struct {
 	Year          *int64
 	RuntimeMs     *int64
 	Language      *string
+	Description   *string
+	OnDisk        bool
 	AddedAt       time.Time
 	UpdatedAt     time.Time
 	ExternalIDs   []ExternalIDRow
 	Editions      []EditionRow
 	Parts         []PartRow
+	Credits       []CreditRow
+	Genres        []string
 	RootFolderIDs []int64
 }
 
@@ -139,11 +151,22 @@ func buildWorkDetailView(row WorkDetailRow) gen.WorkDetail {
 	return gen.WorkDetail{
 		Id: row.ID, MediaType: row.MediaType, Title: row.Title, SortTitle: row.SortTitle,
 		Year: yearOf(row.Year), RuntimeMs: row.RuntimeMs, Language: row.Language,
+		Description: row.Description, OnDisk: row.OnDisk,
 		AddedAt: row.AddedAt, UpdatedAt: row.UpdatedAt,
 		ExternalIds: buildExternalIDViews(row.ExternalIDs),
 		Editions:    buildEditionViews(row.Editions),
 		Parts:       buildPartViews(row.Parts),
+		Credits:     buildCreditViews(row.Credits),
+		Genres:      row.Genres,
 	}
+}
+
+func buildCreditViews(rows []CreditRow) []gen.Credit {
+	views := make([]gen.Credit, len(rows))
+	for index, row := range rows {
+		views[index] = gen.Credit{PersonId: row.PersonID, PersonName: row.PersonName, Role: row.Role}
+	}
+	return views
 }
 
 func buildExternalIDViews(rows []ExternalIDRow) []gen.ExternalID {

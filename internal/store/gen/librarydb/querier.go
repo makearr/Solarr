@@ -180,6 +180,10 @@ type Querier interface {
 	// The work itself only. A narrator credited on one audiobook edition, or a soloist
 	// on one track, is not a credit on the work and must not appear here.
 	ListCreditsForWork(ctx context.Context, workID int64) ([]Credit, error)
+	// The work detail page's own need: a credit is not useful to display without
+	// the person's name, and a second round-trip per credit is not worth saving
+	// a join for.
+	ListCreditsForWorkWithPerson(ctx context.Context, workID int64) ([]ListCreditsForWorkWithPersonRow, error)
 	ListDecisionRollup(ctx context.Context, desiredItemID int64) ([]DecisionRollup, error)
 	// Every candidate with its full breakdown, newest first (F1, F16).
 	ListDecisionsForItem(ctx context.Context, arg ListDecisionsForItemParams) ([]CandidateDecision, error)
@@ -227,6 +231,8 @@ type Querier interface {
 	// "This tag or any descendant" is one join because the closure is materialised.
 	ListSubjectsForTagTree(ctx context.Context, arg ListSubjectsForTagTreeParams) ([]ListSubjectsForTagTreeRow, error)
 	ListTagsForSubject(ctx context.Context, arg ListTagsForSubjectParams) ([]TagAssignment, error)
+	// The work detail page's own need, same reasoning as ListCreditsForWorkWithPerson.
+	ListTagsForSubjectWithName(ctx context.Context, arg ListTagsForSubjectWithNameParams) ([]ListTagsForSubjectWithNameRow, error)
 	// Fingerprint generation is the lowest-priority background work and resumable,
 	// so it asks for the next unfingerprinted rows rather than scanning (ADR-35).
 	ListUnfingerprinted(ctx context.Context, arg ListUnfingerprintedParams) ([]MediaObject, error)

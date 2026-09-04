@@ -26,11 +26,14 @@ func (a workDetailAdapter) GetWorkDetail(ctx context.Context, id int64) (apiserv
 	row := apiserver.WorkDetailRow{
 		ID: detail.Work.ID, MediaType: detail.Work.MediaType, Title: detail.Work.CanonicalTitle,
 		SortTitle:     detail.Work.SortTitle,
+		OnDisk:        detail.OnDisk(),
 		AddedAt:       time.Unix(detail.Work.AddedAt, 0),
 		UpdatedAt:     time.Unix(detail.Work.UpdatedAt, 0),
 		ExternalIDs:   externalIDs,
 		Editions:      editionRows(detail.Editions),
 		Parts:         partRows(detail.Parts),
+		Credits:       creditRows(detail.Credits),
+		Genres:        detail.Genres,
 		RootFolderIDs: detail.RootFolderIDs,
 	}
 	if detail.Work.Year.Valid {
@@ -42,7 +45,20 @@ func (a workDetailAdapter) GetWorkDetail(ctx context.Context, id int64) (apiserv
 	if detail.Work.OriginalLanguage.Valid {
 		row.Language = &detail.Work.OriginalLanguage.String
 	}
+	if detail.Work.Description.Valid {
+		row.Description = &detail.Work.Description.String
+	}
 	return row, nil
+}
+
+func creditRows(from []library.Credit) []apiserver.CreditRow {
+	rows := make([]apiserver.CreditRow, len(from))
+	for index, credit := range from {
+		rows[index] = apiserver.CreditRow{
+			PersonID: credit.PersonID, PersonName: credit.PersonName, Role: credit.Role,
+		}
+	}
+	return rows
 }
 
 func editionRows(from []library.EditionDetail) []apiserver.EditionRow {

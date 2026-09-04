@@ -720,6 +720,52 @@ func (q *Queries) ListCreditsForWork(ctx context.Context, workID int64) ([]Credi
 	return items, nil
 }
 
+const listCreditsForWorkWithPerson = `-- name: ListCreditsForWorkWithPerson :many
+SELECT c.person_id, c.role, c.ord, p.name AS person_name
+FROM credit c
+JOIN person p ON p.id = c.person_id
+WHERE c.work_id = ? AND c.edition_id = 0 AND c.part_id = 0
+ORDER BY c.role, c.ord, p.sort_name
+`
+
+type ListCreditsForWorkWithPersonRow struct {
+	PersonID   int64
+	Role       string
+	Ord        sql.NullInt64
+	PersonName string
+}
+
+// The work detail page's own need: a credit is not useful to display without
+// the person's name, and a second round-trip per credit is not worth saving
+// a join for.
+func (q *Queries) ListCreditsForWorkWithPerson(ctx context.Context, workID int64) ([]ListCreditsForWorkWithPersonRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCreditsForWorkWithPerson, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCreditsForWorkWithPersonRow{}
+	for rows.Next() {
+		var i ListCreditsForWorkWithPersonRow
+		if err := rows.Scan(
+			&i.PersonID,
+			&i.Role,
+			&i.Ord,
+			&i.PersonName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEnabledSubscriptions = `-- name: ListEnabledSubscriptions :many
 SELECT id, subject_type, subject_id, media_types_json, roles_json, category_id,
        profile_id, filters_json, monitor_back_catalogue, enabled, user_id, created_at
@@ -945,6 +991,48 @@ func (q *Queries) ListTagsForSubject(ctx context.Context, arg ListTagsForSubject
 			&i.SubjectID,
 			&i.Source,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTagsForSubjectWithName = `-- name: ListTagsForSubjectWithName :many
+SELECT t.id AS tag_id, t.name AS tag_name
+FROM tag_assignment a
+JOIN tag t ON t.id = a.tag_id
+WHERE a.subject_type = ? AND a.subject_id = ?
+ORDER BY t.name
+`
+
+type ListTagsForSubjectWithNameParams struct {
+	SubjectType string
+	SubjectID   int64
+}
+
+type ListTagsForSubjectWithNameRow struct {
+	TagID   int64
+	TagName string
+}
+
+// The work detail page's own need, same reasoning as ListCreditsForWorkWithPerson.
+func (q *Queries) ListTagsForSubjectWithName(ctx context.Context, arg ListTagsForSubjectWithNameParams) ([]ListTagsForSubjectWithNameRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTagsForSubjectWithName, arg.SubjectType, arg.SubjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTagsForSubjectWithNameRow{}
+	for rows.Next() {
+		var i ListTagsForSubjectWithNameRow
+		if err := rows.Scan(&i.TagID, &i.TagName); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

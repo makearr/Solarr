@@ -124,6 +124,56 @@ func TestGetWork_UnderAVisibleRootFolderAnswers200WithFullShape(t *testing.T) {
 	}
 }
 
+func TestGetWork_RendersDescriptionOnDiskCreditsAndGenres(t *testing.T) {
+	fixture := newWorksFixture(t)
+	visible, rootVisible := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	_ = visible
+
+	description := "1973 studio album by Dipa Cogaf."
+	fixture.workDetail.row = apiserver.WorkDetailRow{
+		ID: 1, MediaType: "music", Title: "The Fura Husu of the Teke", SortTitle: "dark side of the moon",
+		Description: &description, OnDisk: true,
+		AddedAt: fixture.clock.Now(), UpdatedAt: fixture.clock.Now(),
+		Credits:       []apiserver.CreditRow{{PersonID: 5, PersonName: "Dipa Cogaf", Role: "artist"}},
+		Genres:        []string{"progressive rock", "art rock"},
+		RootFolderIDs: []int64{rootVisible.ID},
+	}
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/1"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+
+	var body struct {
+		Description *string `json:"description"`
+		OnDisk      bool    `json:"on_disk"`
+		Credits     []struct {
+			PersonID   int64  `json:"person_id"`
+			PersonName string `json:"person_name"`
+			Role       string `json:"role"`
+		} `json:"credits"`
+		Genres []string `json:"genres"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if body.Description == nil || *body.Description != description {
+		t.Errorf("description = %v, want %q", body.Description, description)
+	}
+	if !body.OnDisk {
+		t.Error("on_disk = false, want true")
+	}
+	if len(body.Credits) != 1 || body.Credits[0].PersonName != "Dipa Cogaf" || body.Credits[0].Role != "artist" {
+		t.Errorf("credits = %+v, want Dipa Cogaf's artist credit", body.Credits)
+	}
+	if len(body.Genres) != 2 || body.Genres[0] != "progressive rock" {
+		t.Errorf("genres = %+v, want both genres in order", body.Genres)
+	}
+}
+
 func TestGetWork_MalformedIDAnswers400(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.createUser(t, "admin", settings.RoleAdmin)
