@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Library,
   Settings,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ type Category = components["schemas"]["LibraryCategory"];
 const SECTIONS: readonly { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/library", label: "Library", icon: Library },
+  { to: "/people", label: "People", icon: Users },
   { to: "/unidentified", label: "Unidentified", icon: HelpCircle },
   { to: "/activity", label: "Activity", icon: Activity },
   { to: "/settings", label: "Settings", icon: Settings },

@@ -1,4 +1,4 @@
-import { useParams } from "@tanstack/react-router";
+import { useParams, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
@@ -8,8 +8,10 @@ import { CoverArt } from "./CoverArt";
 type Edition = components["schemas"]["Edition"];
 type WorkPart = components["schemas"]["WorkPart"];
 type ExternalID = components["schemas"]["ExternalID"];
+type Credit = components["schemas"]["Credit"];
 
-// Read-only: title, editions, parts, external ids. No scoring/Decision yet (stage 4).
+// Read-only: title, release date, on-disk status, credits, genres, description,
+// editions, parts. No scoring/Decision yet (stage 4).
 export function WorkDetail() {
   const { id: rawID } = useParams({ strict: false }) as { id?: string };
   const id = rawID !== undefined ? Number(rawID) : undefined;
@@ -44,18 +46,39 @@ export function WorkDetail() {
             size="full"
             className="h-40 w-40 shrink-0 rounded-lg object-cover"
           />
-          <div className="flex flex-col gap-1 pt-1">
+          <div className="flex flex-col gap-1.5 pt-1">
             <h1 className="text-lg font-semibold">{work.title}</h1>
             <p className="text-sm text-ink-muted">
-              {work.media_type}
-              {work.year ? ` · ${work.year}` : ""}
+              {work.year ? `Released ${work.year}` : "Release date unknown"}
             </p>
+            <OnDiskBadge onDisk={work.on_disk} />
           </div>
         </header>
 
-        {work.external_ids.length > 0 && (
-          <Section title="External IDs">
-            <ExternalIDList ids={work.external_ids} />
+        {work.description && (
+          <Section title="Description">
+            <p className="text-sm leading-relaxed">{work.description}</p>
+          </Section>
+        )}
+
+        {work.credits.length > 0 && (
+          <Section title="Credits">
+            <CreditList credits={work.credits} />
+          </Section>
+        )}
+
+        {work.genres.length > 0 && (
+          <Section title="Genres">
+            <ul className="flex flex-wrap gap-1.5">
+              {work.genres.map((genre) => (
+                <li
+                  key={genre}
+                  className="rounded-full border border-border-subtle px-2 py-0.5 text-xs text-ink-muted"
+                >
+                  {genre}
+                </li>
+              ))}
+            </ul>
           </Section>
         )}
 
@@ -81,8 +104,61 @@ export function WorkDetail() {
             </ul>
           </Section>
         )}
+
+        {work.external_ids.length > 0 && (
+          <Section title="External IDs">
+            <ExternalIDList ids={work.external_ids} />
+          </Section>
+        )}
       </div>
     </div>
+  );
+}
+
+function OnDiskBadge({ onDisk }: { onDisk: boolean }) {
+  return (
+    <span
+      className={`w-fit rounded-full border px-2 py-0.5 text-xs ${
+        onDisk
+          ? "border-current text-accent"
+          : "border-border-subtle text-ink-muted"
+      }`}
+    >
+      {onDisk ? "On disk" : "Missing"}
+    </span>
+  );
+}
+
+// Grouped by role (artist, producer, songwriter, ...) so a long credit list
+// reads as who-did-what rather than a flat name dump.
+function CreditList({ credits }: { credits: readonly Credit[] }) {
+  const byRole = new Map<string, Credit[]>();
+  for (const credit of credits) {
+    const group = byRole.get(credit.role) ?? [];
+    group.push(credit);
+    byRole.set(credit.role, group);
+  }
+
+  return (
+    <dl className="flex flex-col gap-2">
+      {[...byRole.entries()].map(([role, people]) => (
+        <div key={role} className="flex items-baseline gap-2 text-sm">
+          <dt className="w-24 shrink-0 capitalize text-ink-muted">{role}</dt>
+          <dd className="flex flex-wrap gap-x-2 gap-y-1">
+            {people.map((credit) => (
+              <Link
+                key={credit.person_id}
+                to="/people/$id"
+                params={{ id: String(credit.person_id) }}
+                className="hover:underline"
+              >
+                {credit.person_name}
+              </Link>
+            ))}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

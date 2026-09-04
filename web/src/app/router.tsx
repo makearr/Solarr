@@ -8,6 +8,8 @@ import {
 import { Activity } from "./Activity";
 import { Dashboard } from "./Dashboard";
 import { Library } from "./Library";
+import { People } from "./People";
+import { PersonDetail } from "./PersonDetail";
 import { Settings } from "./Settings";
 import { Shell } from "./Shell";
 import { Unidentified } from "./Unidentified";
@@ -27,6 +29,8 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/", component: Dashboard }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library", component: Library }),
   createRoute({ getParentRoute: () => rootRoute, path: "/works/$id", component: WorkDetail }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/people", component: People }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/people/$id", component: PersonDetail }),
   createRoute({ getParentRoute: () => rootRoute, path: "/unidentified", component: Unidentified }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity", component: Activity }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: Settings }),
