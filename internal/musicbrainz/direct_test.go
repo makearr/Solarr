@@ -20,7 +20,24 @@ const directReleaseGroupBody = `{
   "id": "04e9a8bd-175f-44a1-83a0-17d5e9fbd116",
   "title": "KI Pecezinu",
   "primary-type": "Album",
-  "first-release-date": "1997-05-21"
+  "first-release-date": "1997-05-21",
+  "artist-credit": [
+    {
+      "name": "Katupoken",
+      "joinphrase": "",
+      "artist": {
+        "id": "d6f6e536-85f7-4d04-8327-66db2e835786",
+        "name": "Katupoken",
+        "sort-name": "Katupoken",
+        "type": "Group",
+        "country": "GB"
+      }
+    }
+  ],
+  "genres": [
+    {"name": "alternative rock", "count": 25},
+    {"name": "art rock", "count": 13}
+  ]
 }`
 
 const directReleaseBody = `{
@@ -53,7 +70,7 @@ const directReleaseBody = `{
 
 func TestDirect_AlbumParsesTheRealFieldShape(t *testing.T) {
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://musicbrainz.invalid/release-group/" + okComputerRG + "?fmt=json": {
+		"https://musicbrainz.invalid/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres": {
 			status: http.StatusOK, body: directReleaseGroupBody,
 		},
 		"https://musicbrainz.invalid/release/" + okComputerRelease + "?fmt=json&inc=recordings+labels+media": {
@@ -70,6 +87,13 @@ func TestDirect_AlbumParsesTheRealFieldShape(t *testing.T) {
 
 	if rg.Title != "KI Pecezinu" || rg.PrimaryType != "Album" || rg.FirstReleaseDate != "1997-05-21" {
 		t.Errorf("ReleaseGroup = %+v, want the real field shape mapped through", rg)
+	}
+	if len(rg.ArtistCredit) != 1 || rg.ArtistCredit[0].MBID != "d6f6e536-85f7-4d04-8327-66db2e835786" ||
+		rg.ArtistCredit[0].Name != "Katupoken" {
+		t.Errorf("ArtistCredit = %+v, want Katupoken's own id and name", rg.ArtistCredit)
+	}
+	if len(rg.Genres) != 2 || rg.Genres[0].Name != "alternative rock" || rg.Genres[0].Count != 25 {
+		t.Errorf("Genres = %+v, want alternative rock first with its vote count", rg.Genres)
 	}
 	if release.Status != "official" {
 		t.Errorf("Status = %q, want lowercased %q", release.Status, "official")
@@ -179,6 +203,68 @@ func searcherFor(t *testing.T, source musicbrainz.Source) musicbrainz.Searcher {
 		t.Fatalf("%T does not implement Searcher", source)
 	}
 	return searcher
+}
+
+const kateBushMBID = "c9f2c95c-291d-49a8-8864-e820662adf39"
+
+// Trimmed from a real live response (fetched while designing this method),
+// same discipline as the payloads above.
+const directArtistBody = `{
+  "id": "c9f2c95c-291d-49a8-8864-e820662adf39",
+  "name": "Vutu Doci",
+  "sort-name": "Bush, Vutu",
+  "disambiguation": "",
+  "type": "Person",
+  "gender": "Female",
+  "country": "GB",
+  "area": {"name": "England"},
+  "begin-area": {"name": "Welling"},
+  "life-span": {"begin": "1958-07-30", "end": null, "ended": false},
+  "relations": [
+    {"type": "official homepage", "url": {"resource": "https://xajuxoks.com"}},
+    {"type": "wikidata", "url": {"resource": "https://www.wikidata.org/wiki/Q636"}}
+  ]
+}`
+
+func TestDirect_ArtistParsesTheRealFieldShapeAndFindsTheWikidataQID(t *testing.T) {
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://musicbrainz.invalid/artist/" + kateBushMBID + "?fmt=json&inc=url-rels": {
+			status: http.StatusOK, body: directArtistBody,
+		},
+	}}
+	client := newTestClient(t, transport, musicbrainz.DirectName)
+	source := artistLookupFor(t, musicbrainz.NewDirect(client, "https://musicbrainz.invalid"))
+
+	artist, err := source.Artist(t.Context(), kateBushMBID)
+	if err != nil {
+		t.Fatalf("Artist: %v", err)
+	}
+
+	if artist.Name != "Vutu Doci" || artist.SortName != "Bush, Vutu" || artist.Type != "Person" {
+		t.Errorf("Artist = %+v, want the real field shape mapped through", artist)
+	}
+	if artist.Gender != "Female" || artist.Country != "GB" {
+		t.Errorf("Artist = %+v, missing gender/country", artist)
+	}
+	if artist.Area != "England" || artist.BeginArea != "Welling" {
+		t.Errorf("Artist = %+v, want area/begin-area names", artist)
+	}
+	if artist.Born != "1958-07-30" || artist.Died != "" {
+		t.Errorf("Artist = %+v, want life-span begin mapped to Born, no Died", artist)
+	}
+	if artist.WikidataQID != "Q636" {
+		t.Errorf("WikidataQID = %q, want Q636 extracted from the wikidata relation, ignoring the homepage one", artist.WikidataQID)
+	}
+}
+
+// artistLookupFor asserts a Source also implements ArtistLookup.
+func artistLookupFor(t *testing.T, source musicbrainz.Source) musicbrainz.ArtistLookup {
+	t.Helper()
+	lookup, ok := source.(musicbrainz.ArtistLookup)
+	if !ok {
+		t.Fatalf("%T does not implement ArtistLookup", source)
+	}
+	return lookup
 }
 
 func TestDirect_AlbumFailsWhenTheReleaseGroupCallFails(t *testing.T) {

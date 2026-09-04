@@ -42,25 +42,110 @@ func (d direct) Album(ctx context.Context, releaseGroupMBID, releaseMBID string)
 	return rg, release, nil
 }
 
-// directReleaseGroup is musicbrainz.org's release-group JSON. Its own default
-// fields already carry everything this package wants -- no inc= needed.
+// directReleaseGroup is musicbrainz.org's release-group JSON with
+// inc=artist-credits+genres -- ArtistCredit and Genres need that inc, every
+// other field is already in the default response.
 type directReleaseGroup struct {
 	ID               string `json:"id"`
 	Title            string `json:"title"`
 	PrimaryType      string `json:"primary-type"`
 	FirstReleaseDate string `json:"first-release-date"`
+	ArtistCredit     []struct {
+		Name   string `json:"name"`
+		Artist struct {
+			ID string `json:"id"`
+		} `json:"artist"`
+	} `json:"artist-credit"`
+	Genres []struct {
+		Name  string `json:"name"`
+		Count int    `json:"count"`
+	} `json:"genres"`
 }
 
 func (d direct) releaseGroup(ctx context.Context, mbid string) (ReleaseGroup, error) {
 	var parsed directReleaseGroup
-	url := fmt.Sprintf("%s/release-group/%s?fmt=json", d.baseURL, mbid)
+	url := fmt.Sprintf("%s/release-group/%s?fmt=json&inc=artist-credits+genres", d.baseURL, mbid)
 	if err := getJSON(ctx, d.client, url, &parsed); err != nil {
 		return ReleaseGroup{}, fmt.Errorf("musicbrainz: release-group %s: %w", mbid, err)
 	}
+
+	credits := make([]ArtistCredit, len(parsed.ArtistCredit))
+	for i, credit := range parsed.ArtistCredit {
+		credits[i] = ArtistCredit{MBID: credit.Artist.ID, Name: credit.Name}
+	}
+	genres := make([]Genre, len(parsed.Genres))
+	for i, genre := range parsed.Genres {
+		genres[i] = Genre{Name: genre.Name, Count: genre.Count}
+	}
+
 	return ReleaseGroup{
 		MBID: parsed.ID, Title: parsed.Title,
 		PrimaryType: parsed.PrimaryType, FirstReleaseDate: parsed.FirstReleaseDate,
+		ArtistCredit: credits, Genres: genres,
 	}, nil
+}
+
+// directArtist is musicbrainz.org's artist JSON with inc=url-rels -- verified
+// against a real live response (Vutu Doci).
+type directArtist struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	SortName       string `json:"sort-name"`
+	Disambiguation string `json:"disambiguation"`
+	Type           string `json:"type"`
+	Gender         string `json:"gender"`
+	Country        string `json:"country"`
+	Area           struct {
+		Name string `json:"name"`
+	} `json:"area"`
+	BeginArea struct {
+		Name string `json:"name"`
+	} `json:"begin-area"`
+	LifeSpan struct {
+		Begin string `json:"begin"`
+		End   string `json:"end"`
+	} `json:"life-span"`
+	Relations []struct {
+		Type string `json:"type"`
+		URL  struct {
+			Resource string `json:"resource"`
+		} `json:"url"`
+	} `json:"relations"`
+}
+
+// Artist implements ArtistLookup: full artist detail, including the Wikidata
+// QID a real biography needs (ADR-8) -- MusicBrainz's own "wikidata" URL
+// relation, not a separate lookup.
+func (d direct) Artist(ctx context.Context, mbid string) (Artist, error) {
+	var parsed directArtist
+	url := fmt.Sprintf("%s/artist/%s?fmt=json&inc=url-rels", d.baseURL, mbid)
+	if err := getJSON(ctx, d.client, url, &parsed); err != nil {
+		return Artist{}, fmt.Errorf("musicbrainz: artist %s: %w", mbid, err)
+	}
+
+	artist := Artist{
+		MBID: parsed.ID, Name: parsed.Name, SortName: parsed.SortName,
+		Disambiguation: parsed.Disambiguation, Type: parsed.Type, Gender: parsed.Gender,
+		Country: parsed.Country, Area: parsed.Area.Name, BeginArea: parsed.BeginArea.Name,
+		Born: parsed.LifeSpan.Begin, Died: parsed.LifeSpan.End,
+	}
+	for _, relation := range parsed.Relations {
+		if relation.Type == "wikidata" {
+			artist.WikidataQID = wikidataQID(relation.URL.Resource)
+			break
+		}
+	}
+	return artist, nil
+}
+
+// wikidataQID extracts "Q636" from "https://www.wikidata.org/wiki/Q636" --
+// the only shape MusicBrainz's own wikidata relation uses.
+func wikidataQID(resource string) string {
+	_, qid, found := strings.Cut(resource, "/wiki/")
+	if !found {
+		return ""
+	}
+	return qid
 }
 
 // directSearchResponse is musicbrainz.org's release-group search JSON

@@ -80,6 +80,23 @@ func (f *fakeSearchSource) SearchReleaseGroups(
 	return f.matches, nil
 }
 
+// fakeArtistLookupSource is a fakeSource that also implements ArtistLookup, so
+// Provider.Artist has something in the source list that qualifies.
+type fakeArtistLookupSource struct {
+	fakeSource
+	artist      musicbrainz.Artist
+	artistErr   error
+	artistCalls int
+}
+
+func (f *fakeArtistLookupSource) Artist(context.Context, string) (musicbrainz.Artist, error) {
+	f.artistCalls++
+	if f.artistErr != nil {
+		return musicbrainz.Artist{}, f.artistErr
+	}
+	return f.artist, nil
+}
+
 func newProvider(t *testing.T, sources ...musicbrainz.Source) musicbrainz.Provider {
 	t.Helper()
 	return musicbrainz.New(musicbrainz.Config{
@@ -307,6 +324,62 @@ func TestProvider_ASecondSearchIsServedFromCache(t *testing.T) {
 	}
 	if len(matches) != 1 || matches[0].MBID != "rg1" {
 		t.Errorf("matches = %+v, want the first search's cached result", matches)
+	}
+}
+
+func TestProvider_ArtistSkipsSourcesThatDoNotImplementArtistLookup(t *testing.T) {
+	proxy := &fakeSource{name: "proxy"} // no ArtistLookup
+	direct := &fakeArtistLookupSource{fakeSource: fakeSource{name: "direct"},
+		artist: musicbrainz.Artist{MBID: "artist-1", Name: "Vutu Doci"}}
+	provider := newProvider(t, proxy, direct)
+
+	artist, err := provider.Artist(t.Context(), musicbrainz.PriorityEnrich, "artist-1")
+	if err != nil {
+		t.Fatalf("Artist: %v", err)
+	}
+	if artist.Name != "Vutu Doci" {
+		t.Errorf("Artist = %+v, want the one ArtistLookup-capable source's answer", artist)
+	}
+	if direct.artistCalls != 1 {
+		t.Errorf("artistCalls = %d, want 1", direct.artistCalls)
+	}
+}
+
+func TestProvider_ArtistErrorsWhenNoSourceCanLookUpAnArtist(t *testing.T) {
+	proxy := &fakeSource{name: "proxy"}
+	provider := newProvider(t, proxy)
+
+	if _, err := provider.Artist(t.Context(), musicbrainz.PriorityEnrich, "artist-1"); err == nil {
+		t.Fatal("Artist succeeded with no ArtistLookup-capable source configured")
+	}
+}
+
+func TestProvider_ArtistErrorsWhenEveryLookupFails(t *testing.T) {
+	direct := &fakeArtistLookupSource{fakeSource: fakeSource{name: "direct"}, artistErr: errors.New("lookup down")}
+	provider := newProvider(t, direct)
+
+	if _, err := provider.Artist(t.Context(), musicbrainz.PriorityEnrich, "artist-1"); err == nil {
+		t.Fatal("Artist succeeded although the only ArtistLookup-capable source failed")
+	}
+}
+
+func TestProvider_ASecondArtistLookupIsServedFromCache(t *testing.T) {
+	direct := &fakeArtistLookupSource{fakeSource: fakeSource{name: "direct"},
+		artist: musicbrainz.Artist{MBID: "artist-1", Name: "Vutu Doci"}}
+	provider := newProvider(t, direct)
+
+	if _, err := provider.Artist(t.Context(), musicbrainz.PriorityEnrich, "artist-1"); err != nil {
+		t.Fatalf("first Artist: %v", err)
+	}
+	artist, err := provider.Artist(t.Context(), musicbrainz.PriorityEnrich, "artist-1")
+	if err != nil {
+		t.Fatalf("second Artist: %v", err)
+	}
+	if direct.artistCalls != 1 {
+		t.Errorf("artistCalls = %d, want 1 -- the second lookup should hit the cache", direct.artistCalls)
+	}
+	if artist.Name != "Vutu Doci" {
+		t.Errorf("Artist = %+v, want the first lookup's cached result", artist)
 	}
 }
 

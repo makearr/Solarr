@@ -19,6 +19,51 @@ type ReleaseGroup struct {
 	// FirstReleaseDate is a partial date (YYYY, YYYY-MM or YYYY-MM-DD), exactly
 	// as MusicBrainz's own work_date convention allows.
 	FirstReleaseDate string
+	// ArtistCredit is who the release group credits, in credit order --
+	// ADR-32's role="artist" credit (§19.5's "role-rich credits").
+	ArtistCredit []ArtistCredit
+	// Genres are the release group's own genre tags with MusicBrainz's vote
+	// count, best first -- ADR-33's tag system, source "musicbrainz".
+	Genres []Genre
+}
+
+// ArtistCredit is one credited artist on a release group.
+type ArtistCredit struct {
+	MBID string
+	Name string
+}
+
+// Genre is one release group's genre tag, with MusicBrainz's own vote count --
+// the closest thing to a ranking a caller has.
+type Genre struct {
+	Name  string
+	Count int
+}
+
+// Artist is a MusicBrainz artist's own detail: ADR-32's person facts. Fetched
+// separately from ReleaseGroup.ArtistCredit, which only carries a name and id
+// -- person_external_id provider "musicbrainz:artist".
+type Artist struct {
+	MBID           string
+	Name           string
+	SortName       string
+	Disambiguation string
+	// Type is MusicBrainz's own vocabulary ("Person", "Group", "Orchestra",
+	// "Choir", ...), stored as-is, same reasoning as ReleaseGroup.PrimaryType.
+	Type    string
+	Gender  string
+	Country string
+	// Area is MusicBrainz's broadest place (usually a country-level area);
+	// BeginArea is the more specific "born in" location, when known.
+	Area      string
+	BeginArea string
+	// Born and Died are partial dates, MusicBrainz's life-span begin/end.
+	Born string
+	Died string
+	// WikidataQID is extracted from the artist's "wikidata" URL relation, when
+	// one exists -- the cross-provider identity bridge (ADR-8) a real
+	// biography needs, since MusicBrainz itself has no biography field.
+	WikidataQID string
 }
 
 // Release is edition-level data: work_external_id provider "musicbrainz:release".
@@ -88,4 +133,12 @@ type ReleaseGroupMatch struct {
 // Provider.Search only ever tries sources that assert this interface.
 type Searcher interface {
 	SearchReleaseGroups(ctx context.Context, artist, title string, limit int) ([]ReleaseGroupMatch, error)
+}
+
+// ArtistLookup is an optional Source capability: full artist detail beyond the
+// name and id ReleaseGroup.ArtistCredit already carries. Not every Source
+// implements it -- same reasoning as Searcher, the proxy's artist shape is
+// unverified live.
+type ArtistLookup interface {
+	Artist(ctx context.Context, mbid string) (Artist, error)
 }

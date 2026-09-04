@@ -42,6 +42,8 @@ const (
 	// cacheKindSearch is a text search's result set, keyed on searchCacheKey
 	// rather than an MBID -- there is no id to key it on until a search answers.
 	cacheKindSearch = "musicbrainz:search"
+	// cacheKindArtist is one artist's own detail, keyed on their MBID.
+	cacheKindArtist = "musicbrainz:artist"
 )
 
 // Provider is ADR-29 end to end: try each source in priority order, falling
@@ -141,6 +143,59 @@ func (p Provider) Search(
 		return nil, nil
 	}
 	return nil, fmt.Errorf("musicbrainz: no source answered search %q/%q: %w", artist, title, errors.Join(errs...))
+}
+
+// Artist answers one artist's own detail, cache-first, permanent like Album.
+// Only sources implementing ArtistLookup are tried -- same reasoning as
+// Search, the proxy's artist shape is unverified live.
+func (p Provider) Artist(ctx context.Context, _ Priority, mbid string) (Artist, error) {
+	if artist, ok := p.cachedArtist(ctx, mbid); ok {
+		return artist, nil
+	}
+
+	var errs []error
+	for _, source := range p.sources {
+		lookup, ok := source.(ArtistLookup)
+		if !ok {
+			continue
+		}
+		artist, err := lookup.Artist(ctx, mbid)
+		if err != nil {
+			p.logger.WarnContext(ctx, "musicbrainz source artist lookup failed",
+				slog.String("source", source.Name()), slog.Any("error", err))
+			errs = append(errs, err)
+			continue
+		}
+		p.rememberArtist(ctx, source.Name(), mbid, artist)
+		return artist, nil
+	}
+	if len(errs) == 0 {
+		return Artist{}, fmt.Errorf("musicbrainz: no source can look up an artist (mbid %s)", mbid)
+	}
+	return Artist{}, fmt.Errorf("musicbrainz: no source answered artist %s: %w", mbid, errors.Join(errs...))
+}
+
+func (p Provider) cachedArtist(ctx context.Context, mbid string) (Artist, bool) {
+	entry, err := p.cache.Get(ctx, cacheKindArtist, mbid)
+	if err != nil || p.stale(entry) {
+		return Artist{}, false
+	}
+	var artist Artist
+	if json.Unmarshal([]byte(entry.Body), &artist) != nil {
+		return Artist{}, false
+	}
+	return artist, true
+}
+
+func (p Provider) rememberArtist(ctx context.Context, source, mbid string, artist Artist) {
+	body, err := json.Marshal(artist)
+	if err != nil {
+		return
+	}
+	if err := p.cache.Set(ctx, cacheKindArtist, mbid,
+		metacache.Entry{Source: source, Body: string(body), FetchedAt: p.clock.Now()}); err != nil {
+		p.logger.WarnContext(ctx, "musicbrainz: artist cache write failed", slog.Any("error", err))
+	}
 }
 
 // searchCacheKey normalises a search so "Vutu Doci"/"vutu doci" share one cache
