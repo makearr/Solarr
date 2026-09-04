@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -13,6 +14,34 @@ import (
 // (documentation/sql-and-sqlc.md).
 const workColumns = `id, media_type, canonical_title, sort_title, original_language,
        year, runtime_ms, added_at, updated_at, added_by`
+
+// workArtistColumn is the work list's one join: the credited artist's own name,
+// so the list can show it without a second round-trip per row. Scoped to the
+// "artist" role and limited to one row via credit_by_work(work_id, role), so it
+// stays an index point-lookup regardless of corpus size (ADR-28) rather than a
+// join that could multiply rows out for a work credited to several artists.
+const workArtistColumn = `(SELECT p.name FROM credit c JOIN person p ON p.id = c.person_id
+        WHERE c.work_id = work.id AND c.role = 'artist' ORDER BY c.ord LIMIT 1) AS artist`
+
+// WorkSort selects which column the list is ordered by. The zero value sorts
+// by title, matching every caller that does not set it.
+type WorkSort string
+
+// The columns the list can be ordered by.
+const (
+	WorkSortTitle WorkSort = ""
+	WorkSortYear  WorkSort = "year"
+	WorkSortAdded WorkSort = "added"
+)
+
+// SortDirection is which way WorkSort orders. The zero value is ascending.
+type SortDirection string
+
+// The directions a WorkSort can order in.
+const (
+	SortAscending  SortDirection = ""
+	SortDescending SortDirection = "desc"
+)
 
 // WorkFilter is what the library list can narrow on. A zero field is not a filter, so
 // it never reaches the SQL (section 21.2).
@@ -31,13 +60,29 @@ type WorkFilter struct {
 	// callers translate "no root folder is visible" into an empty result rather
 	// than an unfiltered one themselves.
 	RootFolderIDs []int64
+	// Sort and Direction pick the list's order (section 21.2's configurable,
+	// sortable columns). Artist is deliberately not sortable: it comes from a
+	// join with no supporting index, so ordering by it would fall back to
+	// sorting the whole result (ADR-28) -- displayed, but not orderable, until
+	// there is a real reason to pay for that index.
+	Sort      WorkSort
+	Direction SortDirection
 }
 
-// WorkCursor is a position in the list: the sort title, plus the id to break ties.
-// Without the id, a page boundary inside a group sharing a sort title drops rows.
+// WorkCursor is a position in the list: the id always breaks ties, since without it a
+// page boundary inside a group sharing a sort value drops rows. Only the field matching
+// the active WorkSort is read; the others are ignored.
 type WorkCursor struct {
 	SortTitle string
+	SortYear  int64
+	SortAdded int64
 	ID        int64
+}
+
+// WorkListRow is one row of the library list plus its primary artist credit.
+type WorkListRow struct {
+	librarydb.Work
+	Artist sql.NullString
 }
 
 // Works reads the library list surface.
@@ -61,13 +106,37 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	predicates.AddIf(filter.YearTo != 0, "year <= ?", filter.YearTo)
 	addPrefix(&predicates, filter.TitlePrefix)
 	addRootFolders(&predicates, filter.RootFolderIDs)
-	predicates.AddIf(after.SortTitle != "" || after.ID != 0,
-		"(sort_title > ? OR (sort_title = ? AND id > ?))",
-		after.SortTitle, after.SortTitle, after.ID)
 
-	query := "SELECT " + workColumns + "\nFROM work" + predicates.Where() +
-		"\nORDER BY sort_title, id\nLIMIT ?"
+	column, cursorValue := sortColumn(filter.Sort, after)
+	operator := ">"
+	orderDirection := ""
+	if filter.Direction == SortDescending {
+		operator = "<"
+		orderDirection = " DESC"
+	}
+	// The id tie-break always advances ascending: it is a distinct sort key from
+	// column, not affected by column's own direction, and ORDER BY below keeps it
+	// ascending too so the two stay consistent.
+	predicates.AddIf(after.ID != 0,
+		"("+column+" "+operator+" ? OR ("+column+" = ? AND id > ?))",
+		cursorValue, cursorValue, after.ID)
+
+	query := "SELECT " + workColumns + ",\n       " + workArtistColumn + "\nFROM work" +
+		predicates.Where() + "\nORDER BY " + column + orderDirection + ", id\nLIMIT ?"
 	return query, predicates.Args(pageSize)
+}
+
+// sortColumn maps a WorkSort to its SQL column and the cursor value to compare
+// it against.
+func sortColumn(sort WorkSort, after WorkCursor) (column string, cursorValue any) {
+	switch sort {
+	case WorkSortYear:
+		return "year", after.SortYear
+	case WorkSortAdded:
+		return "added_at", after.SortAdded
+	default:
+		return "sort_title", after.SortTitle
+	}
 }
 
 // addPrefix filters on the start of the sort title as a range, so it stays a range scan
@@ -122,7 +191,7 @@ func addRootFolders(predicates *store.Predicates, ids []int64) {
 }
 
 // List returns one page of the library list.
-func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pageSize int) ([]librarydb.Work, error) {
+func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pageSize int) ([]WorkListRow, error) {
 	query, arguments := composeList(filter, after, pageSize)
 
 	rows, err := w.store.Read().QueryContext(ctx, query, arguments...)
@@ -131,12 +200,12 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 	}
 	defer func() { _ = rows.Close() }()
 
-	var works []librarydb.Work
+	var works []WorkListRow
 	for rows.Next() {
-		var work librarydb.Work
+		var work WorkListRow
 		if err := rows.Scan(&work.ID, &work.MediaType, &work.CanonicalTitle, &work.SortTitle,
 			&work.OriginalLanguage, &work.Year, &work.RuntimeMs, &work.AddedAt,
-			&work.UpdatedAt, &work.AddedBy); err != nil {
+			&work.UpdatedAt, &work.AddedBy, &work.Artist); err != nil {
 			return nil, fmt.Errorf("library: scan work: %w", err)
 		}
 		works = append(works, work)

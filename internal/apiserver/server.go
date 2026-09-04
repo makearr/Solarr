@@ -391,6 +391,28 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 		}
 		params.CategoryId = &categoryID
 	}
+	if raw := query.Get("sort"); raw != "" {
+		switch gen.ListWorksParamsSort(raw) {
+		case gen.Title, gen.Year, gen.Added:
+			sort := gen.ListWorksParamsSort(raw)
+			params.Sort = &sort
+		default:
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "sort must be title, year or added")
+			return
+		}
+	}
+	if raw := query.Get("dir"); raw != "" {
+		switch gen.ListWorksParamsDir(raw) {
+		case gen.Asc, gen.Desc:
+			dir := gen.ListWorksParamsDir(raw)
+			params.Dir = &dir
+		default:
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "dir must be asc or desc")
+			return
+		}
+	}
 
 	s.ListWorks(w, r, params)
 }

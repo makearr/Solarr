@@ -18,8 +18,14 @@ func (a worksAdapter) ListWorks(
 	ctx context.Context, filter apiserver.WorksFilter, cursor apiserver.WorksCursor, pageSize int,
 ) ([]apiserver.WorkRow, error) {
 	rows, err := a.works.List(ctx,
-		library.WorkFilter{RootFolderIDs: filter.RootFolderIDs},
-		library.WorkCursor{SortTitle: cursor.SortTitle, ID: cursor.ID},
+		library.WorkFilter{
+			RootFolderIDs: filter.RootFolderIDs,
+			Sort:          library.WorkSort(filter.Sort),
+			Direction:     library.SortDirection(filter.Direction),
+		},
+		library.WorkCursor{
+			SortTitle: cursor.SortTitle, SortYear: cursor.SortYear, SortAdded: cursor.SortAdded, ID: cursor.ID,
+		},
 		pageSize)
 	if err != nil {
 		return nil, err
@@ -33,6 +39,9 @@ func (a worksAdapter) ListWorks(
 		}
 		if row.Year.Valid {
 			view.Year = &row.Year.Int64
+		}
+		if row.Artist.Valid {
+			view.Artist = &row.Artist.String
 		}
 		views[index] = view
 	}

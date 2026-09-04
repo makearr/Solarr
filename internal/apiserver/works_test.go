@@ -32,14 +32,16 @@ const testImagesDir = "/images"
 type fakeWorksReader struct {
 	rows       []apiserver.WorkRow
 	lastFilter apiserver.WorksFilter
+	lastCursor apiserver.WorksCursor
 	calls      int
 }
 
 func (f *fakeWorksReader) ListWorks(
-	_ context.Context, filter apiserver.WorksFilter, _ apiserver.WorksCursor, pageSize int,
+	_ context.Context, filter apiserver.WorksFilter, cursor apiserver.WorksCursor, pageSize int,
 ) ([]apiserver.WorkRow, error) {
 	f.calls++
 	f.lastFilter = filter
+	f.lastCursor = cursor
 	if len(f.rows) > pageSize {
 		return f.rows[:pageSize], nil
 	}
@@ -349,6 +351,105 @@ func TestListWorks_ResponseShapeAndCursor(t *testing.T) {
 	}
 	if body.NextCursor == "" {
 		t.Error("NextCursor is empty, want a cursor: there is a second row beyond the limit")
+	}
+}
+
+func TestListWorks_ArtistFieldPassesThrough(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	artist := "Katupoken"
+	fixture.works.rows = []apiserver.WorkRow{
+		{ID: 1, MediaType: "music", Title: "KI Pecezinu", SortTitle: "ki pecezinu", Artist: &artist,
+			AddedAt: fixture.clock.Now(), UpdatedAt: fixture.clock.Now()},
+	}
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+
+	var body struct {
+		Items []struct {
+			Artist *string `json:"artist"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body.Items) != 1 || body.Items[0].Artist == nil || *body.Items[0].Artist != "Katupoken" {
+		t.Fatalf("items = %+v, want an artist of Katupoken", body.Items)
+	}
+}
+
+func TestListWorks_SortAndDirReachTheFilter(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works?sort=year&dir=desc"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.works.lastFilter.Sort != apiserver.WorkSortYear {
+		t.Errorf("Sort = %q, want year", fixture.works.lastFilter.Sort)
+	}
+	if fixture.works.lastFilter.Direction != apiserver.SortDescending {
+		t.Errorf("Direction = %q, want desc", fixture.works.lastFilter.Direction)
+	}
+}
+
+func TestListWorks_UnknownSortAnswers400(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works?sort=artist"))
+	if recorder.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400: artist is not a valid sort column", recorder.Code)
+	}
+}
+
+// A year-sorted page's next_cursor must round-trip through the year cursor
+// codec, not the title one -- worksCursorFor's whole reason to exist.
+func TestListWorks_YearSortedCursorRoundTrips(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	first := int64(1990)
+	second := int64(2010)
+	fixture.works.rows = []apiserver.WorkRow{
+		{ID: 1, MediaType: "music", Title: "Older", SortTitle: "older", Year: &first,
+			AddedAt: fixture.clock.Now(), UpdatedAt: fixture.clock.Now()},
+		{ID: 2, MediaType: "music", Title: "Newer", SortTitle: "newer", Year: &second,
+			AddedAt: fixture.clock.Now(), UpdatedAt: fixture.clock.Now()},
+	}
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works?sort=year&limit=1"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	var body struct {
+		NextCursor string `json:"next_cursor"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.NextCursor == "" {
+		t.Fatal("NextCursor is empty, want a cursor")
+	}
+
+	recorder = fixture.do(authedGet(t, cookies, "/api/v1/works?sort=year&cursor="+body.NextCursor))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("second page status %d (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.works.lastCursor.SortYear != 1990 || fixture.works.lastCursor.ID != 1 {
+		t.Errorf("decoded cursor = %+v, want SortYear 1990, ID 1", fixture.works.lastCursor)
 	}
 }
 

@@ -550,6 +550,15 @@ paths:
             answers 404, matching a single-item lookup (Invariant 37) rather
             than a filter that silently returns nothing.
           schema: { type: integer, format: int64 }
+        - name: sort
+          in: query
+          description: >-
+            Which column orders the list. artist is not a valid value here
+            (Work.artist's own description explains why); title is the default.
+          schema: { type: string, enum: [title, year, added] }
+        - name: dir
+          in: query
+          schema: { type: string, enum: [asc, desc], default: asc }
       responses:
         "200":
           description: One page.
@@ -1229,6 +1238,11 @@ components:
         title: { type: string }
         sort_title: { type: string }
         year: { type: integer }
+        artist:
+          type: string
+          description: >-
+            The work's own "artist"-role credit, when it has one. Not
+            sortable: it comes from a join with no supporting index (ADR-28).
         added_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 

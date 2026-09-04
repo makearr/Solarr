@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/makearr/MediaNexus/internal/apiserver/gen"
@@ -18,17 +19,41 @@ type WorksReader interface {
 	ListWorks(ctx context.Context, filter WorksFilter, cursor WorksCursor, pageSize int) ([]WorkRow, error)
 }
 
+// WorkSort selects which column ListWorks orders by. The zero value is title.
+type WorkSort string
+
+// The columns ListWorks can order by.
+const (
+	WorkSortTitle WorkSort = ""
+	WorkSortYear  WorkSort = "year"
+	WorkSortAdded WorkSort = "added"
+)
+
+// SortDirection is which way a WorkSort orders. The zero value is ascending.
+type SortDirection string
+
+// The directions a WorkSort can order in.
+const (
+	SortAscending  SortDirection = ""
+	SortDescending SortDirection = "desc"
+)
+
 // WorksFilter narrows a ListWorks call. RootFolderIDs is nil for unfiltered, a
 // non-nil empty slice for "the caller has no visible root folder at all" --
 // library.WorkFilter's own nil-vs-empty distinction, carried through here since
 // getting this wrong here would mean a category filter that quietly does nothing.
 type WorksFilter struct {
 	RootFolderIDs []int64
+	Sort          WorkSort
+	Direction     SortDirection
 }
 
-// WorksCursor is a position in the list.
+// WorksCursor is a position in the list. Only the field matching the active
+// WorkSort is read; the others are ignored (library.WorkCursor's own convention).
 type WorksCursor struct {
 	SortTitle string
+	SortYear  int64
+	SortAdded int64
 	ID        int64
 }
 
@@ -39,6 +64,9 @@ type WorkRow struct {
 	Title     string
 	SortTitle string
 	Year      *int64
+	// Artist is the work's own "artist"-role credit, when it has one. Never
+	// sortable -- gen.ListWorksParamsSort's own description explains why.
+	Artist    *string
 	AddedAt   time.Time
 	UpdatedAt time.Time
 }
@@ -71,13 +99,36 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		return
 	}
 
-	rows, err := s.works.ListWorks(r.Context(), WorksFilter{RootFolderIDs: rootFolderIDs},
-		WorksCursor{SortTitle: cursor.Sort, ID: cursor.ID}, limit+1)
+	sort := WorkSort(derefOr(params.Sort, gen.ListWorksParamsSort("")))
+	direction := SortAscending
+	if derefOr(params.Dir, gen.ListWorksParamsDir("")) == gen.Desc {
+		direction = SortDescending
+	}
+
+	rows, err := s.works.ListWorks(r.Context(),
+		WorksFilter{RootFolderIDs: rootFolderIDs, Sort: sort, Direction: direction},
+		worksCursorFor(sort, cursor), limit+1)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, buildWorkPage(rows, limit))
+	writeJSON(w, s.logger, http.StatusOK, buildWorkPage(rows, limit, sort))
+}
+
+// worksCursorFor decodes the cursor's opaque sort value against whichever
+// field the active sort actually reads -- ListWorks' own single paginate.TextCursor
+// carries a plain int64-as-string for year/added_at, never a second cursor codec.
+func worksCursorFor(sort WorkSort, cursor paginate.TextCursor) WorksCursor {
+	switch sort {
+	case WorkSortYear:
+		value, _ := strconv.ParseInt(cursor.Sort, 10, 64)
+		return WorksCursor{SortYear: value, ID: cursor.ID}
+	case WorkSortAdded:
+		value, _ := strconv.ParseInt(cursor.Sort, 10, 64)
+		return WorksCursor{SortAdded: value, ID: cursor.ID}
+	default:
+		return WorksCursor{SortTitle: cursor.Sort, ID: cursor.ID}
+	}
 }
 
 // visibleRootFolders resolves what a caller may see into root folder ids,
@@ -114,20 +165,20 @@ func (s *Server) visibleRootFolders(access authz.Access, categoryID *int64) ([]i
 // buildWorkPage trims the probe row (one more than pageSize) and, if present,
 // encodes the cursor from it -- paginate.Build's shape, reimplemented here since
 // Build is fixed to the integer-sorted Cursor and works sort on text.
-func buildWorkPage(rows []WorkRow, limit int) gen.WorkPage {
+func buildWorkPage(rows []WorkRow, limit int, sort WorkSort) gen.WorkPage {
 	items := rows
 	var nextCursor string
 	if len(rows) > limit {
 		items = rows[:limit]
 		last := items[len(items)-1]
-		nextCursor = paginate.TextCursor{Sort: last.SortTitle, ID: last.ID}.Encode()
+		nextCursor = paginate.TextCursor{Sort: cursorValueFor(sort, last), ID: last.ID}.Encode()
 	}
 
 	views := make([]gen.Work, len(items))
 	for index, row := range items {
 		views[index] = gen.Work{
 			Id: row.ID, MediaType: row.MediaType, Title: row.Title, SortTitle: row.SortTitle,
-			Year: yearOf(row.Year), AddedAt: row.AddedAt, UpdatedAt: row.UpdatedAt,
+			Year: yearOf(row.Year), Artist: row.Artist, AddedAt: row.AddedAt, UpdatedAt: row.UpdatedAt,
 		}
 	}
 
@@ -136,6 +187,19 @@ func buildWorkPage(rows []WorkRow, limit int) gen.WorkPage {
 		page.NextCursor = &nextCursor
 	}
 	return page
+}
+
+// cursorValueFor is worksCursorFor's inverse: the opaque sort value the next
+// page's cursor carries for the row a page ended on.
+func cursorValueFor(sort WorkSort, row WorkRow) string {
+	switch sort {
+	case WorkSortYear:
+		return strconv.FormatInt(derefOr(row.Year, 0), 10)
+	case WorkSortAdded:
+		return strconv.FormatInt(row.AddedAt.Unix(), 10)
+	default:
+		return row.SortTitle
+	}
 }
 
 func yearOf(year *int64) *int {

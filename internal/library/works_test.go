@@ -2,6 +2,7 @@ package library_test
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/library"
@@ -168,4 +169,116 @@ func TestListWorks_PaginationWalksEveryRowExactlyOnce(t *testing.T) {
 			t.Errorf("work %d returned %d times", id, times)
 		}
 	}
+}
+
+func TestListWorks_ArtistIsThePersonCreditedInTheArtistRole(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	people := library.NewPeople(opened)
+
+	credited := createWork(t, opened, "music", "KI Pecezinu")
+	uncredited := createWork(t, opened, "music", "Unknown Pleasures")
+
+	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
+		Provider: "musicbrainz:artist", ExternalID: "artist-1",
+		Person: library.PersonIdentity{Name: "Katupoken", SortName: "Katupoken"},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePerson: %v", err)
+	}
+	if err := people.AddCredit(t.Context(), credited.ID, personID, "artist", 0); err != nil {
+		t.Fatalf("AddCredit: %v", err)
+	}
+	// A non-artist role must not surface as the list's artist column.
+	if err := people.AddCredit(t.Context(), uncredited.ID, personID, "producer", 0); err != nil {
+		t.Fatalf("AddCredit: %v", err)
+	}
+
+	page, err := works.List(t.Context(), library.WorkFilter{}, library.WorkCursor{}, 100)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	byID := make(map[int64]library.WorkListRow, len(page))
+	for _, row := range page {
+		byID[row.ID] = row
+	}
+	if !byID[credited.ID].Artist.Valid || byID[credited.ID].Artist.String != "Katupoken" {
+		t.Errorf("Artist for the artist-credited work = %+v, want Katupoken", byID[credited.ID].Artist)
+	}
+	if byID[uncredited.ID].Artist.Valid {
+		t.Errorf("Artist for the producer-only work = %+v, want no artist credit", byID[uncredited.ID].Artist)
+	}
+}
+
+func TestListWorks_SortByYearOrdersAndPaginatesWithTies(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+
+	// Two works share a year, so the id tie-break must still walk every row
+	// exactly once (same reasoning as the sort_title pagination test above).
+	older := createWorkWithYear(t, opened, "Older Album", 1990)
+	tiedA := createWorkWithYear(t, opened, "Tied Album A", 2000)
+	tiedB := createWorkWithYear(t, opened, "Tied Album B", 2000)
+	newer := createWorkWithYear(t, opened, "Newer Album", 2010)
+
+	filter := library.WorkFilter{Sort: library.WorkSortYear}
+	var seen []int64
+	cursor := library.WorkCursor{}
+	for {
+		page, err := works.List(t.Context(), filter, cursor, 1)
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(page) == 0 {
+			break
+		}
+		last := page[0]
+		seen = append(seen, last.ID)
+		cursor = library.WorkCursor{SortYear: last.Year.Int64, ID: last.ID}
+	}
+
+	if len(seen) != 4 {
+		t.Fatalf("walked %d works, want 4", len(seen))
+	}
+	if seen[0] != older.ID || seen[3] != newer.ID {
+		t.Errorf("order = %v, want %d first and %d last (ascending by year)", seen, older.ID, newer.ID)
+	}
+	orderedForward := seen[1] == tiedA.ID && seen[2] == tiedB.ID
+	orderedBackward := seen[1] == tiedB.ID && seen[2] == tiedA.ID
+	if !orderedForward && !orderedBackward {
+		t.Errorf("order = %v, want the two tied-year works in the middle, each exactly once", seen)
+	}
+}
+
+func TestListWorks_SortDirectionDescendingReversesOrder(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+
+	older := createWorkWithYear(t, opened, "Older Album", 1990)
+	newer := createWorkWithYear(t, opened, "Newer Album", 2010)
+
+	page, err := works.List(t.Context(),
+		library.WorkFilter{Sort: library.WorkSortYear, Direction: library.SortDescending},
+		library.WorkCursor{}, 100)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(page) != 2 || page[0].ID != newer.ID || page[1].ID != older.ID {
+		t.Errorf("descending order = %+v, want %d then %d", page, newer.ID, older.ID)
+	}
+}
+
+func createWorkWithYear(t *testing.T, opened *store.Store, title string, year int64) librarydb.Work {
+	t.Helper()
+	var created librarydb.Work
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		row, err := q.CreateWork(ctx, librarydb.CreateWorkParams{
+			MediaType: "music", CanonicalTitle: title, SortTitle: title,
+			Year: sql.NullInt64{Int64: year, Valid: true}, AddedAt: 1, UpdatedAt: 1,
+		})
+		created = row
+		return err
+	})
+	return created
 }

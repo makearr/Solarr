@@ -800,6 +800,8 @@ export interface components {
             title: string;
             sort_title: string;
             year?: number;
+            /** @description The work's own "artist"-role credit, when it has one. Not sortable: it comes from a join with no supporting index (ADR-28). */
+            artist?: string;
             /** Format: date-time */
             added_at: string;
             /** Format: date-time */
@@ -1614,6 +1616,9 @@ export interface operations {
                 limit?: number;
                 /** @description Narrows to one category. Naming a category the caller cannot read answers 404, matching a single-item lookup (Invariant 37) rather than a filter that silently returns nothing. */
                 category_id?: number;
+                /** @description Which column orders the list. artist is not a valid value here (Work.artist's own description explains why); title is the default. */
+                sort?: "title" | "year" | "added";
+                dir?: "asc" | "desc";
             };
             header?: never;
             path?: never;

@@ -119,6 +119,19 @@ const (
 	Readonly Role = "readonly"
 )
 
+// Defines values for ListWorksParamsSort.
+const (
+	Added ListWorksParamsSort = "added"
+	Title ListWorksParamsSort = "title"
+	Year  ListWorksParamsSort = "year"
+)
+
+// Defines values for ListWorksParamsDir.
+const (
+	Asc  ListWorksParamsDir = "asc"
+	Desc ListWorksParamsDir = "desc"
+)
+
 // Defines values for GetWorkArtworkParamsSize.
 const (
 	Full  GetWorkArtworkParamsSize = "full"
@@ -562,7 +575,10 @@ type UserAccount struct {
 
 // Work defines model for Work.
 type Work struct {
-	AddedAt   time.Time `json:"added_at"`
+	AddedAt time.Time `json:"added_at"`
+
+	// Artist The work's own "artist"-role credit, when it has one. Not sortable: it comes from a join with no supporting index (ADR-28).
+	Artist    *string   `json:"artist,omitempty"`
 	Id        int64     `json:"id"`
 	MediaType string    `json:"media_type"`
 	SortTitle string    `json:"sort_title"`
@@ -739,7 +755,17 @@ type ListWorksParams struct {
 
 	// CategoryId Narrows to one category. Naming a category the caller cannot read answers 404, matching a single-item lookup (Invariant 37) rather than a filter that silently returns nothing.
 	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
+
+	// Sort Which column orders the list. artist is not a valid value here (Work.artist's own description explains why); title is the default.
+	Sort *ListWorksParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+	Dir  *ListWorksParamsDir  `form:"dir,omitempty" json:"dir,omitempty"`
 }
+
+// ListWorksParamsSort defines parameters for ListWorks.
+type ListWorksParamsSort string
+
+// ListWorksParamsDir defines parameters for ListWorks.
+type ListWorksParamsDir string
 
 // GetWorkArtworkParams defines parameters for GetWorkArtwork.
 type GetWorkArtworkParams struct {
@@ -1943,6 +1969,22 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	err = runtime.BindQueryParameter("form", true, false, "category_id", r.URL.Query(), &params.CategoryId)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "sort", r.URL.Query(), &params.Sort)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "dir" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "dir", r.URL.Query(), &params.Dir)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dir", Err: err})
 		return
 	}
 
