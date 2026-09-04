@@ -23,11 +23,12 @@ const seriesStandardProfileJSON = `{
     "audio_codec": [["truehd", "dtshd"], ["eac3", "dts"], ["aac", "ac3"], ["mp3"]],
     "audio_channels": [["7.1"], ["5.1"], ["2.0"]]
   },
-  "targets": [
-    {"when": {"resolution": "2160p", "video_codec": "hevc"}, "bitrate": {"min": "20Mbps", "ideal": "45Mbps", "max": "90Mbps"}},
-    {"when": {"resolution": "1080p", "video_codec": "h264"}, "bitrate": {"min": "6Mbps", "ideal": "12Mbps", "max": "25Mbps"}}
-  ],
-  "bitrate_weights": {"over": 1.0, "under": 1.0},
+  "targets": {
+    "bitrate": [
+      {"when": {"resolution": "2160p", "video_codec": "hevc"}, "min": "20Mbps", "ideal": "45Mbps", "max": "90Mbps", "weights": {"over": 1.0, "under": 1.0}},
+      {"when": {"resolution": "1080p", "video_codec": "h264"}, "min": "6Mbps", "ideal": "12Mbps", "max": "25Mbps", "weights": {"over": 1.0, "under": 1.0}}
+    ]
+  },
   "scoring": [
     {"name": "preferred-groups", "score": 10, "specs": [
         {"field": "release_group", "in": "$preferred"}

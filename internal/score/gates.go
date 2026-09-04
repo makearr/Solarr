@@ -28,7 +28,7 @@ const unmeasuredFact = "unmeasured"
 
 // evaluateGates runs every configured requirement -- never stops at the first
 // failure, so a rejected candidate's UI can show everything wrong at once (ADR-40).
-func evaluateGates(require Requirements, tiers map[string][][]string, target BitrateTarget, hasTarget bool, facts Facts) (gates []model.GateResult, rejections []model.Rejection, deferrals []model.Deferral, outcome model.Outcome) {
+func evaluateGates(require Requirements, tiers map[string][][]string, target Target, hasTarget bool, facts Facts) (gates []model.GateResult, rejections []model.Rejection, deferrals []model.Deferral, outcome model.Outcome) {
 	var outcomes []gateOutcome
 
 	if require.Resolution != nil {
@@ -107,19 +107,19 @@ func requireAnyOfGate(name string, want []string, present []string) gateOutcome 
 	return gateOutcome{model.GateResult{Gate: name, Passed: false, Wanted: wanted, Got: got}, gateFailed}
 }
 
-func bitrateMinimumGate(target BitrateTarget, hasTarget bool, overallBitsPerSecond int64) gateOutcome {
+func bitrateMinimumGate(target Target, hasTarget bool, overallBitsPerSecond int64) gateOutcome {
 	if !hasTarget {
 		return gateOutcome{model.GateResult{Gate: "bitrate_min", Passed: true, Wanted: "n/a", Got: "no matching target"}, gatePassed}
 	}
 	if overallBitsPerSecond <= 0 {
-		return gateOutcome{model.GateResult{Gate: "bitrate_min", Passed: false, Wanted: target.Bitrate.Min, Got: unmeasuredFact}, gateMissing}
+		return gateOutcome{model.GateResult{Gate: "bitrate_min", Passed: false, Wanted: target.Min, Got: unmeasuredFact}, gateMissing}
 	}
-	minRate, err := parseBitRate(target.Bitrate.Min)
+	minRate, err := parseBitRate(target.Min)
 	if err != nil {
-		return gateOutcome{model.GateResult{Gate: "bitrate_min", Passed: true, Wanted: target.Bitrate.Min, Got: "invalid target"}, gatePassed}
+		return gateOutcome{model.GateResult{Gate: "bitrate_min", Passed: true, Wanted: target.Min, Got: "invalid target"}, gatePassed}
 	}
 	passed := float64(overallBitsPerSecond) >= minRate
-	result := model.GateResult{Gate: "bitrate_min", Passed: passed, Wanted: target.Bitrate.Min, Got: fmt.Sprintf("%d bps", overallBitsPerSecond)}
+	result := model.GateResult{Gate: "bitrate_min", Passed: passed, Wanted: target.Min, Got: fmt.Sprintf("%d bps", overallBitsPerSecond)}
 	if passed {
 		return gateOutcome{result, gatePassed}
 	}

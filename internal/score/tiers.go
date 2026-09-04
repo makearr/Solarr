@@ -3,6 +3,7 @@ package score
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/makearr/MediaNexus/internal/model"
 )
@@ -20,22 +21,22 @@ func rankInGroups(groups [][]string, value string) (rank int, found bool) {
 
 // buildQualityVector builds one TierValue per compare dimension, in order -- proof
 // of ADR-40's "no change to the interpreter": a video and a music profile run this same code.
-func buildQualityVector(compare []string, tiers map[string][][]string, facts Facts, distance float64, distanceOK bool) model.QualityVector {
+func buildQualityVector(compare []string, tiers map[string][][]string, facts Facts, distances map[string]targetResult) model.QualityVector {
 	vector := model.QualityVector{}
 	for _, dimension := range compare {
-		vector.Tiers = append(vector.Tiers, tierValueFor(dimension, tiers, facts, distance, distanceOK))
+		vector.Tiers = append(vector.Tiers, tierValueFor(dimension, tiers, facts, distances))
 	}
 	return vector
 }
 
-func tierValueFor(dimension string, tiers map[string][][]string, facts Facts, distance float64, distanceOK bool) model.TierValue {
-	switch dimension {
-	case "score":
+func tierValueFor(dimension string, tiers map[string][][]string, facts Facts, distances map[string]targetResult) model.TierValue {
+	if dimension == "score" {
 		// The additive stage breaks ties outside model.Compare (Decision.Score),
 		// so as a comparison dimension it always agrees.
 		return model.TierValue{Dimension: dimension, Rank: 0, Label: "n/a", Detail: "tie-break is the additive score stage, not a tier"}
-	case "bitrate_distance":
-		return bitrateDistanceTier(distance, distanceOK)
+	}
+	if base, isDistance := strings.CutSuffix(dimension, "_distance"); isDistance {
+		return distanceTier(dimension, distances[base])
 	}
 
 	if groups, declared := tiers[dimension]; declared {
@@ -44,17 +45,21 @@ func tierValueFor(dimension string, tiers map[string][][]string, facts Facts, di
 	return numericTier(dimension, facts)
 }
 
-func bitrateDistanceTier(distance float64, ok bool) model.TierValue {
-	if !ok {
-		return model.TierValue{Dimension: "bitrate_distance", Rank: math.MaxInt32, Label: "unmeasured", Detail: "no matching target or bitrate not probed"}
+// distanceTier renders any dimension's own "<dimension>_distance" entry --
+// ADR-40 amended 2026-09-04 so this is a lookup, not a dimension-specific
+// branch: the interpreter gains no new code per dimension, only the profile's
+// own "targets" data does.
+func distanceTier(compareName string, result targetResult) model.TierValue {
+	if !result.distanceOK {
+		return model.TierValue{Dimension: compareName, Rank: math.MaxInt32, Label: "unmeasured", Detail: "no matching target or dimension not probed"}
 	}
 	// Scaled to an int without losing ordering; distances stay well under this range.
-	rank := int(math.Round(distance * 1_000_000))
+	rank := int(math.Round(result.distance * 1_000_000))
 	return model.TierValue{
-		Dimension: "bitrate_distance",
+		Dimension: compareName,
 		Rank:      rank,
-		Label:     fmt.Sprintf("%.3f", distance),
-		Detail:    "log2(rate/ideal), weighted by over/under",
+		Label:     fmt.Sprintf("%.3f", result.distance),
+		Detail:    "log2(measured/ideal), weighted by over/under",
 	}
 }
 

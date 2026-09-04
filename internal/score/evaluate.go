@@ -5,11 +5,11 @@ import "github.com/makearr/MediaNexus/internal/model"
 // Evaluate runs ADR-40's three stages against one candidate. preferred substitutes
 // a scoring spec's "$preferred" placeholder, e.g. release groups the user favours.
 func Evaluate(profile Profile, facts Facts, preferred []string) model.Decision {
-	target, hasTarget := matchTarget(profile.Targets, facts.File)
-	distance, distanceOK := bitrateDistance(facts.File.OverallBitrate, target, profile.BitrateWeights, hasTarget)
+	distances := resolveTargets(profile.Targets, facts)
+	bitrate := distances["bitrate"]
 
-	gates, rejections, deferrals, outcome := evaluateGates(profile.Require, profile.Tiers, target, hasTarget, facts)
-	vector := buildQualityVector(profile.Compare, profile.Tiers, facts, distance, distanceOK)
+	gates, rejections, deferrals, outcome := evaluateGates(profile.Require, profile.Tiers, bitrate.target, bitrate.hasTarget, facts)
+	vector := buildQualityVector(profile.Compare, profile.Tiers, facts, distances)
 	components := evaluateScoring(profile.Scoring, facts, preferred)
 
 	return model.Decision{

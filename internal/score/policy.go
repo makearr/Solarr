@@ -9,14 +9,18 @@ import (
 // Profile is ADR-40's quality profile, parsed from settings.QualityProfile.RulesJSON
 // -- production JSON, the design doc's YAML is the same shape for readability.
 type Profile struct {
-	Name           string                `json:"quality_profile"`
-	Require        Requirements          `json:"require"`
-	Compare        []string              `json:"compare"`
-	Tiers          map[string][][]string `json:"tiers"`
-	Targets        []BitrateTarget       `json:"targets"`
-	BitrateWeights BitrateWeights        `json:"bitrate_weights"`
-	Scoring        []ScoringRule         `json:"scoring"`
-	Upgrade        UpgradePolicy         `json:"upgrade"`
+	Name    string                `json:"quality_profile"`
+	Require Requirements          `json:"require"`
+	Compare []string              `json:"compare"`
+	Tiers   map[string][][]string `json:"tiers"`
+	// Targets keys on a dimension name ("bitrate", "sample_rate", "bit_depth", ...)
+	// -- ADR-40 amended 2026-09-04: any numeric dimension may carry a target, not
+	// just bitrate. A dimension's own "<dimension>_distance" compare entry reads
+	// this; a dimension absent here keeps the plain "higher is better" numeric
+	// comparison, so an existing bitrate-only profile needs no changes at all.
+	Targets map[string][]Target `json:"targets"`
+	Scoring []ScoringRule       `json:"scoring"`
+	Upgrade UpgradePolicy       `json:"upgrade"`
 }
 
 // Requirements is ADR-40 stage 1 -- every entry is evaluated, never short-circuited,
@@ -41,24 +45,24 @@ type AnyOfClause struct {
 	AnyOf []string `json:"any_of"`
 }
 
-// BitrateTarget supplies the ideal/min/max for files matching When, checked in
-// declaration order -- the first match wins.
-type BitrateTarget struct {
+// Target supplies the ideal/min/max for one dimension, for files matching When,
+// checked in declaration order -- the first match wins. Values are strings so a
+// dimension can carry a human-readable unit ("20Mbps", "48kHz") the way a release
+// name or a *Arr-style quality definition would state it; parseTargetValue
+// converts a dimension's own unit to the number Facts reports.
+type Target struct {
 	When    map[string]string `json:"when"`
-	Bitrate BitrateRange      `json:"bitrate"`
+	Min     string            `json:"min,omitempty"`
+	Ideal   string            `json:"ideal"`
+	Max     string            `json:"max,omitempty"`
+	Weights TargetWeights     `json:"weights"`
 }
 
-// BitrateRange values are human-readable rates ("20Mbps", "1MB/min"); parseBitRate
-// converts either unit to bits/sec.
-type BitrateRange struct {
-	Min   string `json:"min"`
-	Ideal string `json:"ideal"`
-	Max   string `json:"max"`
-}
-
-// BitrateWeights scales the over/under asymmetry of bitrate distance. Parse
-// defaults zero values to 1, so an omitted block means "no asymmetry", not "zero".
-type BitrateWeights struct {
+// TargetWeights scales the over/under asymmetry of a dimension's distance
+// (ADR-40). Parse defaults a zero field per-dimension: bitrate defaults to
+// symmetric 1/1, sample_rate and bit_depth default over below under (0.5/1),
+// so a name is not required to also copy the asymmetry that makes it useful.
+type TargetWeights struct {
 	Over  float64 `json:"over"`
 	Under float64 `json:"under"`
 }
@@ -148,13 +152,36 @@ func Parse(data []byte) (Profile, error) {
 	if err := json.Unmarshal(data, &profile); err != nil {
 		return Profile{}, fmt.Errorf("score: parsing profile: %w", err)
 	}
-	if profile.BitrateWeights.Over == 0 {
-		profile.BitrateWeights.Over = 1
-	}
-	if profile.BitrateWeights.Under == 0 {
-		profile.BitrateWeights.Under = 1
+	for dimension, targets := range profile.Targets {
+		if _, declaredAsTier := profile.Tiers[dimension]; declaredAsTier {
+			return Profile{}, fmt.Errorf(
+				"score: %q is declared in both \"tiers\" and \"targets\" -- a dimension is one or the other, never both (Invariant 72)",
+				dimension)
+		}
+		for index := range targets {
+			defaultTargetWeights(dimension, &targets[index].Weights)
+		}
 	}
 	return profile, nil
+}
+
+// defaultTargetWeights fills a zero Over or Under with the dimension's own
+// default, not a single global one: bitrate stays symmetric (1/1), sample_rate
+// and bit_depth over-weight below under-weight (0.5/1) so overshooting a target
+// costs less than undershooting it -- ADR-40's amendment, confirmed with the
+// user. A caller who sets one side explicitly keeps it; only a zero field
+// (JSON omitted it) is defaulted.
+func defaultTargetWeights(dimension string, weights *TargetWeights) {
+	over, under := 1.0, 1.0
+	if dimension == "sample_rate" || dimension == "bit_depth" {
+		over = 0.5
+	}
+	if weights.Over == 0 {
+		weights.Over = over
+	}
+	if weights.Under == 0 {
+		weights.Under = under
+	}
 }
 
 // ParseUpgrade decodes an UpgradeJSON column stored separately from the rules.

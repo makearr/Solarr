@@ -29,7 +29,7 @@ func TestEvaluateGates_EvaluatesEveryGateNotJustTheFirstFailure(t *testing.T) {
 		AudioLanguages: []string{"ru"}, // fails any_of
 		OverallBitrate: 100,            // fails bitrate_min once a target is picked -- none matches here, so this one passes
 	}}
-	gates, rejections, _, outcome := evaluateGates(seriesRequire(), seriesTiers, BitrateTarget{}, false, facts)
+	gates, rejections, _, outcome := evaluateGates(seriesRequire(), seriesTiers, Target{}, false, facts)
 
 	if len(gates) != 4 {
 		t.Fatalf("len(gates) = %d, want 4 (every configured requirement evaluated)", len(gates))
@@ -49,7 +49,7 @@ func TestEvaluateGates_AllPassAccepts(t *testing.T) {
 		AudioLanguages: []string{"en"},
 		OverallBitrate: 8_000_000,
 	}}
-	target := BitrateTarget{Bitrate: BitrateRange{Min: "6Mbps"}}
+	target := Target{Min: "6Mbps"}
 	gates, rejections, deferrals, outcome := evaluateGates(seriesRequire(), seriesTiers, target, true, facts)
 
 	if len(gates) != 4 {
@@ -77,7 +77,7 @@ func TestEvaluateGates_UnmeasuredFieldDefersRatherThanRejects(t *testing.T) {
 		AudioLanguages: []string{"en"},
 		OverallBitrate: 8_000_000,
 	}}
-	target := BitrateTarget{Bitrate: BitrateRange{Min: "6Mbps"}}
+	target := Target{Min: "6Mbps"}
 	gates, rejections, deferrals, outcome := evaluateGates(seriesRequire(), seriesTiers, target, true, facts)
 
 	if len(rejections) != 0 {
@@ -110,7 +110,7 @@ func TestEvaluateGates_FailedBeatsMissingInOutcome(t *testing.T) {
 		AudioLanguages: []string{"en"},
 		OverallBitrate: 8_000_000,
 	}}
-	target := BitrateTarget{Bitrate: BitrateRange{Min: "6Mbps"}}
+	target := Target{Min: "6Mbps"}
 	_, rejections, deferrals, outcome := evaluateGates(seriesRequire(), seriesTiers, target, true, facts)
 
 	if outcome != model.OutcomeReject {
