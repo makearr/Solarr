@@ -3,6 +3,11 @@
 Build numbers advance on each successful image build; see
 `documentation/versioning.md`.
 
+## 0.0.22 — 2026-09-04
+
+- Add root folder placement policy and section 11.7's Resolve engine
+
+
 ## 0.0.21 — 2026-09-04
 
 - Add the naming template engine, live-verified against the real library (todo 4.5)
