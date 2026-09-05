@@ -69,6 +69,7 @@ type worksFixture struct {
 	importInspector      *fakeImportInspector
 	drainStarter         *fakeDrainStarter
 	moveJobs             *fakeMoveJobLister
+	renameStarter        *fakeRenameStarter
 	fsys                 *fsx.Mem
 	clock                *clock.Fake
 }
@@ -126,6 +127,7 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 	importInspector := &fakeImportInspector{}
 	drainStarter := &fakeDrainStarter{}
 	moveJobs := &fakeMoveJobLister{}
+	renameStarter := &fakeRenameStarter{}
 	fsys := fsx.NewMem(fake)
 	server, err := apiserver.New(apiserver.Config{
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
@@ -145,6 +147,7 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 		ImportInspector:      importInspector,
 		DrainStarter:         drainStarter,
 		MoveJobs:             moveJobs,
+		RenameStarter:        renameStarter,
 		FS:                   fsys,
 		ImagesDir:            testImagesDir,
 		LibrarySize:          librarySize,
@@ -166,7 +169,7 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 		artwork: artwork, people: people, subscriber: subscriber,
 		blockedContent: blockedContent, removeAndBlocker: removeAndBlocker,
 		importSessions: importSessions, importInspector: importInspector,
-		drainStarter: drainStarter, moveJobs: moveJobs,
+		drainStarter: drainStarter, moveJobs: moveJobs, renameStarter: renameStarter,
 		fsys: fsys, clock: fake,
 	}
 }

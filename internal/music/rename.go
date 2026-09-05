@@ -34,8 +34,13 @@ func mustCompileDefaults() ([]naming.Segment, []naming.Segment) {
 // RenameTarget is one file's current and proposed location under the
 // shipped default naming template -- section 11.8's own "preview as a
 // diff" (Invariant 73), scoped to the one template that exists today.
+// WorkID and SizeBytes carry through what RenamePreview already resolved
+// per file, so a caller building a mover.Request from a []RenameTarget
+// never needs to re-derive either.
 type RenameTarget struct {
 	MediaObjectID   int64
+	WorkID          int64
+	SizeBytes       int64
 	CurrentRelPath  string
 	ProposedRelPath string
 }
@@ -57,7 +62,7 @@ var ErrNoIdentity = errors.New("music: file has no work_part identity")
 // Format is simply absent from the rendered path, the same way it already
 // is for any file where the edition does not state one.
 func RenameTargetFor(
-	detail library.WorkDetail, identity library.FileIdentity, mediaObjectID int64, currentRelPath string,
+	detail library.WorkDetail, identity library.FileIdentity, mediaObjectID, sizeBytes int64, currentRelPath string,
 ) (RenameTarget, error) {
 	var edition library.EditionDetail
 	if identity.EditionID != nil {
@@ -94,5 +99,8 @@ func RenameTargetFor(
 		return RenameTarget{}, fmt.Errorf("music: render path for media_object %d: %w", mediaObjectID, err)
 	}
 
-	return RenameTarget{MediaObjectID: mediaObjectID, CurrentRelPath: currentRelPath, ProposedRelPath: proposed}, nil
+	return RenameTarget{
+		MediaObjectID: mediaObjectID, WorkID: identity.WorkID, SizeBytes: sizeBytes,
+		CurrentRelPath: currentRelPath, ProposedRelPath: proposed,
+	}, nil
 }

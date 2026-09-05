@@ -35,6 +35,15 @@ type MoveJobLister interface {
 	ListMoveJobs(ctx context.Context, filterReason, filterState string) ([]MoveJobRow, error)
 }
 
+// RenameStarter applies section 11.8's own naming template to a root's
+// already-identified files. Same DrainPlanResult shape DrainStarter
+// answers -- structurally identical (accepted/moves/refused/deltas), not
+// drain-specific despite the name, and not worth a second type until the
+// two shapes actually need to diverge.
+type RenameStarter interface {
+	StartRename(ctx context.Context, rootFolderID int64, preview bool) (DrainPlanResult, error)
+}
+
 // DrainPlanResult is what one drain computation answered, in apiserver's own
 // plain-data shape -- no mover.MovePlan or library types cross this
 // boundary.
@@ -122,6 +131,49 @@ func (s *Server) DrainRootFolder(w http.ResponseWriter, r *http.Request, id int6
 	preview := body.Preview != nil && *body.Preview
 
 	result, err := s.drainStarter.StartDrain(r.Context(), id, preview)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, drainPlanView(result))
+}
+
+// routeRenameRootFolder parses the id path parameter, mirroring
+// routeDrainRootFolder.
+func (s *Server) routeRenameRootFolder(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a root folder id must be a number")
+		return
+	}
+	s.RenameRootFolder(w, r, id)
+}
+
+// RenameRootFolder computes section 11.8's own rename plan for one root,
+// administrator only -- it can move real files on disk, the same trust
+// boundary DrainRootFolder's own doc comment states.
+func (s *Server) RenameRootFolder(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.renameStarter == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "renaming is not available")
+		return
+	}
+
+	var body gen.RenameRootFolderJSONRequestBody
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDrainBody)).Decode(&body); err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "the request body could not be read")
+			return
+		}
+	}
+	preview := body.Preview != nil && *body.Preview
+
+	result, err := s.renameStarter.StartRename(r.Context(), id, preview)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return

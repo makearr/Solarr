@@ -113,6 +113,9 @@ type Config struct {
 	// MoveJobs lists ADR-51 move jobs. Optional: without it, ListMoveJobs
 	// answers 503.
 	MoveJobs MoveJobLister
+	// RenameStarter applies section 11.8's naming template to a root.
+	// Optional: without it, RenameRootFolder answers 503.
+	RenameStarter RenameStarter
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -151,6 +154,7 @@ type Server struct {
 	importInspector      ImportInspector
 	drainStarter         DrainStarter
 	moveJobs             MoveJobLister
+	renameStarter        RenameStarter
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -201,6 +205,7 @@ func New(config Config) (*Server, error) {
 		importInspector:      config.ImportInspector,
 		drainStarter:         config.DrainStarter,
 		moveJobs:             config.MoveJobs,
+		renameStarter:        config.RenameStarter,
 		address:              net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -267,6 +272,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/rootfolders/{id}/drain", server.routeDrainRootFolder)
 			secured.Delete("/rootfolders/{id}/drain", server.routeStopDrainingRootFolder)
 			secured.Get("/moves", server.routeListMoveJobs)
+			secured.Post("/rootfolders/{id}/rename", server.routeRenameRootFolder)
 			secured.Get("/users", server.ListUsers)
 			secured.Post("/users", server.CreateUser)
 			secured.Patch("/users/{id}", routeUser(server.UpdateUser))

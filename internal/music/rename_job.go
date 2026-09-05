@@ -49,7 +49,7 @@ type RenameMoveJobs interface {
 	AddItems(ctx context.Context, jobID int64, items []library.NewMoveItem) error
 }
 
-// RenameConfig is what RenamePreview and RenameCommit need. Every field is
+// RenameConfig is what RenamePreview and RenameStart need. Every field is
 // required except Clock, which is optional and defaults to the real clock.
 type RenameConfig struct {
 	Roots      RenameRoots
@@ -93,7 +93,7 @@ func RenamePreview(ctx context.Context, cfg RenameConfig, rootFolderID int64) ([
 			}
 			details[identity.WorkID] = detail
 		}
-		target, err := RenameTargetFor(detail, identity, f.MediaObjectID, f.RelPath)
+		target, err := RenameTargetFor(detail, identity, f.MediaObjectID, f.SizeBytes, f.RelPath)
 		if err != nil {
 			continue
 		}
@@ -104,13 +104,15 @@ func RenamePreview(ctx context.Context, cfg RenameConfig, rootFolderID int64) ([
 	return targets, nil
 }
 
-// RenameCommit computes the same preview RenamePreview would, then --
-// unless there is nothing to rename -- plans it (one affinity group per
-// work, so an album renames as one unit) and, unless the plan refuses,
-// persists the move job and enqueues moverjob's own Apply. moveJobID is 0
-// when nothing was committed (nothing to rename, or the plan refused
-// outright) -- the caller reads plan.Refused for why.
-func RenameCommit(ctx context.Context, cfg RenameConfig, rootFolderID int64) (mover.MovePlan, int64, error) {
+// RenameStart computes the same preview RenamePreview would, then plans it
+// (one affinity group per work, so an album renames as one unit under
+// mover.Plan's own guards -- read-only+allow_rename, and the same-root
+// reserve exemption, both apply here exactly as they do for any other
+// RENAME request). With preview true, or when the plan refuses outright or
+// there is nothing to rename, nothing is persisted and moveJobID is 0 --
+// the caller reads plan.Refused for why. Otherwise the move job is
+// persisted and moverjob's own Apply is enqueued.
+func RenameStart(ctx context.Context, cfg RenameConfig, rootFolderID int64, preview bool) (mover.MovePlan, int64, error) {
 	targets, err := RenamePreview(ctx, cfg, rootFolderID)
 	if err != nil {
 		return mover.MovePlan{}, 0, err
@@ -124,24 +126,14 @@ func RenameCommit(ctx context.Context, cfg RenameConfig, rootFolderID int64) (mo
 		return mover.MovePlan{}, 0, fmt.Errorf("music: root folder %d not found", rootFolderID)
 	}
 
-	files := make([]mover.FileToMove, 0, len(targets))
-	for _, target := range targets {
-		// The identity was already resolved once inside RenamePreview above;
-		// re-resolving it here for its own WorkID (RenameTarget itself does
-		// not carry one) is a second, cheap lookup rather than widening
-		// RenameTarget's own shape for one caller's grouping need.
-		identity, found, err := cfg.Identities.IdentityForFile(ctx, target.MediaObjectID)
-		if err != nil {
-			return mover.MovePlan{}, 0, fmt.Errorf("music: identity for media object %d: %w", target.MediaObjectID, err)
-		}
-		if !found {
-			continue
-		}
-		files = append(files, mover.FileToMove{
+	files := make([]mover.FileToMove, len(targets))
+	for i, target := range targets {
+		files[i] = mover.FileToMove{
 			MediaObjectID: target.MediaObjectID, SourceRootFolderID: rootFolderID,
-			SourceRelPath: target.CurrentRelPath, AffinityKey: fmt.Sprintf("work:%d", identity.WorkID),
+			SourceRelPath: target.CurrentRelPath, SizeBytes: target.SizeBytes,
+			AffinityKey:      fmt.Sprintf("work:%d", target.WorkID),
 			DestRootFolderID: rootFolderID, DestRelPath: target.ProposedRelPath,
-		})
+		}
 	}
 
 	rootCandidate := renameRootCandidate(rootFolderID, root)
@@ -154,7 +146,7 @@ func RenameCommit(ctx context.Context, cfg RenameConfig, rootFolderID int64) (mo
 	if err != nil {
 		return mover.MovePlan{}, 0, fmt.Errorf("music: plan rename for root %d: %w", rootFolderID, err)
 	}
-	if len(plan.Moves) == 0 {
+	if preview || len(plan.Moves) == 0 {
 		return plan, 0, nil
 	}
 

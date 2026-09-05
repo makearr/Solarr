@@ -138,7 +138,7 @@ func TestRenamePreview_SkipsFilesWithNoIdentity(t *testing.T) {
 	}
 }
 
-func TestRenameCommit_PersistsAndEnqueuesWhenSomethingChanged(t *testing.T) {
+func TestRenameStart_PersistsAndEnqueuesWhenSomethingChanged(t *testing.T) {
 	moveJobs := &fakeRenameMoveJobs{}
 	cfg := music.RenameConfig{
 		Roots: fakeRenameRoots{1: {ID: 1, Online: true, Writable: true, FSID: "fs-a"}},
@@ -152,7 +152,7 @@ func TestRenameCommit_PersistsAndEnqueuesWhenSomethingChanged(t *testing.T) {
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	plan, jobID, err := music.RenameCommit(t.Context(), cfg, 1)
+	plan, jobID, err := music.RenameStart(t.Context(), cfg, 1, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}
@@ -167,7 +167,39 @@ func TestRenameCommit_PersistsAndEnqueuesWhenSomethingChanged(t *testing.T) {
 	}
 }
 
-func TestRenameCommit_DoesNothingWhenNothingChanged(t *testing.T) {
+// preview:true computes the real plan (guards included -- unlike the old
+// two-entry-point design, this now actually runs mover.Plan) but persists
+// nothing.
+func TestRenameStart_PreviewComputesThePlanWithoutPersistingAnything(t *testing.T) {
+	moveJobs := &fakeRenameMoveJobs{}
+	cfg := music.RenameConfig{
+		Roots: fakeRenameRoots{1: {ID: 1, Online: true, Writable: true, FSID: "fs-a"}},
+		Files: fakeRenameFiles{1: {
+			{MediaObjectID: 1, RelPath: "Old/01.flac", SizeBytes: 100},
+		}},
+		Identities: fakeRenameIdentities{1: {WorkID: 1, MediaRef: "disc1:track1"}},
+		Works:      fakeRenameWorks{1: renameWorkDetailFixture()},
+		MoveJobs:   moveJobs,
+		Queue:      newRenameQueue(t),
+		Clock:      clock.NewFakeAtEpoch(),
+	}
+
+	plan, jobID, err := music.RenameStart(t.Context(), cfg, 1, true)
+	if err != nil {
+		t.Fatalf("RenameStart: %v", err)
+	}
+	if jobID != 0 {
+		t.Errorf("jobID = %d, want 0 for a preview", jobID)
+	}
+	if len(plan.Moves) != 1 {
+		t.Fatalf("plan.Moves = %+v, want one computed move", plan.Moves)
+	}
+	if moveJobs.items != nil {
+		t.Error("MoveJobs.AddItems was called during a preview")
+	}
+}
+
+func TestRenameStart_DoesNothingWhenNothingChanged(t *testing.T) {
 	moveJobs := &fakeRenameMoveJobs{}
 	cfg := music.RenameConfig{
 		Roots: fakeRenameRoots{1: {ID: 1, Online: true, Writable: true, FSID: "fs-a"}},
@@ -181,7 +213,7 @@ func TestRenameCommit_DoesNothingWhenNothingChanged(t *testing.T) {
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	plan, jobID, err := music.RenameCommit(t.Context(), cfg, 1)
+	plan, jobID, err := music.RenameStart(t.Context(), cfg, 1, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}
@@ -199,7 +231,7 @@ func TestRenameCommit_DoesNothingWhenNothingChanged(t *testing.T) {
 // Nothing to rename short-circuits before ever looking up the root folder's
 // own policy -- an unknown root id must not turn "there was nothing to do
 // anyway" into a spurious error.
-func TestRenameCommit_DoesNothingForAnUnknownRootWithNothingToRename(t *testing.T) {
+func TestRenameStart_DoesNothingForAnUnknownRootWithNothingToRename(t *testing.T) {
 	cfg := music.RenameConfig{
 		Roots: fakeRenameRoots{},
 		Files: fakeRenameFiles{99: {
@@ -209,7 +241,7 @@ func TestRenameCommit_DoesNothingForAnUnknownRootWithNothingToRename(t *testing.
 		Works:      fakeRenameWorks{1: renameWorkDetailFixture()},
 	}
 
-	plan, jobID, err := music.RenameCommit(t.Context(), cfg, 99)
+	plan, jobID, err := music.RenameStart(t.Context(), cfg, 99, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}
@@ -218,7 +250,7 @@ func TestRenameCommit_DoesNothingForAnUnknownRootWithNothingToRename(t *testing.
 	}
 }
 
-func TestRenameCommit_RefusesOnAReadOnlyRootWithoutAllowRename(t *testing.T) {
+func TestRenameStart_RefusesOnAReadOnlyRootWithoutAllowRename(t *testing.T) {
 	moveJobs := &fakeRenameMoveJobs{}
 	cfg := music.RenameConfig{
 		Roots: fakeRenameRoots{1: {ID: 1, Online: true, Writable: true, FSID: "fs-a", ReadOnly: true}},
@@ -232,7 +264,7 @@ func TestRenameCommit_RefusesOnAReadOnlyRootWithoutAllowRename(t *testing.T) {
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	plan, jobID, err := music.RenameCommit(t.Context(), cfg, 1)
+	plan, jobID, err := music.RenameStart(t.Context(), cfg, 1, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}

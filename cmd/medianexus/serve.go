@@ -24,6 +24,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/health"
 	"github.com/makearr/MediaNexus/internal/jobs"
 	"github.com/makearr/MediaNexus/internal/library"
+	"github.com/makearr/MediaNexus/internal/music"
 	"github.com/makearr/MediaNexus/internal/privilege"
 	"github.com/makearr/MediaNexus/internal/recovery"
 	"github.com/makearr/MediaNexus/internal/settings"
@@ -429,6 +430,11 @@ func (p *process) startServer(ctx context.Context) error {
 			cache: p.cache,
 		},
 		MoveJobs: moveJobAdapter{moveJobs: library.NewMoveJobs(p.library)},
+		RenameStarter: renameAdapter{config: music.RenameConfig{
+			Roots: drainRoots{cache: p.cache}, Files: library.NewPhysical(p.library),
+			Identities: library.NewDesired(p.library), Works: library.NewWorks(p.library),
+			MoveJobs: library.NewMoveJobs(p.library), Queue: p.queue, Clock: clock.NewSystem(),
+		}},
 		// time.Local.String() reports "Local"; the name the operator set is the useful one.
 		Timezone: p.timezone,
 		Egress:   egressStatus{prober: prober},

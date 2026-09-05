@@ -34,6 +34,21 @@ func (f *fakeDrainStarter) StopDrain(_ context.Context, rootFolderID int64) erro
 	return f.stopErr
 }
 
+type fakeRenameStarter struct {
+	result apiserver.DrainPlanResult
+	err    error
+
+	calls       int
+	lastRootID  int64
+	lastPreview bool
+}
+
+func (f *fakeRenameStarter) StartRename(_ context.Context, rootFolderID int64, preview bool) (apiserver.DrainPlanResult, error) {
+	f.calls++
+	f.lastRootID, f.lastPreview = rootFolderID, preview
+	return f.result, f.err
+}
+
 type fakeMoveJobLister struct {
 	rows []apiserver.MoveJobRow
 	err  error
@@ -194,5 +209,56 @@ func TestListMoveJobs_PassesFiltersThrough(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), `"files_done":2`) {
 		t.Errorf("body = %s, want files_done:2", recorder.Body.String())
+	}
+}
+
+func TestRenameRootFolder_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/rootfolders/1/rename", `{}`))
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.renameStarter.calls != 0 {
+		t.Error("rename ran despite the caller not being an administrator")
+	}
+}
+
+func TestRenameRootFolder_PassesPreviewThrough(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/rootfolders/7/rename", `{"preview":true}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.renameStarter.lastRootID != 7 || !fixture.renameStarter.lastPreview {
+		t.Errorf("StartRename called with (%d, %v), want (7, true)",
+			fixture.renameStarter.lastRootID, fixture.renameStarter.lastPreview)
+	}
+}
+
+func TestRenameRootFolder_ReturnsTheComputedPlan(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	jobID := int64(9)
+	fixture.renameStarter.result = apiserver.DrainPlanResult{
+		Accepted: true, MoveJobID: jobID, FilesTotal: 1, BytesTotal: 100,
+		Moves: []apiserver.DrainMoveRow{
+			{MediaObjectID: 1, DestRootFolderID: 1, DestRelPath: "Artist/Album (2000)/Artist - 01 - Track.flac", SizeBytes: 100, AffinityKey: "work:1"},
+		},
+	}
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/rootfolders/1/rename", `{}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, `"accepted":true`) || !strings.Contains(body, `"move_job_id":9`) {
+		t.Errorf("body = %s, want accepted:true and move_job_id:9", body)
 	}
 }

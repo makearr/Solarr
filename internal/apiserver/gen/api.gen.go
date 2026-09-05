@@ -1205,6 +1205,11 @@ type DrainRootFolderJSONBody struct {
 	Preview *bool `json:"preview,omitempty"`
 }
 
+// RenameRootFolderJSONBody defines parameters for RenameRootFolder.
+type RenameRootFolderJSONBody struct {
+	Preview *bool `json:"preview,omitempty"`
+}
+
 // SimulateScoreJSONBody defines parameters for SimulateScore.
 type SimulateScoreJSONBody struct {
 	LanguageProfileId      *int64    `json:"language_profile_id,omitempty"`
@@ -1338,6 +1343,9 @@ type AddRootFolderJSONRequestBody AddRootFolderJSONBody
 // DrainRootFolderJSONRequestBody defines body for DrainRootFolder for application/json ContentType.
 type DrainRootFolderJSONRequestBody DrainRootFolderJSONBody
 
+// RenameRootFolderJSONRequestBody defines body for RenameRootFolder for application/json ContentType.
+type RenameRootFolderJSONRequestBody RenameRootFolderJSONBody
+
 // SimulateScoreJSONRequestBody defines body for SimulateScore for application/json ContentType.
 type SimulateScoreJSONRequestBody SimulateScoreJSONBody
 
@@ -1466,6 +1474,9 @@ type ServerInterface interface {
 	// Evacuate a root folder (ADR-51). Administrator only.
 	// (POST /rootfolders/{id}/drain)
 	DrainRootFolder(w http.ResponseWriter, r *http.Request, id int64)
+	// Preview or apply the shipped naming template to a root's own already-identified files (section 11.8). Administrator only.
+	// (POST /rootfolders/{id}/rename)
+	RenameRootFolder(w http.ResponseWriter, r *http.Request, id int64)
 	// F6: paste a release title, see how it would score against a profile -- no candidate, no acquisition, no side effects.
 	// (POST /score/simulate)
 	SimulateScore(w http.ResponseWriter, r *http.Request)
@@ -1727,6 +1738,12 @@ func (_ Unimplemented) StopDrainingRootFolder(w http.ResponseWriter, r *http.Req
 // Evacuate a root folder (ADR-51). Administrator only.
 // (POST /rootfolders/{id}/drain)
 func (_ Unimplemented) DrainRootFolder(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Preview or apply the shipped naming template to a root's own already-identified files (section 11.8). Administrator only.
+// (POST /rootfolders/{id}/rename)
+func (_ Unimplemented) RenameRootFolder(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2888,6 +2905,39 @@ func (siw *ServerInterfaceWrapper) DrainRootFolder(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// RenameRootFolder operation middleware
+func (siw *ServerInterfaceWrapper) RenameRootFolder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RenameRootFolder(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SimulateScore operation middleware
 func (siw *ServerInterfaceWrapper) SimulateScore(w http.ResponseWriter, r *http.Request) {
 
@@ -3693,6 +3743,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/rootfolders/{id}/drain", wrapper.DrainRootFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/rootfolders/{id}/rename", wrapper.RenameRootFolder)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/score/simulate", wrapper.SimulateScore)

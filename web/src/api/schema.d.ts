@@ -315,6 +315,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rootfolders/{id}/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview or apply the shipped naming template to a root's own already-identified files (section 11.8). Administrator only.
+         * @description For every file with a resolved work_part identity, computes its proposed path under the shipped default template and compares it to its current one -- files with no identity, or whose identity names no real part, are silently skipped, not fatal to the whole preview. `preview: true`, or a plan that changes nothing, persists nothing -- `accepted` is false and the response explains why. There is only the one shipped template today; a naming_profile system letting a category choose between several is its own, later follow-up.
+         */
+        post: operations["renameRootFolder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/moves": {
         parameters: {
             query?: never;
@@ -2233,6 +2255,39 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    renameRootFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @default false */
+                    preview?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The computed plan, in the same shape a drain plan uses -- `accepted` is false for a preview or a refused plan; true once the move job is created and enqueued. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrainPlan"];
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

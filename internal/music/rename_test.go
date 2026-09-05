@@ -35,7 +35,7 @@ func TestRenameTargetFor_RendersUnderTheDefaultTemplate(t *testing.T) {
 	detail := workDetailFixture()
 	identity := library.FileIdentity{WorkID: 1, MediaRef: "disc1:track3"}
 
-	target, err := music.RenameTargetFor(detail, identity, 42, "Old Path/track.flac")
+	target, err := music.RenameTargetFor(detail, identity, 42, 4096, "Old Path/track.flac")
 	if err != nil {
 		t.Fatalf("RenameTargetFor: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestRenameTargetFor_FallsBackToWorkYearWithNoEdition(t *testing.T) {
 	detail := workDetailFixture()
 	identity := library.FileIdentity{WorkID: 1, MediaRef: "disc1:track3"}
 
-	target, err := music.RenameTargetFor(detail, identity, 42, "track.flac")
+	target, err := music.RenameTargetFor(detail, identity, 42, 4096, "track.flac")
 	if err != nil {
 		t.Fatalf("RenameTargetFor: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestRenameTargetFor_PrefersThePinnedEditionYear(t *testing.T) {
 	editionID := int64(10)
 	identity := library.FileIdentity{WorkID: 1, EditionID: &editionID, MediaRef: "disc1:track3"}
 
-	target, err := music.RenameTargetFor(detail, identity, 42, "track.flac")
+	target, err := music.RenameTargetFor(detail, identity, 42, 4096, "track.flac")
 	if err != nil {
 		t.Fatalf("RenameTargetFor: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestRenameTargetFor_ReportsUnchangedWhenAlreadyCorrect(t *testing.T) {
 	identity := library.FileIdentity{WorkID: 1, MediaRef: "disc1:track3"}
 	current := "Nick Cave and the Bad Seeds/Tender Prey (1988)/Nick Cave and the Bad Seeds - 03 - The Furab Keke.flac"
 
-	target, err := music.RenameTargetFor(detail, identity, 42, current)
+	target, err := music.RenameTargetFor(detail, identity, 42, 4096, current)
 	if err != nil {
 		t.Fatalf("RenameTargetFor: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestRenameTargetFor_ErrorsWhenNoPartMatchesTheMediaRef(t *testing.T) {
 	detail := workDetailFixture()
 	identity := library.FileIdentity{WorkID: 1, MediaRef: "disc9:track99"}
 
-	_, err := music.RenameTargetFor(detail, identity, 42, "track.flac")
+	_, err := music.RenameTargetFor(detail, identity, 42, 4096, "track.flac")
 	if !errors.Is(err, music.ErrNoIdentity) {
 		t.Errorf("RenameTargetFor = %v, want ErrNoIdentity", err)
 	}

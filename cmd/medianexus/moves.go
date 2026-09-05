@@ -8,6 +8,8 @@ import (
 	"github.com/makearr/MediaNexus/internal/apiserver"
 	"github.com/makearr/MediaNexus/internal/drainjob"
 	"github.com/makearr/MediaNexus/internal/library"
+	"github.com/makearr/MediaNexus/internal/mover"
+	"github.com/makearr/MediaNexus/internal/music"
 	"github.com/makearr/MediaNexus/internal/settings"
 )
 
@@ -71,8 +73,16 @@ func (a drainAdapter) StopDrain(ctx context.Context, rootFolderID int64) error {
 }
 
 func drainPlanResult(result drainjob.Result) apiserver.DrainPlanResult {
-	view := apiserver.DrainPlanResult{Accepted: result.Accepted, MoveJobID: result.MoveJobID}
-	for _, m := range result.Plan.Moves {
+	return movePlanResult(result.Plan, result.Accepted, result.MoveJobID)
+}
+
+// movePlanResult converts a mover.MovePlan into apiserver's own plain-data
+// shape -- shared by drainAdapter and renameAdapter, since both answer the
+// exact same DrainPlanResult DTO (structurally generic despite the name;
+// see apiserver.RenameStarter's own doc comment).
+func movePlanResult(plan mover.MovePlan, accepted bool, moveJobID int64) apiserver.DrainPlanResult {
+	view := apiserver.DrainPlanResult{Accepted: accepted, MoveJobID: moveJobID}
+	for _, m := range plan.Moves {
 		view.FilesTotal++
 		view.BytesTotal += m.SizeBytes
 		view.Moves = append(view.Moves, apiserver.DrainMoveRow{
@@ -80,18 +90,32 @@ func drainPlanResult(result drainjob.Result) apiserver.DrainPlanResult {
 			DestRelPath: m.DestRelPath, SizeBytes: m.SizeBytes, AffinityKey: m.AffinityKey,
 		})
 	}
-	for _, r := range result.Plan.Refused {
+	for _, r := range plan.Refused {
 		view.Refused = append(view.Refused, apiserver.DrainRefusalRow{
 			MediaObjectID: r.MediaObjectID, AffinityKey: r.AffinityKey, Reason: r.Reason,
 		})
 	}
-	for _, d := range result.Plan.RootDeltas {
+	for _, d := range plan.RootDeltas {
 		view.RootDeltas = append(view.RootDeltas, apiserver.RootDeltaRow{
 			RootFolderID: d.RootFolderID, BytesIn: d.BytesIn, BytesOut: d.BytesOut,
 			ResultingFreeBytes: d.ResultingFreeBytes,
 		})
 	}
 	return view
+}
+
+// renameAdapter satisfies apiserver.RenameStarter over
+// internal/music.RenameStart.
+type renameAdapter struct {
+	config music.RenameConfig
+}
+
+func (a renameAdapter) StartRename(ctx context.Context, rootFolderID int64, preview bool) (apiserver.DrainPlanResult, error) {
+	plan, jobID, err := music.RenameStart(ctx, a.config, rootFolderID, preview)
+	if err != nil {
+		return apiserver.DrainPlanResult{}, err
+	}
+	return movePlanResult(plan, jobID != 0, jobID), nil
 }
 
 // moveJobAdapter satisfies apiserver.MoveJobLister over library.MoveJobs.

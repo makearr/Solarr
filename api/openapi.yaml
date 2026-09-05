@@ -491,6 +491,50 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /rootfolders/{id}/rename:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: renameRootFolder
+      tags: [library]
+      summary: >-
+        Preview or apply the shipped naming template to a root's own
+        already-identified files (section 11.8). Administrator only.
+      description: >-
+        For every file with a resolved work_part identity, computes its
+        proposed path under the shipped default template and compares it
+        to its current one -- files with no identity, or whose identity
+        names no real part, are silently skipped, not fatal to the whole
+        preview. `preview: true`, or a plan that changes nothing, persists
+        nothing -- `accepted` is false and the response explains why.
+        There is only the one shipped template today; a naming_profile
+        system letting a category choose between several is its own,
+        later follow-up.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preview: { type: boolean, default: false }
+      responses:
+        "200":
+          description: >-
+            The computed plan, in the same shape a drain plan uses --
+            `accepted` is false for a preview or a refused plan; true once
+            the move job is created and enqueued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DrainPlan" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /moves:
     get:
       operationId: listMoveJobs
