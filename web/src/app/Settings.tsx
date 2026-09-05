@@ -5,6 +5,7 @@ import { ShieldAlert, ShieldCheck } from "lucide-react";
 import { api } from "@/api/client";
 import { useAuthPolicy, useSetAuthRequired } from "@/lib/useAuthPolicy";
 import { Categories } from "./Categories";
+import { UnwantedFiles } from "./UnwantedFiles";
 import { Users } from "./Users";
 
 /** Settings sections in the order they matter to someone setting the thing up.
@@ -54,6 +55,8 @@ export function Settings() {
         {me.data && <Users currentUserId={me.data.user_id} />}
 
         <Categories />
+
+        <UnwantedFiles />
 
         <section className="flex flex-col gap-2">
           <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Storage</h2>
