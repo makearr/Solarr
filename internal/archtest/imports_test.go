@@ -97,6 +97,13 @@ var allowedInternalImports = map[string][]string{
 	// imports internal/mediatool, internal/parse or internal/music. fsx is
 	// the one dependency, for the walk itself.
 	"internal/inspect": {"internal/fsx"},
+	// ADR-36's composite acquisition priority: pure arithmetic over
+	// caller-supplied facts, no I/O and no database of its own -- the same
+	// separation internal/score and internal/placement keep from their own
+	// callers. Ready ahead of its consumer (stage 5/6's planner, which does
+	// not exist yet), the same shape those two packages were before their
+	// own callers existed.
+	"internal/priority": {},
 	// Section 11.7's capacity-polling job: probes every configured root via
 	// fsx and writes what it found back to settings.db.
 	"internal/capacity": {"internal/clock", "internal/fsx", "internal/jobs", "internal/settings"},
