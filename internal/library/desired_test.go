@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/makearr/MediaNexus/internal/library"
 	"github.com/makearr/MediaNexus/internal/store"
 	"github.com/makearr/MediaNexus/internal/store/gen/librarydb"
 )
@@ -304,6 +305,65 @@ func TestHuntQueueSkipsWhatIsNotYetEligible(t *testing.T) {
 	}
 	if len(next) != 0 {
 		t.Errorf("%d entries returned before they were eligible", len(next))
+	}
+}
+
+// IdentityForFile is what a rename preview needs: which work and which
+// media_ref a file's primary coverage names, with no edition (an "any
+// pressing" SET) reported as a nil EditionID rather than a fabricated one.
+func TestIdentityForFile_ResolvesWorkAndMediaRefFromPrimaryCoverage(t *testing.T) {
+	opened, _ := newLibrary(t)
+	work := createWork(t, opened, "music", "Tender Prey")
+	item := createDesired(t, opened, work.ID, "SET", 3)
+	object := createObject(t, opened, "quick-1", 4096)
+	attach(t, opened, item.ID, object.ID, "primary", "disc1:track3")
+
+	desired := library.NewDesired(opened)
+	identity, found, err := desired.IdentityForFile(t.Context(), object.ID)
+	if err != nil {
+		t.Fatalf("IdentityForFile: %v", err)
+	}
+	if !found {
+		t.Fatal("IdentityForFile: found = false, want true")
+	}
+	if identity.WorkID != work.ID || identity.MediaRef != "disc1:track3" || identity.EditionID != nil {
+		t.Errorf("identity = %+v, want work %d, media_ref disc1:track3, no edition", identity, work.ID)
+	}
+}
+
+// A non-primary role (a trailer, a bonus file) does not name the file for
+// renaming purposes -- the same reasoning CountPrimaryFiles already applies
+// to satisfaction.
+func TestIdentityForFile_IgnoresNonPrimaryCoverage(t *testing.T) {
+	opened, _ := newLibrary(t)
+	work := createWork(t, opened, "music", "Tender Prey")
+	item := createDesired(t, opened, work.ID, "SET", 3)
+	object := createObject(t, opened, "quick-bonus", 4096)
+	attach(t, opened, item.ID, object.ID, "bonus", "disc1:track99")
+
+	desired := library.NewDesired(opened)
+	_, found, err := desired.IdentityForFile(t.Context(), object.ID)
+	if err != nil {
+		t.Fatalf("IdentityForFile: %v", err)
+	}
+	if found {
+		t.Error("IdentityForFile found a bonus-role file, want it ignored")
+	}
+}
+
+// A file with no desired_item_file row at all -- never aligned -- has no
+// identity to name it by.
+func TestIdentityForFile_NotFoundWhenNeverAligned(t *testing.T) {
+	opened, _ := newLibrary(t)
+	object := createObject(t, opened, "quick-orphan", 4096)
+
+	desired := library.NewDesired(opened)
+	_, found, err := desired.IdentityForFile(t.Context(), object.ID)
+	if err != nil {
+		t.Fatalf("IdentityForFile: %v", err)
+	}
+	if found {
+		t.Error("IdentityForFile found an identity for an unaligned file, want none")
 	}
 }
 

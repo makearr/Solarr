@@ -127,6 +127,55 @@ func TestPlan_RefusesIntoAReadOnlyDestination(t *testing.T) {
 	}
 }
 
+// A true in-place rename -- source and destination are the same read-only
+// root -- is section 11.8's own one exception: allow_rename permits it,
+// where a cross-root move into a read-only root never can (the test right
+// above this one). Both roles are the same RootCandidate, so ReadOnly is
+// set on the one entry both source and dest resolve to.
+func TestPlan_AllowsARenameInPlaceOnAReadOnlyRootWithAllowRename(t *testing.T) {
+	root := onlineWritable(1, "fs-a", 1000)
+	root.ReadOnly = true
+	req := mover.Request{
+		Reason: mover.ReasonRename,
+		Files: []mover.FileToMove{
+			{MediaObjectID: 1, SourceRootFolderID: 1, SourceRelPath: "Old/track.flac",
+				SizeBytes: 100, AffinityKey: "a", DestRootFolderID: 1, DestRelPath: "New/track.flac"},
+		},
+		Roots:             map[int64]placement.RootCandidate{1: root},
+		SourceAllowRename: map[int64]bool{1: true},
+	}
+	plan, err := mover.Plan(req)
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	if len(plan.Moves) != 1 || len(plan.Refused) != 0 {
+		t.Fatalf("plan = %+v, want the in-place rename allowed", plan)
+	}
+}
+
+// The same read-only root without allow_rename still refuses -- allow_rename
+// is what section 11.8's table conditions the exception on, not read-only
+// alone.
+func TestPlan_RefusesARenameInPlaceOnAReadOnlyRootWithoutAllowRename(t *testing.T) {
+	root := onlineWritable(1, "fs-a", 1000)
+	root.ReadOnly = true
+	req := mover.Request{
+		Reason: mover.ReasonRename,
+		Files: []mover.FileToMove{
+			{MediaObjectID: 1, SourceRootFolderID: 1, SourceRelPath: "Old/track.flac",
+				SizeBytes: 100, AffinityKey: "a", DestRootFolderID: 1, DestRelPath: "New/track.flac"},
+		},
+		Roots: map[int64]placement.RootCandidate{1: root},
+	}
+	plan, err := mover.Plan(req)
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	if len(plan.Moves) != 0 || len(plan.Refused) != 1 {
+		t.Fatalf("plan = %+v, want the in-place rename refused without allow_rename", plan)
+	}
+}
+
 func TestPlan_RefusesOutOfAReadOnlySourceUnlessAllowRename(t *testing.T) {
 	req := mover.Request{
 		Reason: mover.ReasonRename,

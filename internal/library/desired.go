@@ -306,6 +306,45 @@ func (d Desired) ItemsForFile(ctx context.Context, mediaObjectID int64) ([]FileM
 	return memberships, nil
 }
 
+// FileIdentity is a file's own editorial position -- which work, which
+// edition (nil for "any pressing"), and which part -- resolved from its
+// desired_item_file coverage. What a rename preview needs to know "which
+// track is this" without any media-type knowledge of its own.
+type FileIdentity struct {
+	WorkID    int64
+	EditionID *int64
+	MediaRef  string
+}
+
+// IdentityForFile answers the editorial identity backing one file, or
+// found=false when the file has no desired_item_file coverage at all --
+// not yet aligned to a desired_item (section 19.6's own Align), or an
+// import that never went through discovery. Only 'primary' coverage
+// counts, matching CountPrimaryFiles' own reasoning: a trailer or bonus
+// role does not name the file for renaming purposes.
+func (d Desired) IdentityForFile(ctx context.Context, mediaObjectID int64) (FileIdentity, bool, error) {
+	memberships, err := d.ItemsForFile(ctx, mediaObjectID)
+	if err != nil {
+		return FileIdentity{}, false, err
+	}
+	for _, m := range memberships {
+		if m.Role != "primary" {
+			continue
+		}
+		item, err := d.Get(ctx, m.DesiredItemID)
+		if err != nil {
+			return FileIdentity{}, false, fmt.Errorf("library: get desired item %d: %w", m.DesiredItemID, err)
+		}
+		identity := FileIdentity{WorkID: item.WorkID, MediaRef: m.MediaRef}
+		if item.EditionID.Valid {
+			id := item.EditionID.Int64
+			identity.EditionID = &id
+		}
+		return identity, true, nil
+	}
+	return FileIdentity{}, false, nil
+}
+
 // Get answers one desired_item's own row, including its WorkID -- needed by
 // a caller that only has an item id and must recompute or detach against it.
 func (d Desired) Get(ctx context.Context, itemID int64) (librarydb.DesiredItem, error) {

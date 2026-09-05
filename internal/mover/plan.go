@@ -288,14 +288,23 @@ func guardGroup(req Request, g group) (reason string, ok bool) {
 	if !dest.Writable {
 		return fmt.Sprintf("destination root %d is not writable", destID), false
 	}
-	if dest.ReadOnly {
-		// Refused into a read_only root, always (Invariant 69/78) -- there
-		// is no allow_rename-equivalent override for a destination the way
-		// there is for a source.
+	// section 11.8's own permitted-check table is explicit that RENAME is
+	// the one reason where source and destination are the same root
+	// ("APPLY: atomic rename within the root; cross-root is a move, not a
+	// rename"), and for exactly that case read_only + allow_rename together
+	// permit it (read_only=1 AND allow_rename=1 -> allowed) -- the
+	// destination-side override this comment used to say did not exist.
+	// Every other reason keeps the unconditional refusal: a category
+	// migration, rebalance or drain always targets a different root, where
+	// "read-only into" has no rename-style escape hatch at all.
+	if dest.ReadOnly && !isSameRootRename(req, g, destID) {
 		return fmt.Sprintf("destination root %d is read-only", destID), false
 	}
 
 	for _, f := range g.files {
+		if isSameRootRename(req, g, destID) && f.SourceRootFolderID == destID {
+			continue // covered by the read_only+allow_rename check above
+		}
 		if req.SourceReadOnly[f.SourceRootFolderID] && !req.SourceAllowRename[f.SourceRootFolderID] {
 			return fmt.Sprintf("source root %d is read-only and does not allow rename", f.SourceRootFolderID), false
 		}
@@ -305,6 +314,23 @@ func guardGroup(req Request, g group) (reason string, ok bool) {
 		}
 	}
 	return "", true
+}
+
+// isSameRootRename reports whether every file in g is a true in-place
+// rename (source root == destination root) under ReasonRename, with the
+// one root's own allow_rename set -- the narrow condition section 11.8's
+// permitted-check table describes, never true for the other three reasons
+// (which always target a different root).
+func isSameRootRename(req Request, g group, destID int64) bool {
+	if req.Reason != ReasonRename || !req.SourceAllowRename[destID] {
+		return false
+	}
+	for _, f := range g.files {
+		if f.SourceRootFolderID != destID {
+			return false
+		}
+	}
+	return true
 }
 
 func minFreeBytes(roots map[int64]placement.RootCandidate, rootFolderID int64) int64 {
