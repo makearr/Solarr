@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/makearr/MediaNexus/internal/inspect"
+	"github.com/makearr/MediaNexus/internal/model"
 	"github.com/makearr/MediaNexus/internal/store"
 	"github.com/makearr/MediaNexus/internal/store/gen/librarydb"
 )
@@ -26,23 +28,26 @@ const (
 	ImportOriginAdoption    = "adoption"
 )
 
-// Import unit shapes (import_unit.shape).
+// Import unit shapes (import_unit.shape) -- inspect.Shape's own values
+// (inspect.ShapeOf), re-exported as plain strings for this file's own callers.
+// UnitPack has no inspect.Shape equivalent: PACK is a cross-unit fact (ADR-50),
+// never one unit's own structural shape (see inspect.Shape's doc comment).
 const (
-	UnitSingle    = "SINGLE"
-	UnitSet       = "SET"
+	UnitSingle    = string(inspect.ShapeSingle)
+	UnitSet       = string(inspect.ShapeSet)
 	UnitPack      = "PACK"
-	UnitMultiDisc = "MULTI_DISC"
+	UnitMultiDisc = string(inspect.ShapeMultiDisc)
 )
 
-// Import unit decisions (import_unit.decision). A unit is recorded QUEUE by
-// default -- IDENTIFY does not exist yet (private/questions.md), so nothing
-// commits automatically today; SetUnitDecision is what a later IDENTIFY pass
-// calls once it does.
+// Import unit decisions (import_unit.decision) -- model.UnitDecision's own
+// values (model.Decide), re-exported as plain strings for this file's own
+// callers. A unit is recorded UnitQueue by default until a real IDENTIFY/DECIDE
+// caller wires music.IdentifyUnit and model.Decide to SetUnitDecision.
 const (
-	UnitCommit = "COMMIT"
-	UnitQueue  = "QUEUE"
-	UnitSkip   = "SKIP"
-	UnitFailed = "FAILED"
+	UnitCommit = string(model.DecisionCommit)
+	UnitQueue  = string(model.DecisionQueue)
+	UnitSkip   = string(model.DecisionSkip)
+	UnitFailed = string(model.DecisionFailed)
 )
 
 // ImportSessions is ADR-48's own persistence: one row per inspection-and-import

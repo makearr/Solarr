@@ -14,18 +14,23 @@ package inspect
 // unit in a session is where PACK detection belongs once it exists.
 type Shape string
 
+// Values match migration 0018's own comment on import_unit.shape verbatim
+// (checked before choosing these, the same reconciliation Decide's own constants
+// needed against import_unit.decision) -- library.UnitSingle/UnitSet/UnitMultiDisc
+// are this package's values, re-exported as plain strings for that package's own
+// existing callers.
 const (
 	// ShapeSingle is a unit of one media file -- a single, not an album.
-	ShapeSingle Shape = "single"
+	ShapeSingle Shape = "SINGLE"
 	// ShapeSet is more than one media file with no disc-subfolder evidence -- an
 	// album's worth of tracks in one place.
-	ShapeSet Shape = "set"
+	ShapeSet Shape = "SET"
 	// ShapeMultiDisc is a unit GROUP merged from a disc-subfolder pattern
 	// (CD1/CD2, Disc 1/Disc 2) -- still one work, one edition (ADR-50: "Multi-disc
 	// is a pack kind, not a special case"), but worth keeping distinct from
 	// ShapeSet since it is evidence of the original disc layout a later stage
 	// (naming, or an eventual pack record) may still want.
-	ShapeMultiDisc Shape = "multi_disc"
+	ShapeMultiDisc Shape = "MULTI_DISC"
 )
 
 // ShapeOf classifies one unit structurally, from GROUP's own findings alone.

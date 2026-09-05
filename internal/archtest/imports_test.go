@@ -71,7 +71,7 @@ var allowedInternalImports = map[string][]string{
 	// the ADR-24 chain's own candidate type) -- model has no dependencies of its own,
 	// so this stays a downward arrow like every other entry here.
 	"internal/library": {
-		"internal/clock", "internal/fsx", "internal/model", "internal/paginate",
+		"internal/clock", "internal/fsx", "internal/inspect", "internal/model", "internal/paginate",
 		"internal/store", "internal/store/gen/librarydb",
 	},
 	// The only unprompted outbound call, so it needs the one way out (Invariant 28).
