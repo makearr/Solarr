@@ -96,9 +96,12 @@ var allowedInternalImports = map[string][]string{
 	// Resolve, reusing placement.RootCandidate rather than a second,
 	// independent copy of the same root-policy shape (this project's own
 	// established lesson: two copies of one policy shape is how they
-	// drift). Apply (the resumable job) will need fsx/clock/jobs/library
-	// too, added when that lands.
-	"internal/mover": {"internal/placement"},
+	// drift). ApplyOne does real file I/O (fsx) but still touches no
+	// database of its own -- RECORD/UNLINK/TIDY stay the caller's job. The
+	// job orchestration layer (persistence, resumability) is its own,
+	// separate package when it lands, the same split internal/inspect
+	// keeps from internal/importjob.
+	"internal/mover": {"internal/fsx", "internal/placement"},
 	// ADR-48's import inspection: walk, classify, group. No media-type
 	// knowledge and no database of its own (ADR-23) -- tag reading and
 	// segment plausibility are both injected functions, so this never

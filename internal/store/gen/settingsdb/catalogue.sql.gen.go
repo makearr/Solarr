@@ -104,7 +104,8 @@ const createRootFolder = `-- name: CreateRootFolder :one
 INSERT INTO root_folder (path, label, online)
 VALUES (?, ?, ?)
 RETURNING id, path, label, online, writable, writable_reason, read_only, allow_rename,
-          total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json
+          total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
+       drain_state, drain_job_id
 `
 
 type CreateRootFolderParams struct {
@@ -131,6 +132,8 @@ func (q *Queries) CreateRootFolder(ctx context.Context, arg CreateRootFolderPara
 		&i.CapacityCheckedAt,
 		&i.FsID,
 		&i.CapabilitiesJson,
+		&i.DrainState,
+		&i.DrainJobID,
 	)
 	return i, err
 }
@@ -206,7 +209,8 @@ func (q *Queries) GetPlacementAffinity(ctx context.Context, arg GetPlacementAffi
 
 const getRootFolder = `-- name: GetRootFolder :one
 SELECT id, path, label, online, writable, writable_reason, read_only, allow_rename,
-       total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json
+       total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
+       drain_state, drain_job_id
 FROM root_folder WHERE id = ?
 `
 
@@ -228,6 +232,8 @@ func (q *Queries) GetRootFolder(ctx context.Context, id int64) (RootFolder, erro
 		&i.CapacityCheckedAt,
 		&i.FsID,
 		&i.CapabilitiesJson,
+		&i.DrainState,
+		&i.DrainJobID,
 	)
 	return i, err
 }
@@ -305,7 +311,8 @@ func (q *Queries) ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFo
 
 const listRootFolders = `-- name: ListRootFolders :many
 SELECT id, path, label, online, writable, writable_reason, read_only, allow_rename,
-       total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json
+       total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
+       drain_state, drain_job_id
 FROM root_folder ORDER BY path
 `
 
@@ -333,6 +340,8 @@ func (q *Queries) ListRootFolders(ctx context.Context) ([]RootFolder, error) {
 			&i.CapacityCheckedAt,
 			&i.FsID,
 			&i.CapabilitiesJson,
+			&i.DrainState,
+			&i.DrainJobID,
 		); err != nil {
 			return nil, err
 		}

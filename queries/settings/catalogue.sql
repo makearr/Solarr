@@ -25,19 +25,22 @@ DELETE FROM category WHERE id = ?;
 
 -- name: ListRootFolders :many
 SELECT id, path, label, online, writable, writable_reason, read_only, allow_rename,
-       total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json
+       total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
+       drain_state, drain_job_id
 FROM root_folder ORDER BY path;
 
 -- name: GetRootFolder :one
 SELECT id, path, label, online, writable, writable_reason, read_only, allow_rename,
-       total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json
+       total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
+       drain_state, drain_job_id
 FROM root_folder WHERE id = ?;
 
 -- name: CreateRootFolder :one
 INSERT INTO root_folder (path, label, online)
 VALUES (?, ?, ?)
 RETURNING id, path, label, online, writable, writable_reason, read_only, allow_rename,
-          total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json;
+          total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
+       drain_state, drain_job_id;
 
 -- name: SetRootFolderOnline :exec
 UPDATE root_folder SET online = ? WHERE id = ?;

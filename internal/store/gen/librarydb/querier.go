@@ -79,6 +79,9 @@ type Querier interface {
 	// Returning the row costs four times the insert itself at import scale, so this is
 	// execlastid: documentation/benchmarks.md.
 	CreateMediaObject(ctx context.Context, arg CreateMediaObjectParams) (int64, error)
+	// ADR-51 (migration 0020). Column lists follow table order, or sqlc stops
+	// reusing models.
+	CreateMoveJob(ctx context.Context, arg CreateMoveJobParams) (MoveJob, error)
 	CreateOrganisation(ctx context.Context, arg CreateOrganisationParams) (Organisation, error)
 	// People, organisations, tags and subscriptions. Column lists follow table order.
 	CreatePerson(ctx context.Context, arg CreatePersonParams) (Person, error)
@@ -138,6 +141,7 @@ type Querier interface {
 	// Every stored variant is matched during import, not just the canonical one (ADR-41).
 	FindWorksByNormalizedTitle(ctx context.Context, arg FindWorksByNormalizedTitleParams) ([]Work, error)
 	FinishImportSession(ctx context.Context, arg FinishImportSessionParams) error
+	FinishMoveJob(ctx context.Context, arg FinishMoveJobParams) error
 	// Only a completed sweep moves the watermark and clears the cursor.
 	FinishScan(ctx context.Context, arg FinishScanParams) error
 	GetAcquisition(ctx context.Context, id int64) (Acquisition, error)
@@ -159,6 +163,7 @@ type Querier interface {
 	GetMediaObject(ctx context.Context, id int64) (MediaObject, error)
 	// oshash is exact identity: the same bytes, with no decoding (ADR-35).
 	GetMediaObjectByOshash(ctx context.Context, oshash sql.NullString) (MediaObject, error)
+	GetMoveJob(ctx context.Context, id int64) (MoveJob, error)
 	GetOrganisation(ctx context.Context, id int64) (Organisation, error)
 	GetPathByLocation(ctx context.Context, arg GetPathByLocationParams) (LibraryPath, error)
 	GetPerson(ctx context.Context, id int64) (Person, error)
@@ -179,6 +184,10 @@ type Querier interface {
 	GetWorkExternalIDByProvider(ctx context.Context, arg GetWorkExternalIDByProviderParams) (WorkExternalID, error)
 	GetWorkPart(ctx context.Context, id int64) (WorkPart, error)
 	InsertImportUnit(ctx context.Context, arg InsertImportUnitParams) (ImportUnit, error)
+	// One row per call, looped inside one transaction by the caller (the same
+	// shape ImportSessions.AddUnits already uses) -- modernc's sqlite driver
+	// does not support :copyfrom (pgx/mysql only).
+	InsertMoveItem(ctx context.Context, arg InsertMoveItemParams) error
 	// Physical files. Column lists follow table order, or sqlc stops reusing models.
 	InternAttributes(ctx context.Context, arg InternAttributesParams) (MediaAttribute, error)
 	// The pipeline filters against this between dedupe and evaluate (section 10.11).
@@ -253,6 +262,10 @@ type Querier interface {
 	// ListImportUnits itself stays as-is for the job's own small, in-process needs
 	// (resumeOrCreate's "the last unit committed so far" lookup).
 	ListImportUnitsPage(ctx context.Context, arg ListImportUnitsPageParams) ([]ImportUnit, error)
+	ListMoveItems(ctx context.Context, moveJobID int64) ([]MoveItem, error)
+	// Small, operator-facing list -- move counts never approach library scale,
+	// the same reasoning ListImportSessions' own comment already gives.
+	ListMoveJobs(ctx context.Context, arg ListMoveJobsParams) ([]MoveJob, error)
 	// "Monitor this studio and everything beneath it" needs the whole subtree, and
 	// imprints and sub-labels are real in every domain (ADR-32).
 	ListOrganisationSubtree(ctx context.Context, id int64) ([]Organisation, error)
@@ -343,6 +356,10 @@ type Querier interface {
 	NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error)
 	// oldest_searched, the default hunt mode (section 9.3).
 	NextHuntByOldestSearched(ctx context.Context, arg NextHuntByOldestSearchedParams) ([]HuntQueue, error)
+	// Oldest (insertion order, via rowid on a WITHOUT ROWID table's own implicit
+	// ordering by the primary key) pending item first -- Apply works through a
+	// job's own items one at a time, resumable: a restart just asks again.
+	NextPendingMoveItem(ctx context.Context, moveJobID int64) (MoveItem, error)
 	// Revalidated at dispatch, so an expired entry is never handed to a downloader.
 	NextReady(ctx context.Context, arg NextReadyParams) ([]ReadyQueue, error)
 	// Which search caused this file, and which download produced it (F4, section 12).
@@ -362,6 +379,9 @@ type Querier interface {
 	// cheaper to reason about than keeping a running total consistent through
 	// every future call site that can change a unit's decision.
 	RecomputeImportSessionCounts(ctx context.Context, sessionID int64) error
+	// Recomputed from move_item rather than incremented as items complete -- the
+	// same drift-and-repair shape RecomputeImportSessionCounts already uses.
+	RecomputeMoveJobProgress(ctx context.Context, moveJobID int64) error
 	// The reconciliation job compares this against present_count. Drift is
 	// inevitable, so the repair path is not optional.
 	RecomputePresentCount(ctx context.Context, id int64) error
@@ -372,6 +392,12 @@ type Querier interface {
 	// fault, and counting it would make reputation measure the environment (ADR-45).
 	RecordGroupObservation(ctx context.Context, arg RecordGroupObservationParams) error
 	RecordImportDecision(ctx context.Context, arg RecordImportDecisionParams) (ImportDecision, error)
+	// ADR-51's own RECORD step: media_object never changes (Invariant 70), only
+	// where it lives. Matched by the old (root_folder_id, rel_path) rather than
+	// by id, since that pair is what Apply already has in hand from its own
+	// PlannedMove; :execrows lets the caller confirm exactly one row moved
+	// rather than trusting a silent no-op.
+	RelocateLibraryPath(ctx context.Context, arg RelocateLibraryPathParams) (int64, error)
 	RemoveBlockedContent(ctx context.Context, id int64) error
 	RemoveFromBlocklist(ctx context.Context, id int64) error
 	RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error
@@ -417,6 +443,8 @@ type Querier interface {
 	// mismatch stays visible (ADR-39). The scalars land on the object, not the
 	// interned row, because they are unique per file.
 	SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttributesParams) error
+	SetMoveItemState(ctx context.Context, arg SetMoveItemStateParams) error
+	SetMoveJobRunning(ctx context.Context, id int64) error
 	SetPersonMonitored(ctx context.Context, arg SetPersonMonitoredParams) error
 	// Progress mid-sweep: the cursor advances, the watermark does not.
 	SetScanCursor(ctx context.Context, arg SetScanCursorParams) error

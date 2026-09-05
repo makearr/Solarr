@@ -779,6 +779,36 @@ func (q *Queries) MarkLibraryPathsMissing(ctx context.Context, arg MarkLibraryPa
 	return result.RowsAffected()
 }
 
+const relocateLibraryPath = `-- name: RelocateLibraryPath :execrows
+UPDATE library_path SET root_folder_id = ?1, rel_path = ?2
+WHERE root_folder_id = ?3 AND rel_path = ?4
+`
+
+type RelocateLibraryPathParams struct {
+	NewRootFolderID int64
+	NewRelPath      string
+	OldRootFolderID int64
+	OldRelPath      string
+}
+
+// ADR-51's own RECORD step: media_object never changes (Invariant 70), only
+// where it lives. Matched by the old (root_folder_id, rel_path) rather than
+// by id, since that pair is what Apply already has in hand from its own
+// PlannedMove; :execrows lets the caller confirm exactly one row moved
+// rather than trusting a silent no-op.
+func (q *Queries) RelocateLibraryPath(ctx context.Context, arg RelocateLibraryPathParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, relocateLibraryPath,
+		arg.NewRootFolderID,
+		arg.NewRelPath,
+		arg.OldRootFolderID,
+		arg.OldRelPath,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setFingerprints = `-- name: SetFingerprints :exec
 UPDATE media_object
 SET oshash = ?, phash = ?, audio_fp = ?, audio_fp_prefix = ?, fingerprinted_at = ?

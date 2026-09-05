@@ -154,6 +154,15 @@ LIMIT sqlc.arg(page_size);
 -- name: TouchLibraryPath :exec
 UPDATE library_path SET last_seen_at = ?, missing_since = NULL WHERE id = ?;
 
+-- ADR-51's own RECORD step: media_object never changes (Invariant 70), only
+-- where it lives. Matched by the old (root_folder_id, rel_path) rather than
+-- by id, since that pair is what Apply already has in hand from its own
+-- PlannedMove; :execrows lets the caller confirm exactly one row moved
+-- rather than trusting a silent no-op.
+-- name: RelocateLibraryPath :execrows
+UPDATE library_path SET root_folder_id = sqlc.arg(new_root_folder_id), rel_path = sqlc.arg(new_rel_path)
+WHERE root_folder_id = sqlc.arg(old_root_folder_id) AND rel_path = sqlc.arg(old_rel_path);
+
 -- Bounded per Invariant 2: the caller loops this until a pass affects zero rows,
 -- never one UPDATE over the whole root.
 -- name: MarkLibraryPathsMissing :execrows

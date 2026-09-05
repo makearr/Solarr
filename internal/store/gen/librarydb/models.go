@@ -375,6 +375,32 @@ type MediaObject struct {
 	VerifiedAt            sql.NullInt64
 }
 
+type MoveItem struct {
+	MoveJobID     int64
+	MediaObjectID int64
+	AffinityKey   string
+	DestRootID    int64
+	DestRelPath   string
+	Bytes         int64
+	State         string
+	Error         sql.NullString
+}
+
+type MoveJob struct {
+	ID           int64
+	Reason       string
+	SourceRootID sql.NullInt64
+	State        string
+	FilesTotal   int64
+	FilesDone    int64
+	BytesTotal   int64
+	BytesDone    int64
+	PlanJson     string
+	CreatedAt    int64
+	FinishedAt   sql.NullInt64
+	Error        sql.NullString
+}
+
 type Organisation struct {
 	ID         int64
 	Name       string

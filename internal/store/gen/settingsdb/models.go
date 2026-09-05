@@ -116,6 +116,8 @@ type RootFolder struct {
 	CapacityCheckedAt sql.NullInt64
 	FsID              sql.NullString
 	CapabilitiesJson  sql.NullString
+	DrainState        string
+	DrainJobID        sql.NullInt64
 }
 
 type UserCategoryAccess struct {
