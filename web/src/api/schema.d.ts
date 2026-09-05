@@ -1087,6 +1087,8 @@ export interface components {
         DrainMove: {
             /** Format: int64 */
             media_object_id: number;
+            /** @description The file's current path -- present so a caller can render the full "current vs proposed" diff section 11.8 asks for, not just the proposed side. */
+            source_rel_path?: string;
             /** Format: int64 */
             dest_root_folder_id: number;
             dest_rel_path: string;

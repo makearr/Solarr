@@ -60,6 +60,7 @@ type DrainPlanResult struct {
 // DrainMoveRow is one file a drain plan approved.
 type DrainMoveRow struct {
 	MediaObjectID    int64
+	SourceRelPath    string
 	DestRootFolderID int64
 	DestRelPath      string
 	SizeBytes        int64
@@ -274,6 +275,9 @@ func drainPlanView(result DrainPlanResult) gen.DrainPlan {
 		view.Moves[i] = gen.DrainMove{
 			MediaObjectId: m.MediaObjectID, DestRootFolderId: m.DestRootFolderID,
 			DestRelPath: m.DestRelPath, SizeBytes: m.SizeBytes, AffinityKey: m.AffinityKey,
+		}
+		if m.SourceRelPath != "" {
+			view.Moves[i].SourceRelPath = &m.SourceRelPath
 		}
 	}
 	for i, refusal := range result.Refused {

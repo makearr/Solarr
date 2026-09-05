@@ -1719,6 +1719,12 @@ components:
       required: [media_object_id, dest_root_folder_id, dest_rel_path, size_bytes, affinity_key]
       properties:
         media_object_id: { type: integer, format: int64 }
+        source_rel_path:
+          type: string
+          description: >-
+            The file's current path -- present so a caller can render the
+            full "current vs proposed" diff section 11.8 asks for, not just
+            the proposed side.
         dest_root_folder_id: { type: integer, format: int64 }
         dest_rel_path: { type: string }
         size_bytes: { type: integer, format: int64 }

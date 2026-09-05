@@ -86,7 +86,7 @@ func movePlanResult(plan mover.MovePlan, accepted bool, moveJobID int64) apiserv
 		view.FilesTotal++
 		view.BytesTotal += m.SizeBytes
 		view.Moves = append(view.Moves, apiserver.DrainMoveRow{
-			MediaObjectID: m.MediaObjectID, DestRootFolderID: m.DestRootFolderID,
+			MediaObjectID: m.MediaObjectID, SourceRelPath: m.SourceRelPath, DestRootFolderID: m.DestRootFolderID,
 			DestRelPath: m.DestRelPath, SizeBytes: m.SizeBytes, AffinityKey: m.AffinityKey,
 		})
 	}

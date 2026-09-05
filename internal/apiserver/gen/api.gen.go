@@ -438,6 +438,9 @@ type DrainMove struct {
 	DestRootFolderId int64  `json:"dest_root_folder_id"`
 	MediaObjectId    int64  `json:"media_object_id"`
 	SizeBytes        int64  `json:"size_bytes"`
+
+	// SourceRelPath The file's current path -- present so a caller can render the full "current vs proposed" diff section 11.8 asks for, not just the proposed side.
+	SourceRelPath *string `json:"source_rel_path,omitempty"`
 }
 
 // DrainPlan What one drainRootFolder call computed -- a preview, a refusal, or an accepted and enqueued plan (ADR-51).
