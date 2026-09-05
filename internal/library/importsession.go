@@ -269,6 +269,29 @@ func (s ImportSessions) ListUnits(ctx context.Context, sessionID int64) ([]Unit,
 	return units, nil
 }
 
+// ListUnitsPage returns one cursor-paginated page of a session's units,
+// unlike ListUnits above -- a session's own unit count is not bounded the way
+// a session count is (Invariant 22 is exactly the "500k+ files" case a
+// whole-library adoption run can hit), so an API caller needs a real page.
+// filterDecision empty means every decision.
+func (s ImportSessions) ListUnitsPage(
+	ctx context.Context, sessionID, afterID int64, filterDecision string, pageSize int64,
+) ([]Unit, error) {
+	rows, err := librarydb.New(s.store.Read()).ListImportUnitsPage(ctx, librarydb.ListImportUnitsPageParams{
+		SessionID: sessionID, AfterID: afterID,
+		FilterByDecision: boolToInt(filterDecision != ""), Decision: filterDecision,
+		PageSize: pageSize,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: list units page for import session %d: %w", sessionID, err)
+	}
+	units := make([]Unit, len(rows))
+	for i, row := range rows {
+		units[i] = unitFromRow(row)
+	}
+	return units, nil
+}
+
 func sessionFromRow(row librarydb.ImportSession) Session {
 	return Session{
 		ID: row.ID, SourcePath: row.SourcePath, Origin: row.Origin,

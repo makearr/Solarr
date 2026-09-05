@@ -21,8 +21,9 @@ var allowedInternalImports = map[string][]string{
 	"cmd/medianexus": {
 		"internal/apiserver", "internal/auth", "internal/clock", "internal/config",
 		"internal/egress", "internal/events", "internal/fsx", "internal/health",
-		"internal/httpx", "internal/importjob", "internal/jobs", "internal/library", "internal/mediatool",
-		"internal/metacache", "internal/music", "internal/musicbrainz", "internal/paginate",
+		"internal/httpx", "internal/importjob", "internal/inspect", "internal/jobs",
+		"internal/library", "internal/mediatool", "internal/metacache", "internal/model",
+		"internal/music", "internal/musicbrainz", "internal/paginate",
 		"internal/capacity", "internal/privilege", "internal/probe", "internal/recovery",
 		"internal/scan", "internal/settings", "internal/store", "internal/webui",
 		"internal/wikidata", "migrations",

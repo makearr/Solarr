@@ -1065,6 +1065,117 @@ paths:
           $ref: "#/components/responses/Problem"
           description: No such file.
 
+  /import/inspect:
+    post:
+      operationId: inspectImport
+      tags: [library]
+      summary: >-
+        Point at any path and enqueue ADR-48's own inspection pipeline.
+        Administrator only.
+      description: >-
+        Enqueues `import.inspect` (WALK/CLASSIFY/GROUP/EVIDENCE/IDENTIFY/
+        SHAPE/DECIDE) over `source_path`. It only inspects and records --
+        no file is moved and no work/edition row is created, so a unit
+        recorded `COMMIT` means its confidence cleared the threshold, not
+        that it is in the library yet. Poll `GET /import/sessions/{id}` for
+        progress. A retry of an interrupted run resumes the same session
+        rather than starting over.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportInspectRequest" }
+      responses:
+        "202":
+          description: Enqueued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportInspectResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /import/sessions:
+    get:
+      operationId: listImportSessions
+      tags: [library]
+      summary: Every import session (ADR-48), newest first.
+      description: >-
+        Unpaginated -- session counts never approach library scale
+        (Invariant 22 is about files, not import runs).
+      parameters:
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [INSPECTING, IMPORTING, DONE, FAILED, REVERTED]
+      responses:
+        "200":
+          description: The sessions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ImportSession" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /import/sessions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getImportSession
+      tags: [library]
+      summary: One session's own progress and counts.
+      responses:
+        "200":
+          description: The session.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportSession" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /import/sessions/{id}/units:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listImportUnits
+      tags: [library]
+      summary: One session's own units, in the order they were committed.
+      description: >-
+        `after_id` pages through the list (the id of the last item already
+        seen, 0 for the first page) -- the same plain ascending id cursor
+        `/blocked` uses, since a session's own unit count can be large (a
+        whole-library adoption run).
+      parameters:
+        - name: decision
+          in: query
+          schema:
+            type: string
+            enum: [COMMIT, QUEUE, SKIP, FAILED]
+        - name: after_id
+          in: query
+          schema: { type: integer, format: int64, default: 0 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: A page of units.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ImportUnit" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /categories:
     get:
       operationId: listCategories
@@ -2017,6 +2128,125 @@ components:
           type: array
           items: { type: integer, format: int64 }
           description: Every desired_item id detached and recomputed.
+
+    ImportInspectRequest:
+      type: object
+      description: Where to look, and what kind of import this is (ADR-48).
+      required: [source_path]
+      properties:
+        source_path: { type: string }
+        origin:
+          type: string
+          enum: [manual, acquisition, watched, adoption]
+          description: Defaults to manual when omitted.
+        category_id:
+          type: integer
+          format: int64
+          description: The target category, when known up front. Omitted means "decide per unit".
+
+    ImportInspectResult:
+      type: object
+      required: [enqueued]
+      properties:
+        enqueued: { type: boolean }
+
+    ImportSession:
+      type: object
+      description: One inspection-and-import run over one source path (ADR-48).
+      required:
+        - id
+        - source_path
+        - origin
+        - state
+        - threshold
+        - units_total
+        - units_committed
+        - units_queued
+        - bytes_imported
+        - started_at
+      properties:
+        id: { type: integer, format: int64 }
+        source_path: { type: string }
+        origin: { type: string, enum: [manual, acquisition, watched, adoption] }
+        category_id: { type: integer, format: int64 }
+        state:
+          type: string
+          enum: [INSPECTING, IMPORTING, DONE, FAILED, REVERTED]
+        threshold:
+          type: number
+          format: float
+          description: import.auto_commit_confidence's value in force for this run.
+        units_total: { type: integer, format: int64 }
+        units_committed: { type: integer, format: int64 }
+        units_queued: { type: integer, format: int64 }
+        bytes_imported:
+          type: integer
+          format: int64
+          description: Only committed units' bytes.
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        error: { type: string }
+
+    ImportEvidenceSignal:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string }
+        detail: { type: string }
+
+    ImportEvidence:
+      type: object
+      description: Every GROUP signal that shaped this unit's boundary (ADR-10 shape).
+      properties:
+        signals:
+          type: array
+          items: { $ref: "#/components/schemas/ImportEvidenceSignal" }
+        ambiguous:
+          type: boolean
+          description: >-
+            True when grouping had to infer a boundary from a weaker signal
+            rather than a decisive one.
+
+    ImportCandidate:
+      type: object
+      description: One IDENTIFY strategy's ranked answer for a unit.
+      required: [strategy, confidence]
+      properties:
+        strategy: { type: string }
+        work_id: { type: integer, format: int64 }
+        provider: { type: string }
+        external_id: { type: string }
+        confidence: { type: number, format: float }
+
+    ImportUnit:
+      type: object
+      description: One unit ADR-48's pipeline found and decided.
+      required: [id, session_id, rel_path, shape, file_count, bytes, confidence, decision]
+      properties:
+        id: { type: integer, format: int64 }
+        session_id: { type: integer, format: int64 }
+        rel_path:
+          type: string
+          description: The unit's own root, relative to the session's source_path.
+        shape:
+          type: string
+          enum: [SINGLE, SET, PACK, MULTI_DISC]
+        file_count: { type: integer, format: int64 }
+        bytes: { type: integer, format: int64 }
+        confidence: { type: number, format: float }
+        decision:
+          type: string
+          enum: [COMMIT, QUEUE, SKIP, FAILED]
+        work_id:
+          type: integer
+          format: int64
+          description: Not yet resolved for a COMMIT decision -- ADR-48's own scope stops at DECIDE.
+        edition_id: { type: integer, format: int64 }
+        evidence: { $ref: "#/components/schemas/ImportEvidence" }
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/ImportCandidate" }
+        reason: { type: string }
 
     LibraryCategory:
       type: object

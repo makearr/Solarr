@@ -74,6 +74,47 @@ const (
 	Ok HealthStatusStatus = "ok"
 )
 
+// Defines values for ImportInspectRequestOrigin.
+const (
+	ImportInspectRequestOriginAcquisition ImportInspectRequestOrigin = "acquisition"
+	ImportInspectRequestOriginAdoption    ImportInspectRequestOrigin = "adoption"
+	ImportInspectRequestOriginManual      ImportInspectRequestOrigin = "manual"
+	ImportInspectRequestOriginWatched     ImportInspectRequestOrigin = "watched"
+)
+
+// Defines values for ImportSessionOrigin.
+const (
+	Acquisition ImportSessionOrigin = "acquisition"
+	Adoption    ImportSessionOrigin = "adoption"
+	Manual      ImportSessionOrigin = "manual"
+	Watched     ImportSessionOrigin = "watched"
+)
+
+// Defines values for ImportSessionState.
+const (
+	ImportSessionStateDONE       ImportSessionState = "DONE"
+	ImportSessionStateFAILED     ImportSessionState = "FAILED"
+	ImportSessionStateIMPORTING  ImportSessionState = "IMPORTING"
+	ImportSessionStateINSPECTING ImportSessionState = "INSPECTING"
+	ImportSessionStateREVERTED   ImportSessionState = "REVERTED"
+)
+
+// Defines values for ImportUnitDecision.
+const (
+	ImportUnitDecisionCOMMIT ImportUnitDecision = "COMMIT"
+	ImportUnitDecisionFAILED ImportUnitDecision = "FAILED"
+	ImportUnitDecisionQUEUE  ImportUnitDecision = "QUEUE"
+	ImportUnitDecisionSKIP   ImportUnitDecision = "SKIP"
+)
+
+// Defines values for ImportUnitShape.
+const (
+	MULTIDISC ImportUnitShape = "MULTI_DISC"
+	PACK      ImportUnitShape = "PACK"
+	SET       ImportUnitShape = "SET"
+	SINGLE    ImportUnitShape = "SINGLE"
+)
+
 // Defines values for JobPool.
 const (
 	Acquire     JobPool = "acquire"
@@ -85,13 +126,13 @@ const (
 
 // Defines values for JobState.
 const (
-	CANCELLED    JobState = "CANCELLED"
-	FAILED       JobState = "FAILED"
-	LEASED       JobState = "LEASED"
-	PENDING      JobState = "PENDING"
-	PENDINGRETRY JobState = "PENDING_RETRY"
-	RUNNING      JobState = "RUNNING"
-	SUCCEEDED    JobState = "SUCCEEDED"
+	JobStateCANCELLED    JobState = "CANCELLED"
+	JobStateFAILED       JobState = "FAILED"
+	JobStateLEASED       JobState = "LEASED"
+	JobStatePENDING      JobState = "PENDING"
+	JobStatePENDINGRETRY JobState = "PENDING_RETRY"
+	JobStateRUNNING      JobState = "RUNNING"
+	JobStateSUCCEEDED    JobState = "SUCCEEDED"
 )
 
 // Defines values for LogoutStatusStatus.
@@ -170,6 +211,23 @@ const (
 	MISSING    WantedState = "MISSING"
 	PARTIAL    WantedState = "PARTIAL"
 	UPGRADABLE WantedState = "UPGRADABLE"
+)
+
+// Defines values for ListImportSessionsParamsState.
+const (
+	ListImportSessionsParamsStateDONE       ListImportSessionsParamsState = "DONE"
+	ListImportSessionsParamsStateFAILED     ListImportSessionsParamsState = "FAILED"
+	ListImportSessionsParamsStateIMPORTING  ListImportSessionsParamsState = "IMPORTING"
+	ListImportSessionsParamsStateINSPECTING ListImportSessionsParamsState = "INSPECTING"
+	ListImportSessionsParamsStateREVERTED   ListImportSessionsParamsState = "REVERTED"
+)
+
+// Defines values for ListImportUnitsParamsDecision.
+const (
+	COMMIT ListImportUnitsParamsDecision = "COMMIT"
+	FAILED ListImportUnitsParamsDecision = "FAILED"
+	QUEUE  ListImportUnitsParamsDecision = "QUEUE"
+	SKIP   ListImportUnitsParamsDecision = "SKIP"
 )
 
 // Defines values for ListWorksParamsSort.
@@ -423,6 +481,101 @@ type Identity struct {
 	UserId   int64  `json:"user_id"`
 	Username string `json:"username"`
 }
+
+// ImportCandidate One IDENTIFY strategy's ranked answer for a unit.
+type ImportCandidate struct {
+	Confidence float32 `json:"confidence"`
+	ExternalId *string `json:"external_id,omitempty"`
+	Provider   *string `json:"provider,omitempty"`
+	Strategy   string  `json:"strategy"`
+	WorkId     *int64  `json:"work_id,omitempty"`
+}
+
+// ImportEvidence Every GROUP signal that shaped this unit's boundary (ADR-10 shape).
+type ImportEvidence struct {
+	// Ambiguous True when grouping had to infer a boundary from a weaker signal rather than a decisive one.
+	Ambiguous *bool                   `json:"ambiguous,omitempty"`
+	Signals   *[]ImportEvidenceSignal `json:"signals,omitempty"`
+}
+
+// ImportEvidenceSignal defines model for ImportEvidenceSignal.
+type ImportEvidenceSignal struct {
+	Detail *string `json:"detail,omitempty"`
+	Kind   string  `json:"kind"`
+}
+
+// ImportInspectRequest Where to look, and what kind of import this is (ADR-48).
+type ImportInspectRequest struct {
+	// CategoryId The target category, when known up front. Omitted means "decide per unit".
+	CategoryId *int64 `json:"category_id,omitempty"`
+
+	// Origin Defaults to manual when omitted.
+	Origin     *ImportInspectRequestOrigin `json:"origin,omitempty"`
+	SourcePath string                      `json:"source_path"`
+}
+
+// ImportInspectRequestOrigin Defaults to manual when omitted.
+type ImportInspectRequestOrigin string
+
+// ImportInspectResult defines model for ImportInspectResult.
+type ImportInspectResult struct {
+	Enqueued bool `json:"enqueued"`
+}
+
+// ImportSession One inspection-and-import run over one source path (ADR-48).
+type ImportSession struct {
+	// BytesImported Only committed units' bytes.
+	BytesImported int64               `json:"bytes_imported"`
+	CategoryId    *int64              `json:"category_id,omitempty"`
+	Error         *string             `json:"error,omitempty"`
+	FinishedAt    *time.Time          `json:"finished_at,omitempty"`
+	Id            int64               `json:"id"`
+	Origin        ImportSessionOrigin `json:"origin"`
+	SourcePath    string              `json:"source_path"`
+	StartedAt     time.Time           `json:"started_at"`
+	State         ImportSessionState  `json:"state"`
+
+	// Threshold import.auto_commit_confidence's value in force for this run.
+	Threshold      float32 `json:"threshold"`
+	UnitsCommitted int64   `json:"units_committed"`
+	UnitsQueued    int64   `json:"units_queued"`
+	UnitsTotal     int64   `json:"units_total"`
+}
+
+// ImportSessionOrigin defines model for ImportSession.Origin.
+type ImportSessionOrigin string
+
+// ImportSessionState defines model for ImportSession.State.
+type ImportSessionState string
+
+// ImportUnit One unit ADR-48's pipeline found and decided.
+type ImportUnit struct {
+	Bytes      int64              `json:"bytes"`
+	Candidates *[]ImportCandidate `json:"candidates,omitempty"`
+	Confidence float32            `json:"confidence"`
+	Decision   ImportUnitDecision `json:"decision"`
+	EditionId  *int64             `json:"edition_id,omitempty"`
+
+	// Evidence Every GROUP signal that shaped this unit's boundary (ADR-10 shape).
+	Evidence  *ImportEvidence `json:"evidence,omitempty"`
+	FileCount int64           `json:"file_count"`
+	Id        int64           `json:"id"`
+	Reason    *string         `json:"reason,omitempty"`
+
+	// RelPath The unit's own root, relative to the session's source_path.
+	RelPath   string          `json:"rel_path"`
+	SessionId int64           `json:"session_id"`
+	Shape     ImportUnitShape `json:"shape"`
+
+	// WorkId Not yet resolved for a COMMIT decision -- ADR-48's own scope stops at DECIDE.
+	WorkId *int64 `json:"work_id,omitempty"`
+}
+
+// ImportUnitDecision defines model for ImportUnit.Decision.
+type ImportUnitDecision string
+
+// ImportUnitShape defines model for ImportUnit.Shape.
+type ImportUnitShape string
 
 // Job The job's payload is deliberately absent. It can carry paths and provider identifiers, and a listing is not the place to hand that out.
 type Job struct {
@@ -856,6 +1009,24 @@ type StreamEventsParams struct {
 	LastEventID *string       `json:"Last-Event-ID,omitempty"`
 }
 
+// ListImportSessionsParams defines parameters for ListImportSessions.
+type ListImportSessionsParams struct {
+	State *ListImportSessionsParamsState `form:"state,omitempty" json:"state,omitempty"`
+}
+
+// ListImportSessionsParamsState defines parameters for ListImportSessions.
+type ListImportSessionsParamsState string
+
+// ListImportUnitsParams defines parameters for ListImportUnits.
+type ListImportUnitsParams struct {
+	Decision *ListImportUnitsParamsDecision `form:"decision,omitempty" json:"decision,omitempty"`
+	AfterId  *int64                         `form:"after_id,omitempty" json:"after_id,omitempty"`
+	Limit    *int                           `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListImportUnitsParamsDecision defines parameters for ListImportUnits.
+type ListImportUnitsParamsDecision string
+
 // ListJobsParams defines parameters for ListJobs.
 type ListJobsParams struct {
 	// Cursor From `next_cursor` of the previous page. Absent on the first page. There is no offset parameter and there will not be one.
@@ -1028,6 +1199,9 @@ type UpdateExclusionPatternJSONRequestBody = ExclusionPatternWrite
 // RemoveAndBlockFileJSONRequestBody defines body for RemoveAndBlockFile for application/json ContentType.
 type RemoveAndBlockFileJSONRequestBody = RemoveAndBlockRequest
 
+// InspectImportJSONRequestBody defines body for InspectImport for application/json ContentType.
+type InspectImportJSONRequestBody = ImportInspectRequest
+
 // ResolveUnidentifiedJSONRequestBody defines body for ResolveUnidentified for application/json ContentType.
 type ResolveUnidentifiedJSONRequestBody ResolveUnidentifiedJSONBody
 
@@ -1114,6 +1288,18 @@ type ServerInterface interface {
 	// Liveness.
 	// (GET /health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// Point at any path and enqueue ADR-48's own inspection pipeline. Administrator only.
+	// (POST /import/inspect)
+	InspectImport(w http.ResponseWriter, r *http.Request)
+	// Every import session (ADR-48), newest first.
+	// (GET /import/sessions)
+	ListImportSessions(w http.ResponseWriter, r *http.Request, params ListImportSessionsParams)
+	// One session's own progress and counts.
+	// (GET /import/sessions/{id})
+	GetImportSession(w http.ResponseWriter, r *http.Request, id int64)
+	// One session's own units, in the order they were committed.
+	// (GET /import/sessions/{id}/units)
+	ListImportUnits(w http.ResponseWriter, r *http.Request, id int64, params ListImportUnitsParams)
 	// A page of jobs the caller may see.
 	// (GET /jobs)
 	ListJobs(w http.ResponseWriter, r *http.Request, params ListJobsParams)
@@ -1303,6 +1489,30 @@ func (_ Unimplemented) RemoveAndBlockFile(w http.ResponseWriter, r *http.Request
 // Liveness.
 // (GET /health)
 func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Point at any path and enqueue ADR-48's own inspection pipeline. Administrator only.
+// (POST /import/inspect)
+func (_ Unimplemented) InspectImport(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every import session (ADR-48), newest first.
+// (GET /import/sessions)
+func (_ Unimplemented) ListImportSessions(w http.ResponseWriter, r *http.Request, params ListImportSessionsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One session's own progress and counts.
+// (GET /import/sessions/{id})
+func (_ Unimplemented) GetImportSession(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One session's own units, in the order they were committed.
+// (GET /import/sessions/{id}/units)
+func (_ Unimplemented) ListImportUnits(w http.ResponseWriter, r *http.Request, id int64, params ListImportUnitsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1916,6 +2126,156 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// InspectImport operation middleware
+func (siw *ServerInterfaceWrapper) InspectImport(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.InspectImport(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListImportSessions operation middleware
+func (siw *ServerInterfaceWrapper) ListImportSessions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListImportSessionsParams
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "state", r.URL.Query(), &params.State)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListImportSessions(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetImportSession operation middleware
+func (siw *ServerInterfaceWrapper) GetImportSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetImportSession(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListImportUnits operation middleware
+func (siw *ServerInterfaceWrapper) ListImportUnits(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListImportUnitsParams
+
+	// ------------- Optional query parameter "decision" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "decision", r.URL.Query(), &params.Decision)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "decision", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "after_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "after_id", r.URL.Query(), &params.AfterId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListImportUnits(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3019,6 +3379,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/health", wrapper.GetHealth)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/import/inspect", wrapper.InspectImport)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/import/sessions", wrapper.ListImportSessions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/import/sessions/{id}", wrapper.GetImportSession)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/import/sessions/{id}/units", wrapper.ListImportUnits)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/jobs", wrapper.ListJobs)

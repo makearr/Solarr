@@ -69,6 +69,21 @@ SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason
 FROM import_unit WHERE session_id = ? ORDER BY id;
 
+-- Cursor-paginated, unlike ListImportUnits above: a session's own unit count
+-- is not bounded the way a session count is (Invariant 22 is exactly the
+-- "500k+ files" case a whole-library adoption run can hit), so the API layer
+-- needs a real page, not the whole session's units in one response.
+-- ListImportUnits itself stays as-is for the job's own small, in-process needs
+-- (resumeOrCreate's "the last unit committed so far" lookup).
+-- name: ListImportUnitsPage :many
+SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
+       work_id, edition_id, evidence_json, candidates_json, reason
+FROM import_unit
+WHERE session_id = sqlc.arg(session_id) AND id > sqlc.arg(after_id)
+  AND (sqlc.arg(filter_by_decision) = 0 OR decision = sqlc.arg(decision))
+ORDER BY id
+LIMIT sqlc.arg(page_size);
+
 -- name: GetImportUnit :one
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason

@@ -5,6 +5,7 @@ import {
   HelpCircle,
   LayoutDashboard,
   Library,
+  ScanSearch,
   Settings,
   Users,
   type LucideIcon,
@@ -24,6 +25,7 @@ const SECTIONS: readonly { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/library", label: "Library", icon: Library },
   { to: "/people", label: "People", icon: Users },
   { to: "/unidentified", label: "Unidentified", icon: HelpCircle },
+  { to: "/import", label: "Import", icon: ScanSearch },
   { to: "/activity", label: "Activity", icon: Activity },
   { to: "/settings", label: "Settings", icon: Settings },
 ];

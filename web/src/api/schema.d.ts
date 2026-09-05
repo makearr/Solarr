@@ -682,6 +682,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/import/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Point at any path and enqueue ADR-48's own inspection pipeline. Administrator only.
+         * @description Enqueues `import.inspect` (WALK/CLASSIFY/GROUP/EVIDENCE/IDENTIFY/ SHAPE/DECIDE) over `source_path`. It only inspects and records -- no file is moved and no work/edition row is created, so a unit recorded `COMMIT` means its confidence cleared the threshold, not that it is in the library yet. Poll `GET /import/sessions/{id}` for progress. A retry of an interrupted run resumes the same session rather than starting over.
+         */
+        post: operations["inspectImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/import/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every import session (ADR-48), newest first.
+         * @description Unpaginated -- session counts never approach library scale (Invariant 22 is about files, not import runs).
+         */
+        get: operations["listImportSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/import/sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** One session's own progress and counts. */
+        get: operations["getImportSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/import/sessions/{id}/units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * One session's own units, in the order they were committed.
+         * @description `after_id` pages through the list (the id of the last item already seen, 0 for the first page) -- the same plain ascending id cursor `/blocked` uses, since a session's own unit count can be large (a whole-library adoption run).
+         */
+        get: operations["listImportUnits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories": {
         parameters: {
             query?: never;
@@ -1318,6 +1399,105 @@ export interface components {
             blocklist_id?: number;
             /** @description Every desired_item id detached and recomputed. */
             reopened_items: number[];
+        };
+        /** @description Where to look, and what kind of import this is (ADR-48). */
+        ImportInspectRequest: {
+            source_path: string;
+            /**
+             * @description Defaults to manual when omitted.
+             * @enum {string}
+             */
+            origin?: "manual" | "acquisition" | "watched" | "adoption";
+            /**
+             * Format: int64
+             * @description The target category, when known up front. Omitted means "decide per unit".
+             */
+            category_id?: number;
+        };
+        ImportInspectResult: {
+            enqueued: boolean;
+        };
+        /** @description One inspection-and-import run over one source path (ADR-48). */
+        ImportSession: {
+            /** Format: int64 */
+            id: number;
+            source_path: string;
+            /** @enum {string} */
+            origin: "manual" | "acquisition" | "watched" | "adoption";
+            /** Format: int64 */
+            category_id?: number;
+            /** @enum {string} */
+            state: "INSPECTING" | "IMPORTING" | "DONE" | "FAILED" | "REVERTED";
+            /**
+             * Format: float
+             * @description import.auto_commit_confidence's value in force for this run.
+             */
+            threshold: number;
+            /** Format: int64 */
+            units_total: number;
+            /** Format: int64 */
+            units_committed: number;
+            /** Format: int64 */
+            units_queued: number;
+            /**
+             * Format: int64
+             * @description Only committed units' bytes.
+             */
+            bytes_imported: number;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            finished_at?: string;
+            error?: string;
+        };
+        ImportEvidenceSignal: {
+            kind: string;
+            detail?: string;
+        };
+        /** @description Every GROUP signal that shaped this unit's boundary (ADR-10 shape). */
+        ImportEvidence: {
+            signals?: components["schemas"]["ImportEvidenceSignal"][];
+            /** @description True when grouping had to infer a boundary from a weaker signal rather than a decisive one. */
+            ambiguous?: boolean;
+        };
+        /** @description One IDENTIFY strategy's ranked answer for a unit. */
+        ImportCandidate: {
+            strategy: string;
+            /** Format: int64 */
+            work_id?: number;
+            provider?: string;
+            external_id?: string;
+            /** Format: float */
+            confidence: number;
+        };
+        /** @description One unit ADR-48's pipeline found and decided. */
+        ImportUnit: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            session_id: number;
+            /** @description The unit's own root, relative to the session's source_path. */
+            rel_path: string;
+            /** @enum {string} */
+            shape: "SINGLE" | "SET" | "PACK" | "MULTI_DISC";
+            /** Format: int64 */
+            file_count: number;
+            /** Format: int64 */
+            bytes: number;
+            /** Format: float */
+            confidence: number;
+            /** @enum {string} */
+            decision: "COMMIT" | "QUEUE" | "SKIP" | "FAILED";
+            /**
+             * Format: int64
+             * @description Not yet resolved for a COMMIT decision -- ADR-48's own scope stops at DECIDE.
+             */
+            work_id?: number;
+            /** Format: int64 */
+            edition_id?: number;
+            evidence?: components["schemas"]["ImportEvidence"];
+            candidates?: components["schemas"]["ImportCandidate"][];
+            reason?: string;
         };
         /** @description A category as a navigation target: no `permission` field, since the list is already narrowed to what the caller may read (unlike `Me`'s `categories`, which reports the caller's level on each). */
         LibraryCategory: {
@@ -2468,6 +2648,108 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             /** @description No such file. */
+            404: components["responses"]["Problem"];
+        };
+    };
+    inspectImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportInspectRequest"];
+            };
+        };
+        responses: {
+            /** @description Enqueued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportInspectResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listImportSessions: {
+        parameters: {
+            query?: {
+                state?: "INSPECTING" | "IMPORTING" | "DONE" | "FAILED" | "REVERTED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sessions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSession"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    getImportSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSession"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listImportUnits: {
+        parameters: {
+            query?: {
+                decision?: "COMMIT" | "QUEUE" | "SKIP" | "FAILED";
+                after_id?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of units. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportUnit"][];
+                };
+            };
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };

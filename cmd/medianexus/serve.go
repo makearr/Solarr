@@ -415,6 +415,8 @@ func (p *process) startServer(ctx context.Context) error {
 			),
 			physical: library.NewPhysical(p.library), clock: clock.NewSystem(),
 		},
+		ImportSessions:  importSessionsAdapter{sessions: library.NewImportSessions(p.library)},
+		ImportInspector: importInspectorAdapter{queue: p.queue},
 		// time.Local.String() reports "Local"; the name the operator set is the useful one.
 		Timezone: p.timezone,
 		Egress:   egressStatus{prober: prober},

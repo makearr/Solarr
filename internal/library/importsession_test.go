@@ -90,6 +90,55 @@ func TestImportSessions_AddUnitsRecomputesCounts(t *testing.T) {
 	}
 }
 
+func TestImportSessions_ListUnitsPagePaginatesAndFiltersByDecision(t *testing.T) {
+	opened, _ := newLibrary(t)
+	sessions := library.NewImportSessions(opened)
+	ctx := t.Context()
+
+	id, err := sessions.Create(ctx, library.NewSession{
+		SourcePath: "/downloads/messy", Origin: library.ImportOriginManual, Threshold: 0.9, StartedAt: 100,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	ids, err := sessions.AddUnits(ctx, id, []library.NewUnit{
+		{RelPath: "Album 1", Shape: library.UnitSet, FileCount: 1, Bytes: 100, EvidenceJSON: "{}"},
+		{RelPath: "Album 2", Shape: library.UnitSet, FileCount: 1, Bytes: 100, EvidenceJSON: "{}"},
+		{RelPath: "Album 3", Shape: library.UnitSet, FileCount: 1, Bytes: 100, EvidenceJSON: "{}"},
+	})
+	if err != nil {
+		t.Fatalf("AddUnits: %v", err)
+	}
+	created := createWork(t, opened, "music", "Album 1")
+	if err := sessions.SetUnitDecision(ctx, ids[0], library.UnitCommit, 0.96, &created.ID, nil, "", ""); err != nil {
+		t.Fatalf("SetUnitDecision: %v", err)
+	}
+
+	page1, err := sessions.ListUnitsPage(ctx, id, 0, "", 2)
+	if err != nil {
+		t.Fatalf("ListUnitsPage: %v", err)
+	}
+	if len(page1) != 2 || page1[0].RelPath != "Album 1" || page1[1].RelPath != "Album 2" {
+		t.Fatalf("page1 = %+v, want Album 1 then Album 2", page1)
+	}
+
+	page2, err := sessions.ListUnitsPage(ctx, id, page1[len(page1)-1].ID, "", 2)
+	if err != nil {
+		t.Fatalf("ListUnitsPage: %v", err)
+	}
+	if len(page2) != 1 || page2[0].RelPath != "Album 3" {
+		t.Fatalf("page2 = %+v, want just Album 3", page2)
+	}
+
+	committed, err := sessions.ListUnitsPage(ctx, id, 0, library.UnitCommit, 10)
+	if err != nil {
+		t.Fatalf("ListUnitsPage filtered: %v", err)
+	}
+	if len(committed) != 1 || committed[0].RelPath != "Album 1" {
+		t.Fatalf("committed = %+v, want only Album 1", committed)
+	}
+}
+
 func TestImportSessions_SetUnitDecisionRecomputesCounts(t *testing.T) {
 	opened, _ := newLibrary(t)
 	sessions := library.NewImportSessions(opened)

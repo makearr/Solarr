@@ -100,6 +100,13 @@ type Config struct {
 	// RemoveAndBlocker runs ADR-53 section 3's compound action. Optional:
 	// without it, RemoveAndBlockFile answers 503.
 	RemoveAndBlocker RemoveAndBlocker
+	// ImportSessions lists ADR-48 import sessions and their units. Optional:
+	// without it, ListImportSessions/GetImportSession/ListImportUnits answer
+	// 503.
+	ImportSessions ImportSessionLister
+	// ImportInspector enqueues ADR-48's own inspection job. Optional: without
+	// it, InspectImport answers 503.
+	ImportInspector ImportInspector
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -134,6 +141,8 @@ type Server struct {
 	peopleSubscriber     PeopleSubscriber
 	blockedContent       BlockedContentLister
 	removeAndBlocker     RemoveAndBlocker
+	importSessions       ImportSessionLister
+	importInspector      ImportInspector
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -180,6 +189,8 @@ func New(config Config) (*Server, error) {
 		peopleSubscriber:     config.PeopleSubscriber,
 		blockedContent:       config.BlockedContent,
 		removeAndBlocker:     config.RemoveAndBlocker,
+		importSessions:       config.ImportSessions,
+		importInspector:      config.ImportInspector,
 		address:              net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -238,6 +249,10 @@ func New(config Config) (*Server, error) {
 			secured.Get("/blocked", server.routeListBlockedContent)
 			secured.Delete("/blocked/{id}", server.routeRemoveBlockedContent)
 			secured.Post("/files/{mediaObjectId}/remove-block", server.routeRemoveAndBlockFile)
+			secured.Post("/import/inspect", server.InspectImport)
+			secured.Get("/import/sessions", server.routeListImportSessions)
+			secured.Get("/import/sessions/{id}", server.routeGetImportSession)
+			secured.Get("/import/sessions/{id}/units", server.routeListImportUnits)
 			secured.Get("/rootfolders", server.ListRootFolders)
 			secured.Get("/users", server.ListUsers)
 			secured.Post("/users", server.CreateUser)

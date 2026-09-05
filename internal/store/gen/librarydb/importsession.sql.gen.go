@@ -305,6 +305,73 @@ func (q *Queries) ListImportUnits(ctx context.Context, sessionID int64) ([]Impor
 	return items, nil
 }
 
+const listImportUnitsPage = `-- name: ListImportUnitsPage :many
+SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
+       work_id, edition_id, evidence_json, candidates_json, reason
+FROM import_unit
+WHERE session_id = ?1 AND id > ?2
+  AND (?3 = 0 OR decision = ?4)
+ORDER BY id
+LIMIT ?5
+`
+
+type ListImportUnitsPageParams struct {
+	SessionID        int64
+	AfterID          int64
+	FilterByDecision interface{}
+	Decision         string
+	PageSize         int64
+}
+
+// Cursor-paginated, unlike ListImportUnits above: a session's own unit count
+// is not bounded the way a session count is (Invariant 22 is exactly the
+// "500k+ files" case a whole-library adoption run can hit), so the API layer
+// needs a real page, not the whole session's units in one response.
+// ListImportUnits itself stays as-is for the job's own small, in-process needs
+// (resumeOrCreate's "the last unit committed so far" lookup).
+func (q *Queries) ListImportUnitsPage(ctx context.Context, arg ListImportUnitsPageParams) ([]ImportUnit, error) {
+	rows, err := q.db.QueryContext(ctx, listImportUnitsPage,
+		arg.SessionID,
+		arg.AfterID,
+		arg.FilterByDecision,
+		arg.Decision,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ImportUnit{}
+	for rows.Next() {
+		var i ImportUnit
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.RelPath,
+			&i.Shape,
+			&i.FileCount,
+			&i.Bytes,
+			&i.Confidence,
+			&i.Decision,
+			&i.WorkID,
+			&i.EditionID,
+			&i.EvidenceJson,
+			&i.CandidatesJson,
+			&i.Reason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const recomputeImportSessionCounts = `-- name: RecomputeImportSessionCounts :exec
 UPDATE import_session SET
   units_total = (SELECT COUNT(*) FROM import_unit iu WHERE iu.session_id = ?1),

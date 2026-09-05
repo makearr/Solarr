@@ -246,6 +246,13 @@ type Querier interface {
 	// infer a concrete type for the argument.
 	ListImportSessions(ctx context.Context, arg ListImportSessionsParams) ([]ImportSession, error)
 	ListImportUnits(ctx context.Context, sessionID int64) ([]ImportUnit, error)
+	// Cursor-paginated, unlike ListImportUnits above: a session's own unit count
+	// is not bounded the way a session count is (Invariant 22 is exactly the
+	// "500k+ files" case a whole-library adoption run can hit), so the API layer
+	// needs a real page, not the whole session's units in one response.
+	// ListImportUnits itself stays as-is for the job's own small, in-process needs
+	// (resumeOrCreate's "the last unit committed so far" lookup).
+	ListImportUnitsPage(ctx context.Context, arg ListImportUnitsPageParams) ([]ImportUnit, error)
 	// "Monitor this studio and everything beneath it" needs the whole subtree, and
 	// imprints and sub-labels are real in every domain (ADR-32).
 	ListOrganisationSubtree(ctx context.Context, id int64) ([]Organisation, error)
