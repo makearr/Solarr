@@ -59,6 +59,26 @@ type Artwork struct {
 	FetchedAt   sql.NullInt64
 }
 
+type BlockedContent struct {
+	ID           int64
+	Oshash       sql.NullString
+	QuickHash    sql.NullString
+	Chromaprint  sql.NullString
+	Phash        sql.NullString
+	SizeBytes    int64
+	Reason       string
+	Note         sql.NullString
+	MediaType    sql.NullString
+	Title        string
+	ReleaseGroup string
+	Source       string
+	UserID       sql.NullInt64
+	ExpiresAt    sql.NullInt64
+	CreatedAt    int64
+	HitCount     int64
+	LastHitAt    sql.NullInt64
+}
+
 type BlocklistedRelease struct {
 	ID            int64
 	IndexerID     sql.NullInt64

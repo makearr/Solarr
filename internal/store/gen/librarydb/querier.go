@@ -65,6 +65,9 @@ type Querier interface {
 	// scanned, monitored work has rows on both sides and must count once.
 	CountWorksVisibleToCategory(ctx context.Context, arg CountWorksVisibleToCategoryParams) (int64, error)
 	CreateAcquisition(ctx context.Context, arg CreateAcquisitionParams) (Acquisition, error)
+	// ADR-53 part 2 (migration 0019). Column lists follow table order, or sqlc
+	// stops reusing models.
+	CreateBlockedContent(ctx context.Context, arg CreateBlockedContentParams) (BlockedContent, error)
 	// Collections, the ready queue, artwork, statistics and reputation.
 	CreateCollection(ctx context.Context, arg CreateCollectionParams) (Collection, error)
 	// Desired state. Column lists follow table order, or sqlc stops reusing models.
@@ -113,6 +116,12 @@ type Querier interface {
 	DetachFilePart(ctx context.Context, arg DetachFilePartParams) error
 	// Primed so something dispatches the instant a slot frees (section 10.5).
 	EnqueueReady(ctx context.Context, arg EnqueueReadyParams) error
+	// The import gate's own check (section 10.3 step 3, ADR-53): exact hashes
+	// only, oshash first since it is the stronger identifier when both exist.
+	// Perceptual columns (chromaprint/phash) are matched separately once
+	// fingerprinting exists -- a fuzzy hit is never folded into this exact check
+	// (architecture.md section 5.8's own "never treated as an exact one" rule).
+	FindBlockedContentByExactHash(ctx context.Context, arg FindBlockedContentByExactHashParams) ([]BlockedContent, error)
 	// The cheap identity check an incremental scan runs before reading a file.
 	FindMediaObjectsByQuickHash(ctx context.Context, quickHash string) ([]MediaObject, error)
 	// Anime absolute numbering: episode 137 of a series resolves to the part that
@@ -136,6 +145,7 @@ type Querier interface {
 	GetAcquisitionByClientRef(ctx context.Context, arg GetAcquisitionByClientRefParams) (Acquisition, error)
 	GetArtwork(ctx context.Context, arg GetArtworkParams) (string, error)
 	GetAttributes(ctx context.Context, id int64) (MediaAttribute, error)
+	GetBlockedContent(ctx context.Context, id int64) (BlockedContent, error)
 	GetCandidate(ctx context.Context, id int64) (Candidate, error)
 	// A dashboard figure is one lookup regardless of library size (ADR-28).
 	GetCounter(ctx context.Context, arg GetCounterParams) (Counter, error)
@@ -197,6 +207,7 @@ type Querier interface {
 	// the work-level listing above deliberately does not.
 	ListAllCreditsUnderWork(ctx context.Context, workID int64) ([]Credit, error)
 	ListArtworkForSubject(ctx context.Context, arg ListArtworkForSubjectParams) ([]Artwork, error)
+	ListBlockedContent(ctx context.Context, arg ListBlockedContentParams) ([]BlockedContent, error)
 	ListBlocklist(ctx context.Context, arg ListBlocklistParams) ([]BlocklistedRelease, error)
 	ListCollectionMembers(ctx context.Context, collectionID int64) ([]CollectionMember, error)
 	ListCollectionsForWork(ctx context.Context, workID int64) ([]Collection, error)
@@ -329,6 +340,9 @@ type Querier interface {
 	NextReady(ctx context.Context, arg NextReadyParams) ([]ReadyQueue, error)
 	// Which search caused this file, and which download produced it (F4, section 12).
 	ProvenanceForObject(ctx context.Context, mediaObjectID sql.NullInt64) ([]ProvenanceForObjectRow, error)
+	// Manual blocks never expire (section 10.8); auto entries may, matching
+	// section 10.11's existing blocklisted_release rule.
+	PurgeExpiredBlockedContent(ctx context.Context, expiresAt sql.NullInt64) error
 	// Auto entries expire because indexers repair things; manual ones do not.
 	PurgeExpiredBlocklist(ctx context.Context, expiresAt sql.NullInt64) error
 	PurgeExpiredReady(ctx context.Context, expiresAt int64) error
@@ -345,11 +359,13 @@ type Querier interface {
 	// inevitable, so the repair path is not optional.
 	RecomputePresentCount(ctx context.Context, id int64) error
 	RecordAcquiredFile(ctx context.Context, arg RecordAcquiredFileParams) (AcquisitionFile, error)
+	RecordBlockedContentHit(ctx context.Context, arg RecordBlockedContentHitParams) error
 	RecordDecision(ctx context.Context, arg RecordDecisionParams) (CandidateDecision, error)
 	// Only content-attributable outcomes count: a full disk is not the group's
 	// fault, and counting it would make reputation measure the environment (ADR-45).
 	RecordGroupObservation(ctx context.Context, arg RecordGroupObservationParams) error
 	RecordImportDecision(ctx context.Context, arg RecordImportDecisionParams) (ImportDecision, error)
+	RemoveBlockedContent(ctx context.Context, id int64) error
 	RemoveFromBlocklist(ctx context.Context, id int64) error
 	RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error
 	// Aged decision detail (section 5.7, Part VI Q5).
