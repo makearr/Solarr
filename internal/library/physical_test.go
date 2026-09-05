@@ -3,9 +3,11 @@ package library_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"testing"
 
+	"github.com/makearr/MediaNexus/internal/library"
 	"github.com/makearr/MediaNexus/internal/store"
 	"github.com/makearr/MediaNexus/internal/store/gen/librarydb"
 )
@@ -104,6 +106,47 @@ func TestOneObjectCarriesManyPaths(t *testing.T) {
 	// Primary first, so a caller that wants "the" path takes the first row.
 	if paths[0].IsPrimary != 1 {
 		t.Error("the primary path is not first")
+	}
+}
+
+// ADR-51's own RECORD step: media_object identity (Invariant 70) is
+// untouched by a relocation -- only where it lives changes.
+func TestRelocate_MovesTheLibraryPath(t *testing.T) {
+	opened, queries := newLibrary(t)
+	object := createObject(t, opened, "quick-1", 4096)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		_, err := q.AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+			MediaObjectID: object.ID, RootFolderID: 1, RelPath: "Old/track.flac",
+			LinkKind: "primary", IsPrimary: 1, CreatedAt: 1,
+		})
+		return err
+	})
+
+	physical := library.NewPhysical(opened)
+	if err := physical.Relocate(t.Context(), 1, "Old/track.flac", 2, "New/track.flac"); err != nil {
+		t.Fatalf("Relocate: %v", err)
+	}
+
+	paths, err := queries.ListPathsForObject(t.Context(), object.ID)
+	if err != nil {
+		t.Fatalf("ListPathsForObject: %v", err)
+	}
+	if len(paths) != 1 || paths[0].RootFolderID != 2 || paths[0].RelPath != "New/track.flac" {
+		t.Fatalf("paths = %+v, want the one path moved to root 2 / New/track.flac", paths)
+	}
+	if paths[0].MediaObjectID != object.ID {
+		t.Error("media_object_id changed across a relocation -- Invariant 70 violated")
+	}
+}
+
+// A relocation naming a location that no longer exists (a concurrent
+// change since Plan ran) must fail loudly, not silently do nothing.
+func TestRelocate_FailsWhenTheSourceLocationIsGone(t *testing.T) {
+	opened, _ := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	err := physical.Relocate(t.Context(), 1, "Nowhere/track.flac", 2, "New/track.flac")
+	if !errors.Is(err, library.ErrPathNotFound) {
+		t.Errorf("Relocate = %v, want ErrPathNotFound", err)
 	}
 }
 

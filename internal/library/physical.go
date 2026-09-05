@@ -206,6 +206,36 @@ func (p Physical) PathsForObject(ctx context.Context, mediaObjectID int64) ([]li
 	return rows, nil
 }
 
+// ErrPathNotFound means the (rootFolderID, relPath) pair Relocate was asked
+// to move no longer names a library_path row -- a concurrent change since
+// Plan ran (a rescan, another move, a manual edit), not a bug in the caller.
+var ErrPathNotFound = errors.New("library: no library_path at the given location")
+
+// Relocate is ADR-51's own RECORD step: media_object never changes
+// (Invariant 70), only where it lives. Matched by the old
+// (root_folder_id, rel_path) pair, which is exactly what a PlannedMove
+// already carries -- no lookup needed before the update.
+func (p Physical) Relocate(ctx context.Context, oldRootFolderID int64, oldRelPath string, newRootFolderID int64, newRelPath string) error {
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		affected, err := librarydb.New(tx).RelocateLibraryPath(ctx, librarydb.RelocateLibraryPathParams{
+			NewRootFolderID: newRootFolderID, NewRelPath: newRelPath,
+			OldRootFolderID: oldRootFolderID, OldRelPath: oldRelPath,
+		})
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return ErrPathNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("library: relocate %d:%s to %d:%s: %w",
+			oldRootFolderID, oldRelPath, newRootFolderID, newRelPath, err)
+	}
+	return nil
+}
+
 // DeleteObject removes a media_object outright, cascading to every
 // library_path and desired_item_file row that referenced it. Unlike
 // MarkMissing (section 10.4's "a vanished path is MISSING, not deleted,
