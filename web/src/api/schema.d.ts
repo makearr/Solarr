@@ -851,6 +851,10 @@ export interface components {
             files: number;
             monitored: number;
             missing: number;
+            /** @description Files with a measured attributes row (ADR-39). Same "library" counter scope as the others, a distinct metric pair (library.ProbeCoverage, todo 4.2) reconciled by its own sweep. */
+            probed: number;
+            /** @description total_files minus probed, computed here rather than stored twice. */
+            unprobed: number;
         };
         /** @enum {string} */
         JobState: "PENDING" | "PENDING_RETRY" | "LEASED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED";

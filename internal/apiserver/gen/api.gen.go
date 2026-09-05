@@ -372,7 +372,13 @@ type LibraryCounts struct {
 	Files     int `json:"files"`
 	Missing   int `json:"missing"`
 	Monitored int `json:"monitored"`
-	Works     int `json:"works"`
+
+	// Probed Files with a measured attributes row (ADR-39). Same "library" counter scope as the others, a distinct metric pair (library.ProbeCoverage, todo 4.2) reconciled by its own sweep.
+	Probed int `json:"probed"`
+
+	// Unprobed total_files minus probed, computed here rather than stored twice.
+	Unprobed int `json:"unprobed"`
+	Works    int `json:"works"`
 }
 
 // LogoutStatus defines model for LogoutStatus.

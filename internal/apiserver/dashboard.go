@@ -106,5 +106,10 @@ func (s *Server) libraryCounts(ctx context.Context) gen.LibraryCounts {
 	counts.Files = int(values["files"])
 	counts.Monitored = int(values["monitored"])
 	counts.Missing = int(values["missing"])
+	// probed/total_files are library.ProbeCoverage's own metric pair (todo 4.2),
+	// reconciled by a separate sweep into the same "library" counter scope --
+	// distinct metrics, not a collision.
+	counts.Probed = int(values["probed"])
+	counts.Unprobed = int(values["total_files"] - values["probed"])
 	return counts
 }

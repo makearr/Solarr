@@ -1343,12 +1343,21 @@ components:
         Read from the `counter` table, never aggregated live (section 21.12,
         ADR-28). Absent counters report zero, so an empty library and an
         uncounted one look the same until the reconciliation job has run.
-      required: [works, files, monitored, missing]
+      required: [works, files, monitored, missing, probed, unprobed]
       properties:
         works: { type: integer }
         files: { type: integer }
         monitored: { type: integer }
         missing: { type: integer }
+        probed:
+          type: integer
+          description: >-
+            Files with a measured attributes row (ADR-39). Same "library"
+            counter scope as the others, a distinct metric pair
+            (library.ProbeCoverage, todo 4.2) reconciled by its own sweep.
+        unprobed:
+          type: integer
+          description: total_files minus probed, computed here rather than stored twice.
 
     JobState:
       type: string

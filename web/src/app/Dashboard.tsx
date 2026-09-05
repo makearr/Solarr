@@ -57,6 +57,25 @@ export function Dashboard() {
           </div>
         </Section>
 
+        {library.probed + library.unprobed > 0 && (
+          <Section title="Probe coverage">
+            <div className="flex items-center gap-3 rounded-lg border border-border-subtle
+                           bg-surface px-3 py-2.5 text-sm">
+              <span className="font-mono tabular-nums">
+                {library.probed.toLocaleString()} of{" "}
+                {(library.probed + library.unprobed).toLocaleString()} files probed
+              </span>
+              {library.unprobed > 0 && (
+                <span className="ml-auto shrink-0 text-xs text-ink-muted">
+                  {library.unprobed.toLocaleString()} still unmeasured
+                </span>
+              )}
+            </div>
+            {/* No dedicated "unprobed files" list exists yet (section 21.14) --
+                this stays a plain figure rather than a link to nowhere useful. */}
+          </Section>
+        )}
+
         <Section title={`Storage (${roots.length})`}>
           {roots.length === 0 ? (
             <Note>
