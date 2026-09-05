@@ -91,6 +91,12 @@ var allowedInternalImports = map[string][]string{
 	// the caller already fetched, no I/O and no settings.db of its own --
 	// the same separation internal/score keeps from internal/settings.
 	"internal/placement": {},
+	// ADR-48's import inspection: walk, classify, group. No media-type
+	// knowledge and no database of its own (ADR-23) -- tag reading and
+	// segment plausibility are both injected functions, so this never
+	// imports internal/mediatool, internal/parse or internal/music. fsx is
+	// the one dependency, for the walk itself.
+	"internal/inspect": {"internal/fsx"},
 	// Section 11.7's capacity-polling job: probes every configured root via
 	// fsx and writes what it found back to settings.db.
 	"internal/capacity": {"internal/clock", "internal/fsx", "internal/jobs", "internal/settings"},
