@@ -144,28 +144,34 @@ func (s ImportSessions) Create(ctx context.Context, params NewSession) (int64, e
 // (Invariant 2), then recomputes the session's own running counts -- the same
 // drift-and-repair shape CategoryCounters already uses, rather than trying to
 // keep a running total consistent through every future call site that can
-// change a unit's decision.
-func (s ImportSessions) AddUnits(ctx context.Context, sessionID int64, units []NewUnit) error {
+// change a unit's decision. Returns the new rows' ids, in the same order as
+// units, so a caller that already has a real IDENTIFY/DECIDE result in hand
+// (import.inspect's own job) can call SetUnitDecision immediately without a
+// second round trip to look them back up.
+func (s ImportSessions) AddUnits(ctx context.Context, sessionID int64, units []NewUnit) ([]int64, error) {
 	if len(units) == 0 {
-		return nil
+		return nil, nil
 	}
+	ids := make([]int64, len(units))
 	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
-		for _, unit := range units {
-			if _, err := queries.InsertImportUnit(ctx, librarydb.InsertImportUnitParams{
+		for i, unit := range units {
+			row, err := queries.InsertImportUnit(ctx, librarydb.InsertImportUnitParams{
 				SessionID: sessionID, RelPath: unit.RelPath, Shape: unit.Shape,
 				FileCount: unit.FileCount, Bytes: unit.Bytes, Confidence: 0,
 				Decision: UnitQueue, EvidenceJson: unit.EvidenceJSON, Reason: nullString(unit.Reason),
-			}); err != nil {
+			})
+			if err != nil {
 				return fmt.Errorf("insert unit %s: %w", unit.RelPath, err)
 			}
+			ids[i] = row.ID
 		}
 		return queries.RecomputeImportSessionCounts(ctx, sessionID)
 	})
 	if err != nil {
-		return fmt.Errorf("library: add import units to session %d: %w", sessionID, err)
+		return nil, fmt.Errorf("library: add import units to session %d: %w", sessionID, err)
 	}
-	return nil
+	return ids, nil
 }
 
 // SetUnitDecision is the one mutation IDENTIFY needs once it exists: a unit

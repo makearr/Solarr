@@ -49,12 +49,15 @@ func TestImportSessions_AddUnitsRecomputesCounts(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	err = sessions.AddUnits(ctx, id, []library.NewUnit{
+	ids, err := sessions.AddUnits(ctx, id, []library.NewUnit{
 		{RelPath: "Artist A/Album 1", Shape: library.UnitSet, FileCount: 10, Bytes: 1000, EvidenceJSON: "{}"},
 		{RelPath: "Artist B/Album 2", Shape: library.UnitSet, FileCount: 8, Bytes: 800, EvidenceJSON: "{}"},
 	})
 	if err != nil {
 		t.Fatalf("AddUnits: %v", err)
+	}
+	if len(ids) != 2 || ids[0] == 0 || ids[1] == 0 || ids[0] == ids[1] {
+		t.Errorf("AddUnits ids = %v, want 2 distinct non-zero ids", ids)
 	}
 
 	got, err := sessions.Get(ctx, id)
@@ -98,7 +101,7 @@ func TestImportSessions_SetUnitDecisionRecomputesCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if err := sessions.AddUnits(ctx, id, []library.NewUnit{
+	if _, err := sessions.AddUnits(ctx, id, []library.NewUnit{
 		{RelPath: "Artist A/Album 1", Shape: library.UnitSet, FileCount: 10, Bytes: 1000, EvidenceJSON: "{}"},
 		{RelPath: "Artist B/Album 2", Shape: library.UnitSet, FileCount: 8, Bytes: 800, EvidenceJSON: "{}"},
 	}); err != nil {
