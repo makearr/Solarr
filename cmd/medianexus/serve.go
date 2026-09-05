@@ -346,6 +346,7 @@ func (p *process) startServer(ctx context.Context) error {
 	p.enqueueCategoryCounts(ctx)
 	p.enqueueProbe(ctx)
 	p.enqueueCapacity(ctx)
+	p.startSchedulers(ctx)
 	if err := p.seedAuthPolicy(ctx); err != nil {
 		return err
 	}
