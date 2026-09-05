@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/makearr/MediaNexus/internal/clock"
@@ -17,13 +18,14 @@ type CategoryScope struct {
 	RootFolderIDs []int64
 }
 
-// CategoryCounters recomputes "works" and "files" per category from
-// work_root_folder and library_path -- the same temporary bridge (migration 0012)
-// the works list and search use, standing in for desired_item until it exists for
-// music. Unlike Reconciler's desired-item-state metrics, neither source table needs
-// a per-category SQL filter: both are grouped by root_folder_id once, and a
-// category's total is the sum over whichever roots it spans (drift-and-repair is
-// the design, not a fallback -- see Reconciler's own doc comment).
+// CategoryCounters recomputes "works" and "files" per category. "files" is
+// library_path grouped by root folder -- a file only ever exists on disk, under
+// a root folder, so that half needs no desired_item involvement. "works" is the
+// union of work_root_folder (on-disk presence, migration 0012's bridge) and
+// desired_item.category_id (a subscription-discovered work has no root folder
+// yet) -- summing the two separately would double-count a scanned, monitored
+// work that has rows on both sides, so "works" is one distinct-count query per
+// scope rather than a Go-side sum over a bulk grouped query the way "files" is.
 type CategoryCounters struct {
 	store *store.Store
 	clock clock.Clock
@@ -39,15 +41,6 @@ func NewCategoryCounters(opened *store.Store, cl clock.Clock) CategoryCounters {
 func (c CategoryCounters) Reconcile(ctx context.Context, scopes []CategoryScope) ([]Correction, error) {
 	reader := librarydb.New(c.store.Read())
 
-	workRows, err := reader.CountWorksByRootFolder(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("library: category counters: %w", err)
-	}
-	worksByRoot := make(map[int64]int64, len(workRows))
-	for _, row := range workRows {
-		worksByRoot[row.RootFolderID] = row.Total
-	}
-
 	fileRows, err := reader.CountLibraryPathsByRootFolder(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("library: category counters: %w", err)
@@ -60,7 +53,7 @@ func (c CategoryCounters) Reconcile(ctx context.Context, scopes []CategoryScope)
 	now := c.clock.Now().Unix()
 	var corrections []Correction
 	for _, scope := range scopes {
-		found, err := c.reconcileScope(ctx, now, scope, worksByRoot, filesByRoot)
+		found, err := c.reconcileScope(ctx, reader, now, scope, filesByRoot)
 		if err != nil {
 			return nil, fmt.Errorf("library: category counters: reconcile category:%d: %w", scope.CategoryID, err)
 		}
@@ -70,15 +63,26 @@ func (c CategoryCounters) Reconcile(ctx context.Context, scopes []CategoryScope)
 }
 
 func (c CategoryCounters) reconcileScope(
-	ctx context.Context, now int64, scope CategoryScope, worksByRoot, filesByRoot map[int64]int64,
+	ctx context.Context, reader *librarydb.Queries, now int64, scope CategoryScope, filesByRoot map[int64]int64,
 ) ([]Correction, error) {
 	scopeKey := fmt.Sprintf("category:%d", scope.CategoryID)
+
+	encodedRootFolderIDs, err := json.Marshal(scope.RootFolderIDs)
+	if err != nil {
+		return nil, fmt.Errorf("encode root folder ids: %w", err)
+	}
+	works, err := reader.CountWorksVisibleToCategory(ctx, librarydb.CountWorksVisibleToCategoryParams{
+		RootFolderIds: string(encodedRootFolderIDs), CategoryID: scope.CategoryID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("count works: %w", err)
+	}
 	truth := map[string]int64{
-		"works": sumFor(worksByRoot, scope.RootFolderIDs),
+		"works": works,
 		"files": sumFor(filesByRoot, scope.RootFolderIDs),
 	}
 
-	existingRows, err := librarydb.New(c.store.Read()).ListCountersForScope(ctx, scopeKey)
+	existingRows, err := reader.ListCountersForScope(ctx, scopeKey)
 	if err != nil {
 		return nil, err
 	}

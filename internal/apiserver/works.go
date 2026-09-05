@@ -38,12 +38,14 @@ const (
 	SortDescending SortDirection = "desc"
 )
 
-// WorksFilter narrows a ListWorks call. RootFolderIDs is nil for unfiltered, a
-// non-nil empty slice for "the caller has no visible root folder at all" --
-// library.WorkFilter's own nil-vs-empty distinction, carried through here since
-// getting this wrong here would mean a category filter that quietly does nothing.
+// WorksFilter narrows a ListWorks call. RootFolderIDs and CategoryIDs are
+// ADR-27 visibility's two halves -- on-disk presence and desired-item
+// membership, library.WorkFilter's own nil-vs-empty distinction carried
+// through here since getting this wrong here would mean a category filter
+// that quietly does nothing or quietly leaks.
 type WorksFilter struct {
 	RootFolderIDs []int64
+	CategoryIDs   []int64
 	Sort          WorkSort
 	Direction     SortDirection
 }
@@ -93,7 +95,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		return
 	}
 
-	rootFolderIDs, err := s.visibleRootFolders(access, params.CategoryId)
+	rootFolderIDs, categoryIDs, err := s.visibility(access, params.CategoryId)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -106,7 +108,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 	}
 
 	rows, err := s.works.ListWorks(r.Context(),
-		WorksFilter{RootFolderIDs: rootFolderIDs, Sort: sort, Direction: direction},
+		WorksFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Sort: sort, Direction: direction},
 		worksCursorFor(sort, cursor), limit+1)
 	if err != nil {
 		writeError(w, s.logger, err)
@@ -131,18 +133,22 @@ func worksCursorFor(sort WorkSort, cursor paginate.TextCursor) WorksCursor {
 	}
 }
 
-// visibleRootFolders resolves what a caller may see into root folder ids,
+// visibility resolves what a caller may see into ADR-27's two halves -- root
+// folder ids (on-disk presence) and category ids (desired_item.category_id,
+// for a work with no root folder yet, e.g. a subscription-discovered album) --
 // scoped to categoryID when given. A category the caller cannot read answers
 // authz.ErrNotVisible, which writeError already maps to 404 (Invariant 37).
-func (s *Server) visibleRootFolders(access authz.Access, categoryID *int64) ([]int64, error) {
-	var categoryIDs []int64
+func (s *Server) visibility(access authz.Access, categoryID *int64) (rootFolderIDs, categoryIDs []int64, err error) {
 	if categoryID != nil {
 		if _, err := access.Category(*categoryID, settings.PermissionRead); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		categoryIDs = []int64{*categoryID}
 	} else {
 		categoryIDs = access.VisibleCategoryIDs(settings.PermissionRead)
+	}
+	if categoryIDs == nil {
+		categoryIDs = []int64{}
 	}
 
 	visible := make(map[int64]struct{}, len(categoryIDs))
@@ -153,13 +159,13 @@ func (s *Server) visibleRootFolders(access authz.Access, categoryID *int64) ([]i
 	// Non-nil from here on, even when it stays empty: WorksFilter.RootFolderIDs
 	// treats nil as unfiltered, which would leak every category's works the
 	// instant a caller has none visible.
-	rootFolderIDs := make([]int64, 0)
+	rootFolderIDs = make([]int64, 0)
 	for _, root := range s.auth.Settings.Snapshot().CategoryRoots() {
 		if _, ok := visible[root.CategoryID]; ok {
 			rootFolderIDs = append(rootFolderIDs, root.RootFolderID)
 		}
 	}
-	return rootFolderIDs, nil
+	return rootFolderIDs, categoryIDs, nil
 }
 
 // buildWorkPage trims the probe row (one more than pageSize) and, if present,

@@ -9,40 +9,30 @@ import (
 	"context"
 )
 
-const countWorksByRootFolder = `-- name: CountWorksByRootFolder :many
-SELECT root_folder_id, CAST(COUNT(DISTINCT work_id) AS INTEGER) AS total
-FROM work_root_folder GROUP BY root_folder_id ORDER BY root_folder_id
+const countWorksVisibleToCategory = `-- name: CountWorksVisibleToCategory :one
+SELECT CAST(COUNT(DISTINCT work_id) AS INTEGER) AS total FROM (
+  SELECT work_id FROM work_root_folder
+  WHERE root_folder_id IN (SELECT value FROM json_each(?1))
+  UNION
+  SELECT work_id FROM desired_item WHERE category_id = ?2
+)
 `
 
-type CountWorksByRootFolderRow struct {
-	RootFolderID int64
-	Total        int64
+type CountWorksVisibleToCategoryParams struct {
+	RootFolderIds interface{}
+	CategoryID    int64
 }
 
-// The truth a category counter is checked against (library/categorycounts.go): every
-// root folder's work count in one query, summed per category in Go since library.db
-// does not know which root folders a category spans (ADR-25).
-func (q *Queries) CountWorksByRootFolder(ctx context.Context) ([]CountWorksByRootFolderRow, error) {
-	rows, err := q.db.QueryContext(ctx, countWorksByRootFolder)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []CountWorksByRootFolderRow{}
-	for rows.Next() {
-		var i CountWorksByRootFolderRow
-		if err := rows.Scan(&i.RootFolderID, &i.Total); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+// The "works" count for one category: the union of on-disk presence
+// (work_root_folder) and desired-state membership (desired_item.category_id) --
+// a subscription-discovered work has no root folder yet but still belongs to its
+// category (private/next.md's work_root_folder retirement). Distinct because a
+// scanned, monitored work has rows on both sides and must count once.
+func (q *Queries) CountWorksVisibleToCategory(ctx context.Context, arg CountWorksVisibleToCategoryParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countWorksVisibleToCategory, arg.RootFolderIds, arg.CategoryID)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
 }
 
 const linkWorkRootFolder = `-- name: LinkWorkRootFolder :exec
@@ -58,7 +48,10 @@ type LinkWorkRootFolderParams struct {
 	FirstSeenAt  int64
 }
 
-// Temporary bridge until desired_item exists for music (see the migration comment).
+// work_root_folder records on-disk presence: which root folder a scan found a work
+// under. It is no longer the sole ADR-27 visibility signal (desired_item.category_id
+// covers a work with no root folder yet, e.g. subscription-discovered), but it is
+// still real and still needed for that half.
 func (q *Queries) LinkWorkRootFolder(ctx context.Context, arg LinkWorkRootFolderParams) error {
 	_, err := q.db.ExecContext(ctx, linkWorkRootFolder, arg.WorkID, arg.RootFolderID, arg.FirstSeenAt)
 	return err

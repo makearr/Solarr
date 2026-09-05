@@ -40,7 +40,9 @@ type WantedAlbum struct {
 
 // WorkDetail is a work's own fields, its editions, its parts, its credits and
 // genre tags, and every level's external ids. RootFolderIDs doubles as
-// display data (OnDisk, section 21.3) and the ADR-27 visibility check.
+// display data (OnDisk, section 21.3) and one half of the ADR-27 visibility
+// check; CategoryIDs is the other half -- a subscription-discovered work has
+// no root folder yet but does have a desired_item.category_id.
 type WorkDetail struct {
 	Work          librarydb.Work
 	ExternalIDs   []librarydb.WorkExternalID
@@ -49,6 +51,7 @@ type WorkDetail struct {
 	Credits       []Credit
 	Genres        []string
 	RootFolderIDs []int64
+	CategoryIDs   []int64
 	// Wanted is nil when nothing has ever wanted this album -- no scan, no
 	// subscription, no user request.
 	Wanted *WantedAlbum
@@ -135,21 +138,26 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 		return WorkDetail{}, fmt.Errorf("library: work detail: desired items: %w", err)
 	}
 	var wanted *WantedAlbum
+	categoryIDs := make([]int64, 0, len(items))
+	seenCategory := make(map[int64]bool, len(items))
 	for _, item := range items {
-		if item.SatisfactionKind == "SET" && !item.EditionID.Valid && item.MediaRef == "" {
+		if !seenCategory[item.CategoryID] {
+			seenCategory[item.CategoryID] = true
+			categoryIDs = append(categoryIDs, item.CategoryID)
+		}
+		if wanted == nil && item.SatisfactionKind == "SET" && !item.EditionID.Valid && item.MediaRef == "" {
 			wanted = &WantedAlbum{
 				ID: item.ID, Monitored: item.Monitored == 1, PresentCount: item.PresentCount, State: item.State,
 			}
 			if item.RequiredCount.Valid {
 				wanted.RequiredCount = &item.RequiredCount.Int64
 			}
-			break
 		}
 	}
 
 	return WorkDetail{
 		Work: work, ExternalIDs: externalIDs, Editions: editionDetails,
 		Parts: partDetails, Credits: credits, Genres: genres, RootFolderIDs: rootFolderIDs,
-		Wanted: wanted,
+		CategoryIDs: categoryIDs, Wanted: wanted,
 	}, nil
 }

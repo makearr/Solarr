@@ -90,7 +90,12 @@ func (s *Server) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64
 		return
 	}
 
-	rootFolderIDs, err := s.visibleRootFolders(access, nil)
+	// Root-folder-only, deliberately: a subscription-discovered work has no
+	// edition yet (full edition resolution for a search/subscription-identified
+	// work is still unattempted, private/next.md), so ListWorksNeedingArtwork
+	// never finds one to fetch a cover for -- the category half of ADR-27
+	// visibility would have nothing to gate here today.
+	rootFolderIDs, _, err := s.visibility(access, nil)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return

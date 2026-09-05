@@ -26,6 +26,7 @@ type fakeWorksMonitor struct {
 	bulkCount             int64
 	bulkErr               error
 	lastBulkRootFolderIDs []int64
+	lastBulkCategoryIDs   []int64
 	lastBulkIDs           []int64
 	lastBulkExcludedIDs   []int64
 	lastBulkMonitored     *bool
@@ -50,10 +51,11 @@ func (f *fakeWorksMonitor) SetPartMonitored(_ context.Context, _, partID int64, 
 }
 
 func (f *fakeWorksMonitor) BulkSetMonitored(
-	_ context.Context, rootFolderIDs, ids, excludedIDs []int64, monitored, preview bool,
+	_ context.Context, rootFolderIDs, categoryIDs, ids, excludedIDs []int64, monitored, preview bool,
 ) (int64, error) {
 	f.bulkCalls++
 	f.lastBulkRootFolderIDs = rootFolderIDs
+	f.lastBulkCategoryIDs = categoryIDs
 	f.lastBulkIDs = ids
 	f.lastBulkExcludedIDs = excludedIDs
 	f.lastBulkMonitored = &monitored
@@ -194,6 +196,14 @@ func TestBulkSetWorkMonitored_ResolvesCategoryAndForwardsTheSelection(t *testing
 	}
 	if len(fixture.worksMonitor.lastBulkRootFolderIDs) == 0 {
 		t.Error("want the category resolved to at least one root folder id")
+	}
+	// The other half of ADR-27 visibility must reach the selection too, or a
+	// subscription-discovered work (desired_item.category_id, no root folder
+	// yet) can never be matched by a bulk action -- private/next.md's
+	// confirmed bug.
+	if diff := []int64{1}; len(fixture.worksMonitor.lastBulkCategoryIDs) != len(diff) ||
+		fixture.worksMonitor.lastBulkCategoryIDs[0] != 1 {
+		t.Errorf("categoryIDs = %v, want %v", fixture.worksMonitor.lastBulkCategoryIDs, diff)
 	}
 	if len(fixture.worksMonitor.lastBulkIDs) != 0 {
 		t.Errorf("ids = %v, want none -- this was a query selection", fixture.worksMonitor.lastBulkIDs)

@@ -54,12 +54,16 @@ type WorkFilter struct {
 	// for ordering.
 	TitlePrefix string
 	// RootFolderIDs restricts the list to works work_root_folder recorded against
-	// any of these root folders -- the temporary bridge category filtering uses
-	// (migration 0012's comment) until desired_item exists for music. Nil means
-	// unfiltered, distinct from an empty non-nil slice, which matches nothing --
-	// callers translate "no root folder is visible" into an empty result rather
-	// than an unfiltered one themselves.
+	// any of these root folders -- on-disk presence, half of ADR-27 visibility.
+	// Nil means this half is not applied; a non-nil empty slice matches nothing
+	// via this half. CategoryIDs is the other half (desired_item.category_id, for
+	// a work with no root folder yet); a work matching either is included. Both
+	// nil together means fully unfiltered -- callers translate "nothing visible"
+	// into an empty non-nil slice on at least one of the two themselves.
 	RootFolderIDs []int64
+	// CategoryIDs restricts the list to works with a desired_item recorded
+	// against any of these categories -- see RootFolderIDs' own doc comment.
+	CategoryIDs []int64
 	// Sort and Direction pick the list's order (section 21.2's configurable,
 	// sortable columns). Artist is deliberately not sortable: it comes from a
 	// join with no supporting index, so ordering by it would fall back to
@@ -105,7 +109,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	predicates.AddIf(filter.YearFrom != 0, "year >= ?", filter.YearFrom)
 	predicates.AddIf(filter.YearTo != 0, "year <= ?", filter.YearTo)
 	addPrefix(&predicates, filter.TitlePrefix)
-	addRootFolders(&predicates, filter.RootFolderIDs)
+	addVisibility(&predicates, filter.RootFolderIDs, filter.CategoryIDs)
 
 	column, cursorValue := sortColumn(filter.Sort, after)
 	operator := ">"
@@ -169,25 +173,49 @@ func prefixUpperBound(prefix string) (string, bool) {
 	return "", false
 }
 
-// addRootFolders restricts to works seen under any of ids. nil means the filter
-// was not asked for; a non-nil empty slice ("nothing is visible") deliberately
-// matches no rows rather than being indistinguishable from unfiltered.
-func addRootFolders(predicates *store.Predicates, ids []int64) {
-	if ids == nil {
+// addVisibility restricts to works visible via either root folder (on-disk
+// presence) or category (desired_item.category_id, for a work with no root
+// folder yet) -- ADR-27's two halves, OR'd together. Either side nil means
+// that half was not asked for and contributes nothing; both nil together
+// leaves the list unfiltered. A non-nil empty slice on a side that applies
+// matches no rows via that side, same as before this had two halves.
+func addVisibility(predicates *store.Predicates, rootFolderIDs, categoryIDs []int64) {
+	rootFragment, rootArgs, rootApplies := membershipFragment(
+		"id IN (SELECT work_id FROM work_root_folder WHERE root_folder_id IN (%s))", rootFolderIDs)
+	categoryFragment, categoryArgs, categoryApplies := membershipFragment(
+		"id IN (SELECT work_id FROM desired_item WHERE category_id IN (%s))", categoryIDs)
+
+	switch {
+	case !rootApplies && !categoryApplies:
 		return
+	case rootApplies && !categoryApplies:
+		predicates.Add(rootFragment, rootArgs...)
+	case !rootApplies && categoryApplies:
+		predicates.Add(categoryFragment, categoryArgs...)
+	default:
+		predicates.Add("("+rootFragment+" OR "+categoryFragment+")",
+			append(append([]any{}, rootArgs...), categoryArgs...)...)
+	}
+}
+
+// membershipFragment builds one "IN (...)" clause (template holding one %s for
+// the placeholder list) for ids. applies is false when ids is nil (the caller
+// did not ask for this filter at all); an empty non-nil ids deliberately
+// renders as a clause matching nothing, not as "unfiltered".
+func membershipFragment(template string, ids []int64) (fragment string, arguments []any, applies bool) {
+	if ids == nil {
+		return "", nil, false
 	}
 	if len(ids) == 0 {
-		predicates.Add("0 = 1")
-		return
+		return "0 = 1", nil, true
 	}
 	placeholders := make([]string, len(ids))
-	arguments := make([]any, len(ids))
+	arguments = make([]any, len(ids))
 	for index, id := range ids {
 		placeholders[index] = "?"
 		arguments[index] = id
 	}
-	predicates.Add("id IN (SELECT work_id FROM work_root_folder WHERE root_folder_id IN ("+
-		strings.Join(placeholders, ",")+"))", arguments...)
+	return fmt.Sprintf(template, strings.Join(placeholders, ",")), arguments, true
 }
 
 // List returns one page of the library list.

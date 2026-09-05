@@ -23,7 +23,7 @@ func TestSearch_MatchesCanonicalTitle(t *testing.T) {
 	opened, _ := newLibrary(t)
 	work := createWork(t, opened, "music", "Tender Prey")
 
-	results, err := library.NewSearch(opened).Works(t.Context(), "tender", "", nil, 10)
+	results, err := library.NewSearch(opened).Works(t.Context(), "tender", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestSearch_MatchesAnAlias(t *testing.T) {
 		return err
 	})
 
-	results, err := library.NewSearch(opened).Works(t.Context(), "fur dich", "", nil, 10)
+	results, err := library.NewSearch(opened).Works(t.Context(), "fur dich", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestSearch_MatchesAPartTitle(t *testing.T) {
 		return err
 	})
 
-	results, err := library.NewSearch(opened).Works(t.Context(), "mercy seat", "", nil, 10)
+	results, err := library.NewSearch(opened).Works(t.Context(), "mercy seat", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestSearch_MatchesAPartAltTitle(t *testing.T) {
 		return err
 	})
 
-	results, err := library.NewSearch(opened).Works(t.Context(), "raucher", "", nil, 10)
+	results, err := library.NewSearch(opened).Works(t.Context(), "raucher", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestSearch_MatchesAsYouType(t *testing.T) {
 	opened, _ := newLibrary(t)
 	work := createWork(t, opened, "music", "Tender Prey")
 
-	results, err := library.NewSearch(opened).Works(t.Context(), "tender pr", "", nil, 10)
+	results, err := library.NewSearch(opened).Works(t.Context(), "tender pr", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestSearch_FiltersByMediaType(t *testing.T) {
 	createWork(t, opened, "music", "Push the Sky Away")
 	movie := createWork(t, opened, "movie", "Push the Sky Away Documentary")
 
-	results, err := library.NewSearch(opened).Works(t.Context(), "push the sky", "movie", nil, 10)
+	results, err := library.NewSearch(opened).Works(t.Context(), "push the sky", "movie", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestSearch_DeduplicatesAWorkWithSeveralMatchingTitles(t *testing.T) {
 		return err
 	})
 
-	results, err := library.NewSearch(opened).Works(t.Context(), "nathan", "", nil, 10)
+	results, err := library.NewSearch(opened).Works(t.Context(), "nathan", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestSearch_RanksTheCanonicalTitleMatchFirst(t *testing.T) {
 		return err
 	})
 
-	results, err := library.NewSearch(opened).Works(t.Context(), "boatman's call", "", nil, 10)
+	results, err := library.NewSearch(opened).Works(t.Context(), "boatman's call", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestSearch_TracksARenamedWork(t *testing.T) {
 		t.Fatalf("rename: %v", err)
 	}
 
-	renamed, err := library.NewSearch(opened).Works(t.Context(), "final title", "", nil, 10)
+	renamed, err := library.NewSearch(opened).Works(t.Context(), "final title", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestSearch_TracksARenamedWork(t *testing.T) {
 		t.Errorf("matched work %d, want %d", found.ID, work.ID)
 	}
 
-	stale, err := library.NewSearch(opened).Works(t.Context(), "working title", "", nil, 10)
+	stale, err := library.NewSearch(opened).Works(t.Context(), "working title", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestSearch_ForgetsADeletedWork(t *testing.T) {
 	})
 	_ = queries
 
-	results, err := library.NewSearch(opened).Works(t.Context(), "briefly here", "", nil, 10)
+	results, err := library.NewSearch(opened).Works(t.Context(), "briefly here", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -250,7 +250,7 @@ func TestSearch_ForgetsARemovedAliasWithoutLosingTheWork(t *testing.T) {
 		t.Fatalf("delete alias: %v", err)
 	}
 
-	byAlias, err := library.NewSearch(opened).Works(t.Context(), "removable alias", "", nil, 10)
+	byAlias, err := library.NewSearch(opened).Works(t.Context(), "removable alias", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestSearch_ForgetsARemovedAliasWithoutLosingTheWork(t *testing.T) {
 		t.Errorf("the removed alias still matches: %+v", byAlias)
 	}
 
-	byCanonical, err := library.NewSearch(opened).Works(t.Context(), "kept title", "", nil, 10)
+	byCanonical, err := library.NewSearch(opened).Works(t.Context(), "kept title", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestSearch_RejectsAQueryBelowTheMinimumLength(t *testing.T) {
 	createWork(t, opened, "music", "A")
 
 	for _, query := range []string{"", " ", "a"} {
-		_, err := library.NewSearch(opened).Works(t.Context(), query, "", nil, 10)
+		_, err := library.NewSearch(opened).Works(t.Context(), query, "", nil, nil, 10)
 		if !errors.Is(err, library.ErrQueryTooShort) {
 			t.Errorf("query %q: got %v, want ErrQueryTooShort", query, err)
 		}
@@ -289,7 +289,7 @@ func TestSearch_TreatsFTS5OperatorCharactersAsPlainText(t *testing.T) {
 	work := createWork(t, opened, "music", `XT/QK: "Greatest" Hits - Live NOT Studio`)
 
 	results, err := library.NewSearch(opened).Works(t.Context(),
-		`XT/QK: "Greatest" Hits - Live NOT Studio`, "", nil, 10)
+		`XT/QK: "Greatest" Hits - Live NOT Studio`, "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -307,7 +307,7 @@ func TestSearch_RootFolderFilterNarrowsToLinkedWorks(t *testing.T) {
 	linkRootFolder(t, opened, inRoot1.ID, 1)
 	linkRootFolder(t, opened, inRoot2.ID, 2)
 
-	results, err := library.NewSearch(opened).Works(t.Context(), "amber", "", []int64{1}, 10)
+	results, err := library.NewSearch(opened).Works(t.Context(), "amber", "", []int64{1}, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -326,7 +326,7 @@ func TestSearch_EmptyNonNilRootFolderFilterMatchesNothing(t *testing.T) {
 	work := createWork(t, opened, "music", "amber rivers")
 	linkRootFolder(t, opened, work.ID, 1)
 
-	nilFiltered, err := library.NewSearch(opened).Works(t.Context(), "amber", "", nil, 10)
+	nilFiltered, err := library.NewSearch(opened).Works(t.Context(), "amber", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works (nil): %v", err)
 	}
@@ -334,7 +334,7 @@ func TestSearch_EmptyNonNilRootFolderFilterMatchesNothing(t *testing.T) {
 		t.Errorf("nil rootFolderIDs excluded a row, want unfiltered: got %+v", nilFiltered)
 	}
 
-	emptyFiltered, err := library.NewSearch(opened).Works(t.Context(), "amber", "", []int64{}, 10)
+	emptyFiltered, err := library.NewSearch(opened).Works(t.Context(), "amber", "", []int64{}, nil, 10)
 	if err != nil {
 		t.Fatalf("Works (empty): %v", err)
 	}

@@ -71,8 +71,9 @@ type WantedRow struct {
 	State         string
 }
 
-// WorkDetailRow is a work's full detail. RootFolderIDs is not rendered --
-// GetWork uses it to run ListWorks' ADR-27 visibility check against one item.
+// WorkDetailRow is a work's full detail. RootFolderIDs and CategoryIDs are not
+// rendered -- GetWork uses them to run ListWorks' ADR-27 visibility check
+// (both halves) against one item.
 type WorkDetailRow struct {
 	ID            int64
 	MediaType     string
@@ -91,6 +92,7 @@ type WorkDetailRow struct {
 	Credits       []CreditRow
 	Genres        []string
 	RootFolderIDs []int64
+	CategoryIDs   []int64
 	// Wanted is nil when nothing has ever wanted this album.
 	Wanted *WantedRow
 }
@@ -109,11 +111,12 @@ type WorksMonitor interface {
 	// with an error wrapping sql.ErrNoRows.
 	SetPartMonitored(ctx context.Context, workID, partID int64, monitored bool) error
 	// BulkSetMonitored is SetWorkMonitored over a selection (section 21.7):
-	// every work visible under rootFolderIDs whose id is in ids (when
-	// non-empty) or is not in excludedIDs otherwise. Always returns how
-	// many works matched; when preview is true nothing is changed.
+	// every work visible under rootFolderIDs or categoryIDs (ADR-27's two
+	// halves) whose id is in ids (when non-empty) or is not in excludedIDs
+	// otherwise. Always returns how many works matched; when preview is true
+	// nothing is changed.
 	BulkSetMonitored(
-		ctx context.Context, rootFolderIDs, ids, excludedIDs []int64, monitored, preview bool,
+		ctx context.Context, rootFolderIDs, categoryIDs, ids, excludedIDs []int64, monitored, preview bool,
 	) (int64, error)
 }
 
@@ -154,12 +157,12 @@ func (s *Server) GetWork(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 
-	rootFolderIDs, err := s.visibleRootFolders(access, nil)
+	rootFolderIDs, categoryIDs, err := s.visibility(access, nil)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	if !sharesAnID(rootFolderIDs, row.RootFolderIDs) {
+	if !workDetailVisible(rootFolderIDs, categoryIDs, row) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
 		return
 	}
@@ -266,9 +269,9 @@ func (s *Server) SetPartMonitored(w http.ResponseWriter, r *http.Request, id, pa
 
 // BulkSetWorkMonitored is SetWorkMonitored over a selection (section 21.7):
 // "bulk selection is a query, never a list of ids". Visibility is enforced
-// by resolving rootFolderIDs from the caller's own access before the
-// selection is ever interpreted, the same visibleRootFolders call ListWorks
-// makes -- a work outside it is never matched, explicit id or not.
+// by resolving rootFolderIDs and categoryIDs from the caller's own access
+// before the selection is ever interpreted, the same visibility call ListWorks
+// makes -- a work outside both is never matched, explicit id or not.
 func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
@@ -288,13 +291,13 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rootFolderIDs, err := s.visibleRootFolders(access, body.CategoryId)
+	rootFolderIDs, categoryIDs, err := s.visibility(access, body.CategoryId)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
 
-	count, err := s.worksMonitor.BulkSetMonitored(r.Context(), rootFolderIDs,
+	count, err := s.worksMonitor.BulkSetMonitored(r.Context(), rootFolderIDs, categoryIDs,
 		derefOr(body.Ids, nil), derefOr(body.ExcludedIds, nil), body.Monitored, derefOr(body.Preview, false))
 	if err != nil {
 		writeError(w, s.logger, err)
@@ -317,12 +320,12 @@ func (s *Server) workVisible(w http.ResponseWriter, r *http.Request, access auth
 		writeError(w, s.logger, err)
 		return false
 	}
-	rootFolderIDs, err := s.visibleRootFolders(access, nil)
+	rootFolderIDs, categoryIDs, err := s.visibility(access, nil)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return false
 	}
-	if !sharesAnID(rootFolderIDs, row.RootFolderIDs) {
+	if !workDetailVisible(rootFolderIDs, categoryIDs, row) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
 		return false
 	}
@@ -334,6 +337,14 @@ func buildWantedView(row WantedRow) gen.Wanted {
 		Id: row.ID, Monitored: row.Monitored, RequiredCount: row.RequiredCount,
 		PresentCount: row.PresentCount, State: gen.WantedState(row.State),
 	}
+}
+
+// workDetailVisible is GetWork's own ADR-27 visibility check: row is visible
+// if either half -- on-disk root folder or desired_item category -- shares an
+// id with what the caller may see. A subscription-discovered work has no root
+// folder yet, so the category half is what makes it reachable at all.
+func workDetailVisible(rootFolderIDs, categoryIDs []int64, row WorkDetailRow) bool {
+	return sharesAnID(rootFolderIDs, row.RootFolderIDs) || sharesAnID(categoryIDs, row.CategoryIDs)
 }
 
 // sharesAnID reports whether a and b have any element in common.

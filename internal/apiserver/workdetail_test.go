@@ -49,6 +49,51 @@ func TestGetWork_UnderARootFolderTheCallerCannotReadAnswers404(t *testing.T) {
 	}
 }
 
+// private/next.md's confirmed bug: a subscription-discovered work has no
+// root folder yet (nothing ever calls LinkWorkRootFolder for it), only a
+// desired_item.category_id. It must still be reachable through GetWork via
+// the category half of ADR-27 visibility, not just the root-folder half.
+func TestGetWork_SubscriptionDiscoveredWorkWithNoRootFolderIsVisibleByCategory(t *testing.T) {
+	fixture := newWorksFixture(t)
+	visible, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	user := fixture.createUser(t, "listener", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, visible.ID, settings.PermissionRead); err != nil {
+		t.Fatalf("SetCategoryAccess: %v", err)
+	}
+	cookies := fixture.signIn(t, "listener")
+
+	fixture.workDetail.row = apiserver.WorkDetailRow{
+		ID: 1, MediaType: "music", Title: "Subscribed Album", SortTitle: "subscribed album",
+		CategoryIDs: []int64{visible.ID},
+	}
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/1"))
+	if recorder.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200: a work with no root folder but a visible category must be reachable", recorder.Code)
+	}
+}
+
+// The category half must not leak, either: a work whose only desired_item
+// belongs to a category the caller cannot read must still answer 404, the
+// same as the root-folder half already does.
+func TestGetWork_SubscriptionDiscoveredWorkInAnUnreadableCategoryAnswers404(t *testing.T) {
+	fixture := newWorksFixture(t)
+	_, _ = fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	_, _ = fixture.createCategoryWithRoot(t, "Private Stash", "/media/private")
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	fixture.workDetail.row = apiserver.WorkDetailRow{
+		ID: 1, MediaType: "music", Title: "Secret Subscribed Album", SortTitle: "secret subscribed album",
+		CategoryIDs: []int64{2},
+	}
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/1"))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 for a desired_item category this caller cannot read", recorder.Code)
+	}
+}
+
 func TestGetWork_UnderAVisibleRootFolderAnswers200WithFullShape(t *testing.T) {
 	fixture := newWorksFixture(t)
 	visible, rootVisible := fixture.createCategoryWithRoot(t, "Music", "/media/music")

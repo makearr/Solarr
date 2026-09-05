@@ -17,7 +17,7 @@ type searchAdapter struct{ search library.Search }
 func (a searchAdapter) SearchWorks(
 	ctx context.Context, filter apiserver.SearchFilter, limit int,
 ) ([]apiserver.SearchResultRow, error) {
-	results, err := a.search.Works(ctx, filter.Query, filter.MediaType, filter.RootFolderIDs, limit)
+	results, err := a.search.Works(ctx, filter.Query, filter.MediaType, filter.RootFolderIDs, filter.CategoryIDs, limit)
 	if err != nil {
 		if errors.Is(err, library.ErrQueryTooShort) {
 			return nil, apiserver.ErrQueryTooShort

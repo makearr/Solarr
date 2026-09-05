@@ -33,10 +33,14 @@ type SearchResult struct {
 
 // Works ranks works whose title or an alias matches query, cross-media-type unless
 // mediaType narrows it (section 21.1's "search across everything"). A work appears at
-// most once even when several of its titles match. rootFolderIDs mirrors
-// WorkFilter.RootFolderIDs: nil is unfiltered, a non-nil empty slice matches nothing
-// (ADR-27, the caller translates "no root folder visible" into that before calling).
-func (s Search) Works(ctx context.Context, query, mediaType string, rootFolderIDs []int64, pageSize int) ([]SearchResult, error) {
+// most once even when several of its titles match. rootFolderIDs and categoryIDs mirror
+// WorkFilter's own two visibility halves: nil means that half is not applied, a non-nil
+// empty slice matches nothing via that half, and a work matching either is included
+// (ADR-27 -- a subscription-discovered work has no root folder yet but does have a
+// desired_item.category_id).
+func (s Search) Works(
+	ctx context.Context, query, mediaType string, rootFolderIDs, categoryIDs []int64, pageSize int,
+) ([]SearchResult, error) {
 	matchQuery, ok := buildMatchQuery(query)
 	if !ok {
 		return nil, ErrQueryTooShort
@@ -47,10 +51,16 @@ func (s Search) Works(ctx context.Context, query, mediaType string, rootFolderID
 	if err != nil {
 		return nil, fmt.Errorf("library: encode root folder ids: %w", err)
 	}
+	filterCategories := categoryIDs != nil
+	encodedCategoryIDs, err := json.Marshal(categoryIDs)
+	if err != nil {
+		return nil, fmt.Errorf("library: encode category ids: %w", err)
+	}
 
 	rows, err := librarydb.New(s.store.Read()).SearchWorks(ctx, librarydb.SearchWorksParams{
 		Query: matchQuery, MediaType: mediaType, PageSize: int64(pageSize),
 		FilterRootFolders: boolToInt(filterRootFolders), RootFolderIds: string(encodedRootFolderIDs),
+		FilterCategories: boolToInt(filterCategories), CategoryIds: string(encodedCategoryIDs),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: search works: %w", err)

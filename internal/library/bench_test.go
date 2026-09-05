@@ -183,7 +183,7 @@ func TestADR28_SearchStaysUnderItsTarget(t *testing.T) {
 	wanted := searchPrefixes(t, opened, samples)
 
 	durations := measure(len(wanted), func(index int) {
-		if _, err := search.Works(t.Context(), wanted[index], "", nil, listPageSize); err != nil {
+		if _, err := search.Works(t.Context(), wanted[index], "", nil, nil, listPageSize); err != nil {
 			t.Fatalf("Works: %v", err)
 		}
 	})

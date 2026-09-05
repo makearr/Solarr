@@ -208,9 +208,9 @@ func slugify(name string) string {
 // biography (decoded back out of fields_json), and their discography -- every
 // work credited to them, any role (architecture.md's own GET /people/{id}
 // sketch: "incl. coverage per media type"). Coverage itself (held vs missing
-// vs upgradable) reuses Satisfaction, which needs desired_item populated for
-// music -- not yet true (migration 0012's work_root_folder bridge exists
-// precisely because it isn't), so this pass answers the discography half only.
+// vs upgradable) reuses Satisfaction over desired_item, populated for music
+// since todo 4.4 -- not wired into this endpoint yet, so this pass answers
+// the discography half only.
 type PersonDetail struct {
 	Person      librarydb.Person
 	Aliases     []string

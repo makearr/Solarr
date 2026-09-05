@@ -112,6 +112,47 @@ func TestCategoryCounters_UnchangedCountsProduceNoCorrections(t *testing.T) {
 	}
 }
 
+// The confirmed bug private/next.md named: a subscription-discovered work has a
+// desired_item.category_id but no work_root_folder row, so a naive per-root-folder
+// count undercounts a category's sidebar "works" total the moment a subscription
+// creates one. The union must also not double-count a work that has rows on both
+// sides (scanned AND has a desired_item in the same category).
+func TestCategoryCounters_CountsSubscriptionDiscoveredWorksWithNoRootFolder(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	desired := library.NewDesired(opened)
+	counters := library.NewCategoryCounters(opened, clock.NewFakeAtEpoch())
+
+	scannedAndDesired, subscriptionOnly := library.WorkLink{
+		Provider: "test", ExternalID: "a", Confidence: 1,
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "A", SortTitle: "a"}, RootFolderID: 1,
+	}, library.WorkLink{
+		Provider: "test", ExternalID: "b", Confidence: 1,
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "B", SortTitle: "b"},
+	}
+	workIDs, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{scannedAndDesired, subscriptionOnly})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+	for _, workID := range workIDs {
+		if _, err := desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{
+			WorkID: workID, CategoryID: 1, ProfileID: 1, Monitored: true,
+		}); err != nil {
+			t.Fatalf("EnsureAlbumItem: %v", err)
+		}
+	}
+
+	corrections, err := counters.Reconcile(t.Context(), []library.CategoryScope{
+		{CategoryID: 1, RootFolderIDs: []int64{1}},
+	})
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if v, ok := correctionFor(corrections, "works"); !ok || v.Now != 2 {
+		t.Errorf("works = %+v, ok=%v, want Now=2 (one on both sides, one desired_item-only)", v, ok)
+	}
+}
+
 // A category with no root folders (none configured yet, or all detached) must
 // reconcile to zero rather than erroring or being skipped.
 func TestCategoryCounters_ACategoryWithNoRootFoldersReconcilesToZero(t *testing.T) {

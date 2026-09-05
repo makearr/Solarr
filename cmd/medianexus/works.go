@@ -20,6 +20,7 @@ func (a worksAdapter) ListWorks(
 	rows, err := a.works.List(ctx,
 		library.WorkFilter{
 			RootFolderIDs: filter.RootFolderIDs,
+			CategoryIDs:   filter.CategoryIDs,
 			Sort:          library.WorkSort(filter.Sort),
 			Direction:     library.SortDirection(filter.Direction),
 		},

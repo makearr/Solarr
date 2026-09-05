@@ -38,9 +38,10 @@ type WorkLink struct {
 	// work this link resolves to, in the same transaction.
 	Edition *EditionLink
 	// RootFolderID records which root folder this link's identifying file came
-	// from (work_root_folder) -- the temporary bridge category filtering uses
-	// until desired_item exists for music (migration 0012's comment). Zero means
-	// the caller has no root folder to report.
+	// from (work_root_folder) -- on-disk presence, one half of ADR-27
+	// visibility (WorkFilter.RootFolderIDs' own doc comment has the other
+	// half, desired_item.category_id). Zero means the caller has no root
+	// folder to report.
 	RootFolderID int64
 }
 

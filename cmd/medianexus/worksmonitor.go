@@ -83,9 +83,9 @@ const bulkPageSize = 200
 // type with no category configured, a since-deleted work) is logged and
 // skipped rather than aborting the rest of the selection.
 func (a worksMonitorAdapter) BulkSetMonitored(
-	ctx context.Context, rootFolderIDs, ids, excludedIDs []int64, monitored, preview bool,
+	ctx context.Context, rootFolderIDs, categoryIDs, ids, excludedIDs []int64, monitored, preview bool,
 ) (int64, error) {
-	matched, err := a.matchingWorkIDs(ctx, rootFolderIDs, ids, excludedIDs)
+	matched, err := a.matchingWorkIDs(ctx, rootFolderIDs, categoryIDs, ids, excludedIDs)
 	if err != nil {
 		return 0, err
 	}
@@ -106,12 +106,12 @@ func (a worksMonitorAdapter) BulkSetMonitored(
 }
 
 // matchingWorkIDs turns a selection into concrete ids. Explicit ids (an
-// "include" selection) are filtered to ones visible under rootFolderIDs and
-// not excluded; otherwise every visible work not excluded is enumerated
-// (an "all matching" selection), paged so no single read pulls the whole
-// library into memory at once.
+// "include" selection) are filtered to ones visible under rootFolderIDs or
+// categoryIDs (ADR-27's two halves) and not excluded; otherwise every visible
+// work not excluded is enumerated (an "all matching" selection), paged so no
+// single read pulls the whole library into memory at once.
 func (a worksMonitorAdapter) matchingWorkIDs(
-	ctx context.Context, rootFolderIDs, ids, excludedIDs []int64,
+	ctx context.Context, rootFolderIDs, categoryIDs, ids, excludedIDs []int64,
 ) ([]int64, error) {
 	excluded := make(map[int64]bool, len(excludedIDs))
 	for _, id := range excludedIDs {
@@ -131,7 +131,7 @@ func (a worksMonitorAdapter) matchingWorkIDs(
 			if err != nil {
 				return nil, err
 			}
-			if rootFolderVisible(rootFolderIDs, detail.RootFolderIDs) {
+			if idVisible(rootFolderIDs, detail.RootFolderIDs) || idVisible(categoryIDs, detail.CategoryIDs) {
 				matched = append(matched, id)
 			}
 		}
@@ -141,7 +141,8 @@ func (a worksMonitorAdapter) matchingWorkIDs(
 	var matched []int64
 	cursor := library.WorkCursor{}
 	for {
-		rows, err := a.works.List(ctx, library.WorkFilter{RootFolderIDs: rootFolderIDs}, cursor, bulkPageSize)
+		rows, err := a.works.List(ctx,
+			library.WorkFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs}, cursor, bulkPageSize)
 		if err != nil {
 			return nil, err
 		}
@@ -158,17 +159,17 @@ func (a worksMonitorAdapter) matchingWorkIDs(
 	}
 }
 
-// rootFolderVisible reports whether any of a work's own root folders is
-// among the caller's visible ones -- ADR-27, the same check
+// idVisible reports whether any of a work's own ids (root folder or category)
+// is among the caller's visible ones -- ADR-27, the same check
 // apiserver.sharesAnID makes, duplicated here rather than exported since
 // apiserver's helpers are unexported by design (this package translates,
 // it does not reach into apiserver's internals).
-func rootFolderVisible(visible, workRootFolderIDs []int64) bool {
+func idVisible(visible, workIDs []int64) bool {
 	seen := make(map[int64]struct{}, len(visible))
 	for _, id := range visible {
 		seen[id] = struct{}{}
 	}
-	for _, id := range workRootFolderIDs {
+	for _, id := range workIDs {
 		if _, ok := seen[id]; ok {
 			return true
 		}

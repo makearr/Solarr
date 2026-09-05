@@ -126,6 +126,48 @@ func TestListWorks_EmptyNonNilRootFolderFilterMatchesNothing(t *testing.T) {
 	}
 }
 
+// The confirmed bug private/next.md named: a subscription-discovered work has a
+// desired_item.category_id but no work_root_folder row at all (nothing ever calls
+// LinkWorkRootFolder for it), so it must still surface when the caller's visible
+// categories are passed alongside their visible root folders -- neither alone is
+// enough, since a work can have either or both.
+func TestListWorks_CategoryFilterFindsASubscriptionDiscoveredWorkWithNoRootFolder(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	desired := library.NewDesired(opened)
+
+	scanned := createWork(t, opened, "music", "amber rivers")
+	linkRootFolder(t, opened, scanned.ID, 1)
+
+	subscribed := createWork(t, opened, "music", "broken signals")
+	if _, err := desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{
+		WorkID: subscribed.ID, CategoryID: 9, ProfileID: 1, Monitored: true,
+	}); err != nil {
+		t.Fatalf("EnsureAlbumItem: %v", err)
+	}
+
+	page, err := works.List(t.Context(),
+		library.WorkFilter{RootFolderIDs: []int64{1}, CategoryIDs: []int64{9}}, library.WorkCursor{}, 100)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(page) != 2 {
+		t.Fatalf("got %d works, want both the scanned and the subscription-discovered one: %+v", len(page), page)
+	}
+
+	// The subscription-discovered work must NOT appear if its category is not
+	// in the caller's visible set -- the fix must not leak everything with any
+	// desired_item row, only what the caller's own categories admit.
+	restricted, err := works.List(t.Context(),
+		library.WorkFilter{RootFolderIDs: []int64{1}, CategoryIDs: []int64{}}, library.WorkCursor{}, 100)
+	if err != nil {
+		t.Fatalf("List (restricted): %v", err)
+	}
+	if len(restricted) != 1 || restricted[0].ID != scanned.ID {
+		t.Errorf("got %+v, want only the scanned work once the subscription's category is not visible", restricted)
+	}
+}
+
 // Sort titles repeat, so a page boundary lands inside a group. Mutation-testing the id
 // tie-break away drops 230 of 250 rows silently (notes section 11).
 func TestListWorks_PaginationWalksEveryRowExactlyOnce(t *testing.T) {

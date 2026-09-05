@@ -35,6 +35,7 @@ func (a workDetailAdapter) GetWorkDetail(ctx context.Context, id int64) (apiserv
 		Credits:       creditRows(detail.Credits),
 		Genres:        detail.Genres,
 		RootFolderIDs: detail.RootFolderIDs,
+		CategoryIDs:   detail.CategoryIDs,
 	}
 	if detail.Work.Year.Valid {
 		row.Year = &detail.Work.Year.Int64

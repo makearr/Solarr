@@ -30,13 +30,15 @@ type SearchReader interface {
 	SearchWorks(ctx context.Context, filter SearchFilter, limit int) ([]SearchResultRow, error)
 }
 
-// SearchFilter narrows a SearchWorks call. RootFolderIDs carries ADR-27 visibility the
-// same way WorksFilter.RootFolderIDs does: nil is unfiltered, a non-nil empty slice
-// means the caller can see no root folder at all and must match nothing.
+// SearchFilter narrows a SearchWorks call. RootFolderIDs and CategoryIDs carry
+// ADR-27 visibility's two halves the same way WorksFilter's own fields do: nil
+// means that half is not applied, a non-nil empty slice means the caller can
+// see nothing via that half.
 type SearchFilter struct {
 	Query         string
 	MediaType     string
 	RootFolderIDs []int64
+	CategoryIDs   []int64
 }
 
 // SearchResultRow is one work a query matched, ranked best (lowest score) first.
@@ -73,7 +75,7 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request, params gen.Searc
 		return
 	}
 
-	rootFolderIDs, err := s.visibleRootFolders(access, nil)
+	rootFolderIDs, categoryIDs, err := s.visibility(access, nil)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -81,7 +83,8 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request, params gen.Searc
 
 	limit := clampSearchLimit(derefOr(params.Limit, 0))
 	rows, err := s.search.SearchWorks(r.Context(), SearchFilter{
-		Query: params.Q, MediaType: derefOr(params.MediaType, ""), RootFolderIDs: rootFolderIDs,
+		Query: params.Q, MediaType: derefOr(params.MediaType, ""),
+		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs,
 	}, limit)
 	if err != nil {
 		writeError(w, s.logger, err)

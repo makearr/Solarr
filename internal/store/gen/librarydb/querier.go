@@ -56,12 +56,14 @@ type Querier interface {
 	// Only 'primary' counts: a trailer belongs to the work without satisfying it.
 	CountPrimaryFiles(ctx context.Context, desiredItemID int64) (int64, error)
 	CountRollupOutcomes(ctx context.Context, since int64) ([]CountRollupOutcomesRow, error)
-	// The truth a category counter is checked against (library/categorycounts.go): every
-	// root folder's work count in one query, summed per category in Go since library.db
-	// does not know which root folders a category spans (ADR-25).
-	CountWorksByRootFolder(ctx context.Context) ([]CountWorksByRootFolderRow, error)
 	// Coverage: what a monitored person has produced against what is held (ADR-32).
 	CountWorksCreditedTo(ctx context.Context, arg CountWorksCreditedToParams) (int64, error)
+	// The "works" count for one category: the union of on-disk presence
+	// (work_root_folder) and desired-state membership (desired_item.category_id) --
+	// a subscription-discovered work has no root folder yet but still belongs to its
+	// category (private/next.md's work_root_folder retirement). Distinct because a
+	// scanned, monitored work has rows on both sides and must count once.
+	CountWorksVisibleToCategory(ctx context.Context, arg CountWorksVisibleToCategoryParams) (int64, error)
 	CreateAcquisition(ctx context.Context, arg CreateAcquisitionParams) (Acquisition, error)
 	// Collections, the ready queue, artwork, statistics and reputation.
 	CreateCollection(ctx context.Context, arg CreateCollectionParams) (Collection, error)
@@ -164,7 +166,10 @@ type Querier interface {
 	LinkWorkExternalID(ctx context.Context, arg LinkWorkExternalIDParams) error
 	LinkWorkOrganisation(ctx context.Context, arg LinkWorkOrganisationParams) error
 	LinkWorkPartExternalID(ctx context.Context, arg LinkWorkPartExternalIDParams) error
-	// Temporary bridge until desired_item exists for music (see the migration comment).
+	// work_root_folder records on-disk presence: which root folder a scan found a work
+	// under. It is no longer the sole ADR-27 visibility signal (desired_item.category_id
+	// covers a work with no root folder yet, e.g. subscription-discovered), but it is
+	// still real and still needed for that half.
 	LinkWorkRootFolder(ctx context.Context, arg LinkWorkRootFolderParams) error
 	ListAcquiredFiles(ctx context.Context, acquisitionID int64) ([]AcquisitionFile, error)
 	// Startup reconciliation polls every non-terminal acquisition (section 10.9).
@@ -323,12 +328,14 @@ type Querier interface {
 	// candidate set down from the full corpus.
 	//
 	// ADR-27 category visibility (migration 0012's work_root_folder bridge, same as
-	// addRootFolders in internal/library/works.go) is applied as a static predicate here
+	// addVisibility in internal/library/works.go) is applied as a static predicate here
 	// rather than composed in Go: MATCH has already cut ranked down to a handful of rows, so
 	// an index on that filter does not matter the way it does for the unfiltered work-table
-	// scan composeList guards against. filter_root_folders=0 means unfiltered (root_folder_ids
-	// is ignored); =1 filters to root_folder_ids, which is empty when the caller can see
-	// nothing, matching zero rows rather than being indistinguishable from unfiltered
+	// scan composeList guards against. filter_root_folders=0 and filter_categories=0 together
+	// mean fully unfiltered; each flag that is set matches its own subquery, OR'd, so a
+	// subscription-discovered work (no root folder, but a desired_item.category_id) is found
+	// the same way as a scanned one -- either side empty means the caller can see nothing
+	// via that path, matching zero rows rather than being indistinguishable from unfiltered
 	// (json_each of jobs.sql's visible_categories is the precedent for passing a Go slice as
 	// a JSON array).
 	SearchWorks(ctx context.Context, arg SearchWorksParams) ([]SearchWorksRow, error)
