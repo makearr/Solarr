@@ -85,6 +85,20 @@ func validateRootFolderPolicy(minFreeBytes int64) config.Problems {
 	return nil
 }
 
+// validateImportAutoCommitConfidence checks ADR-48's commit line before it is
+// written (ADR-44) -- architecture.md's own table explicitly welcomes "a raw
+// number ... for anyone who wants one" beyond the five named levels, so this only
+// bounds it to a real confidence, not to one of the five.
+func validateImportAutoCommitConfidence(confidence float64) config.Problems {
+	if confidence < 0 || confidence > 1 {
+		return config.Problems{{
+			Path: "import.auto_commit_confidence", Value: strconv.FormatFloat(confidence, 'f', -1, 64),
+			Expectation: "a confidence between 0 and 1",
+		}}
+	}
+	return nil
+}
+
 // validateQualityProfile checks a quality profile before it is written (ADR-44):
 // a name, and rules/upgrade JSON that actually decodes as ADR-40's shape --
 // internal/score.Parse/ParseUpgrade own that shape, so a typo like `"compare":
