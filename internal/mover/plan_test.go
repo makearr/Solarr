@@ -222,6 +222,30 @@ func TestPlan_RefusesWhenTheReserveWouldBeViolated(t *testing.T) {
 	}
 }
 
+// A same-root rename consumes no new capacity at all -- a rename(2) never
+// duplicates bytes -- so a group whose total size would flunk the reserve
+// check under the ordinary cross-root formula must still be allowed when
+// source and destination are the same root.
+func TestPlan_SameRootRenameIsExemptFromTheReserveCheck(t *testing.T) {
+	root := onlineWritable(1, "fs-a", 150)
+	root.MinFreeBytes = 100
+	req := mover.Request{
+		Reason: mover.ReasonRename,
+		Files: []mover.FileToMove{
+			{MediaObjectID: 1, SourceRootFolderID: 1, SourceRelPath: "Old/track.flac",
+				SizeBytes: 100, AffinityKey: "a", DestRootFolderID: 1, DestRelPath: "New/track.flac"},
+		},
+		Roots: map[int64]placement.RootCandidate{1: root},
+	}
+	plan, err := mover.Plan(req)
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	if len(plan.Moves) != 1 || len(plan.Refused) != 0 {
+		t.Fatalf("plan = %+v, want the in-place rename allowed despite 150-100=50 being below the 100 reserve", plan)
+	}
+}
+
 // Drain's own stated guarantee: any shortfall refuses every group, not just
 // the one that could not fit -- "it does not fill the other disks and then
 // fail". A non-drain reason must not have this behaviour: other groups still

@@ -176,7 +176,14 @@ func Plan(req Request) (MovePlan, error) {
 		}
 
 		dest := deltaFor(g.files[0].DestRootFolderID)
-		if dest.ResultingFreeBytes-g.totalBytes < minFreeBytes(req.Roots, g.files[0].DestRootFolderID) {
+		// A same-root group (every file's source equals its own destination
+		// -- RENAME's own in-place case) consumes no new capacity at all: it
+		// is always a rename(2), which duplicates no bytes. Checking the
+		// reserve against g.totalBytes here would count space leaving and
+		// arriving on the very same root as pure consumption, wrongly
+		// refusing a rename of a large, otherwise perfectly affordable
+		// group purely because it is large.
+		if !allSameRoot(g) && dest.ResultingFreeBytes-g.totalBytes < minFreeBytes(req.Roots, g.files[0].DestRootFolderID) {
 			shortfall := minFreeBytes(req.Roots, g.files[0].DestRootFolderID) - (dest.ResultingFreeBytes - g.totalBytes)
 			reason := fmt.Sprintf("insufficient space on root %d: %d bytes short of the reserve",
 				g.files[0].DestRootFolderID, shortfall)
@@ -316,6 +323,21 @@ func guardGroup(req Request, g group) (reason string, ok bool) {
 	return "", true
 }
 
+// allSameRoot reports whether every file in g has its own destination equal
+// to its own source -- true in-place movement, regardless of Reason. Used
+// for the reserve check's own "no new capacity consumed" exemption above;
+// isSameRootRename below additionally requires ReasonRename and
+// allow_rename, since read_only's own exemption is deliberately narrower
+// than "physically the same disk" alone.
+func allSameRoot(g group) bool {
+	for _, f := range g.files {
+		if f.SourceRootFolderID != f.DestRootFolderID {
+			return false
+		}
+	}
+	return true
+}
+
 // isSameRootRename reports whether every file in g is a true in-place
 // rename (source root == destination root) under ReasonRename, with the
 // one root's own allow_rename set -- the narrow condition section 11.8's
@@ -325,12 +347,7 @@ func isSameRootRename(req Request, g group, destID int64) bool {
 	if req.Reason != ReasonRename || !req.SourceAllowRename[destID] {
 		return false
 	}
-	for _, f := range g.files {
-		if f.SourceRootFolderID != destID {
-			return false
-		}
-	}
-	return true
+	return allSameRoot(g)
 }
 
 func minFreeBytes(roots map[int64]placement.RootCandidate, rootFolderID int64) int64 {
