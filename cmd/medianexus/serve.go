@@ -322,6 +322,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerImportJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerMoverJob(registry, executor); err != nil {
+		return err
+	}
 	p.dispatcher = jobs.NewDispatcher(queue, wall, executor, jobs.DispatcherConfig{
 		Sizes: []jobs.PoolSize{
 			{Pool: jobs.PoolSearch, Capacity: p.config.Workers.Search},

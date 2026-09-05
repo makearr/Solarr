@@ -23,7 +23,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/egress", "internal/events", "internal/fsx", "internal/health",
 		"internal/httpx", "internal/importjob", "internal/inspect", "internal/jobs",
 		"internal/library", "internal/mediatool", "internal/metacache", "internal/model",
-		"internal/music", "internal/musicbrainz", "internal/paginate",
+		"internal/mover", "internal/moverjob", "internal/music", "internal/musicbrainz", "internal/paginate",
 		"internal/capacity", "internal/privilege", "internal/probe", "internal/recovery",
 		"internal/scan", "internal/settings", "internal/store", "internal/webui",
 		"internal/wikidata", "migrations",
@@ -163,6 +163,13 @@ var allowedInternalImports = map[string][]string{
 	"internal/importjob": {
 		"internal/clock", "internal/fsx", "internal/inspect", "internal/jobs",
 		"internal/library", "internal/mediatool", "internal/model", "internal/music",
+	},
+	// ADR-51's resumable Apply: claims a move_item, calls mover.ApplyOne, then
+	// records/unlinks through internal/library. No internal/settings import --
+	// a cmd/medianexus adapter bridges RootFolders the same way importjob's
+	// Policy is bridged.
+	"internal/moverjob": {
+		"internal/clock", "internal/fsx", "internal/jobs", "internal/library", "internal/mover",
 	},
 	// ADR-15's post-restore pass spans library.db and jobs.db, so it composes their
 	// owning packages rather than reaching into either gen package (section 4.3).
