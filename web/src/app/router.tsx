@@ -9,6 +9,7 @@ import { Activity } from "./Activity";
 import { Dashboard } from "./Dashboard";
 import { Import } from "./Import";
 import { Library } from "./Library";
+import { Moves } from "./Moves";
 import { People } from "./People";
 import { PersonDetail } from "./PersonDetail";
 import { Settings } from "./Settings";
@@ -34,6 +35,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/people/$id", component: PersonDetail }),
   createRoute({ getParentRoute: () => rootRoute, path: "/unidentified", component: Unidentified }),
   createRoute({ getParentRoute: () => rootRoute, path: "/import", component: Import }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/moves", component: Moves }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity", component: Activity }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: Settings }),
 ];

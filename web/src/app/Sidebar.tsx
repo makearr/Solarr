@@ -2,6 +2,7 @@ import { Link, useRouterState, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
+  ArrowLeftRight,
   HelpCircle,
   LayoutDashboard,
   Library,
@@ -26,6 +27,7 @@ const SECTIONS: readonly { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/people", label: "People", icon: Users },
   { to: "/unidentified", label: "Unidentified", icon: HelpCircle },
   { to: "/import", label: "Import", icon: ScanSearch },
+  { to: "/moves", label: "Move & drain", icon: ArrowLeftRight },
   { to: "/activity", label: "Activity", icon: Activity },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
