@@ -149,6 +149,18 @@ a user offered the Corresponding Source should be able to see what the binary li
 | `golang.org/x/crypto` | BSD-3-Clause | argon2id password hashing (ADR-14). Not in the standard library, and hand-rolling a password hash is never the right call |
 | `golang.org/x/image` | BSD-3-Clause | High-quality resampling (`draw.CatmullRom`) for section 21.6's artwork pipeline |
 | `github.com/mayahiro/go-webp` | MIT | Pure-Go lossy (VP8) WebP encoder for section 21.6. ADR-30 rules out cgo's libwebp; chosen as the first of three candidates tried, verified by a real encode-then-decode round trip rather than trusting its README |
+| `github.com/nwaples/rardecode/v2` | BSD-2-Clause | Pure-Go RAR decoder (ADR-49), including multi-volume sets. `zip`/`tar`/`gzip`/`bzip2` are stdlib and need no entry here |
+| `github.com/bodgit/sevenzip` | BSD-3-Clause | Pure-Go 7z decoder (ADR-49) |
+| `github.com/ulikunitz/xz` | BSD-3-Clause | Pure-Go xz decompression (ADR-49), for `.tar.xz` |
+
+Bundling `unrar` or p7zip was considered and rejected (ADR-49): the UnRAR licence forbids using
+the source to recreate the RAR compression algorithm, which is exactly the kind of licence
+friction this file exists to avoid inside an AGPL-3.0 image; p7zip's own RAR support inherits
+the same code. `bodgit/sevenzip`'s own transitive dependencies —
+`github.com/bodgit/plumbing`, `github.com/bodgit/windows`, `github.com/spf13/afero`,
+`github.com/klauspost/compress`, `github.com/pierrec/lz4/v4`, `github.com/stangelandcl/ppmd`,
+`github.com/nwaples/rardecode` (the non-v2 line, a 7z-embedded-RAR helper), `go4.org` and
+`github.com/andybalholm/brotli` — are BSD or MIT. `go.mod` is the authoritative list.
 
 `modernc.org/sqlite`'s transitive dependencies — `modernc.org/libc`, `modernc.org/memory`, `modernc.org/mathutil`,
 `github.com/remyoudompheng/bigfft`, `github.com/dustin/go-humanize`, `github.com/google/uuid`,

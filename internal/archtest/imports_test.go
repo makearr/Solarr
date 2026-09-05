@@ -104,6 +104,13 @@ var allowedInternalImports = map[string][]string{
 	// not exist yet), the same shape those two packages were before their
 	// own callers existed.
 	"internal/priority": {},
+	// ADR-49's archive support: List (no writes) and Extract (workspace
+	// only, via fsx's SafeJoin choke point, Invariant 76). Reading the
+	// source archive itself uses the real filesystem directly, the same
+	// reasoning internal/mediatool's own real-path subprocess reads
+	// already have -- rar/7z multi-volume support needs real sibling
+	// files next to the path given, not an abstraction over them.
+	"internal/archive": {"internal/fsx"},
 	// Section 11.7's capacity-polling job: probes every configured root via
 	// fsx and writes what it found back to settings.db.
 	"internal/capacity": {"internal/clock", "internal/fsx", "internal/jobs", "internal/settings"},
