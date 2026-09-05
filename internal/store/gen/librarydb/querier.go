@@ -152,6 +152,10 @@ type Querier interface {
 	// stops reusing models.
 	GetScanState(ctx context.Context, rootFolderID int64) (ScanState, error)
 	GetTagBySlug(ctx context.Context, slug string) (Tag, error)
+	// One entry, for the manual resolve action -- confirming a candidate needs the
+	// file's own root_folder_id (to link work_root_folder), which the ranked
+	// candidates list alone does not carry.
+	GetUnidentified(ctx context.Context, mediaObjectID int64) (IdentificationQueue, error)
 	GetWork(ctx context.Context, id int64) (Work, error)
 	// Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
 	GetWorkByExternalID(ctx context.Context, arg GetWorkByExternalIDParams) (Work, error)

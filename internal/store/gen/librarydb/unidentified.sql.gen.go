@@ -20,6 +20,28 @@ func (q *Queries) DeleteUnidentified(ctx context.Context, mediaObjectID int64) e
 	return err
 }
 
+const getUnidentified = `-- name: GetUnidentified :one
+SELECT media_object_id, root_folder_id, rel_path, candidates_json, first_seen_at, last_seen_at
+FROM identification_queue WHERE media_object_id = ?
+`
+
+// One entry, for the manual resolve action -- confirming a candidate needs the
+// file's own root_folder_id (to link work_root_folder), which the ranked
+// candidates list alone does not carry.
+func (q *Queries) GetUnidentified(ctx context.Context, mediaObjectID int64) (IdentificationQueue, error) {
+	row := q.db.QueryRowContext(ctx, getUnidentified, mediaObjectID)
+	var i IdentificationQueue
+	err := row.Scan(
+		&i.MediaObjectID,
+		&i.RootFolderID,
+		&i.RelPath,
+		&i.CandidatesJson,
+		&i.FirstSeenAt,
+		&i.LastSeenAt,
+	)
+	return i, err
+}
+
 const listUnidentified = `-- name: ListUnidentified :many
 SELECT media_object_id, root_folder_id, rel_path, candidates_json, first_seen_at, last_seen_at
 FROM identification_queue

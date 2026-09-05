@@ -2,8 +2,14 @@ package apiserver
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
 	"net/http"
+	"strconv"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/MediaNexus/internal/apiserver/gen"
 	"github.com/makearr/MediaNexus/internal/authz"
@@ -74,6 +80,90 @@ func (s *Server) ListUnidentified(w http.ResponseWriter, r *http.Request, params
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, buildUnidentifiedPage(rows, limit))
+}
+
+// UnidentifiedResolver confirms a candidate for one queued file (section
+// 21.3's manual-resolve action). Defined here and implemented by the caller,
+// same reasoning as UnidentifiedReader's own doc comment.
+type UnidentifiedResolver interface {
+	// GetUnidentified answers one queued entry, for the visibility check
+	// before resolving it. A missing id wraps sql.ErrNoRows.
+	GetUnidentified(ctx context.Context, mediaObjectID int64) (UnidentifiedRow, error)
+	// ResolveUnidentified fetches the candidate's real title, resolves or
+	// creates the work, links the root folder and clears the queue entry.
+	ResolveUnidentified(ctx context.Context, mediaObjectID int64, provider, externalID string) (workID int64, err error)
+}
+
+// ErrUnsupportedProvider mirrors music.ErrUnsupportedProvider without this
+// package importing internal/music (WorksReader's own doc comment explains
+// why) -- the caller's adapter translates.
+var ErrUnsupportedProvider = errors.New("apiserver: unsupported provider for manual resolve")
+
+// routeResolveUnidentified parses the mediaObjectId path parameter, mirroring
+// routeGetWork.
+func (s *Server) routeResolveUnidentified(w http.ResponseWriter, r *http.Request) {
+	mediaObjectID, err := strconv.ParseInt(chi.URLParam(r, "mediaObjectId"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a media object id must be a number")
+		return
+	}
+	s.ResolveUnidentified(w, r, mediaObjectID)
+}
+
+// ResolveUnidentified confirms a candidate for one queued file (section 21.3).
+// A file under a root folder the caller cannot read answers 404, the same as
+// missing (Invariant 37).
+func (s *Server) ResolveUnidentified(w http.ResponseWriter, r *http.Request, mediaObjectID int64) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.unidentifiedResolver == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "manual resolution is not available")
+		return
+	}
+
+	var body gen.ResolveUnidentifiedJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "the request body could not be read")
+		return
+	}
+
+	entry, err := s.unidentifiedResolver.GetUnidentified(r.Context(), mediaObjectID)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such queued file")
+		return
+	}
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	// Root-folder-only, the same reasoning ListUnidentified's own comment
+	// gives: a queued file is by definition physical.
+	rootFolderIDs, _, err := s.visibility(access, nil)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if !sharesAnID(rootFolderIDs, []int64{entry.RootFolderID}) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such queued file")
+		return
+	}
+
+	workID, err := s.unidentifiedResolver.ResolveUnidentified(r.Context(), mediaObjectID, body.Provider, body.ExternalId)
+	if err != nil {
+		if errors.Is(err, ErrUnsupportedProvider) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, map[string]int64{"work_id": workID})
 }
 
 func buildUnidentifiedPage(rows []UnidentifiedRow, limit int) gen.UnidentifiedPage {

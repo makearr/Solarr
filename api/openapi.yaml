@@ -857,6 +857,52 @@ paths:
           $ref: "#/components/responses/Problem"
           description: category_id does not exist, or the caller cannot read it.
 
+  /library/unidentified/{mediaObjectId}/resolve:
+    parameters:
+      - name: mediaObjectId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: resolveUnidentified
+      tags: [library]
+      summary: >-
+        Confirm a candidate for a queued file (section 21.3's manual-resolve
+        action).
+      description: >-
+        Fetches the candidate's real title from the provider, resolves or
+        creates the work, links the file's own root folder, and clears the
+        queue entry. Confidence is 1.0 -- a human explicitly chose this. Reaches
+        only as far as automatic search identification does: the work becomes
+        real and browsable, but no edition or tracklist alignment is attempted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, external_id]
+              properties:
+                provider:
+                  type: string
+                  description: Only musicbrainz:release-group is supported today.
+                external_id: { type: string }
+      responses:
+        "200":
+          description: Resolved.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [work_id]
+                properties:
+                  work_id: { type: integer, format: int64 }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: No such queued file, or the caller cannot read its root folder.
+
   /categories:
     get:
       operationId: listCategories

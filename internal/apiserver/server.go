@@ -78,6 +78,9 @@ type Config struct {
 	// Unidentified lists F29's manual identification queue. Optional: without
 	// it, ListUnidentified answers 503.
 	Unidentified UnidentifiedReader
+	// UnidentifiedResolver confirms a candidate for one queued file (section
+	// 21.3). Optional: without it, ResolveUnidentified answers 503.
+	UnidentifiedResolver UnidentifiedResolver
 	// Artwork reads a work's cached cover art. Optional: without it,
 	// GetWorkArtwork answers 503.
 	Artwork ArtworkReader
@@ -109,19 +112,20 @@ type Server struct {
 	roots   RootChecker
 	address string
 
-	librarySize      LibrarySize
-	timezone         string
-	egress           EgressReporter
-	works            WorksReader
-	workDetail       WorkDetailReader
-	worksMonitor     WorksMonitor
-	search           SearchReader
-	unidentified     UnidentifiedReader
-	artwork          ArtworkReader
-	fsys             fsx.FS
-	imagesDir        string
-	people           PeopleReader
-	peopleSubscriber PeopleSubscriber
+	librarySize          LibrarySize
+	timezone             string
+	egress               EgressReporter
+	works                WorksReader
+	workDetail           WorkDetailReader
+	worksMonitor         WorksMonitor
+	search               SearchReader
+	unidentified         UnidentifiedReader
+	unidentifiedResolver UnidentifiedResolver
+	artwork              ArtworkReader
+	fsys                 fsx.FS
+	imagesDir            string
+	people               PeopleReader
+	peopleSubscriber     PeopleSubscriber
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -152,20 +156,21 @@ func New(config Config) (*Server, error) {
 		webui:   config.WebUI,
 		roots:   config.Roots,
 
-		librarySize:      config.LibrarySize,
-		timezone:         config.Timezone,
-		egress:           config.Egress,
-		works:            config.Works,
-		workDetail:       config.WorkDetail,
-		worksMonitor:     config.WorksMonitor,
-		search:           config.Search,
-		unidentified:     config.Unidentified,
-		artwork:          config.Artwork,
-		fsys:             config.FS,
-		imagesDir:        config.ImagesDir,
-		people:           config.People,
-		peopleSubscriber: config.PeopleSubscriber,
-		address:          net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
+		librarySize:          config.LibrarySize,
+		timezone:             config.Timezone,
+		egress:               config.Egress,
+		works:                config.Works,
+		workDetail:           config.WorkDetail,
+		worksMonitor:         config.WorksMonitor,
+		search:               config.Search,
+		unidentified:         config.Unidentified,
+		unidentifiedResolver: config.UnidentifiedResolver,
+		artwork:              config.Artwork,
+		fsys:                 config.FS,
+		imagesDir:            config.ImagesDir,
+		people:               config.People,
+		peopleSubscriber:     config.PeopleSubscriber,
+		address:              net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
 	router := chi.NewRouter()
@@ -207,6 +212,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/parts/{partId}/monitor", server.routeSetPartMonitored)
 			secured.Get("/works/{id}/artwork", server.routeGetWorkArtwork)
 			secured.Get("/library/unidentified", server.routeListUnidentified)
+			secured.Post("/library/unidentified/{mediaObjectId}/resolve", server.routeResolveUnidentified)
 			secured.Get("/search", server.routeSearch)
 			secured.Post("/score/simulate", server.SimulateScore)
 			secured.Get("/categories", server.ListCategories)

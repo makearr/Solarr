@@ -30,10 +30,15 @@ func NewDirect(client *httpx.Client, baseURL string) Source {
 
 func (direct) Name() string { return DirectName }
 
+// An empty releaseMBID answers the release group alone (a zero Release, no
+// error), the same as proxy.Album -- see its own doc comment for why.
 func (d direct) Album(ctx context.Context, releaseGroupMBID, releaseMBID string) (ReleaseGroup, Release, error) {
 	rg, err := d.releaseGroup(ctx, releaseGroupMBID)
 	if err != nil {
 		return ReleaseGroup{}, Release{}, err
+	}
+	if releaseMBID == "" {
+		return rg, Release{}, nil
 	}
 	release, err := d.release(ctx, releaseMBID)
 	if err != nil {

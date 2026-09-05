@@ -131,6 +131,30 @@ func TestDirect_AlbumParsesTheRealFieldShape(t *testing.T) {
 	}
 }
 
+// An empty releaseMBID answers the release group alone, without the second
+// /release/ call at all -- proxy_test.go's own equivalent explains why this
+// matters (section 21.3's manual-resolve action).
+func TestDirect_AlbumWithNoReleaseMBIDSkipsTheReleaseCall(t *testing.T) {
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://musicbrainz.invalid/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres+url-rels": {
+			status: http.StatusOK, body: directReleaseGroupBody,
+		},
+	}}
+	client := newTestClient(t, transport, musicbrainz.DirectName)
+	source := musicbrainz.NewDirect(client, "https://musicbrainz.invalid")
+
+	rg, release, err := source.Album(t.Context(), okComputerRG, "")
+	if err != nil {
+		t.Fatalf("Album: %v", err)
+	}
+	if rg.Title != "KI Pecezinu" {
+		t.Errorf("ReleaseGroup = %+v, want the release group's own fields still populated", rg)
+	}
+	if release.MBID != "" || release.Title != "" || len(release.Media) != 0 {
+		t.Errorf("Release = %+v, want a zero value -- no /release/ URL was even stubbed", release)
+	}
+}
+
 func TestDirect_NameIsTheBreakerBucketKey(t *testing.T) {
 	source := musicbrainz.NewDirect(newTestClient(t, &fakeTransport{}, musicbrainz.DirectName), "https://musicbrainz.invalid")
 	if source.Name() != musicbrainz.DirectName {

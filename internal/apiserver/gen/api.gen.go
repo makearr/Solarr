@@ -710,6 +710,14 @@ type ListUnidentifiedParams struct {
 	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
 }
 
+// ResolveUnidentifiedJSONBody defines parameters for ResolveUnidentified.
+type ResolveUnidentifiedJSONBody struct {
+	ExternalId string `json:"external_id"`
+
+	// Provider Only musicbrainz:release-group is supported today.
+	Provider string `json:"provider"`
+}
+
 // ListPeopleParams defines parameters for ListPeople.
 type ListPeopleParams struct {
 	// Cursor From `next_cursor` of the previous page. Absent on the first page.
@@ -845,6 +853,9 @@ type LoginJSONRequestBody LoginJSONBody
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody CreateCategoryJSONBody
 
+// ResolveUnidentifiedJSONRequestBody defines body for ResolveUnidentified for application/json ContentType.
+type ResolveUnidentifiedJSONRequestBody ResolveUnidentifiedJSONBody
+
 // SubscribePersonJSONRequestBody defines body for SubscribePerson for application/json ContentType.
 type SubscribePersonJSONRequestBody SubscribePersonJSONBody
 
@@ -913,6 +924,9 @@ type ServerInterface interface {
 	// Files a scan recorded that the ADR-24 chain could not confidently resolve (F29's manual identification queue).
 	// (GET /library/unidentified)
 	ListUnidentified(w http.ResponseWriter, r *http.Request, params ListUnidentifiedParams)
+	// Confirm a candidate for a queued file (section 21.3's manual-resolve action).
+	// (POST /library/unidentified/{mediaObjectId}/resolve)
+	ResolveUnidentified(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
 	// Who the caller is and what they may see.
 	// (GET /me)
 	GetMe(w http.ResponseWriter, r *http.Request)
@@ -1063,6 +1077,12 @@ func (_ Unimplemented) ListJobs(w http.ResponseWriter, r *http.Request, params L
 // Files a scan recorded that the ADR-24 chain could not confidently resolve (F29's manual identification queue).
 // (GET /library/unidentified)
 func (_ Unimplemented) ListUnidentified(w http.ResponseWriter, r *http.Request, params ListUnidentifiedParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Confirm a candidate for a queued file (section 21.3's manual-resolve action).
+// (POST /library/unidentified/{mediaObjectId}/resolve)
+func (_ Unimplemented) ResolveUnidentified(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1541,6 +1561,39 @@ func (siw *ServerInterfaceWrapper) ListUnidentified(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListUnidentified(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResolveUnidentified operation middleware
+func (siw *ServerInterfaceWrapper) ResolveUnidentified(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "mediaObjectId" -------------
+	var mediaObjectId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "mediaObjectId", chi.URLParam(r, "mediaObjectId"), &mediaObjectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mediaObjectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveUnidentified(w, r, mediaObjectId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2494,6 +2547,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/library/unidentified", wrapper.ListUnidentified)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/library/unidentified/{mediaObjectId}/resolve", wrapper.ResolveUnidentified)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/me", wrapper.GetMe)

@@ -555,6 +555,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/library/unidentified/{mediaObjectId}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a candidate for a queued file (section 21.3's manual-resolve action).
+         * @description Fetches the candidate's real title from the provider, resolves or creates the work, links the file's own root folder, and clears the queue entry. Confidence is 1.0 -- a human explicitly chose this. Reaches only as far as automatic search identification does: the work becomes real and browsable, but no edition or tracklist alignment is attempted.
+         */
+        post: operations["resolveUnidentified"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories": {
         parameters: {
             query?: never;
@@ -1998,6 +2020,43 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             /** @description category_id does not exist, or the caller cannot read it. */
+            404: components["responses"]["Problem"];
+        };
+    };
+    resolveUnidentified: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Only musicbrainz:release-group is supported today. */
+                    provider: string;
+                    external_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Resolved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        work_id: number;
+                    };
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            /** @description No such queued file, or the caller cannot read its root folder. */
             404: components["responses"]["Problem"];
         };
     };

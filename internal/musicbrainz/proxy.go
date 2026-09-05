@@ -64,6 +64,9 @@ type proxyTrack struct {
 	MediumNumber  int    `json:"MediumNumber"`
 }
 
+// An empty releaseMBID answers the release group alone (a zero Release, no
+// error) -- section 21.3's manual-resolve action only ever has a release
+// group id to confirm from the unidentified queue, never a specific pressing.
 func (p proxy) Album(ctx context.Context, releaseGroupMBID, releaseMBID string) (ReleaseGroup, Release, error) {
 	var parsed proxyAlbum
 	url := fmt.Sprintf("%s/album/%s", p.baseURL, releaseGroupMBID)
@@ -74,6 +77,9 @@ func (p proxy) Album(ctx context.Context, releaseGroupMBID, releaseMBID string) 
 	rg := ReleaseGroup{
 		MBID: parsed.ID, Title: parsed.Title,
 		PrimaryType: parsed.Type, FirstReleaseDate: parsed.ReleaseDate,
+	}
+	if releaseMBID == "" {
+		return rg, Release{}, nil
 	}
 
 	for _, candidate := range parsed.Releases {

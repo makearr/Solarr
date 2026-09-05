@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+
 import { api } from "@/api/client";
 import { ListTable, type Column } from "@/list/ListTable";
 import { useLibraryList } from "@/list/useLibraryList";
@@ -7,21 +10,16 @@ import type { components } from "@/api/schema";
 type UnidentifiedFile = components["schemas"]["UnidentifiedFile"];
 
 // F29: everything a scan recorded that the ADR-24 chain could not confidently
-// resolve, so a human can point it at the right work. Read-only for now --
-// stage 3 has no manual-identify write path yet, only the queue itself.
-const COLUMNS: readonly Column<UnidentifiedFile>[] = [
-  { key: "rel_path", header: "Path", render: (file) => file.rel_path },
-  {
-    key: "candidates",
-    header: "Best guess",
-    render: (file) => (file.candidates.length > 0 ? describeBest(file) : "No match found"),
-  },
-  { key: "first_seen_at", header: "First seen", width: "12rem", render: (file) => file.first_seen_at },
-];
-
+// resolve, so a human can point it at the right work. Section 21.3's
+// manual-resolve action confirms the best candidate; picking a different one
+// from the ranked list, searching a provider live, and marking a file as not
+// media are all still their own follow-up (no live-search endpoint exists
+// yet, and "not media" needs a persistent flag a future scan would have to
+// respect that does not exist either).
 const FILTER_KEYS: readonly string[] = ["category_id"];
 
 export function Unidentified() {
+  const queryClient = useQueryClient();
   const list = useLibraryList<UnidentifiedFile>(
     {
       name: "unidentified",
@@ -45,6 +43,37 @@ export function Unidentified() {
     useRouteView(FILTER_KEYS),
   );
 
+  const resolve = useMutation({
+    mutationFn: async (file: UnidentifiedFile) => {
+      const best = file.candidates[0];
+      if (best?.provider === undefined || best.external_id === undefined) return;
+      const { error } = await api.POST("/library/unidentified/{mediaObjectId}/resolve", {
+        params: { path: { mediaObjectId: file.media_object_id } },
+        body: { provider: best.provider, external_id: best.external_id },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["unidentified"] });
+    },
+  });
+
+  const columns: readonly Column<UnidentifiedFile>[] = [
+    { key: "rel_path", header: "Path", render: (file) => file.rel_path },
+    {
+      key: "candidates",
+      header: "Best guess",
+      render: (file) => (file.candidates.length > 0 ? describeBest(file) : "No match found"),
+    },
+    { key: "first_seen_at", header: "First seen", width: "12rem", render: (file) => file.first_seen_at },
+    {
+      key: "actions",
+      header: "",
+      width: "8rem",
+      render: (file) => <ResolveAction file={file} onConfirm={() => resolve.mutate(file)} />,
+    },
+  ];
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
@@ -62,10 +91,56 @@ export function Unidentified() {
         )}
 
         {list.items.length > 0 && (
-          <ListTable list={list} columns={COLUMNS} idOf={(file) => file.media_object_id} />
+          <ListTable list={list} columns={columns} idOf={(file) => file.media_object_id} />
         )}
       </div>
     </div>
+  );
+}
+
+/** Only a musicbrainz:release-group candidate can be confirmed today
+ *  (internal/music.ErrUnsupportedProvider) -- other strategies (hash,
+ *  fingerprint) do not carry a provider id the resolve action can look a
+ *  title up from. */
+function ResolveAction({ file, onConfirm }: { file: UnidentifiedFile; onConfirm: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const best = file.candidates[0];
+  if (best?.provider !== "musicbrainz:release-group" || best.external_id === undefined) return null;
+
+  if (!confirming) {
+    return (
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className="rounded-md border border-border-subtle px-2 py-0.5 text-xs text-ink-muted
+                   hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2
+                   focus-visible:outline-accent"
+      >
+        Confirm
+      </button>
+    );
+  }
+  return (
+    <span className="flex items-center gap-1 text-xs">
+      <button
+        type="button"
+        onClick={() => {
+          setConfirming(false);
+          onConfirm();
+        }}
+        className="rounded-md bg-accent px-2 py-0.5 text-accent-ink focus-visible:outline-2
+                   focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        Yes, this one
+      </button>
+      <button
+        type="button"
+        onClick={() => setConfirming(false)}
+        className="rounded-md border border-border-subtle px-2 py-0.5 text-ink-muted hover:text-ink"
+      >
+        Cancel
+      </button>
+    </span>
   );
 }
 

@@ -2,6 +2,7 @@ package apiserver_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"slices"
@@ -30,6 +31,139 @@ func (f *fakeUnidentifiedReader) ListUnidentified(
 		return f.rows[:pageSize], nil
 	}
 	return f.rows, nil
+}
+
+// fakeUnidentifiedResolver answers a canned entry from GetUnidentified and
+// records what ResolveUnidentified was called with, without a real
+// library.db or musicbrainz call.
+type fakeUnidentifiedResolver struct {
+	entry      apiserver.UnidentifiedRow
+	getErr     error
+	resolveErr error
+	workID     int64
+
+	lastMediaObjectID int64
+	lastProvider      string
+	lastExternalID    string
+	resolveCalls      int
+}
+
+func (f *fakeUnidentifiedResolver) GetUnidentified(
+	_ context.Context, mediaObjectID int64,
+) (apiserver.UnidentifiedRow, error) {
+	if f.getErr != nil {
+		return apiserver.UnidentifiedRow{}, f.getErr
+	}
+	f.entry.MediaObjectID = mediaObjectID
+	return f.entry, nil
+}
+
+func (f *fakeUnidentifiedResolver) ResolveUnidentified(
+	_ context.Context, mediaObjectID int64, provider, externalID string,
+) (int64, error) {
+	f.resolveCalls++
+	f.lastMediaObjectID = mediaObjectID
+	f.lastProvider = provider
+	f.lastExternalID = externalID
+	if f.resolveErr != nil {
+		return 0, f.resolveErr
+	}
+	return f.workID, nil
+}
+
+// ResolveUnidentified confirms a candidate for a queued file the caller may
+// see, and forwards exactly what the request named.
+func TestResolveUnidentified_ConfirmsACandidateAndReturnsTheWorkID(t *testing.T) {
+	fixture := newWorksFixture(t)
+	_, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.unidentifiedResolver.entry = apiserver.UnidentifiedRow{RootFolderID: root.ID}
+	fixture.unidentifiedResolver.workID = 42
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/library/unidentified/1/resolve",
+		`{"provider":"musicbrainz:release-group","external_id":"rg-1"}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+
+	var body struct {
+		WorkID int64 `json:"work_id"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.WorkID != 42 {
+		t.Errorf("work_id = %d, want 42", body.WorkID)
+	}
+	if fixture.unidentifiedResolver.lastMediaObjectID != 1 ||
+		fixture.unidentifiedResolver.lastProvider != "musicbrainz:release-group" ||
+		fixture.unidentifiedResolver.lastExternalID != "rg-1" {
+		t.Errorf("resolver called with %+v, want the request body forwarded",
+			fixture.unidentifiedResolver)
+	}
+}
+
+// The core ADR-27 guarantee: a queued file under a root folder the caller
+// cannot read must answer 404, indistinguishable from missing, and must
+// never reach ResolveUnidentified at all.
+func TestResolveUnidentified_UnreadableRootFolderAnswers404AndNeverResolves(t *testing.T) {
+	fixture := newWorksFixture(t)
+	_, hidden := fixture.createCategoryWithRoot(t, "Private Stash", "/media/private")
+	fixture.unidentifiedResolver.entry = apiserver.UnidentifiedRow{RootFolderID: hidden.ID}
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/library/unidentified/1/resolve",
+		`{"provider":"musicbrainz:release-group","external_id":"rg-1"}`))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", recorder.Code)
+	}
+	if fixture.unidentifiedResolver.resolveCalls != 0 {
+		t.Error("ResolveUnidentified must not be reached for an unreadable root folder")
+	}
+}
+
+// A missing queued entry answers 404, not 500.
+func TestResolveUnidentified_MissingEntryAnswers404(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.unidentifiedResolver.getErr = sql.ErrNoRows
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/library/unidentified/999/resolve",
+		`{"provider":"musicbrainz:release-group","external_id":"rg-1"}`))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", recorder.Code)
+	}
+}
+
+// An unsupported provider is a 400, not a 500 -- the caller sent a request
+// this action cannot fulfil, not something that broke.
+func TestResolveUnidentified_UnsupportedProviderAnswers400(t *testing.T) {
+	fixture := newWorksFixture(t)
+	_, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.unidentifiedResolver.entry = apiserver.UnidentifiedRow{RootFolderID: root.ID}
+	fixture.unidentifiedResolver.resolveErr = apiserver.ErrUnsupportedProvider
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/library/unidentified/1/resolve",
+		`{"provider":"tvdb","external_id":"x"}`))
+	if recorder.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400, body = %s", recorder.Code, recorder.Body)
+	}
+}
+
+// Unauthenticated requests answer 401.
+func TestResolveUnidentified_RequiresAuthentication(t *testing.T) {
+	fixture := newWorksFixture(t)
+
+	recorder := fixture.do(authedPost(t, nil, "/api/v1/library/unidentified/1/resolve",
+		`{"provider":"musicbrainz:release-group","external_id":"rg-1"}`))
+	if recorder.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", recorder.Code)
+	}
 }
 
 // The core guarantee, same as TestListWorks_ExcludesRootFoldersOfCategoriesNotGranted:

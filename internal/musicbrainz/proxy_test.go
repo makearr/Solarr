@@ -101,6 +101,28 @@ func TestProxy_AlbumErrorsWhenTheReleaseIsNotUnderTheGroup(t *testing.T) {
 	}
 }
 
+// An empty releaseMBID answers the release group alone -- section 21.3's
+// manual-resolve action only ever has a release group id, never a specific
+// pressing, to confirm a queued file against.
+func TestProxy_AlbumWithNoReleaseMBIDAnswersTheReleaseGroupAlone(t *testing.T) {
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://lidarr.invalid/album/" + okComputerRG: {status: http.StatusOK, body: proxyAlbumBody},
+	}}
+	client := newTestClient(t, transport, musicbrainz.ProxyName)
+	source := musicbrainz.NewProxy(client, "https://lidarr.invalid")
+
+	rg, release, err := source.Album(t.Context(), okComputerRG, "")
+	if err != nil {
+		t.Fatalf("Album: %v", err)
+	}
+	if rg.Title != "KI Pecezinu" {
+		t.Errorf("ReleaseGroup = %+v, want the release group's own fields still populated", rg)
+	}
+	if release.MBID != "" || release.Title != "" || len(release.Media) != 0 {
+		t.Errorf("Release = %+v, want a zero value when no releaseMBID was asked for", release)
+	}
+}
+
 func TestProxy_NameIsTheBreakerBucketKey(t *testing.T) {
 	source := musicbrainz.NewProxy(newTestClient(t, &fakeTransport{}, musicbrainz.ProxyName), "https://lidarr.invalid")
 	if source.Name() != musicbrainz.ProxyName {

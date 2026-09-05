@@ -96,6 +96,26 @@ func (u Unidentified) Record(ctx context.Context, entries []QueueEntry) error {
 	})
 }
 
+// Get answers one queued entry, for the manual resolve action -- confirming a
+// candidate needs the file's own RootFolderID (to link work_root_folder),
+// which List's page rows already carry but a caller resolving a single id
+// from a request path should not have to page through the whole queue for.
+// A missing id surfaces sql.ErrNoRows, wrapped: callers use errors.Is.
+func (u Unidentified) Get(ctx context.Context, mediaObjectID int64) (Row, error) {
+	row, err := librarydb.New(u.store.Read()).GetUnidentified(ctx, mediaObjectID)
+	if err != nil {
+		return Row{}, fmt.Errorf("library: get unidentified %d: %w", mediaObjectID, err)
+	}
+	var candidates []Candidate
+	if err := json.Unmarshal([]byte(row.CandidatesJson), &candidates); err != nil {
+		return Row{}, fmt.Errorf("library: decode candidates for media object %d: %w", mediaObjectID, err)
+	}
+	return Row{
+		MediaObjectID: row.MediaObjectID, RootFolderID: row.RootFolderID, RelPath: row.RelPath,
+		Candidates: candidates, FirstSeenAt: row.FirstSeenAt, LastSeenAt: row.LastSeenAt,
+	}, nil
+}
+
 // Clear removes entries once they resolve -- a later sweep identifying a file that
 // was previously queued. Deleting a media_object_id not currently queued is a
 // silent no-op, the same as any idempotent repair path in this codebase.

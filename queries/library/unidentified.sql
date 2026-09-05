@@ -15,6 +15,13 @@ ON CONFLICT (media_object_id) DO UPDATE SET
 -- name: DeleteUnidentified :exec
 DELETE FROM identification_queue WHERE media_object_id = ?;
 
+-- One entry, for the manual resolve action -- confirming a candidate needs the
+-- file's own root_folder_id (to link work_root_folder), which the ranked
+-- candidates list alone does not carry.
+-- name: GetUnidentified :one
+SELECT media_object_id, root_folder_id, rel_path, candidates_json, first_seen_at, last_seen_at
+FROM identification_queue WHERE media_object_id = ?;
+
 -- filter_root_folders=0 means unfiltered; =1 filters to root_folder_ids, which is
 -- empty when the caller can see nothing -- same ADR-27 shape as search.sql's
 -- SearchWorks, json_each passing a Go slice as a JSON array.
