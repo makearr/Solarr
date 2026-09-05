@@ -402,6 +402,16 @@ func (p *process) startServer(ctx context.Context) error {
 		ImagesDir:        filepath.Join(p.config.Paths.CacheDir, "images"),
 		People:           peopleAdapter{people: library.NewPeople(p.library)},
 		PeopleSubscriber: peopleAdapter{people: library.NewPeople(p.library)},
+		BlockedContent:   blockedContentAdapter{blocks: library.NewBlockedContentStore(p.library)},
+		RemoveAndBlocker: removeAndBlockAdapter{
+			action: library.NewRemoveAndBlock(
+				library.NewQuarantine(p.library, p.fsys, clock.NewSystem()),
+				library.NewBlockedContentStore(p.library), library.NewBlocklistStore(p.library),
+				library.NewDesired(p.library), library.NewPhysical(p.library),
+				rootFolderPathFromCache(p.cache),
+			),
+			physical: library.NewPhysical(p.library), clock: clock.NewSystem(),
+		},
 		// time.Local.String() reports "Local"; the name the operator set is the useful one.
 		Timezone: p.timezone,
 		Egress:   egressStatus{prober: prober},

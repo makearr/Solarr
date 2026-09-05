@@ -94,6 +94,12 @@ type Config struct {
 	// PeopleSubscriber subscribes a caller to a person. Optional: without it,
 	// SubscribePerson answers 503.
 	PeopleSubscriber PeopleSubscriber
+	// BlockedContent lists and removes ADR-53 part 2's hash blocks. Optional:
+	// without it, ListBlockedContent/RemoveBlockedContent answer 503.
+	BlockedContent BlockedContentLister
+	// RemoveAndBlocker runs ADR-53 section 3's compound action. Optional:
+	// without it, RemoveAndBlockFile answers 503.
+	RemoveAndBlocker RemoveAndBlocker
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -126,6 +132,8 @@ type Server struct {
 	imagesDir            string
 	people               PeopleReader
 	peopleSubscriber     PeopleSubscriber
+	blockedContent       BlockedContentLister
+	removeAndBlocker     RemoveAndBlocker
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -170,6 +178,8 @@ func New(config Config) (*Server, error) {
 		imagesDir:            config.ImagesDir,
 		people:               config.People,
 		peopleSubscriber:     config.PeopleSubscriber,
+		blockedContent:       config.BlockedContent,
+		removeAndBlocker:     config.RemoveAndBlocker,
 		address:              net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -221,6 +231,13 @@ func New(config Config) (*Server, error) {
 			secured.Get("/people", server.routeListPeople)
 			secured.Get("/people/{id}", server.routeGetPerson)
 			secured.Post("/people/{id}/subscribe", server.routeSubscribePerson)
+			secured.Get("/exclusions", server.ListExclusionPatterns)
+			secured.Post("/exclusions", server.CreateExclusionPattern)
+			secured.Patch("/exclusions/{id}", server.routeUpdateExclusionPattern)
+			secured.Delete("/exclusions/{id}", server.routeDeleteExclusionPattern)
+			secured.Get("/blocked", server.routeListBlockedContent)
+			secured.Delete("/blocked/{id}", server.routeRemoveBlockedContent)
+			secured.Post("/files/{mediaObjectId}/remove-block", server.routeRemoveAndBlockFile)
 			secured.Get("/rootfolders", server.ListRootFolders)
 			secured.Get("/users", server.ListUsers)
 			secured.Post("/users", server.CreateUser)

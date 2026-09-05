@@ -178,6 +178,21 @@ func (p Physical) ListUnmeasured(ctx context.Context, afterID int64, pageSize in
 	return files, nil
 }
 
+// Exists reports whether a media_object id is real -- an API layer's own
+// existence check before an action like RemoveAndBlock, which does not
+// itself fail on an unknown id (a Reopen-only or Block-only request simply
+// finds nothing to do).
+func (p Physical) Exists(ctx context.Context, mediaObjectID int64) (bool, error) {
+	_, err := librarydb.New(p.store.Read()).GetMediaObject(ctx, mediaObjectID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("library: check object %d exists: %w", mediaObjectID, err)
+	}
+	return true, nil
+}
+
 // PathsForObject answers every library_path row for one media_object,
 // primary first -- ADR-11 cross-entry hardlinking means one set of bytes can
 // have more than one path, which a caller removing a file everywhere those

@@ -26,6 +26,21 @@ const (
 	AuthPolicyConfiguredModeProxy      AuthPolicyConfiguredMode = "proxy"
 )
 
+// Defines values for BlockedContentEntryReason.
+const (
+	BlockedContentEntryReasonCORRUPT     BlockedContentEntryReason = "CORRUPT"
+	BlockedContentEntryReasonEXECUTABLE  BlockedContentEntryReason = "EXECUTABLE"
+	BlockedContentEntryReasonFAKE        BlockedContentEntryReason = "FAKE"
+	BlockedContentEntryReasonMISLABELLED BlockedContentEntryReason = "MISLABELLED"
+	BlockedContentEntryReasonUNWANTED    BlockedContentEntryReason = "UNWANTED"
+)
+
+// Defines values for BlockedContentEntrySource.
+const (
+	Auto BlockedContentEntrySource = "auto"
+	User BlockedContentEntrySource = "user"
+)
+
 // Defines values for DecisionOutcome.
 const (
 	ACCEPT DecisionOutcome = "ACCEPT"
@@ -40,6 +55,18 @@ const (
 	EventTopicLibrary      EventTopic = "library"
 	EventTopicNotification EventTopic = "notification"
 	EventTopicPressure     EventTopic = "pressure"
+)
+
+// Defines values for ExclusionPatternAction.
+const (
+	ExclusionPatternActionIgnore ExclusionPatternAction = "ignore"
+	ExclusionPatternActionRefuse ExclusionPatternAction = "refuse"
+)
+
+// Defines values for ExclusionPatternWriteAction.
+const (
+	ExclusionPatternWriteActionIgnore ExclusionPatternWriteAction = "ignore"
+	ExclusionPatternWriteActionRefuse ExclusionPatternWriteAction = "refuse"
 )
 
 // Defines values for HealthStatusStatus.
@@ -112,6 +139,24 @@ const (
 	Ready ReadyStatusStatus = "ready"
 )
 
+// Defines values for RemoveAndBlockRequestBlockReason.
+const (
+	RemoveAndBlockRequestBlockReasonCORRUPT     RemoveAndBlockRequestBlockReason = "CORRUPT"
+	RemoveAndBlockRequestBlockReasonEXECUTABLE  RemoveAndBlockRequestBlockReason = "EXECUTABLE"
+	RemoveAndBlockRequestBlockReasonFAKE        RemoveAndBlockRequestBlockReason = "FAKE"
+	RemoveAndBlockRequestBlockReasonMISLABELLED RemoveAndBlockRequestBlockReason = "MISLABELLED"
+	RemoveAndBlockRequestBlockReasonUNWANTED    RemoveAndBlockRequestBlockReason = "UNWANTED"
+)
+
+// Defines values for RemoveAndBlockRequestQuarantineReason.
+const (
+	FailedImport  RemoveAndBlockRequestQuarantineReason = "failed_import"
+	Junk          RemoveAndBlockRequestQuarantineReason = "junk"
+	RejectedWorse RemoveAndBlockRequestQuarantineReason = "rejected_worse"
+	Replaced      RemoveAndBlockRequestQuarantineReason = "replaced"
+	UserDelete    RemoveAndBlockRequestQuarantineReason = "user_delete"
+)
+
 // Defines values for Role.
 const (
 	Admin    Role = "admin"
@@ -165,6 +210,38 @@ type AuthPolicy struct {
 // AuthPolicyConfiguredMode How config.yml says callers authenticate when they must. Turning authentication back on restores this mode rather than guessing one.
 type AuthPolicyConfiguredMode string
 
+// BlockedContentEntry Bytes that never enter the library again (ADR-53 part 2), keyed on content hashes, never on a filename (Invariant 82). At least one of `oshash`/`quick_hash`/`chromaprint`/`phash` is always present.
+type BlockedContentEntry struct {
+	Chromaprint *string    `json:"chromaprint,omitempty"`
+	CreatedAt   *time.Time `json:"created_at,omitempty"`
+
+	// ExpiresAt Absent means permanent -- manual blocks always are.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// HitCount How many times this block has fired since it was created.
+	HitCount     *int64                     `json:"hit_count,omitempty"`
+	Id           *int64                     `json:"id,omitempty"`
+	LastHitAt    *time.Time                 `json:"last_hit_at,omitempty"`
+	MediaType    *string                    `json:"media_type,omitempty"`
+	Note         *string                    `json:"note,omitempty"`
+	Oshash       *string                    `json:"oshash,omitempty"`
+	Phash        *string                    `json:"phash,omitempty"`
+	QuickHash    *string                    `json:"quick_hash,omitempty"`
+	Reason       *BlockedContentEntryReason `json:"reason,omitempty"`
+	ReleaseGroup *string                    `json:"release_group,omitempty"`
+	SizeBytes    *int64                     `json:"size_bytes,omitempty"`
+	Source       *BlockedContentEntrySource `json:"source,omitempty"`
+
+	// Title What the blocked release claimed to be, for the UI.
+	Title *string `json:"title,omitempty"`
+}
+
+// BlockedContentEntryReason defines model for BlockedContentEntry.Reason.
+type BlockedContentEntryReason string
+
+// BlockedContentEntrySource defines model for BlockedContentEntry.Source.
+type BlockedContentEntrySource string
+
 // BuildInfo defines model for BuildInfo.
 type BuildInfo struct {
 	BuildDate time.Time `json:"build_date"`
@@ -173,7 +250,7 @@ type BuildInfo struct {
 	Commit  string `json:"commit"`
 	License string `json:"license"`
 
-	// Milestone A name, not a version component (documentation/versioning.md). Empty until set with `make milestone "name"`.
+	// Milestone A name, not a version component (documentation/versioning.md). Empty until set with `make milestone NAME="name"`.
 	Milestone *string `json:"milestone,omitempty"`
 
 	// ServerTime The server's wall clock at the moment of the response. Schedules, air dates and retention run on this clock, not the viewer's, and on a remote host the two routinely differ.
@@ -284,6 +361,39 @@ type Egress struct {
 
 // EventTopic defines model for EventTopic.
 type EventTopic string
+
+// ExclusionPattern "A file shaped like this is not media" -- by name or extension glob, never by content (ADR-53 part 1). `media_type` absent means every media type; `category_id` absent means every category of that media type.
+type ExclusionPattern struct {
+	// Action `ignore` skips the file silently. `refuse` poisons the whole unit it is found in -- nothing in that unit imports.
+	Action ExclusionPatternAction `json:"action"`
+
+	// Builtin A shipped default -- still editable and removable.
+	Builtin    bool    `json:"builtin"`
+	CategoryId *int64  `json:"category_id,omitempty"`
+	Enabled    bool    `json:"enabled"`
+	Id         int64   `json:"id"`
+	MediaType  *string `json:"media_type,omitempty"`
+
+	// Note Why this pattern exists, shown wherever it fires.
+	Note    string `json:"note"`
+	Pattern string `json:"pattern"`
+}
+
+// ExclusionPatternAction `ignore` skips the file silently. `refuse` poisons the whole unit it is found in -- nothing in that unit imports.
+type ExclusionPatternAction string
+
+// ExclusionPatternWrite defines model for ExclusionPatternWrite.
+type ExclusionPatternWrite struct {
+	Action     ExclusionPatternWriteAction `json:"action"`
+	CategoryId *int64                      `json:"category_id,omitempty"`
+	Enabled    *bool                       `json:"enabled,omitempty"`
+	MediaType  *string                     `json:"media_type,omitempty"`
+	Note       *string                     `json:"note,omitempty"`
+	Pattern    string                      `json:"pattern"`
+}
+
+// ExclusionPatternWriteAction defines model for ExclusionPatternWrite.Action.
+type ExclusionPatternWriteAction string
 
 // ExternalID One provider's id for a work, edition or part.
 type ExternalID struct {
@@ -500,6 +610,53 @@ type Rejection struct {
 	Wanted string `json:"wanted"`
 }
 
+// RemoveAndBlockRequest Each step is independently requestable (architecture.md section 10.8's own text) -- requesting none of the four is accepted and does nothing.
+type RemoveAndBlockRequest struct {
+	Block            *bool                                  `json:"block,omitempty"`
+	BlockNote        *string                                `json:"block_note,omitempty"`
+	BlockReason      *RemoveAndBlockRequestBlockReason      `json:"block_reason,omitempty"`
+	BlockTitle       *string                                `json:"block_title,omitempty"`
+	Blocklist        *bool                                  `json:"blocklist,omitempty"`
+	BlocklistTitle   *string                                `json:"blocklist_title,omitempty"`
+	ContentHash      *string                                `json:"content_hash,omitempty"`
+	DesiredItemId    *int64                                 `json:"desired_item_id,omitempty"`
+	Guid             *string                                `json:"guid,omitempty"`
+	IndexerId        *int64                                 `json:"indexer_id,omitempty"`
+	Oshash           *string                                `json:"oshash,omitempty"`
+	Quarantine       *bool                                  `json:"quarantine,omitempty"`
+	QuarantineReason *RemoveAndBlockRequestQuarantineReason `json:"quarantine_reason,omitempty"`
+
+	// QuarantineRetainHours How long the quarantined copy survives before Sweep purges it.
+	QuarantineRetainHours *int    `json:"quarantine_retain_hours,omitempty"`
+	QuickHash             *string `json:"quick_hash,omitempty"`
+	ReleaseGroup          *string `json:"release_group,omitempty"`
+	Reopen                *bool   `json:"reopen,omitempty"`
+}
+
+// RemoveAndBlockRequestBlockReason defines model for RemoveAndBlockRequest.BlockReason.
+type RemoveAndBlockRequestBlockReason string
+
+// RemoveAndBlockRequestQuarantineReason defines model for RemoveAndBlockRequest.QuarantineReason.
+type RemoveAndBlockRequestQuarantineReason string
+
+// RemoveAndBlockResult What the action actually did -- each field only set when its own step ran.
+type RemoveAndBlockResult struct {
+	// BlockId Present when `block` was requested.
+	BlockId *int64 `json:"block_id,omitempty"`
+
+	// BlocklistId Present when `blocklist` was requested.
+	BlocklistId *int64 `json:"blocklist_id,omitempty"`
+
+	// CrossDeviceDeletes Copies that turned out to be on a different filesystem than their own quarantine directory -- deleted directly instead of quarantined (section 10.8), unrestorable.
+	CrossDeviceDeletes int `json:"cross_device_deletes"`
+
+	// QuarantinedPaths The quarantine path each copy landed at, one per copy actually moved.
+	QuarantinedPaths []string `json:"quarantined_paths"`
+
+	// ReopenedItems Every desired_item id detached and recomputed.
+	ReopenedItems []int64 `json:"reopened_items"`
+}
+
 // Role defines model for Role.
 type Role string
 
@@ -679,6 +836,12 @@ type LoginJSONBody struct {
 	Username string `json:"username"`
 }
 
+// ListBlockedContentParams defines parameters for ListBlockedContent.
+type ListBlockedContentParams struct {
+	AfterId *int64 `form:"after_id,omitempty" json:"after_id,omitempty"`
+	Limit   *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // CreateCategoryJSONBody defines parameters for CreateCategory.
 type CreateCategoryJSONBody struct {
 	MediaType    string `json:"media_type"`
@@ -856,6 +1019,15 @@ type LoginJSONRequestBody LoginJSONBody
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody CreateCategoryJSONBody
 
+// CreateExclusionPatternJSONRequestBody defines body for CreateExclusionPattern for application/json ContentType.
+type CreateExclusionPatternJSONRequestBody = ExclusionPatternWrite
+
+// UpdateExclusionPatternJSONRequestBody defines body for UpdateExclusionPattern for application/json ContentType.
+type UpdateExclusionPatternJSONRequestBody = ExclusionPatternWrite
+
+// RemoveAndBlockFileJSONRequestBody defines body for RemoveAndBlockFile for application/json ContentType.
+type RemoveAndBlockFileJSONRequestBody = RemoveAndBlockRequest
+
 // ResolveUnidentifiedJSONRequestBody defines body for ResolveUnidentified for application/json ContentType.
 type ResolveUnidentifiedJSONRequestBody ResolveUnidentifiedJSONBody
 
@@ -903,6 +1075,12 @@ type ServerInterface interface {
 	// Clear the session cookie.
 	// (POST /auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
+	// Every blocked-by-hash entry (ADR-53 part 2).
+	// (GET /blocked)
+	ListBlockedContent(w http.ResponseWriter, r *http.Request, params ListBlockedContentParams)
+	// Reverse a block. Administrator only.
+	// (DELETE /blocked/{id})
+	RemoveBlockedContent(w http.ResponseWriter, r *http.Request, id int64)
 	// Every category the caller may read (ADR-27).
 	// (GET /categories)
 	ListCategories(w http.ResponseWriter, r *http.Request)
@@ -918,6 +1096,21 @@ type ServerInterface interface {
 	// Server-sent events, filtered by category access.
 	// (GET /events)
 	StreamEvents(w http.ResponseWriter, r *http.Request, params StreamEventsParams)
+	// Every unwanted-file pattern (ADR-53 part 1).
+	// (GET /exclusions)
+	ListExclusionPatterns(w http.ResponseWriter, r *http.Request)
+	// Add an unwanted-file pattern. Administrator only.
+	// (POST /exclusions)
+	CreateExclusionPattern(w http.ResponseWriter, r *http.Request)
+	// Remove a pattern -- a shipped default exactly as freely as a user-added one. Administrator only.
+	// (DELETE /exclusions/{id})
+	DeleteExclusionPattern(w http.ResponseWriter, r *http.Request, id int64)
+	// Change a pattern's content. Administrator only. `builtin` never changes -- a shipped default stays a shipped default, only editable and removable (ADR-53's own text), never rebrandable as user-added.
+	// (PATCH /exclusions/{id})
+	UpdateExclusionPattern(w http.ResponseWriter, r *http.Request, id int64)
+	// "This is fake, get rid of it and make sure it never comes back" (architecture.md section 10.8/ADR-53 section 3). Administrator only.
+	// (POST /files/{mediaObjectId}/remove-block)
+	RemoveAndBlockFile(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
 	// Liveness.
 	// (GET /health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -1035,6 +1228,18 @@ func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Every blocked-by-hash entry (ADR-53 part 2).
+// (GET /blocked)
+func (_ Unimplemented) ListBlockedContent(w http.ResponseWriter, r *http.Request, params ListBlockedContentParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Reverse a block. Administrator only.
+// (DELETE /blocked/{id})
+func (_ Unimplemented) RemoveBlockedContent(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Every category the caller may read (ADR-27).
 // (GET /categories)
 func (_ Unimplemented) ListCategories(w http.ResponseWriter, r *http.Request) {
@@ -1062,6 +1267,36 @@ func (_ Unimplemented) GetDashboard(w http.ResponseWriter, r *http.Request) {
 // Server-sent events, filtered by category access.
 // (GET /events)
 func (_ Unimplemented) StreamEvents(w http.ResponseWriter, r *http.Request, params StreamEventsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every unwanted-file pattern (ADR-53 part 1).
+// (GET /exclusions)
+func (_ Unimplemented) ListExclusionPatterns(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add an unwanted-file pattern. Administrator only.
+// (POST /exclusions)
+func (_ Unimplemented) CreateExclusionPattern(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a pattern -- a shipped default exactly as freely as a user-added one. Administrator only.
+// (DELETE /exclusions/{id})
+func (_ Unimplemented) DeleteExclusionPattern(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change a pattern's content. Administrator only. `builtin` never changes -- a shipped default stays a shipped default, only editable and removable (ADR-53's own text), never rebrandable as user-added.
+// (PATCH /exclusions/{id})
+func (_ Unimplemented) UpdateExclusionPattern(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// "This is fake, get rid of it and make sure it never comes back" (architecture.md section 10.8/ADR-53 section 3). Administrator only.
+// (POST /files/{mediaObjectId}/remove-block)
+func (_ Unimplemented) RemoveAndBlockFile(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1302,6 +1537,82 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 	handler.ServeHTTP(w, r)
 }
 
+// ListBlockedContent operation middleware
+func (siw *ServerInterfaceWrapper) ListBlockedContent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListBlockedContentParams
+
+	// ------------- Optional query parameter "after_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "after_id", r.URL.Query(), &params.AfterId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBlockedContent(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveBlockedContent operation middleware
+func (siw *ServerInterfaceWrapper) RemoveBlockedContent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveBlockedContent(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListCategories operation middleware
 func (siw *ServerInterfaceWrapper) ListCategories(w http.ResponseWriter, r *http.Request) {
 
@@ -1448,6 +1759,149 @@ func (siw *ServerInterfaceWrapper) StreamEvents(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.StreamEvents(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListExclusionPatterns operation middleware
+func (siw *ServerInterfaceWrapper) ListExclusionPatterns(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListExclusionPatterns(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateExclusionPattern operation middleware
+func (siw *ServerInterfaceWrapper) CreateExclusionPattern(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateExclusionPattern(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteExclusionPattern operation middleware
+func (siw *ServerInterfaceWrapper) DeleteExclusionPattern(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteExclusionPattern(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateExclusionPattern operation middleware
+func (siw *ServerInterfaceWrapper) UpdateExclusionPattern(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateExclusionPattern(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveAndBlockFile operation middleware
+func (siw *ServerInterfaceWrapper) RemoveAndBlockFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "mediaObjectId" -------------
+	var mediaObjectId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "mediaObjectId", chi.URLParam(r, "mediaObjectId"), &mediaObjectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mediaObjectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveAndBlockFile(w, r, mediaObjectId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2528,6 +2982,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/auth/logout", wrapper.Logout)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/blocked", wrapper.ListBlockedContent)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/blocked/{id}", wrapper.RemoveBlockedContent)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories", wrapper.ListCategories)
 	})
 	r.Group(func(r chi.Router) {
@@ -2541,6 +3001,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/events", wrapper.StreamEvents)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/exclusions", wrapper.ListExclusionPatterns)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/exclusions", wrapper.CreateExclusionPattern)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/exclusions/{id}", wrapper.DeleteExclusionPattern)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/exclusions/{id}", wrapper.UpdateExclusionPattern)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/files/{mediaObjectId}/remove-block", wrapper.RemoveAndBlockFile)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/health", wrapper.GetHealth)

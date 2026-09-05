@@ -577,6 +577,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/exclusions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every unwanted-file pattern (ADR-53 part 1).
+         * @description Shipped defaults and user-added patterns together, unfiltered by category (an administrator sees every pattern that exists, the same way root folders are listed). Unpaginated -- pattern counts are small, dozens at most.
+         */
+        get: operations["listExclusionPatterns"];
+        put?: never;
+        /** Add an unwanted-file pattern. Administrator only. */
+        post: operations["createExclusionPattern"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exclusions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a pattern -- a shipped default exactly as freely as a user-added one. Administrator only. */
+        delete: operations["deleteExclusionPattern"];
+        options?: never;
+        head?: never;
+        /** Change a pattern's content. Administrator only. `builtin` never changes -- a shipped default stays a shipped default, only editable and removable (ADR-53's own text), never rebrandable as user-added. */
+        patch: operations["updateExclusionPattern"];
+        trace?: never;
+    };
+    "/blocked": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every blocked-by-hash entry (ADR-53 part 2).
+         * @description Oldest first. `after_id` pages through the list (the id of the last item already seen, 0 for the first page) -- a plain ascending id cursor, not the compound sort/id cursor `/works` and `/search` use, since this list has only one sort order.
+         */
+        get: operations["listBlockedContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/blocked/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Reverse a block. Administrator only.
+         * @description Removes the block only -- it does not restore a quarantined file or undo a blocklist entry; those are their own separate reversals (`POST /quarantine/{id}/restore`, not yet built, and `DELETE` on the blocklist, not yet exposed either).
+         */
+        delete: operations["removeBlockedContent"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files/{mediaObjectId}/remove-block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * "This is fake, get rid of it and make sure it never comes back" (architecture.md section 10.8/ADR-53 section 3). Administrator only.
+         * @description Four steps, each independently requestable: quarantine every copy of the file's bytes (never a direct delete, restorable), block its hashes, blocklist the source release so it is not re-grabbed, and detach the file from every desired item it satisfied so that item returns to wanting the real thing. Requesting none of the four is a no-op, not an error.
+         */
+        post: operations["removeAndBlockFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories": {
         parameters: {
             query?: never;
@@ -734,7 +839,7 @@ export interface components {
             /** @example 26.09.1.35 */
             version: string;
             /**
-             * @description A name, not a version component (documentation/versioning.md). Empty until set with `make milestone "name"`.
+             * @description A name, not a version component (documentation/versioning.md). Empty until set with `make milestone NAME="name"`.
              * @example music, usenet
              */
             milestone?: string;
@@ -1090,6 +1195,129 @@ export interface components {
             items: components["schemas"]["UnidentifiedFile"][];
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
+        };
+        /** @description "A file shaped like this is not media" -- by name or extension glob, never by content (ADR-53 part 1). `media_type` absent means every media type; `category_id` absent means every category of that media type. */
+        ExclusionPattern: {
+            /** Format: int64 */
+            id: number;
+            /** @example *.exe */
+            pattern: string;
+            /**
+             * @description `ignore` skips the file silently. `refuse` poisons the whole unit it is found in -- nothing in that unit imports.
+             * @enum {string}
+             */
+            action: "ignore" | "refuse";
+            media_type?: string;
+            /** Format: int64 */
+            category_id?: number;
+            /** @description Why this pattern exists, shown wherever it fires. */
+            note: string;
+            /** @description A shipped default -- still editable and removable. */
+            builtin: boolean;
+            enabled: boolean;
+        };
+        ExclusionPatternWrite: {
+            /** @example *.exe */
+            pattern: string;
+            /** @enum {string} */
+            action: "ignore" | "refuse";
+            media_type?: string;
+            /** Format: int64 */
+            category_id?: number;
+            note?: string;
+            /** @default true */
+            enabled: boolean;
+        };
+        /** @description Bytes that never enter the library again (ADR-53 part 2), keyed on content hashes, never on a filename (Invariant 82). At least one of `oshash`/`quick_hash`/`chromaprint`/`phash` is always present. */
+        BlockedContentEntry: {
+            /** Format: int64 */
+            id?: number;
+            oshash?: string;
+            quick_hash?: string;
+            chromaprint?: string;
+            phash?: string;
+            /** Format: int64 */
+            size_bytes?: number;
+            /** @enum {string} */
+            reason?: "FAKE" | "MISLABELLED" | "CORRUPT" | "UNWANTED" | "EXECUTABLE";
+            note?: string;
+            media_type?: string;
+            /** @description What the blocked release claimed to be, for the UI. */
+            title?: string;
+            release_group?: string;
+            /** @enum {string} */
+            source?: "user" | "auto";
+            /**
+             * Format: date-time
+             * @description Absent means permanent -- manual blocks always are.
+             */
+            expires_at?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /**
+             * Format: int64
+             * @description How many times this block has fired since it was created.
+             */
+            hit_count?: number;
+            /** Format: date-time */
+            last_hit_at?: string;
+        };
+        /** @description Each step is independently requestable (architecture.md section 10.8's own text) -- requesting none of the four is accepted and does nothing. */
+        RemoveAndBlockRequest: {
+            /** @default false */
+            quarantine: boolean;
+            /**
+             * @default user_delete
+             * @enum {string}
+             */
+            quarantine_reason: "rejected_worse" | "replaced" | "junk" | "user_delete" | "failed_import";
+            /**
+             * @description How long the quarantined copy survives before Sweep purges it.
+             * @default 168
+             */
+            quarantine_retain_hours: number;
+            /** @default false */
+            block: boolean;
+            oshash?: string;
+            quick_hash?: string;
+            /**
+             * @default FAKE
+             * @enum {string}
+             */
+            block_reason: "FAKE" | "MISLABELLED" | "CORRUPT" | "UNWANTED" | "EXECUTABLE";
+            block_note?: string;
+            block_title?: string;
+            release_group?: string;
+            /** @default false */
+            blocklist: boolean;
+            /** Format: int64 */
+            indexer_id?: number;
+            guid?: string;
+            content_hash?: string;
+            blocklist_title?: string;
+            /** Format: int64 */
+            desired_item_id?: number;
+            /** @default false */
+            reopen: boolean;
+        };
+        /** @description What the action actually did -- each field only set when its own step ran. */
+        RemoveAndBlockResult: {
+            /** @description The quarantine path each copy landed at, one per copy actually moved. */
+            quarantined_paths: string[];
+            /** @description Copies that turned out to be on a different filesystem than their own quarantine directory -- deleted directly instead of quarantined (section 10.8), unrestorable. */
+            cross_device_deletes: number;
+            /**
+             * Format: int64
+             * @description Present when `block` was requested.
+             */
+            block_id?: number;
+            /**
+             * Format: int64
+             * @description Present when `blocklist` was requested.
+             */
+            blocklist_id?: number;
+            /** @description Every desired_item id detached and recomputed. */
+            reopened_items: number[];
         };
         /** @description A category as a navigation target: no `permission` field, since the list is already narrowed to what the caller may read (unlike `Me`'s `categories`, which reports the caller's level on each). */
         LibraryCategory: {
@@ -2062,6 +2290,184 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             /** @description No such queued file, or the caller cannot read its root folder. */
+            404: components["responses"]["Problem"];
+        };
+    };
+    listExclusionPatterns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The patterns. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExclusionPattern"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    createExclusionPattern: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExclusionPatternWrite"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExclusionPattern"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    deleteExclusionPattern: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateExclusionPattern: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExclusionPatternWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExclusionPattern"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listBlockedContent: {
+        parameters: {
+            query?: {
+                after_id?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of blocks. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockedContentEntry"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    removeBlockedContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    removeAndBlockFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoveAndBlockRequest"];
+            };
+        };
+        responses: {
+            /** @description What actually happened. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoveAndBlockResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            /** @description No such file. */
             404: components["responses"]["Problem"];
         };
     };

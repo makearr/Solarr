@@ -63,6 +63,8 @@ type worksFixture struct {
 	artwork              *fakeArtworkReader
 	people               *fakePeopleReader
 	subscriber           *fakePeopleSubscriber
+	blockedContent       *fakeBlockedContentLister
+	removeAndBlocker     *fakeRemoveAndBlocker
 	fsys                 *fsx.Mem
 	clock                *clock.Fake
 }
@@ -114,6 +116,8 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 	artwork := &fakeArtworkReader{}
 	people := &fakePeopleReader{}
 	subscriber := &fakePeopleSubscriber{}
+	blockedContent := &fakeBlockedContentLister{}
+	removeAndBlocker := &fakeRemoveAndBlocker{}
 	fsys := fsx.NewMem(fake)
 	server, err := apiserver.New(apiserver.Config{
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
@@ -127,6 +131,8 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 		Artwork:              artwork,
 		People:               people,
 		PeopleSubscriber:     subscriber,
+		BlockedContent:       blockedContent,
+		RemoveAndBlocker:     removeAndBlocker,
 		FS:                   fsys,
 		ImagesDir:            testImagesDir,
 		LibrarySize:          librarySize,
@@ -146,6 +152,7 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 		server: server, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor,
 		search: search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,
 		artwork: artwork, people: people, subscriber: subscriber,
+		blockedContent: blockedContent, removeAndBlocker: removeAndBlocker,
 		fsys: fsys, clock: fake,
 	}
 }

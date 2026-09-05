@@ -903,6 +903,168 @@ paths:
           $ref: "#/components/responses/Problem"
           description: No such queued file, or the caller cannot read its root folder.
 
+  /exclusions:
+    get:
+      operationId: listExclusionPatterns
+      tags: [library]
+      summary: Every unwanted-file pattern (ADR-53 part 1).
+      description: >-
+        Shipped defaults and user-added patterns together, unfiltered by
+        category (an administrator sees every pattern that exists, the same
+        way root folders are listed). Unpaginated -- pattern counts are
+        small, dozens at most.
+      responses:
+        "200":
+          description: The patterns.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ExclusionPattern" }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createExclusionPattern
+      tags: [library]
+      summary: Add an unwanted-file pattern. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExclusionPatternWrite" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExclusionPattern" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /exclusions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    patch:
+      operationId: updateExclusionPattern
+      tags: [library]
+      summary: >-
+        Change a pattern's content. Administrator only. `builtin` never
+        changes -- a shipped default stays a shipped default, only editable
+        and removable (ADR-53's own text), never rebrandable as user-added.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExclusionPatternWrite" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExclusionPattern" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteExclusionPattern
+      tags: [library]
+      summary: >-
+        Remove a pattern -- a shipped default exactly as freely as a
+        user-added one. Administrator only.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /blocked:
+    get:
+      operationId: listBlockedContent
+      tags: [library]
+      summary: Every blocked-by-hash entry (ADR-53 part 2).
+      description: >-
+        Oldest first. `after_id` pages through the list (the id of the last
+        item already seen, 0 for the first page) -- a plain ascending id
+        cursor, not the compound sort/id cursor `/works` and `/search` use,
+        since this list has only one sort order.
+      parameters:
+        - name: after_id
+          in: query
+          schema: { type: integer, format: int64, default: 0 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: A page of blocks.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BlockedContentEntry" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /blocked/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    delete:
+      operationId: removeBlockedContent
+      tags: [library]
+      summary: Reverse a block. Administrator only.
+      description: >-
+        Removes the block only -- it does not restore a quarantined file or
+        undo a blocklist entry; those are their own separate reversals
+        (`POST /quarantine/{id}/restore`, not yet built, and
+        `DELETE` on the blocklist, not yet exposed either).
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /files/{mediaObjectId}/remove-block:
+    parameters:
+      - name: mediaObjectId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: removeAndBlockFile
+      tags: [library]
+      summary: >-
+        "This is fake, get rid of it and make sure it never comes back"
+        (architecture.md section 10.8/ADR-53 section 3). Administrator only.
+      description: >-
+        Four steps, each independently requestable: quarantine every copy of
+        the file's bytes (never a direct delete, restorable), block its
+        hashes, blocklist the source release so it is not re-grabbed, and
+        detach the file from every desired item it satisfied so that item
+        returns to wanting the real thing. Requesting none of the four is a
+        no-op, not an error.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RemoveAndBlockRequest" }
+      responses:
+        "200":
+          description: What actually happened.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RemoveAndBlockResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: No such file.
+
   /categories:
     get:
       operationId: listCategories
@@ -1719,6 +1881,142 @@ components:
           description: >-
             Empty on the last page, which is how a client knows to stop without
             one more request that returns nothing.
+
+    ExclusionPattern:
+      type: object
+      description: >-
+        "A file shaped like this is not media" -- by name or extension glob,
+        never by content (ADR-53 part 1). `media_type` absent means every
+        media type; `category_id` absent means every category of that
+        media type.
+      required: [id, pattern, action, note, builtin, enabled]
+      properties:
+        id: { type: integer, format: int64 }
+        pattern: { type: string, example: "*.exe" }
+        action:
+          type: string
+          enum: [ignore, refuse]
+          description: >-
+            `ignore` skips the file silently. `refuse` poisons the whole
+            unit it is found in -- nothing in that unit imports.
+        media_type: { type: string }
+        category_id: { type: integer, format: int64 }
+        note:
+          type: string
+          description: Why this pattern exists, shown wherever it fires.
+        builtin:
+          type: boolean
+          description: A shipped default -- still editable and removable.
+        enabled: { type: boolean }
+
+    ExclusionPatternWrite:
+      type: object
+      required: [pattern, action]
+      properties:
+        pattern: { type: string, example: "*.exe" }
+        action: { type: string, enum: [ignore, refuse] }
+        media_type: { type: string }
+        category_id: { type: integer, format: int64 }
+        note: { type: string }
+        enabled: { type: boolean, default: true }
+
+    BlockedContentEntry:
+      type: object
+      description: >-
+        Bytes that never enter the library again (ADR-53 part 2), keyed on
+        content hashes, never on a filename (Invariant 82). At least one of
+        `oshash`/`quick_hash`/`chromaprint`/`phash` is always present.
+      required:
+        - id, size_bytes, reason, title, release_group, source, created_at, hit_count
+      properties:
+        id: { type: integer, format: int64 }
+        oshash: { type: string }
+        quick_hash: { type: string }
+        chromaprint: { type: string }
+        phash: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        reason:
+          type: string
+          enum: [FAKE, MISLABELLED, CORRUPT, UNWANTED, EXECUTABLE]
+        note: { type: string }
+        media_type: { type: string }
+        title:
+          type: string
+          description: What the blocked release claimed to be, for the UI.
+        release_group: { type: string }
+        source: { type: string, enum: [user, auto] }
+        expires_at:
+          type: string
+          format: date-time
+          description: Absent means permanent -- manual blocks always are.
+        created_at: { type: string, format: date-time }
+        hit_count:
+          type: integer
+          format: int64
+          description: How many times this block has fired since it was created.
+        last_hit_at: { type: string, format: date-time }
+
+    RemoveAndBlockRequest:
+      type: object
+      description: >-
+        Each step is independently requestable (architecture.md section
+        10.8's own text) -- requesting none of the four is accepted and
+        does nothing.
+      properties:
+        quarantine: { type: boolean, default: false }
+        quarantine_reason:
+          type: string
+          enum: [rejected_worse, replaced, junk, user_delete, failed_import]
+          default: user_delete
+        quarantine_retain_hours:
+          type: integer
+          default: 168
+          description: How long the quarantined copy survives before Sweep purges it.
+        block: { type: boolean, default: false }
+        oshash: { type: string }
+        quick_hash: { type: string }
+        block_reason:
+          type: string
+          enum: [FAKE, MISLABELLED, CORRUPT, UNWANTED, EXECUTABLE]
+          default: FAKE
+        block_note: { type: string }
+        block_title: { type: string }
+        release_group: { type: string }
+        blocklist: { type: boolean, default: false }
+        indexer_id: { type: integer, format: int64 }
+        guid: { type: string }
+        content_hash: { type: string }
+        blocklist_title: { type: string }
+        desired_item_id: { type: integer, format: int64 }
+        reopen: { type: boolean, default: false }
+
+    RemoveAndBlockResult:
+      type: object
+      description: What the action actually did -- each field only set when its own step ran.
+      required: [quarantined_paths, cross_device_deletes, reopened_items]
+      properties:
+        quarantined_paths:
+          type: array
+          items: { type: string }
+          description: The quarantine path each copy landed at, one per copy actually moved.
+        cross_device_deletes:
+          type: integer
+          description: >-
+            Copies that turned out to be on a different filesystem than
+            their own quarantine directory -- deleted directly instead of
+            quarantined (section 10.8), unrestorable.
+        block_id:
+          type: integer
+          format: int64
+          description: Present when `block` was requested.
+        blocklist_id:
+          type: integer
+          format: int64
+          description: Present when `blocklist` was requested.
+        reopened_items:
+          type: array
+          items: { type: integer, format: int64 }
+          description: Every desired_item id detached and recomputed.
 
     LibraryCategory:
       type: object
