@@ -649,6 +649,71 @@ func (c *Cache) PasswordHash(ctx context.Context, username string) (string, erro
 	return row.PasswordHash.String, nil
 }
 
+// CreateExclusionPattern adds an unwanted-file pattern (ADR-53 part 1).
+// Builtin is always false here -- only the shipped migration defaults are
+// ever marked builtin, so a pattern the user adds is never mistaken for one.
+func (c *Cache) CreateExclusionPattern(ctx context.Context, pattern ExclusionPattern) (ExclusionPattern, error) {
+	if problems := validateExclusionPattern(pattern.Pattern, pattern.Action, pattern.MediaType,
+		pattern.CategoryID, c.categoryExists); len(problems) > 0 {
+		return ExclusionPattern{}, problems
+	}
+
+	var created settingsdb.ExclusionPattern
+	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		row, err := queries.CreateExclusionPattern(ctx, settingsdb.CreateExclusionPatternParams{
+			Pattern: pattern.Pattern, Action: pattern.Action, MediaType: sql.NullString{String: pattern.MediaType, Valid: pattern.MediaType != ""},
+			CategoryID: int64PtrToNull(pattern.CategoryID), Note: pattern.Note,
+			Builtin: 0, Enabled: boolToInt(pattern.Enabled),
+		})
+		created = row
+		return err
+	})
+	if err != nil {
+		return ExclusionPattern{}, fmt.Errorf("settings: create exclusion pattern %q: %w", pattern.Pattern, err)
+	}
+	return convertExclusionPatterns([]settingsdb.ExclusionPattern{created})[0], nil
+}
+
+// UpdateExclusionPattern replaces a pattern's content -- Builtin never
+// changes after creation, only what a builtin pattern says and whether it is
+// enabled (still editable and removable, per ADR-53's own text).
+func (c *Cache) UpdateExclusionPattern(ctx context.Context, id int64, pattern ExclusionPattern) error {
+	if _, found := c.Snapshot().ExclusionPattern(id); !found {
+		return fmt.Errorf("%w: exclusion pattern %d", ErrNotFound, id)
+	}
+	if problems := validateExclusionPattern(pattern.Pattern, pattern.Action, pattern.MediaType,
+		pattern.CategoryID, c.categoryExists); len(problems) > 0 {
+		return problems
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.UpdateExclusionPattern(ctx, settingsdb.UpdateExclusionPatternParams{
+			Pattern: pattern.Pattern, Action: pattern.Action, MediaType: sql.NullString{String: pattern.MediaType, Valid: pattern.MediaType != ""},
+			CategoryID: int64PtrToNull(pattern.CategoryID), Note: pattern.Note,
+			Enabled: boolToInt(pattern.Enabled), ID: id,
+		})
+	})
+}
+
+// DeleteExclusionPattern removes a pattern outright, builtin or not -- ADR-53
+// is explicit that a shipped default stays "editable and removable", never
+// protected from deletion the way an in-use quality profile is.
+func (c *Cache) DeleteExclusionPattern(ctx context.Context, id int64) error {
+	if _, found := c.Snapshot().ExclusionPattern(id); !found {
+		return fmt.Errorf("%w: exclusion pattern %d", ErrNotFound, id)
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.DeleteExclusionPattern(ctx, id)
+	})
+}
+
+// categoryExists adapts Snapshot().Category for validateExclusionPattern's
+// own injected lookup, so the validator stays a pure function of its
+// arguments rather than reaching into Cache state itself.
+func (c *Cache) categoryExists(id int64) bool {
+	_, found := c.Snapshot().Category(id)
+	return found
+}
+
 func boolToInt(value bool) int64 {
 	if value {
 		return 1

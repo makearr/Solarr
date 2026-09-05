@@ -112,6 +112,10 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("settings: list language profiles: %w", err)
 	}
+	exclusionPatterns, err := c.queries.ListExclusionPatterns(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list exclusion patterns: %w", err)
+	}
 
 	stored, err := c.queries.ListInstanceSettings(ctx)
 	if err != nil {
@@ -143,6 +147,7 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 		access,
 		convertQualityProfiles(qualityProfiles),
 		convertedLanguageProfiles,
+		convertExclusionPatterns(exclusionPatterns),
 		policy,
 	), nil
 }
@@ -202,6 +207,18 @@ func convertQualityProfiles(rows []settingsdb.QualityProfile) []QualityProfile {
 		})
 	}
 	return profiles
+}
+
+func convertExclusionPatterns(rows []settingsdb.ExclusionPattern) []ExclusionPattern {
+	patterns := make([]ExclusionPattern, 0, len(rows))
+	for _, row := range rows {
+		patterns = append(patterns, ExclusionPattern{
+			ID: row.ID, Pattern: row.Pattern, Action: row.Action,
+			MediaType: row.MediaType.String, CategoryID: nullInt64Ptr(row.CategoryID),
+			Note: row.Note, Builtin: row.Builtin != 0, Enabled: row.Enabled != 0,
+		})
+	}
+	return patterns
 }
 
 func convertLanguageProfiles(rows []settingsdb.LanguageProfile) ([]LanguageProfile, error) {

@@ -97,6 +97,36 @@ const (
 	MonitorDiscoveredNone        = "none"
 )
 
+// Exclusion pattern actions (exclusion_pattern.action, ADR-53 part 1).
+const (
+	// ExclusionIgnore means "not media" -- skipped silently, never grouped,
+	// never counted.
+	ExclusionIgnore = "ignore"
+	// ExclusionRefuse poisons the whole unit it is found in: nothing in that
+	// unit imports. An executable beside media is the classic shape of a
+	// fake, not clutter to skip past.
+	ExclusionRefuse = "refuse"
+)
+
+// ExclusionPattern is ADR-53 part 1: "a file shaped like this is not media",
+// by name/extension glob, never by content -- the hash-based half
+// (blocked_content) lives in library.db instead, since it is a fact about
+// content rather than policy. MediaType nil means every media type;
+// CategoryID nil means every category of that media type -- .iso is poison
+// in a music release and legitimate in a ROM one, which is why both exist.
+type ExclusionPattern struct {
+	ID         int64
+	Pattern    string
+	Action     string
+	MediaType  string
+	CategoryID *int64
+	Note       string
+	// Builtin marks a shipped default -- still editable and removable, never
+	// a reason to hide it from the same list a user-added pattern appears in.
+	Builtin bool
+	Enabled bool
+}
+
 // QualityProfile is ADR-40's policy, evaluated by internal/score: hard gates, then
 // lexicographic tiers, then an additive score. RulesJSON and UpgradeJSON are kept
 // as raw JSON here -- internal/score owns the parsed shape, since it is the only

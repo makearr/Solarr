@@ -27,6 +27,9 @@ type Querier interface {
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	// Autonomous discovery jobs (ADR-38). Policy, so this stays in settings.db.
 	CreateDiscoveryJob(ctx context.Context, arg CreateDiscoveryJobParams) (DiscoveryJob, error)
+	// ADR-53 part 1 (migration 0007). Column lists follow table order, or sqlc
+	// stops reusing models.
+	CreateExclusionPattern(ctx context.Context, arg CreateExclusionPatternParams) (ExclusionPattern, error)
 	CreateLanguageProfile(ctx context.Context, arg CreateLanguageProfileParams) (LanguageProfile, error)
 	CreateQualityProfile(ctx context.Context, arg CreateQualityProfileParams) (QualityProfile, error)
 	CreateRootFolder(ctx context.Context, arg CreateRootFolderParams) (RootFolder, error)
@@ -34,6 +37,7 @@ type Querier interface {
 	DeleteAPIKey(ctx context.Context, id int64) error
 	DeleteCategory(ctx context.Context, id int64) error
 	DeleteDiscoveryJob(ctx context.Context, id int64) error
+	DeleteExclusionPattern(ctx context.Context, id int64) error
 	DeleteLanguageProfile(ctx context.Context, id int64) error
 	DeletePreference(ctx context.Context, arg DeletePreferenceParams) error
 	DeleteQualityProfile(ctx context.Context, id int64) error
@@ -43,6 +47,7 @@ type Querier interface {
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetCategory(ctx context.Context, id int64) (Category, error)
 	GetDiscoveryJob(ctx context.Context, id int64) (DiscoveryJob, error)
+	GetExclusionPattern(ctx context.Context, id int64) (ExclusionPattern, error)
 	GetInstanceSetting(ctx context.Context, key string) (InstanceSetting, error)
 	GetLanguageProfile(ctx context.Context, id int64) (LanguageProfile, error)
 	GetPlacementAffinity(ctx context.Context, arg GetPlacementAffinityParams) (int64, error)
@@ -61,6 +66,7 @@ type Querier interface {
 	ListDiscoveryJobs(ctx context.Context) ([]DiscoveryJob, error)
 	// What a scheduler actually runs -- off until previewed (ADR-38).
 	ListEnabledDiscoveryJobs(ctx context.Context) ([]DiscoveryJob, error)
+	ListExclusionPatterns(ctx context.Context) ([]ExclusionPattern, error)
 	// Instance-wide policy, seeded from config.yml and changeable afterwards (ADR-21).
 	ListInstanceSettings(ctx context.Context) ([]InstanceSetting, error)
 	ListLanguageProfiles(ctx context.Context) ([]LanguageProfile, error)
@@ -95,6 +101,7 @@ type Querier interface {
 	TouchAPIKey(ctx context.Context, arg TouchAPIKeyParams) error
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) error
 	UpdateDiscoveryJob(ctx context.Context, arg UpdateDiscoveryJobParams) error
+	UpdateExclusionPattern(ctx context.Context, arg UpdateExclusionPatternParams) error
 	UpdateLanguageProfile(ctx context.Context, arg UpdateLanguageProfileParams) error
 	UpdateQualityProfile(ctx context.Context, arg UpdateQualityProfileParams) error
 }

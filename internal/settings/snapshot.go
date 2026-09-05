@@ -4,23 +4,25 @@ import "slices"
 
 // Snapshot is an immutable view of settings.db (ADR-25).
 type Snapshot struct {
-	users            []User
-	categories       []Category
-	rootFolders      []RootFolder
-	categoryRoot     []CategoryRoot
-	qualityProfiles  []QualityProfile
-	languageProfiles []LanguageProfile
+	users             []User
+	categories        []Category
+	rootFolders       []RootFolder
+	categoryRoot      []CategoryRoot
+	qualityProfiles   []QualityProfile
+	languageProfiles  []LanguageProfile
+	exclusionPatterns []ExclusionPattern
 	// policy is instance-wide settings by key, read through typed accessors.
 	policy map[string]string
 
 	// Indexes, built once, so a lookup is a map hit rather than a scan.
-	userByID            map[int64]User
-	userByUsername      map[string]User
-	categoryByID        map[int64]Category
-	rootFolderByID      map[int64]RootFolder
-	accessByUser        map[int64]map[int64]Permission
-	qualityProfileByID  map[int64]QualityProfile
-	languageProfileByID map[int64]LanguageProfile
+	userByID             map[int64]User
+	userByUsername       map[string]User
+	categoryByID         map[int64]Category
+	rootFolderByID       map[int64]RootFolder
+	accessByUser         map[int64]map[int64]Permission
+	qualityProfileByID   map[int64]QualityProfile
+	languageProfileByID  map[int64]LanguageProfile
+	exclusionPatternByID map[int64]ExclusionPattern
 }
 
 // Users returns every account, ordered by username.
@@ -78,6 +80,15 @@ func (s *Snapshot) LanguageProfile(id int64) (LanguageProfile, bool) {
 	return profile, found
 }
 
+// ExclusionPatterns returns every exclusion pattern, in id order.
+func (s *Snapshot) ExclusionPatterns() []ExclusionPattern { return s.exclusionPatterns }
+
+// ExclusionPattern looks up an exclusion pattern by id.
+func (s *Snapshot) ExclusionPattern(id int64) (ExclusionPattern, bool) {
+	pattern, found := s.exclusionPatternByID[id]
+	return pattern, found
+}
+
 // Permission reports what a user may do in a category. An absent grant is None:
 // a category with no row is invisible, not public.
 func (s *Snapshot) Permission(userID, categoryID int64) Permission {
@@ -120,22 +131,24 @@ func (s *Snapshot) RootFoldersForCategory(categoryID int64) []RootFolder {
 func newSnapshot(users []User, categories []Category, rootFolders []RootFolder,
 	attachments []CategoryRoot, access map[int64]map[int64]Permission,
 	qualityProfiles []QualityProfile, languageProfiles []LanguageProfile,
-	policy map[string]string) *Snapshot {
+	exclusionPatterns []ExclusionPattern, policy map[string]string) *Snapshot {
 	snapshot := &Snapshot{
-		policy:              policy,
-		users:               slices.Clone(users),
-		categories:          slices.Clone(categories),
-		rootFolders:         slices.Clone(rootFolders),
-		categoryRoot:        slices.Clone(attachments),
-		qualityProfiles:     slices.Clone(qualityProfiles),
-		languageProfiles:    slices.Clone(languageProfiles),
-		userByID:            make(map[int64]User, len(users)),
-		userByUsername:      make(map[string]User, len(users)),
-		categoryByID:        make(map[int64]Category, len(categories)),
-		rootFolderByID:      make(map[int64]RootFolder, len(rootFolders)),
-		accessByUser:        access,
-		qualityProfileByID:  make(map[int64]QualityProfile, len(qualityProfiles)),
-		languageProfileByID: make(map[int64]LanguageProfile, len(languageProfiles)),
+		policy:               policy,
+		users:                slices.Clone(users),
+		categories:           slices.Clone(categories),
+		rootFolders:          slices.Clone(rootFolders),
+		categoryRoot:         slices.Clone(attachments),
+		qualityProfiles:      slices.Clone(qualityProfiles),
+		languageProfiles:     slices.Clone(languageProfiles),
+		exclusionPatterns:    slices.Clone(exclusionPatterns),
+		userByID:             make(map[int64]User, len(users)),
+		userByUsername:       make(map[string]User, len(users)),
+		categoryByID:         make(map[int64]Category, len(categories)),
+		rootFolderByID:       make(map[int64]RootFolder, len(rootFolders)),
+		accessByUser:         access,
+		qualityProfileByID:   make(map[int64]QualityProfile, len(qualityProfiles)),
+		languageProfileByID:  make(map[int64]LanguageProfile, len(languageProfiles)),
+		exclusionPatternByID: make(map[int64]ExclusionPattern, len(exclusionPatterns)),
 	}
 	for _, user := range snapshot.users {
 		snapshot.userByID[user.ID] = user
@@ -152,6 +165,9 @@ func newSnapshot(users []User, categories []Category, rootFolders []RootFolder,
 	}
 	for _, profile := range snapshot.languageProfiles {
 		snapshot.languageProfileByID[profile.ID] = profile
+	}
+	for _, pattern := range snapshot.exclusionPatterns {
+		snapshot.exclusionPatternByID[pattern.ID] = pattern
 	}
 	return snapshot
 }

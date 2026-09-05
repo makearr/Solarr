@@ -120,3 +120,44 @@ func validateLanguageProfile(name string) config.Problems {
 	}
 	return problems
 }
+
+// validateExclusionPattern checks an unwanted-file pattern before it is
+// written (ADR-53 part 1). categoryExists is a lookup rather than a direct
+// Snapshot dependency, so this stays a pure function of its inputs like
+// every other validator here.
+func validateExclusionPattern(
+	pattern, action, mediaType string, categoryID *int64, categoryExists func(int64) bool,
+) config.Problems {
+	var problems config.Problems
+
+	if strings.TrimSpace(pattern) == "" {
+		problems = append(problems, config.Problem{Path: "pattern", Expectation: "a glob pattern"})
+	} else if _, err := filepath.Match(pattern, "probe"); err != nil {
+		problems = append(problems, config.Problem{
+			Path: "pattern", Value: pattern, Expectation: fmt.Sprintf("a valid glob: %v", err),
+		})
+	}
+
+	if action != ExclusionIgnore && action != ExclusionRefuse {
+		problems = append(problems, config.Problem{
+			Path: "action", Value: action,
+			Expectation: fmt.Sprintf("one of %s, %s", ExclusionIgnore, ExclusionRefuse),
+		})
+	}
+
+	if mediaType != "" && !slices.Contains(MediaTypes, mediaType) {
+		problems = append(problems, config.Problem{
+			Path: "media_type", Value: mediaType,
+			Expectation: "empty (every media type) or one of " + strings.Join(MediaTypes, ", "),
+		})
+	}
+
+	if categoryID != nil && !categoryExists(*categoryID) {
+		problems = append(problems, config.Problem{
+			Path: "category_id", Value: strconv.FormatInt(*categoryID, 10),
+			Expectation: "an existing category",
+		})
+	}
+
+	return problems
+}

@@ -59,6 +59,17 @@ type DiscoveryJob struct {
 	LastRunAt   sql.NullInt64
 }
 
+type ExclusionPattern struct {
+	ID         int64
+	Pattern    string
+	Action     string
+	MediaType  sql.NullString
+	CategoryID sql.NullInt64
+	Note       string
+	Builtin    int64
+	Enabled    int64
+}
+
 type InstanceSetting struct {
 	Key       string
 	ValueJson string
