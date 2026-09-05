@@ -20,6 +20,13 @@ func TestSegmentConfidence(t *testing.T) {
 		{"format container", "FLAC", true},
 		{"edition word alone", "Deluxe Edition", true},
 		{"source word alone", "WEB", true},
+		// Real production-library findings (Nuzes, XT/QK): a numeric album
+		// title in front of "(Year)" must not score like a bare year alone.
+		{"numeric album title with year", "19 (2008)", false},
+		{"another numeric album title", "30 (2021)", false},
+		{"year-shaped album title with year suffix", "1977 (2022)", false},
+		{"edition word with year still a container", "Deluxe Edition (2008)", true},
+		{"bonus tracks with year still a container", "Bonus Tracks (2008)", true},
 	}
 
 	for _, tt := range tests {

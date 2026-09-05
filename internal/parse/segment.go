@@ -11,6 +11,16 @@ import (
 // (e.g. a lone disc marker with no sibling to merge against).
 var discMarkerRe = regexp.MustCompile(`(?i)^(cd|disc|disk)[\s_-]*\d+$`)
 
+// trailingYearRe strips this project's own default "Title (Year)" naming
+// shape (internal/naming, proven byte-for-byte against thousands of real album
+// folders) so the title is judged on its own -- not the year, and not by
+// treating the title's own content as if it were the same kind of technical
+// claim a bare year is. Without this, a real, purely numeric album title
+// (Nuzes's "19"/"21"/"25"/"30", XT/QK's "1977 (2022)") scores identically to
+// a genuine bare-year container ("(1997)" alone) even though only one of
+// them is an entity name -- found live against the real production library.
+var trailingYearRe = regexp.MustCompile(`\(((?:19|20)\d{2})(?:-(?:19|20)\d{2})?\)\s*$`)
+
 // SegmentConfidence scores a single path segment's chance of being a real
 // entity name (an artist, an album) rather than a container or noise word --
 // internal/inspect's own SegmentPlausibility extension point (ADR-48), which
@@ -24,12 +34,34 @@ func SegmentConfidence(segment string) float64 {
 		return 0
 	}
 
+	body := trimmed
+	stripYear := false
+	if loc := trailingYearRe.FindStringIndex(trimmed); loc != nil {
+		body = strings.TrimSpace(trimmed[:loc[0]])
+		stripYear = true
+		if body == "" {
+			return 0.1 // nothing but a year in brackets -- a bare-year container
+		}
+	}
+
 	meaningful := 0
-	for _, word := range strings.Fields(Normalize(trimmed)) {
+	for _, word := range strings.Fields(Normalize(body)) {
 		word = strings.TrimFunc(word, func(r rune) bool {
 			return (r < 'a' || r > 'z') && (r < '0' || r > '9')
 		})
-		if word == "" || yearRe.MatchString(word) || isAllDigits(word) || isVocabWord(word) {
+		if word == "" {
+			continue
+		}
+		// A "Title (Year)" match already accounts for the date, so the title
+		// itself is not re-checked against year/digit patterns -- only real
+		// edition/source/format noise still disqualifies it (isNoiseWord).
+		// Without a year suffix, the full vocabulary applies, including bare
+		// years and plain numbers, which alone are still a container.
+		if stripYear {
+			if isNoiseWord(word) {
+				continue
+			}
+		} else if yearRe.MatchString(word) || isAllDigits(word) || isVocabWord(word) {
 			continue
 		}
 		meaningful++
@@ -43,6 +75,15 @@ func SegmentConfidence(segment string) float64 {
 		confidence = 0.85 // a segment alone never carries Parse's own full-title certainty
 	}
 	return confidence
+}
+
+// isNoiseWord is edition/source/format vocabulary only -- deliberately
+// narrower than isVocabWord, which also claims bare years and would
+// otherwise disqualify a real numeric album title sitting in front of a
+// matched "(Year)" suffix.
+func isNoiseWord(word string) bool {
+	return editionWords[word] || sourceWords[word] != "" ||
+		losslessFormats[word] != "" || lossyFormats[word] != ""
 }
 
 func isAllDigits(s string) bool {
