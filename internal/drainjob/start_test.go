@@ -205,6 +205,67 @@ func TestStart_ErrorsWhenTheRootHasNoFiles(t *testing.T) {
 	}
 }
 
+func TestCompleter_AdvancesToDrainedWhenTheRootIsEmpty(t *testing.T) {
+	roots := &fakeRoots{folders: map[int64]settings.RootFolder{
+		1: {ID: 1, DrainState: settings.DrainStateDraining, DrainJobID: i64(7)},
+	}}
+	completer := drainjob.Completer{Roots: roots, Files: fakeFiles{}}
+
+	if err := completer.CompleteDrainIfEmpty(t.Context(), 1, 7); err != nil {
+		t.Fatalf("CompleteDrainIfEmpty: %v", err)
+	}
+	if roots.folders[1].DrainState != settings.DrainStateDrained || roots.folders[1].DrainJobID != nil {
+		t.Errorf("root = %+v, want DRAINED/nil", roots.folders[1])
+	}
+}
+
+func TestCompleter_LeavesDrainingWhenFilesRemain(t *testing.T) {
+	roots := &fakeRoots{folders: map[int64]settings.RootFolder{
+		1: {ID: 1, DrainState: settings.DrainStateDraining, DrainJobID: i64(7)},
+	}}
+	files := fakeFiles{1: {{MediaObjectID: 1, RelPath: "still/here.flac", SizeBytes: 1}}}
+	completer := drainjob.Completer{Roots: roots, Files: files}
+
+	if err := completer.CompleteDrainIfEmpty(t.Context(), 1, 7); err != nil {
+		t.Fatalf("CompleteDrainIfEmpty: %v", err)
+	}
+	if roots.folders[1].DrainState != settings.DrainStateDraining {
+		t.Errorf("DrainState = %q, want DRAINING to stay put while files remain", roots.folders[1].DrainState)
+	}
+}
+
+// A stale move job id (a later drain already replaced this one, or StopDrain
+// already reset the state) must not advance a state that is no longer this
+// job's own to complete.
+func TestCompleter_IgnoresAMismatchedMoveJobID(t *testing.T) {
+	roots := &fakeRoots{folders: map[int64]settings.RootFolder{
+		1: {ID: 1, DrainState: settings.DrainStateDraining, DrainJobID: i64(99)},
+	}}
+	completer := drainjob.Completer{Roots: roots, Files: fakeFiles{}}
+
+	if err := completer.CompleteDrainIfEmpty(t.Context(), 1, 7); err != nil {
+		t.Fatalf("CompleteDrainIfEmpty: %v", err)
+	}
+	if roots.folders[1].DrainState != settings.DrainStateDraining {
+		t.Errorf("DrainState = %q, want untouched for a move job id that is not this root's own current drain",
+			roots.folders[1].DrainState)
+	}
+}
+
+func TestCompleter_IgnoresARootNotCurrentlyDraining(t *testing.T) {
+	roots := &fakeRoots{folders: map[int64]settings.RootFolder{
+		1: {ID: 1, DrainState: settings.DrainStateNone},
+	}}
+	completer := drainjob.Completer{Roots: roots, Files: fakeFiles{}}
+
+	if err := completer.CompleteDrainIfEmpty(t.Context(), 1, 7); err != nil {
+		t.Fatalf("CompleteDrainIfEmpty: %v", err)
+	}
+	if roots.folders[1].DrainState != settings.DrainStateNone {
+		t.Errorf("DrainState = %q, want untouched", roots.folders[1].DrainState)
+	}
+}
+
 // A destination attached to a different category from the source is never
 // offered to placement.Resolve at all, so a drain with no real sibling
 // refuses cleanly rather than raiding an unrelated category's own root.

@@ -1,6 +1,7 @@
 package moverjob_test
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"os"
@@ -116,6 +117,28 @@ func (f *fixture) job(roots moverjob.RootFolders) *moverjob.Job {
 		FS: f.fsys, MoveJobs: library.NewMoveJobs(f.store), Physical: library.NewPhysical(f.store),
 		Roots: roots, Clock: f.clock, Logger: slog.New(slog.DiscardHandler),
 	})
+}
+
+func (f *fixture) jobWithDrainCompletion(roots moverjob.RootFolders, completion moverjob.DrainCompletion) *moverjob.Job {
+	return moverjob.NewJob(moverjob.Config{
+		FS: f.fsys, MoveJobs: library.NewMoveJobs(f.store), Physical: library.NewPhysical(f.store),
+		Roots: roots, DrainCompletion: completion, Clock: f.clock, Logger: slog.New(slog.DiscardHandler),
+	})
+}
+
+// fakeDrainCompletion records whether and how it was called, without
+// needing a real settings-backed Roots/Files pair -- moverjob only cares
+// that the hook fires for the right job, not what it does.
+type fakeDrainCompletion struct {
+	calls            int
+	lastRootFolderID int64
+	lastMoveJobID    int64
+}
+
+func (f *fakeDrainCompletion) CompleteDrainIfEmpty(_ context.Context, rootFolderID, moveJobID int64) error {
+	f.calls++
+	f.lastRootFolderID, f.lastMoveJobID = rootFolderID, moveJobID
+	return nil
 }
 
 func (f *fixture) run(t *testing.T, job *moverjob.Job, moveJobID int64) error {
@@ -392,6 +415,79 @@ func TestJob_TidyNeverRemovesTheRootFolderItself(t *testing.T) {
 
 	if !fx.exists("/root1") {
 		t.Error("TIDY removed the root folder's own directory, not just its now-empty contents")
+	}
+}
+
+// TestJob_CallsDrainCompletionForADrainJobWithASourceRoot proves the
+// completion hook fires with the right (source root, move job) pair once a
+// DRAIN job finishes -- the real gap a live container run found: nothing
+// ever checked back to advance drain_state once the move itself succeeded.
+func TestJob_CallsDrainCompletionForADrainJobWithASourceRoot(t *testing.T) {
+	fx := newFixture(t)
+	fx.writeFile(t, "/root1/track.flac", "bytes")
+	objectID := fx.registerObject(t, 1, "track.flac", "bytes")
+
+	moveJobs := library.NewMoveJobs(fx.store)
+	sourceRootID := int64(1)
+	jobID, err := moveJobs.Create(t.Context(), library.NewMoveJob{
+		Reason: string(mover.ReasonDrain), SourceRootID: &sourceRootID, FilesTotal: 1, BytesTotal: 5,
+		PlanJSON: "{}", CreatedAt: fx.clock.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := moveJobs.AddItems(t.Context(), jobID, []library.NewMoveItem{{
+		MediaObjectID: objectID, DestRootID: 2, DestRelPath: "track.flac", Bytes: 5,
+	}}); err != nil {
+		t.Fatalf("AddItems: %v", err)
+	}
+
+	completion := &fakeDrainCompletion{}
+	roots := fakeRoots{1: {Path: "/root1", FSID: "fs-a"}, 2: {Path: "/root2", FSID: "fs-b"}}
+	if err := fx.run(t, fx.jobWithDrainCompletion(roots, completion), jobID); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if completion.calls != 1 {
+		t.Fatalf("DrainCompletion called %d times, want 1", completion.calls)
+	}
+	if completion.lastRootFolderID != 1 || completion.lastMoveJobID != jobID {
+		t.Errorf("DrainCompletion called with (%d, %d), want (1, %d)",
+			completion.lastRootFolderID, completion.lastMoveJobID, jobID)
+	}
+}
+
+// TestJob_DoesNotCallDrainCompletionForANonDrainReason proves the hook is
+// specific to DRAIN jobs -- a rename/category/rebalance job's source root
+// has no drain to complete.
+func TestJob_DoesNotCallDrainCompletionForANonDrainReason(t *testing.T) {
+	fx := newFixture(t)
+	fx.writeFile(t, "/root1/track.flac", "bytes")
+	objectID := fx.registerObject(t, 1, "track.flac", "bytes")
+
+	moveJobs := library.NewMoveJobs(fx.store)
+	sourceRootID := int64(1)
+	jobID, err := moveJobs.Create(t.Context(), library.NewMoveJob{
+		Reason: string(mover.ReasonRebalance), SourceRootID: &sourceRootID, FilesTotal: 1, BytesTotal: 5,
+		PlanJSON: "{}", CreatedAt: fx.clock.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := moveJobs.AddItems(t.Context(), jobID, []library.NewMoveItem{{
+		MediaObjectID: objectID, DestRootID: 2, DestRelPath: "track.flac", Bytes: 5,
+	}}); err != nil {
+		t.Fatalf("AddItems: %v", err)
+	}
+
+	completion := &fakeDrainCompletion{}
+	roots := fakeRoots{1: {Path: "/root1", FSID: "fs-a"}, 2: {Path: "/root2", FSID: "fs-b"}}
+	if err := fx.run(t, fx.jobWithDrainCompletion(roots, completion), jobID); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if completion.calls != 0 {
+		t.Errorf("DrainCompletion called %d times for a REBALANCE job, want 0", completion.calls)
 	}
 }
 

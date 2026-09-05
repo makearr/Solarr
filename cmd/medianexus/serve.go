@@ -17,6 +17,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/auth"
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/config"
+	"github.com/makearr/MediaNexus/internal/drainjob"
 	"github.com/makearr/MediaNexus/internal/egress"
 	"github.com/makearr/MediaNexus/internal/events"
 	"github.com/makearr/MediaNexus/internal/fsx"
@@ -420,6 +421,14 @@ func (p *process) startServer(ctx context.Context) error {
 		},
 		ImportSessions:  importSessionsAdapter{sessions: library.NewImportSessions(p.library)},
 		ImportInspector: importInspectorAdapter{queue: p.queue},
+		DrainStarter: drainAdapter{
+			config: drainjob.Config{
+				Roots: drainRoots{cache: p.cache}, Files: library.NewPhysical(p.library),
+				MoveJobs: library.NewMoveJobs(p.library), Queue: p.queue, Clock: clock.NewSystem(),
+			},
+			cache: p.cache,
+		},
+		MoveJobs: moveJobAdapter{moveJobs: library.NewMoveJobs(p.library)},
 		// time.Local.String() reports "Local"; the name the operator set is the useful one.
 		Timezone: p.timezone,
 		Egress:   egressStatus{prober: prober},

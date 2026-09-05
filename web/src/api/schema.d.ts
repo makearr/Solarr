@@ -289,6 +289,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rootfolders/{id}/drain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Evacuate a root folder (ADR-51). Administrator only.
+         * @description Groups every file on the root by its own top-level directory (the same directory every shipped naming template already nests one artist, show or series beneath) and places each group, largest first, on whichever other root sharing a category with this one has the most free space. `preview: true`, or a plan that refuses outright, persists nothing -- `accepted` is false and the response explains why. Otherwise the move job is created, `accepts_new = 0` and `drain_state = DRAINING` are forced across every category this root shares, and the job that actually moves the files is enqueued.
+         */
+        post: operations["drainRootFolder"];
+        /**
+         * Stop draining a root; restores accepts_new. Administrator only.
+         * @description Clears drain_state back to NONE and restores accepts_new across every category the root shares. Files already moved stay where they landed; a move job already running is not itself cancelled (see `DELETE /moves/{id}` for that, once it exists).
+         */
+        delete: operations["stopDrainingRootFolder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every move job (ADR-51), newest first.
+         * @description Unpaginated -- move job counts never approach library scale, the same reasoning `/import/sessions` already gives.
+         */
+        get: operations["listMoveJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/export": {
         parameters: {
             query?: never;
@@ -994,6 +1040,78 @@ export interface components {
             online: boolean;
             /** @description Whether this process can write here. False is reported, never enforced: ownership on the host is the operator's to decide, and MediaNexus does not chown a library it did not create. Absent when it has not been probed. */
             writable?: boolean;
+            /**
+             * @description ADR-51's own drain state machine.
+             * @enum {string}
+             */
+            drain_state?: "NONE" | "DRAINING" | "PAUSED" | "DRAINED";
+            /** Format: int64 */
+            drain_job_id?: number;
+        };
+        /** @description What one drainRootFolder call computed -- a preview, a refusal, or an accepted and enqueued plan (ADR-51). */
+        DrainPlan: {
+            /** @description False for a preview or a refused plan; nothing was persisted. */
+            accepted: boolean;
+            /** Format: int64 */
+            move_job_id?: number;
+            /** Format: int64 */
+            files_total: number;
+            /** Format: int64 */
+            bytes_total: number;
+            moves: components["schemas"]["DrainMove"][];
+            refused: components["schemas"]["DrainRefusal"][];
+            root_deltas: components["schemas"]["RootDelta"][];
+        };
+        DrainMove: {
+            /** Format: int64 */
+            media_object_id: number;
+            /** Format: int64 */
+            dest_root_folder_id: number;
+            dest_rel_path: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /** @description The top-level directory this file was grouped and moved with. */
+            affinity_key: string;
+        };
+        DrainRefusal: {
+            /** Format: int64 */
+            media_object_id: number;
+            affinity_key: string;
+            reason: string;
+        };
+        /** @description One root's own preview -- Invariant 73's "preview first". */
+        RootDelta: {
+            /** Format: int64 */
+            root_folder_id: number;
+            /** Format: int64 */
+            bytes_in: number;
+            /** Format: int64 */
+            bytes_out: number;
+            /** Format: int64 */
+            resulting_free_bytes: number;
+        };
+        MoveJob: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            reason: "RENAME" | "CATEGORY" | "REBALANCE" | "DRAIN";
+            /** Format: int64 */
+            source_root_id?: number;
+            /** @enum {string} */
+            state: "PLANNED" | "RUNNING" | "PAUSED" | "DONE" | "FAILED";
+            /** Format: int64 */
+            files_total: number;
+            /** Format: int64 */
+            files_done: number;
+            /** Format: int64 */
+            bytes_total: number;
+            /** Format: int64 */
+            bytes_done: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            finished_at?: string;
+            error?: string;
         };
         Identity: {
             /** Format: int64 */
@@ -2060,6 +2178,89 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    drainRootFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @default false */
+                    preview?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The computed plan. accepted is false for a preview or a refused plan; true once the move job is created and enqueued. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrainPlan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The root folder has no files to drain. */
+            409: components["responses"]["Problem"];
+        };
+    };
+    stopDrainingRootFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stopped. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listMoveJobs: {
+        parameters: {
+            query?: {
+                reason?: "RENAME" | "CATEGORY" | "REBALANCE" | "DRAIN";
+                state?: "PLANNED" | "RUNNING" | "PAUSED" | "DONE" | "FAILED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The move jobs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoveJob"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
         };
     };
     exportSettings: {

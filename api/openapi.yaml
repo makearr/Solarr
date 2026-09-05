@@ -433,6 +433,90 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
 
+  /rootfolders/{id}/drain:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: drainRootFolder
+      tags: [library]
+      summary: Evacuate a root folder (ADR-51). Administrator only.
+      description: >-
+        Groups every file on the root by its own top-level directory (the
+        same directory every shipped naming template already nests one
+        artist, show or series beneath) and places each group, largest
+        first, on whichever other root sharing a category with this one has
+        the most free space. `preview: true`, or a plan that refuses
+        outright, persists nothing -- `accepted` is false and the response
+        explains why. Otherwise the move job is created, `accepts_new = 0`
+        and `drain_state = DRAINING` are forced across every category this
+        root shares, and the job that actually moves the files is enqueued.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preview: { type: boolean, default: false }
+      responses:
+        "200":
+          description: >-
+            The computed plan. accepted is false for a preview or a refused
+            plan; true once the move job is created and enqueued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DrainPlan" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          $ref: "#/components/responses/Problem"
+          description: The root folder has no files to drain.
+    delete:
+      operationId: stopDrainingRootFolder
+      tags: [library]
+      summary: Stop draining a root; restores accepts_new. Administrator only.
+      description: >-
+        Clears drain_state back to NONE and restores accepts_new across
+        every category the root shares. Files already moved stay where they
+        landed; a move job already running is not itself cancelled (see
+        `DELETE /moves/{id}` for that, once it exists).
+      responses:
+        "204": { description: Stopped. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /moves:
+    get:
+      operationId: listMoveJobs
+      tags: [library]
+      summary: Every move job (ADR-51), newest first.
+      description: >-
+        Unpaginated -- move job counts never approach library scale, the
+        same reasoning `/import/sessions` already gives.
+      parameters:
+        - name: reason
+          in: query
+          schema: { type: string, enum: [RENAME, CATEGORY, REBALANCE, DRAIN] }
+        - name: state
+          in: query
+          schema: { type: string, enum: [PLANNED, RUNNING, PAUSED, DONE, FAILED] }
+      responses:
+        "200":
+          description: The move jobs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MoveJob" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /settings/export:
     get:
       operationId: exportSettings
@@ -1557,6 +1641,80 @@ components:
             enforced: ownership on the host is the operator's to decide, and
             MediaNexus does not chown a library it did not create. Absent when
             it has not been probed.
+        drain_state:
+          type: string
+          enum: [NONE, DRAINING, PAUSED, DRAINED]
+          description: ADR-51's own drain state machine.
+        drain_job_id: { type: integer, format: int64 }
+
+    DrainPlan:
+      type: object
+      description: >-
+        What one drainRootFolder call computed -- a preview, a refusal, or
+        an accepted and enqueued plan (ADR-51).
+      required: [accepted, files_total, bytes_total, moves, refused, root_deltas]
+      properties:
+        accepted:
+          type: boolean
+          description: False for a preview or a refused plan; nothing was persisted.
+        move_job_id: { type: integer, format: int64 }
+        files_total: { type: integer, format: int64 }
+        bytes_total: { type: integer, format: int64 }
+        moves:
+          type: array
+          items: { $ref: "#/components/schemas/DrainMove" }
+        refused:
+          type: array
+          items: { $ref: "#/components/schemas/DrainRefusal" }
+        root_deltas:
+          type: array
+          items: { $ref: "#/components/schemas/RootDelta" }
+
+    DrainMove:
+      type: object
+      required: [media_object_id, dest_root_folder_id, dest_rel_path, size_bytes, affinity_key]
+      properties:
+        media_object_id: { type: integer, format: int64 }
+        dest_root_folder_id: { type: integer, format: int64 }
+        dest_rel_path: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        affinity_key:
+          type: string
+          description: The top-level directory this file was grouped and moved with.
+
+    DrainRefusal:
+      type: object
+      required: [media_object_id, affinity_key, reason]
+      properties:
+        media_object_id: { type: integer, format: int64 }
+        affinity_key: { type: string }
+        reason: { type: string }
+
+    RootDelta:
+      type: object
+      description: One root's own preview -- Invariant 73's "preview first".
+      required: [root_folder_id, bytes_in, bytes_out, resulting_free_bytes]
+      properties:
+        root_folder_id: { type: integer, format: int64 }
+        bytes_in: { type: integer, format: int64 }
+        bytes_out: { type: integer, format: int64 }
+        resulting_free_bytes: { type: integer, format: int64 }
+
+    MoveJob:
+      type: object
+      required: [id, reason, state, files_total, files_done, bytes_total, bytes_done, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        reason: { type: string, enum: [RENAME, CATEGORY, REBALANCE, DRAIN] }
+        source_root_id: { type: integer, format: int64 }
+        state: { type: string, enum: [PLANNED, RUNNING, PAUSED, DONE, FAILED] }
+        files_total: { type: integer, format: int64 }
+        files_done: { type: integer, format: int64 }
+        bytes_total: { type: integer, format: int64 }
+        bytes_done: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        error: { type: string }
 
     Identity:
       type: object

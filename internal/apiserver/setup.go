@@ -149,6 +149,13 @@ func rootFolderView(folder settings.RootFolder) gen.RootFolder {
 		label := folder.Label
 		view.Label = &label
 	}
+	if folder.DrainState != "" {
+		state := gen.RootFolderDrainState(folder.DrainState)
+		view.DrainState = &state
+	}
+	if folder.DrainJobID != nil {
+		view.DrainJobId = folder.DrainJobID
+	}
 	return view
 }
 

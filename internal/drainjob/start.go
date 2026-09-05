@@ -192,6 +192,40 @@ func eligibleDestinations(roots Roots, rootFolderID int64) []placement.RootCandi
 	return candidates
 }
 
+// Completer satisfies moverjob.DrainCompletion: once a DRAIN job's own
+// moverjob.Job.Run finishes, it checks whether the drained root now holds
+// no files at all, and if so advances drain_state from DRAINING to
+// DRAINED. A live container run found this transition never happened
+// before Completer existed -- nothing had ever checked back once a drain's
+// own move job finished.
+type Completer struct {
+	Roots Roots
+	Files Files
+}
+
+// CompleteDrainIfEmpty is a no-op unless rootFolderID's own drain_state is
+// still DRAINING for exactly this moveJobID -- a stale or already-advanced
+// state, or a moveJobID that is not the root's own current drain, means
+// this is not this drain's job to complete (a concurrent drain replaced it,
+// or StopDrain already reset it). Files left behind (a partial failure)
+// leave drain_state at DRAINING rather than falsely advancing it.
+func (c Completer) CompleteDrainIfEmpty(ctx context.Context, rootFolderID, moveJobID int64) error {
+	root, ok := c.Roots.RootFolder(rootFolderID)
+	if !ok || root.DrainState != settings.DrainStateDraining || root.DrainJobID == nil || *root.DrainJobID != moveJobID {
+		return nil
+	}
+
+	remaining, err := c.Files.PathsForRoot(ctx, rootFolderID)
+	if err != nil {
+		return fmt.Errorf("drainjob: check root %d is empty: %w", rootFolderID, err)
+	}
+	if len(remaining) > 0 {
+		return nil
+	}
+
+	return c.Roots.SetRootFolderDrainState(ctx, rootFolderID, settings.DrainStateDrained, nil)
+}
+
 func rootCandidate(root settings.RootFolder, acceptsNew bool) placement.RootCandidate {
 	var freeBytes, totalBytes int64
 	if root.FreeBytes != nil {

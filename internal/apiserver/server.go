@@ -107,6 +107,12 @@ type Config struct {
 	// ImportInspector enqueues ADR-48's own inspection job. Optional: without
 	// it, InspectImport answers 503.
 	ImportInspector ImportInspector
+	// DrainStarter starts and stops ADR-51's own drain. Optional: without
+	// it, DrainRootFolder/StopDrainingRootFolder answer 503.
+	DrainStarter DrainStarter
+	// MoveJobs lists ADR-51 move jobs. Optional: without it, ListMoveJobs
+	// answers 503.
+	MoveJobs MoveJobLister
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -143,6 +149,8 @@ type Server struct {
 	removeAndBlocker     RemoveAndBlocker
 	importSessions       ImportSessionLister
 	importInspector      ImportInspector
+	drainStarter         DrainStarter
+	moveJobs             MoveJobLister
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -191,6 +199,8 @@ func New(config Config) (*Server, error) {
 		removeAndBlocker:     config.RemoveAndBlocker,
 		importSessions:       config.ImportSessions,
 		importInspector:      config.ImportInspector,
+		drainStarter:         config.DrainStarter,
+		moveJobs:             config.MoveJobs,
 		address:              net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -254,6 +264,9 @@ func New(config Config) (*Server, error) {
 			secured.Get("/import/sessions/{id}", server.routeGetImportSession)
 			secured.Get("/import/sessions/{id}/units", server.routeListImportUnits)
 			secured.Get("/rootfolders", server.ListRootFolders)
+			secured.Post("/rootfolders/{id}/drain", server.routeDrainRootFolder)
+			secured.Delete("/rootfolders/{id}/drain", server.routeStopDrainingRootFolder)
+			secured.Get("/moves", server.routeListMoveJobs)
 			secured.Get("/users", server.ListUsers)
 			secured.Post("/users", server.CreateUser)
 			secured.Patch("/users/{id}", routeUser(server.UpdateUser))

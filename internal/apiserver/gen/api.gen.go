@@ -155,6 +155,23 @@ const (
 	Youtube   MediaType = "youtube"
 )
 
+// Defines values for MoveJobReason.
+const (
+	MoveJobReasonCATEGORY  MoveJobReason = "CATEGORY"
+	MoveJobReasonDRAIN     MoveJobReason = "DRAIN"
+	MoveJobReasonREBALANCE MoveJobReason = "REBALANCE"
+	MoveJobReasonRENAME    MoveJobReason = "RENAME"
+)
+
+// Defines values for MoveJobState.
+const (
+	MoveJobStateDONE    MoveJobState = "DONE"
+	MoveJobStateFAILED  MoveJobState = "FAILED"
+	MoveJobStatePAUSED  MoveJobState = "PAUSED"
+	MoveJobStatePLANNED MoveJobState = "PLANNED"
+	MoveJobStateRUNNING MoveJobState = "RUNNING"
+)
+
 // Defines values for Permission.
 const (
 	PermissionManage  Permission = "manage"
@@ -205,6 +222,14 @@ const (
 	Readonly Role = "readonly"
 )
 
+// Defines values for RootFolderDrainState.
+const (
+	RootFolderDrainStateDRAINED  RootFolderDrainState = "DRAINED"
+	RootFolderDrainStateDRAINING RootFolderDrainState = "DRAINING"
+	RootFolderDrainStateNONE     RootFolderDrainState = "NONE"
+	RootFolderDrainStatePAUSED   RootFolderDrainState = "PAUSED"
+)
+
 // Defines values for WantedState.
 const (
 	COMPLETE   WantedState = "COMPLETE"
@@ -224,10 +249,27 @@ const (
 
 // Defines values for ListImportUnitsParamsDecision.
 const (
-	COMMIT ListImportUnitsParamsDecision = "COMMIT"
-	FAILED ListImportUnitsParamsDecision = "FAILED"
-	QUEUE  ListImportUnitsParamsDecision = "QUEUE"
-	SKIP   ListImportUnitsParamsDecision = "SKIP"
+	ListImportUnitsParamsDecisionCOMMIT ListImportUnitsParamsDecision = "COMMIT"
+	ListImportUnitsParamsDecisionFAILED ListImportUnitsParamsDecision = "FAILED"
+	ListImportUnitsParamsDecisionQUEUE  ListImportUnitsParamsDecision = "QUEUE"
+	ListImportUnitsParamsDecisionSKIP   ListImportUnitsParamsDecision = "SKIP"
+)
+
+// Defines values for ListMoveJobsParamsReason.
+const (
+	ListMoveJobsParamsReasonCATEGORY  ListMoveJobsParamsReason = "CATEGORY"
+	ListMoveJobsParamsReasonDRAIN     ListMoveJobsParamsReason = "DRAIN"
+	ListMoveJobsParamsReasonREBALANCE ListMoveJobsParamsReason = "REBALANCE"
+	ListMoveJobsParamsReasonRENAME    ListMoveJobsParamsReason = "RENAME"
+)
+
+// Defines values for ListMoveJobsParamsState.
+const (
+	ListMoveJobsParamsStateDONE    ListMoveJobsParamsState = "DONE"
+	ListMoveJobsParamsStateFAILED  ListMoveJobsParamsState = "FAILED"
+	ListMoveJobsParamsStatePAUSED  ListMoveJobsParamsState = "PAUSED"
+	ListMoveJobsParamsStatePLANNED ListMoveJobsParamsState = "PLANNED"
+	ListMoveJobsParamsStateRUNNING ListMoveJobsParamsState = "RUNNING"
 )
 
 // Defines values for ListWorksParamsSort.
@@ -386,6 +428,35 @@ type DecisionOutcome string
 // Deferral A reason this candidate is not actionable yet.
 type Deferral struct {
 	Reason string `json:"reason"`
+}
+
+// DrainMove defines model for DrainMove.
+type DrainMove struct {
+	// AffinityKey The top-level directory this file was grouped and moved with.
+	AffinityKey      string `json:"affinity_key"`
+	DestRelPath      string `json:"dest_rel_path"`
+	DestRootFolderId int64  `json:"dest_root_folder_id"`
+	MediaObjectId    int64  `json:"media_object_id"`
+	SizeBytes        int64  `json:"size_bytes"`
+}
+
+// DrainPlan What one drainRootFolder call computed -- a preview, a refusal, or an accepted and enqueued plan (ADR-51).
+type DrainPlan struct {
+	// Accepted False for a preview or a refused plan; nothing was persisted.
+	Accepted   bool           `json:"accepted"`
+	BytesTotal int64          `json:"bytes_total"`
+	FilesTotal int64          `json:"files_total"`
+	MoveJobId  *int64         `json:"move_job_id,omitempty"`
+	Moves      []DrainMove    `json:"moves"`
+	Refused    []DrainRefusal `json:"refused"`
+	RootDeltas []RootDelta    `json:"root_deltas"`
+}
+
+// DrainRefusal defines model for DrainRefusal.
+type DrainRefusal struct {
+	AffinityKey   string `json:"affinity_key"`
+	MediaObjectId int64  `json:"media_object_id"`
+	Reason        string `json:"reason"`
 }
 
 // Edition defines model for Edition.
@@ -665,6 +736,27 @@ type Me struct {
 // MediaType Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
 type MediaType string
 
+// MoveJob defines model for MoveJob.
+type MoveJob struct {
+	BytesDone    int64         `json:"bytes_done"`
+	BytesTotal   int64         `json:"bytes_total"`
+	CreatedAt    time.Time     `json:"created_at"`
+	Error        *string       `json:"error,omitempty"`
+	FilesDone    int64         `json:"files_done"`
+	FilesTotal   int64         `json:"files_total"`
+	FinishedAt   *time.Time    `json:"finished_at,omitempty"`
+	Id           int64         `json:"id"`
+	Reason       MoveJobReason `json:"reason"`
+	SourceRootId *int64        `json:"source_root_id,omitempty"`
+	State        MoveJobState  `json:"state"`
+}
+
+// MoveJobReason defines model for MoveJob.Reason.
+type MoveJobReason string
+
+// MoveJobState defines model for MoveJob.State.
+type MoveJobState string
+
 // ParsedTitle internal/parse's own reading of the pasted title, shown so a simulation is not a black box.
 type ParsedTitle struct {
 	Album       *string `json:"album,omitempty"`
@@ -813,10 +905,22 @@ type RemoveAndBlockResult struct {
 // Role defines model for Role.
 type Role string
 
+// RootDelta One root's own preview -- Invariant 73's "preview first".
+type RootDelta struct {
+	BytesIn            int64 `json:"bytes_in"`
+	BytesOut           int64 `json:"bytes_out"`
+	ResultingFreeBytes int64 `json:"resulting_free_bytes"`
+	RootFolderId       int64 `json:"root_folder_id"`
+}
+
 // RootFolder defines model for RootFolder.
 type RootFolder struct {
-	Id    int64   `json:"id"`
-	Label *string `json:"label,omitempty"`
+	DrainJobId *int64 `json:"drain_job_id,omitempty"`
+
+	// DrainState ADR-51's own drain state machine.
+	DrainState *RootFolderDrainState `json:"drain_state,omitempty"`
+	Id         int64                 `json:"id"`
+	Label      *string               `json:"label,omitempty"`
 
 	// Online An unmounted root counts as unavailable, never as free space (Invariant 20a).
 	Online bool   `json:"online"`
@@ -825,6 +929,9 @@ type RootFolder struct {
 	// Writable Whether this process can write here. False is reported, never enforced: ownership on the host is the operator's to decide, and MediaNexus does not chown a library it did not create. Absent when it has not been probed.
 	Writable *bool `json:"writable,omitempty"`
 }
+
+// RootFolderDrainState ADR-51's own drain state machine.
+type RootFolderDrainState string
 
 // ScoreComponent One additive-stage contribution (ADR-40 stage 3). Breaks ties only.
 type ScoreComponent struct {
@@ -1055,6 +1162,18 @@ type ResolveUnidentifiedJSONBody struct {
 	Provider string `json:"provider"`
 }
 
+// ListMoveJobsParams defines parameters for ListMoveJobs.
+type ListMoveJobsParams struct {
+	Reason *ListMoveJobsParamsReason `form:"reason,omitempty" json:"reason,omitempty"`
+	State  *ListMoveJobsParamsState  `form:"state,omitempty" json:"state,omitempty"`
+}
+
+// ListMoveJobsParamsReason defines parameters for ListMoveJobs.
+type ListMoveJobsParamsReason string
+
+// ListMoveJobsParamsState defines parameters for ListMoveJobs.
+type ListMoveJobsParamsState string
+
 // ListPeopleParams defines parameters for ListPeople.
 type ListPeopleParams struct {
 	// Cursor From `next_cursor` of the previous page. Absent on the first page.
@@ -1079,6 +1198,11 @@ type SubscribePersonJSONBody struct {
 type AddRootFolderJSONBody struct {
 	Label *string `json:"label,omitempty"`
 	Path  string  `json:"path"`
+}
+
+// DrainRootFolderJSONBody defines parameters for DrainRootFolder.
+type DrainRootFolderJSONBody struct {
+	Preview *bool `json:"preview,omitempty"`
 }
 
 // SimulateScoreJSONBody defines parameters for SimulateScore.
@@ -1211,6 +1335,9 @@ type SubscribePersonJSONRequestBody SubscribePersonJSONBody
 // AddRootFolderJSONRequestBody defines body for AddRootFolder for application/json ContentType.
 type AddRootFolderJSONRequestBody AddRootFolderJSONBody
 
+// DrainRootFolderJSONRequestBody defines body for DrainRootFolder for application/json ContentType.
+type DrainRootFolderJSONRequestBody DrainRootFolderJSONBody
+
 // SimulateScoreJSONRequestBody defines body for SimulateScore for application/json ContentType.
 type SimulateScoreJSONRequestBody SimulateScoreJSONBody
 
@@ -1312,6 +1439,9 @@ type ServerInterface interface {
 	// Who the caller is and what they may see.
 	// (GET /me)
 	GetMe(w http.ResponseWriter, r *http.Request)
+	// Every move job (ADR-51), newest first.
+	// (GET /moves)
+	ListMoveJobs(w http.ResponseWriter, r *http.Request, params ListMoveJobsParams)
 	// A page of people (ADR-32) -- first-class monitorable entities, not just credits.
 	// (GET /people)
 	ListPeople(w http.ResponseWriter, r *http.Request, params ListPeopleParams)
@@ -1330,6 +1460,12 @@ type ServerInterface interface {
 	// Add a library root.
 	// (POST /rootfolders)
 	AddRootFolder(w http.ResponseWriter, r *http.Request)
+	// Stop draining a root; restores accepts_new. Administrator only.
+	// (DELETE /rootfolders/{id}/drain)
+	StopDrainingRootFolder(w http.ResponseWriter, r *http.Request, id int64)
+	// Evacuate a root folder (ADR-51). Administrator only.
+	// (POST /rootfolders/{id}/drain)
+	DrainRootFolder(w http.ResponseWriter, r *http.Request, id int64)
 	// F6: paste a release title, see how it would score against a profile -- no candidate, no acquisition, no side effects.
 	// (POST /score/simulate)
 	SimulateScore(w http.ResponseWriter, r *http.Request)
@@ -1540,6 +1676,12 @@ func (_ Unimplemented) GetMe(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Every move job (ADR-51), newest first.
+// (GET /moves)
+func (_ Unimplemented) ListMoveJobs(w http.ResponseWriter, r *http.Request, params ListMoveJobsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // A page of people (ADR-32) -- first-class monitorable entities, not just credits.
 // (GET /people)
 func (_ Unimplemented) ListPeople(w http.ResponseWriter, r *http.Request, params ListPeopleParams) {
@@ -1573,6 +1715,18 @@ func (_ Unimplemented) ListRootFolders(w http.ResponseWriter, r *http.Request) {
 // Add a library root.
 // (POST /rootfolders)
 func (_ Unimplemented) AddRootFolder(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Stop draining a root; restores accepts_new. Administrator only.
+// (DELETE /rootfolders/{id}/drain)
+func (_ Unimplemented) StopDrainingRootFolder(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Evacuate a root folder (ADR-51). Administrator only.
+// (POST /rootfolders/{id}/drain)
+func (_ Unimplemented) DrainRootFolder(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2442,6 +2596,49 @@ func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request)
 	handler.ServeHTTP(w, r)
 }
 
+// ListMoveJobs operation middleware
+func (siw *ServerInterfaceWrapper) ListMoveJobs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMoveJobsParams
+
+	// ------------- Optional query parameter "reason" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "reason", r.URL.Query(), &params.Reason)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reason", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "state", r.URL.Query(), &params.State)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMoveJobs(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListPeople operation middleware
 func (siw *ServerInterfaceWrapper) ListPeople(w http.ResponseWriter, r *http.Request) {
 
@@ -2616,6 +2813,72 @@ func (siw *ServerInterfaceWrapper) AddRootFolder(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AddRootFolder(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StopDrainingRootFolder operation middleware
+func (siw *ServerInterfaceWrapper) StopDrainingRootFolder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StopDrainingRootFolder(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DrainRootFolder operation middleware
+func (siw *ServerInterfaceWrapper) DrainRootFolder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DrainRootFolder(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3405,6 +3668,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/me", wrapper.GetMe)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/moves", wrapper.ListMoveJobs)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/people", wrapper.ListPeople)
 	})
 	r.Group(func(r chi.Router) {
@@ -3421,6 +3687,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/rootfolders", wrapper.AddRootFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/rootfolders/{id}/drain", wrapper.StopDrainingRootFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/rootfolders/{id}/drain", wrapper.DrainRootFolder)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/score/simulate", wrapper.SimulateScore)

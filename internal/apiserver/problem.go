@@ -68,6 +68,9 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	case errors.Is(err, settings.ErrInUse):
 		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Still in use", err.Error())
 
+	case errors.Is(err, ErrNothingToDrain):
+		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Nothing to drain", err.Error())
+
 	case errors.Is(err, authz.ErrNoAccess):
 		// A route that skipped its middleware. It is a bug, not a client error,
 		// and the client learns nothing about it.

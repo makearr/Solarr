@@ -65,25 +65,42 @@ type RootFolders interface {
 	RootFolder(rootFolderID int64) (RootFolder, bool)
 }
 
+// DrainCompletion closes ADR-51's own drain lifecycle: once a DRAIN job's
+// files have all moved, the source root may hold nothing left, at which
+// point drain_state should advance from DRAINING to DRAINED ("holds no
+// library files and can be unmounted"). Optional -- nil leaves a DRAIN
+// job's own drain_state exactly where starting it put it, the same gap
+// live verification against a real container found (the state stayed
+// DRAINING forever with no caller ever checking back). internal/moverjob
+// itself has no way to answer "is this root now empty" (that needs
+// internal/library.Physical.PathsForRoot, which this package does not
+// import), so a cmd/medianexus adapter over internal/drainjob answers it.
+type DrainCompletion interface {
+	CompleteDrainIfEmpty(ctx context.Context, rootFolderID, moveJobID int64) error
+}
+
 // Job runs one move.apply execution: claim the next pending item, apply it,
 // record and unlink, repeat until the job's items are all terminal.
 type Job struct {
-	fsys     fsx.FS
-	moveJobs library.MoveJobs
-	physical library.Physical
-	roots    RootFolders
-	clock    clock.Clock
-	logger   *slog.Logger
+	fsys            fsx.FS
+	moveJobs        library.MoveJobs
+	physical        library.Physical
+	roots           RootFolders
+	drainCompletion DrainCompletion
+	clock           clock.Clock
+	logger          *slog.Logger
 }
 
-// Config is what a Job needs. Every field is required except Logger.
+// Config is what a Job needs. Every field is required except Logger and
+// DrainCompletion.
 type Config struct {
-	FS       fsx.FS
-	MoveJobs library.MoveJobs
-	Physical library.Physical
-	Roots    RootFolders
-	Clock    clock.Clock
-	Logger   *slog.Logger
+	FS              fsx.FS
+	MoveJobs        library.MoveJobs
+	Physical        library.Physical
+	Roots           RootFolders
+	DrainCompletion DrainCompletion
+	Clock           clock.Clock
+	Logger          *slog.Logger
 }
 
 // NewJob builds the handler.
@@ -94,7 +111,7 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		fsys: config.FS, moveJobs: config.MoveJobs, physical: config.Physical,
-		roots: config.Roots, clock: config.Clock, logger: logger,
+		roots: config.Roots, drainCompletion: config.DrainCompletion, clock: config.Clock, logger: logger,
 	}
 }
 
@@ -143,7 +160,21 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	}
 
 	j.logger.Info("move job finished", slog.Int64("move_job_id", moveJob.ID))
-	return j.moveJobs.Finish(ctx, moveJob.ID, library.MoveJobDone, j.clock.Now().Unix(), "")
+	if err := j.moveJobs.Finish(ctx, moveJob.ID, library.MoveJobDone, j.clock.Now().Unix(), ""); err != nil {
+		return err
+	}
+
+	if j.drainCompletion != nil && moveJob.Reason == string(mover.ReasonDrain) && moveJob.SourceRootID != nil {
+		if err := j.drainCompletion.CompleteDrainIfEmpty(ctx, *moveJob.SourceRootID, moveJob.ID); err != nil {
+			// The move itself already succeeded and is recorded -- failing
+			// the whole job over a drain_state bookkeeping error would only
+			// cause a pointless retry of already-finished work.
+			j.logger.Warn("drain completion check failed",
+				slog.Int64("move_job_id", moveJob.ID), slog.Int64("root_folder_id", *moveJob.SourceRootID),
+				slog.String("error", err.Error()))
+		}
+	}
+	return nil
 }
 
 // applyItem moves one file: locate its current path, copy/verify or rename
