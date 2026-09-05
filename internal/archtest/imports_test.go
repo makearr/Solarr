@@ -92,6 +92,13 @@ var allowedInternalImports = map[string][]string{
 	// the caller already fetched, no I/O and no settings.db of its own --
 	// the same separation internal/score keeps from internal/settings.
 	"internal/placement": {},
+	// ADR-51's move engine. Plan is pure like internal/placement's own
+	// Resolve, reusing placement.RootCandidate rather than a second,
+	// independent copy of the same root-policy shape (this project's own
+	// established lesson: two copies of one policy shape is how they
+	// drift). Apply (the resumable job) will need fsx/clock/jobs/library
+	// too, added when that lands.
+	"internal/mover": {"internal/placement"},
 	// ADR-48's import inspection: walk, classify, group. No media-type
 	// knowledge and no database of its own (ADR-23) -- tag reading and
 	// segment plausibility are both injected functions, so this never
