@@ -145,8 +145,11 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, original_path, quarantine_path, root_folder_id, media_object_id,
           acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at;
 
--- name: MarkQuarantineRestored :exec
-UPDATE quarantine SET restored_at = ? WHERE id = ?;
+-- :execrows so a caller can tell "already restored" (0 rows) from "restored
+-- just now" (1 row) without a separate read first -- nothing calls this yet,
+-- so tightening it here does not touch a working caller.
+-- name: MarkQuarantineRestored :execrows
+UPDATE quarantine SET restored_at = ? WHERE id = ? AND restored_at IS NULL;
 
 -- name: DeleteQuarantineEntry :exec
 DELETE FROM quarantine WHERE id = ?;
@@ -162,6 +165,33 @@ SELECT id, original_path, quarantine_path, root_folder_id, media_object_id,
        acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
 FROM quarantine
 WHERE restored_at IS NULL AND expires_at <= ? ORDER BY expires_at LIMIT ?;
+
+-- name: GetQuarantine :one
+SELECT id, original_path, quarantine_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
+FROM quarantine WHERE id = ?;
+
+-- The global counterpart to QuarantinedBytesForRoot, for the config.max_bytes
+-- guard (section 10.8) -- a budget across every root, not one at a time.
+-- name: SumQuarantinedBytes :one
+SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM quarantine
+WHERE restored_at IS NULL;
+
+-- Oldest-first eviction order for the max_bytes guard -- distinct from
+-- ListExpiredQuarantine, which is age-of-expiry, not age-of-entry.
+-- name: ListActiveQuarantineOldestFirst :many
+SELECT id, original_path, quarantine_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
+FROM quarantine
+WHERE restored_at IS NULL ORDER BY quarantined_at LIMIT ?;
+
+-- The per-root counterpart, for the max_percent_of_root guard.
+-- name: ListActiveQuarantineByRootOldestFirst :many
+SELECT id, original_path, quarantine_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
+FROM quarantine
+WHERE restored_at IS NULL AND root_folder_id = sqlc.arg(root_folder_id)
+ORDER BY quarantined_at LIMIT sqlc.arg(limit);
 
 -- name: RecordAcquiredFile :one
 INSERT INTO acquisition_file (acquisition_id, source_path, media_object_id,

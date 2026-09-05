@@ -192,9 +192,10 @@ func TestRestoringReleasesTheHeldBytes(t *testing.T) {
 		return err
 	})
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
-		return q.MarkQuarantineRestored(ctx, librarydb.MarkQuarantineRestoredParams{
+		_, err := q.MarkQuarantineRestored(ctx, librarydb.MarkQuarantineRestoredParams{
 			ID: entry.ID, RestoredAt: sql.NullInt64{Int64: 50, Valid: true},
 		})
+		return err
 	})
 
 	held, err := queries.QuarantinedBytesForRoot(t.Context(),

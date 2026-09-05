@@ -276,6 +276,31 @@ func (q *Queries) GetCandidate(ctx context.Context, id int64) (Candidate, error)
 	return i, err
 }
 
+const getQuarantine = `-- name: GetQuarantine :one
+SELECT id, original_path, quarantine_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
+FROM quarantine WHERE id = ?
+`
+
+func (q *Queries) GetQuarantine(ctx context.Context, id int64) (Quarantine, error) {
+	row := q.db.QueryRowContext(ctx, getQuarantine, id)
+	var i Quarantine
+	err := row.Scan(
+		&i.ID,
+		&i.OriginalPath,
+		&i.QuarantinePath,
+		&i.RootFolderID,
+		&i.MediaObjectID,
+		&i.AcquisitionID,
+		&i.Reason,
+		&i.SizeBytes,
+		&i.QuarantinedAt,
+		&i.ExpiresAt,
+		&i.RestoredAt,
+	)
+	return i, err
+}
+
 const isBlocklisted = `-- name: IsBlocklisted :one
 SELECT COUNT(*) AS blocked FROM blocklisted_release
 WHERE (expires_at IS NULL OR expires_at > ?1)
@@ -380,6 +405,99 @@ func (q *Queries) ListActiveAcquisitions(ctx context.Context) ([]Acquisition, er
 			&i.LastError,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listActiveQuarantineByRootOldestFirst = `-- name: ListActiveQuarantineByRootOldestFirst :many
+SELECT id, original_path, quarantine_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
+FROM quarantine
+WHERE restored_at IS NULL AND root_folder_id = ?1
+ORDER BY quarantined_at LIMIT ?2
+`
+
+type ListActiveQuarantineByRootOldestFirstParams struct {
+	RootFolderID sql.NullInt64
+	Limit        int64
+}
+
+// The per-root counterpart, for the max_percent_of_root guard.
+func (q *Queries) ListActiveQuarantineByRootOldestFirst(ctx context.Context, arg ListActiveQuarantineByRootOldestFirstParams) ([]Quarantine, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveQuarantineByRootOldestFirst, arg.RootFolderID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Quarantine{}
+	for rows.Next() {
+		var i Quarantine
+		if err := rows.Scan(
+			&i.ID,
+			&i.OriginalPath,
+			&i.QuarantinePath,
+			&i.RootFolderID,
+			&i.MediaObjectID,
+			&i.AcquisitionID,
+			&i.Reason,
+			&i.SizeBytes,
+			&i.QuarantinedAt,
+			&i.ExpiresAt,
+			&i.RestoredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listActiveQuarantineOldestFirst = `-- name: ListActiveQuarantineOldestFirst :many
+SELECT id, original_path, quarantine_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
+FROM quarantine
+WHERE restored_at IS NULL ORDER BY quarantined_at LIMIT ?
+`
+
+// Oldest-first eviction order for the max_bytes guard -- distinct from
+// ListExpiredQuarantine, which is age-of-expiry, not age-of-entry.
+func (q *Queries) ListActiveQuarantineOldestFirst(ctx context.Context, limit int64) ([]Quarantine, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveQuarantineOldestFirst, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Quarantine{}
+	for rows.Next() {
+		var i Quarantine
+		if err := rows.Scan(
+			&i.ID,
+			&i.OriginalPath,
+			&i.QuarantinePath,
+			&i.RootFolderID,
+			&i.MediaObjectID,
+			&i.AcquisitionID,
+			&i.Reason,
+			&i.SizeBytes,
+			&i.QuarantinedAt,
+			&i.ExpiresAt,
+			&i.RestoredAt,
 		); err != nil {
 			return nil, err
 		}
@@ -578,8 +696,8 @@ func (q *Queries) ListImportDecisionsNeedingReview(ctx context.Context, limit in
 	return items, nil
 }
 
-const markQuarantineRestored = `-- name: MarkQuarantineRestored :exec
-UPDATE quarantine SET restored_at = ? WHERE id = ?
+const markQuarantineRestored = `-- name: MarkQuarantineRestored :execrows
+UPDATE quarantine SET restored_at = ? WHERE id = ? AND restored_at IS NULL
 `
 
 type MarkQuarantineRestoredParams struct {
@@ -587,9 +705,15 @@ type MarkQuarantineRestoredParams struct {
 	ID         int64
 }
 
-func (q *Queries) MarkQuarantineRestored(ctx context.Context, arg MarkQuarantineRestoredParams) error {
-	_, err := q.db.ExecContext(ctx, markQuarantineRestored, arg.RestoredAt, arg.ID)
-	return err
+// :execrows so a caller can tell "already restored" (0 rows) from "restored
+// just now" (1 row) without a separate read first -- nothing calls this yet,
+// so tightening it here does not touch a working caller.
+func (q *Queries) MarkQuarantineRestored(ctx context.Context, arg MarkQuarantineRestoredParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markQuarantineRestored, arg.RestoredAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const provenanceForObject = `-- name: ProvenanceForObject :many
@@ -926,6 +1050,20 @@ func (q *Queries) SetDownloadProgress(ctx context.Context, arg SetDownloadProgre
 		arg.ID,
 	)
 	return err
+}
+
+const sumQuarantinedBytes = `-- name: SumQuarantinedBytes :one
+SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM quarantine
+WHERE restored_at IS NULL
+`
+
+// The global counterpart to QuarantinedBytesForRoot, for the config.max_bytes
+// guard (section 10.8) -- a budget across every root, not one at a time.
+func (q *Queries) SumQuarantinedBytes(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, sumQuarantinedBytes)
+	var held int64
+	err := row.Scan(&held)
+	return held, err
 }
 
 const upsertCandidate = `-- name: UpsertCandidate :one

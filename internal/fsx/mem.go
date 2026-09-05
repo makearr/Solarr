@@ -25,6 +25,7 @@ type Mem struct {
 
 	reflinkSupported  bool
 	hardlinkSupported bool
+	renameSupported   bool
 
 	diskTotalBytes int64
 	diskFreeBytes  int64
@@ -68,6 +69,7 @@ func NewMem(c clock.Clock) *Mem {
 		nodes:             make(map[string]*memNode),
 		reflinkSupported:  true,
 		hardlinkSupported: true,
+		renameSupported:   true,
 		diskTotalBytes:    defaultDiskTotalBytes,
 		diskFreeBytes:     defaultDiskFreeBytes,
 	}
@@ -106,6 +108,15 @@ func (m *Mem) SetHardlinkSupported(supported bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.hardlinkSupported = supported
+}
+
+// SetRenameSupported switches Rename's own cross-device behaviour off, standing
+// in for the same "two different filesystems" case Link already simulates --
+// section 10.8's quarantine refuses to cross one rather than silently copying.
+func (m *Mem) SetRenameSupported(supported bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.renameSupported = supported
 }
 
 func (m *Mem) now() time.Time { return m.clock.Now() }
@@ -291,6 +302,9 @@ func (m *Mem) ReadDir(path string) ([]DirEntry, error) {
 func (m *Mem) Rename(oldPath, newPath string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if !m.renameSupported {
+		return pathError("rename", newPath, syscall.EXDEV)
+	}
 	from := filepath.Clean(oldPath)
 	to, err := m.resolveLocked(newPath, 0)
 	if err != nil {

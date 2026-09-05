@@ -65,6 +65,22 @@ func TestMem_LinkAcrossFilesystemsIsEXDEV(t *testing.T) {
 	}
 }
 
+func TestMem_RenameAcrossFilesystemsIsEXDEV(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	if err := fsys.MkdirAll("/library", 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	writeFile(t, fsys, "/library/a.flac", "audio")
+	fsys.SetRenameSupported(false)
+
+	if err := fsys.Rename("/library/a.flac", "/library/b.flac"); !errors.Is(err, syscall.EXDEV) {
+		t.Errorf("Rename = %v, want EXDEV — quarantine's own cross-device case (section 10.8)", err)
+	}
+	if _, err := fsys.Stat("/library/a.flac"); err != nil {
+		t.Errorf("a failed rename must leave the source alone: %v", err)
+	}
+}
+
 func TestMem_SymlinkLoopIsELOOPNotAHang(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
 	if err := fsys.MkdirAll("/library", 0o755); err != nil {

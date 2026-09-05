@@ -153,6 +153,7 @@ type Querier interface {
 	GetPathByLocation(ctx context.Context, arg GetPathByLocationParams) (LibraryPath, error)
 	GetPerson(ctx context.Context, id int64) (Person, error)
 	GetPersonByExternalID(ctx context.Context, arg GetPersonByExternalIDParams) (Person, error)
+	GetQuarantine(ctx context.Context, id int64) (Quarantine, error)
 	GetRequest(ctx context.Context, id int64) (Request, error)
 	// Per-root sweep progress (section 10.4). Column lists follow table order, or sqlc
 	// stops reusing models.
@@ -185,6 +186,11 @@ type Querier interface {
 	ListAcquiredFiles(ctx context.Context, acquisitionID int64) ([]AcquisitionFile, error)
 	// Startup reconciliation polls every non-terminal acquisition (section 10.9).
 	ListActiveAcquisitions(ctx context.Context) ([]Acquisition, error)
+	// The per-root counterpart, for the max_percent_of_root guard.
+	ListActiveQuarantineByRootOldestFirst(ctx context.Context, arg ListActiveQuarantineByRootOldestFirstParams) ([]Quarantine, error)
+	// Oldest-first eviction order for the max_bytes guard -- distinct from
+	// ListExpiredQuarantine, which is age-of-expiry, not age-of-entry.
+	ListActiveQuarantineOldestFirst(ctx context.Context, limit int64) ([]Quarantine, error)
 	// The person detail page's own need: every alias this person is known by.
 	ListAliasesForPerson(ctx context.Context, personID int64) ([]string, error)
 	// Every credit anywhere under a work, at any scope. Coverage counts use this;
@@ -311,7 +317,10 @@ type Querier interface {
 	// Bounded per Invariant 2: the caller loops this until a pass affects zero rows,
 	// never one UPDATE over the whole root.
 	MarkLibraryPathsMissing(ctx context.Context, arg MarkLibraryPathsMissingParams) (int64, error)
-	MarkQuarantineRestored(ctx context.Context, arg MarkQuarantineRestoredParams) error
+	// :execrows so a caller can tell "already restored" (0 rows) from "restored
+	// just now" (1 row) without a separate read first -- nothing calls this yet,
+	// so tightening it here does not touch a working caller.
+	MarkQuarantineRestored(ctx context.Context, arg MarkQuarantineRestoredParams) (int64, error)
 	MarkRequestFulfilled(ctx context.Context, id int64) (int64, error)
 	NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error)
 	// oldest_searched, the default hunt mode (section 9.3).
@@ -399,6 +408,9 @@ type Querier interface {
 	// A sweep that starts records only that it started: the watermark must not move
 	// until one finishes, or an interrupted scan would look complete.
 	StartScan(ctx context.Context, arg StartScanParams) error
+	// The global counterpart to QuarantinedBytesForRoot, for the config.max_bytes
+	// guard (section 10.8) -- a budget across every root, not one at a time.
+	SumQuarantinedBytes(ctx context.Context) (int64, error)
 	// Re-observing a known path proves it is still present, and clears any earlier
 	// missing mark (section 10.4): a file coming back is exactly the case this exists
 	// for.
