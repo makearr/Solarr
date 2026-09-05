@@ -1,7 +1,7 @@
 # Changelog
 
-Build numbers advance on each successful image build; see
-`documentation/versioning.md`.
+Version is `year.month.release.build`; see `documentation/versioning.md`. Entries at and
+below `0.0.x` predate that scheme and are left as history, unconverted.
 
 ## 0.0.22 — 2026-09-04
 

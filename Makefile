@@ -42,10 +42,34 @@ RUN_NODE_ROOT := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) \
 .PHONY: help verify build test race bench bench-drivers lint vet fmt fmt-check sqlc sqlc-check \
         api web web-test web-dev image image-local builder binfmt milestone version cache-init clean-cache deps tidy
 
-VERSION     := $(shell tr -d '[:space:]' < VERSION 2>/dev/null || echo 0.0.0)
+# Version is year.month.release.build (documentation/versioning.md). Never parse a
+# component as a decimal integer for display -- the month is zero-padded and must stay so.
+VERSION     := $(shell tr -d '[:space:]' < VERSION 2>/dev/null || echo 0.0.0.0)
+VERSION_PARTS := $(subst ., ,$(VERSION))
+CUR_YEAR    := $(word 1,$(VERSION_PARTS))
+CUR_MONTH   := $(word 2,$(VERSION_PARTS))
+CUR_RELEASE := $(word 3,$(VERSION_PARTS))
+CUR_BUILD   := $(word 4,$(VERSION_PARTS))
+TODAY_YEAR  := $(shell date -u +%y)
+TODAY_MONTH := $(shell date -u +%m)
+# make image's next version: same month means release+1, a new month resets release to 1.
+# build advances unconditionally -- it is the all-time count of successful images, never reset.
+ifeq ($(TODAY_YEAR)-$(TODAY_MONTH),$(CUR_YEAR)-$(CUR_MONTH))
+NEXT_RELEASE := $(shell expr $(CUR_RELEASE) + 1)
+else
+NEXT_RELEASE := 1
+endif
+NEXT_BUILD    := $(shell expr $(CUR_BUILD) + 1)
+NEXT_VERSION  := $(TODAY_YEAR).$(TODAY_MONTH).$(NEXT_RELEASE).$(NEXT_BUILD)
+# Only trailing whitespace is trimmed -- a milestone name legitimately contains
+# internal spaces ("music, usenet"), unlike VERSION's single unspaced token.
+MILESTONE   := $(shell head -n1 MILESTONE 2>/dev/null | sed -e 's/[[:space:]]*$$//')
 COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_DATE  := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-LDFLAGS     := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)
+# -ldflags's value is itself whitespace-split, so a milestone name containing a
+# space ("music, usenet") needs its own quoting or the build fails outright.
+LDFLAGS     := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE) \
+               -X 'main.milestone=$(MILESTONE)'
 IMAGE       ?= ghcr.io/makearr/medianexus
 PLATFORMS   ?= linux/amd64,linux/arm64
 ARCH        := $(shell uname -m | sed -e s/x86_64/amd64/ -e s/aarch64/arm64/)
@@ -144,8 +168,8 @@ web-dev:    ## Vite dev server on :5173, proxying the API
 
 ## ---- versioning: builds advance BUILD, milestones advance MINOR ----
 ## Full scheme: documentation/versioning.md
-version:    ## Print the current version
-	@echo $(VERSION)
+version:    ## Print the current version (and milestone, if named)
+	@echo "$(VERSION)$(if $(MILESTONE), -- $(MILESTONE),)"
 
 image:      ## Release build: multi-arch, push to ghcr, bump, changelog, tag, push, release
 	@test -f Dockerfile || { echo "no Dockerfile yet"; exit 1; }
@@ -161,10 +185,10 @@ image:      ## Release build: multi-arch, push to ghcr, bump, changelog, tag, pu
 	@git diff --quiet && git diff --cached --quiet || 	  { echo "working tree is dirty — commit first, or use 'make image-local'"; exit 1; }
 	@echo "$(TOKEN)" | docker login ghcr.io -u makearr --password-stdin
 	docker buildx build --builder $(BUILDER) --push --platform $(PLATFORMS) \
-	  --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) \
-	  --build-arg BUILD_DATE=$(BUILD_DATE) \
-	  -t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
-	@./scripts/release.sh
+	  --build-arg VERSION=$(NEXT_VERSION) --build-arg COMMIT=$(COMMIT) \
+	  --build-arg BUILD_DATE=$(BUILD_DATE) --build-arg MILESTONE="$(MILESTONE)" \
+	  -t $(IMAGE):$(NEXT_VERSION) -t $(IMAGE):$(TODAY_YEAR).$(TODAY_MONTH) -t $(IMAGE):latest .
+	@NEXT_VERSION=$(NEXT_VERSION) MILESTONE="$(MILESTONE)" ./scripts/release.sh
 
 image-local: ## Local single-arch build: allows a dirty tree, no bump, no push
 	@test -f Dockerfile || { echo "no Dockerfile yet"; exit 1; }
@@ -184,10 +208,10 @@ image-local: ## Local single-arch build: allows a dirty tree, no bump, no push
 	fi
 	@echo "built $(IMAGE):dev - version held at $(VERSION)"
 
-milestone:  ## Advance to the next milestone: MINOR+1, BUILD reset to 0
-	@awk -F. '{printf "%s.%d.0\n", $$1, $$2+1}' VERSION > VERSION.tmp && mv VERSION.tmp VERSION
-	@echo "milestone: $(VERSION) -> $$(cat VERSION)"
-	@echo "tag it:  git tag v$$(cat VERSION) && git push origin v$$(cat VERSION)"
+milestone:  ## Name the milestone shown beside the version: make milestone NAME="music, usenet"
+	@test -n "$(NAME)" || { echo 'usage: make milestone NAME="name"'; exit 1; }
+	@echo "$(NAME)" > MILESTONE
+	@echo "milestone: $(NAME)"
 
 builder:    ## Create the multi-arch builder if it does not exist
 	@docker buildx inspect $(BUILDER) >/dev/null 2>&1 || { \

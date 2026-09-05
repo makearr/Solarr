@@ -17,9 +17,12 @@ import (
 
 // Injected with -ldflags -X at build time; see documentation/versioning.md (§13).
 var (
-	version   = "0.0.0-dev"
+	version   = "0.0.0.0-dev"
 	commit    = "unknown"
 	buildDate = "unknown"
+	// milestone is a name, not a version component (documentation/versioning.md) --
+	// set by `make milestone NAME="name"` and empty until the user names one.
+	milestone = ""
 )
 
 // defaultConfigPath matches the single /config volume the image expects (§20.2).
@@ -46,7 +49,11 @@ func run(args []string, out, errOut io.Writer) error {
 
 	switch command {
 	case "version":
-		_, err := fmt.Fprintf(out, "medianexus %s\ncommit     %s\nbuilt      %s\n", version, commit, buildDate)
+		label := version
+		if milestone != "" {
+			label = fmt.Sprintf("%s -- %s", version, milestone)
+		}
+		_, err := fmt.Fprintf(out, "medianexus %s\ncommit     %s\nbuilt      %s\n", label, commit, buildDate)
 		return err
 	case "config":
 		return runConfig(args[1:], out, errOut)

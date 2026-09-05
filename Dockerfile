@@ -22,9 +22,10 @@ FROM --platform=$BUILDPLATFORM golang:1 AS build
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
-ARG VERSION=0.0.0
+ARG VERSION=0.0.0.0
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
+ARG MILESTONE=
 # A fork overrides this: documentation/licence-compliance.md.
 ARG SOURCE_URL=https://github.com/makearr/MediaNexus
 
@@ -44,6 +45,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
         -X main.version=${VERSION} \
         -X main.commit=${COMMIT} \
         -X main.buildDate=${BUILD_DATE} \
+        -X 'main.milestone=${MILESTONE}' \
         -X main.sourceURL=${SOURCE_URL}" \
       -o /out/medianexus ./cmd/medianexus
 

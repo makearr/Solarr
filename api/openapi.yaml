@@ -1168,7 +1168,13 @@ components:
       type: object
       required: [version, commit, build_date, source_url, license, sqlite_driver]
       properties:
-        version: { type: string, example: "0.2.17" }
+        version: { type: string, example: "26.09.1.35" }
+        milestone:
+          type: string
+          example: "music, usenet"
+          description: >-
+            A name, not a version component (documentation/versioning.md). Empty
+            until set with `make milestone NAME="name"`.
         commit:
           type: string
           description: >-

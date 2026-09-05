@@ -11,7 +11,10 @@ import (
 
 // BuildInfo is what the About endpoint reports (section 13).
 type BuildInfo struct {
-	Version   string `json:"version"`
+	Version string `json:"version"`
+	// Milestone is a name, not a version component, and empty until named
+	// (documentation/versioning.md) -- set by `make milestone NAME="name"`.
+	Milestone string `json:"milestone,omitempty"`
 	Commit    string `json:"commit"`
 	BuildDate string `json:"build_date"`
 	// SourceURL points at the Corresponding Source for *this* build (section 13).

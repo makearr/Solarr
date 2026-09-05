@@ -173,6 +173,9 @@ type BuildInfo struct {
 	Commit  string `json:"commit"`
 	License string `json:"license"`
 
+	// Milestone A name, not a version component (documentation/versioning.md). Empty until set with `make milestone "name"`.
+	Milestone *string `json:"milestone,omitempty"`
+
 	// ServerTime The server's wall clock at the moment of the response. Schedules, air dates and retention run on this clock, not the viewer's, and on a remote host the two routinely differ.
 	ServerTime *time.Time `json:"server_time,omitempty"`
 

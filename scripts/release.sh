@@ -18,10 +18,14 @@ token() {
 prev_version=$(tr -d '[:space:]' < VERSION)
 prev_tag=$(git tag -l 'v*' --sort=-v:refname | head -1)
 
-# ── bump BUILD ────────────────────────────────────────────────────────────────
-new_version=$(awk -F. '{printf "%s.%s.%d", $1, $2, $3+1}' VERSION)
+# ── the next version and milestone name are computed by the Makefile, which already
+# built and pushed the image tagged with them — this script only records that fact ──
+new_version="${NEXT_VERSION:?NEXT_VERSION must be set by the Makefile}"
+milestone="${MILESTONE:-}"
 echo "$new_version" > VERSION
 tag="v${new_version}"
+title="${new_version}"
+[ -n "$milestone" ] && title="${new_version} — ${milestone}"
 
 # ── changelog: commits since the previous tag ─────────────────────────────────
 range=""; [ -n "$prev_tag" ] && range="${prev_tag}..HEAD"
@@ -37,7 +41,7 @@ if [ -f "$CHANGELOG" ]; then
   { head -n 4 "$CHANGELOG"; echo; echo "$entry"; tail -n +5 "$CHANGELOG"; } > "$CHANGELOG.tmp"
   mv "$CHANGELOG.tmp" "$CHANGELOG"
 else
-  printf '# Changelog\n\nBuild numbers advance on each successful image build; see\n`documentation/versioning.md`.\n\n%s\n' "$entry" > "$CHANGELOG"
+  printf '# Changelog\n\nVersion is `year.month.release.build`; see\n`documentation/versioning.md`.\n\n%s\n' "$entry" > "$CHANGELOG"
 fi
 
 # ── commit, tag, push ─────────────────────────────────────────────────────────
@@ -47,7 +51,7 @@ git commit -q -m "Build ${new_version}
 Image ghcr.io/makearr/medianexus:${new_version} built and pushed for
 linux/amd64 and linux/arm64 from $(git rev-parse --short HEAD)."
 
-git tag -a "$tag" -m "Build ${new_version}
+git tag -a "$tag" -m "Build ${title}
 
 ${subjects}"
 
@@ -57,13 +61,13 @@ git push -q "https://x-access-token:${TOKEN}@${REMOTE}" HEAD:main "$tag" ||
 
 # ── GitHub release ────────────────────────────────────────────────────────────
 body=$(printf '%s\n\n---\n\nImage: `ghcr.io/makearr/medianexus:%s`\nPlatforms: linux/amd64, linux/arm64' "$subjects" "$new_version")
-code=$(python3 - "$tag" "$new_version" "$body" <<'PY'
+code=$(python3 - "$tag" "$title" "$body" <<'PY'
 import json, os, sys, urllib.request, re
-tag, ver, body = sys.argv[1], sys.argv[2], sys.argv[3]
+tag, title, body = sys.argv[1], sys.argv[2], sys.argv[3]
 tok = re.search(r'ghp_[A-Za-z0-9]+', open('private/secrets.md').read()).group(0) \
       if not os.environ.get('GITHUB_TOKEN') else os.environ['GITHUB_TOKEN']
-payload = json.dumps({"tag_name": tag, "name": f"Build {ver}", "body": body,
-                      "draft": False, "prerelease": ver.startswith("0.")}).encode()
+payload = json.dumps({"tag_name": tag, "name": title, "body": body,
+                      "draft": False, "prerelease": False}).encode()
 req = urllib.request.Request("https://api.github.com/repos/makearr/MediaNexus/releases",
         data=payload, method="POST",
         headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"})

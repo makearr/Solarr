@@ -371,7 +371,7 @@ func (p *process) startServer(ctx context.Context) error {
 		Port:    p.config.Server.Port,
 		BaseURL: p.config.Server.BaseURL,
 		Build: apiserver.BuildInfo{
-			Version: version, Commit: commit, BuildDate: buildDate,
+			Version: version, Milestone: milestone, Commit: commit, BuildDate: buildDate,
 			SourceURL: sourceURL, License: license,
 			SQLiteDriver: store.DriverName(),
 		},

@@ -731,8 +731,13 @@ export interface components {
         /** @enum {string} */
         ProblemType: "not-found" | "forbidden" | "conflict" | "bad-request" | "method-not-allowed" | "unavailable" | "internal" | "unauthorized";
         BuildInfo: {
-            /** @example 0.2.17 */
+            /** @example 26.09.1.35 */
             version: string;
+            /**
+             * @description A name, not a version component (documentation/versioning.md). Empty until set with `make milestone "name"`.
+             * @example music, usenet
+             */
+            milestone?: string;
             /** @description Reported as `unknown` rather than a plausible-looking wrong value when it could not be determined; the source link depends on it. */
             commit: string;
             /** Format: date-time */

@@ -1,37 +1,50 @@
 # Versioning
 
 ```text
-MAJOR . MINOR . BUILD
-  0   .   2   .  17
-  │       │       └── successful Docker builds since this milestone
-  │       └────────── milestone: something that works. Not a digit -- 0.9 is
-  │                   followed by 0.10, then 0.11, for as long as it takes
-  └────────────────── advanced only when the author says so. Never automatic
+YEAR . MONTH . RELEASE . BUILD
+ 26  .  09   .    1    .  35
+ │       │        │        └── build   never resets, ever. Count of successful images, all time
+ │       │        └─────────── release resets to 1 on the first release of each month
+ │       └──────────────────── month   zero-padded, always two digits
+ └──────────────────────────── year    two digits
 ```
 
-## BUILD — successful Docker builds
+Both `release` and `build` advance on every successful `make image`. `release` is simply the
+monthly-scoped count: the first successful build in a calendar month is release 1, the next is
+release 2, and so on until the month rolls over. `build` is the same all-time counter it always
+was, just relabelled — it never resets.
 
-Advances **only** when `make image` completes successfully. Commits do not change it, so the
-number means "this many images have been produced", not "this much has been typed".
+**There is no MAJOR or MINOR, and no `1.0`.** Milestones survive as a **name**, not a version
+number (see below); nothing in this scheme is ever "reached".
+
+**The month is always two digits.** `year`, `month`, `release` and `build` are stored and
+compared as four separate parts, never as one parsed decimal — treating `.09` as `9` loses the
+padding and breaks the string format.
+
+## BUILD and RELEASE — advanced only by `make image`
+
+Both advance **only** when `make image` completes successfully. Commits do not change them, so
+the numbers mean "this many images have been produced" and "this many this month", not "this
+much has been typed".
 
 A failed build leaves the version untouched.
 
 ### What `make image` does
 
 ```text
-1  refuse if the working tree is dirty          ← see below
-2  docker login ghcr.io
-3  buildx --push, linux/amd64 + linux/arm64
-4  bump BUILD in VERSION
+1  refuse if the working tree is dirty                    ← see below
+2  compute the next version from today's date + VERSION   ← same month: release+1, new month: release=1; build+1 always
+3  docker login ghcr.io
+4  buildx --push, linux/amd64 + linux/arm64, tagged with the next version, YEAR.MONTH, and latest
 5  prepend a CHANGELOG.md entry — commits since the previous tag
 6  commit VERSION + CHANGELOG.md
 7  annotated tag v<version>
 8  git push main + tag
-9  create the GitHub release, body = the changelog entry
+9  create the GitHub release, body = the changelog entry, title includes the milestone name if set
 ```
 
-Everything after step 3 runs only if the build and push succeeded, so a failed build leaves
-the repository untouched.
+Everything after step 4 runs only if the build and push succeeded, so a failed build leaves the
+repository untouched.
 
 ### Why a dirty tree is refused
 
@@ -51,53 +64,32 @@ release.
 |---|---|
 | `CHANGELOG.md` | One section per build, newest first, in the repository |
 | Annotated git tag | The same entry, attached to `v<version>` |
-| **GitHub release** | Published per build, body is the changelog entry plus the image reference and platforms |
+| **GitHub release** | Published per build, body is the changelog entry plus the image reference, platforms, and the milestone name if one is set |
 
-Releases below `1.0.0` are marked as pre-releases.
+## Milestones — names, not numbers
 
-## MINOR — milestones
+`make milestone NAME="music, usenet"` records a name in the `MILESTONE` file at the repository root,
+sitting beside `VERSION`. It does not change any version component. The name shows up:
 
-Advanced by hand with `make milestone`, which increments MINOR and resets BUILD to 0. Each
-milestone is **something that works**, not something that is written.
+- In the GitHub release title: `26.09.3 — music, usenet`
+- On the About page and `/api/v1/about`, next to the version, when one is set
+- In `medianexus version`'s CLI output
 
-| Version | Milestone |
-|---------|-----------|
-| `0.0.x` | Pre-milestone — foundation, store, jobs, API skeleton |
-| `0.1.x` | **Working web interface** |
-| `0.2.x` | **Working music library, usenet only** |
-| `0.3.x` | Working TV library |
-| `0.4.x` | Working movie library |
-| `0.5.x` | Working audiobook library |
-| `0.6.x` | Working book library |
-| `0.7.x` | Working adult library |
-| `0.8.x` | Working comic library |
-| `0.9.x` | Working ROM library |
-| `0.10.x`, `0.11.x`, ... | Whatever comes after. **MINOR is a counter, not a digit** |
-
-**MINOR does not stop at 9.** The nine library types happen to fit `0.1` to `0.9`, which is a
-coincidence of counting and not a plan. Work continues past them -- `0.10.x`, `0.11.x` and
-onwards -- and `make milestone` increments arithmetically, so `0.9.14` becomes `0.10.0`.
-
-**`1.0.0` is not reached by finishing a list.** No milestone, no completed roadmap and no
-amount of working library types advances MAJOR. It happens when the author decides it happens,
-and nothing in the tooling can do it -- there is deliberately no `make major`.
-
-**"Working" is a high bar.** A library type reaches its milestone when it can identify,
-acquire, import and present that media end to end — not when its module compiles.
-
-**`0.2.x` says "usenet only" because it has to.** Torrent support is stage 17 and music is
-predominantly on torrents, so a milestone claiming a working music library without that
-qualification would overstate what it does. The stage order is a deliberate risk and is not
-changed by this; only the claim is. Stage 17 is M effort and can move at any point, and the
-qualification comes off the milestone when it does.
+A milestone is a claim that **something works**, named by the person deciding it works — not a
+counter, and nothing advances it automatically. Naming a new milestone (or renaming the current
+one) simply overwrites `MILESTONE`; there is no history of past names beyond what git already
+keeps for the file.
 
 ## What the version is not
 
 - Not a measure of effort or commits.
-- Not automatically semver-meaningful below `1.0` — the API is unstable until then.
-- **Not a progress bar.** `0.9` does not mean "90% done", and it is not one step from `1.0`.
-- Not sortable as text. `0.10.0` is newer than `0.9.9` but sorts before it in any plain string
-  comparison; use `sort -V` and git's own tag ordering, never `sort`.
+- Not semver. There is no API-stability contract implied by any component.
+- **Not a progress bar.** A higher `release` does not mean "more done this month" — some months
+  ship once, some ship ten times, depending on what landed.
+- Sortable as text **only because every component is fixed-width or left-padded to compare
+  correctly within its own field** (`26.09` before `26.10`, etc.) — still prefer `sort -V` and
+  git's own tag ordering over a plain string comparison, since `release` and `build` are not
+  zero-padded.
 
 ## Injecting it into the binary
 
@@ -106,8 +98,8 @@ source obligation is met (see `licence-compliance.md`):
 
 ```bash
 -ldflags "-X main.version=$(cat VERSION) -X main.commit=$(git rev-parse --short HEAD) \
-          -X main.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          -X main.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.milestone=$(cat MILESTONE)"
 ```
 
 A build with an unknown commit reports it as unknown rather than showing a plausible-looking
-wrong value.
+wrong value. `milestone` is simply empty when `MILESTONE` is empty or absent.
