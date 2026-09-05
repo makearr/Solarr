@@ -134,7 +134,8 @@ var allowedInternalImports = map[string][]string{
 	"internal/music": {
 		"internal/artwork", "internal/clock", "internal/fsx", "internal/httpx",
 		"internal/inspect", "internal/jobs", "internal/library", "internal/match",
-		"internal/mediatool", "internal/model", "internal/musicbrainz", "internal/naming",
+		"internal/mediatool", "internal/model", "internal/mover", "internal/moverjob",
+		"internal/musicbrainz", "internal/naming", "internal/placement",
 		"internal/parse", "internal/scan", "internal/settings", "internal/wikidata",
 	},
 	"internal/paginate": {},
