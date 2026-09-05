@@ -4,6 +4,7 @@ import { ShieldAlert, ShieldCheck } from "lucide-react";
 
 import { api } from "@/api/client";
 import { useAuthPolicy, useSetAuthRequired } from "@/lib/useAuthPolicy";
+import { Categories } from "./Categories";
 import { Users } from "./Users";
 
 /** Settings sections in the order they matter to someone setting the thing up.
@@ -11,7 +12,6 @@ import { Users } from "./Users";
  *  scaffolding is honest about being scaffolding rather than looking broken. */
 const SECTIONS = [
   { id: "storage", title: "Storage", blurb: "Library roots, placement and free-space limits." },
-  { id: "categories", title: "Categories", blurb: "The policy boundary for naming, profiles and access.", stage: 3 },
   { id: "profiles", title: "Quality profiles", blurb: "Hard gates, tier order and scoring.", stage: 4 },
   { id: "indexers", title: "Indexers", blurb: "Newznab and Torznab sources, and their egress.", stage: 5 },
   { id: "downloaders", title: "Download clients", blurb: "Usenet, torrent and direct downloads.", stage: 5 },
@@ -52,6 +52,8 @@ export function Settings() {
         <AccessSection />
 
         {me.data && <Users currentUserId={me.data.user_id} />}
+
+        <Categories />
 
         <section className="flex flex-col gap-2">
           <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Storage</h2>

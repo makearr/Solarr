@@ -875,6 +875,58 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/LibraryCategory" }
         "401": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createCategory
+      tags: [settings]
+      summary: Add a category. Administrator only.
+      description: >-
+        Grants every administrator manage on the new category (ADR-27).
+        priority_rank orders categories for ADR-36's composite acquisition
+        priority; omitted, it places the new category after every existing
+        one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [media_type, name]
+              properties:
+                media_type: { type: string }
+                name: { type: string, minLength: 1 }
+                priority_rank: { type: integer, format: int64 }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryCategory" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /categories/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    delete:
+      operationId: deleteCategory
+      tags: [settings]
+      summary: Remove a category. Administrator only.
+      description: >-
+        Refused, naming what still uses it, while any root folder is
+        attached, any user holds explicit access, or a discovery job
+        references it (Invariant 41).
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          $ref: "#/components/responses/Problem"
+          description: Still referenced; the detail names what by.
 
   /people:
     get:

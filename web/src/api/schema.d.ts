@@ -568,8 +568,34 @@ export interface paths {
          */
         get: operations["listCategories"];
         put?: never;
-        post?: never;
+        /**
+         * Add a category. Administrator only.
+         * @description Grants every administrator manage on the new category (ADR-27). priority_rank orders categories for ADR-36's composite acquisition priority; omitted, it places the new category after every existing one.
+         */
+        post: operations["createCategory"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a category. Administrator only.
+         * @description Refused, naming what still uses it, while any root folder is attached, any user holds explicit access, or a discovery job references it (Invariant 41).
+         */
+        delete: operations["deleteCategory"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1990,6 +2016,63 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+        };
+    };
+    createCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    media_type: string;
+                    name: string;
+                    /** Format: int64 */
+                    priority_rank?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryCategory"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    deleteCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description Still referenced; the detail names what by. */
+            409: components["responses"]["Problem"];
         };
     };
     listPeople: {

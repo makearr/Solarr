@@ -670,6 +670,13 @@ type LoginJSONBody struct {
 	Username string `json:"username"`
 }
 
+// CreateCategoryJSONBody defines parameters for CreateCategory.
+type CreateCategoryJSONBody struct {
+	MediaType    string `json:"media_type"`
+	Name         string `json:"name"`
+	PriorityRank *int64 `json:"priority_rank,omitempty"`
+}
+
 // StreamEventsParams defines parameters for StreamEvents.
 type StreamEventsParams struct {
 	// Topics Comma-separated subset of topics. Absent means every topic the caller may see. An unrecognised name is rejected rather than ignored, so a typo is not a silently empty stream.
@@ -829,6 +836,9 @@ type SetPartMonitoredJSONBody struct {
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody LoginJSONBody
 
+// CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
+type CreateCategoryJSONRequestBody CreateCategoryJSONBody
+
 // SubscribePersonJSONRequestBody defines body for SubscribePerson for application/json ContentType.
 type SubscribePersonJSONRequestBody SubscribePersonJSONBody
 
@@ -876,6 +886,12 @@ type ServerInterface interface {
 	// Every category the caller may read (ADR-27).
 	// (GET /categories)
 	ListCategories(w http.ResponseWriter, r *http.Request)
+	// Add a category. Administrator only.
+	// (POST /categories)
+	CreateCategory(w http.ResponseWriter, r *http.Request)
+	// Remove a category. Administrator only.
+	// (DELETE /categories/{id})
+	DeleteCategory(w http.ResponseWriter, r *http.Request, id int64)
 	// Configured libraries and current state, for the landing page.
 	// (GET /dashboard)
 	GetDashboard(w http.ResponseWriter, r *http.Request)
@@ -999,6 +1015,18 @@ func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
 // Every category the caller may read (ADR-27).
 // (GET /categories)
 func (_ Unimplemented) ListCategories(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add a category. Administrator only.
+// (POST /categories)
+func (_ Unimplemented) CreateCategory(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a category. Administrator only.
+// (DELETE /categories/{id})
+func (_ Unimplemented) DeleteCategory(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1258,6 +1286,61 @@ func (siw *ServerInterfaceWrapper) ListCategories(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListCategories(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCategory operation middleware
+func (siw *ServerInterfaceWrapper) CreateCategory(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCategory(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteCategory operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCategory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCategory(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2384,6 +2467,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories", wrapper.ListCategories)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/categories", wrapper.CreateCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/categories/{id}", wrapper.DeleteCategory)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/dashboard", wrapper.GetDashboard)

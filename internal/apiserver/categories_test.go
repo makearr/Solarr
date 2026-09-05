@@ -5,11 +5,21 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/settings"
 )
+
+func authedDelete(t *testing.T, cookies []*http.Cookie, target string) *http.Request {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodDelete, target, nil)
+	for _, cookie := range cookies {
+		request.AddCookie(cookie)
+	}
+	return request
+}
 
 // fakeLibrarySize answers canned counter values per scope, so a test can assert
 // ListCategories reads "works"/"files" from exactly the scope key
@@ -204,5 +214,170 @@ func TestListCategories_RequiresAuthentication(t *testing.T) {
 	recorder := fixture.do(authedGet(t, nil, "/api/v1/categories"))
 	if recorder.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want 401 for no credential", recorder.Code)
+	}
+}
+
+// CreateCategory is the manual half of what a hand-written settings/import
+// YAML document already did -- an administrator can now stand up a category
+// without one.
+func TestCreateCategory_AddsACategoryAdministratorsCanSeeImmediately(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/categories",
+		`{"media_type":"music","name":"Music"}`))
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+
+	var created struct {
+		ID        int64  `json:"id"`
+		MediaType string `json:"media_type"`
+		Name      string `json:"name"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if created.MediaType != "music" || created.Name != "Music" || created.ID == 0 {
+		t.Errorf("created = %+v, want a real id and the submitted fields", created)
+	}
+
+	category, found := fixture.cache.Snapshot().Category(created.ID)
+	if !found {
+		t.Fatalf("category %d not found in settings.db after creation", created.ID)
+	}
+	if category.Name != "Music" {
+		t.Errorf("stored category = %+v, want Name=Music", category)
+	}
+}
+
+// An omitted priority_rank must place the new category after every existing
+// one, so creating one from the interface never requires understanding
+// ADR-36's ordering just to get a sane default.
+func TestCreateCategory_OmittedPriorityRankPlacesItLast(t *testing.T) {
+	fixture := newWorksFixture(t)
+	if _, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 5); err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/categories",
+		`{"media_type":"tv","name":"Television"}`))
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	var created struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	category, found := fixture.cache.Snapshot().Category(created.ID)
+	if !found || category.PriorityRank <= 5 {
+		t.Errorf("priority rank = %+v, want something after the existing category's 5", category)
+	}
+}
+
+// A non-administrator must not be able to create a category -- the same gate
+// settings import/export already enforces.
+func TestCreateCategory_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/categories",
+		`{"media_type":"music","name":"Music"}`))
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 for a non-administrator", recorder.Code)
+	}
+}
+
+// Invalid input (an empty name) must answer 400 with the validation problem,
+// not a generic 500 -- config.Problems has its own shape writeError does not
+// special-case, so the handler must translate it itself (settings.go's
+// ImportSettings is the precedent).
+func TestCreateCategory_InvalidInputAnswers400(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/categories",
+		`{"media_type":"music","name":""}`))
+	if recorder.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 for an empty name, body = %s", recorder.Code, recorder.Body)
+	}
+}
+
+// DeleteCategory removes an unreferenced category. Every administrator holds
+// an automatic manage grant on every category (settings.CreateUser/
+// CreateCategory keep that in sync both directions), so the admin issuing the
+// request has to give up its own grant first -- the same real constraint
+// internal/settings' own TestDeleteUser_TakesTheirGrantsWithThem works around
+// by testing its "successful delete" case with an operator instead. Here the
+// request itself must come from an admin (CreateCategory/DeleteCategory are
+// admin-only), so the admin's own auto-granted access is revoked first.
+func TestDeleteCategory_RemovesAnUnreferencedCategory(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 1)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	admin := fixture.createUser(t, "admin", settings.RoleAdmin)
+	if err := fixture.cache.RevokeCategoryAccess(t.Context(), admin.ID, category.ID); err != nil {
+		t.Fatalf("RevokeCategoryAccess: %v", err)
+	}
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedDelete(t, cookies, "/api/v1/categories/"+strconv.FormatInt(category.ID, 10)))
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if _, found := fixture.cache.Snapshot().Category(category.ID); found {
+		t.Error("category still present in settings.db after delete")
+	}
+}
+
+// A category with an attached root folder must be refused, naming what still
+// uses it (Invariant 41), the same as deleting an in-use quality profile.
+func TestDeleteCategory_RefusedWhileARootFolderIsAttached(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedDelete(t, cookies, "/api/v1/categories/"+strconv.FormatInt(category.ID, 10)))
+	if recorder.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409 while a root folder is still attached, body = %s",
+			recorder.Code, recorder.Body)
+	}
+}
+
+// A non-administrator must not be able to delete a category either.
+func TestDeleteCategory_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 1)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedDelete(t, cookies, "/api/v1/categories/"+strconv.FormatInt(category.ID, 10)))
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 for a non-administrator", recorder.Code)
+	}
+}
+
+// Deleting a category that does not exist answers 404, not 204 or 500.
+func TestDeleteCategory_MissingCategoryAnswers404(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedDelete(t, cookies, "/api/v1/categories/999999"))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 for a missing category", recorder.Code)
 	}
 }
