@@ -178,6 +178,35 @@ func (p Physical) ListUnmeasured(ctx context.Context, afterID int64, pageSize in
 	return files, nil
 }
 
+// PathsForObject answers every library_path row for one media_object,
+// primary first -- ADR-11 cross-entry hardlinking means one set of bytes can
+// have more than one path, which a caller removing a file everywhere those
+// bytes exist (ADR-53's own "remove and block") needs to know about rather
+// than assuming a single location.
+func (p Physical) PathsForObject(ctx context.Context, mediaObjectID int64) ([]librarydb.LibraryPath, error) {
+	rows, err := librarydb.New(p.store.Read()).ListPathsForObject(ctx, mediaObjectID)
+	if err != nil {
+		return nil, fmt.Errorf("library: paths for object %d: %w", mediaObjectID, err)
+	}
+	return rows, nil
+}
+
+// DeleteObject removes a media_object outright, cascading to every
+// library_path and desired_item_file row that referenced it. Unlike
+// MarkMissing (section 10.4's "a vanished path is MISSING, not deleted,
+// until the root is confirmed online"), this is for a caller that already
+// knows, with certainty, that the bytes are gone -- a deliberate quarantine,
+// not a scan's own uncertainty about a path it has not looked at again yet.
+func (p Physical) DeleteObject(ctx context.Context, mediaObjectID int64) error {
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).DeleteMediaObject(ctx, mediaObjectID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: delete object %d: %w", mediaObjectID, err)
+	}
+	return nil
+}
+
 // ClaimedAttributesFor answers the claimed half of ADR-39 for one file, when
 // there is one -- the claimed side is not wired up from a release name yet
 // (todo 4.2's own remaining item), so found is false for every file today,

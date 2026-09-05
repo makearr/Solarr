@@ -277,6 +277,68 @@ func (d Desired) RecordAlignment(ctx context.Context, itemID, workID int64, file
 	return nil
 }
 
+// FileMembership is one desired_item_file row: which item and role a file
+// covers.
+type FileMembership struct {
+	DesiredItemID int64
+	MediaObjectID int64
+	Role          string
+	MediaRef      string
+	AddedAt       int64
+}
+
+// ItemsForFile answers every desired_item a file currently satisfies -- what
+// a scan needs to recognise bytes it has seen (section 5.2's own doc
+// comment on the query), and what a removal needs to know before the file
+// is gone.
+func (d Desired) ItemsForFile(ctx context.Context, mediaObjectID int64) ([]FileMembership, error) {
+	rows, err := librarydb.New(d.store.Read()).ListDesiredItemsForFile(ctx, mediaObjectID)
+	if err != nil {
+		return nil, fmt.Errorf("library: items for file %d: %w", mediaObjectID, err)
+	}
+	memberships := make([]FileMembership, len(rows))
+	for i, row := range rows {
+		memberships[i] = FileMembership{
+			DesiredItemID: row.DesiredItemID, MediaObjectID: row.MediaObjectID,
+			Role: row.Role, MediaRef: row.MediaRef, AddedAt: row.AddedAt,
+		}
+	}
+	return memberships, nil
+}
+
+// Get answers one desired_item's own row, including its WorkID -- needed by
+// a caller that only has an item id and must recompute or detach against it.
+func (d Desired) Get(ctx context.Context, itemID int64) (librarydb.DesiredItem, error) {
+	row, err := librarydb.New(d.store.Read()).GetDesiredItem(ctx, itemID)
+	if err != nil {
+		return librarydb.DesiredItem{}, fmt.Errorf("library: get desired item %d: %w", itemID, err)
+	}
+	return row, nil
+}
+
+// DetachAndRecompute removes a file from an item under every role listed and
+// recomputes required/present count and state in the same transaction -- the
+// same attach+recompute shape RecordAlignment already uses for the opposite
+// direction. Detaching a role the item never actually had is a no-op, not an
+// error, the same idempotence every other repair path in this codebase has.
+func (d Desired) DetachAndRecompute(ctx context.Context, itemID, workID, mediaObjectID int64, roles []string) error {
+	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		for _, role := range roles {
+			if err := queries.DetachFile(ctx, librarydb.DetachFileParams{
+				DesiredItemID: itemID, MediaObjectID: mediaObjectID, Role: role,
+			}); err != nil {
+				return fmt.Errorf("detach role %q: %w", role, err)
+			}
+		}
+		return recomputeAlbumTx(ctx, queries, itemID, workID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: detach file %d from item %d: %w", mediaObjectID, itemID, err)
+	}
+	return nil
+}
+
 // RecomputeAlbum re-derives an album item's required_count (from the work's
 // currently-monitored parts) and present_count/state (from what
 // desired_item_file already covers), and marks it dirty for the planner.
