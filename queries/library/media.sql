@@ -148,6 +148,22 @@ WHERE root_folder_id = sqlc.arg(root_folder_id) AND id > sqlc.arg(after_id)
 ORDER BY id
 LIMIT sqlc.arg(page_size);
 
+-- ADR-51's drain: every real file to evacuate, with its size for
+-- mover.PlanDrain's own affinity-group byte totals. Primary paths only,
+-- the same convention ListUnmeasured already uses -- a secondary,
+-- cross-entry-hardlinked path for the same object (ADR-11) sharing this
+-- root is a known, narrow gap move_item's own (move_job_id, media_object_id)
+-- primary key already forces (one item per object per job), not something
+-- this query can widen on its own.
+-- name: ListPathsForRootWithSize :many
+SELECT lp.media_object_id, lp.rel_path, o.size_bytes
+FROM library_path lp
+JOIN media_object o ON o.id = lp.media_object_id
+WHERE lp.root_folder_id = sqlc.arg(root_folder_id) AND lp.is_primary = 1
+  AND lp.media_object_id > sqlc.arg(after_id)
+ORDER BY lp.media_object_id
+LIMIT sqlc.arg(page_size);
+
 -- Re-observing a known path proves it is still present, and clears any earlier
 -- missing mark (section 10.4): a file coming back is exactly the case this exists
 -- for.

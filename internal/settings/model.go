@@ -190,7 +190,20 @@ type RootFolder struct {
 	// CapabilitiesJSON is deliberately not typed further here (section
 	// 11.7): which filesystem capabilities matter is expected to grow.
 	CapabilitiesJSON string
+	// DrainState is ADR-51's own state machine (NONE/DRAINING/PAUSED/
+	// DRAINED); DrainJobID is library.db's move_job id behind it, nil when
+	// DrainState is NONE.
+	DrainState string
+	DrainJobID *int64
 }
+
+// Root folder drain states (root_folder.drain_state).
+const (
+	DrainStateNone     = "NONE"
+	DrainStateDraining = "DRAINING"
+	DrainStatePaused   = "PAUSED"
+	DrainStateDrained  = "DRAINED"
+)
 
 // CategoryRoot attaches a root folder to a category (§11.7).
 type CategoryRoot struct {

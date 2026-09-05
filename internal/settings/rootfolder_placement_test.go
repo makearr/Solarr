@@ -130,6 +130,107 @@ func TestPlacementAffinity_RoundTrips(t *testing.T) {
 	}
 }
 
+func TestCreateRootFolder_DefaultsToDrainStateNone(t *testing.T) {
+	cache, _ := newCache(t)
+	root, err := cache.CreateRootFolder(t.Context(), "/media/music", "")
+	if err != nil {
+		t.Fatalf("CreateRootFolder: %v", err)
+	}
+	if root.DrainState != settings.DrainStateNone || root.DrainJobID != nil {
+		t.Errorf("DrainState=%q DrainJobID=%v, want NONE/nil for a freshly created root",
+			root.DrainState, root.DrainJobID)
+	}
+}
+
+func TestSetRootFolderDrainState_RecordsStateAndJobID(t *testing.T) {
+	cache, _ := newCache(t)
+	root, err := cache.CreateRootFolder(t.Context(), "/media/music", "")
+	if err != nil {
+		t.Fatalf("CreateRootFolder: %v", err)
+	}
+
+	jobID := int64(42)
+	if err := cache.SetRootFolderDrainState(t.Context(), root.ID, settings.DrainStateDraining, &jobID); err != nil {
+		t.Fatalf("SetRootFolderDrainState: %v", err)
+	}
+	updated, _ := cache.Snapshot().RootFolder(root.ID)
+	if updated.DrainState != settings.DrainStateDraining || updated.DrainJobID == nil || *updated.DrainJobID != jobID {
+		t.Errorf("root = %+v, want DRAINING with drain_job_id 42", updated)
+	}
+
+	if err := cache.SetRootFolderDrainState(t.Context(), root.ID, settings.DrainStateNone, nil); err != nil {
+		t.Fatalf("SetRootFolderDrainState (clear): %v", err)
+	}
+	cleared, _ := cache.Snapshot().RootFolder(root.ID)
+	if cleared.DrainState != settings.DrainStateNone || cleared.DrainJobID != nil {
+		t.Errorf("root = %+v, want NONE/nil after clearing", cleared)
+	}
+}
+
+func TestSetAcceptsNewForRootFolder_FlipsEveryCategoryAttachment(t *testing.T) {
+	cache, _ := newCache(t)
+	music, err := cache.CreateCategory(t.Context(), "music", "Music", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	videos, err := cache.CreateCategory(t.Context(), "music", "Music Videos", 200)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	root, err := cache.CreateRootFolder(t.Context(), "/media/shared", "")
+	if err != nil {
+		t.Fatalf("CreateRootFolder: %v", err)
+	}
+	for _, category := range []settings.Category{music, videos} {
+		if err := cache.AttachRootFolder(t.Context(), settings.CategoryRoot{
+			CategoryID: category.ID, RootFolderID: root.ID, Weight: 1, AcceptsNew: true,
+		}); err != nil {
+			t.Fatalf("AttachRootFolder(%d): %v", category.ID, err)
+		}
+	}
+
+	if err := cache.SetAcceptsNewForRootFolder(t.Context(), root.ID, false); err != nil {
+		t.Fatalf("SetAcceptsNewForRootFolder: %v", err)
+	}
+	for _, attachment := range cache.Snapshot().CategoryRoots() {
+		if attachment.RootFolderID != root.ID {
+			continue
+		}
+		if attachment.AcceptsNew {
+			t.Errorf("category %d still accepts new placements after draining", attachment.CategoryID)
+		}
+	}
+}
+
+func TestCategoriesForRootFolder_ReturnsEveryAttachedCategory(t *testing.T) {
+	cache, _ := newCache(t)
+	music, err := cache.CreateCategory(t.Context(), "music", "Music", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	other, err := cache.CreateRootFolder(t.Context(), "/media/other", "")
+	if err != nil {
+		t.Fatalf("CreateRootFolder: %v", err)
+	}
+	root, err := cache.CreateRootFolder(t.Context(), "/media/music", "")
+	if err != nil {
+		t.Fatalf("CreateRootFolder: %v", err)
+	}
+	if err := cache.AttachRootFolder(t.Context(), settings.CategoryRoot{
+		CategoryID: music.ID, RootFolderID: root.ID, Weight: 1, AcceptsNew: true,
+	}); err != nil {
+		t.Fatalf("AttachRootFolder: %v", err)
+	}
+
+	categoryIDs := cache.Snapshot().CategoriesForRootFolder(root.ID)
+	if len(categoryIDs) != 1 || categoryIDs[0] != music.ID {
+		t.Errorf("CategoriesForRootFolder(root) = %v, want [%d]", categoryIDs, music.ID)
+	}
+	if got := cache.Snapshot().CategoriesForRootFolder(other.ID); len(got) != 0 {
+		t.Errorf("CategoriesForRootFolder(other) = %v, want none", got)
+	}
+}
+
 func TestPlacementAffinity_UpdateOverwritesThePreviousRoot(t *testing.T) {
 	cache, _ := newCache(t)
 	category, err := cache.CreateCategory(t.Context(), "music", "Music", 100)

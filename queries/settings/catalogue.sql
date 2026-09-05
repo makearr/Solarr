@@ -59,6 +59,11 @@ SET writable = ?, writable_reason = ?, total_bytes = ?, free_bytes = ?,
     capacity_checked_at = ?, fs_id = ?, capabilities_json = ?
 WHERE id = ?;
 
+-- name: SetRootFolderDrainState :exec
+-- ADR-51's own drain state machine; drain_job_id is library.db's own id
+-- (no FK, cross-db), null once a drain finishes or is cancelled.
+UPDATE root_folder SET drain_state = ?, drain_job_id = ? WHERE id = ?;
+
 -- name: DeleteRootFolder :exec
 DELETE FROM root_folder WHERE id = ?;
 

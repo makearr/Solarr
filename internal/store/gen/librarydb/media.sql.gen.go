@@ -545,6 +545,58 @@ func (q *Queries) ListPathsForObject(ctx context.Context, mediaObjectID int64) (
 	return items, nil
 }
 
+const listPathsForRootWithSize = `-- name: ListPathsForRootWithSize :many
+SELECT lp.media_object_id, lp.rel_path, o.size_bytes
+FROM library_path lp
+JOIN media_object o ON o.id = lp.media_object_id
+WHERE lp.root_folder_id = ?1 AND lp.is_primary = 1
+  AND lp.media_object_id > ?2
+ORDER BY lp.media_object_id
+LIMIT ?3
+`
+
+type ListPathsForRootWithSizeParams struct {
+	RootFolderID int64
+	AfterID      int64
+	PageSize     int64
+}
+
+type ListPathsForRootWithSizeRow struct {
+	MediaObjectID int64
+	RelPath       string
+	SizeBytes     int64
+}
+
+// ADR-51's drain: every real file to evacuate, with its size for
+// mover.PlanDrain's own affinity-group byte totals. Primary paths only,
+// the same convention ListUnmeasured already uses -- a secondary,
+// cross-entry-hardlinked path for the same object (ADR-11) sharing this
+// root is a known, narrow gap move_item's own (move_job_id, media_object_id)
+// primary key already forces (one item per object per job), not something
+// this query can widen on its own.
+func (q *Queries) ListPathsForRootWithSize(ctx context.Context, arg ListPathsForRootWithSizeParams) ([]ListPathsForRootWithSizeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPathsForRootWithSize, arg.RootFolderID, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPathsForRootWithSizeRow{}
+	for rows.Next() {
+		var i ListPathsForRootWithSizeRow
+		if err := rows.Scan(&i.MediaObjectID, &i.RelPath, &i.SizeBytes); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPathsInRoot = `-- name: ListPathsInRoot :many
 SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary,
        created_at, last_seen_at, missing_since

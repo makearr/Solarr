@@ -178,6 +178,47 @@ func (p Physical) ListUnmeasured(ctx context.Context, afterID int64, pageSize in
 	return files, nil
 }
 
+// FileOnRoot is one real file currently on a root, for ADR-51's drain --
+// the primary path only (see ListPathsForRootWithSize's own doc comment for
+// the narrow cross-entry-hardlink gap this leaves).
+type FileOnRoot struct {
+	MediaObjectID int64
+	RelPath       string
+	SizeBytes     int64
+}
+
+// drainPageSize mirrors the other cursor-paginated readers in this file
+// (ADR-22): bounded per page, regardless of how many pages PathsForRoot
+// itself walks through in one call.
+const drainPageSize = 1000
+
+// PathsForRoot returns every real file on a root folder, size included --
+// ADR-51's own drain needs the whole list at once to group and place it,
+// unlike ListUnmeasured's own per-page caller; paging internally keeps any
+// one query bounded (ADR-22) while still handing the caller a complete
+// answer.
+func (p Physical) PathsForRoot(ctx context.Context, rootFolderID int64) ([]FileOnRoot, error) {
+	var files []FileOnRoot
+	afterID := int64(0)
+	for {
+		rows, err := librarydb.New(p.store.Read()).ListPathsForRootWithSize(ctx, librarydb.ListPathsForRootWithSizeParams{
+			RootFolderID: rootFolderID, AfterID: afterID, PageSize: drainPageSize,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("library: paths for root %d: %w", rootFolderID, err)
+		}
+		for _, row := range rows {
+			files = append(files, FileOnRoot{
+				MediaObjectID: row.MediaObjectID, RelPath: row.RelPath, SizeBytes: row.SizeBytes,
+			})
+			afterID = row.MediaObjectID
+		}
+		if int64(len(rows)) < drainPageSize {
+			return files, nil
+		}
+	}
+}
+
 // Exists reports whether a media_object id is real -- an API layer's own
 // existence check before an action like RemoveAndBlock, which does not
 // itself fail on an unknown id (a Reopen-only or Block-only request simply

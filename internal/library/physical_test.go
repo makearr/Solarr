@@ -150,6 +150,40 @@ func TestRelocate_FailsWhenTheSourceLocationIsGone(t *testing.T) {
 	}
 }
 
+// PathsForRoot is ADR-51 drain's own file enumeration: every real file on a
+// root, size included, primary paths only. A secondary path on a different
+// root for the same object is correctly excluded.
+func TestPathsForRoot_ReturnsEveryPrimaryFileOnThatRootWithSize(t *testing.T) {
+	opened, _ := newLibrary(t)
+	onTarget := createObject(t, opened, "quick-1", 100)
+	elsewhere := createObject(t, opened, "quick-2", 200)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		if _, err := q.AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+			MediaObjectID: onTarget.ID, RootFolderID: 5, RelPath: "Artist/track.flac",
+			LinkKind: "primary", IsPrimary: 1, CreatedAt: 1,
+		}); err != nil {
+			return err
+		}
+		_, err := q.AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+			MediaObjectID: elsewhere.ID, RootFolderID: 9, RelPath: "Other/track.flac",
+			LinkKind: "primary", IsPrimary: 1, CreatedAt: 1,
+		})
+		return err
+	})
+
+	physical := library.NewPhysical(opened)
+	files, err := physical.PathsForRoot(t.Context(), 5)
+	if err != nil {
+		t.Fatalf("PathsForRoot: %v", err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("files = %+v, want exactly the one file on root 5", files)
+	}
+	if files[0].MediaObjectID != onTarget.ID || files[0].RelPath != "Artist/track.flac" || files[0].SizeBytes != 100 {
+		t.Errorf("file = %+v, want {%d, Artist/track.flac, 100}", files[0], onTarget.ID)
+	}
+}
+
 // Two files cannot occupy one location. Without this a rescan that re-imports a
 // directory silently doubles the library.
 func TestALocationIsUniqueWithinItsRoot(t *testing.T) {

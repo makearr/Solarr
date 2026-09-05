@@ -284,6 +284,7 @@ func convertRootFolder(row settingsdb.RootFolder) RootFolder {
 		TotalBytes: nullInt64Ptr(row.TotalBytes), FreeBytes: nullInt64Ptr(row.FreeBytes),
 		MinFreeBytes: row.MinFreeBytes, CapacityCheckedAt: nullInt64Ptr(row.CapacityCheckedAt),
 		FSID: row.FsID.String, CapabilitiesJSON: row.CapabilitiesJson.String,
+		DrainState: row.DrainState, DrainJobID: nullInt64Ptr(row.DrainJobID),
 	}
 }
 

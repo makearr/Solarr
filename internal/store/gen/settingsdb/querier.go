@@ -90,6 +90,9 @@ type Querier interface {
 	// The capacity-polling job's own write: everything it probes, in one
 	// statement, so a root's reading is never partially updated.
 	SetRootFolderCapacity(ctx context.Context, arg SetRootFolderCapacityParams) error
+	// ADR-51's own drain state machine; drain_job_id is library.db's own id
+	// (no FK, cross-db), null once a drain finishes or is cancelled.
+	SetRootFolderDrainState(ctx context.Context, arg SetRootFolderDrainStateParams) error
 	SetRootFolderOnline(ctx context.Context, arg SetRootFolderOnlineParams) error
 	// read_only and allow_rename are the user's own policy (section 11.7,
 	// Invariant 69); min_free_bytes is their reserve. Kept separate from

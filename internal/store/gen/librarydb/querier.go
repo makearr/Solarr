@@ -271,6 +271,14 @@ type Querier interface {
 	ListOrganisationSubtree(ctx context.Context, id int64) ([]Organisation, error)
 	ListOrganisationsForWork(ctx context.Context, workID int64) ([]WorkOrganisation, error)
 	ListPathsForObject(ctx context.Context, mediaObjectID int64) ([]LibraryPath, error)
+	// ADR-51's drain: every real file to evacuate, with its size for
+	// mover.PlanDrain's own affinity-group byte totals. Primary paths only,
+	// the same convention ListUnmeasured already uses -- a secondary,
+	// cross-entry-hardlinked path for the same object (ADR-11) sharing this
+	// root is a known, narrow gap move_item's own (move_job_id, media_object_id)
+	// primary key already forces (one item per object per job), not something
+	// this query can widen on its own.
+	ListPathsForRootWithSize(ctx context.Context, arg ListPathsForRootWithSizeParams) ([]ListPathsForRootWithSizeRow, error)
 	// A vanished path is MISSING, not deleted, until the root is confirmed online
 	// (section 10.4), so the scan lists a root rather than removing from it.
 	ListPathsInRoot(ctx context.Context, arg ListPathsInRootParams) ([]LibraryPath, error)

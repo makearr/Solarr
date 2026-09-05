@@ -126,6 +126,20 @@ func (s *Snapshot) RootFoldersForCategory(categoryID int64) []RootFolder {
 	return folders
 }
 
+// CategoriesForRootFolder returns the category ids a root folder is
+// attached to, in attachment order -- the reverse of RootFoldersForCategory,
+// for ADR-51 drain's own "eligible destinations share a category with the
+// root being drained" scoping.
+func (s *Snapshot) CategoriesForRootFolder(rootFolderID int64) []int64 {
+	var categoryIDs []int64
+	for _, attachment := range s.categoryRoot {
+		if attachment.RootFolderID == rootFolderID {
+			categoryIDs = append(categoryIDs, attachment.CategoryID)
+		}
+	}
+	return categoryIDs
+}
+
 // newSnapshot builds the indexes. It clones the slices it is given, so a caller
 // keeping a reference cannot mutate a published snapshot.
 func newSnapshot(users []User, categories []Category, rootFolders []RootFolder,

@@ -171,6 +171,16 @@ var allowedInternalImports = map[string][]string{
 	"internal/moverjob": {
 		"internal/clock", "internal/fsx", "internal/jobs", "internal/library", "internal/mover",
 	},
+	// ADR-51's POST /rootfolders/{id}/drain: gathers real facts, calls
+	// mover.PlanDrain (which calls internal/placement itself), persists via
+	// internal/library, and enqueues internal/moverjob. internal/settings is
+	// imported for its types only (settings.RootFolder/CategoryRoot), the
+	// same lightweight use internal/scan's own Roots interface already makes
+	// -- actual cache access stays behind this package's own Roots interface.
+	"internal/drainjob": {
+		"internal/clock", "internal/jobs", "internal/library", "internal/mover",
+		"internal/moverjob", "internal/placement", "internal/settings",
+	},
 	// ADR-15's post-restore pass spans library.db and jobs.db, so it composes their
 	// owning packages rather than reaching into either gen package (section 4.3).
 	"internal/recovery": {

@@ -428,6 +428,23 @@ func (q *Queries) SetRootFolderCapacity(ctx context.Context, arg SetRootFolderCa
 	return err
 }
 
+const setRootFolderDrainState = `-- name: SetRootFolderDrainState :exec
+UPDATE root_folder SET drain_state = ?, drain_job_id = ? WHERE id = ?
+`
+
+type SetRootFolderDrainStateParams struct {
+	DrainState string
+	DrainJobID sql.NullInt64
+	ID         int64
+}
+
+// ADR-51's own drain state machine; drain_job_id is library.db's own id
+// (no FK, cross-db), null once a drain finishes or is cancelled.
+func (q *Queries) SetRootFolderDrainState(ctx context.Context, arg SetRootFolderDrainStateParams) error {
+	_, err := q.db.ExecContext(ctx, setRootFolderDrainState, arg.DrainState, arg.DrainJobID, arg.ID)
+	return err
+}
+
 const setRootFolderOnline = `-- name: SetRootFolderOnline :exec
 UPDATE root_folder SET online = ? WHERE id = ?
 `

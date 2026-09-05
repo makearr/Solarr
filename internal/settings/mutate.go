@@ -427,6 +427,40 @@ func (c *Cache) SetRootFolderCapacity(ctx context.Context, id int64, capacity Ro
 	})
 }
 
+// SetAcceptsNewForRootFolder flips accepts_new across every category this
+// root is attached to -- ADR-51's own "draining forces accepts_new = 0"
+// (section 11.7), applied uniformly since a drain evacuates the whole disk,
+// not one category's share of it. Reuses AttachRootFolder's own upsert per
+// attachment rather than a new query, preserving each attachment's ord and
+// weight.
+func (c *Cache) SetAcceptsNewForRootFolder(ctx context.Context, rootFolderID int64, acceptsNew bool) error {
+	for _, attachment := range c.Snapshot().CategoryRoots() {
+		if attachment.RootFolderID != rootFolderID {
+			continue
+		}
+		attachment.AcceptsNew = acceptsNew
+		if err := c.AttachRootFolder(ctx, attachment); err != nil {
+			return fmt.Errorf("settings: set accepts_new for root folder %d, category %d: %w",
+				rootFolderID, attachment.CategoryID, err)
+		}
+	}
+	return nil
+}
+
+// SetRootFolderDrainState records ADR-51's own drain state machine.
+// drainJobID is library.db's move_job id (no FK, cross-db), nil once a
+// drain finishes, is cancelled, or never started (DrainStateNone).
+func (c *Cache) SetRootFolderDrainState(ctx context.Context, id int64, state string, drainJobID *int64) error {
+	if _, found := c.Snapshot().RootFolder(id); !found {
+		return fmt.Errorf("%w: root folder %d", ErrNotFound, id)
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetRootFolderDrainState(ctx, settingsdb.SetRootFolderDrainStateParams{
+			DrainState: state, DrainJobID: int64PtrToNull(drainJobID), ID: id,
+		})
+	})
+}
+
 // PlacementAffinity answers what an affinity key last resolved to (section
 // 11.7's COMMIT step) -- placement.Resolve is pure, so this lookup and
 // SetPlacementAffinity below are what a caller runs around it.
