@@ -70,6 +70,9 @@ type Querier interface {
 	// Desired state. Column lists follow table order, or sqlc stops reusing models.
 	CreateDesiredItem(ctx context.Context, arg CreateDesiredItemParams) (DesiredItem, error)
 	CreateEdition(ctx context.Context, arg CreateEditionParams) (Edition, error)
+	// ADR-48 (migration 0018). Column lists follow table order, or sqlc stops
+	// reusing models.
+	CreateImportSession(ctx context.Context, arg CreateImportSessionParams) (ImportSession, error)
 	// Returning the row costs four times the insert itself at import scale, so this is
 	// execlastid: documentation/benchmarks.md.
 	CreateMediaObject(ctx context.Context, arg CreateMediaObjectParams) (int64, error)
@@ -125,6 +128,7 @@ type Querier interface {
 	FindWorksByClassification(ctx context.Context, arg FindWorksByClassificationParams) ([]Work, error)
 	// Every stored variant is matched during import, not just the canonical one (ADR-41).
 	FindWorksByNormalizedTitle(ctx context.Context, arg FindWorksByNormalizedTitleParams) ([]Work, error)
+	FinishImportSession(ctx context.Context, arg FinishImportSessionParams) error
 	// Only a completed sweep moves the watermark and clears the cursor.
 	FinishScan(ctx context.Context, arg FinishScanParams) error
 	GetAcquisition(ctx context.Context, id int64) (Acquisition, error)
@@ -140,6 +144,8 @@ type Querier interface {
 	GetEditionByExternalID(ctx context.Context, arg GetEditionByExternalIDParams) (Edition, error)
 	// Scoring reads the bounded value, never the raw rate (ADR-45).
 	GetGroupReputation(ctx context.Context, releaseGroup string) (GroupReputation, error)
+	GetImportSession(ctx context.Context, id int64) (ImportSession, error)
+	GetImportUnit(ctx context.Context, id int64) (ImportUnit, error)
 	GetMediaObject(ctx context.Context, id int64) (MediaObject, error)
 	// oshash is exact identity: the same bytes, with no decoding (ADR-35).
 	GetMediaObjectByOshash(ctx context.Context, oshash sql.NullString) (MediaObject, error)
@@ -161,6 +167,7 @@ type Querier interface {
 	GetWorkByExternalID(ctx context.Context, arg GetWorkByExternalIDParams) (Work, error)
 	GetWorkExternalIDByProvider(ctx context.Context, arg GetWorkExternalIDByProviderParams) (WorkExternalID, error)
 	GetWorkPart(ctx context.Context, id int64) (WorkPart, error)
+	InsertImportUnit(ctx context.Context, arg InsertImportUnitParams) (ImportUnit, error)
 	// Physical files. Column lists follow table order, or sqlc stops reusing models.
 	InternAttributes(ctx context.Context, arg InternAttributesParams) (MediaAttribute, error)
 	// The pipeline filters against this between dedupe and evaluate (section 10.11).
@@ -214,6 +221,14 @@ type Querier interface {
 	ListFilesForDesiredItem(ctx context.Context, desiredItemID int64) ([]DesiredItemFile, error)
 	ListGroupObservations(ctx context.Context, arg ListGroupObservationsParams) ([]GroupObservation, error)
 	ListImportDecisionsNeedingReview(ctx context.Context, limit int64) ([]ImportDecision, error)
+	// Small, operator-facing list -- session counts never approach library scale
+	// (Invariant 22 is about files, not import runs), so this is a plain list
+	// rather than cursor-paginated, newest first per idx_import_session_state.
+	// filter_by_state=0 means unfiltered, the same two-argument shape ListUnidentified
+	// already uses -- an "arg = '' OR ..." single-argument form leaves sqlc unable to
+	// infer a concrete type for the argument.
+	ListImportSessions(ctx context.Context, arg ListImportSessionsParams) ([]ImportSession, error)
+	ListImportUnits(ctx context.Context, sessionID int64) ([]ImportUnit, error)
 	// "Monitor this studio and everything beneath it" needs the whole subtree, and
 	// imprints and sub-labels are real in every domain (ADR-32).
 	ListOrganisationSubtree(ctx context.Context, id int64) ([]Organisation, error)
@@ -312,6 +327,11 @@ type Querier interface {
 	// Quarantined bytes count against the free-space gate, so they are summed per
 	// root rather than assumed to be free (ADR-12).
 	QuarantinedBytesForRoot(ctx context.Context, rootFolderID sql.NullInt64) (int64, error)
+	// Recomputed from import_unit rather than incremented as units are added or
+	// redecided -- the same drift-and-repair shape CategoryCounters already uses,
+	// cheaper to reason about than keeping a running total consistent through
+	// every future call site that can change a unit's decision.
+	RecomputeImportSessionCounts(ctx context.Context, sessionID int64) error
 	// The reconciliation job compares this against present_count. Drift is
 	// inevitable, so the repair path is not optional.
 	RecomputePresentCount(ctx context.Context, id int64) error
@@ -356,6 +376,11 @@ type Querier interface {
 	SetDownloadProgress(ctx context.Context, arg SetDownloadProgressParams) error
 	SetFingerprints(ctx context.Context, arg SetFingerprintsParams) error
 	SetGroupReputation(ctx context.Context, arg SetGroupReputationParams) error
+	SetImportSessionExtractDir(ctx context.Context, arg SetImportSessionExtractDirParams) error
+	// The only mutation IDENTIFY needs once it exists: a unit starts QUEUE with no
+	// identity (F29's own default) and this is what fills in a real result later,
+	// without this package needing to know how that result was produced.
+	SetImportUnitDecision(ctx context.Context, arg SetImportUnitDecisionParams) error
 	// Measured attributes replace claimed ones after probing; the claim is kept so a
 	// mismatch stays visible (ADR-39). The scalars land on the object, not the
 	// interned row, because they are unique per file.

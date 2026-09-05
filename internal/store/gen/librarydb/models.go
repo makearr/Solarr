@@ -257,6 +257,40 @@ type ImportDecision struct {
 	OverriddenAt      sql.NullInt64
 }
 
+type ImportSession struct {
+	ID             int64
+	SourcePath     string
+	Origin         string
+	AcquisitionID  sql.NullInt64
+	CategoryID     sql.NullInt64
+	State          string
+	Threshold      float64
+	UnitsTotal     int64
+	UnitsCommitted int64
+	UnitsQueued    int64
+	BytesImported  int64
+	ExtractDir     sql.NullString
+	StartedAt      int64
+	FinishedAt     sql.NullInt64
+	Error          sql.NullString
+}
+
+type ImportUnit struct {
+	ID             int64
+	SessionID      int64
+	RelPath        string
+	Shape          string
+	FileCount      int64
+	Bytes          int64
+	Confidence     float64
+	Decision       string
+	WorkID         sql.NullInt64
+	EditionID      sql.NullInt64
+	EvidenceJson   string
+	CandidatesJson sql.NullString
+	Reason         sql.NullString
+}
+
 type LibraryPath struct {
 	ID            int64
 	MediaObjectID int64
