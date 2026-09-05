@@ -17,9 +17,16 @@ type ExternalID struct {
 // carries no behaviour of its own -- a strategy combines it with fsx (to read the
 // file) or the store (to look up prior identity) to actually do either; this package
 // stays free of both.
+//
+// MediaObjectID and RootFolderID are both optional (ADR-48): a scan-time file
+// already has both, but an import-inspection unit (a download folder, a manual
+// import target) is identified before it has a media_object row or a root folder
+// at all -- that is the entire point of inspecting it first. RelPath is always
+// present, relative to whatever base the caller's PathOf/TagSource resolves it
+// against, which differs between the two callers rather than this type.
 type FileRef struct {
-	MediaObjectID int64
-	RootFolderID  int64
+	MediaObjectID *int64
+	RootFolderID  *int64
 	RelPath       string
 }
 

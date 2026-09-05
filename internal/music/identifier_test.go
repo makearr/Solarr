@@ -24,8 +24,9 @@ func (f fixedTags) TagsFor(context.Context, model.FileRef) (mediatool.Tags, erro
 
 func identify(t *testing.T, tags mediatool.Tags) []model.Identification {
 	t.Helper()
+	mediaObjectID := int64(1)
 	found, err := music.NewMBIDIdentifier(fixedTags{tags: tags}).
-		Identify(t.Context(), model.FileRef{MediaObjectID: 1, RelPath: "a.flac"})
+		Identify(t.Context(), model.FileRef{MediaObjectID: &mediaObjectID, RelPath: "a.flac"})
 	if err != nil {
 		t.Fatalf("Identify: %v", err)
 	}
@@ -133,10 +134,11 @@ func TestResolved_AnswersFromTheBatchAndSaysWhenAFileWasNotInIt(t *testing.T) {
 		{Path: "/music/a.flac", Tags: mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}},
 		{Path: "/music/broken.m4a", Err: errors.New("moov atom not found")},
 	}
+	rootFolderID := int64(1)
 	resolved := music.Resolved{
 		Tags: music.NewBatchTags(probes),
 		Path: func(file model.FileRef) (string, bool) {
-			if file.RootFolderID != 1 {
+			if file.RootFolderID == nil || *file.RootFolderID != 1 {
 				return "", false
 			}
 			return "/music/" + file.RelPath, true
@@ -144,7 +146,7 @@ func TestResolved_AnswersFromTheBatchAndSaysWhenAFileWasNotInIt(t *testing.T) {
 	}
 	identifier := music.NewMBIDIdentifier(resolved)
 
-	found, err := identifier.Identify(t.Context(), model.FileRef{RootFolderID: 1, RelPath: "a.flac"})
+	found, err := identifier.Identify(t.Context(), model.FileRef{RootFolderID: &rootFolderID, RelPath: "a.flac"})
 	if err != nil {
 		t.Fatalf("Identify: %v", err)
 	}
@@ -154,11 +156,46 @@ func TestResolved_AnswersFromTheBatchAndSaysWhenAFileWasNotInIt(t *testing.T) {
 
 	// A file that failed to probe is absent, not present-and-empty: identifying it
 	// as "no MBID" would silently downgrade a read failure into a fact about the file.
-	if _, err := identifier.Identify(t.Context(), model.FileRef{RootFolderID: 1, RelPath: "broken.m4a"}); err == nil {
+	if _, err := identifier.Identify(t.Context(), model.FileRef{RootFolderID: &rootFolderID, RelPath: "broken.m4a"}); err == nil {
 		t.Error("a file that failed to probe was treated as having no tags")
 	}
-	if _, err := identifier.Identify(t.Context(), model.FileRef{RootFolderID: 9, RelPath: "a.flac"}); err == nil {
+	otherRootFolderID := int64(9)
+	if _, err := identifier.Identify(t.Context(), model.FileRef{RootFolderID: &otherRootFolderID, RelPath: "a.flac"}); err == nil {
 		t.Error("a file under an unknown root resolved anyway")
+	}
+	// ADR-48: an import-inspection unit has no root folder at all yet -- nil, not a
+	// sentinel id, and a caller's PathOf is free to refuse it (as this one does) or
+	// to resolve it against an import base instead.
+	if _, err := identifier.Identify(t.Context(), model.FileRef{RelPath: "a.flac"}); err == nil {
+		t.Error("a file with no root folder resolved through a PathOf that requires one")
+	}
+}
+
+// ADR-48's import inspection identifies a unit before it has a root folder at
+// all -- proving the one thing the widening exists for: a PathOf that resolves
+// a nil RootFolderID against an import base, not just a caller that refuses it.
+func TestResolved_AnswersWithNoRootFolderForAnImportUnit(t *testing.T) {
+	probes := []mediatool.Probe{
+		{Path: "/downloads/Unsorted/a.flac",
+			Tags: mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}},
+	}
+	resolved := music.Resolved{
+		Tags: music.NewBatchTags(probes),
+		Path: func(file model.FileRef) (string, bool) {
+			if file.RootFolderID != nil {
+				return "", false
+			}
+			return "/downloads/" + file.RelPath, true
+		},
+	}
+	identifier := music.NewMBIDIdentifier(resolved)
+
+	found, err := identifier.Identify(t.Context(), model.FileRef{RelPath: "Unsorted/a.flac"})
+	if err != nil {
+		t.Fatalf("Identify: %v", err)
+	}
+	if len(found) != 1 || found[0].ExternalID.ExternalID != releaseGroupMBID {
+		t.Fatalf("got %+v, want the batch's release group", found)
 	}
 }
 

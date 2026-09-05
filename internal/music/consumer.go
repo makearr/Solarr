@@ -200,7 +200,7 @@ func (c Consumer) identifyBatch(
 	for index, one := range observed {
 		mediaObjectID := mediaObjectIDs[index]
 		fileRef := model.FileRef{
-			MediaObjectID: mediaObjectID, RootFolderID: rootFolderID, RelPath: one.File.RelPath,
+			MediaObjectID: &mediaObjectID, RootFolderID: &rootFolderID, RelPath: one.File.RelPath,
 		}
 		result, err := model.RunChain(ctx, identifiers, fileRef, c.chain)
 		if err != nil {

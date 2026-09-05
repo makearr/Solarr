@@ -3,6 +3,7 @@ package music
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/makearr/MediaNexus/internal/mediatool"
 	"github.com/makearr/MediaNexus/internal/model"
@@ -148,12 +149,22 @@ type Resolved struct {
 	Path PathOf
 }
 
+// rootFolderIDLabel renders an optional root folder id for an error message --
+// nil is the import-inspection case (ADR-48), not a bug, so it gets a label
+// rather than printing a pointer address.
+func rootFolderIDLabel(id *int64) string {
+	if id == nil {
+		return "<none>"
+	}
+	return strconv.FormatInt(*id, 10)
+}
+
 // TagsFor returns the tags read for this file in the batch.
 func (r Resolved) TagsFor(_ context.Context, file model.FileRef) (mediatool.Tags, error) {
 	path, ok := r.Path(file)
 	if !ok {
-		return nil, fmt.Errorf("music: no path for root folder %d and %q",
-			file.RootFolderID, file.RelPath)
+		return nil, fmt.Errorf("music: no path for root folder %s and %q",
+			rootFolderIDLabel(file.RootFolderID), file.RelPath)
 	}
 	tags, ok := r.Tags.byPath[path]
 	if !ok {
