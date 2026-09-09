@@ -105,6 +105,81 @@ func TestAddCredit_RecordsAWorkLevelCredit(t *testing.T) {
 	}
 }
 
+// The Tracks navigation level's own denormalized sort key (ADR-54,
+// 0021_work_primary_artist.sql): the primary (ord=0, role="artist") credit
+// must refresh work.primary_artist_id/primary_artist_sort_name, since
+// AddCredit is its only writer.
+func TestAddCredit_OrdZeroArtistSetsWorkPrimaryArtist(t *testing.T) {
+	opened, queries := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	people := library.NewPeople(opened)
+	workID := newWorkForCredits(t, identity, queries, "rg-credit-primary")
+
+	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
+		Provider: "musicbrainz:artist", ExternalID: "artist-primary",
+		Person: library.PersonIdentity{Name: "Katupoken", SortName: "Katupoken"},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePerson: %v", err)
+	}
+	if err := people.AddCredit(t.Context(), workID, personID, "artist", 0); err != nil {
+		t.Fatalf("AddCredit: %v", err)
+	}
+
+	work, err := queries.GetWork(t.Context(), workID)
+	if err != nil {
+		t.Fatalf("GetWork: %v", err)
+	}
+	if !work.PrimaryArtistID.Valid || work.PrimaryArtistID.Int64 != personID {
+		t.Errorf("PrimaryArtistID = %+v, want %d", work.PrimaryArtistID, personID)
+	}
+	if !work.PrimaryArtistSortName.Valid || work.PrimaryArtistSortName.String != "Katupoken" {
+		t.Errorf("PrimaryArtistSortName = %+v, want \"Katupoken\"", work.PrimaryArtistSortName)
+	}
+}
+
+// A credit that is not the primary artist (a featured performer, ord > 0, or
+// any non-"artist" role) must never touch the denormalized column -- a second
+// AddCredit call for a featured artist must not overwrite the real primary.
+func TestAddCredit_NonPrimaryCreditDoesNotSetWorkPrimaryArtist(t *testing.T) {
+	opened, queries := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	people := library.NewPeople(opened)
+	workID := newWorkForCredits(t, identity, queries, "rg-credit-non-primary")
+
+	primary, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
+		Provider: "musicbrainz:artist", ExternalID: "artist-primary-2",
+		Person: library.PersonIdentity{Name: "Katupoken", SortName: "Katupoken"},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePerson: %v", err)
+	}
+	featured, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
+		Provider: "musicbrainz:artist", ExternalID: "artist-featured",
+		Person: library.PersonIdentity{Name: "Someone Else", SortName: "Else, Someone"},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePerson: %v", err)
+	}
+	if err := people.AddCredit(t.Context(), workID, primary, "artist", 0); err != nil {
+		t.Fatalf("AddCredit (primary): %v", err)
+	}
+	if err := people.AddCredit(t.Context(), workID, featured, "artist", 1); err != nil {
+		t.Fatalf("AddCredit (featured, ord 1): %v", err)
+	}
+	if err := people.AddCredit(t.Context(), workID, featured, "producer", 0); err != nil {
+		t.Fatalf("AddCredit (producer, ord 0): %v", err)
+	}
+
+	work, err := queries.GetWork(t.Context(), workID)
+	if err != nil {
+		t.Fatalf("GetWork: %v", err)
+	}
+	if !work.PrimaryArtistID.Valid || work.PrimaryArtistID.Int64 != primary {
+		t.Errorf("PrimaryArtistID = %+v, want the original primary %d unchanged", work.PrimaryArtistID, primary)
+	}
+}
+
 func TestAssignGenres_CreatesTagsAndAssignsThem(t *testing.T) {
 	opened, queries := newLibrary(t)
 	identity := library.NewIdentity(opened)

@@ -187,7 +187,8 @@ INSERT INTO work (media_type, canonical_title, sort_title, original_language,
                   year, runtime_ms, added_at, updated_at, added_by)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, media_type, canonical_title, sort_title, original_language,
-          year, runtime_ms, added_at, updated_at, added_by, description
+          year, runtime_ms, added_at, updated_at, added_by, description,
+          primary_artist_id, primary_artist_sort_name
 `
 
 type CreateWorkParams struct {
@@ -228,6 +229,8 @@ func (q *Queries) CreateWork(ctx context.Context, arg CreateWorkParams) (Work, e
 		&i.UpdatedAt,
 		&i.AddedBy,
 		&i.Description,
+		&i.PrimaryArtistID,
+		&i.PrimaryArtistSortName,
 	)
 	return i, err
 }
@@ -398,7 +401,8 @@ func (q *Queries) FindWorkPart(ctx context.Context, arg FindWorkPartParams) (Wor
 
 const findWorksByClassification = `-- name: FindWorksByClassification :many
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
-       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description
+       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description,
+       w.primary_artist_id, w.primary_artist_sort_name
 FROM work w
 JOIN work_classification c ON c.work_id = w.id
 WHERE c.kind = ?1 AND c.value = ?2
@@ -441,6 +445,8 @@ func (q *Queries) FindWorksByClassification(ctx context.Context, arg FindWorksBy
 			&i.UpdatedAt,
 			&i.AddedBy,
 			&i.Description,
+			&i.PrimaryArtistID,
+			&i.PrimaryArtistSortName,
 		); err != nil {
 			return nil, err
 		}
@@ -457,7 +463,8 @@ func (q *Queries) FindWorksByClassification(ctx context.Context, arg FindWorksBy
 
 const findWorksByNormalizedTitle = `-- name: FindWorksByNormalizedTitle :many
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
-       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description
+       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description,
+       w.primary_artist_id, w.primary_artist_sort_name
 FROM work w
 JOIN work_title t ON t.work_id = w.id
 WHERE t.normalized = ?1
@@ -495,6 +502,8 @@ func (q *Queries) FindWorksByNormalizedTitle(ctx context.Context, arg FindWorksB
 			&i.UpdatedAt,
 			&i.AddedBy,
 			&i.Description,
+			&i.PrimaryArtistID,
+			&i.PrimaryArtistSortName,
 		); err != nil {
 			return nil, err
 		}
@@ -566,7 +575,8 @@ func (q *Queries) GetEditionByExternalID(ctx context.Context, arg GetEditionByEx
 
 const getWork = `-- name: GetWork :one
 SELECT id, media_type, canonical_title, sort_title, original_language,
-       year, runtime_ms, added_at, updated_at, added_by, description
+       year, runtime_ms, added_at, updated_at, added_by, description,
+       primary_artist_id, primary_artist_sort_name
 FROM work WHERE id = ?
 `
 
@@ -585,13 +595,16 @@ func (q *Queries) GetWork(ctx context.Context, id int64) (Work, error) {
 		&i.UpdatedAt,
 		&i.AddedBy,
 		&i.Description,
+		&i.PrimaryArtistID,
+		&i.PrimaryArtistSortName,
 	)
 	return i, err
 }
 
 const getWorkByExternalID = `-- name: GetWorkByExternalID :one
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
-       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description
+       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description,
+       w.primary_artist_id, w.primary_artist_sort_name
 FROM work w
 JOIN work_external_id e ON e.work_id = w.id
 WHERE e.provider = ? AND e.external_id = ?
@@ -618,6 +631,8 @@ func (q *Queries) GetWorkByExternalID(ctx context.Context, arg GetWorkByExternal
 		&i.UpdatedAt,
 		&i.AddedBy,
 		&i.Description,
+		&i.PrimaryArtistID,
+		&i.PrimaryArtistSortName,
 	)
 	return i, err
 }
@@ -1244,6 +1259,24 @@ type SetWorkPartMonitoredParams struct {
 
 func (q *Queries) SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonitoredParams) error {
 	_, err := q.db.ExecContext(ctx, setWorkPartMonitored, arg.Monitored, arg.ID)
+	return err
+}
+
+const setWorkPrimaryArtist = `-- name: SetWorkPrimaryArtist :exec
+UPDATE work SET primary_artist_id = ?, primary_artist_sort_name = ? WHERE id = ?
+`
+
+type SetWorkPrimaryArtistParams struct {
+	PrimaryArtistID       sql.NullInt64
+	PrimaryArtistSortName sql.NullString
+	ID                    int64
+}
+
+// The Tracks navigation level's own denormalized sort key (0021_work_primary_artist.sql's
+// doc comment) -- written only by internal/library.People.AddCredit, the one place a
+// role='artist' ord=0 credit is ever recorded.
+func (q *Queries) SetWorkPrimaryArtist(ctx context.Context, arg SetWorkPrimaryArtistParams) error {
+	_, err := q.db.ExecContext(ctx, setWorkPrimaryArtist, arg.PrimaryArtistID, arg.PrimaryArtistSortName, arg.ID)
 	return err
 }
 

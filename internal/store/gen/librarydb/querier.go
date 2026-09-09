@@ -475,6 +475,10 @@ type Querier interface {
 	SetWorkDescription(ctx context.Context, arg SetWorkDescriptionParams) error
 	SetWorkField(ctx context.Context, arg SetWorkFieldParams) error
 	SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonitoredParams) error
+	// The Tracks navigation level's own denormalized sort key (0021_work_primary_artist.sql's
+	// doc comment) -- written only by internal/library.People.AddCredit, the one place a
+	// role='artist' ord=0 credit is ever recorded.
+	SetWorkPrimaryArtist(ctx context.Context, arg SetWorkPrimaryArtistParams) error
 	// A sweep that starts records only that it started: the watermark must not move
 	// until one finishes, or an interrupted scan would look complete.
 	StartScan(ctx context.Context, arg StartScanParams) error

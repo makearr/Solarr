@@ -108,13 +108,37 @@ func findOrCreatePerson(
 	return person.ID, nil
 }
 
+// creditRoleArtist mirrors music.CreditRoleArtist -- internal/library cannot
+// import internal/music (the dependency arrow points the other way), and
+// workArtistColumn already hardcodes this same string for the same reason.
+const creditRoleArtist = "artist"
+
 // AddCredit records a work-level credit (edition_id/part_id zero, Appendix E
-// D2) for an already-resolved person. ord is the credit order (0-based).
+// D2) for an already-resolved person. ord is the credit order (0-based). A
+// role="artist" ord=0 credit -- the primary artist -- also refreshes
+// work.primary_artist_id/primary_artist_sort_name in the same transaction:
+// the Tracks navigation level's own denormalized sort key
+// (0021_work_primary_artist.sql), and AddCredit is its one writer.
 func (p People) AddCredit(ctx context.Context, workID, personID int64, role string, ord int) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		return librarydb.New(tx).AddCredit(ctx, librarydb.AddCreditParams{
+		queries := librarydb.New(tx)
+		if err := queries.AddCredit(ctx, librarydb.AddCreditParams{
 			PersonID: personID, WorkID: workID, EditionID: 0, PartID: 0,
 			Role: role, Character: "", Ord: sql.NullInt64{Int64: int64(ord), Valid: true},
+		}); err != nil {
+			return err
+		}
+		if role != creditRoleArtist || ord != 0 {
+			return nil
+		}
+		person, err := queries.GetPerson(ctx, personID)
+		if err != nil {
+			return fmt.Errorf("primary artist: get person: %w", err)
+		}
+		return queries.SetWorkPrimaryArtist(ctx, librarydb.SetWorkPrimaryArtistParams{
+			PrimaryArtistID:       sql.NullInt64{Int64: personID, Valid: true},
+			PrimaryArtistSortName: sql.NullString{String: person.SortName, Valid: true},
+			ID:                    workID,
 		})
 	})
 	if err != nil {
