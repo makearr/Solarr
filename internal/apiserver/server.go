@@ -268,6 +268,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/search", server.routeSearch)
 			secured.Post("/score/simulate", server.SimulateScore)
 			secured.Get("/libraries", server.ListLibraries)
+			secured.Put("/libraries/{id}/last-level", server.routeSetLibraryLastLevel)
 			secured.Get("/libraries/{id}/{level}", server.routeListLibraryLevel)
 			secured.Get("/categories", server.ListCategories)
 			secured.Post("/categories", server.CreateCategory)

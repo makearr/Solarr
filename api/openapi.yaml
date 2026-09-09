@@ -1323,6 +1323,38 @@ paths:
                 items: { $ref: "#/components/schemas/Library" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /libraries/{id}/last-level:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: setLibraryLastLevel
+      tags: [library]
+      summary: Remember the level last visited in this library (ADR-54).
+      description: >-
+        A per-user preference (user_preference), so the sidebar tree costs
+        one click on return rather than three. Deliberately its own endpoint
+        rather than a field on GET/PUT /me -- it changes on ordinary
+        navigation, not an account edit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [level]
+              properties:
+                level: { type: string }
+      responses:
+        "204": { description: Stored. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: The library does not exist, is not readable, or declares no such level.
+
   /libraries/{id}/{level}:
     parameters:
       - name: id
@@ -2550,6 +2582,11 @@ components:
         levels:
           type: array
           items: { $ref: "#/components/schemas/LibraryLevel" }
+        last_level:
+          type: string
+          description: >-
+            The level key the caller last visited in this library
+            (user_preference), absent if never visited.
 
     LibraryLevel:
       type: object

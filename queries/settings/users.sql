@@ -50,6 +50,9 @@ DELETE FROM user_category_access WHERE user_id = ? AND category_id = ?;
 -- name: ListPreferencesForUser :many
 SELECT user_id, key, value_json FROM user_preference WHERE user_id = ?;
 
+-- name: GetPreference :one
+SELECT user_id, key, value_json FROM user_preference WHERE user_id = ? AND key = ?;
+
 -- name: SetPreference :exec
 INSERT INTO user_preference (user_id, key, value_json)
 VALUES (?, ?, ?)

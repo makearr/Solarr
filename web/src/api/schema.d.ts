@@ -851,6 +851,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/libraries/{id}/last-level": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Remember the level last visited in this library (ADR-54).
+         * @description A per-user preference (user_preference), so the sidebar tree costs one click on return rather than three. Deliberately its own endpoint rather than a field on GET/PUT /me -- it changes on ordinary navigation, not an account edit.
+         */
+        put: operations["setLibraryLastLevel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/libraries/{id}/{level}": {
         parameters: {
             query?: never;
@@ -1704,6 +1726,8 @@ export interface components {
             media_type: string;
             name: string;
             levels: components["schemas"]["LibraryLevel"][];
+            /** @description The level key the caller last visited in this library (user_preference), absent if never visited. */
+            last_level?: string;
         };
         /** @description One browsable entity level a media type declares (ADR-23's NavigationLevels extension point). Core never learns what an album or a season is -- key, label and entity are entirely the media type's own vocabulary. */
         LibraryLevel: {
@@ -3114,6 +3138,36 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+        };
+    };
+    setLibraryLastLevel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    level: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            /** @description The library does not exist, is not readable, or declares no such level. */
+            404: components["responses"]["Problem"];
         };
     };
     listLibraryLevel: {

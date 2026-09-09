@@ -706,7 +706,10 @@ type JobState string
 
 // Library A category as a navigation root (ADR-54): its declared entity levels replace the old flat works/files pair -- see LibraryLevel.
 type Library struct {
-	Id        int64          `json:"id"`
+	Id int64 `json:"id"`
+
+	// LastLevel The level key the caller last visited in this library (user_preference), absent if never visited.
+	LastLevel *string        `json:"last_level,omitempty"`
 	Levels    []LibraryLevel `json:"levels"`
 	MediaType string         `json:"media_type"`
 	Name      string         `json:"name"`
@@ -1197,6 +1200,11 @@ type ListJobsParams struct {
 	State *JobState `form:"state,omitempty" json:"state,omitempty"`
 }
 
+// SetLibraryLastLevelJSONBody defines parameters for SetLibraryLastLevel.
+type SetLibraryLastLevelJSONBody struct {
+	Level string `json:"level"`
+}
+
 // ListLibraryLevelParams defines parameters for ListLibraryLevel.
 type ListLibraryLevelParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
@@ -1390,6 +1398,9 @@ type RemoveAndBlockFileJSONRequestBody = RemoveAndBlockRequest
 // InspectImportJSONRequestBody defines body for InspectImport for application/json ContentType.
 type InspectImportJSONRequestBody = ImportInspectRequest
 
+// SetLibraryLastLevelJSONRequestBody defines body for SetLibraryLastLevel for application/json ContentType.
+type SetLibraryLastLevelJSONRequestBody SetLibraryLastLevelJSONBody
+
 // ResolveUnidentifiedJSONRequestBody defines body for ResolveUnidentified for application/json ContentType.
 type ResolveUnidentifiedJSONRequestBody ResolveUnidentifiedJSONBody
 
@@ -1500,6 +1511,9 @@ type ServerInterface interface {
 	// The navigation tree -- libraries the caller may see, with their levels (ADR-54).
 	// (GET /libraries)
 	ListLibraries(w http.ResponseWriter, r *http.Request)
+	// Remember the level last visited in this library (ADR-54).
+	// (PUT /libraries/{id}/last-level)
+	SetLibraryLastLevel(w http.ResponseWriter, r *http.Request, id int64)
 	// One page of one navigation level (ADR-54).
 	// (GET /libraries/{id}/{level})
 	ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int64, level string, params ListLibraryLevelParams)
@@ -1737,6 +1751,12 @@ func (_ Unimplemented) ListJobs(w http.ResponseWriter, r *http.Request, params L
 // The navigation tree -- libraries the caller may see, with their levels (ADR-54).
 // (GET /libraries)
 func (_ Unimplemented) ListLibraries(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remember the level last visited in this library (ADR-54).
+// (PUT /libraries/{id}/last-level)
+func (_ Unimplemented) SetLibraryLastLevel(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2597,6 +2617,39 @@ func (siw *ServerInterfaceWrapper) ListLibraries(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListLibraries(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetLibraryLastLevel operation middleware
+func (siw *ServerInterfaceWrapper) SetLibraryLastLevel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetLibraryLastLevel(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3870,6 +3923,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/libraries", wrapper.ListLibraries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/libraries/{id}/last-level", wrapper.SetLibraryLastLevel)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/libraries/{id}/{level}", wrapper.ListLibraryLevel)

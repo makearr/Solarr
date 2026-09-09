@@ -34,6 +34,7 @@ type libraryBody struct {
 	MediaType string             `json:"media_type"`
 	Name      string             `json:"name"`
 	Levels    []libraryLevelBody `json:"levels"`
+	LastLevel *string            `json:"last_level"`
 }
 
 // TestListLibraries_RendersTheDeclaredLevelsWithTheirCounts is ADR-54's core
@@ -141,6 +142,84 @@ func TestListLibraries_UnregisteredMediaTypeAnswersNoLevels(t *testing.T) {
 	}
 	if len(body) != 1 || body[0].Levels == nil || len(body[0].Levels) != 0 {
 		t.Errorf("libraries = %+v, want one library with an empty (not null) levels array", body)
+	}
+}
+
+// ADR-54's own point: a library the caller has visited before reports the
+// level they were last on, so the sidebar tree costs one click, not three.
+func TestListLibraries_ReportsTheLastVisitedLevel(t *testing.T) {
+	navigation := fakeNavigation{
+		"music": {
+			{Key: "albums", Label: "Albums", Entity: model.LevelEntityWork},
+			{Key: "tracks", Label: "Tracks", Entity: model.LevelEntityWorkPart},
+		},
+	}
+	fixture := newWorksFixtureWithLibrarySizeAndNavigation(t, nil, navigation)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	putRecorder := fixture.do(authedPut(t, cookies,
+		fmt.Sprintf("/api/v1/libraries/%d/last-level", category.ID), `{"level":"tracks"}`))
+	if putRecorder.Code != http.StatusNoContent {
+		t.Fatalf("PUT status %d (%s)", putRecorder.Code, putRecorder.Body)
+	}
+
+	getRecorder := fixture.do(authedGet(t, cookies, "/api/v1/libraries"))
+	if getRecorder.Code != http.StatusOK {
+		t.Fatalf("GET status %d (%s)", getRecorder.Code, getRecorder.Body)
+	}
+	var body []libraryBody
+	if err := json.Unmarshal(getRecorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 1 || body[0].LastLevel == nil || *body[0].LastLevel != "tracks" {
+		t.Errorf("libraries = %+v, want last_level=\"tracks\"", body)
+	}
+}
+
+// A library never visited before reports no last level, not an error.
+func TestListLibraries_NeverVisitedReportsNoLastLevel(t *testing.T) {
+	navigation := fakeNavigation{"music": {{Key: "albums", Label: "Albums", Entity: model.LevelEntityWork}}}
+	fixture := newWorksFixtureWithLibrarySizeAndNavigation(t, nil, navigation)
+	if _, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 100); err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/libraries"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	var body []libraryBody
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 1 || body[0].LastLevel != nil {
+		t.Errorf("libraries = %+v, want last_level absent", body)
+	}
+}
+
+// Setting a level unknown to this library's media type answers 404, the
+// same guard GET /libraries/{id}/{level} already applies.
+func TestSetLibraryLastLevel_UnknownLevelAnswers404(t *testing.T) {
+	navigation := fakeNavigation{"music": {{Key: "albums", Label: "Albums", Entity: model.LevelEntityWork}}}
+	fixture := newWorksFixtureWithLibrarySizeAndNavigation(t, nil, navigation)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPut(t, cookies,
+		fmt.Sprintf("/api/v1/libraries/%d/last-level", category.ID), `{"level":"nonsense"}`))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", recorder.Code)
 	}
 }
 

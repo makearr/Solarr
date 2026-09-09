@@ -22,6 +22,16 @@ func authedPost(t *testing.T, cookies []*http.Cookie, target, body string) *http
 	return request
 }
 
+func authedPut(t *testing.T, cookies []*http.Cookie, target, body string) *http.Request {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodPut, target, strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	for _, cookie := range cookies {
+		request.AddCookie(cookie)
+	}
+	return request
+}
+
 const losslessProfileRules = `{"compare":["lossless","score"],"scoring":[
 	{"name":"preferred-groups","score":10,"specs":[{"field":"release_group","in":"$preferred"}]}
 ]}`

@@ -70,10 +70,14 @@ function groupByMediaType(libraries: readonly LibraryEntry[]): { mediaType: stri
   return groups;
 }
 
-/** A library's default level -- Albums when it declares one, otherwise
- *  whatever it declared first. Core knows nothing about "albums" being
- *  special (ADR-23); this is purely a sidebar-navigation convenience. */
-function defaultLevelKey(library: LibraryEntry): string | undefined {
+/** A library's default level -- the caller's own last-visited one
+ *  (user_preference, ADR-54) when it still names a level this library
+ *  declares, else Albums, else whatever it declared first. Core knows
+ *  nothing about "albums" being special (ADR-23); this is purely a
+ *  sidebar-navigation convenience. */
+export function defaultLevelKey(library: LibraryEntry): string | undefined {
+  const keys = new Set(library.levels.map((level) => level.key));
+  if (library.last_level && keys.has(library.last_level)) return library.last_level;
   return library.levels.find((level) => level.key === "albums")?.key ?? library.levels[0]?.key;
 }
 

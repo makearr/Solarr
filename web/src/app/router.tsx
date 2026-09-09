@@ -18,6 +18,7 @@ import { People } from "./People";
 import { PersonDetail } from "./PersonDetail";
 import { Settings } from "./Settings";
 import { Shell } from "./Shell";
+import { defaultLevelKey } from "./Sidebar";
 import { Unidentified } from "./Unidentified";
 import { WorkDetail } from "./WorkDetail";
 
@@ -47,7 +48,7 @@ const routes = [
       }
       const { data } = await api.GET("/libraries");
       const first = data?.[0];
-      const level = first?.levels.find((entry) => entry.key === "albums")?.key ?? first?.levels[0]?.key;
+      const level = first && defaultLevelKey(first);
       throw redirect(
         first && level
           ? { to: "/library/$categoryId/$level", params: { categoryId: String(first.id), level } }

@@ -138,6 +138,22 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, 
 	return i, err
 }
 
+const getPreference = `-- name: GetPreference :one
+SELECT user_id, key, value_json FROM user_preference WHERE user_id = ? AND key = ?
+`
+
+type GetPreferenceParams struct {
+	UserID int64
+	Key    string
+}
+
+func (q *Queries) GetPreference(ctx context.Context, arg GetPreferenceParams) (UserPreference, error) {
+	row := q.db.QueryRowContext(ctx, getPreference, arg.UserID, arg.Key)
+	var i UserPreference
+	err := row.Scan(&i.UserID, &i.Key, &i.ValueJson)
+	return i, err
+}
+
 const getUserByAPIKeyHash = `-- name: GetUserByAPIKeyHash :one
 SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.ui_tier, k.id AS key_id
 FROM api_key k JOIN app_user u ON u.id = k.user_id

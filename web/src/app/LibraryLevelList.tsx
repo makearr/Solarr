@@ -3,6 +3,7 @@ import { useParams } from "@tanstack/react-router";
 import { api } from "@/api/client";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
+import { useRecordLastLevel } from "@/list/useRecordLastLevel";
 import type { components } from "@/api/schema";
 
 type LevelItem = components["schemas"]["LibraryLevelItem"];
@@ -19,6 +20,7 @@ export function LibraryLevelList() {
     categoryId?: string;
     level?: string;
   };
+  useRecordLastLevel(categoryId, level ?? "");
 
   const list = useLibraryList<LevelItem>(
     {

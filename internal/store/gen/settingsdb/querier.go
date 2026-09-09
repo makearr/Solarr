@@ -51,6 +51,7 @@ type Querier interface {
 	GetInstanceSetting(ctx context.Context, key string) (InstanceSetting, error)
 	GetLanguageProfile(ctx context.Context, id int64) (LanguageProfile, error)
 	GetPlacementAffinity(ctx context.Context, arg GetPlacementAffinityParams) (int64, error)
+	GetPreference(ctx context.Context, arg GetPreferenceParams) (UserPreference, error)
 	GetQualityProfile(ctx context.Context, id int64) (QualityProfile, error)
 	GetRootFolder(ctx context.Context, id int64) (RootFolder, error)
 	GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetUserByAPIKeyHashRow, error)

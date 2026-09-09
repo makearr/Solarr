@@ -9,6 +9,7 @@ import { ListTable, type Column } from "@/list/ListTable";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
 import { useNarrow } from "@/list/useNarrow";
+import { useRecordLastLevel } from "@/list/useRecordLastLevel";
 import type { SelectionRequest } from "@/list/selection";
 import type { components } from "@/api/schema";
 import { CoverArt } from "./CoverArt";
@@ -135,6 +136,7 @@ const FILTER_KEYS: readonly string[] = [];
 
 export function Library() {
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
+  useRecordLastLevel(categoryId, "albums");
   // FILTER_KEYS is empty (category is a route param, not a URL filter), so
   // category_id is injected here rather than read back from the URL -- this
   // is what keeps the query cache key and bulk "select all matching" scoped

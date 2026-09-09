@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -42,10 +43,94 @@ func (s *Server) ListLibraries(w http.ResponseWriter, r *http.Request) {
 	for index, category := range visible {
 		views[index] = gen.Library{
 			Id: category.ID, MediaType: category.MediaType, Name: category.Name,
-			Levels: s.libraryLevels(r.Context(), category),
+			Levels:    s.libraryLevels(r.Context(), category),
+			LastLevel: s.lastLibraryLevel(r.Context(), access.UserID(), category.ID),
 		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)
+}
+
+// lastLevelPreferenceKey is where ADR-54's last-visited level is stored,
+// one row per (user, library) in settings.db's user_preference table.
+func lastLevelPreferenceKey(categoryID int64) string {
+	return "library.last_level." + strconv.FormatInt(categoryID, 10)
+}
+
+// lastLibraryLevel reads a caller's own last-visited level for one library,
+// nil if never visited or if preferences are unavailable -- the same
+// "render without the tile" fallback as every other optional figure here.
+func (s *Server) lastLibraryLevel(ctx context.Context, userID, categoryID int64) *string {
+	if s.auth.Settings == nil {
+		return nil
+	}
+	raw, ok, err := s.auth.Settings.GetPreference(ctx, userID, lastLevelPreferenceKey(categoryID))
+	if err != nil {
+		s.logger.WarnContext(ctx, "last library level unavailable",
+			"user_id", userID, "category_id", categoryID, "error", err)
+		return nil
+	}
+	if !ok {
+		return nil
+	}
+	var level string
+	if err := json.Unmarshal([]byte(raw), &level); err != nil {
+		return nil
+	}
+	return &level
+}
+
+// routeSetLibraryLastLevel parses the id path parameter, mirroring routeGetWork.
+func (s *Server) routeSetLibraryLastLevel(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a library id must be a number")
+		return
+	}
+	s.SetLibraryLastLevel(w, r, id)
+}
+
+// SetLibraryLastLevel stores the level the caller last visited in one
+// library (ADR-54), so the sidebar tree costs one click on return.
+func (s *Server) SetLibraryLastLevel(w http.ResponseWriter, r *http.Request, id int64) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	category, err := access.Category(id, settings.PermissionRead)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+
+	var body gen.SetLibraryLastLevelJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "the request body could not be read")
+		return
+	}
+	if _, ok := s.findLevel(category.MediaType, body.Level); !ok {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound,
+			"Not found", "this library declares no such level")
+		return
+	}
+
+	encoded, err := json.Marshal(body.Level)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.auth.Settings == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "preferences are not available")
+		return
+	}
+	if err := s.auth.Settings.SetPreference(r.Context(), access.UserID(), lastLevelPreferenceKey(id), string(encoded)); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // libraryLevels renders one category's declared levels with their counts.
