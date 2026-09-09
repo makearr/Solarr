@@ -12,6 +12,7 @@ import { Activity } from "./Activity";
 import { Dashboard } from "./Dashboard";
 import { Import } from "./Import";
 import { Library } from "./Library";
+import { LibraryConfigPlaceholder } from "./LibraryConfigPlaceholder";
 import { LibraryLevelList } from "./LibraryLevelList";
 import { Moves } from "./Moves";
 import { People } from "./People";
@@ -57,6 +58,11 @@ const routes = [
     },
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/albums", component: Library }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/library/$categoryId/config/$section",
+    component: LibraryConfigPlaceholder,
+  }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/$level", component: LibraryLevelList }),
   createRoute({ getParentRoute: () => rootRoute, path: "/works/$id", component: WorkDetail }),
   createRoute({ getParentRoute: () => rootRoute, path: "/people", component: People }),

@@ -83,7 +83,11 @@ export function defaultLevelKey(library: LibraryEntry): string | undefined {
 
 export function Sidebar() {
   const path = useRouterState({ select: (state) => state.location.pathname });
-  const routeParams = useParams({ strict: false }) as { categoryId?: string; level?: string };
+  const routeParams = useParams({ strict: false }) as {
+    categoryId?: string;
+    level?: string;
+    section?: string;
+  };
   // Section 21.8's 700-1100px row: icons only, no decision panel to make room
   // for yet (that lands with a persisted Decision, stage 4+).
   const collapsed = useSidebarCollapsed();
@@ -154,6 +158,7 @@ export function Sidebar() {
                       collapsed={collapsed}
                       isActive={routeParams.categoryId === String(library.id)}
                       activeLevel={routeParams.level}
+                      activeSection={routeParams.section}
                       isExpanded={collapsed ? false : expanded.has(library.id) || routeParams.categoryId === String(library.id)}
                       onToggle={() => toggle(library.id)}
                     />
@@ -182,11 +187,22 @@ export function Sidebar() {
   );
 }
 
+// Sibling to the entity levels, not one of them (ADR-54's own tree sketch):
+// generic per-library config, not a media-type-declared NavigationLevel, so
+// it is never in library.levels and gets its own route rather than reusing
+// /library/$categoryId/$level.
+const CONFIG_SECTIONS: readonly { key: string; label: string }[] = [
+  { key: "quality", label: "Quality profiles" },
+  { key: "naming", label: "Naming" },
+  { key: "language", label: "Language" },
+];
+
 function LibraryNode({
   library,
   collapsed,
   isActive,
   activeLevel,
+  activeSection,
   isExpanded,
   onToggle,
 }: {
@@ -194,6 +210,7 @@ function LibraryNode({
   collapsed: boolean;
   isActive: boolean;
   activeLevel: string | undefined;
+  activeSection: string | undefined;
   isExpanded: boolean;
   onToggle: () => void;
 }) {
@@ -231,7 +248,7 @@ function LibraryNode({
         )}
       </div>
 
-      {!collapsed && isExpanded && library.levels.length > 0 && (
+      {!collapsed && isExpanded && (library.levels.length > 0 || CONFIG_SECTIONS.length > 0) && (
         <ul className="ml-5 flex flex-col gap-0.5 border-l border-border-subtle pl-2">
           {library.levels.map((level) => (
             <li key={level.key}>
@@ -242,6 +259,17 @@ function LibraryNode({
               >
                 <span className="truncate">{level.label}</span>
                 {level.count != null && <span className="ml-auto shrink-0 text-xs text-ink-muted">{level.count}</span>}
+              </Link>
+            </li>
+          ))}
+          {CONFIG_SECTIONS.map((section) => (
+            <li key={section.key}>
+              <Link
+                to="/library/$categoryId/config/$section"
+                params={{ categoryId: String(library.id), section: section.key }}
+                className={sectionLinkClass(isActive && activeSection === section.key, false)}
+              >
+                <span className="truncate">{section.label}</span>
               </Link>
             </li>
           ))}
