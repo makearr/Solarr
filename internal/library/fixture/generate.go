@@ -260,7 +260,12 @@ func insertWorkDetail(ctx context.Context, opened *store.Store, plans []*workPla
 			return err
 		}
 		plan.desiredID = desired.ID
-		return nil
+
+		// Bounded sort-name modulus, no real person row needed (ADR-28 plan
+		// benchmark only orders by this column, migration 0021).
+		return queries.SetWorkPrimaryArtist(ctx, librarydb.SetWorkPrimaryArtistParams{
+			ID: plan.id, PrimaryArtistSortName: text(fmt.Sprintf("Artist %04d", plan.id%500)),
+		})
 	})
 	if err != nil {
 		return fmt.Errorf("fixture: work detail: %w", err)

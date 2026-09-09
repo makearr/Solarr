@@ -11,17 +11,22 @@ import (
 )
 
 // workColumns is the sqlc model's field order, which the scan below depends on
-// (documentation/sql-and-sqlc.md).
-const workColumns = `id, media_type, canonical_title, sort_title, original_language,
-       year, runtime_ms, added_at, updated_at, added_by`
+// (documentation/sql-and-sqlc.md). Qualified with "work." -- person (joined in
+// for workArtistColumn) also has id and added_at columns, which would
+// otherwise be ambiguous.
+const workColumns = `work.id, work.media_type, work.canonical_title, work.sort_title, work.original_language,
+       work.year, work.runtime_ms, work.added_at, work.updated_at, work.added_by`
 
-// workArtistColumn is the work list's one join: the credited artist's own name,
-// so the list can show it without a second round-trip per row. Scoped to the
-// "artist" role and limited to one row via credit_by_work(work_id, role), so it
-// stays an index point-lookup regardless of corpus size (ADR-28) rather than a
-// join that could multiply rows out for a work credited to several artists.
-const workArtistColumn = `(SELECT p.name FROM credit c JOIN person p ON p.id = c.person_id
-        WHERE c.work_id = work.id AND c.role = 'artist' ORDER BY c.ord LIMIT 1) AS artist`
+// workArtistColumn reads work.primary_artist_id (migration 0021) via a plain
+// LEFT JOIN -- a correlated subquery here used to force SQLite to sort the
+// whole result regardless of index (ADR-28; see notes.md for the story).
+const workArtistColumn = `primary_artist.name AS artist`
+
+// workArtistJoin is workArtistColumn's join, appended to every list query's
+// FROM clause. "primary_artist" avoids colliding with any other query in this
+// file that might alias person differently.
+const workArtistJoin = `
+LEFT JOIN person primary_artist ON primary_artist.id = work.primary_artist_id`
 
 // WorkSort selects which column the list is ordered by. The zero value sorts
 // by title, matching every caller that does not set it.
@@ -65,10 +70,8 @@ type WorkFilter struct {
 	// against any of these categories -- see RootFolderIDs' own doc comment.
 	CategoryIDs []int64
 	// Sort and Direction pick the list's order (section 21.2's configurable,
-	// sortable columns). Artist is deliberately not sortable: it comes from a
-	// join with no supporting index, so ordering by it would fall back to
-	// sorting the whole result (ADR-28) -- displayed, but not orderable, until
-	// there is a real reason to pay for that index.
+	// sortable columns). Artist is not a WorkSort option yet -- work_primary_artist_sort
+	// (migration 0021) could support it now, but nothing has asked for it.
 	Sort      WorkSort
 	Direction SortDirection
 }
@@ -122,24 +125,25 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	// column, not affected by column's own direction, and ORDER BY below keeps it
 	// ascending too so the two stay consistent.
 	predicates.AddIf(after.ID != 0,
-		"("+column+" "+operator+" ? OR ("+column+" = ? AND id > ?))",
+		"("+column+" "+operator+" ? OR ("+column+" = ? AND work.id > ?))",
 		cursorValue, cursorValue, after.ID)
 
-	query := "SELECT " + workColumns + ",\n       " + workArtistColumn + "\nFROM work" +
-		predicates.Where() + "\nORDER BY " + column + orderDirection + ", id\nLIMIT ?"
+	query := "SELECT " + workColumns + ",\n       " + workArtistColumn + "\nFROM work" + workArtistJoin +
+		predicates.Where() + "\nORDER BY " + column + orderDirection + ", work.id\nLIMIT ?"
 	return query, predicates.Args(pageSize)
 }
 
 // sortColumn maps a WorkSort to its SQL column and the cursor value to compare
-// it against.
+// it against. Qualified with "work." -- workArtistColumn's join makes "added_at"
+// otherwise ambiguous against person's own column of the same name.
 func sortColumn(sort WorkSort, after WorkCursor) (column string, cursorValue any) {
 	switch sort {
 	case WorkSortYear:
-		return "year", after.SortYear
+		return "work.year", after.SortYear
 	case WorkSortAdded:
-		return "added_at", after.SortAdded
+		return "work.added_at", after.SortAdded
 	default:
-		return "sort_title", after.SortTitle
+		return "work.sort_title", after.SortTitle
 	}
 }
 
@@ -179,11 +183,16 @@ func prefixUpperBound(prefix string) (string, bool) {
 // that half was not asked for and contributes nothing; both nil together
 // leaves the list unfiltered. A non-nil empty slice on a side that applies
 // matches no rows via that side, same as before this had two halves.
+//
+// EXISTS, correlated on work.id, not "id IN (SELECT ...)": the IN form drove
+// SQLite to abandon the sort index entirely (ADR-28; see notes.md).
 func addVisibility(predicates *store.Predicates, rootFolderIDs, categoryIDs []int64) {
 	rootFragment, rootArgs, rootApplies := membershipFragment(
-		"id IN (SELECT work_id FROM work_root_folder WHERE root_folder_id IN (%s))", rootFolderIDs)
+		"EXISTS (SELECT 1 FROM work_root_folder wrf WHERE wrf.work_id = work.id AND wrf.root_folder_id IN (%s))",
+		rootFolderIDs)
 	categoryFragment, categoryArgs, categoryApplies := membershipFragment(
-		"id IN (SELECT work_id FROM desired_item WHERE category_id IN (%s))", categoryIDs)
+		"EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = work.id AND di.category_id IN (%s))",
+		categoryIDs)
 
 	switch {
 	case !rootApplies && !categoryApplies:
