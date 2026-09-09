@@ -144,6 +144,36 @@ type LibraryTracksReader interface {
 		rows []TrackRow, nextCursor TracksCursor, hasMore bool, err error)
 }
 
+// ArtistsFilter narrows ListLibraryArtists -- ADR-27's two visibility
+// halves, exactly WorksFilter's own fields.
+type ArtistsFilter struct {
+	RootFolderIDs []int64
+	CategoryIDs   []int64
+}
+
+// ArtistsCursor is a position in the Artists level, ordered by sort name.
+type ArtistsCursor struct {
+	SortName string
+	ID       int64
+}
+
+// ArtistRow is one person credited as an artist on a work visible to the
+// library (ADR-54's Artists level).
+type ArtistRow struct {
+	ID       int64
+	Name     string
+	SortName string
+}
+
+// LibraryArtistsReader lists the Artists navigation level (a person-entity
+// level). Defined here and implemented by the caller, so this package never
+// imports internal/library directly (WorksReader's own doc comment explains
+// why) -- separate from PeopleReader, which is deliberately not
+// category-scoped (a person spans several media types at once, ADR-32).
+type LibraryArtistsReader interface {
+	ListLibraryArtists(ctx context.Context, filter ArtistsFilter, cursor ArtistsCursor, pageSize int) ([]ArtistRow, error)
+}
+
 // levelCursor is GET /libraries/{id}/{level}'s own opaque cursor: a handful
 // of text fields plus an id tie-break, general enough for any level's own
 // sort key (Albums needs one field, Tracks needs two) without a new codec
@@ -258,6 +288,8 @@ func (s *Server) ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int
 		s.listLibraryLevelWorks(w, r, rootFolderIDs, categoryIDs, cursor, limit)
 	case model.LevelEntityWorkPart:
 		s.listLibraryLevelTracks(w, r, rootFolderIDs, categoryIDs, cursor, limit)
+	case model.LevelEntityPerson:
+		s.listLibraryLevelArtists(w, r, rootFolderIDs, categoryIDs, cursor, limit)
 	default:
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
 			"Unavailable", "this level has no reader wired up yet")
@@ -349,6 +381,39 @@ func (s *Server) listLibraryLevelTracks(
 		}
 	}
 	writeLibraryLevelPage(w, s.logger, views, nextEncoded)
+}
+
+// listLibraryLevelArtists serves a person-entity level (Artists) over
+// LibraryArtistsReader.
+func (s *Server) listLibraryLevelArtists(
+	w http.ResponseWriter, r *http.Request, rootFolderIDs, categoryIDs []int64, cursor levelCursor, limit int,
+) {
+	if s.libraryArtists == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "the library is not available")
+		return
+	}
+	rows, err := s.libraryArtists.ListLibraryArtists(r.Context(),
+		ArtistsFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs},
+		ArtistsCursor{SortName: cursor.field(0), ID: cursor.id}, limit+1)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+
+	items := rows
+	var next string
+	if len(rows) > limit {
+		items = rows[:limit]
+		last := items[len(items)-1]
+		next = (levelCursor{fields: []string{last.SortName}, id: last.ID}).encode()
+	}
+
+	views := make([]gen.LibraryLevelItem, len(items))
+	for index, row := range items {
+		views[index] = gen.LibraryLevelItem{Id: row.ID, Title: row.Name}
+	}
+	writeLibraryLevelPage(w, s.logger, views, next)
 }
 
 // trackSubtitle is a track row's secondary line: its artist and album,

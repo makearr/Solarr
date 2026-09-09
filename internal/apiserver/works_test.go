@@ -75,6 +75,23 @@ type worksFixture struct {
 	clock                *clock.Fake
 }
 
+// fakeLibraryArtistsReader answers canned rows for the Artists navigation
+// level, so a test can assert ListLibraryLevel's dispatch without a real
+// library.People.
+type fakeLibraryArtistsReader struct {
+	rows       []apiserver.ArtistRow
+	lastFilter apiserver.ArtistsFilter
+	lastCursor apiserver.ArtistsCursor
+}
+
+func (f *fakeLibraryArtistsReader) ListLibraryArtists(
+	_ context.Context, filter apiserver.ArtistsFilter, cursor apiserver.ArtistsCursor, _ int,
+) ([]apiserver.ArtistRow, error) {
+	f.lastFilter = filter
+	f.lastCursor = cursor
+	return f.rows, nil
+}
+
 // fakeLibraryTracksReader answers canned rows for the Tracks navigation
 // level, so a test can assert ListLibraryLevel's dispatch without a real
 // library.TrackParts.
@@ -112,6 +129,19 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 // ADR-54's per-level counts without every other caller needing one.
 func newWorksFixtureWithLibrarySizeAndNavigation(
 	t *testing.T, librarySize apiserver.LibrarySize, navigation apiserver.NavigationProvider,
+) worksFixture {
+	t.Helper()
+	return newWorksFixtureWithLibrarySizeNavigationAndArtists(t, librarySize, navigation, nil)
+}
+
+// newWorksFixtureWithLibrarySizeNavigationAndArtists is
+// newWorksFixtureWithLibrarySizeAndNavigation plus an injectable
+// LibraryArtistsReader, for libraries_test.go's assertion that the Artists
+// level dispatches when one is actually wired (nil elsewhere, so the "no
+// reader yet" 503 case stays real).
+func newWorksFixtureWithLibrarySizeNavigationAndArtists(
+	t *testing.T, librarySize apiserver.LibrarySize, navigation apiserver.NavigationProvider,
+	libraryArtists apiserver.LibraryArtistsReader,
 ) worksFixture {
 	t.Helper()
 	directory := t.TempDir()
@@ -184,6 +214,7 @@ func newWorksFixtureWithLibrarySizeAndNavigation(
 		LibrarySize:          librarySize,
 		Navigation:           navigation,
 		LibraryTracks:        libraryTracks,
+		LibraryArtists:       libraryArtists,
 		Clock:                fake,
 		Logger:               slog.New(slog.DiscardHandler),
 		Auth: apiserver.AuthConfig{

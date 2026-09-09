@@ -123,6 +123,9 @@ type Config struct {
 	// LibraryTracks lists the Tracks navigation level (ADR-54). Optional:
 	// without it, a work_part-entity level answers 503.
 	LibraryTracks LibraryTracksReader
+	// LibraryArtists lists the Artists navigation level (ADR-54). Optional:
+	// without it, a person-entity level answers 503.
+	LibraryArtists LibraryArtistsReader
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -164,6 +167,7 @@ type Server struct {
 	renameStarter        RenameStarter
 	navigation           NavigationProvider
 	libraryTracks        LibraryTracksReader
+	libraryArtists       LibraryArtistsReader
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -217,6 +221,7 @@ func New(config Config) (*Server, error) {
 		renameStarter:        config.RenameStarter,
 		navigation:           config.Navigation,
 		libraryTracks:        config.LibraryTracks,
+		libraryArtists:       config.LibraryArtists,
 		address:              net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 

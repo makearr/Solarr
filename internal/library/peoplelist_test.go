@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/library"
@@ -38,6 +39,75 @@ func TestListPeople_OrdersBySortNameThenID(t *testing.T) {
 	}
 	if got[0].SortName != "CEHA" || got[1].SortName != "Bush, Vutu" || got[2].SortName != "Katupoken" {
 		t.Errorf("order = %q, %q, %q, want CEHA, Bush Vutu, Katupoken by sort_name", got[0].SortName, got[1].SortName, got[2].SortName)
+	}
+}
+
+// ADR-54's Artists level: only persons credited role="artist" on a work
+// visible to the category appear, and a person credited only in a role that
+// isn't "artist" (a producer, say) never does.
+func TestListPeople_RoleAndVisibilityFilterNarrowsToArtistsInTheCategory(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	people := library.NewPeople(opened)
+
+	visibleWork, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: "test", ExternalID: "a", Confidence: 1,
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "A", SortTitle: "a"}, RootFolderID: 1,
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks (visible): %v", err)
+	}
+	otherRootWork, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: "test", ExternalID: "b", Confidence: 1,
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "B", SortTitle: "b"}, RootFolderID: 2,
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks (other root): %v", err)
+	}
+
+	artistInCategory := resolvePersonNamed(t, people, "artist-in", "In Category", "In Category")
+	artistElsewhere := resolvePersonNamed(t, people, "artist-out", "Out Of Category", "Out Of Category")
+	producerOnly := resolvePersonNamed(t, people, "producer-only", "Producer Only", "Producer Only")
+
+	if err := people.AddCredit(t.Context(), visibleWork[0], artistInCategory, "artist", 0); err != nil {
+		t.Fatalf("AddCredit (in category): %v", err)
+	}
+	if err := people.AddCredit(t.Context(), otherRootWork[0], artistElsewhere, "artist", 0); err != nil {
+		t.Fatalf("AddCredit (other root): %v", err)
+	}
+	if err := people.AddCredit(t.Context(), visibleWork[0], producerOnly, "producer", 0); err != nil {
+		t.Fatalf("AddCredit (producer): %v", err)
+	}
+
+	got, err := people.ListPeople(t.Context(),
+		library.PersonFilter{Role: "artist", RootFolderIDs: []int64{1}}, library.PersonCursor{}, 50)
+	if err != nil {
+		t.Fatalf("ListPeople: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != artistInCategory {
+		t.Errorf("ListPeople = %+v, want exactly the one artist credited in the visible root", got)
+	}
+}
+
+// Unlike TrackParts' own plan test (bench_test.go, corpus-scale, since two
+// viable indexes competed there), person_sort is the only index that could
+// ever serve this ORDER BY -- there is no competing candidate for a small
+// table to pick "correctly" by accident, so the EXISTS-vs-TEMP-B-TREE
+// question this asks is scale-independent (ADR-28; see notes.md).
+func TestListPeople_ArtistFilterPlanReachesTheIndexAndNeverSorts(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+
+	plan, err := people.ExplainPeopleList(t.Context(),
+		library.PersonFilter{Role: "artist", RootFolderIDs: []int64{1}}, library.PersonCursor{}, 50)
+	if err != nil {
+		t.Fatalf("ExplainPeopleList: %v", err)
+	}
+	if !strings.Contains(plan, "person_sort") {
+		t.Errorf("plan does not reach person_sort:\n%s", plan)
+	}
+	if strings.Contains(plan, "TEMP B-TREE") {
+		t.Errorf("plan sorts the whole result:\n%s", plan)
 	}
 }
 

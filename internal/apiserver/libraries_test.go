@@ -237,8 +237,8 @@ func TestListLibraryLevel_WorkPartEntityDelegatesToLibraryTracksReader(t *testin
 	}
 }
 
-// A level with no reader wired up (Artists, today) answers 503 rather than
-// crashing or silently returning nothing.
+// A level with no reader wired up answers 503 rather than crashing or
+// silently returning nothing.
 func TestListLibraryLevel_PersonEntityWithNoReaderAnswers503(t *testing.T) {
 	navigation := fakeNavigation{"music": {{Key: "artists", Label: "Artists", Entity: model.LevelEntityPerson}}}
 	fixture := newWorksFixtureWithLibrarySizeAndNavigation(t, nil, navigation)
@@ -253,6 +253,36 @@ func TestListLibraryLevel_PersonEntityWithNoReaderAnswers503(t *testing.T) {
 		fmt.Sprintf("/api/v1/libraries/%d/artists", category.ID)))
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503", recorder.Code)
+	}
+}
+
+// A person-entity level (Artists) delegates to LibraryArtistsReader once one
+// is actually wired.
+func TestListLibraryLevel_PersonEntityDelegatesToLibraryArtistsReader(t *testing.T) {
+	navigation := fakeNavigation{"music": {{Key: "artists", Label: "Artists", Entity: model.LevelEntityPerson}}}
+	artists := &fakeLibraryArtistsReader{rows: []apiserver.ArtistRow{{ID: 5, Name: "Katupoken", SortName: "Katupoken"}}}
+	fixture := newWorksFixtureWithLibrarySizeNavigationAndArtists(t, nil, navigation, artists)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies,
+		fmt.Sprintf("/api/v1/libraries/%d/artists", category.ID)))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	var body libraryLevelPageBody
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body.Items) != 1 || body.Items[0].Title != "Katupoken" {
+		t.Errorf("items = %+v, want Katupoken", body.Items)
+	}
+	if len(artists.lastFilter.CategoryIDs) != 1 || artists.lastFilter.CategoryIDs[0] != category.ID {
+		t.Errorf("filter = %+v, want scoped to category %d", artists.lastFilter, category.ID)
 	}
 }
 

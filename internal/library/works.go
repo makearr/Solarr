@@ -187,23 +187,34 @@ func prefixUpperBound(prefix string) (string, bool) {
 // EXISTS, correlated on work.id, not "id IN (SELECT ...)": the IN form drove
 // SQLite to abandon the sort index entirely (ADR-28; see notes.md).
 func addVisibility(predicates *store.Predicates, rootFolderIDs, categoryIDs []int64) {
+	fragment, arguments, applies := visibilityFragment("work.id", rootFolderIDs, categoryIDs)
+	if applies {
+		predicates.Add(fragment, arguments...)
+	}
+}
+
+// visibilityFragment is addVisibility's own OR-of-two-halves logic, factored
+// out so a second real caller (peoplelist.go's Artists-level query, credit-
+// correlated rather than directly against work.id) shares it instead of
+// re-deriving the same easy-to-get-subtly-wrong combination.
+func visibilityFragment(workIDExpr string, rootFolderIDs, categoryIDs []int64) (fragment string, arguments []any, applies bool) {
 	rootFragment, rootArgs, rootApplies := membershipFragment(
-		"EXISTS (SELECT 1 FROM work_root_folder wrf WHERE wrf.work_id = work.id AND wrf.root_folder_id IN (%s))",
+		"EXISTS (SELECT 1 FROM work_root_folder wrf WHERE wrf.work_id = "+workIDExpr+" AND wrf.root_folder_id IN (%s))",
 		rootFolderIDs)
 	categoryFragment, categoryArgs, categoryApplies := membershipFragment(
-		"EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = work.id AND di.category_id IN (%s))",
+		"EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = "+workIDExpr+" AND di.category_id IN (%s))",
 		categoryIDs)
 
 	switch {
 	case !rootApplies && !categoryApplies:
-		return
+		return "", nil, false
 	case rootApplies && !categoryApplies:
-		predicates.Add(rootFragment, rootArgs...)
+		return rootFragment, rootArgs, true
 	case !rootApplies && categoryApplies:
-		predicates.Add(categoryFragment, categoryArgs...)
+		return categoryFragment, categoryArgs, true
 	default:
-		predicates.Add("("+rootFragment+" OR "+categoryFragment+")",
-			append(append([]any{}, rootArgs...), categoryArgs...)...)
+		return "(" + rootFragment + " OR " + categoryFragment + ")",
+			append(append([]any{}, rootArgs...), categoryArgs...), true
 	}
 }
 
