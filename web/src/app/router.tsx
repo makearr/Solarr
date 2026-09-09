@@ -3,12 +3,16 @@ import {
   createRoute,
   createRouter,
   Outlet,
+  redirect,
 } from "@tanstack/react-router";
+
+import { api } from "@/api/client";
 
 import { Activity } from "./Activity";
 import { Dashboard } from "./Dashboard";
 import { Import } from "./Import";
 import { Library } from "./Library";
+import { LibraryLevelList } from "./LibraryLevelList";
 import { Moves } from "./Moves";
 import { People } from "./People";
 import { PersonDetail } from "./PersonDetail";
@@ -29,7 +33,30 @@ const rootRoute = createRootRoute({
 // generated artefact to keep in step, and the route count here does not earn it.
 const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/", component: Dashboard }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/library", component: Library }),
+  // The old flat /library?category_id=X (ADR-54 replaces it with a per-library
+  // tree): redirected, never 404ing, to the same category's Albums level, or
+  // (an aggregate dashboard tile has no single category) the first library
+  // the caller can see -- there is no unfiltered browse view any more.
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/library",
+    beforeLoad: async ({ search }) => {
+      const categoryId = (search as Record<string, unknown>).category_id;
+      if (typeof categoryId === "string") {
+        throw redirect({ to: "/library/$categoryId/albums", params: { categoryId } });
+      }
+      const { data } = await api.GET("/libraries");
+      const first = data?.[0];
+      const level = first?.levels.find((entry) => entry.key === "albums")?.key ?? first?.levels[0]?.key;
+      throw redirect(
+        first && level
+          ? { to: "/library/$categoryId/$level", params: { categoryId: String(first.id), level } }
+          : { to: "/" },
+      );
+    },
+  }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/albums", component: Library }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/$level", component: LibraryLevelList }),
   createRoute({ getParentRoute: () => rootRoute, path: "/works/$id", component: WorkDetail }),
   createRoute({ getParentRoute: () => rootRoute, path: "/people", component: People }),
   createRoute({ getParentRoute: () => rootRoute, path: "/people/$id", component: PersonDetail }),

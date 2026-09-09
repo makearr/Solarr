@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { Link } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
@@ -129,10 +129,24 @@ function buildColumns(visible: ReadonlySet<OptionalColumn>): Column<Work>[] {
   return columns;
 }
 
-// category_id narrows to one category (ADR-27); the sidebar links here with it set.
-const FILTER_KEYS: readonly string[] = ["category_id"];
+// The route's own path param (/library/$categoryId/albums, ADR-54) -- no
+// longer a URL filter a user picks among several, so it is not in FILTER_KEYS.
+const FILTER_KEYS: readonly string[] = [];
 
 export function Library() {
+  const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
+  // FILTER_KEYS is empty (category is a route param, not a URL filter), so
+  // category_id is injected here rather than read back from the URL -- this
+  // is what keeps the query cache key and bulk "select all matching" scoped
+  // to the right category (query.key/selection.toRequest both read filters).
+  const baseView = useRouteView(FILTER_KEYS);
+  const routeView = useMemo(
+    () => ({
+      query: { ...baseView.query, filters: { ...baseView.query.filters, category_id: categoryId ?? "" } },
+      setQuery: baseView.setQuery,
+    }),
+    [baseView, categoryId],
+  );
   const [view, setView] = useState<"table" | "grid">("table");
   const [visibleColumns, setVisibleColumns] = useState<OptionalColumn[]>(loadVisibleColumns);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -146,14 +160,13 @@ export function Library() {
       rowHeight: narrow ? CARD_HEIGHT : view === "grid" ? GRID_CARD_HEIGHT : TABLE_ROW_HEIGHT,
       idOf: (work) => work.id,
       fetchPage: async ({ cursor, query, signal }) => {
-        const categoryId = query.filters.category_id;
         const sort = query.sort !== null ? SORT_KEYS[query.sort as OptionalColumn | "title"] : undefined;
         const { data, error } = await api.GET("/works", {
           params: {
             query: {
               cursor,
               limit: 100,
-              category_id: categoryId ? Number(categoryId) : undefined,
+              category_id: query.filters.category_id ? Number(query.filters.category_id) : undefined,
               sort,
               dir: query.direction === "desc" ? "desc" : undefined,
             },
@@ -164,7 +177,7 @@ export function Library() {
         return data;
       },
     },
-    useRouteView(FILTER_KEYS),
+    routeView,
   );
 
   const visibleSet = useMemo(() => new Set(visibleColumns), [visibleColumns]);
