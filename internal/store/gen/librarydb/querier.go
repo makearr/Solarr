@@ -36,6 +36,13 @@ type Querier interface {
 	// "You have 4 of 6 Ihaol films" is the first thing library-derived discovery
 	// looks for, so held and stated counts come back together (ADR-38).
 	CollectionCoverage(ctx context.Context, id int64) (CollectionCoverageRow, error)
+	// The "artists" count for one category (ADR-54's person-entity navigation levels,
+	// e.g. music's Artists): distinct persons credited with role 'artist' on a work
+	// visible to the category. Hard-codes the 'artist' role, the same way
+	// workArtistColumn already does (internal/library/works.go) -- generalising which
+	// role counts as a level's "primary person" waits for a second media type that
+	// needs a different one.
+	CountArtistCreditsVisibleToCategory(ctx context.Context, arg CountArtistCreditsVisibleToCategoryParams) (int64, error)
 	// library.db references settings.db by id with no foreign key (ADR-25), so only the
 	// application can find a reference a restore has orphaned. The count is what makes
 	// the report worth reading.
@@ -56,6 +63,10 @@ type Querier interface {
 	// Only 'primary' counts: a trailer belongs to the work without satisfying it.
 	CountPrimaryFiles(ctx context.Context, desiredItemID int64) (int64, error)
 	CountRollupOutcomes(ctx context.Context, since int64) ([]CountRollupOutcomesRow, error)
+	// The "parts" count for one category (ADR-54's work_part-entity navigation levels,
+	// e.g. music's Tracks): every work_part belonging to a work visible to the
+	// category, by the same on-disk-or-desired union CountWorksVisibleToCategory uses.
+	CountWorkPartsVisibleToCategory(ctx context.Context, arg CountWorkPartsVisibleToCategoryParams) (int64, error)
 	// Coverage: what a monitored person has produced against what is held (ADR-32).
 	CountWorksCreditedTo(ctx context.Context, arg CountWorksCreditedToParams) (int64, error)
 	// The "works" count for one category: the union of on-disk presence

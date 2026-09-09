@@ -135,6 +135,14 @@ const (
 	JobStateSUCCEEDED    JobState = "SUCCEEDED"
 )
 
+// Defines values for LibraryLevelEntity.
+const (
+	LibraryLevelEntityOrganisation LibraryLevelEntity = "organisation"
+	LibraryLevelEntityPerson       LibraryLevelEntity = "person"
+	LibraryLevelEntityWork         LibraryLevelEntity = "work"
+	LibraryLevelEntityWorkPart     LibraryLevelEntity = "work_part"
+)
+
 // Defines values for LogoutStatusStatus.
 const (
 	SignedOut LogoutStatusStatus = "signed-out"
@@ -696,6 +704,14 @@ type JobPool string
 // JobState defines model for JobState.
 type JobState string
 
+// Library A category as a navigation root (ADR-54): its declared entity levels replace the old flat works/files pair -- see LibraryLevel.
+type Library struct {
+	Id        int64          `json:"id"`
+	Levels    []LibraryLevel `json:"levels"`
+	MediaType string         `json:"media_type"`
+	Name      string         `json:"name"`
+}
+
 // LibraryCategory A category as a navigation target: no `permission` field, since the list is already narrowed to what the caller may read (unlike `Me`'s `categories`, which reports the caller's level on each).
 type LibraryCategory struct {
 	Files     *int   `json:"files,omitempty"`
@@ -720,6 +736,21 @@ type LibraryCounts struct {
 	Unprobed int `json:"unprobed"`
 	Works    int `json:"works"`
 }
+
+// LibraryLevel One browsable entity level a media type declares (ADR-23's NavigationLevels extension point). Core never learns what an album or a season is -- key, label and entity are entirely the media type's own vocabulary.
+type LibraryLevel struct {
+	// Count From the counter table (section 21.12), never a live COUNT. Absent when this entity has no counter yet.
+	Count       *int               `json:"count,omitempty"`
+	DefaultSort string             `json:"default_sort"`
+	Entity      LibraryLevelEntity `json:"entity"`
+
+	// Key Stable identifier used in the URL and in GET /libraries/{id}/{level}.
+	Key   string `json:"key"`
+	Label string `json:"label"`
+}
+
+// LibraryLevelEntity defines model for LibraryLevel.Entity.
+type LibraryLevelEntity string
 
 // LogoutStatus defines model for LogoutStatus.
 type LogoutStatus struct {
@@ -1441,6 +1472,9 @@ type ServerInterface interface {
 	// A page of jobs the caller may see.
 	// (GET /jobs)
 	ListJobs(w http.ResponseWriter, r *http.Request, params ListJobsParams)
+	// The navigation tree -- libraries the caller may see, with their levels (ADR-54).
+	// (GET /libraries)
+	ListLibraries(w http.ResponseWriter, r *http.Request)
 	// Files a scan recorded that the ADR-24 chain could not confidently resolve (F29's manual identification queue).
 	// (GET /library/unidentified)
 	ListUnidentified(w http.ResponseWriter, r *http.Request, params ListUnidentifiedParams)
@@ -1669,6 +1703,12 @@ func (_ Unimplemented) ListImportUnits(w http.ResponseWriter, r *http.Request, i
 // A page of jobs the caller may see.
 // (GET /jobs)
 func (_ Unimplemented) ListJobs(w http.ResponseWriter, r *http.Request, params ListJobsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The navigation tree -- libraries the caller may see, with their levels (ADR-54).
+// (GET /libraries)
+func (_ Unimplemented) ListLibraries(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2501,6 +2541,28 @@ func (siw *ServerInterfaceWrapper) ListJobs(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListJobs(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLibraries operation middleware
+func (siw *ServerInterfaceWrapper) ListLibraries(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLibraries(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3710,6 +3772,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/jobs", wrapper.ListJobs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/libraries", wrapper.ListLibraries)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/library/unidentified", wrapper.ListUnidentified)

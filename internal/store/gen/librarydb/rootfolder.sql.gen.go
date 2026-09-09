@@ -9,6 +9,59 @@ import (
 	"context"
 )
 
+const countArtistCreditsVisibleToCategory = `-- name: CountArtistCreditsVisibleToCategory :one
+SELECT CAST(COUNT(DISTINCT person_id) AS INTEGER) AS total FROM credit
+WHERE role = 'artist' AND work_id IN (
+  SELECT work_id FROM work_root_folder
+  WHERE root_folder_id IN (SELECT value FROM json_each(?1))
+  UNION
+  SELECT work_id FROM desired_item WHERE category_id = ?2
+)
+`
+
+type CountArtistCreditsVisibleToCategoryParams struct {
+	RootFolderIds interface{}
+	CategoryID    int64
+}
+
+// The "artists" count for one category (ADR-54's person-entity navigation levels,
+// e.g. music's Artists): distinct persons credited with role 'artist' on a work
+// visible to the category. Hard-codes the 'artist' role, the same way
+// workArtistColumn already does (internal/library/works.go) -- generalising which
+// role counts as a level's "primary person" waits for a second media type that
+// needs a different one.
+func (q *Queries) CountArtistCreditsVisibleToCategory(ctx context.Context, arg CountArtistCreditsVisibleToCategoryParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countArtistCreditsVisibleToCategory, arg.RootFolderIds, arg.CategoryID)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
+const countWorkPartsVisibleToCategory = `-- name: CountWorkPartsVisibleToCategory :one
+SELECT CAST(COUNT(*) AS INTEGER) AS total FROM work_part
+WHERE work_id IN (
+  SELECT work_id FROM work_root_folder
+  WHERE root_folder_id IN (SELECT value FROM json_each(?1))
+  UNION
+  SELECT work_id FROM desired_item WHERE category_id = ?2
+)
+`
+
+type CountWorkPartsVisibleToCategoryParams struct {
+	RootFolderIds interface{}
+	CategoryID    int64
+}
+
+// The "parts" count for one category (ADR-54's work_part-entity navigation levels,
+// e.g. music's Tracks): every work_part belonging to a work visible to the
+// category, by the same on-disk-or-desired union CountWorksVisibleToCategory uses.
+func (q *Queries) CountWorkPartsVisibleToCategory(ctx context.Context, arg CountWorkPartsVisibleToCategoryParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countWorkPartsVisibleToCategory, arg.RootFolderIds, arg.CategoryID)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const countWorksVisibleToCategory = `-- name: CountWorksVisibleToCategory :one
 SELECT CAST(COUNT(DISTINCT work_id) AS INTEGER) AS total FROM (
   SELECT work_id FROM work_root_folder

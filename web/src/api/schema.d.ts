@@ -831,6 +831,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/libraries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The navigation tree -- libraries the caller may see, with their levels (ADR-54).
+         * @description Unpaginated, same reasoning as GET /categories: the number of libraries is small. Each level's count comes from the counter table (section 21.12), never a live COUNT.
+         */
+        get: operations["listLibraries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories": {
         parameters: {
             query?: never;
@@ -1651,6 +1671,31 @@ export interface components {
             /** @description From the counter table (section 21.12), never a live COUNT. 0 until the reconciliation sweep has run at least once. */
             works?: number;
             files?: number;
+        };
+        /** @description A category as a navigation root (ADR-54): its declared entity levels replace the old flat works/files pair -- see LibraryLevel. */
+        Library: {
+            /** Format: int64 */
+            id: number;
+            /** @example music */
+            media_type: string;
+            name: string;
+            levels: components["schemas"]["LibraryLevel"][];
+        };
+        /** @description One browsable entity level a media type declares (ADR-23's NavigationLevels extension point). Core never learns what an album or a season is -- key, label and entity are entirely the media type's own vocabulary. */
+        LibraryLevel: {
+            /**
+             * @description Stable identifier used in the URL and in GET /libraries/{id}/{level}.
+             * @example albums
+             */
+            key: string;
+            /** @example Albums */
+            label: string;
+            /** @enum {string} */
+            entity: "work" | "work_part" | "person" | "organisation";
+            /** @example title */
+            default_sort: string;
+            /** @description From the counter table (section 21.12), never a live COUNT. Absent when this entity has no counter yet. */
+            count?: number;
         };
         /** @description A hard requirement, evaluated before any comparison (ADR-40 stage 1). */
         GateResult: {
@@ -3009,6 +3054,27 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listLibraries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The libraries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Library"][];
+                };
+            };
+            401: components["responses"]["Problem"];
         };
     };
     listCategories: {

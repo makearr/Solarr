@@ -116,6 +116,10 @@ type Config struct {
 	// RenameStarter applies section 11.8's naming template to a root.
 	// Optional: without it, RenameRootFolder answers 503.
 	RenameStarter RenameStarter
+	// Navigation resolves ADR-54's declared levels per media type. Optional:
+	// without it, ListLibraries reports every library with no levels rather
+	// than failing.
+	Navigation NavigationProvider
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -155,6 +159,7 @@ type Server struct {
 	drainStarter         DrainStarter
 	moveJobs             MoveJobLister
 	renameStarter        RenameStarter
+	navigation           NavigationProvider
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -206,6 +211,7 @@ func New(config Config) (*Server, error) {
 		drainStarter:         config.DrainStarter,
 		moveJobs:             config.MoveJobs,
 		renameStarter:        config.RenameStarter,
+		navigation:           config.Navigation,
 		address:              net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -251,6 +257,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/library/unidentified/{mediaObjectId}/resolve", server.routeResolveUnidentified)
 			secured.Get("/search", server.routeSearch)
 			secured.Post("/score/simulate", server.SimulateScore)
+			secured.Get("/libraries", server.ListLibraries)
 			secured.Get("/categories", server.ListCategories)
 			secured.Post("/categories", server.CreateCategory)
 			secured.Delete("/categories/{id}", server.routeDeleteCategory)

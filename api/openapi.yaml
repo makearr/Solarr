@@ -1304,6 +1304,25 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /libraries:
+    get:
+      operationId: listLibraries
+      tags: [library]
+      summary: The navigation tree -- libraries the caller may see, with their levels (ADR-54).
+      description: >-
+        Unpaginated, same reasoning as GET /categories: the number of
+        libraries is small. Each level's count comes from the counter table
+        (section 21.12), never a live COUNT.
+      responses:
+        "200":
+          description: The libraries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Library" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /categories:
     get:
       operationId: listCategories
@@ -2474,6 +2493,48 @@ components:
             the reconciliation sweep has run at least once.
         files:
           type: integer
+
+    Library:
+      type: object
+      description: >-
+        A category as a navigation root (ADR-54): its declared entity levels
+        replace the old flat works/files pair -- see LibraryLevel.
+      required: [id, media_type, name, levels]
+      properties:
+        id: { type: integer, format: int64 }
+        media_type: { type: string, example: "music" }
+        name: { type: string }
+        levels:
+          type: array
+          items: { $ref: "#/components/schemas/LibraryLevel" }
+
+    LibraryLevel:
+      type: object
+      description: >-
+        One browsable entity level a media type declares (ADR-23's
+        NavigationLevels extension point). Core never learns what an album
+        or a season is -- key, label and entity are entirely the media
+        type's own vocabulary.
+      required: [key, label, entity, default_sort]
+      properties:
+        key:
+          type: string
+          description: Stable identifier used in the URL and in GET /libraries/{id}/{level}.
+          example: "albums"
+        label:
+          type: string
+          example: "Albums"
+        entity:
+          type: string
+          enum: [work, work_part, person, organisation]
+        default_sort:
+          type: string
+          example: "title"
+        count:
+          type: integer
+          description: >-
+            From the counter table (section 21.12), never a live COUNT.
+            Absent when this entity has no counter yet.
 
     GateResult:
       type: object

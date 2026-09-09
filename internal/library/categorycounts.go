@@ -18,14 +18,18 @@ type CategoryScope struct {
 	RootFolderIDs []int64
 }
 
-// CategoryCounters recomputes "works" and "files" per category. "files" is
-// library_path grouped by root folder -- a file only ever exists on disk, under
-// a root folder, so that half needs no desired_item involvement. "works" is the
-// union of work_root_folder (on-disk presence, migration 0012's bridge) and
-// desired_item.category_id (a subscription-discovered work has no root folder
-// yet) -- summing the two separately would double-count a scanned, monitored
-// work that has rows on both sides, so "works" is one distinct-count query per
-// scope rather than a Go-side sum over a bulk grouped query the way "files" is.
+// CategoryCounters recomputes "works", "files", "parts" and "artists" per
+// category. "files" is library_path grouped by root folder -- a file only ever
+// exists on disk, under a root folder, so that half needs no desired_item
+// involvement. "works", "parts" and "artists" all read the same on-disk-or-
+// desired union (work_root_folder, migration 0012's bridge, OR
+// desired_item.category_id for a subscription-discovered work with no root
+// folder yet) -- summing the two sides separately would double-count a
+// scanned, monitored work that has rows on both, so each is one distinct-count
+// query per scope rather than a Go-side sum over a bulk grouped query the way
+// "files" is. "parts" and "artists" back ADR-54's navigation-level counts
+// (work_part-entity and person-entity levels respectively, e.g. music's Tracks
+// and Artists).
 type CategoryCounters struct {
 	store *store.Store
 	clock clock.Clock
@@ -77,9 +81,23 @@ func (c CategoryCounters) reconcileScope(
 	if err != nil {
 		return nil, fmt.Errorf("count works: %w", err)
 	}
+	parts, err := reader.CountWorkPartsVisibleToCategory(ctx, librarydb.CountWorkPartsVisibleToCategoryParams{
+		RootFolderIds: string(encodedRootFolderIDs), CategoryID: scope.CategoryID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("count parts: %w", err)
+	}
+	artists, err := reader.CountArtistCreditsVisibleToCategory(ctx, librarydb.CountArtistCreditsVisibleToCategoryParams{
+		RootFolderIds: string(encodedRootFolderIDs), CategoryID: scope.CategoryID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("count artists: %w", err)
+	}
 	truth := map[string]int64{
-		"works": works,
-		"files": sumFor(filesByRoot, scope.RootFolderIDs),
+		"works":   works,
+		"files":   sumFor(filesByRoot, scope.RootFolderIDs),
+		"parts":   parts,
+		"artists": artists,
 	}
 
 	existingRows, err := reader.ListCountersForScope(ctx, scopeKey)

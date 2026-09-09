@@ -84,6 +84,16 @@ func newWorksFixture(t *testing.T) worksFixture {
 // (categories_test.go) without every other worksFixture caller needing one.
 func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibrarySize) worksFixture {
 	t.Helper()
+	return newWorksFixtureWithLibrarySizeAndNavigation(t, librarySize, nil)
+}
+
+// newWorksFixtureWithLibrarySizeAndNavigation is newWorksFixtureWithLibrarySize
+// plus an injectable NavigationProvider, for libraries_test.go's assertions on
+// ADR-54's per-level counts without every other caller needing one.
+func newWorksFixtureWithLibrarySizeAndNavigation(
+	t *testing.T, librarySize apiserver.LibrarySize, navigation apiserver.NavigationProvider,
+) worksFixture {
+	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
 	if err := os.MkdirAll(backups, 0o755); err != nil {
@@ -151,6 +161,7 @@ func newWorksFixtureWithLibrarySize(t *testing.T, librarySize apiserver.LibraryS
 		FS:                   fsys,
 		ImagesDir:            testImagesDir,
 		LibrarySize:          librarySize,
+		Navigation:           navigation,
 		Clock:                fake,
 		Logger:               slog.New(slog.DiscardHandler),
 		Auth: apiserver.AuthConfig{

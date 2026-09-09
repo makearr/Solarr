@@ -49,8 +49,8 @@ func TestCategoryCounters_CountsWorksAndFilesForTheScopedRoots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
-	if len(corrections) != 4 {
-		t.Fatalf("corrections = %+v, want 4 (works+files for each of 2 categories)", corrections)
+	if len(corrections) != 8 {
+		t.Fatalf("corrections = %+v, want 8 (works+files+parts+artists for each of 2 categories)", corrections)
 	}
 
 	if v, ok := correctionFor(corrections, "works"); !ok || v.Now != 2 || v.Scope != "category:1" {
@@ -150,6 +150,66 @@ func TestCategoryCounters_CountsSubscriptionDiscoveredWorksWithNoRootFolder(t *t
 	}
 	if v, ok := correctionFor(corrections, "works"); !ok || v.Now != 2 {
 		t.Errorf("works = %+v, ok=%v, want Now=2 (one on both sides, one desired_item-only)", v, ok)
+	}
+}
+
+// ADR-54's navigation levels need per-category counts for work_part-entity
+// levels (music's Tracks) and person-entity levels (music's Artists), not just
+// "works"/"files" -- this is the acceptance case for both.
+func TestCategoryCounters_CountsPartsAndArtistCredits(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	people := library.NewPeople(opened)
+	counters := library.NewCategoryCounters(opened, clock.NewFakeAtEpoch())
+
+	workIDs, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: "test", ExternalID: "a", Confidence: 1,
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "A", SortTitle: "a"}, RootFolderID: 1,
+		Edition: &library.EditionLink{
+			Provider: "test", ExternalID: "edition-a", Confidence: 1,
+			Edition: library.EditionIdentity{Kind: "unknown", Label: "edition-a"},
+		},
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+	workID := workIDs[0]
+
+	placeholders, err := identity.PlaceholderEditions(t.Context(), 10)
+	if err != nil || len(placeholders) != 1 {
+		t.Fatalf("PlaceholderEditions: %v, %+v", err, placeholders)
+	}
+	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), placeholders[0].EditionID, workID, nil,
+		library.EditionRefinement{Kind: "album"}, []library.PartIdentity{
+			{MediaRef: "disc1:track1", SortKey: "0001"},
+			{MediaRef: "disc1:track2", SortKey: "0002"},
+			{MediaRef: "disc1:track3", SortKey: "0003"},
+		}); err != nil {
+		t.Fatalf("RefineEdition: %v", err)
+	}
+
+	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
+		Provider: "test", ExternalID: "artist-a",
+		Person: library.PersonIdentity{Name: "Artist A", SortName: "Artist A"},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePerson: %v", err)
+	}
+	if err := people.AddCredit(t.Context(), workID, personID, "artist", 0); err != nil {
+		t.Fatalf("AddCredit: %v", err)
+	}
+
+	corrections, err := counters.Reconcile(t.Context(), []library.CategoryScope{
+		{CategoryID: 1, RootFolderIDs: []int64{1}},
+	})
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if v, ok := correctionFor(corrections, "parts"); !ok || v.Now != 3 {
+		t.Errorf("parts = %+v, ok=%v, want Now=3", v, ok)
+	}
+	if v, ok := correctionFor(corrections, "artists"); !ok || v.Now != 1 {
+		t.Errorf("artists = %+v, ok=%v, want Now=1", v, ok)
 	}
 }
 
