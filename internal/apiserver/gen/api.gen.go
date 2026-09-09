@@ -752,6 +752,25 @@ type LibraryLevel struct {
 // LibraryLevelEntity defines model for LibraryLevel.Entity.
 type LibraryLevelEntity string
 
+// LibraryLevelItem One row of one navigation level, whatever entity it wraps (a work, a work_part, a person). Deliberately generic (see listLibraryLevel).
+type LibraryLevelItem struct {
+	Id        int64 `json:"id"`
+	Monitored *bool `json:"monitored,omitempty"`
+
+	// Subtitle A secondary line -- an artist credit, an album title, whatever the level has.
+	Subtitle *string `json:"subtitle,omitempty"`
+	Title    string  `json:"title"`
+	Year     *int    `json:"year,omitempty"`
+}
+
+// LibraryLevelPage defines model for LibraryLevelPage.
+type LibraryLevelPage struct {
+	Items []LibraryLevelItem `json:"items"`
+
+	// NextCursor Empty on the last page.
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
 // LogoutStatus defines model for LogoutStatus.
 type LogoutStatus struct {
 	Status LogoutStatusStatus `json:"status"`
@@ -1064,7 +1083,7 @@ type WantedState string
 type Work struct {
 	AddedAt time.Time `json:"added_at"`
 
-	// Artist The work's own "artist"-role credit, when it has one. Not sortable: it comes from a join with no supporting index (ADR-28).
+	// Artist The work's own "artist"-role credit, when it has one. Not a sort option on this endpoint yet -- nothing has asked for it.
 	Artist    *string   `json:"artist,omitempty"`
 	Id        int64     `json:"id"`
 	MediaType string    `json:"media_type"`
@@ -1176,6 +1195,12 @@ type ListJobsParams struct {
 
 	// State An unrecognised state is rejected rather than returning nothing.
 	State *JobState `form:"state,omitempty" json:"state,omitempty"`
+}
+
+// ListLibraryLevelParams defines parameters for ListLibraryLevel.
+type ListLibraryLevelParams struct {
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListUnidentifiedParams defines parameters for ListUnidentified.
@@ -1475,6 +1500,9 @@ type ServerInterface interface {
 	// The navigation tree -- libraries the caller may see, with their levels (ADR-54).
 	// (GET /libraries)
 	ListLibraries(w http.ResponseWriter, r *http.Request)
+	// One page of one navigation level (ADR-54).
+	// (GET /libraries/{id}/{level})
+	ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int64, level string, params ListLibraryLevelParams)
 	// Files a scan recorded that the ADR-24 chain could not confidently resolve (F29's manual identification queue).
 	// (GET /library/unidentified)
 	ListUnidentified(w http.ResponseWriter, r *http.Request, params ListUnidentifiedParams)
@@ -1709,6 +1737,12 @@ func (_ Unimplemented) ListJobs(w http.ResponseWriter, r *http.Request, params L
 // The navigation tree -- libraries the caller may see, with their levels (ADR-54).
 // (GET /libraries)
 func (_ Unimplemented) ListLibraries(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One page of one navigation level (ADR-54).
+// (GET /libraries/{id}/{level})
+func (_ Unimplemented) ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int64, level string, params ListLibraryLevelParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2563,6 +2597,67 @@ func (siw *ServerInterfaceWrapper) ListLibraries(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListLibraries(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLibraryLevel operation middleware
+func (siw *ServerInterfaceWrapper) ListLibraryLevel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "level" -------------
+	var level string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "level", chi.URLParam(r, "level"), &level, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "level", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListLibraryLevelParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLibraryLevel(w, r, id, level, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3775,6 +3870,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/libraries", wrapper.ListLibraries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/libraries/{id}/{level}", wrapper.ListLibraryLevel)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/library/unidentified", wrapper.ListUnidentified)

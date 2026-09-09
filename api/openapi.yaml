@@ -1323,6 +1323,49 @@ paths:
                 items: { $ref: "#/components/schemas/Library" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /libraries/{id}/{level}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: level
+        in: path
+        required: true
+        description: One of the library's own declared level keys (see GET /libraries).
+        schema: { type: string, example: "albums" }
+    get:
+      operationId: listLibraryLevel
+      tags: [library]
+      summary: One page of one navigation level (ADR-54).
+      description: >-
+        A generic row shape (LibraryLevelItem) rather than one schema per
+        entity: only one media type exists today, so there is no second real
+        case yet to generalize a typed-per-level response from. Click through
+        to the existing typed detail endpoint (GET /works/{id}, etc.) for
+        everything this row does not carry.
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryLevelPage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: The library does not exist, is not readable, or declares no such level.
+        "503":
+          $ref: "#/components/responses/Problem"
+          description: This level exists but has no reader wired up yet.
+
   /categories:
     get:
       operationId: listCategories
@@ -1965,8 +2008,8 @@ components:
         artist:
           type: string
           description: >-
-            The work's own "artist"-role credit, when it has one. Not
-            sortable: it comes from a join with no supporting index (ADR-28).
+            The work's own "artist"-role credit, when it has one. Not a
+            sort option on this endpoint yet -- nothing has asked for it.
         added_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -2535,6 +2578,32 @@ components:
           description: >-
             From the counter table (section 21.12), never a live COUNT.
             Absent when this entity has no counter yet.
+
+    LibraryLevelItem:
+      type: object
+      description: >-
+        One row of one navigation level, whatever entity it wraps (a work, a
+        work_part, a person). Deliberately generic (see listLibraryLevel).
+      required: [id, title]
+      properties:
+        id: { type: integer, format: int64 }
+        title: { type: string }
+        subtitle:
+          type: string
+          description: A secondary line -- an artist credit, an album title, whatever the level has.
+        year: { type: integer }
+        monitored: { type: boolean }
+
+    LibraryLevelPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LibraryLevelItem" }
+        next_cursor:
+          type: string
+          description: Empty on the last page.
 
     GateResult:
       type: object

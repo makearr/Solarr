@@ -70,8 +70,28 @@ type worksFixture struct {
 	drainStarter         *fakeDrainStarter
 	moveJobs             *fakeMoveJobLister
 	renameStarter        *fakeRenameStarter
+	libraryTracks        *fakeLibraryTracksReader
 	fsys                 *fsx.Mem
 	clock                *clock.Fake
+}
+
+// fakeLibraryTracksReader answers canned rows for the Tracks navigation
+// level, so a test can assert ListLibraryLevel's dispatch without a real
+// library.TrackParts.
+type fakeLibraryTracksReader struct {
+	rows       []apiserver.TrackRow
+	nextCursor apiserver.TracksCursor
+	hasMore    bool
+	lastFilter apiserver.TracksFilter
+	lastCursor apiserver.TracksCursor
+}
+
+func (f *fakeLibraryTracksReader) ListLibraryTracks(
+	_ context.Context, filter apiserver.TracksFilter, cursor apiserver.TracksCursor, _ int,
+) ([]apiserver.TrackRow, apiserver.TracksCursor, bool, error) {
+	f.lastFilter = filter
+	f.lastCursor = cursor
+	return f.rows, f.nextCursor, f.hasMore, nil
 }
 
 func newWorksFixture(t *testing.T) worksFixture {
@@ -138,6 +158,7 @@ func newWorksFixtureWithLibrarySizeAndNavigation(
 	drainStarter := &fakeDrainStarter{}
 	moveJobs := &fakeMoveJobLister{}
 	renameStarter := &fakeRenameStarter{}
+	libraryTracks := &fakeLibraryTracksReader{}
 	fsys := fsx.NewMem(fake)
 	server, err := apiserver.New(apiserver.Config{
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
@@ -162,6 +183,7 @@ func newWorksFixtureWithLibrarySizeAndNavigation(
 		ImagesDir:            testImagesDir,
 		LibrarySize:          librarySize,
 		Navigation:           navigation,
+		LibraryTracks:        libraryTracks,
 		Clock:                fake,
 		Logger:               slog.New(slog.DiscardHandler),
 		Auth: apiserver.AuthConfig{
@@ -181,7 +203,7 @@ func newWorksFixtureWithLibrarySizeAndNavigation(
 		blockedContent: blockedContent, removeAndBlocker: removeAndBlocker,
 		importSessions: importSessions, importInspector: importInspector,
 		drainStarter: drainStarter, moveJobs: moveJobs, renameStarter: renameStarter,
-		fsys: fsys, clock: fake,
+		libraryTracks: libraryTracks, fsys: fsys, clock: fake,
 	}
 }
 

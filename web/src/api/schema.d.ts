@@ -851,6 +851,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/libraries/{id}/{level}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                /** @description One of the library's own declared level keys (see GET /libraries). */
+                level: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * One page of one navigation level (ADR-54).
+         * @description A generic row shape (LibraryLevelItem) rather than one schema per entity: only one media type exists today, so there is no second real case yet to generalize a typed-per-level response from. Click through to the existing typed detail endpoint (GET /works/{id}, etc.) for everything this row does not carry.
+         */
+        get: operations["listLibraryLevel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories": {
         parameters: {
             query?: never;
@@ -1270,7 +1294,7 @@ export interface components {
             title: string;
             sort_title: string;
             year?: number;
-            /** @description The work's own "artist"-role credit, when it has one. Not sortable: it comes from a join with no supporting index (ADR-28). */
+            /** @description The work's own "artist"-role credit, when it has one. Not a sort option on this endpoint yet -- nothing has asked for it. */
             artist?: string;
             /** Format: date-time */
             added_at: string;
@@ -1696,6 +1720,21 @@ export interface components {
             default_sort: string;
             /** @description From the counter table (section 21.12), never a live COUNT. Absent when this entity has no counter yet. */
             count?: number;
+        };
+        /** @description One row of one navigation level, whatever entity it wraps (a work, a work_part, a person). Deliberately generic (see listLibraryLevel). */
+        LibraryLevelItem: {
+            /** Format: int64 */
+            id: number;
+            title: string;
+            /** @description A secondary line -- an artist credit, an album title, whatever the level has. */
+            subtitle?: string;
+            year?: number;
+            monitored?: boolean;
+        };
+        LibraryLevelPage: {
+            items: components["schemas"]["LibraryLevelItem"][];
+            /** @description Empty on the last page. */
+            next_cursor?: string;
         };
         /** @description A hard requirement, evaluated before any comparison (ADR-40 stage 1). */
         GateResult: {
@@ -3075,6 +3114,39 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+        };
+    };
+    listLibraryLevel: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                /** @description One of the library's own declared level keys (see GET /libraries). */
+                level: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryLevelPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            /** @description The library does not exist, is not readable, or declares no such level. */
+            404: components["responses"]["Problem"];
+            /** @description This level exists but has no reader wired up yet. */
+            503: components["responses"]["Problem"];
         };
     };
     listCategories: {

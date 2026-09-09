@@ -2,10 +2,12 @@ package apiserver_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"testing"
 
+	"github.com/makearr/MediaNexus/internal/apiserver"
 	"github.com/makearr/MediaNexus/internal/model"
 	"github.com/makearr/MediaNexus/internal/settings"
 )
@@ -151,5 +153,142 @@ func TestListLibraries_RequiresAuthentication(t *testing.T) {
 	recorder := fixture.do(authedGet(t, nil, "/api/v1/libraries"))
 	if recorder.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want 401 for no credential", recorder.Code)
+	}
+}
+
+type libraryLevelItemBody struct {
+	ID       int64   `json:"id"`
+	Title    string  `json:"title"`
+	Subtitle *string `json:"subtitle"`
+	Year     *int    `json:"year"`
+}
+
+type libraryLevelPageBody struct {
+	Items      []libraryLevelItemBody `json:"items"`
+	NextCursor *string                `json:"next_cursor"`
+}
+
+// A work-entity level (Albums) delegates to the existing WorksReader -- a
+// level is a filter and a default sort, not a new list implementation.
+func TestListLibraryLevel_WorkEntityDelegatesToWorksReader(t *testing.T) {
+	navigation := fakeNavigation{"music": {{Key: "albums", Label: "Albums", Entity: model.LevelEntityWork}}}
+	fixture := newWorksFixtureWithLibrarySizeAndNavigation(t, nil, navigation)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	year := int64(1997)
+	artist := "Katupoken"
+	fixture.works.rows = []apiserver.WorkRow{{ID: 1, Title: "KI Pecezinu", SortTitle: "ki pecezinu", Year: &year, Artist: &artist}}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies,
+		fmt.Sprintf("/api/v1/libraries/%d/albums", category.ID)))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	var body libraryLevelPageBody
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body.Items) != 1 || body.Items[0].Title != "KI Pecezinu" ||
+		body.Items[0].Subtitle == nil || *body.Items[0].Subtitle != "Katupoken" ||
+		body.Items[0].Year == nil || *body.Items[0].Year != 1997 {
+		t.Errorf("items = %+v, want KI Pecezinu / Katupoken / 1997", body.Items)
+	}
+	if len(fixture.works.lastFilter.CategoryIDs) != 1 || fixture.works.lastFilter.CategoryIDs[0] != category.ID {
+		t.Errorf("filter = %+v, want scoped to category %d", fixture.works.lastFilter, category.ID)
+	}
+}
+
+// A work_part-entity level (Tracks) delegates to LibraryTracksReader.
+func TestListLibraryLevel_WorkPartEntityDelegatesToLibraryTracksReader(t *testing.T) {
+	navigation := fakeNavigation{"music": {{Key: "tracks", Label: "Tracks", Entity: model.LevelEntityWorkPart}}}
+	fixture := newWorksFixtureWithLibrarySizeAndNavigation(t, nil, navigation)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	title := "Sesoge"
+	artist := "Katupoken"
+	fixture.libraryTracks.rows = []apiserver.TrackRow{
+		{ID: 9, Title: &title, AlbumTitle: "KI Pecezinu", ArtistName: &artist},
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies,
+		fmt.Sprintf("/api/v1/libraries/%d/tracks", category.ID)))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	var body libraryLevelPageBody
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body.Items) != 1 || body.Items[0].Title != "Sesoge" ||
+		body.Items[0].Subtitle == nil || *body.Items[0].Subtitle != "Katupoken -- KI Pecezinu" {
+		t.Errorf("items = %+v, want Sesoge / \"Katupoken -- KI Pecezinu\"", body.Items)
+	}
+	if len(fixture.libraryTracks.lastFilter.CategoryIDs) != 1 ||
+		fixture.libraryTracks.lastFilter.CategoryIDs[0] != category.ID {
+		t.Errorf("filter = %+v, want scoped to category %d", fixture.libraryTracks.lastFilter, category.ID)
+	}
+}
+
+// A level with no reader wired up (Artists, today) answers 503 rather than
+// crashing or silently returning nothing.
+func TestListLibraryLevel_PersonEntityWithNoReaderAnswers503(t *testing.T) {
+	navigation := fakeNavigation{"music": {{Key: "artists", Label: "Artists", Entity: model.LevelEntityPerson}}}
+	fixture := newWorksFixtureWithLibrarySizeAndNavigation(t, nil, navigation)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies,
+		fmt.Sprintf("/api/v1/libraries/%d/artists", category.ID)))
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503", recorder.Code)
+	}
+}
+
+// An unknown level key for this library's media type answers 404.
+func TestListLibraryLevel_UnknownLevelAnswers404(t *testing.T) {
+	navigation := fakeNavigation{"music": {{Key: "albums", Label: "Albums", Entity: model.LevelEntityWork}}}
+	fixture := newWorksFixtureWithLibrarySizeAndNavigation(t, nil, navigation)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies,
+		fmt.Sprintf("/api/v1/libraries/%d/nonsense", category.ID)))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", recorder.Code)
+	}
+}
+
+// A category the caller cannot read answers 404, the same as GET /works's
+// own single-category lookup (Invariant 37).
+func TestListLibraryLevel_UngrantedCategoryAnswers404(t *testing.T) {
+	navigation := fakeNavigation{"music": {{Key: "albums", Label: "Albums", Entity: model.LevelEntityWork}}}
+	fixture := newWorksFixtureWithLibrarySizeAndNavigation(t, nil, navigation)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedGet(t, cookies,
+		fmt.Sprintf("/api/v1/libraries/%d/albums", category.ID)))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", recorder.Code)
 	}
 }
