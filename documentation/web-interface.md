@@ -36,6 +36,26 @@ light flash on every load for anyone who chose dark.
 This is the one thing kept in browser storage, because it is needed before any request can be
 made. View state stays server-side per architecture section 21.2.
 
+## The navigation tree (ADR-54)
+
+The sidebar reads `GET /libraries`: each category the caller may see, with the entity levels
+its media type declares (`NavigationLevels`, an ADR-23 extension point — core renders the
+declaration and never learns what an album is) and each level's count from the `counter` table.
+
+`/library/$categoryId/albums` is the existing `Library` screen (cover art, bulk actions,
+configurable columns) unchanged in substance — only its category now comes from the route's own
+path param rather than a `category_id` search param, which keeps the query cache key and "select
+all matching" correctly scoped: both read `listQuery.filters`, so `category_id` is injected there
+from the route rather than carried a second way.
+
+`/library/$categoryId/$level` is `LibraryLevelList`, generic over `GET /libraries/{id}/{level}`'s
+own generic row shape (`LibraryLevelItem`: id, title, subtitle, year). Only one media type exists
+today, so there is no second real case yet to generalize a typed-per-level response from — a
+level's own detail lives behind the existing typed detail endpoint a row links to
+(`GET /works/{id}`, etc.), not in the list row itself. A level whose reader is not wired up yet
+answers 503 with a real detail message, rendered as the list's own empty state, so "no data" and
+"not built yet" are never confused for each other.
+
 ## The list core
 
 `useLibraryList()` owns fetching, cursor pagination, sort and filter state, the selection model
