@@ -53,6 +53,11 @@ export function PersonDetail() {
     person.country,
     [person.born, person.died].filter(Boolean).join(" – "),
   ].filter((fact): fact is string => Boolean(fact));
+  // ADR-54's own safety argument for retiring the top-level People page:
+  // arriving at a person through one library (Music -> Artists) must not
+  // hide their credits in another. Not yet a link into a per-media-type
+  // browse view -- there is no such surface to link into today.
+  const mediaTypes = [...new Set(person.discography.map((work) => work.media_type))];
 
   return (
     <div className="h-full overflow-y-auto">
@@ -81,6 +86,22 @@ export function PersonDetail() {
         {person.biography && (
           <Section title="Biography">
             <p className="text-sm leading-relaxed">{person.biography}</p>
+          </Section>
+        )}
+
+        {mediaTypes.length > 1 && (
+          <Section title="Also credited in">
+            <div className="flex flex-wrap gap-1.5">
+              {mediaTypes.map((mediaType) => (
+                <span
+                  key={mediaType}
+                  className="rounded-full border border-border-subtle px-2 py-0.5 text-xs
+                             text-ink-muted"
+                >
+                  {mediaType}
+                </span>
+              ))}
+            </div>
           </Section>
         )}
 

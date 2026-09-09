@@ -12,7 +12,6 @@ import {
   Library as LibraryIcon,
   ScanSearch,
   Settings,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -24,9 +23,12 @@ import { ThemeToggle } from "./ThemeToggle";
 
 type LibraryEntry = components["schemas"]["Library"];
 
-/** Fixed sections: not categories, so not driven by /libraries (section 21.1). */
+// People stopped being a top-level section 2026-09-09 (ADR-54's reversal):
+// a person now surfaces under their own library (Music -> Artists), and
+// global search still spans every category, which is where cross-media
+// discovery actually happened -- browsing every person was never how anyone
+// found one.
 const SECTIONS: readonly { to: string; label: string; icon: LucideIcon }[] = [
-  { to: "/people", label: "People", icon: Users },
   { to: "/unidentified", label: "Unidentified", icon: HelpCircle },
   { to: "/import", label: "Import", icon: ScanSearch },
   { to: "/moves", label: "Move & drain", icon: ArrowLeftRight },
