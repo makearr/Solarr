@@ -134,6 +134,10 @@ type Config struct {
 	// Scheduler exposes ADR-59's task registry, live settings and run-state
 	// (todo 4.19). Optional: without it, the schedule endpoints answer 503.
 	Scheduler Scheduler
+	// CacheManager exposes ADR-60's cache budget, measurement and manual
+	// clear (todo 4.19). Optional: without it, the cache endpoints answer
+	// 503.
+	CacheManager CacheManager
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -178,6 +182,7 @@ type Server struct {
 	libraryArtists       LibraryArtistsReader
 	downloadRoots        DownloadFolderChecker
 	scheduler            Scheduler
+	cacheManager         CacheManager
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -234,6 +239,7 @@ func New(config Config) (*Server, error) {
 		libraryArtists:       config.LibraryArtists,
 		downloadRoots:        config.DownloadRoots,
 		scheduler:            config.Scheduler,
+		cacheManager:         config.CacheManager,
 		address:              net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -313,6 +319,9 @@ func New(config Config) (*Server, error) {
 			secured.Get("/schedules", server.ListSchedules)
 			secured.Patch("/schedules/{key}", server.routeUpdateSchedule)
 			secured.Post("/schedules/{key}/run", server.routeRunSchedule)
+			secured.Get("/cache", server.GetCache)
+			secured.Patch("/cache", server.UpdateCacheBudget)
+			secured.Post("/cache/clear", server.ClearCache)
 			secured.Post("/rootfolders/{id}/drain", server.routeDrainRootFolder)
 			secured.Delete("/rootfolders/{id}/drain", server.routeStopDrainingRootFolder)
 			secured.Get("/moves", server.routeListMoveJobs)

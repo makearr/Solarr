@@ -394,6 +394,20 @@ type BulkResult struct {
 	Count int64 `json:"count"`
 }
 
+// CacheReport The cache's own budgets and last-measured size per namespace (ADR-60).
+type CacheReport struct {
+	// ImagesBytes Absent until the cache maintenance task has run once.
+	ImagesBytes        *int64     `json:"images_bytes,omitempty"`
+	ImagesSharePercent int64      `json:"images_share_percent"`
+	MaxAgeDays         int64      `json:"max_age_days"`
+	MaxBytes           int64      `json:"max_bytes"`
+	MeasuredAt         *time.Time `json:"measured_at,omitempty"`
+
+	// MetadataBytes Logical bytes stored, a real measurement -- not metadata.db's own physical file size, which does not shrink on eviction without a VACUUM this codebase deliberately does not run.
+	MetadataBytes        *int64 `json:"metadata_bytes,omitempty"`
+	MetadataSharePercent int64  `json:"metadata_share_percent"`
+}
+
 // Category defines model for Category.
 type Category struct {
 	Id int64 `json:"id"`
@@ -1268,6 +1282,14 @@ type ListBlockedContentParams struct {
 	Limit   *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// UpdateCacheBudgetJSONBody defines parameters for UpdateCacheBudget.
+type UpdateCacheBudgetJSONBody struct {
+	ImagesSharePercent   int64 `json:"images_share_percent"`
+	MaxAgeDays           int64 `json:"max_age_days"`
+	MaxBytes             int64 `json:"max_bytes"`
+	MetadataSharePercent int64 `json:"metadata_share_percent"`
+}
+
 // CreateCategoryJSONBody defines parameters for CreateCategory.
 type CreateCategoryJSONBody struct {
 	MediaType    string `json:"media_type"`
@@ -1518,6 +1540,9 @@ type SetPartMonitoredJSONBody struct {
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody LoginJSONBody
 
+// UpdateCacheBudgetJSONRequestBody defines body for UpdateCacheBudget for application/json ContentType.
+type UpdateCacheBudgetJSONRequestBody UpdateCacheBudgetJSONBody
+
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody CreateCategoryJSONBody
 
@@ -1613,6 +1638,15 @@ type ServerInterface interface {
 	// Reverse a block. Administrator only.
 	// (DELETE /blocked/{id})
 	RemoveBlockedContent(w http.ResponseWriter, r *http.Request, id int64)
+	// The cache's own budgets and last-measured size per namespace (ADR-60).
+	// (GET /cache)
+	GetCache(w http.ResponseWriter, r *http.Request)
+	// Change the cache's budgets. Administrator only.
+	// (PATCH /cache)
+	UpdateCacheBudget(w http.ResponseWriter, r *http.Request)
+	// Remove everything in both namespaces immediately. Administrator only.
+	// (POST /cache/clear)
+	ClearCache(w http.ResponseWriter, r *http.Request)
 	// Every category the caller may read (ADR-27).
 	// (GET /categories)
 	ListCategories(w http.ResponseWriter, r *http.Request)
@@ -1841,6 +1875,24 @@ func (_ Unimplemented) ListBlockedContent(w http.ResponseWriter, r *http.Request
 // Reverse a block. Administrator only.
 // (DELETE /blocked/{id})
 func (_ Unimplemented) RemoveBlockedContent(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The cache's own budgets and last-measured size per namespace (ADR-60).
+// (GET /cache)
+func (_ Unimplemented) GetCache(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change the cache's budgets. Administrator only.
+// (PATCH /cache)
+func (_ Unimplemented) UpdateCacheBudget(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove everything in both namespaces immediately. Administrator only.
+// (POST /cache/clear)
+func (_ Unimplemented) ClearCache(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2352,6 +2404,72 @@ func (siw *ServerInterfaceWrapper) RemoveBlockedContent(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RemoveBlockedContent(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCache operation middleware
+func (siw *ServerInterfaceWrapper) GetCache(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCache(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCacheBudget operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCacheBudget(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCacheBudget(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ClearCache operation middleware
+func (siw *ServerInterfaceWrapper) ClearCache(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ClearCache(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4538,6 +4656,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/blocked/{id}", wrapper.RemoveBlockedContent)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/cache", wrapper.GetCache)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/cache", wrapper.UpdateCacheBudget)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/cache/clear", wrapper.ClearCache)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories", wrapper.ListCategories)

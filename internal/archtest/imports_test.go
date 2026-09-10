@@ -24,7 +24,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/httpx", "internal/importjob", "internal/inspect", "internal/jobs",
 		"internal/library", "internal/mediatool", "internal/metacache", "internal/model",
 		"internal/drainjob", "internal/mover", "internal/moverjob", "internal/music", "internal/musicbrainz", "internal/paginate",
-		"internal/capacity", "internal/privilege", "internal/probe", "internal/recovery",
+		"internal/cachebudget", "internal/capacity", "internal/privilege", "internal/probe", "internal/recovery",
 		"internal/scan", "internal/settings", "internal/store", "internal/webui",
 		"internal/wikidata", "migrations",
 	},
@@ -125,6 +125,11 @@ var allowedInternalImports = map[string][]string{
 	// Section 11.7's capacity-polling job: probes every configured root via
 	// fsx and writes what it found back to settings.db.
 	"internal/capacity": {"internal/clock", "internal/fsx", "internal/jobs", "internal/settings"},
+	// ADR-60's bounded cache: measures and evicts internal/music's own flat
+	// images directory (fsx) and internal/metacache's own SQLite-backed
+	// cache, then records what it found back to settings.db -- the same
+	// probe-then-write-facts shape internal/capacity already has.
+	"internal/cachebudget": {"internal/clock", "internal/fsx", "internal/metacache", "internal/settings"},
 	// The music media type, direct-wired until stage 9 extracts it as a plugin. Its
 	// scan.Consumer needs the sweep's own types (scan), root folder paths (settings),
 	// the filesystem seam for the quick hash (fsx) and an injected clock (ADR-17) --

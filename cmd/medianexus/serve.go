@@ -15,6 +15,7 @@ import (
 
 	"github.com/makearr/MediaNexus/internal/apiserver"
 	"github.com/makearr/MediaNexus/internal/auth"
+	"github.com/makearr/MediaNexus/internal/cachebudget"
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/config"
 	"github.com/makearr/MediaNexus/internal/drainjob"
@@ -59,6 +60,9 @@ type process struct {
 	taskRegistry   *jobs.TaskRegistry
 	scheduleStates *jobs.ScheduleStates
 	taskRunners    map[string]*jobs.TaskRunner
+	// cacheSweep is ADR-60's own measure/enforce/clear (todo 4.19), built once
+	// in registerCacheJob and reused by the API adapter in startServer.
+	cacheSweep *cachebudget.Sweep
 }
 
 // serve is the startup sequence of architecture section 15.1, in order.
@@ -335,6 +339,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerMoverJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerCacheJob(registry, executor); err != nil {
+		return err
+	}
 	p.dispatcher = jobs.NewDispatcher(queue, wall, executor, jobs.DispatcherConfig{
 		Sizes: []jobs.PoolSize{
 			{Pool: jobs.PoolSearch, Capacity: p.config.Workers.Search},
@@ -368,6 +375,7 @@ func (p *process) startServer(ctx context.Context) error {
 	_, _ = p.enqueueCategoryCounts(ctx)
 	_, _ = p.enqueueProbe(ctx)
 	_, _ = p.enqueueCapacity(ctx)
+	_, _ = p.enqueueCacheMaintenance(ctx)
 	p.startSchedulers(ctx)
 	if err := p.seedAuthPolicy(ctx); err != nil {
 		return err
@@ -410,9 +418,10 @@ func (p *process) startServer(ctx context.Context) error {
 			registry: p.taskRegistry, states: p.scheduleStates, runners: p.taskRunners,
 			cache: p.cache, clock: clock.NewSystem(),
 		},
-		LibrarySize: library.NewCounters(p.library),
-		Works:       worksAdapter{works: library.NewWorks(p.library)},
-		WorkDetail:  workDetailAdapter{works: library.NewWorks(p.library)},
+		CacheManager: cacheManagerAdapter{sweep: p.cacheSweep, cache: p.cache, clock: clock.NewSystem()},
+		LibrarySize:  library.NewCounters(p.library),
+		Works:        worksAdapter{works: library.NewWorks(p.library)},
+		WorkDetail:   workDetailAdapter{works: library.NewWorks(p.library)},
 		WorksMonitor: worksMonitorAdapter{
 			works: library.NewWorks(p.library), desired: library.NewDesired(p.library),
 			categories: cacheCategories{cache: p.cache}, defaultProfileID: p.defaultQualityProfileID,

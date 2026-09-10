@@ -669,6 +669,65 @@ paths:
           $ref: "#/components/responses/Problem"
           description: A fire is already in flight for this task.
 
+  /cache:
+    get:
+      operationId: getCache
+      tags: [settings]
+      summary: The cache's own budgets and last-measured size per namespace (ADR-60).
+      responses:
+        "200":
+          description: Budgets and the last measurement.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CacheReport" }
+        "401": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateCacheBudget
+      tags: [settings]
+      summary: Change the cache's budgets. Administrator only.
+      description: >-
+        The two namespace shares must sum to 100 (ADR-44, validated on
+        write). Takes effect on the cache maintenance task's own next tick,
+        not immediately.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [max_bytes, max_age_days, images_share_percent, metadata_share_percent]
+              properties:
+                max_bytes: { type: integer, format: int64 }
+                max_age_days: { type: integer, format: int64 }
+                images_share_percent: { type: integer, format: int64 }
+                metadata_share_percent: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CacheReport" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /cache/clear:
+    post:
+      operationId: clearCache
+      tags: [settings]
+      summary: Remove everything in both namespaces immediately. Administrator only.
+      description: >-
+        Always safe (Invariant 5) -- nothing in the cache is the only copy
+        of anything, so a miss after this just costs a re-fetch.
+      responses:
+        "200":
+          description: Cleared.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CacheReport" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /rootfolders/{id}/drain:
     parameters:
       - name: id
@@ -2184,6 +2243,28 @@ components:
           description: Absent until the task has fired at least once.
         last_error: { type: string }
         next_run_at: { type: string, format: date-time }
+
+    CacheReport:
+      type: object
+      description: The cache's own budgets and last-measured size per namespace (ADR-60).
+      required: [max_bytes, max_age_days, images_share_percent, metadata_share_percent]
+      properties:
+        max_bytes: { type: integer, format: int64 }
+        max_age_days: { type: integer, format: int64 }
+        images_share_percent: { type: integer, format: int64 }
+        metadata_share_percent: { type: integer, format: int64 }
+        images_bytes:
+          type: integer
+          format: int64
+          description: Absent until the cache maintenance task has run once.
+        metadata_bytes:
+          type: integer
+          format: int64
+          description: >-
+            Logical bytes stored, a real measurement -- not metadata.db's own
+            physical file size, which does not shrink on eviction without a
+            VACUUM this codebase deliberately does not run.
+        measured_at: { type: string, format: date-time }
 
     DrainPlan:
       type: object

@@ -11,3 +11,31 @@ ON CONFLICT (kind, external_id) DO UPDATE SET
   source = excluded.source,
   body = excluded.body,
   fetched_at = excluded.fetched_at;
+
+-- ADR-60's cache budget (todo 4.19): the logical bytes actually stored, a
+-- real measurement (SUM of what is there), not an estimate -- distinct from
+-- the metadata.db file's own physical size, which SQLite does not shrink on
+-- DELETE without a VACUUM this codebase deliberately does not run here.
+-- name: SumMetadataCacheBytes :one
+SELECT CAST(COALESCE(SUM(LENGTH(body)), 0) AS INTEGER) FROM metadata_cache;
+
+-- name: CountMetadataCache :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM metadata_cache;
+
+-- ADR-60's max_age: a per-entry ceiling, enforced regardless of budget.
+-- name: DeleteMetadataCacheOlderThan :execrows
+DELETE FROM metadata_cache WHERE fetched_at < ?;
+
+-- ADR-60's budget-triggered eviction: oldest first, exactly n rows so the
+-- caller can re-measure and stop once it is back under budget rather than
+-- guessing a cutoff time. metadata_cache is WITHOUT ROWID (its own
+-- (kind, external_id) primary key already is the index), so the row-value
+-- form is used instead of a rowid subquery.
+-- name: DeleteOldestMetadataCache :execrows
+DELETE FROM metadata_cache WHERE (kind, external_id) IN (
+  SELECT kind, external_id FROM metadata_cache ORDER BY fetched_at ASC LIMIT ?
+);
+
+-- The manual "always safe" clear (Invariant 5).
+-- name: ClearMetadataCache :exec
+DELETE FROM metadata_cache;

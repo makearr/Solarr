@@ -9,6 +9,59 @@ import (
 	"context"
 )
 
+const clearMetadataCache = `-- name: ClearMetadataCache :exec
+DELETE FROM metadata_cache
+`
+
+// The manual "always safe" clear (Invariant 5).
+func (q *Queries) ClearMetadataCache(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, clearMetadataCache)
+	return err
+}
+
+const countMetadataCache = `-- name: CountMetadataCache :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM metadata_cache
+`
+
+func (q *Queries) CountMetadataCache(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countMetadataCache)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const deleteMetadataCacheOlderThan = `-- name: DeleteMetadataCacheOlderThan :execrows
+DELETE FROM metadata_cache WHERE fetched_at < ?
+`
+
+// ADR-60's max_age: a per-entry ceiling, enforced regardless of budget.
+func (q *Queries) DeleteMetadataCacheOlderThan(ctx context.Context, fetchedAt int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteMetadataCacheOlderThan, fetchedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const deleteOldestMetadataCache = `-- name: DeleteOldestMetadataCache :execrows
+DELETE FROM metadata_cache WHERE (kind, external_id) IN (
+  SELECT kind, external_id FROM metadata_cache ORDER BY fetched_at ASC LIMIT ?
+)
+`
+
+// ADR-60's budget-triggered eviction: oldest first, exactly n rows so the
+// caller can re-measure and stop once it is back under budget rather than
+// guessing a cutoff time. metadata_cache is WITHOUT ROWID (its own
+// (kind, external_id) primary key already is the index), so the row-value
+// form is used instead of a rowid subquery.
+func (q *Queries) DeleteOldestMetadataCache(ctx context.Context, limit int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteOldestMetadataCache, limit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getCachedMetadata = `-- name: GetCachedMetadata :one
 
 SELECT kind, external_id, source, body, fetched_at
@@ -60,4 +113,19 @@ func (q *Queries) SetCachedMetadata(ctx context.Context, arg SetCachedMetadataPa
 		arg.FetchedAt,
 	)
 	return err
+}
+
+const sumMetadataCacheBytes = `-- name: SumMetadataCacheBytes :one
+SELECT CAST(COALESCE(SUM(LENGTH(body)), 0) AS INTEGER) FROM metadata_cache
+`
+
+// ADR-60's cache budget (todo 4.19): the logical bytes actually stored, a
+// real measurement (SUM of what is there), not an estimate -- distinct from
+// the metadata.db file's own physical size, which SQLite does not shrink on
+// DELETE without a VACUUM this codebase deliberately does not run here.
+func (q *Queries) SumMetadataCacheBytes(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, sumMetadataCacheBytes)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }

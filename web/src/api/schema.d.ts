@@ -456,6 +456,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/cache": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The cache's own budgets and last-measured size per namespace (ADR-60). */
+        get: operations["getCache"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the cache's budgets. Administrator only.
+         * @description The two namespace shares must sum to 100 (ADR-44, validated on write). Takes effect on the cache maintenance task's own next tick, not immediately.
+         */
+        patch: operations["updateCacheBudget"];
+        trace?: never;
+    };
+    "/cache/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove everything in both namespaces immediately. Administrator only.
+         * @description Always safe (Invariant 5) -- nothing in the cache is the only copy of anything, so a miss after this just costs a re-fetch.
+         */
+        post: operations["clearCache"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rootfolders/{id}/drain": {
         parameters: {
             query?: never;
@@ -1410,6 +1451,29 @@ export interface components {
             last_error?: string;
             /** Format: date-time */
             next_run_at?: string;
+        };
+        /** @description The cache's own budgets and last-measured size per namespace (ADR-60). */
+        CacheReport: {
+            /** Format: int64 */
+            max_bytes: number;
+            /** Format: int64 */
+            max_age_days: number;
+            /** Format: int64 */
+            images_share_percent: number;
+            /** Format: int64 */
+            metadata_share_percent: number;
+            /**
+             * Format: int64
+             * @description Absent until the cache maintenance task has run once.
+             */
+            images_bytes?: number;
+            /**
+             * Format: int64
+             * @description Logical bytes stored, a real measurement -- not metadata.db's own physical file size, which does not shrink on eviction without a VACUUM this codebase deliberately does not run.
+             */
+            metadata_bytes?: number;
+            /** Format: date-time */
+            measured_at?: string;
         };
         /** @description What one drainRootFolder call computed -- a preview, a refusal, or an accepted and enqueued plan (ADR-51). */
         DrainPlan: {
@@ -2862,6 +2926,85 @@ export interface operations {
             404: components["responses"]["Problem"];
             /** @description A fire is already in flight for this task. */
             409: components["responses"]["Problem"];
+        };
+    };
+    getCache: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Budgets and the last measurement. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CacheReport"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    updateCacheBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    max_bytes: number;
+                    /** Format: int64 */
+                    max_age_days: number;
+                    /** Format: int64 */
+                    images_share_percent: number;
+                    /** Format: int64 */
+                    metadata_share_percent: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CacheReport"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    clearCache: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleared. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CacheReport"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     drainRootFolder: {

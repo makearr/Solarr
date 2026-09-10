@@ -4,6 +4,7 @@ import { ShieldAlert, ShieldCheck } from "lucide-react";
 
 import { api } from "@/api/client";
 import { useAuthPolicy, useSetAuthRequired } from "@/lib/useAuthPolicy";
+import { CacheSettings } from "./CacheSettings";
 import { Categories } from "./Categories";
 import { Scheduler } from "./Scheduler";
 import { UnwantedFiles } from "./UnwantedFiles";
@@ -53,6 +54,8 @@ export function Settings() {
         <UnwantedFiles />
 
         <Scheduler />
+
+        <CacheSettings />
 
         <section className="flex flex-col gap-2">
           <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Sections</h2>

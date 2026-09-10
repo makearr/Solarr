@@ -73,6 +73,7 @@ type worksFixture struct {
 	renameStarter        *fakeRenameStarter
 	libraryTracks        *fakeLibraryTracksReader
 	scheduler            *fakeScheduler
+	cacheManager         *fakeCacheManager
 	fsys                 *fsx.Mem
 	clock                *clock.Fake
 }
@@ -192,6 +193,7 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 	renameStarter := &fakeRenameStarter{}
 	libraryTracks := &fakeLibraryTracksReader{}
 	scheduler := &fakeScheduler{states: map[string]jobs.ScheduleRun{}}
+	cacheManager := &fakeCacheManager{}
 	fsys := fsx.NewMem(fake)
 	server, err := apiserver.New(apiserver.Config{
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
@@ -215,6 +217,7 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 		FS:                   fsys,
 		DownloadRoots:        apiserver.FilesystemRoots{FS: fsys},
 		Scheduler:            scheduler,
+		CacheManager:         cacheManager,
 		ImagesDir:            testImagesDir,
 		LibrarySize:          librarySize,
 		Navigation:           navigation,
@@ -239,7 +242,7 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 		blockedContent: blockedContent, removeAndBlocker: removeAndBlocker,
 		importSessions: importSessions, importInspector: importInspector,
 		drainStarter: drainStarter, moveJobs: moveJobs, renameStarter: renameStarter,
-		libraryTracks: libraryTracks, scheduler: scheduler, fsys: fsys, clock: fake,
+		libraryTracks: libraryTracks, scheduler: scheduler, cacheManager: cacheManager, fsys: fsys, clock: fake,
 	}
 }
 

@@ -9,9 +9,25 @@ import (
 )
 
 type Querier interface {
+	// The manual "always safe" clear (Invariant 5).
+	ClearMetadataCache(ctx context.Context) error
+	CountMetadataCache(ctx context.Context) (int64, error)
+	// ADR-60's max_age: a per-entry ceiling, enforced regardless of budget.
+	DeleteMetadataCacheOlderThan(ctx context.Context, fetchedAt int64) (int64, error)
+	// ADR-60's budget-triggered eviction: oldest first, exactly n rows so the
+	// caller can re-measure and stop once it is back under budget rather than
+	// guessing a cutoff time. metadata_cache is WITHOUT ROWID (its own
+	// (kind, external_id) primary key already is the index), so the row-value
+	// form is used instead of a rowid subquery.
+	DeleteOldestMetadataCache(ctx context.Context, limit int64) (int64, error)
 	// Column lists follow table order, or sqlc stops reusing the generated model.
 	GetCachedMetadata(ctx context.Context, arg GetCachedMetadataParams) (MetadataCache, error)
 	SetCachedMetadata(ctx context.Context, arg SetCachedMetadataParams) error
+	// ADR-60's cache budget (todo 4.19): the logical bytes actually stored, a
+	// real measurement (SUM of what is there), not an estimate -- distinct from
+	// the metadata.db file's own physical size, which SQLite does not shrink on
+	// DELETE without a VACUUM this codebase deliberately does not run here.
+	SumMetadataCacheBytes(ctx context.Context) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

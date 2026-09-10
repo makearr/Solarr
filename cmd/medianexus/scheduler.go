@@ -21,6 +21,7 @@ const (
 	categoryCountsScheduleCron     = "*/15 * * * *" // every 15 minutes
 	probeScheduleCron              = "0 * * * *"    // every hour
 	capacityScheduleCron           = "0 */6 * * *"  // every 6 hours
+	cacheMaintenanceScheduleCron   = "0 3 * * *"    // once a day, at 03:00
 )
 
 // cacheScheduleSource adapts settings.Cache to jobs.ScheduleSource -- the
@@ -69,6 +70,10 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(jobs.Task{
 		Key: "capacity", Name: "Root folder capacity", DefaultCadence: capacityScheduleCron,
 		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueCapacity,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "cache_maintenance", Name: "Cache maintenance", DefaultCadence: cacheMaintenanceScheduleCron,
+		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueCacheMaintenance,
 	})
 	return registry
 }

@@ -59,3 +59,69 @@ func (c Cache) Set(ctx context.Context, kind, externalID string, entry Entry) er
 		})
 	})
 }
+
+// SizeBytes answers the logical bytes currently stored (ADR-60): a real
+// measurement of what is there, not the metadata.db file's own physical
+// size, which SQLite does not shrink on DELETE without a VACUUM this
+// codebase deliberately does not run.
+func (c Cache) SizeBytes(ctx context.Context) (int64, error) {
+	bytes, err := metadatadb.New(c.store.Read()).SumMetadataCacheBytes(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("metacache: size: %w", err)
+	}
+	return bytes, nil
+}
+
+// Count answers how many entries are stored, for the eviction loop to know
+// when there is nothing left to evict.
+func (c Cache) Count(ctx context.Context) (int64, error) {
+	count, err := metadatadb.New(c.store.Read()).CountMetadataCache(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("metacache: count: %w", err)
+	}
+	return count, nil
+}
+
+// DeleteOlderThan removes every entry fetched before cutoff (ADR-60's
+// max_age, a per-entry ceiling enforced regardless of budget). Returns how
+// many were removed.
+func (c Cache) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
+	var removed int64
+	err := c.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		var err error
+		removed, err = metadatadb.New(tx).DeleteMetadataCacheOlderThan(ctx, cutoff.Unix())
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("metacache: delete older than %s: %w", cutoff, err)
+	}
+	return removed, nil
+}
+
+// DeleteOldest removes up to n entries, oldest first (ADR-60's budget-
+// triggered eviction). Returns how many were actually removed, which may be
+// fewer than n if the cache holds less.
+func (c Cache) DeleteOldest(ctx context.Context, n int64) (int64, error) {
+	var removed int64
+	err := c.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		var err error
+		removed, err = metadatadb.New(tx).DeleteOldestMetadataCache(ctx, n)
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("metacache: delete oldest %d: %w", n, err)
+	}
+	return removed, nil
+}
+
+// Clear removes every entry (Invariant 5: deleting the cache is always
+// safe -- a miss just costs a re-fetch, never data).
+func (c Cache) Clear(ctx context.Context) error {
+	err := c.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return metadatadb.New(tx).ClearMetadataCache(ctx)
+	})
+	if err != nil {
+		return fmt.Errorf("metacache: clear: %w", err)
+	}
+	return nil
+}
