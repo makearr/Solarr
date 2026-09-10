@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
 	"github.com/makearr/MediaNexus/internal/db/store"
@@ -439,6 +440,120 @@ func TestJob_FailsTerminallyForAPayloadItCannotRead(t *testing.T) {
 	var classified *jobs.Error
 	if !errors.As(err, &classified) || classified.Class != jobs.ClassTerminal {
 		t.Errorf("Run = %v, want a terminal error: a bad payload will not parse next time", err)
+	}
+}
+
+// A fresh run's estimate is a plain, tag-free unit count -- no probes at all,
+// since EstimateUnits never touches the tool.
+func TestJob_RecordsAUnitsEstimate(t *testing.T) {
+	fx := newFixture(t, "Artist/Album1/01.flac", "Artist/Album2/01.flac")
+	fx.tool.byPath[filepath.Join(root, "Artist/Album1/01.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+	fx.tool.byPath[filepath.Join(root, "Artist/Album2/01.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+
+	job := fx.job(t, 0.90)
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	done, err := fx.sessions().List(t.Context(), library.ImportDone)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(done) != 1 || done[0].UnitsEstimated == nil || *done[0].UnitsEstimated != 2 {
+		t.Fatalf("sessions = %+v, want one with UnitsEstimated=2", done)
+	}
+}
+
+// The estimate is computed once, not recomputed on a resumed retry -- proven
+// by adding a third album to the tree between the interrupted attempt and its
+// retry: a recompute would see 3, the frozen estimate from before the retry
+// still reads 2.
+func TestJob_DoesNotRecomputeTheEstimateOnAResume(t *testing.T) {
+	fx := newFixture(t, "Artist/Album1/01.flac", "Artist/Album2/01.flac")
+	fx.tool.byPath[filepath.Join(root, "Artist/Album1/01.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+	fx.tool.byPath[filepath.Join(root, "Artist/Album2/01.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+	fx.tool.failBatchOnce = "Album2"
+
+	job := fx.job(t, 0.90)
+	payload := importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}
+	if err := fx.run(t, job, payload); err == nil {
+		t.Fatal("first Run succeeded, want the injected transient failure to have stopped it")
+	}
+
+	writeFile(t, fx.fsys, filepath.Join(root, "Artist/Album3/01.flac"), 200*1024)
+	fx.tool.byPath[filepath.Join(root, "Artist/Album3/01.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+
+	if err := fx.run(t, job, payload); err != nil {
+		t.Fatalf("retried Run: %v", err)
+	}
+
+	done, err := fx.sessions().List(t.Context(), library.ImportDone)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(done) != 1 || done[0].UnitsEstimated == nil || *done[0].UnitsEstimated != 2 {
+		t.Fatalf("sessions = %+v, want the frozen estimate of 2, not a recompute seeing Album3", done)
+	}
+	if done[0].UnitsTotal != 3 {
+		t.Errorf("UnitsTotal = %d, want 3 (Album3 was found and processed)", done[0].UnitsTotal)
+	}
+}
+
+// Two flat "albums" dropped in the same directory with restarting track
+// numbers split into two units by the track-continuity structural fallback
+// (no tags feed GROUP itself, per Job.Run's own WalkOptions{}) -- one
+// cluster, two units, each with its own confident, distinct MBID, exactly
+// the shape identifyCluster's bounded fan-out must map back to the right
+// ids. Both must independently reach COMMIT: AddUnits' own insert-time
+// default is QUEUE at confidence 0, the same shape a *dropped* decision
+// would leave behind, so anything less than "both really COMMIT" is a sign
+// one unit's real result landed on the other's row, or was lost.
+// Mutation-tested: writing every goroutine's result to decisions[0] instead
+// of decisions[i] passes every other test in this file and is only caught here.
+func TestJob_MapsEachUnitInAClusterToItsOwnDecision(t *testing.T) {
+	const otherReleaseGroupMBID = "8c08f153-7820-4e0d-89ba-12c034eb022a"
+	fx := newFixture(t)
+	write := func(relPath string) {
+		writeFile(t, fx.fsys, filepath.Join(root, relPath), 200*1024)
+		fx.clock.Advance(time.Minute)
+	}
+	write("Messy/01 First.flac")
+	write("Messy/02 Second.flac")
+	write("Messy/01 Third.flac")
+	write("Messy/02 Fourth.flac")
+	fx.tool.byPath[filepath.Join(root, "Messy/01 First.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+	fx.tool.byPath[filepath.Join(root, "Messy/01 Third.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": otherReleaseGroupMBID}
+
+	job := fx.job(t, 0.90)
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	done, err := fx.sessions().List(t.Context(), library.ImportDone)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(done) != 1 || done[0].UnitsTotal != 2 || done[0].UnitsCommitted != 2 {
+		t.Fatalf("sessions = %+v, want one session with 2 units, both committed", done)
+	}
+	units, err := fx.sessions().ListUnits(t.Context(), done[0].ID)
+	if err != nil {
+		t.Fatalf("ListUnits: %v", err)
+	}
+	if len(units) != 2 {
+		t.Fatalf("units = %+v, want 2", units)
+	}
+	for _, u := range units {
+		if u.Decision != library.UnitCommit || u.Confidence == 0 {
+			t.Errorf("unit %+v, want COMMIT with a real confidence -- QUEUE/0 is what a dropped decision looks like", u)
+		}
 	}
 }
 

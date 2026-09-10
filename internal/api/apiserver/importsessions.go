@@ -46,6 +46,7 @@ type ImportSessionRow struct {
 	Threshold                               float64
 	UnitsTotal, UnitsCommitted, UnitsQueued int64
 	UnitsSkipped, UnitsFailed               int64
+	UnitsEstimated                          *int64
 	BytesImported                           int64
 	StartedAt                               time.Time
 	FinishedAt                              *time.Time
@@ -321,7 +322,8 @@ func importSessionView(row ImportSessionRow) gen.ImportSession {
 		Threshold: float32(row.Threshold), UnitsTotal: row.UnitsTotal,
 		UnitsCommitted: row.UnitsCommitted, UnitsQueued: row.UnitsQueued,
 		UnitsSkipped: row.UnitsSkipped, UnitsFailed: row.UnitsFailed,
-		BytesImported: row.BytesImported, StartedAt: row.StartedAt,
+		UnitsEstimated: row.UnitsEstimated,
+		BytesImported:  row.BytesImported, StartedAt: row.StartedAt,
 	}
 	if row.FinishedAt != nil {
 		view.FinishedAt = row.FinishedAt

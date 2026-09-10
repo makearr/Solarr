@@ -161,6 +161,31 @@ function InspectForm() {
 
 const RUNNING_STATES = new Set<ImportSession["state"]>(["INSPECTING", "CANCELLING"]);
 
+/** Rate from measured throughput, absent while the sample is small (todo
+ *  4.21's own wording) -- no total is known ahead of time (units_estimated
+ *  is a cheap, tag-free, possibly-undercounting pre-count, not a real
+ *  count), so this reads units_committed+queued+skipped+failed against
+ *  started_at rather than trusting any single "N of M" framing. */
+function describeProgress(session: ImportSession): string | null {
+  const processed =
+    session.units_committed + session.units_queued + session.units_skipped + session.units_failed;
+  const minSampleUnits = 5;
+  const minSampleMs = 10_000;
+  const elapsedMs = Date.now() - new Date(session.started_at).getTime();
+  if (processed < minSampleUnits || elapsedMs < minSampleMs) return null;
+
+  const perMinute = processed / (elapsedMs / 60_000);
+  const rate = `~${Math.max(1, Math.round(perMinute))} units/min`;
+
+  const estimated = session.units_estimated;
+  if (estimated === undefined || estimated <= processed) return rate;
+  const remainingMinutes = (estimated - processed) / perMinute;
+  if (!Number.isFinite(remainingMinutes) || remainingMinutes <= 0) return rate;
+  const eta =
+    remainingMinutes < 1 ? "<1 min left" : `~${Math.round(remainingMinutes)} min left`;
+  return `${rate} · ${eta} (of ~${estimated} est.)`;
+}
+
 function SessionList({
   selectedId,
   onSelect,
@@ -228,6 +253,9 @@ function SessionList({
                 <span className="truncate text-ink-muted" title={liveProgress[session.id]?.current_unit}>
                   now: {liveProgress[session.id]?.current_unit}
                 </span>
+              )}
+              {RUNNING_STATES.has(session.state) && describeProgress(session) && (
+                <span className="text-ink-muted">{describeProgress(session)}</span>
               )}
               {session.error && <span className="text-danger">{session.error}</span>}
             </button>

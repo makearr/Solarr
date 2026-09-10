@@ -111,8 +111,10 @@ func TestImportSessions_ListUnitsPagePaginatesAndFiltersByDecision(t *testing.T)
 		t.Fatalf("AddUnits: %v", err)
 	}
 	created := createWork(t, opened, "music", "Album 1")
-	if err := sessions.SetUnitDecision(ctx, ids[0], library.UnitCommit, 0.96, &created.ID, nil, "", ""); err != nil {
-		t.Fatalf("SetUnitDecision: %v", err)
+	if err := sessions.SetUnitDecisions(ctx, id, []library.UnitDecision{
+		{UnitID: ids[0], Decision: library.UnitCommit, Confidence: 0.96, WorkID: &created.ID},
+	}); err != nil {
+		t.Fatalf("SetUnitDecisions: %v", err)
 	}
 
 	page1, err := sessions.ListUnitsPage(ctx, id, 0, "", 2)
@@ -140,7 +142,7 @@ func TestImportSessions_ListUnitsPagePaginatesAndFiltersByDecision(t *testing.T)
 	}
 }
 
-func TestImportSessions_SetUnitDecisionRecomputesCounts(t *testing.T) {
+func TestImportSessions_SetUnitDecisionsRecomputesCounts(t *testing.T) {
 	opened, _ := newLibrary(t)
 	sessions := library.NewImportSessions(opened)
 	ctx := t.Context()
@@ -165,8 +167,10 @@ func TestImportSessions_SetUnitDecisionRecomputesCounts(t *testing.T) {
 	// import_unit.work_id has a real FK to work(id) -- a fake id would fail it.
 	created := createWork(t, opened, "music", "Album 1")
 	work := created.ID
-	if err := sessions.SetUnitDecision(ctx, units[0].ID, library.UnitCommit, 0.96, &work, nil, "", ""); err != nil {
-		t.Fatalf("SetUnitDecision: %v", err)
+	if err := sessions.SetUnitDecisions(ctx, id, []library.UnitDecision{
+		{UnitID: units[0].ID, Decision: library.UnitCommit, Confidence: 0.96, WorkID: &work},
+	}); err != nil {
+		t.Fatalf("SetUnitDecisions: %v", err)
 	}
 
 	got, err := sessions.Get(ctx, id)
@@ -330,10 +334,12 @@ func TestImportSessions_RecomputeCountsIncludesSkippedAndFailed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddUnits: %v", err)
 	}
+	decisions := make([]library.UnitDecision, 3)
 	for i, decision := range []string{library.UnitCommit, library.UnitSkip, library.UnitFailed} {
-		if err := sessions.SetUnitDecision(ctx, ids[i], decision, 0.5, nil, nil, "", ""); err != nil {
-			t.Fatalf("SetUnitDecision: %v", err)
-		}
+		decisions[i] = library.UnitDecision{UnitID: ids[i], Decision: decision, Confidence: 0.5}
+	}
+	if err := sessions.SetUnitDecisions(ctx, id, decisions); err != nil {
+		t.Fatalf("SetUnitDecisions: %v", err)
 	}
 
 	got, err := sessions.Get(ctx, id)

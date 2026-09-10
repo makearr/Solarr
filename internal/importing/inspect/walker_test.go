@@ -180,6 +180,40 @@ func TestWalker_ContainerSegmentsMatchTheWholeSessionRule(t *testing.T) {
 	}
 }
 
+// EstimateUnits agrees with a real Walk over the same tree when there is no
+// tag evidence to disagree over -- the common case, since Job.Run's own
+// WalkOptions{} never feeds Walk any tags either (todo 4.21).
+func TestEstimateUnits_MatchesARealWalkWithNoTagEvidence(t *testing.T) {
+	tr := newTree(t,
+		"Katupoken/KI Pecezinu/01 Sesoge.flac",
+		"Dipa Cogaf/The Gupe/CD1/01-track.flac", "Dipa Cogaf/The Gupe/CD2/01-track.flac",
+	)
+	units, _ := walkAll(t, tr, inspect.WalkOptions{})
+
+	estimate, err := inspect.EstimateUnits(t.Context(), tr.fsys, root)
+	if err != nil {
+		t.Fatalf("EstimateUnits: %v", err)
+	}
+	if estimate != len(units) {
+		t.Errorf("EstimateUnits = %d, want %d (matching the real walk)", estimate, len(units))
+	}
+}
+
+// A directory only tag evidence would split (no structural signal at all --
+// same album name, same track numbers, only the release id disagrees) is the
+// one accepted inaccuracy: the estimate cannot see that far ahead of a real
+// probe, so it undercounts one real unit as one.
+func TestEstimateUnits_UndercountsATagOnlySplit(t *testing.T) {
+	tr := newTree(t, "Messy/01 Track.flac", "Messy/02 Track.flac")
+	estimate, err := inspect.EstimateUnits(t.Context(), tr.fsys, root)
+	if err != nil {
+		t.Fatalf("EstimateUnits: %v", err)
+	}
+	if estimate != 1 {
+		t.Errorf("EstimateUnits = %d, want 1 (no structural signal to split on without tags)", estimate)
+	}
+}
+
 var errInterrupted = &interruptedError{}
 
 type interruptedError struct{}

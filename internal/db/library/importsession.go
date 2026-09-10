@@ -83,6 +83,10 @@ type Session struct {
 	StartedAt      int64
 	FinishedAt     *int64
 	Error          string
+	// UnitsEstimated is nil until inspect.EstimateUnits has run once for this
+	// session (todo 4.21's ETA) -- distinct from UnitsTotal, which is "found
+	// so far", not a real total.
+	UnitsEstimated *int64
 }
 
 // NewSession is what Create needs to start one run.
@@ -181,30 +185,55 @@ func (s ImportSessions) AddUnits(ctx context.Context, sessionID int64, units []N
 	return ids, nil
 }
 
-// SetUnitDecision is the one mutation IDENTIFY needs once it exists: a unit
-// starts UnitQueue with no identity, and this fills in a real result without
-// this package needing to know how that result was produced.
-func (s ImportSessions) SetUnitDecision(
-	ctx context.Context, unitID int64, decision string, confidence float64,
-	workID, editionID *int64, candidatesJSON, reason string,
-) error {
-	unit, err := librarydb.New(s.store.Read()).GetImportUnit(ctx, unitID)
-	if err != nil {
-		return fmt.Errorf("library: set import unit %d decision: %w", unitID, err)
+// UnitDecision is one unit's IDENTIFY/DECIDE result, ready to record.
+type UnitDecision struct {
+	UnitID                 int64
+	Decision               string
+	Confidence             float64
+	WorkID, EditionID      *int64
+	CandidatesJSON, Reason string
+}
+
+// SetUnitDecisions records every unit one cluster's IDENTIFY step decided, in
+// a single transaction with a single RecomputeImportSessionCounts at the end
+// (Invariant 3, todo 4.21) -- the same batching AddUnits already gives the
+// insert half, instead of the N reads and N transactions calling this once
+// per unit cost. The caller already knows sessionID (it is the cluster's own),
+// so this needs no per-unit lookup the way the single-unit version once did.
+func (s ImportSessions) SetUnitDecisions(ctx context.Context, sessionID int64, decisions []UnitDecision) error {
+	if len(decisions) == 0 {
+		return nil
 	}
-	err = s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
-		if err := queries.SetImportUnitDecision(ctx, librarydb.SetImportUnitDecisionParams{
-			ID: unitID, Decision: decision, Confidence: confidence,
-			WorkID: nullInt64(workID), EditionID: nullInt64(editionID),
-			CandidatesJson: nullString(candidatesJSON), Reason: nullString(reason),
-		}); err != nil {
-			return err
+		for _, d := range decisions {
+			if err := queries.SetImportUnitDecision(ctx, librarydb.SetImportUnitDecisionParams{
+				ID: d.UnitID, Decision: d.Decision, Confidence: d.Confidence,
+				WorkID: nullInt64(d.WorkID), EditionID: nullInt64(d.EditionID),
+				CandidatesJson: nullString(d.CandidatesJSON), Reason: nullString(d.Reason),
+			}); err != nil {
+				return fmt.Errorf("set unit %d decision: %w", d.UnitID, err)
+			}
 		}
-		return queries.RecomputeImportSessionCounts(ctx, unit.SessionID)
+		return queries.RecomputeImportSessionCounts(ctx, sessionID)
 	})
 	if err != nil {
-		return fmt.Errorf("library: set import unit %d decision: %w", unitID, err)
+		return fmt.Errorf("library: set import unit decisions for session %d: %w", sessionID, err)
+	}
+	return nil
+}
+
+// SetUnitsEstimated records inspect.EstimateUnits' one-off result (todo
+// 4.21's ETA). Callers only call this once per session -- Job.Run skips it
+// once Session.UnitsEstimated is non-nil.
+func (s ImportSessions) SetUnitsEstimated(ctx context.Context, sessionID, estimate int64) error {
+	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetImportSessionUnitsEstimated(ctx, librarydb.SetImportSessionUnitsEstimatedParams{
+			ID: sessionID, UnitsEstimated: nullInt64(&estimate),
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: set import session %d units estimated: %w", sessionID, err)
 	}
 	return nil
 }
@@ -330,6 +359,7 @@ func sessionFromRow(row librarydb.ImportSession) Session {
 		UnitsSkipped: row.UnitsSkipped, UnitsFailed: row.UnitsFailed,
 		BytesImported: row.BytesImported, ExtractDir: row.ExtractDir.String,
 		StartedAt: row.StartedAt, FinishedAt: int64Ptr(row.FinishedAt), Error: row.Error.String,
+		UnitsEstimated: int64Ptr(row.UnitsEstimated),
 	}
 }
 

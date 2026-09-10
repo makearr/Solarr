@@ -700,10 +700,13 @@ type ImportSession struct {
 	// Threshold import.auto_commit_confidence's value in force for this run.
 	Threshold      float32 `json:"threshold"`
 	UnitsCommitted int64   `json:"units_committed"`
-	UnitsFailed    int64   `json:"units_failed"`
-	UnitsQueued    int64   `json:"units_queued"`
-	UnitsSkipped   int64   `json:"units_skipped"`
-	UnitsTotal     int64   `json:"units_total"`
+
+	// UnitsEstimated A cheap, tag-free pre-count of what Walk will find (todo 4.21's ETA), absent until the estimate pass finishes. May undercount a directory tag evidence alone would have split further.
+	UnitsEstimated *int64 `json:"units_estimated,omitempty"`
+	UnitsFailed    int64  `json:"units_failed"`
+	UnitsQueued    int64  `json:"units_queued"`
+	UnitsSkipped   int64  `json:"units_skipped"`
+	UnitsTotal     int64  `json:"units_total"`
 }
 
 // ImportSessionOrigin defines model for ImportSession.Origin.

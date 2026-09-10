@@ -458,6 +458,9 @@ type Querier interface {
 	SetFingerprints(ctx context.Context, arg SetFingerprintsParams) error
 	SetGroupReputation(ctx context.Context, arg SetGroupReputationParams) error
 	SetImportSessionExtractDir(ctx context.Context, arg SetImportSessionExtractDirParams) error
+	// Set once, the first time a session's estimate is computed (todo 4.21's ETA);
+	// never recomputed on a later resume of the same session.
+	SetImportSessionUnitsEstimated(ctx context.Context, arg SetImportSessionUnitsEstimatedParams) error
 	// The only mutation IDENTIFY needs once it exists: a unit starts QUEUE with no
 	// identity (F29's own default) and this is what fills in a real result later,
 	// without this package needing to know how that result was produced.

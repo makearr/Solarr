@@ -18,7 +18,7 @@ VALUES (?1, ?2, ?3,
         ?4, 'INSPECTING', ?5, ?6)
 RETURNING id, source_path, origin, acquisition_id, category_id, state, threshold,
           units_total, units_committed, units_queued, bytes_imported, extract_dir,
-          started_at, finished_at, error, units_skipped, units_failed
+          started_at, finished_at, error, units_skipped, units_failed, units_estimated
 `
 
 type CreateImportSessionParams struct {
@@ -60,6 +60,7 @@ func (q *Queries) CreateImportSession(ctx context.Context, arg CreateImportSessi
 		&i.Error,
 		&i.UnitsSkipped,
 		&i.UnitsFailed,
+		&i.UnitsEstimated,
 	)
 	return i, err
 }
@@ -90,7 +91,7 @@ func (q *Queries) FinishImportSession(ctx context.Context, arg FinishImportSessi
 const getImportSession = `-- name: GetImportSession :one
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error, units_skipped, units_failed
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated
 FROM import_session WHERE id = ?
 `
 
@@ -115,6 +116,7 @@ func (q *Queries) GetImportSession(ctx context.Context, id int64) (ImportSession
 		&i.Error,
 		&i.UnitsSkipped,
 		&i.UnitsFailed,
+		&i.UnitsEstimated,
 	)
 	return i, err
 }
@@ -210,7 +212,7 @@ func (q *Queries) InsertImportUnit(ctx context.Context, arg InsertImportUnitPara
 const listImportSessions = `-- name: ListImportSessions :many
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error, units_skipped, units_failed
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated
 FROM import_session
 WHERE ?1 = 0 OR state = ?2
 ORDER BY started_at DESC
@@ -254,6 +256,7 @@ func (q *Queries) ListImportSessions(ctx context.Context, arg ListImportSessions
 			&i.Error,
 			&i.UnitsSkipped,
 			&i.UnitsFailed,
+			&i.UnitsEstimated,
 		); err != nil {
 			return nil, err
 		}
@@ -430,6 +433,22 @@ type SetImportSessionExtractDirParams struct {
 
 func (q *Queries) SetImportSessionExtractDir(ctx context.Context, arg SetImportSessionExtractDirParams) error {
 	_, err := q.db.ExecContext(ctx, setImportSessionExtractDir, arg.ExtractDir, arg.ID)
+	return err
+}
+
+const setImportSessionUnitsEstimated = `-- name: SetImportSessionUnitsEstimated :exec
+UPDATE import_session SET units_estimated = ? WHERE id = ?
+`
+
+type SetImportSessionUnitsEstimatedParams struct {
+	UnitsEstimated sql.NullInt64
+	ID             int64
+}
+
+// Set once, the first time a session's estimate is computed (todo 4.21's ETA);
+// never recomputed on a later resume of the same session.
+func (q *Queries) SetImportSessionUnitsEstimated(ctx context.Context, arg SetImportSessionUnitsEstimatedParams) error {
+	_, err := q.db.ExecContext(ctx, setImportSessionUnitsEstimated, arg.UnitsEstimated, arg.ID)
 	return err
 }
 
