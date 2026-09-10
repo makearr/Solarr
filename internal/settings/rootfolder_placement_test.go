@@ -1,6 +1,7 @@
 package settings_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/settings"
@@ -59,6 +60,40 @@ func TestSetRootFolderPolicy_RejectsANegativeReserve(t *testing.T) {
 	}
 	if err := cache.SetRootFolderPolicy(t.Context(), root.ID, false, false, -1); err == nil {
 		t.Fatal("SetRootFolderPolicy: expected an error for a negative reserve, got nil")
+	}
+}
+
+func TestSetRootFolderOnline_TogglesAndPersists(t *testing.T) {
+	cache, _ := newCache(t)
+	root, err := cache.CreateRootFolder(t.Context(), "/media/music", "")
+	if err != nil {
+		t.Fatalf("CreateRootFolder: %v", err)
+	}
+	if !root.Online {
+		t.Fatal("a freshly created root should default to online")
+	}
+
+	if err := cache.SetRootFolderOnline(t.Context(), root.ID, false); err != nil {
+		t.Fatalf("SetRootFolderOnline(false): %v", err)
+	}
+	offline, _ := cache.Snapshot().RootFolder(root.ID)
+	if offline.Online {
+		t.Error("Online = true after SetRootFolderOnline(false)")
+	}
+
+	if err := cache.SetRootFolderOnline(t.Context(), root.ID, true); err != nil {
+		t.Fatalf("SetRootFolderOnline(true): %v", err)
+	}
+	online, _ := cache.Snapshot().RootFolder(root.ID)
+	if !online.Online {
+		t.Error("Online = false after SetRootFolderOnline(true)")
+	}
+}
+
+func TestSetRootFolderOnline_RefusesAnUnknownID(t *testing.T) {
+	cache, _ := newCache(t)
+	if err := cache.SetRootFolderOnline(t.Context(), 999, false); !errors.Is(err, settings.ErrNotFound) {
+		t.Errorf("SetRootFolderOnline(999) = %v, want ErrNotFound", err)
 	}
 }
 

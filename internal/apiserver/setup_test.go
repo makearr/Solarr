@@ -84,6 +84,20 @@ func (f setupFixture) post(t *testing.T, path, body string) *httptest.ResponseRe
 	return recorder
 }
 
+// authed replays a request with the cookies a prior claim/login response set,
+// for the PATCH endpoints that require an administrator.
+func (f setupFixture) authed(t *testing.T, method, path, body string, cookies []*http.Cookie) *httptest.ResponseRecorder {
+	t.Helper()
+	request := httptest.NewRequest(method, path, strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	for _, cookie := range cookies {
+		request.AddCookie(cookie)
+	}
+	recorder := httptest.NewRecorder()
+	f.server.Handler().ServeHTTP(recorder, request)
+	return recorder
+}
+
 // The claim closes on the first account, not when the wizard finishes.
 func TestCreateFirstAdministrator_ClosesPermanently(t *testing.T) {
 	fixture := newSetupFixture(t, nil)
@@ -257,3 +271,108 @@ func TestAddRootFolder_AcceptsAndFlagsAnUnwritablePath(t *testing.T) {
 }
 
 var errUnwritable = errors.New(`"/media/music" is owned by uid=0 gid=0`)
+
+// addedRootFolder claims the install and adds one root, returning its id and
+// the admin's session cookies for the PATCH tests below.
+func addedRootFolder(t *testing.T, fixture setupFixture) (id int64, cookies []*http.Cookie) {
+	t.Helper()
+	claim := fixture.post(t, "/api/v1/setup/admin", `{"username":"avs","password":"correct horse battery"}`)
+	if claim.Code != http.StatusCreated {
+		t.Fatalf("claim: %d", claim.Code)
+	}
+	cookies = claim.Result().Cookies()
+
+	created := fixture.authed(t, http.MethodPost, "/api/v1/rootfolders", `{"path":"/media/music"}`, cookies)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("add root folder: %d (%s)", created.Code, created.Body)
+	}
+	var body struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(created.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body: %v", err)
+	}
+	return body.ID, cookies
+}
+
+func TestUpdateRootFolderPolicy_UpdatesReadOnlyAllowRenameAndReserve(t *testing.T) {
+	fixture := newSetupFixture(t, stubRoots{})
+	id, cookies := addedRootFolder(t, fixture)
+
+	recorder := fixture.authed(t, http.MethodPatch, "/api/v1/rootfolders/"+itoa(id),
+		`{"read_only":true,"allow_rename":true,"min_free_bytes":50000000000}`, cookies)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	}
+
+	updated, found := fixture.cache.Snapshot().RootFolder(id)
+	if !found {
+		t.Fatal("root folder not found after update")
+	}
+	if !updated.ReadOnly || !updated.AllowRename || updated.MinFreeBytes != 50_000_000_000 {
+		t.Errorf("root = %+v, want ReadOnly/AllowRename true and MinFreeBytes 50_000_000_000", updated)
+	}
+}
+
+func TestUpdateRootFolderPolicy_RequiresAdministrator(t *testing.T) {
+	fixture := newSetupFixture(t, stubRoots{})
+	id, _ := addedRootFolder(t, fixture)
+
+	recorder := fixture.authed(t, http.MethodPatch, "/api/v1/rootfolders/"+itoa(id),
+		`{"read_only":true,"allow_rename":false,"min_free_bytes":0}`, nil)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401 for an unauthenticated policy change", recorder.Code)
+	}
+}
+
+func TestUpdateRootFolderPolicy_RefusesAnUnknownRoot(t *testing.T) {
+	fixture := newSetupFixture(t, stubRoots{})
+	_, cookies := addedRootFolder(t, fixture)
+
+	recorder := fixture.authed(t, http.MethodPatch, "/api/v1/rootfolders/999",
+		`{"read_only":true,"allow_rename":false,"min_free_bytes":0}`, cookies)
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 for an unknown root folder", recorder.Code)
+	}
+}
+
+func TestSetRootFolderOnline_TogglesAndRequiresAdministrator(t *testing.T) {
+	fixture := newSetupFixture(t, stubRoots{})
+	id, cookies := addedRootFolder(t, fixture)
+
+	unauthenticated := fixture.authed(t, http.MethodPatch, "/api/v1/rootfolders/"+itoa(id)+"/online",
+		`{"online":false}`, nil)
+	if unauthenticated.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401 for an unauthenticated declare", unauthenticated.Code)
+	}
+
+	recorder := fixture.authed(t, http.MethodPatch, "/api/v1/rootfolders/"+itoa(id)+"/online",
+		`{"online":false}`, cookies)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	}
+	offline, _ := fixture.cache.Snapshot().RootFolder(id)
+	if offline.Online {
+		t.Error("Online = true after declaring the root offline")
+	}
+
+	recorder = fixture.authed(t, http.MethodPatch, "/api/v1/rootfolders/"+itoa(id)+"/online",
+		`{"online":true}`, cookies)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	}
+	online, _ := fixture.cache.Snapshot().RootFolder(id)
+	if !online.Online {
+		t.Error("Online = false after declaring the root online again")
+	}
+}
+
+func TestSetRootFolderOnline_RefusesAnUnknownRoot(t *testing.T) {
+	fixture := newSetupFixture(t, stubRoots{})
+	_, cookies := addedRootFolder(t, fixture)
+
+	recorder := fixture.authed(t, http.MethodPatch, "/api/v1/rootfolders/999/online", `{"online":false}`, cookies)
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 for an unknown root folder", recorder.Code)
+	}
+}

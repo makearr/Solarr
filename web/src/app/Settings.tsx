@@ -10,9 +10,11 @@ import { Users } from "./Users";
 
 /** Settings sections in the order they matter to someone setting the thing up.
  *  `stage` names what has to exist before a section can do anything, so the
- *  scaffolding is honest about being scaffolding rather than looking broken. */
+ *  scaffolding is honest about being scaffolding rather than looking broken.
+ *  Storage moved out to its own sidebar section (todo 4.18) -- configuration
+ *  lives where the thing it configures lives, and root folders are no
+ *  longer just-a-list here. */
 const SECTIONS = [
-  { id: "storage", title: "Storage", blurb: "Library roots, placement and free-space limits." },
   { id: "profiles", title: "Quality profiles", blurb: "Hard gates, tier order and scoring.", stage: 4 },
   { id: "indexers", title: "Indexers", blurb: "Newznab and Torznab sources, and their egress.", stage: 5 },
   { id: "downloaders", title: "Download clients", blurb: "Usenet, torrent and direct downloads.", stage: 5 },
@@ -25,15 +27,6 @@ export function Settings() {
     queryKey: ["me"],
     queryFn: async () => {
       const { data, error } = await api.GET("/me");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const roots = useQuery({
-    queryKey: ["rootfolders"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/rootfolders");
       if (error) throw error;
       return data;
     },
@@ -57,30 +50,6 @@ export function Settings() {
         <Categories />
 
         <UnwantedFiles />
-
-        <section className="flex flex-col gap-2">
-          <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Storage</h2>
-          {roots.data && roots.data.length > 0 ? (
-            <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle
-                           bg-surface text-sm">
-              {roots.data.map((root) => (
-                <li key={root.id} className="flex items-center gap-3 px-3 py-2">
-                  <span className="font-medium">{root.label ?? "unlabelled"}</span>
-                  <span className="truncate font-mono text-xs text-ink-muted">{root.path}</span>
-                  <span className="ml-auto shrink-0 text-xs text-ink-muted">
-                    {root.writable === false ? "read-only" : "writable"}
-                    {" · "}
-                    {root.online ? "online" : "offline"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">
-              No library root is configured.
-            </p>
-          )}
-        </section>
 
         <section className="flex flex-col gap-2">
           <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Sections</h2>

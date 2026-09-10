@@ -508,9 +508,14 @@ func (c *Cache) DeleteRootFolder(ctx context.Context, id int64) error {
 	})
 }
 
-// SetRootFolderOnline records whether a root is currently reachable. An offline
-// root is unavailable, never free space (Invariant 20a).
+// SetRootFolderOnline declares a root online or offline (section 10.4): the
+// user's own durable call, never overwritten by a probe finding a declared-
+// offline disk back (Invariant 87 -- "never auto-cleared"). An offline root
+// is unavailable, never free space (Invariant 20a).
 func (c *Cache) SetRootFolderOnline(ctx context.Context, id int64, online bool) error {
+	if _, found := c.Snapshot().RootFolder(id); !found {
+		return fmt.Errorf("%w: root folder %d", ErrNotFound, id)
+	}
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		return queries.SetRootFolderOnline(ctx, settingsdb.SetRootFolderOnlineParams{
 			Online: boolToInt(online), ID: id,

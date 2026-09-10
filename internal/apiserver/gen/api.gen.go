@@ -438,6 +438,24 @@ type Deferral struct {
 	Reason string `json:"reason"`
 }
 
+// DownloadFolder One watched upstream-download destination (todo 4.18, section 5.1). Registry only -- nothing acts on what lands here until stage 5.
+type DownloadFolder struct {
+	CategoryId *int64  `json:"category_id,omitempty"`
+	Id         int64   `json:"id"`
+	Label      *string `json:"label,omitempty"`
+	Path       string  `json:"path"`
+
+	// Readable Probed once, at creation. Nothing refreshes it after -- the same gap root_folder.writable had before the capacity job existed.
+	Readable       bool    `json:"readable"`
+	ReadableReason *string `json:"readable_reason,omitempty"`
+}
+
+// DownloadFolderEntry One top-level entry a live directory read found. Not matched against import state -- that comparison is stage 5's own job, not built yet, so this is a plain listing, not an "unimported files" view.
+type DownloadFolderEntry struct {
+	IsDir bool   `json:"is_dir"`
+	Name  string `json:"name"`
+}
+
 // DrainMove defines model for DrainMove.
 type DrainMove struct {
 	// AffinityKey The top-level directory this file was grouped and moved with.
@@ -1001,16 +1019,30 @@ type RootDelta struct {
 
 // RootFolder defines model for RootFolder.
 type RootFolder struct {
-	DrainJobId *int64 `json:"drain_job_id,omitempty"`
+	// AllowRename Overrides read_only for renaming alone (Invariant 69).
+	AllowRename *bool `json:"allow_rename,omitempty"`
+
+	// CapacityCheckedAt Absent until the capacity job has run once for this root.
+	CapacityCheckedAt *time.Time            `json:"capacity_checked_at,omitempty"`
+	Categories        *[]RootFolderCategory `json:"categories,omitempty"`
+	DrainJobId        *int64                `json:"drain_job_id,omitempty"`
 
 	// DrainState ADR-51's own drain state machine.
 	DrainState *RootFolderDrainState `json:"drain_state,omitempty"`
+	FreeBytes  *int64                `json:"free_bytes,omitempty"`
 	Id         int64                 `json:"id"`
 	Label      *string               `json:"label,omitempty"`
+
+	// MinFreeBytes The user's own reserve; placement refuses to dip below it.
+	MinFreeBytes *int64 `json:"min_free_bytes,omitempty"`
 
 	// Online An unmounted root counts as unavailable, never as free space (Invariant 20a).
 	Online bool   `json:"online"`
 	Path   string `json:"path"`
+
+	// ReadOnly Curated policy, not a probed fact: blocks new placement, upgrade-in-place and tag write-back, and blocks renaming unless allow_rename is also set (Invariant 69).
+	ReadOnly   *bool  `json:"read_only,omitempty"`
+	TotalBytes *int64 `json:"total_bytes,omitempty"`
 
 	// Writable Whether this process can write here. False is reported, never enforced: ownership on the host is the operator's to decide, and MediaNexus does not chown a library it did not create. Absent when it has not been probed.
 	Writable *bool `json:"writable,omitempty"`
@@ -1018,6 +1050,12 @@ type RootFolder struct {
 
 // RootFolderDrainState ADR-51's own drain state machine.
 type RootFolderDrainState string
+
+// RootFolderCategory defines model for RootFolderCategory.
+type RootFolderCategory struct {
+	Id   int64  `json:"id"`
+	Name string `json:"name"`
+}
 
 // ScoreComponent One additive-stage contribution (ADR-40 stage 3). Breaks ties only.
 type ScoreComponent struct {
@@ -1195,6 +1233,13 @@ type CreateCategoryJSONBody struct {
 	PriorityRank *int64 `json:"priority_rank,omitempty"`
 }
 
+// AddDownloadFolderJSONBody defines parameters for AddDownloadFolder.
+type AddDownloadFolderJSONBody struct {
+	CategoryId *int64  `json:"category_id,omitempty"`
+	Label      *string `json:"label,omitempty"`
+	Path       string  `json:"path"`
+}
+
 // StreamEventsParams defines parameters for StreamEvents.
 type StreamEventsParams struct {
 	// Topics Comma-separated subset of topics. Absent means every topic the caller may see. An unrecognised name is rejected rather than ignored, so a typo is not a silently empty stream.
@@ -1297,9 +1342,21 @@ type AddRootFolderJSONBody struct {
 	Path  string  `json:"path"`
 }
 
+// UpdateRootFolderPolicyJSONBody defines parameters for UpdateRootFolderPolicy.
+type UpdateRootFolderPolicyJSONBody struct {
+	AllowRename  bool  `json:"allow_rename"`
+	MinFreeBytes int64 `json:"min_free_bytes"`
+	ReadOnly     bool  `json:"read_only"`
+}
+
 // DrainRootFolderJSONBody defines parameters for DrainRootFolder.
 type DrainRootFolderJSONBody struct {
 	Preview *bool `json:"preview,omitempty"`
+}
+
+// SetRootFolderOnlineJSONBody defines parameters for SetRootFolderOnline.
+type SetRootFolderOnlineJSONBody struct {
+	Online bool `json:"online"`
 }
 
 // RenameRootFolderJSONBody defines parameters for RenameRootFolder.
@@ -1416,6 +1473,9 @@ type LoginJSONRequestBody LoginJSONBody
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody CreateCategoryJSONBody
 
+// AddDownloadFolderJSONRequestBody defines body for AddDownloadFolder for application/json ContentType.
+type AddDownloadFolderJSONRequestBody AddDownloadFolderJSONBody
+
 // CreateExclusionPatternJSONRequestBody defines body for CreateExclusionPattern for application/json ContentType.
 type CreateExclusionPatternJSONRequestBody = ExclusionPatternWrite
 
@@ -1446,8 +1506,14 @@ type SubscribePersonJSONRequestBody SubscribePersonJSONBody
 // AddRootFolderJSONRequestBody defines body for AddRootFolder for application/json ContentType.
 type AddRootFolderJSONRequestBody AddRootFolderJSONBody
 
+// UpdateRootFolderPolicyJSONRequestBody defines body for UpdateRootFolderPolicy for application/json ContentType.
+type UpdateRootFolderPolicyJSONRequestBody UpdateRootFolderPolicyJSONBody
+
 // DrainRootFolderJSONRequestBody defines body for DrainRootFolder for application/json ContentType.
 type DrainRootFolderJSONRequestBody DrainRootFolderJSONBody
+
+// SetRootFolderOnlineJSONRequestBody defines body for SetRootFolderOnline for application/json ContentType.
+type SetRootFolderOnlineJSONRequestBody SetRootFolderOnlineJSONBody
 
 // RenameRootFolderJSONRequestBody defines body for RenameRootFolder for application/json ContentType.
 type RenameRootFolderJSONRequestBody RenameRootFolderJSONBody
@@ -1508,6 +1574,18 @@ type ServerInterface interface {
 	// Configured libraries and current state, for the landing page.
 	// (GET /dashboard)
 	GetDashboard(w http.ResponseWriter, r *http.Request)
+	// The configured download folders (todo 4.18, section 5.1).
+	// (GET /downloadfolders)
+	ListDownloadFolders(w http.ResponseWriter, r *http.Request)
+	// Watch a folder upstream download clients write to. Administrator only.
+	// (POST /downloadfolders)
+	AddDownloadFolder(w http.ResponseWriter, r *http.Request)
+	// Stop watching a download folder. Administrator only.
+	// (DELETE /downloadfolders/{id})
+	DeleteDownloadFolder(w http.ResponseWriter, r *http.Request, id int64)
+	// What is sitting in a download folder right now.
+	// (GET /downloadfolders/{id}/contents)
+	ListDownloadFolderContents(w http.ResponseWriter, r *http.Request, id int64)
 	// Server-sent events, filtered by category access.
 	// (GET /events)
 	StreamEvents(w http.ResponseWriter, r *http.Request, params StreamEventsParams)
@@ -1595,12 +1673,18 @@ type ServerInterface interface {
 	// Add a library root.
 	// (POST /rootfolders)
 	AddRootFolder(w http.ResponseWriter, r *http.Request)
+	// Change a root's own placement policy (Invariant 69). Administrator only.
+	// (PATCH /rootfolders/{id})
+	UpdateRootFolderPolicy(w http.ResponseWriter, r *http.Request, id int64)
 	// Stop draining a root; restores accepts_new. Administrator only.
 	// (DELETE /rootfolders/{id}/drain)
 	StopDrainingRootFolder(w http.ResponseWriter, r *http.Request, id int64)
 	// Evacuate a root folder (ADR-51). Administrator only.
 	// (POST /rootfolders/{id}/drain)
 	DrainRootFolder(w http.ResponseWriter, r *http.Request, id int64)
+	// Declare a root online or offline (section 10.4). Administrator only.
+	// (PATCH /rootfolders/{id}/online)
+	SetRootFolderOnline(w http.ResponseWriter, r *http.Request, id int64)
 	// Preview or apply the shipped naming template to a root's own already-identified files (section 11.8). Administrator only.
 	// (POST /rootfolders/{id}/rename)
 	RenameRootFolder(w http.ResponseWriter, r *http.Request, id int64)
@@ -1721,6 +1805,30 @@ func (_ Unimplemented) DeleteCategory(w http.ResponseWriter, r *http.Request, id
 // Configured libraries and current state, for the landing page.
 // (GET /dashboard)
 func (_ Unimplemented) GetDashboard(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The configured download folders (todo 4.18, section 5.1).
+// (GET /downloadfolders)
+func (_ Unimplemented) ListDownloadFolders(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Watch a folder upstream download clients write to. Administrator only.
+// (POST /downloadfolders)
+func (_ Unimplemented) AddDownloadFolder(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Stop watching a download folder. Administrator only.
+// (DELETE /downloadfolders/{id})
+func (_ Unimplemented) DeleteDownloadFolder(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What is sitting in a download folder right now.
+// (GET /downloadfolders/{id}/contents)
+func (_ Unimplemented) ListDownloadFolderContents(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1898,6 +2006,12 @@ func (_ Unimplemented) AddRootFolder(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Change a root's own placement policy (Invariant 69). Administrator only.
+// (PATCH /rootfolders/{id})
+func (_ Unimplemented) UpdateRootFolderPolicy(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Stop draining a root; restores accepts_new. Administrator only.
 // (DELETE /rootfolders/{id}/drain)
 func (_ Unimplemented) StopDrainingRootFolder(w http.ResponseWriter, r *http.Request, id int64) {
@@ -1907,6 +2021,12 @@ func (_ Unimplemented) StopDrainingRootFolder(w http.ResponseWriter, r *http.Req
 // Evacuate a root folder (ADR-51). Administrator only.
 // (POST /rootfolders/{id}/drain)
 func (_ Unimplemented) DrainRootFolder(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Declare a root online or offline (section 10.4). Administrator only.
+// (PATCH /rootfolders/{id}/online)
+func (_ Unimplemented) SetRootFolderOnline(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2253,6 +2373,116 @@ func (siw *ServerInterfaceWrapper) GetDashboard(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetDashboard(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDownloadFolders operation middleware
+func (siw *ServerInterfaceWrapper) ListDownloadFolders(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDownloadFolders(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddDownloadFolder operation middleware
+func (siw *ServerInterfaceWrapper) AddDownloadFolder(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddDownloadFolder(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteDownloadFolder operation middleware
+func (siw *ServerInterfaceWrapper) DeleteDownloadFolder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteDownloadFolder(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDownloadFolderContents operation middleware
+func (siw *ServerInterfaceWrapper) ListDownloadFolderContents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDownloadFolderContents(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3256,6 +3486,39 @@ func (siw *ServerInterfaceWrapper) AddRootFolder(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// UpdateRootFolderPolicy operation middleware
+func (siw *ServerInterfaceWrapper) UpdateRootFolderPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateRootFolderPolicy(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // StopDrainingRootFolder operation middleware
 func (siw *ServerInterfaceWrapper) StopDrainingRootFolder(w http.ResponseWriter, r *http.Request) {
 
@@ -3313,6 +3576,39 @@ func (siw *ServerInterfaceWrapper) DrainRootFolder(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DrainRootFolder(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetRootFolderOnline operation middleware
+func (siw *ServerInterfaceWrapper) SetRootFolderOnline(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetRootFolderOnline(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4090,6 +4386,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/dashboard", wrapper.GetDashboard)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/downloadfolders", wrapper.ListDownloadFolders)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/downloadfolders", wrapper.AddDownloadFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/downloadfolders/{id}", wrapper.DeleteDownloadFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/downloadfolders/{id}/contents", wrapper.ListDownloadFolderContents)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/events", wrapper.StreamEvents)
 	})
 	r.Group(func(r chi.Router) {
@@ -4177,10 +4485,16 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/rootfolders", wrapper.AddRootFolder)
 	})
 	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/rootfolders/{id}", wrapper.UpdateRootFolderPolicy)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/rootfolders/{id}/drain", wrapper.StopDrainingRootFolder)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/rootfolders/{id}/drain", wrapper.DrainRootFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/rootfolders/{id}/online", wrapper.SetRootFolderOnline)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/rootfolders/{id}/rename", wrapper.RenameRootFolder)

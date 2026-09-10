@@ -433,6 +433,168 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
 
+  /rootfolders/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    patch:
+      operationId: updateRootFolderPolicy
+      tags: [setup]
+      summary: Change a root's own placement policy (Invariant 69). Administrator only.
+      description: >-
+        read_only blocks new placement, upgrade-in-place and tag
+        write-back, and blocks renaming unless allow_rename is also set.
+        min_free_bytes is the reserve placement refuses to dip below. All
+        three are replaced wholesale, matching every other policy-write
+        endpoint's own shape -- there is no partial update.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [read_only, allow_rename, min_free_bytes]
+              properties:
+                read_only: { type: boolean }
+                allow_rename: { type: boolean }
+                min_free_bytes: { type: integer, format: int64, minimum: 0 }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RootFolder" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /rootfolders/{id}/online:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    patch:
+      operationId: setRootFolderOnline
+      tags: [setup]
+      summary: Declare a root online or offline (section 10.4). Administrator only.
+      description: >-
+        A declared-offline root stays that way indefinitely: nothing on it
+        is missing, counted as missing, or re-acquired (Invariant 87), and
+        it is excluded from placement, capacity totals and free-space
+        gates. A probe finding the disk back never clears this by itself --
+        declaring it online again is the only thing that does, so a
+        flapping mount cannot toggle the state under the user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [online]
+              properties:
+                online: { type: boolean }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RootFolder" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /downloadfolders:
+    get:
+      operationId: listDownloadFolders
+      tags: [setup]
+      summary: The configured download folders (todo 4.18, section 5.1).
+      responses:
+        "200":
+          description: Every download folder.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DownloadFolder" }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: addDownloadFolder
+      tags: [setup]
+      summary: Watch a folder upstream download clients write to. Administrator only.
+      description: >-
+        The path is probed for existence and readability before it is
+        accepted, the same as a root folder's own write probe -- a typo or
+        an unmounted volume surfaces here rather than silently sitting
+        unreadable. Never written to by MediaNexus (section 5.1):
+        readability is checked, not writability.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: { type: string, minLength: 1 }
+                label: { type: string }
+                category_id: { type: integer, format: int64 }
+      responses:
+        "201":
+          description: Added.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DownloadFolder" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: The given category_id does not exist.
+
+  /downloadfolders/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    delete:
+      operationId: deleteDownloadFolder
+      tags: [setup]
+      summary: Stop watching a download folder. Administrator only.
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /downloadfolders/{id}/contents:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listDownloadFolderContents
+      tags: [setup]
+      summary: What is sitting in a download folder right now.
+      description: >-
+        A live, non-recursive top-level listing, read fresh on every call --
+        not cached, and not matched against import state (that comparison
+        is stage 5's own job, not built yet).
+      responses:
+        "200":
+          description: The folder's own top-level entries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DownloadFolderEntry" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /rootfolders/{id}/drain:
     parameters:
       - name: id
@@ -1860,11 +2022,69 @@ components:
             enforced: ownership on the host is the operator's to decide, and
             MediaNexus does not chown a library it did not create. Absent when
             it has not been probed.
+        read_only:
+          type: boolean
+          description: >-
+            Curated policy, not a probed fact: blocks new placement,
+            upgrade-in-place and tag write-back, and blocks renaming unless
+            allow_rename is also set (Invariant 69).
+        allow_rename:
+          type: boolean
+          description: Overrides read_only for renaming alone (Invariant 69).
+        total_bytes: { type: integer, format: int64 }
+        free_bytes: { type: integer, format: int64 }
+        min_free_bytes:
+          type: integer
+          format: int64
+          description: The user's own reserve; placement refuses to dip below it.
+        capacity_checked_at:
+          type: string
+          format: date-time
+          description: Absent until the capacity job has run once for this root.
+        categories:
+          type: array
+          items: { $ref: "#/components/schemas/RootFolderCategory" }
         drain_state:
           type: string
           enum: [NONE, DRAINING, PAUSED, DRAINED]
           description: ADR-51's own drain state machine.
         drain_job_id: { type: integer, format: int64 }
+
+    RootFolderCategory:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+
+    DownloadFolder:
+      type: object
+      description: >-
+        One watched upstream-download destination (todo 4.18, section 5.1).
+        Registry only -- nothing acts on what lands here until stage 5.
+      required: [id, path, readable]
+      properties:
+        id: { type: integer, format: int64 }
+        path: { type: string }
+        label: { type: string }
+        category_id: { type: integer, format: int64 }
+        readable:
+          type: boolean
+          description: >-
+            Probed once, at creation. Nothing refreshes it after -- the same
+            gap root_folder.writable had before the capacity job existed.
+        readable_reason: { type: string }
+
+    DownloadFolderEntry:
+      type: object
+      description: >-
+        One top-level entry a live directory read found. Not matched
+        against import state -- that comparison is stage 5's own job, not
+        built yet, so this is a plain listing, not an "unimported files" view.
+      required: [name, is_dir]
+      properties:
+        name: { type: string }
+        is_dir: { type: boolean }
 
     DrainPlan:
       type: object

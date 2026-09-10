@@ -4,11 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/MediaNexus/internal/apiserver/gen"
 	"github.com/makearr/MediaNexus/internal/auth"
 	"github.com/makearr/MediaNexus/internal/authz"
+	"github.com/makearr/MediaNexus/internal/config"
 	"github.com/makearr/MediaNexus/internal/settings"
 )
 
@@ -138,16 +143,31 @@ func (s *Server) AddRootFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	view := rootFolderView(created)
+	view := s.rootFolderView(created)
 	view.Writable = &writable
 	writeJSON(w, s.logger, http.StatusCreated, view)
 }
 
-func rootFolderView(folder settings.RootFolder) gen.RootFolder {
-	view := gen.RootFolder{Id: folder.ID, Path: folder.Path, Online: folder.Online}
+// rootFolderView renders one root folder for the API, including its own
+// read_only/allow_rename policy, capacity (nil until the capacity job has
+// run once), and the categories it is attached to -- everything the root
+// folder overview screen (todo 4.18) needs in one call, since
+// internal/capacity already computes every number and nothing rendered them
+// before this.
+func (s *Server) rootFolderView(folder settings.RootFolder) gen.RootFolder {
+	view := gen.RootFolder{
+		Id: folder.ID, Path: folder.Path, Online: folder.Online,
+		ReadOnly: &folder.ReadOnly, AllowRename: &folder.AllowRename,
+		TotalBytes: folder.TotalBytes, FreeBytes: folder.FreeBytes,
+		MinFreeBytes: &folder.MinFreeBytes,
+	}
 	if folder.Label != "" {
 		label := folder.Label
 		view.Label = &label
+	}
+	if folder.CapacityCheckedAt != nil {
+		checkedAt := time.Unix(*folder.CapacityCheckedAt, 0).UTC()
+		view.CapacityCheckedAt = &checkedAt
 	}
 	if folder.DrainState != "" {
 		state := gen.RootFolderDrainState(folder.DrainState)
@@ -156,7 +176,108 @@ func rootFolderView(folder settings.RootFolder) gen.RootFolder {
 	if folder.DrainJobID != nil {
 		view.DrainJobId = folder.DrainJobID
 	}
+
+	snapshot := s.auth.Settings.Snapshot()
+	var categories []gen.RootFolderCategory
+	for _, categoryID := range snapshot.CategoriesForRootFolder(folder.ID) {
+		if category, found := snapshot.Category(categoryID); found {
+			categories = append(categories, gen.RootFolderCategory{Id: category.ID, Name: category.Name})
+		}
+	}
+	if categories != nil {
+		view.Categories = &categories
+	}
 	return view
+}
+
+// routeUpdateRootFolderPolicy parses the id path parameter, mirroring
+// routeDrainRootFolder.
+func (s *Server) routeUpdateRootFolderPolicy(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a root folder id must be a number")
+		return
+	}
+	s.UpdateRootFolderPolicy(w, r, id)
+}
+
+// UpdateRootFolderPolicy replaces a root's read_only/allow_rename/
+// min_free_bytes wholesale (Invariant 69). Administrator only.
+func (s *Server) UpdateRootFolderPolicy(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+
+	var body gen.UpdateRootFolderPolicyJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "expected read_only, allow_rename and min_free_bytes")
+		return
+	}
+
+	if err := s.auth.Settings.SetRootFolderPolicy(r.Context(), id, body.ReadOnly, body.AllowRename, body.MinFreeBytes); err != nil {
+		if errors.Is(err, settings.ErrNotFound) {
+			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such root folder")
+			return
+		}
+		var problems config.Problems
+		if errors.As(err, &problems) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"The policy has problems", problems.Report("the root folder", "Nothing was changed."))
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+
+	folder, found := s.auth.Settings.Snapshot().RootFolder(id)
+	if !found {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such root folder")
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, s.rootFolderView(folder))
+}
+
+// routeSetRootFolderOnline parses the id path parameter, mirroring
+// routeDrainRootFolder.
+func (s *Server) routeSetRootFolderOnline(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a root folder id must be a number")
+		return
+	}
+	s.SetRootFolderOnline(w, r, id)
+}
+
+// SetRootFolderOnline declares a root online or offline (section 10.4).
+// Administrator only. A declared-offline root stays that way indefinitely --
+// nothing probes it back online (Invariant 87).
+func (s *Server) SetRootFolderOnline(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+
+	var body gen.SetRootFolderOnlineJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected an online flag")
+		return
+	}
+
+	if err := s.auth.Settings.SetRootFolderOnline(r.Context(), id, body.Online); err != nil {
+		if errors.Is(err, settings.ErrNotFound) {
+			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such root folder")
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+
+	folder, found := s.auth.Settings.Snapshot().RootFolder(id)
+	if !found {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such root folder")
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, s.rootFolderView(folder))
 }
 
 // RootChecker inspects a candidate library root, so this package never reaches

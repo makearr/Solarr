@@ -210,6 +210,7 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 		MoveJobs:             moveJobs,
 		RenameStarter:        renameStarter,
 		FS:                   fsys,
+		DownloadRoots:        apiserver.FilesystemRoots{FS: fsys},
 		ImagesDir:            testImagesDir,
 		LibrarySize:          librarySize,
 		Navigation:           navigation,

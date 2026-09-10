@@ -67,3 +67,12 @@ func (r FilesystemRoots) probeWritable(directory string) error {
 	// Or every root the user adds gets a stray file.
 	return r.FS.Remove(probe)
 }
+
+// Readable reports whether this process can list a download folder's
+// contents. Read-only, unlike Writable's create-then-remove probe: a
+// download folder is never written to by MediaNexus (section 5.1) -- it is
+// someone else's client writing there, only ever watched from here.
+func (r FilesystemRoots) Readable(path string) error {
+	_, err := r.FS.ReadDir(path)
+	return err
+}

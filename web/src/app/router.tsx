@@ -10,6 +10,7 @@ import { api } from "@/api/client";
 
 import { Activity } from "./Activity";
 import { Dashboard } from "./Dashboard";
+import { DownloadFolders } from "./DownloadFolders";
 import { Import } from "./Import";
 import { ImportLists } from "./ImportLists";
 import { Library } from "./Library";
@@ -18,6 +19,7 @@ import { LibraryLevelList } from "./LibraryLevelList";
 import { Moves } from "./Moves";
 import { People } from "./People";
 import { PersonDetail } from "./PersonDetail";
+import { RootFolders } from "./RootFolders";
 import { Settings } from "./Settings";
 import { Shell } from "./Shell";
 import { defaultLevelKey } from "./Sidebar";
@@ -76,8 +78,27 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/people", component: People }),
   createRoute({ getParentRoute: () => rootRoute, path: "/people/$id", component: PersonDetail }),
   createRoute({ getParentRoute: () => rootRoute, path: "/unidentified", component: Unidentified }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/import", component: Import }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/moves", component: Moves }),
+  // Storage (todo 4.18): Root folders, Move & drain, Download folders and
+  // Import are grouped under one section. /import and /moves redirect
+  // rather than 404ing, the same courtesy the old flat /library got.
+  createRoute({ getParentRoute: () => rootRoute, path: "/storage/roots", component: RootFolders }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/storage/moves", component: Moves }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/storage/downloads", component: DownloadFolders }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/storage/import", component: Import }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/import",
+    beforeLoad: () => {
+      throw redirect({ to: "/storage/import" });
+    },
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/moves",
+    beforeLoad: () => {
+      throw redirect({ to: "/storage/moves" });
+    },
+  }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity", component: Activity }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: Settings }),
 ];

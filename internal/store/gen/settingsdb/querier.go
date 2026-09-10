@@ -27,6 +27,9 @@ type Querier interface {
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	// Autonomous discovery jobs (ADR-38). Policy, so this stays in settings.db.
 	CreateDiscoveryJob(ctx context.Context, arg CreateDiscoveryJobParams) (DiscoveryJob, error)
+	// Download folders (migration 0010, todo 4.18, section 5.1). Column lists
+	// follow table order, or sqlc stops reusing models.
+	CreateDownloadFolder(ctx context.Context, arg CreateDownloadFolderParams) (DownloadFolder, error)
 	// ADR-53 part 1 (migration 0007). Column lists follow table order, or sqlc
 	// stops reusing models.
 	CreateExclusionPattern(ctx context.Context, arg CreateExclusionPatternParams) (ExclusionPattern, error)
@@ -40,6 +43,7 @@ type Querier interface {
 	DeleteAPIKey(ctx context.Context, id int64) error
 	DeleteCategory(ctx context.Context, id int64) error
 	DeleteDiscoveryJob(ctx context.Context, id int64) error
+	DeleteDownloadFolder(ctx context.Context, id int64) error
 	DeleteExclusionPattern(ctx context.Context, id int64) error
 	DeleteImportList(ctx context.Context, id int64) error
 	DeleteLanguageProfile(ctx context.Context, id int64) error
@@ -51,6 +55,7 @@ type Querier interface {
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetCategory(ctx context.Context, id int64) (Category, error)
 	GetDiscoveryJob(ctx context.Context, id int64) (DiscoveryJob, error)
+	GetDownloadFolder(ctx context.Context, id int64) (DownloadFolder, error)
 	GetExclusionPattern(ctx context.Context, id int64) (ExclusionPattern, error)
 	GetImportList(ctx context.Context, id int64) (ImportList, error)
 	GetInstanceSetting(ctx context.Context, key string) (InstanceSetting, error)
@@ -70,6 +75,7 @@ type Querier interface {
 	ListCategoryAccessForUser(ctx context.Context, userID int64) ([]UserCategoryAccess, error)
 	ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFolder, error)
 	ListDiscoveryJobs(ctx context.Context) ([]DiscoveryJob, error)
+	ListDownloadFolders(ctx context.Context) ([]DownloadFolder, error)
 	// What a scheduler actually runs -- off until previewed (ADR-38).
 	ListEnabledDiscoveryJobs(ctx context.Context) ([]DiscoveryJob, error)
 	ListExclusionPatterns(ctx context.Context) ([]ExclusionPattern, error)

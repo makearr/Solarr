@@ -59,6 +59,15 @@ type DiscoveryJob struct {
 	LastRunAt   sql.NullInt64
 }
 
+type DownloadFolder struct {
+	ID             int64
+	Path           string
+	Label          sql.NullString
+	CategoryID     sql.NullInt64
+	Readable       int64
+	ReadableReason sql.NullString
+}
+
 type ExclusionPattern struct {
 	ID         int64
 	Pattern    string

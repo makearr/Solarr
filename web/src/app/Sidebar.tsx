@@ -7,6 +7,8 @@ import {
   ArrowLeftRight,
   ChevronDown,
   ChevronRight,
+  Download,
+  HardDrive,
   HelpCircle,
   LayoutDashboard,
   Library as LibraryIcon,
@@ -30,10 +32,19 @@ type LibraryEntry = components["schemas"]["Library"];
 // found one.
 const SECTIONS: readonly { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/unidentified", label: "Unidentified", icon: HelpCircle },
-  { to: "/import", label: "Import", icon: ScanSearch },
-  { to: "/moves", label: "Move & drain", icon: ArrowLeftRight },
   { to: "/activity", label: "Activity", icon: Activity },
   { to: "/settings", label: "Settings", icon: Settings },
+];
+
+// Storage (todo 4.18): Import and Move & drain retire from the flat SECTIONS
+// list above in favour of this group. Root folders is new (the overview
+// screen that never existed); Download folders lands as its own follow-up
+// commit right after this one.
+const STORAGE_SECTIONS: readonly { to: string; label: string; icon: LucideIcon }[] = [
+  { to: "/storage/roots", label: "Root folders", icon: HardDrive },
+  { to: "/storage/moves", label: "Move & drain", icon: ArrowLeftRight },
+  { to: "/storage/downloads", label: "Download folders", icon: Download },
+  { to: "/storage/import", label: "Import", icon: ScanSearch },
 ];
 
 const EXPANDED_STORAGE_KEY = "medianexus.sidebar.expandedLibraries";
@@ -175,6 +186,25 @@ export function Sidebar() {
           </ul>
         </>
       )}
+
+      {!collapsed && (
+        <div className="px-4 pt-4 pb-1 text-xs font-medium uppercase tracking-wide text-ink-muted">
+          Storage
+        </div>
+      )}
+      <ul className={`flex flex-col gap-0.5 px-2 ${collapsed ? "pt-4" : ""}`}>
+        {STORAGE_SECTIONS.map(({ to, label, icon: Icon }) => {
+          const active = path.startsWith(to);
+          return (
+            <li key={to}>
+              <Link to={to} title={collapsed ? label : undefined} className={sectionLinkClass(active, collapsed)}>
+                <Icon aria-hidden className="size-4 shrink-0" />
+                {!collapsed && label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
 
       <ul className="flex flex-col gap-0.5 px-2 pt-4">
         {SECTIONS.map(({ to, label, icon: Icon }) => {

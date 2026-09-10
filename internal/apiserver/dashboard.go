@@ -42,7 +42,7 @@ func (s *Server) rootFolderViews() []gen.RootFolder {
 	folders := s.auth.Settings.Snapshot().RootFolders()
 	views := make([]gen.RootFolder, 0, len(folders))
 	for _, folder := range folders {
-		view := rootFolderView(folder)
+		view := s.rootFolderView(folder)
 		if s.roots != nil {
 			writable := s.roots.Writable(folder.Path) == nil
 			view.Writable = &writable

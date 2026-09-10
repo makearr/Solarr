@@ -126,6 +126,11 @@ type Config struct {
 	// LibraryArtists lists the Artists navigation level (ADR-54). Optional:
 	// without it, a person-entity level answers 503.
 	LibraryArtists LibraryArtistsReader
+	// DownloadRoots probes a candidate download folder for existence and
+	// readability (todo 4.18, section 5.1). Optional: without it,
+	// AddDownloadFolder accepts a path unprobed rather than refusing to add
+	// folders at all.
+	DownloadRoots DownloadFolderChecker
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -168,6 +173,7 @@ type Server struct {
 	navigation           NavigationProvider
 	libraryTracks        LibraryTracksReader
 	libraryArtists       LibraryArtistsReader
+	downloadRoots        DownloadFolderChecker
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -222,6 +228,7 @@ func New(config Config) (*Server, error) {
 		navigation:           config.Navigation,
 		libraryTracks:        config.LibraryTracks,
 		libraryArtists:       config.LibraryArtists,
+		downloadRoots:        config.DownloadRoots,
 		address:              net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -292,6 +299,12 @@ func New(config Config) (*Server, error) {
 			secured.Get("/import/sessions/{id}", server.routeGetImportSession)
 			secured.Get("/import/sessions/{id}/units", server.routeListImportUnits)
 			secured.Get("/rootfolders", server.ListRootFolders)
+			secured.Patch("/rootfolders/{id}", server.routeUpdateRootFolderPolicy)
+			secured.Patch("/rootfolders/{id}/online", server.routeSetRootFolderOnline)
+			secured.Get("/downloadfolders", server.ListDownloadFolders)
+			secured.Post("/downloadfolders", server.AddDownloadFolder)
+			secured.Delete("/downloadfolders/{id}", server.routeDeleteDownloadFolder)
+			secured.Get("/downloadfolders/{id}/contents", server.routeListDownloadFolderContents)
 			secured.Post("/rootfolders/{id}/drain", server.routeDrainRootFolder)
 			secured.Delete("/rootfolders/{id}/drain", server.routeStopDrainingRootFolder)
 			secured.Get("/moves", server.routeListMoveJobs)

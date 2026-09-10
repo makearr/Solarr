@@ -289,6 +289,112 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rootfolders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a root's own placement policy (Invariant 69). Administrator only.
+         * @description read_only blocks new placement, upgrade-in-place and tag write-back, and blocks renaming unless allow_rename is also set. min_free_bytes is the reserve placement refuses to dip below. All three are replaced wholesale, matching every other policy-write endpoint's own shape -- there is no partial update.
+         */
+        patch: operations["updateRootFolderPolicy"];
+        trace?: never;
+    };
+    "/rootfolders/{id}/online": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Declare a root online or offline (section 10.4). Administrator only.
+         * @description A declared-offline root stays that way indefinitely: nothing on it is missing, counted as missing, or re-acquired (Invariant 87), and it is excluded from placement, capacity totals and free-space gates. A probe finding the disk back never clears this by itself -- declaring it online again is the only thing that does, so a flapping mount cannot toggle the state under the user.
+         */
+        patch: operations["setRootFolderOnline"];
+        trace?: never;
+    };
+    "/downloadfolders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The configured download folders (todo 4.18, section 5.1). */
+        get: operations["listDownloadFolders"];
+        put?: never;
+        /**
+         * Watch a folder upstream download clients write to. Administrator only.
+         * @description The path is probed for existence and readability before it is accepted, the same as a root folder's own write probe -- a typo or an unmounted volume surfaces here rather than silently sitting unreadable. Never written to by MediaNexus (section 5.1): readability is checked, not writability.
+         */
+        post: operations["addDownloadFolder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/downloadfolders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Stop watching a download folder. Administrator only. */
+        delete: operations["deleteDownloadFolder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/downloadfolders/{id}/contents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * What is sitting in a download folder right now.
+         * @description A live, non-recursive top-level listing, read fresh on every call -- not cached, and not matched against import state (that comparison is stage 5's own job, not built yet).
+         */
+        get: operations["listDownloadFolderContents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rootfolders/{id}/drain": {
         parameters: {
             query?: never;
@@ -1168,6 +1274,25 @@ export interface components {
             online: boolean;
             /** @description Whether this process can write here. False is reported, never enforced: ownership on the host is the operator's to decide, and MediaNexus does not chown a library it did not create. Absent when it has not been probed. */
             writable?: boolean;
+            /** @description Curated policy, not a probed fact: blocks new placement, upgrade-in-place and tag write-back, and blocks renaming unless allow_rename is also set (Invariant 69). */
+            read_only?: boolean;
+            /** @description Overrides read_only for renaming alone (Invariant 69). */
+            allow_rename?: boolean;
+            /** Format: int64 */
+            total_bytes?: number;
+            /** Format: int64 */
+            free_bytes?: number;
+            /**
+             * Format: int64
+             * @description The user's own reserve; placement refuses to dip below it.
+             */
+            min_free_bytes?: number;
+            /**
+             * Format: date-time
+             * @description Absent until the capacity job has run once for this root.
+             */
+            capacity_checked_at?: string;
+            categories?: components["schemas"]["RootFolderCategory"][];
             /**
              * @description ADR-51's own drain state machine.
              * @enum {string}
@@ -1175,6 +1300,28 @@ export interface components {
             drain_state?: "NONE" | "DRAINING" | "PAUSED" | "DRAINED";
             /** Format: int64 */
             drain_job_id?: number;
+        };
+        RootFolderCategory: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+        };
+        /** @description One watched upstream-download destination (todo 4.18, section 5.1). Registry only -- nothing acts on what lands here until stage 5. */
+        DownloadFolder: {
+            /** Format: int64 */
+            id: number;
+            path: string;
+            label?: string;
+            /** Format: int64 */
+            category_id?: number;
+            /** @description Probed once, at creation. Nothing refreshes it after -- the same gap root_folder.writable had before the capacity job existed. */
+            readable: boolean;
+            readable_reason?: string;
+        };
+        /** @description One top-level entry a live directory read found. Not matched against import state -- that comparison is stage 5's own job, not built yet, so this is a plain listing, not an "unimported files" view. */
+        DownloadFolderEntry: {
+            name: string;
+            is_dir: boolean;
         };
         /** @description What one drainRootFolder call computed -- a preview, a refusal, or an accepted and enqueued plan (ADR-51). */
         DrainPlan: {
@@ -2381,6 +2528,173 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    updateRootFolderPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    read_only: boolean;
+                    allow_rename: boolean;
+                    /** Format: int64 */
+                    min_free_bytes: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RootFolder"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setRootFolderOnline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    online: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RootFolder"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listDownloadFolders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every download folder. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadFolder"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    addDownloadFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    path: string;
+                    label?: string;
+                    /** Format: int64 */
+                    category_id?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Added. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadFolder"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            /** @description The given category_id does not exist. */
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteDownloadFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listDownloadFolderContents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The folder's own top-level entries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadFolderEntry"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     drainRootFolder: {
