@@ -683,6 +683,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/discover/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search one category's own metadata provider for something not in the library yet (ADR-56's per-library half). The global, cross-media-type half with its destination-suggestion ladder is not built. */
+        get: operations["discoverSearch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/discover/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a search result as intent: resolves or creates the work and ensures a monitored album-level desired_item for it -- never a download (ADR-56). Administrator or a manage grant on category_id. */
+        post: operations["discoverAdd"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}": {
         parameters: {
             query?: never;
@@ -1731,6 +1765,35 @@ export interface components {
             items: components["schemas"]["Work"][];
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
+        };
+        /** @description One candidate a search found (ADR-56) -- not yet in the library. */
+        DiscoverResult: {
+            /** @example musicbrainz:release-group */
+            provider: string;
+            external_id: string;
+            title: string;
+            artist?: string;
+            /** Format: int64 */
+            year?: number;
+        };
+        DiscoverAddRequest: {
+            /** Format: int64 */
+            category_id: number;
+            provider: string;
+            external_id: string;
+            /** @default true */
+            monitored: boolean;
+        };
+        DiscoverAddResult: {
+            /** Format: int64 */
+            work_id: number;
+            /** Format: int64 */
+            desired_item_id: number;
+            /**
+             * Format: int64
+             * @description ADR-36's composite score, computed against the user_request trigger. There is no populated hunt_queue yet (stage 5/6), so this is the score alone, not a position within it.
+             */
+            priority: number;
         };
         /** @description A person, first-class and monitorable in their own right (ADR-32). */
         Person: {
@@ -3374,6 +3437,64 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            /** @description category_id does not exist, or the caller cannot read it. */
+            404: components["responses"]["Problem"];
+        };
+    };
+    discoverSearch: {
+        parameters: {
+            query: {
+                category_id: number;
+                /** @description At least 2 characters (section 21.5's own floor). */
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to limit candidates, ranked by the provider. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverResult"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            /** @description category_id does not exist, or the caller cannot read it. */
+            404: components["responses"]["Problem"];
+        };
+    };
+    discoverAdd: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoverAddRequest"];
+            };
+        };
+        responses: {
+            /** @description The work and desired_item, and the priority the item will get. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverAddResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             /** @description category_id does not exist, or the caller cannot read it. */
             404: components["responses"]["Problem"];
         };

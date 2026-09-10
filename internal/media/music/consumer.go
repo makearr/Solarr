@@ -330,7 +330,7 @@ func newWorkIdentity(observed scan.Observed) library.WorkIdentity {
 	if title == "" {
 		title = albumTitleFallback(observed.File.RelPath)
 	}
-	return library.WorkIdentity{MediaType: "music", CanonicalTitle: title, SortTitle: sortTitle(title)}
+	return library.WorkIdentity{MediaType: "music", CanonicalTitle: title, SortTitle: SortTitle(title)}
 }
 
 // newEditionLink resolves the release (edition-level) MBID, when the file carries

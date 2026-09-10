@@ -65,7 +65,7 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	case errors.Is(err, authz.ErrInsufficientPermission):
 		writeProblem(w, logger, http.StatusForbidden, TypeForbidden, "Forbidden", err.Error())
 
-	case errors.Is(err, ErrQueryTooShort):
+	case errors.Is(err, ErrQueryTooShort), errors.Is(err, ErrDiscoverUnsupportedMediaType):
 		writeProblem(w, logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
 
 	case errors.Is(err, settings.ErrInUse):

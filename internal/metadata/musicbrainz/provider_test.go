@@ -80,6 +80,25 @@ func (f *fakeSearchSource) SearchReleaseGroups(
 	return f.matches, nil
 }
 
+// fakeQuerySearchSource is a fakeSource that also implements QuerySearcher, so
+// Provider.SearchByQuery has something in the source list that qualifies.
+type fakeQuerySearchSource struct {
+	fakeSource
+	matches     []musicbrainz.ReleaseGroupMatch
+	searchErr   error
+	searchCalls int
+}
+
+func (f *fakeQuerySearchSource) SearchReleaseGroupsByQuery(
+	context.Context, string, int,
+) ([]musicbrainz.ReleaseGroupMatch, error) {
+	f.searchCalls++
+	if f.searchErr != nil {
+		return nil, f.searchErr
+	}
+	return f.matches, nil
+}
+
 // fakeArtistLookupSource is a fakeSource that also implements ArtistLookup, so
 // Provider.Artist has something in the source list that qualifies.
 type fakeArtistLookupSource struct {
@@ -316,6 +335,68 @@ func TestProvider_SearchErrorsWhenEverySearcherFails(t *testing.T) {
 
 	if _, err := provider.Search(t.Context(), musicbrainz.PriorityIdentify, "Vutu Doci", "The Sezo Siluko", 5); err == nil {
 		t.Fatal("Search succeeded although the only Searcher-capable source failed")
+	}
+}
+
+func TestProvider_SearchByQuerySkipsSourcesThatDoNotImplementQuerySearcher(t *testing.T) {
+	proxy := &fakeSource{name: "proxy"} // no QuerySearcher
+	direct := &fakeQuerySearchSource{fakeSource: fakeSource{name: "direct"},
+		matches: []musicbrainz.ReleaseGroupMatch{{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg1"}}}}
+	provider := newProvider(t, proxy, direct)
+
+	matches, err := provider.SearchByQuery(t.Context(), musicbrainz.PriorityInteractive, "vutu doci kick inside", 5)
+	if err != nil {
+		t.Fatalf("SearchByQuery: %v", err)
+	}
+	if len(matches) != 1 || matches[0].MBID != "rg1" {
+		t.Errorf("matches = %+v, want the one QuerySearcher-capable source's answer", matches)
+	}
+	if direct.searchCalls != 1 {
+		t.Errorf("searchCalls = %d, want 1", direct.searchCalls)
+	}
+}
+
+// A provider with no QuerySearcher-capable source at all must answer "nothing
+// found", not an error -- the same optional-capability reasoning Search's own
+// test gives.
+func TestProvider_SearchByQueryWithNoCapableSourceFindsNothing(t *testing.T) {
+	proxy := &fakeSource{name: "proxy"}
+	provider := newProvider(t, proxy)
+
+	matches, err := provider.SearchByQuery(t.Context(), musicbrainz.PriorityInteractive, "vutu doci", 5)
+	if err != nil {
+		t.Fatalf("SearchByQuery: %v, want no error when nothing can search at all", err)
+	}
+	if matches != nil {
+		t.Errorf("matches = %+v, want nil", matches)
+	}
+}
+
+func TestProvider_SearchByQueryErrorsWhenEveryQuerySearcherFails(t *testing.T) {
+	direct := &fakeQuerySearchSource{fakeSource: fakeSource{name: "direct"}, searchErr: errors.New("search down")}
+	provider := newProvider(t, direct)
+
+	if _, err := provider.SearchByQuery(t.Context(), musicbrainz.PriorityInteractive, "vutu doci", 5); err == nil {
+		t.Fatal("SearchByQuery succeeded although the only QuerySearcher-capable source failed")
+	}
+}
+
+// A query search and a fielded search must never collide in the cache even
+// when they would otherwise hash to related strings -- queryCacheKey's own
+// "q\x1f" prefix is what keeps them apart.
+func TestProvider_QuerySearchIsServedFromCacheAndNeverCollidesWithAFieldedSearch(t *testing.T) {
+	direct := &fakeQuerySearchSource{fakeSource: fakeSource{name: "direct"},
+		matches: []musicbrainz.ReleaseGroupMatch{{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg1"}}}}
+	provider := newProvider(t, direct)
+
+	if _, err := provider.SearchByQuery(t.Context(), musicbrainz.PriorityInteractive, "Vutu Doci", 5); err != nil {
+		t.Fatalf("first SearchByQuery: %v", err)
+	}
+	if _, err := provider.SearchByQuery(t.Context(), musicbrainz.PriorityInteractive, "  vutu doci  ", 5); err != nil {
+		t.Fatalf("second SearchByQuery: %v", err)
+	}
+	if direct.searchCalls != 1 {
+		t.Errorf("searchCalls = %d, want 1 -- the second, differently-cased/spaced query must hit the cache", direct.searchCalls)
 	}
 }
 

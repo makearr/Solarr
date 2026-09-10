@@ -186,12 +186,36 @@ type directSearchReleaseGroup struct {
 // caller with no MBID at all can actually claim to know (section 10.2).
 func (d direct) SearchReleaseGroups(ctx context.Context, artist, title string, limit int) ([]ReleaseGroupMatch, error) {
 	query := fmt.Sprintf(`artist:%s AND releasegroup:%s`, luceneQuoted(artist), luceneQuoted(title))
+	matches, err := d.searchReleaseGroups(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("musicbrainz: search release-group %q/%q: %w", artist, title, err)
+	}
+	return matches, nil
+}
+
+// SearchReleaseGroupsByQuery is QuerySearcher's own free-text search (todo
+// 4.17): MusicBrainz's Lucene default-field search over the release group's
+// own document (title, artist credit, tags, ...) rather than SearchReleaseGroups'
+// two named fields, since a Discover query box has nothing to split a raw
+// string into.
+func (d direct) SearchReleaseGroupsByQuery(ctx context.Context, query string, limit int) ([]ReleaseGroupMatch, error) {
+	matches, err := d.searchReleaseGroups(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("musicbrainz: search release-group %q: %w", query, err)
+	}
+	return matches, nil
+}
+
+// searchReleaseGroups is both search methods' shared request/parse -- only
+// the Lucene query string itself differs between a fielded and a free-text
+// search.
+func (d direct) searchReleaseGroups(ctx context.Context, luceneQuery string, limit int) ([]ReleaseGroupMatch, error) {
 	requestURL := fmt.Sprintf("%s/release-group/?query=%s&fmt=json&limit=%d",
-		d.baseURL, url.QueryEscape(query), limit)
+		d.baseURL, url.QueryEscape(luceneQuery), limit)
 
 	var parsed directSearchResponse
 	if err := getJSON(ctx, d.client, requestURL, &parsed); err != nil {
-		return nil, fmt.Errorf("musicbrainz: search release-group %q/%q: %w", artist, title, err)
+		return nil, err
 	}
 
 	matches := make([]ReleaseGroupMatch, len(parsed.ReleaseGroups))

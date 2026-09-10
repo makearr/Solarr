@@ -144,6 +144,17 @@ type Searcher interface {
 	SearchReleaseGroups(ctx context.Context, artist, title string, limit int) ([]ReleaseGroupMatch, error)
 }
 
+// QuerySearcher is Searcher's own free-text counterpart (todo 4.17, ADR-56):
+// a user typing into a Discover search box has not split their query into
+// artist and title fields the way a file's own claimed tags let
+// SearchIdentifier do, and running the same raw string through both of
+// Searcher's fields would AND two broad phrases against different fields and
+// mostly miss. Same optional-capability shape as Searcher, ArtistLookup and
+// Discography -- not every Source implements it.
+type QuerySearcher interface {
+	SearchReleaseGroupsByQuery(ctx context.Context, query string, limit int) ([]ReleaseGroupMatch, error)
+}
+
 // ArtistLookup is an optional Source capability: full artist detail beyond the
 // name and id ReleaseGroup.ArtistCredit already carries. Not every Source
 // implements it -- same reasoning as Searcher, the proxy's artist shape is

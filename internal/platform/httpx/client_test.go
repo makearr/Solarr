@@ -21,6 +21,11 @@ type roundTripper struct {
 	errs      []error
 	calls     int
 	requests  []*http.Request
+	// build, when set, answers every call instead of responses -- for a test
+	// that needs the response body to see the real per-request context Do
+	// constructs (request.Context()), not a canned *http.Response built
+	// before that context exists.
+	build func(*http.Request) *http.Response
 }
 
 func (r *roundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
@@ -28,6 +33,9 @@ func (r *roundTripper) RoundTrip(request *http.Request) (*http.Response, error) 
 	r.calls++
 	r.requests = append(r.requests, request)
 
+	if r.build != nil {
+		return r.build(request), nil
+	}
 	if index < len(r.errs) && r.errs[index] != nil {
 		return nil, r.errs[index]
 	}
@@ -275,6 +283,65 @@ func TestClient_CancellationIsNotEvidenceAgainstTheProvider(t *testing.T) {
 	}
 	if got := breaker.State("indexer").State; got != httpx.BreakerClosed {
 		t.Errorf("breaker = %q after a cancellation, want closed", got)
+	}
+}
+
+// ctxAwareBody stands in for what net/http's own response body really does:
+// a Read after its request's context is cancelled fails with that context's
+// own error, exactly like a real connection's body reader watches for
+// cancellation. respond()'s own strings.Reader body does not model this at
+// all, which is why this bug (found live against a real MusicBrainz
+// response, todo 4.17's Discover search) had nothing to catch it before.
+type ctxAwareBody struct {
+	ctx    context.Context
+	data   string
+	served bool
+}
+
+func (b *ctxAwareBody) Read(p []byte) (int, error) {
+	if err := b.ctx.Err(); err != nil {
+		return 0, err
+	}
+	if b.served {
+		return 0, io.EOF
+	}
+	b.served = true
+	return copy(p, b.data), nil
+}
+
+func (b *ctxAwareBody) Close() error { return nil }
+
+// Do must not cancel its own request-scoped timeout until the caller is done
+// with the response body -- a caller always reads the body *after* Do
+// returns (getJSON's own shape: `response, err := client.Get(...)` then
+// `io.ReadAll(response.Body)`), so cancelling on Do's own return raced that
+// read against the cancellation signal. Mutation-tested: reverting the fix
+// (restoring a bare `defer cancel()` right after the timeout is created)
+// fails this test with "context canceled" -- exactly the live failure.
+func TestClient_ResponseBodyStaysReadableAfterDoReturns(t *testing.T) {
+	// The body is built once RoundTrip sees the real (per-request) context Do
+	// constructs, not the caller's own outer one -- WithContext on the
+	// request is what carries it, so the body has to be built inside build.
+	transport := &roundTripper{build: func(request *http.Request) *http.Response {
+		return &http.Response{
+			StatusCode: http.StatusOK, Header: make(http.Header),
+			Body: &ctxAwareBody{ctx: request.Context(), data: "released"},
+		}
+	}}
+	client, _, _, _ := newTestClient(t, transport)
+
+	response, err := client.Get(t.Context(), "https://indexer.invalid/api")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read response body after Do returned: %v, want no error", err)
+	}
+	if string(body) != "released" {
+		t.Errorf("body = %q, want %q", body, "released")
 	}
 }
 

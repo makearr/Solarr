@@ -49,7 +49,7 @@ func ResolveUnidentified(
 	workIDs, err := identity.ResolveWorks(ctx, cl.Now(), []library.WorkLink{{
 		Provider: extProvider, ExternalID: externalID, Confidence: 1.0,
 		Work: library.WorkIdentity{
-			MediaType: "music", CanonicalTitle: releaseGroup.Title, SortTitle: sortTitle(releaseGroup.Title),
+			MediaType: "music", CanonicalTitle: releaseGroup.Title, SortTitle: SortTitle(releaseGroup.Title),
 		},
 		RootFolderID: entry.RootFolderID,
 	}})

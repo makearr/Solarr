@@ -15,9 +15,10 @@ func albumTitleFallback(relPath string) string {
 	return path.Base(dir)
 }
 
-// sortTitle lowercases, collapses whitespace and drops a leading article, so "The
+// SortTitle lowercases, collapses whitespace and drops a leading article, so "The
 // Genoc" sorts under B. No spec defines this precisely yet; refine when it matters.
-func sortTitle(title string) string {
+// Exported: DiscoverJob (todo 4.17) builds a WorkIdentity outside this package too.
+func SortTitle(title string) string {
 	lowered := strings.ToLower(strings.TrimSpace(title))
 	lowered = strings.Join(strings.Fields(lowered), " ")
 	for _, article := range []string{"the ", "a ", "an "} {

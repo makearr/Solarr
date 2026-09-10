@@ -138,6 +138,10 @@ type Config struct {
 	// clear (todo 4.19). Optional: without it, the cache endpoints answer
 	// 503.
 	CacheManager CacheManager
+	// Discover searches a category's own metadata provider and adds a result
+	// as intent (todo 4.17, ADR-56). Optional: without it, the discover
+	// endpoints answer 503.
+	Discover Discover
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -183,6 +187,7 @@ type Server struct {
 	downloadRoots        DownloadFolderChecker
 	scheduler            Scheduler
 	cacheManager         CacheManager
+	discover             Discover
 	// effectivePort is the port this process actually bound to, resolved at
 	// startup (ADR-58). The Network screen reports it beside whatever
 	// settings.db now holds, since a port change written from the screen
@@ -250,6 +255,7 @@ func New(config Config) (*Server, error) {
 		downloadRoots:        config.DownloadRoots,
 		scheduler:            config.Scheduler,
 		cacheManager:         config.CacheManager,
+		discover:             config.Discover,
 		effectivePort:        config.Port,
 		healthPath:           base + APIPrefix + "/health",
 		address:              net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
@@ -293,6 +299,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/monitor", server.routeSetWorkMonitored)
 			secured.Post("/works/{id}/parts/{partId}/monitor", server.routeSetPartMonitored)
 			secured.Get("/works/{id}/artwork", server.routeGetWorkArtwork)
+			secured.Get("/discover/search", server.routeDiscoverSearch)
+			secured.Post("/discover/add", server.DiscoverAdd)
 			secured.Get("/library/unidentified", server.routeListUnidentified)
 			secured.Post("/library/unidentified/{mediaObjectId}/resolve", server.routeResolveUnidentified)
 			secured.Get("/search", server.routeSearch)
