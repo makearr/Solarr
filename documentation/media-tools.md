@@ -2,8 +2,8 @@
 
 ADR-30 keeps the Go binary pure and static and puts the two things with no good pure-Go
 implementation into the **image** instead: acoustic fingerprinting and tag writing. They
-are invoked as batched subprocesses through one `MediaTool` interface, which lands with
-stage 3.
+are invoked as batched subprocesses through one `MediaTool` interface
+(`internal/platform/mediatool`).
 
 `ffmpeg` and `chromaprint` are in the Dockerfile's runtime stage (`fpcalc`/`ffprobe`); the
 tagging helper is still not, per the still-undecided write path below. This page records
@@ -123,6 +123,7 @@ requests **positionally**, never by the filename a tool echoes back.
 
 ## Running outside Docker
 
-`fpcalc` and the tagging helper must be on `PATH`. `/api/v1/ready` reports which are
-missing rather than failing obscurely at import time, and a missing tool degrades: the
-import proceeds, and tag write-back is recorded as deferred rather than dropped.
+`ffprobe`, `fpcalc` and (from stage 5) the tagging helper must be on `PATH`. Startup logs
+one warning naming every missing tool rather than each file failing obscurely at scan time,
+and a missing tool degrades: the import proceeds, and tag write-back is recorded as deferred
+rather than dropped.

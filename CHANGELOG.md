@@ -33,12 +33,12 @@ below `0.0.x` predate that scheme and are left as history, unconverted.
 - Add the person read/subscribe API (ADR-32 phase 5)
 - Expose credits, genres, description and on-disk status on GET /works/{id}
 - Add work.description, sourced from the release group's own Wikidata QID
-- Add internal/metadata/wikidata and wire real biographies into EnrichJob
+- Add internal/wikidata and wire real biographies into EnrichJob
 - Wire artist credits and genre tags into EnrichJob
 - Add artist/credit/genre data and a library.People resolver (ADR-32/33)
 - Serve and render cover art (section 21.6, closing the loop)
 - Bump build to 0.0.15 (internal)
-- Fix internal/identify/parse and SearchIdentifier bugs found by live verification
+- Fix internal/parse and SearchIdentifier bugs found by live verification
 - Bump build to 0.0.14 (internal)
 - Add MusicBrainz text search and wire ADR-24's parse strategy (section 10.2)
 - Bump build to 0.0.13 (internal)
@@ -48,19 +48,19 @@ below `0.0.x` predate that scheme and are left as history, unconverted.
 - Validate a quality profile's real shape on write, not just its JSON syntax
 - Bump build to 0.0.11 (internal)
 - Bump build to 0.0.10 (internal)
-- Implement internal/identify/score: ADR-40 quality/language interpreter
-- Add internal/platform/artwork resize-and-encode pipeline and Cover Art Archive client
+- Implement internal/score: ADR-40 quality/language interpreter
+- Add internal/artwork resize-and-encode pipeline and Cover Art Archive client
 - Bump build to 0.0.9 (internal)
-- Add internal/identify/match: section 10.2's weighted-distance identity matcher
+- Add internal/match: section 10.2's weighted-distance identity matcher
 - Bump build to 0.0.8 (internal)
 - Round-trip quality and language profiles through config export/import
-- Declare internal/platform/artwork in the import allowlist
-- Declare internal/identify/score and internal/identify/match in the import allowlist
+- Declare internal/artwork in the import allowlist
+- Declare internal/score and internal/match in the import allowlist
 - Bump build to 0.0.7 (internal)
 - Add make binfmt: register qemu emulators before a multi-arch image build
 - Add quality and language profile schema (ADR-40, section 19.8)
 - Bump build to 0.0.6 (internal)
-- Add internal/identify/parse: stage 4's ADR-18 music release-name parser + golden corpus
+- Add internal/parse: stage 4's ADR-18 music release-name parser + golden corpus
 - Bump build to 0.0.5 (internal)
 - Collapse the sidebar to icons below 1100px (section 21.8)
 - Bump build to 0.0.4 (internal)
@@ -80,7 +80,7 @@ below `0.0.x` predate that scheme and are left as history, unconverted.
 - Add GET /api/v1/works: the library list endpoint
 - Add work_root_folder: a temporary bridge for category filtering
 - Wire ADR-29's provider into real edition/work_part enrichment
-- Add internal/metadata/musicbrainz: ADR-29's provider, both sources
+- Add internal/musicbrainz: ADR-29's provider, both sources
 - Add cache/metadata.db: a generic, disposable metadata cache
 - Fix env overrides misreading YAML-special leading characters
 - Populate a placeholder edition from the release MBID
@@ -88,16 +88,16 @@ below `0.0.x` predate that scheme and are left as history, unconverted.
 - Benchmark the scan batch write path at ADR-22 scale
 - Add the scan.Consumer: files on disk become identified works
 - Persist scan progress and add the first job handler (section 10.4)
-- Add internal/scanning/scan: the section 10.4 mtime sweep, resumable
+- Add internal/scan: the section 10.4 mtime sweep, resumable
 - Add the embedded-MBID identifier: identity with no network call (ADR-29)
-- Add internal/platform/mediatool: ADR-30's tools, and settle what stage 3 needs
+- Add internal/mediatool: ADR-30's tools, and settle what stage 3 needs
 - Recover from a corrupt database at startup, and reconcile after (ADR-15)
 - Add backup retention (ADR-15)
 - Add discovery_job (ADR-38) and wire it into Invariant 41
 - Add the request table's query surface (ADR-14, stage 12)
 - Add counter reconciliation logic
-- Add internal/metadata/metaresolve: field-level provider priority (ADR-8, Inv. 13)
-- Add internal/identify/model: ADR-23 extension types and the ADR-24 Identifier chain
+- Add internal/metaresolve: field-level provider priority (ADR-8, Inv. 13)
+- Add internal/model: ADR-23 extension types and the ADR-24 Identifier chain
 - Update benchmarks.md now that FTS5 search exists
 - Add FTS5 search over titles and aliases (migration 0010)
 - Add event_log and retention_state to jobs.db, decision_rollup to library.db

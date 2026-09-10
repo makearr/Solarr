@@ -71,7 +71,8 @@ rwb, n, flag, tmp, data, result2, doStuff
 - **Interfaces at the point of consumption**, defined by the consumer and kept small.
 - **No hidden global state.** Dependencies arrive through constructors. Package-level `var`
   holding mutable state is banned.
-- **Dependencies point one way** (architecture §1). A cycle is a design error; CI enforces it.
+- **Dependencies point one way** (`codebase-map.md`). A cycle is a design error;
+  `internal/archtest` enforces it.
 - Constructors take a struct when there are more than three parameters.
 
 ---
@@ -126,9 +127,9 @@ the API filters; translation stays possible.
 
 ## 7. Tests
 
-- **Standard library only.** No testify, no assertion DSL. `if got != want { t.Errorf(...) }`,
-  with a small set of local generic helpers in `internal/testutil` for deep comparison and
-  error matching. One idiom, no dependency in every test file, failure output under our control.
+- **Standard library only.** No testify, no assertion DSL: `if got != want { t.Errorf(...) }`,
+  with `reflect.DeepEqual` or small helpers local to the package for whole values. One idiom, no
+  dependency in every test file, failure output under our control.
 - Table-driven by default. Test names describe behaviour: `TestPlacement_PrefersAffinityRoot`.
 - **Assert whole values, not fragments.** A scorer test asserts the full `Decision` including
   its components — a right answer for the wrong reasons is a bug when the reasons are the
@@ -195,7 +196,7 @@ Chosen so that no framework owns the shape of the code. Rationale in ADR-31.
 | Router | **stdlib `net/http` + chi** — everything stays an `http.Handler` |
 | Logging | **`log/slog`** — JSON handler, correlation ID from context |
 | API | **OpenAPI spec-first** — `api/openapi.yaml` generates Go interfaces and the TS client |
-| Frontend | **Vite · TanStack Query · Tailwind · shadcn/ui · TanStack Virtual** |
+| Frontend | **Vite · React · TanStack Router/Query/Virtual · Tailwind · Radix primitives** |
 
 ### Generated code
 
@@ -203,7 +204,7 @@ Chosen so that no framework owns the shape of the code. Rationale in ADR-31.
 and never edited by hand.** Change the source and regenerate:
 
 ```bash
-sqlc generate          # after changing queries/*.sql or the schema
+make sqlc              # after changing queries/*.sql or the schema
 make api               # after changing api/openapi.yaml
 ```
 
@@ -240,8 +241,8 @@ CI fails if generated output is stale. If a generated file looks wrong, the sour
   third category and no global store.
 - SSE events invalidate query keys; the UI never polls.
 - **Every list is virtualised.** 500k rows is the design point, not an edge case.
-- shadcn/ui components are copied into the repository as source. Edit them freely — they are
-  ours, not a dependency.
+- Radix primitives are added per component as one is needed, styled with Tailwind
+  (`web-interface.md` has why shadcn/ui was declined).
 - TypeScript `strict` is on. `any` requires a comment justifying it.
 
 ---

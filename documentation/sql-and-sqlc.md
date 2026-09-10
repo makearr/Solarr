@@ -90,6 +90,18 @@ convention. Write `section 5.5`, not `§5.5`, in SQL.
   )
   ```
 
+- **An argument that doubles as its own "unset" flag is not typed.** `sqlc.arg(x) = '' OR
+  col = sqlc.arg(x)` can come back as `interface{}`. Split it into a flag and a value
+  (`filter_by_state = 0 OR state = sqlc.arg(state)`, as `ListUnidentified` does) — and check the
+  flag's polarity against the Go call, which a test of the filtered branch alone will not catch.
+
+- **Several sibling subqueries in one `UPDATE ... SET` confuse the analyzer** into
+  `column reference "session_id" is ambiguous`, although SQLite runs it fine. Alias the inner
+  table in every subquery (`FROM import_unit iu WHERE iu.session_id = ...`).
+
+- **`:copyfrom` is not supported for SQLite** (pgx and MySQL only). Bulk inserts are a per-row
+  `:exec` looped inside one write transaction, as `ImportSessions.AddUnits` does.
+
 - **Every branch of a `UNION` needs named columns**, or sqlc fails with
   `*ast.ResTarget has nil name`. Alias bare parameters and literals. Where a branch is only a
   constant row, a separate statement is usually clearer than an alias.
@@ -104,6 +116,12 @@ convention. Write `section 5.5`, not `§5.5`, in SQL.
   `CAST(... AS REAL)` as any other aggregate, and an `UNINDEXED` column carries no declared
   type either, so an argument compared against it needs `CAST(sqlc.arg(x) AS TEXT)` or it comes
   back as `interface{}`. Worked example: `queries/library/search.sql`.
+
+## What SQLite does not have
+
+- **A `WITHOUT ROWID` table has no `rowid`.** `DELETE ... WHERE rowid IN (SELECT rowid ...)`
+  fails against `metadata_cache`; use a row-value `IN` over its primary key instead:
+  `WHERE (kind, external_id) IN (SELECT kind, external_id ... LIMIT ?)`.
 
 ## Conventions
 

@@ -38,9 +38,9 @@ Also exposed at `GET /api/v1/about`, so the information is available without the
 
 ### Checklist
 
-- [ ] `LICENSE` at repository root
-- [ ] `ATTRIBUTION.md` current
+- [x] `LICENSE` at repository root
+- [x] `ATTRIBUTION.md` current
 - [ ] About view in the UI, unauthenticated
-- [ ] `GET /api/v1/about` returning version, commit, licence, source URL
-- [ ] Source URL overridable at build time, defaulting to upstream
+- [x] `GET /api/v1/about` returning version, commit, licence, source URL (unauthenticated)
+- [x] Source URL overridable at build time (`-X main.sourceURL`), defaulting to upstream
 - [ ] Full licence text viewable in-app

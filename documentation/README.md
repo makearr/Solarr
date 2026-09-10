@@ -5,12 +5,19 @@ named file, linked from the code by path.
 
 | Page | Covers |
 |---|---|
-| [codebase-map.md](codebase-map.md) | Where things live, what depends on what, and where to start reading |
+| [codebase-map.md](codebase-map.md) | The package tree, what depends on what, and where to start reading |
 | [coding-standards.md](coding-standards.md) | Style, structure, comments, testing, AI-maintainability |
-| [startup-checks.md](startup-checks.md) | How directories are checked at startup, and what is deliberately not checked |
-| [sql-and-sqlc.md](sql-and-sqlc.md) | Writing queries, and the sqlc SQLite constraints that bite silently |
-| [benchmarks.md](benchmarks.md) | The 500k corpus, the ADR-28 targets as tests, and the ADR-5 driver switch |
-| [media-tools.md](media-tools.md) | ADR-30's fpcalc and tagging helper: what Alpine has, what it costs, where ffmpeg falls short |
+| [sql-and-sqlc.md](sql-and-sqlc.md) | Writing queries, and the sqlc/SQLite constraints that bite silently |
+| [database-layout.md](database-layout.md) | Which database a table belongs in, and why |
+| [api-generation.md](api-generation.md) | Spec-first generation and what it catches |
+| [web-interface.md](web-interface.md) | Bundle, routing order, theme, the navigation tree, the list core |
+| [container-runtime.md](container-runtime.md) | PUID/PGID, TZ, ownership, capabilities |
+| [startup-checks.md](startup-checks.md) | How directories are checked at startup, and what deliberately is not |
+| [configuration-export.md](configuration-export.md) | F9 export and import |
+| [media-tools.md](media-tools.md) | ADR-30's ffprobe, fpcalc and tagging helper: what Alpine has, what it costs |
+| [benchmarks.md](benchmarks.md) | The 500k corpus, the ADR-28 targets as tests, the ADR-5 driver switch |
+| [versioning.md](versioning.md) | `year.month.release.build`, milestones, what `make image` does |
+| [licence-compliance.md](licence-compliance.md) | AGPL-3.0 and the §13 network clause |
 
 ## What goes here
 
@@ -25,8 +32,3 @@ named file, linked from the code by path.
 - Restating what the code plainly does
 - Architecture decisions — those are ADRs
 - Anything that will silently rot. A page nobody updates is worse than no page
-- [container-runtime.md](container-runtime.md) — PUID/PGID, TZ, ownership, capabilities
-- [web-interface.md](web-interface.md) — bundle, routing order, theme, the list core
-- [api-generation.md](api-generation.md) — spec-first generation and what it catches
-- [configuration-export.md](configuration-export.md) — F9 export and import
-- [database-layout.md](database-layout.md) — which database a table belongs in, and why
