@@ -8,12 +8,12 @@ VALUES (sqlc.arg(source_path), sqlc.arg(origin), sqlc.arg(acquisition_id),
         sqlc.arg(category_id), 'INSPECTING', sqlc.arg(threshold), sqlc.arg(started_at))
 RETURNING id, source_path, origin, acquisition_id, category_id, state, threshold,
           units_total, units_committed, units_queued, bytes_imported, extract_dir,
-          started_at, finished_at, error, units_skipped, units_failed;
+          started_at, finished_at, error, units_skipped, units_failed, units_estimated;
 
 -- name: GetImportSession :one
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error, units_skipped, units_failed
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated
 FROM import_session WHERE id = ?;
 
 -- Small, operator-facing list -- session counts never approach library scale
@@ -25,13 +25,18 @@ FROM import_session WHERE id = ?;
 -- name: ListImportSessions :many
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error, units_skipped, units_failed
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated
 FROM import_session
 WHERE sqlc.arg(filter_by_state) = 0 OR state = sqlc.arg(state)
 ORDER BY started_at DESC;
 
 -- name: SetImportSessionExtractDir :exec
 UPDATE import_session SET extract_dir = ? WHERE id = ?;
+
+-- Set once, the first time a session's estimate is computed (todo 4.21's ETA);
+-- never recomputed on a later resume of the same session.
+-- name: SetImportSessionUnitsEstimated :exec
+UPDATE import_session SET units_estimated = ? WHERE id = ?;
 
 -- name: FinishImportSession :exec
 UPDATE import_session SET state = sqlc.arg(state), finished_at = sqlc.arg(finished_at),

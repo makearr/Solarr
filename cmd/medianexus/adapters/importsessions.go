@@ -73,7 +73,8 @@ func importSessionRow(s library.Session) apiserver.ImportSessionRow {
 		State: s.State, Threshold: s.Threshold, UnitsTotal: s.UnitsTotal,
 		UnitsCommitted: s.UnitsCommitted, UnitsQueued: s.UnitsQueued,
 		UnitsSkipped: s.UnitsSkipped, UnitsFailed: s.UnitsFailed, BytesImported: s.BytesImported,
-		StartedAt: time.Unix(s.StartedAt, 0), Error: s.Error,
+		UnitsEstimated: s.UnitsEstimated,
+		StartedAt:      time.Unix(s.StartedAt, 0), Error: s.Error,
 	}
 	if s.FinishedAt != nil {
 		finished := time.Unix(*s.FinishedAt, 0)

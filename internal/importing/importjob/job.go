@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
+	"sync"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
 	"github.com/makearr/MediaNexus/internal/identify/model"
@@ -127,6 +128,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		j.publishProgress(ctx, sessionID, payload.CategoryID, importPhaseCancelled, "")
 		return j.sessions.Finish(ctx, sessionID, library.ImportCancelled, j.clock.Now().Unix(), "")
 	}
+	j.estimateOnce(ctx, sessionID, payload.SourcePath)
 	j.publishProgress(ctx, sessionID, payload.CategoryID, importPhaseWalking, "")
 
 	identifyCfg := model.ChainConfig{
@@ -194,11 +196,94 @@ func (j *Job) resumeOrCreate(ctx context.Context, payload Payload) (sessionID in
 	return id, "", false, nil
 }
 
+// estimateOnce runs inspect.EstimateUnits and persists it, the first time
+// only -- a resumed session already carrying an estimate skips straight past.
+// Failure is logged and otherwise ignored, the same "a courtesy, never a
+// reason to fail the run" rule publishProgress already applies: a wrong or
+// missing ETA is a worse UI than a stalled import.
+func (j *Job) estimateOnce(ctx context.Context, sessionID int64, sourcePath string) {
+	session, err := j.sessions.Get(ctx, sessionID)
+	if err != nil {
+		j.logger.Warn("could not read session before estimating units", slog.Any("error", err))
+		return
+	}
+	if session.UnitsEstimated != nil {
+		return
+	}
+	estimate, err := inspect.EstimateUnits(ctx, j.fsys, sourcePath)
+	if err != nil {
+		j.logger.Warn("import unit estimate failed", slog.String("source_path", sourcePath), slog.Any("error", err))
+		return
+	}
+	if err := j.sessions.SetUnitsEstimated(ctx, sessionID, int64(estimate)); err != nil {
+		j.logger.Warn("could not record import unit estimate", slog.Any("error", err))
+	}
+}
+
+// identifyParallelism bounds IDENTIFY's fan-out across one cluster's units.
+// IDENTIFY is pure CPU today (Search is wired nil in production, cmd/medianexus/app/job_import.go)
+// so this has no live payoff yet, but todo 4.21 asks for it built ahead of a
+// real Searcher -- the same mediatool.defaultParallelism figure, for the same
+// reason: a bound worth the same order of magnitude as the machine, not tied
+// to any one identifier's own cost.
+const identifyParallelism = 8
+
+// identifyCluster runs IdentifyUnit for every unit in a cluster concurrently,
+// bounded by identifyParallelism -- writes stay serial (todo 4.21): this
+// returns UnitDecision values, and the caller records them all in one
+// SetUnitDecisions transaction, not one per unit. Every model.Identifier
+// passed in must tolerate concurrent Identify calls across different files;
+// today's only one (MBIDIdentifier) does no more than read-only map lookups.
+func identifyCluster(
+	ctx context.Context, ids []int64, batch []inspect.Unit, identifiers []model.Identifier, cfg model.ChainConfig,
+) []library.UnitDecision {
+	decisions := make([]library.UnitDecision, len(batch))
+	slots := make(chan struct{}, identifyParallelism)
+	var running sync.WaitGroup
+	for i, unit := range batch {
+		running.Add(1)
+		slots <- struct{}{}
+		go func(i int, unit inspect.Unit) {
+			defer running.Done()
+			defer func() { <-slots }()
+			decisions[i] = identifyUnit(ctx, ids[i], unit, identifiers, cfg)
+		}(i, unit)
+	}
+	running.Wait()
+	return decisions
+}
+
+// identifyUnit runs IDENTIFY for one unit and turns DECIDE's outcome into a
+// UnitDecision, ready to record. An IdentifyUnit error (every file in the
+// unit unreadable) becomes DecisionFailed rather than propagating -- the same
+// "one bad unit does not fail the batch" reasoning consumer.go's own
+// identifyBatch already applies at scan time.
+func identifyUnit(
+	ctx context.Context, unitID int64, unit inspect.Unit, identifiers []model.Identifier, cfg model.ChainConfig,
+) library.UnitDecision {
+	result, err := music.IdentifyUnit(ctx, unit, identifiers, cfg)
+	decision := model.DecisionFailed
+	var confidence float64
+	var candidatesJSON string
+	if err == nil {
+		decision = model.Decide(result)
+		if result.Best != nil {
+			confidence = result.Best.Confidence
+		}
+		if len(result.Candidates) > 0 {
+			if data, marshalErr := json.Marshal(result.Candidates); marshalErr == nil {
+				candidatesJSON = string(data)
+			}
+		}
+	}
+	return library.UnitDecision{UnitID: unitID, Decision: string(decision), Confidence: confidence, CandidatesJSON: candidatesJSON}
+}
+
 // commitCluster probes one cluster's media files in a single batched call
 // (ADR-28), identifies and shapes every unit in it, and records the result.
 // AddUnits is called before IDENTIFY runs, not after: a unit's row must exist
 // -- at UnitQueue, the same default the schema already documents -- before
-// SetUnitDecision has an id to update, and inserting first means a probe
+// SetUnitDecisions has an id to update, and inserting first means a probe
 // failure still leaves the unit visible rather than silently absent.
 //
 // Cancellation is checked first, before any work -- cheaper than probing a whole cluster to discard it.
@@ -254,43 +339,11 @@ func (j *Job) commitCluster(
 		return fmt.Errorf("importjob: add units: %w", err)
 	}
 
-	for i, unit := range batch {
-		if err := j.identifyAndRecord(ctx, ids[i], unit, identifiers, cfg); err != nil {
-			return err
-		}
+	decisions := identifyCluster(ctx, ids, batch, identifiers, cfg)
+	if err := j.sessions.SetUnitDecisions(ctx, sessionID, decisions); err != nil {
+		return fmt.Errorf("importjob: record decisions: %w", err)
 	}
 	j.publishProgress(ctx, sessionID, categoryID, importPhaseWalking, batch[len(batch)-1].Directory)
-	return nil
-}
-
-// identifyAndRecord runs IDENTIFY for one unit and records DECIDE's outcome.
-// An IdentifyUnit error (every file in the unit unreadable) is not
-// propagated as a job failure -- it is DecisionFailed, recorded and moved
-// past, the same "one bad unit does not fail the batch" reasoning
-// consumer.go's own identifyBatch already applies at scan time.
-func (j *Job) identifyAndRecord(
-	ctx context.Context, unitID int64, unit inspect.Unit, identifiers []model.Identifier, cfg model.ChainConfig,
-) error {
-	result, err := music.IdentifyUnit(ctx, unit, identifiers, cfg)
-	decision := model.DecisionFailed
-	var confidence float64
-	var candidatesJSON string
-	if err == nil {
-		decision = model.Decide(result)
-		if result.Best != nil {
-			confidence = result.Best.Confidence
-		}
-		if len(result.Candidates) > 0 {
-			if data, marshalErr := json.Marshal(result.Candidates); marshalErr == nil {
-				candidatesJSON = string(data)
-			}
-		}
-	}
-	if setErr := j.sessions.SetUnitDecision(
-		ctx, unitID, string(decision), confidence, nil, nil, candidatesJSON, "",
-	); setErr != nil {
-		return fmt.Errorf("importjob: record decision for unit %d: %w", unitID, setErr)
-	}
 	return nil
 }
 

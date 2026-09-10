@@ -60,6 +60,26 @@ type Walker struct{}
 // as Sweeper.
 func NewWalker() Walker { return Walker{} }
 
+// EstimateUnits counts how many units a real Walk over root would emit,
+// without probing or persisting anything -- one readdir and one stat per
+// file, the same filesystem cost Walk's own traversal pays, and nothing more.
+// It runs the identical WALK/GROUP logic (including disc-subfolder merging
+// and the track-continuity structural fallback splitFiles falls back to with
+// no TagReader), so it undercounts only where tag evidence alone would have
+// split a directory that structure does not -- a real, accepted inaccuracy,
+// not a bug, for an estimate that exists purely for a progress ETA (todo
+// 4.21). Deliberately a second walk of the tree: the "never a second walk to
+// count" rule is about WALK/GROUP itself, not this opt-in estimate.
+func EstimateUnits(ctx context.Context, fsys fsx.FS, root string) (int, error) {
+	var total int
+	_, err := NewWalker().Walk(ctx, fsys, root, WalkState{}, WalkOptions{},
+		func(_ context.Context, units []Unit) error {
+			total += len(units)
+			return nil
+		})
+	return total, err
+}
+
 // clusterFiles is what one directory contributes to its own decision, or bubbles
 // up to its parent instead when its own name matches the disc-subfolder pattern.
 // Only media bubbles: mergeDiscSubfolders (Run's own implementation) never

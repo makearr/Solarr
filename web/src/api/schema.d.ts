@@ -2047,6 +2047,11 @@ export interface components {
             threshold: number;
             /** Format: int64 */
             units_total: number;
+            /**
+             * Format: int64
+             * @description A cheap, tag-free pre-count of what Walk will find (todo 4.21's ETA), absent until the estimate pass finishes. May undercount a directory tag evidence alone would have split further.
+             */
+            units_estimated?: number;
             /** Format: int64 */
             units_committed: number;
             /** Format: int64 */

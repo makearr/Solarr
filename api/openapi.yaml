@@ -3064,6 +3064,13 @@ components:
           format: float
           description: import.auto_commit_confidence's value in force for this run.
         units_total: { type: integer, format: int64 }
+        units_estimated:
+          type: integer
+          format: int64
+          description: >-
+            A cheap, tag-free pre-count of what Walk will find (todo 4.21's
+            ETA), absent until the estimate pass finishes. May undercount a
+            directory tag evidence alone would have split further.
         units_committed: { type: integer, format: int64 }
         units_queued: { type: integer, format: int64 }
         units_skipped: { type: integer, format: int64 }
