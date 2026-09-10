@@ -114,7 +114,7 @@ version: %d
 
 server:
   bind: 0.0.0.0
-  port: 8080
+  port: 5454
   base_url: /
 
 # Defaults nest under config_dir, so mounting /config alone is enough.

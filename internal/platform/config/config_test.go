@@ -16,8 +16,8 @@ func TestParse_DefaultsAreValidOnTheirOwn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse of a minimal document = %v, want nil", err)
 	}
-	if parsed.Server.Port != 8080 {
-		t.Errorf("Server.Port = %d, want the default 8080", parsed.Server.Port)
+	if parsed.Server.Port != 5454 {
+		t.Errorf("Server.Port = %d, want the default 5454", parsed.Server.Port)
 	}
 	if parsed.Workers.Import != 1 {
 		t.Errorf("Workers.Import = %d, want the fixed 1", parsed.Workers.Import)

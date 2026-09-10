@@ -95,8 +95,8 @@ func TestCreate_WritesAFileThatLoadsBack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load of the generated file: %v", err)
 	}
-	if loaded.Server.Port != 8080 {
-		t.Errorf("Server.Port = %d, want 8080", loaded.Server.Port)
+	if loaded.Server.Port != 5454 {
+		t.Errorf("Server.Port = %d, want 5454", loaded.Server.Port)
 	}
 }
 

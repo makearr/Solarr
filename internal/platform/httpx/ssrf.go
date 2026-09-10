@@ -170,21 +170,49 @@ func (g *Guard) DialContext(ctx context.Context, network, address string) (net.C
 		return nil, err
 	}
 
+	allowed, err := firstAllowed(host, candidates)
+	if err != nil {
+		return nil, err
+	}
+	// Dial the literal address that was just validated, never the hostname:
+	// re-resolving here is exactly the rebinding window being closed.
+	return g.dial(ctx, network, net.JoinHostPort(allowed.String(), port))
+}
+
+// DialUnchecked connects without classifying address. Its one caller is
+// dialing this process's own configured proxy (ADR-47/58, Invariant 65).
+func (g *Guard) DialUnchecked(ctx context.Context, network, address string) (net.Conn, error) {
+	return g.dial(ctx, network, address)
+}
+
+// CheckDestination resolves and classifies host without dialing -- what a
+// proxied request needs, since DialContext then only ever dials the proxy.
+func (g *Guard) CheckDestination(ctx context.Context, host string) error {
+	if _, exempt := g.allowedHosts[strings.ToLower(host)]; exempt {
+		return nil
+	}
+	candidates, err := g.resolve(ctx, "ip", host)
+	if err != nil {
+		return err
+	}
+	_, err = firstAllowed(host, candidates)
+	return err
+}
+
+// firstAllowed returns the first unblocked candidate, or the last reason.
+func firstAllowed(host string, candidates []netip.Addr) (netip.Addr, error) {
 	var lastBlocked error
 	for _, candidate := range candidates {
 		if reason := ClassifyAddress(candidate); reason != "" {
 			lastBlocked = &BlockedError{Host: host, Address: candidate, Reason: reason}
 			continue
 		}
-		// Dial the literal address that was just validated, never the hostname:
-		// re-resolving here is exactly the rebinding window being closed.
-		return g.dial(ctx, network, net.JoinHostPort(candidate.String(), port))
+		return candidate, nil
 	}
-
 	if lastBlocked != nil {
-		return nil, lastBlocked
+		return netip.Addr{}, lastBlocked
 	}
-	return nil, fmt.Errorf("%w: %s", ErrNoAllowedAddress, host)
+	return netip.Addr{}, fmt.Errorf("%w: %s", ErrNoAllowedAddress, host)
 }
 
 func (g *Guard) resolve(ctx context.Context, network, host string) ([]netip.Addr, error) {

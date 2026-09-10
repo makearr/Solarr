@@ -154,7 +154,7 @@ type Logging struct {
 func Default() Config {
 	return Config{
 		Version: CurrentVersion,
-		Server:  Server{Bind: "0.0.0.0", Port: 8080, BaseURL: "/"},
+		Server:  Server{Bind: "0.0.0.0", Port: 5454, BaseURL: "/"},
 		Paths: Paths{
 			ConfigDir: "/config",
 			DataDir:   "/config/data",

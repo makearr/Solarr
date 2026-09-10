@@ -183,6 +183,16 @@ type Server struct {
 	downloadRoots        DownloadFolderChecker
 	scheduler            Scheduler
 	cacheManager         CacheManager
+	// effectivePort is the port this process actually bound to, resolved at
+	// startup (ADR-58). The Network screen reports it beside whatever
+	// settings.db now holds, since a port change written from the screen
+	// needs a restart before the two agree.
+	effectivePort int
+	// healthPath is the one route ADR-58's IP allowlist never applies to
+	// (section 20.2: a container healthcheck from a bridge network must
+	// never be locked out by a LAN-only rule), computed once against
+	// BaseURL rather than hard-coded against APIPrefix alone.
+	healthPath string
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -240,11 +250,13 @@ func New(config Config) (*Server, error) {
 		downloadRoots:        config.DownloadRoots,
 		scheduler:            config.Scheduler,
 		cacheManager:         config.CacheManager,
+		effectivePort:        config.Port,
+		healthPath:           base + APIPrefix + "/health",
 		address:              net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
 	router := chi.NewRouter()
-	router.Use(server.recoverPanic, server.logRequest)
+	router.Use(server.recoverPanic, server.logRequest, server.ipAllowlist)
 	// chi's defaults answer in plain text; section 13.1 says every error is problem+json with a
 	// stable slug, and "every" includes the ones a client reaches by mistake.
 	router.NotFound(server.handleNotFound)
@@ -319,6 +331,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/schedules", server.ListSchedules)
 			secured.Patch("/schedules/{key}", server.routeUpdateSchedule)
 			secured.Post("/schedules/{key}/run", server.routeRunSchedule)
+			secured.Get("/network", server.GetNetworkSettings)
+			secured.Patch("/network", server.UpdateNetworkSettings)
 			secured.Get("/cache", server.GetCache)
 			secured.Patch("/cache", server.UpdateCacheBudget)
 			secured.Post("/cache/clear", server.ClearCache)

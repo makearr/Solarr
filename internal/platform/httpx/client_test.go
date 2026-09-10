@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -61,6 +62,39 @@ func newTestClient(t *testing.T, transport http.RoundTripper) (*httpx.Client, *h
 		Transport: transport,
 	})
 	return client, limiter, breaker, fake
+}
+
+// Invariant 65: a proxied request's own destination is still validated, even
+// though DialContext never sees it -- proven by the transport never firing.
+func TestClient_ProxiedRequestStillChecksItsOwnDestination(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	guard := httpx.NewGuard(fakeResolver{"internal-service.invalid": {mustParseAddr(t, "192.168.1.50")}}, refusingDial, nil)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 600}}, httpx.NoJitter)
+	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 2, Cooldown: time.Minute})
+	transport := &roundTripper{responses: []*http.Response{respond(http.StatusOK, nil)}}
+
+	proxyURL := mustParseURL(t, "socks5://10.0.0.5:1080")
+	client := httpx.NewClient(fake, guard, limiter, breaker, httpx.ClientConfig{
+		Provider: "indexer", Transport: transport,
+		Proxy: func() httpx.ProxyPolicy { return httpx.ProxyPolicy{URL: proxyURL} },
+	})
+
+	_, err := client.Get(t.Context(), "https://internal-service.invalid/api")
+	if !errors.Is(err, httpx.ErrBlockedAddress) {
+		t.Fatalf("Get = %v, want ErrBlockedAddress", err)
+	}
+	if transport.calls != 0 {
+		t.Errorf("the fake transport was called %d times, want 0 -- the destination check must run before the round trip", transport.calls)
+	}
+}
+
+func mustParseAddr(t *testing.T, raw string) netip.Addr {
+	t.Helper()
+	addr, err := netip.ParseAddr(raw)
+	if err != nil {
+		t.Fatalf("netip.ParseAddr(%q): %v", raw, err)
+	}
+	return addr
 }
 
 func TestClient_SendsTheIdentifyingUserAgent(t *testing.T) {

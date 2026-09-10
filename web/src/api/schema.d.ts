@@ -456,6 +456,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/network": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Port resolution, egress proxy and IP allowlist (ADR-58). */
+        get: operations["getNetworkSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the port, egress proxy or IP allowlist. Administrator only.
+         * @description Written wholesale, like the cache budget. A port change needs a restart before it takes effect. An allow_cidrs list that would exclude the address making this very change is refused outright (ADR-44, Invariant 89) -- this is the one setting where a mistake costs a container shell to undo.
+         */
+        patch: operations["updateNetworkSettings"];
+        trace?: never;
+    };
     "/cache": {
         parameters: {
             query?: never;
@@ -1474,6 +1495,28 @@ export interface components {
             metadata_bytes?: number;
             /** Format: date-time */
             measured_at?: string;
+        };
+        /** @description ADR-58's own port resolution, egress proxy and IP allowlist. The IP allowlist can only ever deny -- it never authenticates and never grants (Invariant 89). */
+        NetworkSettings: {
+            /** @description 0 means nothing has been written from this screen yet -- config.yml (or its own 5454 default) governs until it is. */
+            port: number;
+            /** @description The port this running instance actually bound to at startup. */
+            in_effect_port: number;
+            /** @description port disagrees with in_effect_port -- the change is stored but not live yet. */
+            restart_required: boolean;
+            /** @description Empty means no egress proxy. Scheme is http, https or socks5. */
+            proxy_url?: string;
+            /** @description CIDRs and host suffixes (".lan") that always go direct. */
+            proxy_bypass: string[];
+            /** @description Empty means every address is allowed, the default. */
+            allow_cidrs: string[];
+        };
+        /** @description The writable half of NetworkSettings. */
+        NetworkSettingsUpdate: {
+            port: number;
+            proxy_url?: string;
+            proxy_bypass: string[];
+            allow_cidrs: string[];
         };
         /** @description What one drainRootFolder call computed -- a preview, a refusal, or an accepted and enqueued plan (ADR-51). */
         DrainPlan: {
@@ -2926,6 +2969,54 @@ export interface operations {
             404: components["responses"]["Problem"];
             /** @description A fire is already in flight for this task. */
             409: components["responses"]["Problem"];
+        };
+    };
+    getNetworkSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current policy, plus the port actually in effect. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkSettings"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    updateNetworkSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NetworkSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkSettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     getCache: {

@@ -14,7 +14,7 @@ services:
       TZ: Europe/Fefobo
 
     ports:
-      - "8080:8080"
+      - "5454:5454"
 
     volumes:
       # Config, databases, backups and cache. Keep on local storage: SQLite WAL

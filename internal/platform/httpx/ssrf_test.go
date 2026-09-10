@@ -188,6 +188,51 @@ func TestGuard_ReportsWhenEveryResolvedAddressIsBlocked(t *testing.T) {
 	}
 }
 
+func TestGuard_CheckDestinationBlocksAPrivateAddressWithoutDialing(t *testing.T) {
+	resolver := fakeResolver{"internal.invalid": {netip.MustParseAddr("192.168.1.50")}}
+	guard := httpx.NewGuard(resolver, refusingDial, nil)
+
+	err := guard.CheckDestination(t.Context(), "internal.invalid")
+	var blocked *httpx.BlockedError
+	if !errors.As(err, &blocked) {
+		t.Fatalf("CheckDestination = %v, want a BlockedError", err)
+	}
+	if blocked.Reason != httpx.ReasonPrivate {
+		t.Errorf("Reason = %q, want %q", blocked.Reason, httpx.ReasonPrivate)
+	}
+}
+
+func TestGuard_CheckDestinationAllowsAPublicHost(t *testing.T) {
+	resolver := fakeResolver{"indexer.invalid": {netip.MustParseAddr("93.184.216.34")}}
+	guard := httpx.NewGuard(resolver, refusingDial, nil)
+
+	if err := guard.CheckDestination(t.Context(), "indexer.invalid"); err != nil {
+		t.Errorf("CheckDestination = %v, want nil", err)
+	}
+}
+
+func TestGuard_CheckDestinationRespectsTheAllowlist(t *testing.T) {
+	resolver := fakeResolver{"nas.lan": {netip.MustParseAddr("192.168.1.50")}}
+	guard := httpx.NewGuard(resolver, refusingDial, []string{"nas.lan"})
+
+	if err := guard.CheckDestination(t.Context(), "nas.lan"); err != nil {
+		t.Errorf("CheckDestination = %v, want nil for an allowlisted host", err)
+	}
+}
+
+// DialUnchecked is the one exception: dialing this process's own proxy (ADR-47, Invariant 65).
+func TestGuard_DialUncheckedSkipsClassificationEntirely(t *testing.T) {
+	var dialled string
+	guard := httpx.NewGuard(fakeResolver{}, recordingDial(&dialled), nil)
+
+	if _, err := guard.DialUnchecked(t.Context(), "tcp", "192.168.1.50:1080"); err != nil {
+		t.Fatalf("DialUnchecked: %v", err)
+	}
+	if want := "192.168.1.50:1080"; dialled != want {
+		t.Errorf("dialled %q, want %q", dialled, want)
+	}
+}
+
 type fakeResolver map[string][]netip.Addr
 
 func (r fakeResolver) LookupNetIP(_ context.Context, _, host string) ([]netip.Addr, error) {

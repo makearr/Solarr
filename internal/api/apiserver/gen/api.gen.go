@@ -889,6 +889,35 @@ type MoveJobReason string
 // MoveJobState defines model for MoveJob.State.
 type MoveJobState string
 
+// NetworkSettings ADR-58's own port resolution, egress proxy and IP allowlist. The IP allowlist can only ever deny -- it never authenticates and never grants (Invariant 89).
+type NetworkSettings struct {
+	// AllowCidrs Empty means every address is allowed, the default.
+	AllowCidrs []string `json:"allow_cidrs"`
+
+	// InEffectPort The port this running instance actually bound to at startup.
+	InEffectPort int `json:"in_effect_port"`
+
+	// Port 0 means nothing has been written from this screen yet -- config.yml (or its own 5454 default) governs until it is.
+	Port int `json:"port"`
+
+	// ProxyBypass CIDRs and host suffixes (".lan") that always go direct.
+	ProxyBypass []string `json:"proxy_bypass"`
+
+	// ProxyUrl Empty means no egress proxy. Scheme is http, https or socks5.
+	ProxyUrl *string `json:"proxy_url,omitempty"`
+
+	// RestartRequired port disagrees with in_effect_port -- the change is stored but not live yet.
+	RestartRequired bool `json:"restart_required"`
+}
+
+// NetworkSettingsUpdate The writable half of NetworkSettings.
+type NetworkSettingsUpdate struct {
+	AllowCidrs  []string `json:"allow_cidrs"`
+	Port        int      `json:"port"`
+	ProxyBypass []string `json:"proxy_bypass"`
+	ProxyUrl    *string  `json:"proxy_url,omitempty"`
+}
+
 // ParsedTitle internal/identify/parse's own reading of the pasted title, shown so a simulation is not a black box.
 type ParsedTitle struct {
 	Album       *string `json:"album,omitempty"`
@@ -1573,6 +1602,9 @@ type SetLibraryLastLevelJSONRequestBody SetLibraryLastLevelJSONBody
 // ResolveUnidentifiedJSONRequestBody defines body for ResolveUnidentified for application/json ContentType.
 type ResolveUnidentifiedJSONRequestBody ResolveUnidentifiedJSONBody
 
+// UpdateNetworkSettingsJSONRequestBody defines body for UpdateNetworkSettings for application/json ContentType.
+type UpdateNetworkSettingsJSONRequestBody = NetworkSettingsUpdate
+
 // SubscribePersonJSONRequestBody defines body for SubscribePerson for application/json ContentType.
 type SubscribePersonJSONRequestBody SubscribePersonJSONBody
 
@@ -1740,6 +1772,12 @@ type ServerInterface interface {
 	// Every move job (ADR-51), newest first.
 	// (GET /moves)
 	ListMoveJobs(w http.ResponseWriter, r *http.Request, params ListMoveJobsParams)
+	// Port resolution, egress proxy and IP allowlist (ADR-58).
+	// (GET /network)
+	GetNetworkSettings(w http.ResponseWriter, r *http.Request)
+	// Change the port, egress proxy or IP allowlist. Administrator only.
+	// (PATCH /network)
+	UpdateNetworkSettings(w http.ResponseWriter, r *http.Request)
 	// A page of people (ADR-32) -- first-class monitorable entities, not just credits.
 	// (GET /people)
 	ListPeople(w http.ResponseWriter, r *http.Request, params ListPeopleParams)
@@ -2079,6 +2117,18 @@ func (_ Unimplemented) GetMe(w http.ResponseWriter, r *http.Request) {
 // Every move job (ADR-51), newest first.
 // (GET /moves)
 func (_ Unimplemented) ListMoveJobs(w http.ResponseWriter, r *http.Request, params ListMoveJobsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Port resolution, egress proxy and IP allowlist (ADR-58).
+// (GET /network)
+func (_ Unimplemented) GetNetworkSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change the port, egress proxy or IP allowlist. Administrator only.
+// (PATCH /network)
+func (_ Unimplemented) UpdateNetworkSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3499,6 +3549,50 @@ func (siw *ServerInterfaceWrapper) ListMoveJobs(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// GetNetworkSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetNetworkSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNetworkSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateNetworkSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateNetworkSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateNetworkSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListPeople operation middleware
 func (siw *ServerInterfaceWrapper) ListPeople(w http.ResponseWriter, r *http.Request) {
 
@@ -4758,6 +4852,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/moves", wrapper.ListMoveJobs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/network", wrapper.GetNetworkSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/network", wrapper.UpdateNetworkSettings)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/people", wrapper.ListPeople)

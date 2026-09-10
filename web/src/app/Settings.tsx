@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import { useAuthPolicy, useSetAuthRequired } from "@/lib/useAuthPolicy";
 import { CacheSettings } from "./CacheSettings";
 import { Categories } from "./Categories";
+import { Network } from "./Network";
 import { Scheduler } from "./Scheduler";
 import { UnwantedFiles } from "./UnwantedFiles";
 import { Users } from "./Users";
@@ -52,6 +53,8 @@ export function Settings() {
         <Categories />
 
         <UnwantedFiles />
+
+        <Network />
 
         <Scheduler />
 

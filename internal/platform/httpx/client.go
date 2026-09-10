@@ -37,6 +37,9 @@ type ClientConfig struct {
 	// Transport is injected in tests. When nil the guard's dialer is used, which
 	// is what makes the SSRF check unavoidable in production.
 	Transport http.RoundTripper
+	// Proxy is ADR-58's global egress proxy, read live on every request. Nil
+	// means this client never proxies -- the common case for a test.
+	Proxy LiveProxyPolicy
 }
 
 // Client is the only way out of the process (Invariant 28). One per provider,
@@ -50,6 +53,8 @@ type Client struct {
 	breaker   *Breaker
 	guard     *Guard
 	clock     clock.Clock
+	// proxy nil means this client never proxies (see checkProxiedDestination).
+	proxy LiveProxyPolicy
 }
 
 // NewClient builds a client for one provider.
@@ -65,7 +70,7 @@ func NewClient(c clock.Clock, guard *Guard, limiter *Limiter, breaker *Breaker, 
 
 	transport := config.Transport
 	if transport == nil {
-		transport = NewTransport(guard)
+		transport = NewTransport(guard, config.Proxy)
 	}
 
 	return &Client{
@@ -76,6 +81,7 @@ func NewClient(c clock.Clock, guard *Guard, limiter *Limiter, breaker *Breaker, 
 		breaker:   breaker,
 		guard:     guard,
 		clock:     c,
+		proxy:     config.Proxy,
 		inner: &http.Client{
 			Transport: transport,
 			CheckRedirect: func(request *http.Request, via []*http.Request) error {
@@ -90,9 +96,10 @@ func NewClient(c clock.Clock, guard *Guard, limiter *Limiter, breaker *Breaker, 
 	}
 }
 
-// NewTransport builds a transport that can only reach publicly routable addresses.
-func NewTransport(guard *Guard) *http.Transport {
-	return &http.Transport{
+// NewTransport builds a transport that can only reach publicly routable
+// addresses. proxy is nil for a transport that never proxies.
+func NewTransport(guard *Guard, proxy LiveProxyPolicy) *http.Transport {
+	transport := &http.Transport{
 		DialContext:           guard.DialContext,
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          32,
@@ -101,11 +108,19 @@ func NewTransport(guard *Guard) *http.Transport {
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: time.Second,
 	}
+	if proxy != nil {
+		transport.Proxy = ProxyFunc(proxy)
+		transport.DialContext = ProxyDial(guard, proxy)
+	}
+	return transport
 }
 
 // Do sends a request through the guard, the breaker and the rate limiter (§11.3).
 func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response, error) {
 	if err := c.guard.CheckURL(request.URL); err != nil {
+		return nil, err
+	}
+	if err := c.checkProxiedDestination(ctx, request); err != nil {
 		return nil, err
 	}
 	if err := c.breaker.Allow(c.provider); err != nil {
@@ -155,6 +170,15 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 		Class:      class,
 		RetryAfter: retryAfter,
 	}
+}
+
+// checkProxiedDestination validates the destination directly when this
+// client proxies at all, since a proxied dial never reaches it otherwise.
+func (c *Client) checkProxiedDestination(ctx context.Context, request *http.Request) error {
+	if c.proxy == nil {
+		return nil
+	}
+	return c.guard.CheckDestination(ctx, request.URL.Hostname())
 }
 
 // Get is the common case.

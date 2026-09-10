@@ -65,6 +65,35 @@ anything touches the filesystem**. Otherwise the first symptom is a permission e
 creating `config.yml`, which sends the operator to inspect a volume when the answer is a flag
 they passed.
 
+## Network port
+
+The default port is **5454** (`EXPOSE 5454`, `docker-compose.yml` maps `5454:5454`). It replaced
+8080 on 2026-09-10 (ADR-58) — a one-line change to any existing compose file or bookmark.
+
+Resolution order, applied at startup and reported in the startup banner:
+
+1. `MEDIANEXUS_SERVER_PORT` — always wins. This is the recovery path out of a bad setting
+   written from the interface: if a value written from the Network screen locks the port to
+   something unreachable, set this and restart.
+2. `settings.db`'s own policy — what the Network screen writes. Changing it there needs a
+   restart before it takes effect; the screen says so.
+3. `config.yml`'s `server.port` — the bootstrap value, and the fallback for as long as nothing
+   has been written from the screen yet.
+4. `5454` — the default if none of the above set anything.
+
+The image's own `HEALTHCHECK` (`medianexus healthcheck`) re-derives this same order from
+`config.yml` and `settings.db` independently on every run, so a port changed from the interface
+does not make the container report itself unhealthy.
+
+## Network egress and the IP allowlist
+
+`network.proxy`/`network.proxy_bypass` (a global HTTP or SOCKS5 proxy for outbound metadata and
+update-check traffic) and `network.allow_cidrs` (an IP allowlist) are both `settings.db` policy,
+edited from the Network screen, and apply live with no restart. The allowlist can only ever
+**deny** — it never authenticates and never grants (Invariant 89) — and a change that would lock
+out the address making it is refused outright. `/api/v1/health` is always exempt, so a container
+healthcheck from Docker's own bridge network is never affected by a LAN-only rule.
+
 ## TZ
 
 Sets the container's timezone. Air dates are timezone-dependent (architecture section 19.2) and
