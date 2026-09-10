@@ -23,6 +23,14 @@ import (
 // adapters registerScanJob already built for the same purpose --
 // adapters.DrainRoots already has the RootFolder/CategoryRoots shape
 // music.PlacementRoots needs, structurally, with no new adapter type.
+//
+// Search wires music.SearchIdentifier into IDENTIFY (todo 4.9's own
+// remaining item) -- the same musicbrainz.Provider registerScanJob already
+// hands its own Consumer, so a scene release with no embedded MBID can
+// still auto-resolve on import, not only on a library scan.
+// identifyCluster's 8-wide fan-out (job.go) was built ahead of exactly this;
+// httpx's global rate limiter (ADR-13) is what keeps several concurrent
+// MusicBrainz lookups from one cluster paced rather than bursting.
 func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Executor) error {
 	if err := registry.Register(importjob.Definition); err != nil {
 		return err
@@ -43,6 +51,7 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		Sessions:  library.NewImportSessions(p.library),
 		Policy:    adapters.ImportPolicy{Cache: p.cache},
 		Tool:      mediatool.New(nil, 0),
+		Search:    p.musicBrainzProvider(),
 		Committer: committer,
 		Events:    p.bus,
 		Clock:     clock.NewSystem(),
