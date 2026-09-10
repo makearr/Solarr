@@ -141,3 +141,88 @@ func TestApplyOne_DetectsASizeMismatchAfterCopying(t *testing.T) {
 		t.Fatalf("ApplyOne = %v, want ErrHashMismatch for the wrong expected size", err)
 	}
 }
+
+// PlaceOne prefers reflink first (ADR-11 A's own ladder), on a filesystem
+// that supports it, and the source is left exactly where it was -- unlike
+// ApplyOne's same-filesystem Rename, nothing about import placement may ever
+// touch the source (a download client's own file, not the library's yet).
+func TestPlaceOne_PrefersReflinkAndLeavesTheSource(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
+
+	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")))
+	if err != nil {
+		t.Fatalf("PlaceOne: %v", err)
+	}
+	if method != mover.PlaceReflink {
+		t.Errorf("method = %q, want reflink", method)
+	}
+	if readFile(t, fsys, "/library/New/track.flac") != "the bytes" {
+		t.Error("destination does not have the source's content")
+	}
+	if !exists(fsys, "/downloads/Old/track.flac") {
+		t.Error("PlaceOne must never remove the source")
+	}
+}
+
+// Without reflink support, the next rung is hardlink -- still same-content,
+// still leaves the source untouched (a hardlink is a second directory entry
+// to the same bytes, not a move).
+func TestPlaceOne_FallsBackToHardlinkWithoutReflink(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	fsys.SetReflinkSupported(false)
+	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
+
+	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")))
+	if err != nil {
+		t.Fatalf("PlaceOne: %v", err)
+	}
+	if method != mover.PlaceHardlink {
+		t.Errorf("method = %q, want hardlink", method)
+	}
+	if readFile(t, fsys, "/library/New/track.flac") != "the bytes" {
+		t.Error("destination does not have the source's content")
+	}
+	if !exists(fsys, "/downloads/Old/track.flac") {
+		t.Error("PlaceOne must never remove the source")
+	}
+}
+
+// With neither reflink nor hardlink available (the cross-filesystem case),
+// PlaceOne falls all the way to a verified copy -- ADR-11 A's own last rung
+// this pass implements ("move" is deliberately not built, questions.md).
+func TestPlaceOne_FallsBackToCopyAcrossFilesystems(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	fsys.SetReflinkSupported(false)
+	fsys.SetHardlinkSupported(false)
+	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
+
+	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")))
+	if err != nil {
+		t.Fatalf("PlaceOne: %v", err)
+	}
+	if method != mover.PlaceCopy {
+		t.Errorf("method = %q, want copy", method)
+	}
+	if readFile(t, fsys, "/library/New/track.flac") != "the bytes" {
+		t.Error("destination does not have the source's content")
+	}
+	if !exists(fsys, "/downloads/Old/track.flac") {
+		t.Error("PlaceOne must never remove the source")
+	}
+}
+
+// A copy that lands the wrong size is caught the same way ApplyOne's own
+// cross-filesystem verify catches it -- PlaceOne's copy rung reuses the
+// exact same verify step, not a second, unverified copy path.
+func TestPlaceOne_DetectsASizeMismatchOnCopy(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	fsys.SetReflinkSupported(false)
+	fsys.SetHardlinkSupported(false)
+	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
+
+	_, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes"))+1)
+	if err == nil || !errors.Is(err, mover.ErrHashMismatch) {
+		t.Fatalf("PlaceOne = %v, want ErrHashMismatch for the wrong expected size", err)
+	}
+}

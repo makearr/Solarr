@@ -78,11 +78,13 @@ VALUES (sqlc.arg(session_id), sqlc.arg(rel_path), sqlc.arg(shape), sqlc.arg(file
         sqlc.arg(edition_id), sqlc.arg(evidence_json), sqlc.arg(candidates_json),
         sqlc.arg(reason))
 RETURNING id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
-          work_id, edition_id, evidence_json, candidates_json, reason;
+          work_id, edition_id, evidence_json, candidates_json, reason, work_created,
+          edition_created;
 
 -- name: ListImportUnits :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
-       work_id, edition_id, evidence_json, candidates_json, reason
+       work_id, edition_id, evidence_json, candidates_json, reason, work_created,
+       edition_created
 FROM import_unit WHERE session_id = ? ORDER BY id;
 
 -- Cursor-paginated, unlike ListImportUnits above: a session's own unit count
@@ -93,7 +95,8 @@ FROM import_unit WHERE session_id = ? ORDER BY id;
 -- (resumeOrCreate's "the last unit committed so far" lookup).
 -- name: ListImportUnitsPage :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
-       work_id, edition_id, evidence_json, candidates_json, reason
+       work_id, edition_id, evidence_json, candidates_json, reason, work_created,
+       edition_created
 FROM import_unit
 WHERE session_id = sqlc.arg(session_id) AND id > sqlc.arg(after_id)
   AND (sqlc.arg(filter_by_decision) = 0 OR decision = sqlc.arg(decision))
@@ -102,7 +105,8 @@ LIMIT sqlc.arg(page_size);
 
 -- name: GetImportUnit :one
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
-       work_id, edition_id, evidence_json, candidates_json, reason
+       work_id, edition_id, evidence_json, candidates_json, reason, work_created,
+       edition_created
 FROM import_unit WHERE id = ?;
 
 -- The only mutation IDENTIFY needs once it exists: a unit starts QUEUE with no
@@ -113,3 +117,35 @@ UPDATE import_unit SET decision = sqlc.arg(decision), confidence = sqlc.arg(conf
                         work_id = sqlc.arg(work_id), edition_id = sqlc.arg(edition_id),
                         candidates_json = sqlc.arg(candidates_json), reason = sqlc.arg(reason)
 WHERE id = sqlc.arg(id);
+
+-- Every unit this session decided COMMIT but has not yet actually placed --
+-- decision alone means "confidence cleared the threshold", not "in the
+-- library" (job.go's own doc comment); work_id staying NULL after DECIDE is
+-- what distinguishes the two, since nothing sets it before the IMPORTING
+-- phase runs.
+-- name: ListUnplacedCommitUnits :many
+SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
+       work_id, edition_id, evidence_json, candidates_json, reason, work_created,
+       edition_created
+FROM import_unit
+WHERE session_id = ? AND decision = 'COMMIT' AND work_id IS NULL
+ORDER BY id;
+
+-- The IMPORTING phase's own write, once placement.Resolve, the move and
+-- ResolveWorksDetailed have all succeeded for one unit -- work_id becoming
+-- non-null is what "actually placed" means from here on.
+-- name: SetImportUnitPlacement :exec
+UPDATE import_unit SET work_id = sqlc.arg(work_id), edition_id = sqlc.arg(edition_id),
+                        work_created = sqlc.arg(work_created),
+                        edition_created = sqlc.arg(edition_created)
+WHERE id = sqlc.arg(id);
+
+-- name: InsertImportUnitFile :exec
+INSERT INTO import_unit_file (unit_id, media_object_id) VALUES (?, ?);
+
+-- name: ListImportUnitFilesForSession :many
+SELECT iuf.unit_id, iuf.media_object_id
+FROM import_unit_file iuf
+JOIN import_unit iu ON iu.id = iuf.unit_id
+WHERE iu.session_id = ?
+ORDER BY iuf.id;

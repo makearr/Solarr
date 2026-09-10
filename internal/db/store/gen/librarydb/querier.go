@@ -195,6 +195,7 @@ type Querier interface {
 	GetWorkExternalIDByProvider(ctx context.Context, arg GetWorkExternalIDByProviderParams) (WorkExternalID, error)
 	GetWorkPart(ctx context.Context, id int64) (WorkPart, error)
 	InsertImportUnit(ctx context.Context, arg InsertImportUnitParams) (ImportUnit, error)
+	InsertImportUnitFile(ctx context.Context, arg InsertImportUnitFileParams) error
 	// One row per call, looped inside one transaction by the caller (the same
 	// shape ImportSessions.AddUnits already uses) -- modernc's sqlite driver
 	// does not support :copyfrom (pgx/mysql only).
@@ -265,6 +266,7 @@ type Querier interface {
 	// already uses -- an "arg = '' OR ..." single-argument form leaves sqlc unable to
 	// infer a concrete type for the argument.
 	ListImportSessions(ctx context.Context, arg ListImportSessionsParams) ([]ImportSession, error)
+	ListImportUnitFilesForSession(ctx context.Context, sessionID int64) ([]ListImportUnitFilesForSessionRow, error)
 	ListImportUnits(ctx context.Context, sessionID int64) ([]ImportUnit, error)
 	// Cursor-paginated, unlike ListImportUnits above: a session's own unit count
 	// is not bounded the way a session count is (Invariant 22 is exactly the
@@ -336,6 +338,12 @@ type Querier interface {
 	// The join to library_path is within library.db, not across databases --
 	// both tables live here, so it does not run into the no-cross-DB-join rule.
 	ListUnmeasured(ctx context.Context, arg ListUnmeasuredParams) ([]ListUnmeasuredRow, error)
+	// Every unit this session decided COMMIT but has not yet actually placed --
+	// decision alone means "confidence cleared the threshold", not "in the
+	// library" (job.go's own doc comment); work_id staying NULL after DECIDE is
+	// what distinguishes the two, since nothing sets it before the IMPORTING
+	// phase runs.
+	ListUnplacedCommitUnits(ctx context.Context, sessionID int64) ([]ImportUnit, error)
 	ListWorkClassifications(ctx context.Context, workID int64) ([]WorkClassification, error)
 	ListWorkDates(ctx context.Context, workID int64) ([]WorkDate, error)
 	ListWorkExternalIDs(ctx context.Context, workID int64) ([]WorkExternalID, error)
@@ -465,6 +473,10 @@ type Querier interface {
 	// identity (F29's own default) and this is what fills in a real result later,
 	// without this package needing to know how that result was produced.
 	SetImportUnitDecision(ctx context.Context, arg SetImportUnitDecisionParams) error
+	// The IMPORTING phase's own write, once placement.Resolve, the move and
+	// ResolveWorksDetailed have all succeeded for one unit -- work_id becoming
+	// non-null is what "actually placed" means from here on.
+	SetImportUnitPlacement(ctx context.Context, arg SetImportUnitPlacementParams) error
 	// Measured attributes replace claimed ones after probing; the claim is kept so a
 	// mismatch stays visible (ADR-39). The scalars land on the object, not the
 	// interned row, because they are unique per file.

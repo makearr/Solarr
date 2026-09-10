@@ -312,6 +312,14 @@ type ImportUnit struct {
 	EvidenceJson   string
 	CandidatesJson sql.NullString
 	Reason         sql.NullString
+	WorkCreated    int64
+	EditionCreated int64
+}
+
+type ImportUnitFile struct {
+	ID            int64
+	UnitID        int64
+	MediaObjectID int64
 }
 
 type LibraryPath struct {

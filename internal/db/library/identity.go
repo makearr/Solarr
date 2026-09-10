@@ -97,6 +97,64 @@ func (i Identity) ResolveWorks(ctx context.Context, at time.Time, links []WorkLi
 	return workIDs, nil
 }
 
+// WorkResolution is one link's ResolveWorksDetailed result: the ids
+// ResolveWorks itself already returns, plus whether each row was created new
+// by this call or matched something that already existed. A caller with
+// nothing to undo (scan's own consumer.go) has no use for the distinction;
+// one that must later revert only "the rows the session created" (ADR-48)
+// does, so it is a separate, additive method rather than a breaking change
+// to ResolveWorks' signature.
+type WorkResolution struct {
+	WorkID         int64
+	WorkCreated    bool
+	EditionID      *int64
+	EditionCreated bool
+}
+
+// ResolveWorksDetailed is ResolveWorks plus the created/matched distinction,
+// for a caller that must know precisely which rows it is responsible for
+// (import commit's own revert bookkeeping). Shares the same per-link
+// resolution as ResolveWorks -- a link naming a pair already resolved
+// earlier in the same batch still reuses that work rather than creating a
+// second one.
+func (i Identity) ResolveWorksDetailed(ctx context.Context, at time.Time, links []WorkLink) ([]WorkResolution, error) {
+	if len(links) == 0 {
+		return nil, nil
+	}
+	resolutions := make([]WorkResolution, len(links))
+	err := i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		for index, link := range links {
+			workID, workCreated, err := findOrCreateWork(ctx, queries, at, link)
+			if err != nil {
+				return fmt.Errorf("library: resolve work %s:%s: %w", link.Provider, link.ExternalID, err)
+			}
+			resolution := WorkResolution{WorkID: workID, WorkCreated: workCreated}
+			if link.Edition != nil {
+				editionID, editionCreated, err := resolveEdition(ctx, queries, workID, *link.Edition)
+				if err != nil {
+					return fmt.Errorf("library: resolve edition for work %d: %w", workID, err)
+				}
+				resolution.EditionID = &editionID
+				resolution.EditionCreated = editionCreated
+			}
+			if link.RootFolderID != 0 {
+				if err := queries.LinkWorkRootFolder(ctx, librarydb.LinkWorkRootFolderParams{
+					WorkID: workID, RootFolderID: link.RootFolderID, FirstSeenAt: at.Unix(),
+				}); err != nil {
+					return fmt.Errorf("library: link work %d to root folder %d: %w", workID, link.RootFolderID, err)
+				}
+			}
+			resolutions[index] = resolution
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resolutions, nil
+}
+
 func resolveWork(
 	ctx context.Context, queries *librarydb.Queries, at time.Time, link WorkLink,
 ) (workID int64, created bool, err error) {

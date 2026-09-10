@@ -247,66 +247,89 @@ func (c Consumer) discoverWanted(ctx context.Context, categoryID int64, workIDs 
 	if c.desired == nil || c.categories == nil || categoryID == 0 {
 		return nil
 	}
-	category, found := c.categories.Category(categoryID)
-	if !found || category.MonitorDiscovered == settings.MonitorDiscoveredNone {
-		return nil
-	}
-
 	byWork := make(map[int64][]TrackFile)
 	for index, workID := range workIDs {
 		byWork[workID] = append(byWork[workID], trackFiles[index])
 	}
+	for workID, candidates := range byWork {
+		if err := DiscoverWanted(
+			ctx, c.desired, c.categories, c.clock, c.defaultProfileID, categoryID, workID, candidates,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-	profileID := c.defaultProfileID
+// DiscoverWanted is section 19.6's own "a scan creates desired items too",
+// factored out of Consumer.discoverWanted so import commit (Committer) runs
+// the identical policy for a freshly placed file rather than a second,
+// driftable copy of it: ensure workID's album-level SET item exists (per
+// category.monitor_discovered policy) and align candidates -- this caller's
+// own batch of files, already known to belong to workID -- against whatever
+// parts are not yet covered (Align). A work whose tracklist has not been
+// enriched yet still gets its item -- required_count stays unknown until
+// EnrichJob adds parts, and a later full sweep re-attaches this batch's
+// files once it does.
+//
+// A no-op when desired/categories is nil, categoryID is 0, or the category
+// is not found or configured monitor_discovered=none.
+func DiscoverWanted(
+	ctx context.Context, desired *library.Desired, categories Categories, cl clock.Clock,
+	defaultProfileID, categoryID, workID int64, candidates []TrackFile,
+) error {
+	if desired == nil || categories == nil || categoryID == 0 {
+		return nil
+	}
+	category, found := categories.Category(categoryID)
+	if !found || category.MonitorDiscovered == settings.MonitorDiscoveredNone {
+		return nil
+	}
+	profileID := defaultProfileID
 	if category.QualityProfileID != nil {
 		profileID = *category.QualityProfileID
 	}
 	monitored := category.MonitorDiscovered == settings.MonitorDiscoveredMonitored
-	now := c.clock.Now().Unix()
+	now := cl.Now().Unix()
 
-	for workID, candidates := range byWork {
-		item, err := c.desired.EnsureAlbumItem(ctx, library.AlbumRequest{
-			WorkID: workID, CategoryID: categoryID, ProfileID: profileID, Monitored: monitored,
-		})
-		if err != nil {
-			return fmt.Errorf("ensure album item for work %d: %w", workID, err)
-		}
+	item, err := desired.EnsureAlbumItem(ctx, library.AlbumRequest{
+		WorkID: workID, CategoryID: categoryID, ProfileID: profileID, Monitored: monitored,
+	})
+	if err != nil {
+		return fmt.Errorf("ensure album item for work %d: %w", workID, err)
+	}
 
-		unfilled, err := c.desired.UnfilledParts(ctx, item.ID, workID)
-		if err != nil {
-			return fmt.Errorf("unfilled parts for work %d: %w", workID, err)
-		}
-		if len(unfilled) == 0 {
-			continue
-		}
-		recordingMBIDs, err := c.desired.ExternalIDsFor(ctx, unfilled, ProviderRecording)
-		if err != nil {
-			return fmt.Errorf("recording mbids for work %d: %w", workID, err)
-		}
-		parts := make([]Part, len(unfilled))
-		for index, part := range unfilled {
-			parts[index] = Part{
-				PartID: part.ID, MediaRef: part.MediaRef, Title: part.Title.String,
-				RecordingMBID: recordingMBIDs[part.ID],
-			}
-		}
-
-		var aligned []library.AlignedFile
-		for _, alignedPart := range Align(parts, candidates).Parts {
-			if alignedPart.File != nil {
-				aligned = append(aligned, library.AlignedFile{
-					MediaObjectID: alignedPart.File.MediaObjectID, MediaRef: alignedPart.Part.MediaRef,
-				})
-			}
-		}
-		if len(aligned) == 0 {
-			continue
-		}
-		if err := c.desired.RecordAlignment(ctx, item.ID, workID, aligned, now); err != nil {
-			return fmt.Errorf("record alignment for work %d: %w", workID, err)
+	unfilled, err := desired.UnfilledParts(ctx, item.ID, workID)
+	if err != nil {
+		return fmt.Errorf("unfilled parts for work %d: %w", workID, err)
+	}
+	if len(unfilled) == 0 {
+		return nil
+	}
+	recordingMBIDs, err := desired.ExternalIDsFor(ctx, unfilled, ProviderRecording)
+	if err != nil {
+		return fmt.Errorf("recording mbids for work %d: %w", workID, err)
+	}
+	parts := make([]Part, len(unfilled))
+	for index, part := range unfilled {
+		parts[index] = Part{
+			PartID: part.ID, MediaRef: part.MediaRef, Title: part.Title.String,
+			RecordingMBID: recordingMBIDs[part.ID],
 		}
 	}
-	return nil
+
+	var aligned []library.AlignedFile
+	for _, alignedPart := range Align(parts, candidates).Parts {
+		if alignedPart.File != nil {
+			aligned = append(aligned, library.AlignedFile{
+				MediaObjectID: alignedPart.File.MediaObjectID, MediaRef: alignedPart.Part.MediaRef,
+			})
+		}
+	}
+	if len(aligned) == 0 {
+		return nil
+	}
+	return desired.RecordAlignment(ctx, item.ID, workID, aligned, now)
 }
 
 // tagSourceFor answers the chain's tag lookups from what the scan already probed --

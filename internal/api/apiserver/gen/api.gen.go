@@ -760,7 +760,7 @@ type ImportUnit struct {
 	SessionId int64           `json:"session_id"`
 	Shape     ImportUnitShape `json:"shape"`
 
-	// WorkId Not yet resolved for a COMMIT decision -- ADR-48's own scope stops at DECIDE.
+	// WorkId Non-null once this unit is actually placed in the library, not merely decided COMMIT -- null with decision=COMMIT means the session has no category_id to place into, or placement has not run yet.
 	WorkId *int64 `json:"work_id,omitempty"`
 }
 

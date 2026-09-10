@@ -78,6 +78,56 @@ func ApplyOne(fsys fsx.FS, move PlannedMove, roots RootPath) error {
 	return nil
 }
 
+// PlaceMethod names which rung of ADR-11 A's import ladder actually placed a
+// file -- recorded in the import decision (ADR-11: "the reason is recorded"),
+// distinct from PlannedMove's SameFilesystem, which is about the four
+// already-library-owned move reasons (RENAME/CATEGORY/REBALANCE/DRAIN), not
+// import's first placement of a file the library does not own yet.
+type PlaceMethod string
+
+// The three rungs this pass implements. "move" (ADR-11's fourth rung, delete
+// the source outright) is deliberately not built: nothing yet depends on the
+// source disappearing -- acquisition cleanup is stage 5, and a watched-folder
+// workflow that wants that does not exist either (private/questions.md).
+const (
+	PlaceReflink  PlaceMethod = "reflink"
+	PlaceHardlink PlaceMethod = "hardlink"
+	PlaceCopy     PlaceMethod = "copy"
+)
+
+// PlaceOne places one file at destAbs from sourceAbs by ADR-11 A's own
+// ladder -- reflink, then hardlink, then copy -- and never modifies or
+// removes sourceAbs at any rung: unlike ApplyOne, whose SameFilesystem path
+// is a real Rename because the library already owns that file, an import
+// source is never the library's to delete (that is the still-unbuilt
+// acquisition/watched-folder cleanup policy's job, not this function's).
+// A failed rung falls through to the next one on *any* error, not only
+// fsx.ErrUnsupported: fsx.FS.Link's own doc comment promises ErrUnsupported
+// across filesystems, but neither the real nor the fake implementation
+// actually returns it there (both return a raw EXDEV) -- falling through on
+// any error is the contract that is actually honoured, and a genuine
+// permission or disk problem still surfaces from the final copy rung, which
+// does not fall through further.
+func PlaceOne(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64) (PlaceMethod, error) {
+	if err := fsys.MkdirAll(path.Dir(destAbs), 0o755); err != nil {
+		return "", fmt.Errorf("mover: create destination directory for %q: %w", destAbs, err)
+	}
+
+	if err := fsys.Reflink(sourceAbs, destAbs); err == nil {
+		return PlaceReflink, nil
+	}
+	if err := fsys.Link(sourceAbs, destAbs); err == nil {
+		return PlaceHardlink, nil
+	}
+	if err := copyFile(fsys, sourceAbs, destAbs); err != nil {
+		return "", fmt.Errorf("mover: copy %q to %q: %w", sourceAbs, destAbs, err)
+	}
+	if err := verify(fsys, sourceAbs, destAbs, sizeBytes); err != nil {
+		return "", err
+	}
+	return PlaceCopy, nil
+}
+
 func copyFile(fsys fsx.FS, sourceAbs, destAbs string) error {
 	source, err := fsys.Open(sourceAbs)
 	if err != nil {

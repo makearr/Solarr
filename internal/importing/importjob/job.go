@@ -61,6 +61,17 @@ type Policy interface {
 	ImportAutoCommitConfidence() float64
 }
 
+// Committer places one COMMIT-decided unit into the library --
+// music.Committer's own shape, narrowed to an interface so a test can fake
+// it without building every real dependency (settings roots, every library
+// store) music.Committer itself needs.
+type Committer interface {
+	CommitUnit(
+		ctx context.Context, sourceRoot string, unit inspect.Unit, best model.Identification, tags music.Resolved,
+		categoryID int64,
+	) (music.Placed, error)
+}
+
 // Job runs one import.inspect execution: walk, identify, shape, decide, record.
 type Job struct {
 	fsys     fsx.FS
@@ -72,6 +83,11 @@ type Job struct {
 	// Searcher is deliberately deferred to whichever caller needs real
 	// auto-resolution against untagged scene content.
 	search music.Searcher
+	// committer is optional: nil means a COMMIT decision never places a file,
+	// today's own default for a session with no destination category
+	// (private/questions.md) or a caller (a test) with no real library to
+	// place into.
+	committer Committer
 	// events is optional: nil means no progress is published, the same as
 	// every other optional dependency in this codebase.
 	events *events.Bus
@@ -79,16 +95,18 @@ type Job struct {
 	logger *slog.Logger
 }
 
-// Config is what a Job needs. Every field is required except Search, Events and Logger.
+// Config is what a Job needs. Every field is required except Search,
+// Committer, Events and Logger.
 type Config struct {
-	FS       fsx.FS
-	Sessions library.ImportSessions
-	Policy   Policy
-	Tool     mediatool.Tool
-	Search   music.Searcher
-	Events   *events.Bus
-	Clock    clock.Clock
-	Logger   *slog.Logger
+	FS        fsx.FS
+	Sessions  library.ImportSessions
+	Policy    Policy
+	Tool      mediatool.Tool
+	Search    music.Searcher
+	Committer Committer
+	Events    *events.Bus
+	Clock     clock.Clock
+	Logger    *slog.Logger
 }
 
 // NewJob builds the handler.
@@ -99,7 +117,8 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		fsys: config.FS, sessions: config.Sessions, policy: config.Policy,
-		tool: config.Tool, search: config.Search, events: config.Events, clock: config.Clock, logger: logger,
+		tool: config.Tool, search: config.Search, committer: config.Committer,
+		events: config.Events, clock: config.Clock, logger: logger,
 	}
 }
 
@@ -234,10 +253,16 @@ const identifyParallelism = 8
 // SetUnitDecisions transaction, not one per unit. Every model.Identifier
 // passed in must tolerate concurrent Identify calls across different files;
 // today's only one (MBIDIdentifier) does no more than read-only map lookups.
+// identifyCluster also returns each unit's own model.ChainResult, positionally
+// lined up with the returned decisions -- commitCluster's own placement step
+// needs Best to place a COMMIT-decided unit without re-running IDENTIFY a
+// second time (ADR-48's own speed rule: "probe only what identification will
+// use" applies just as much to a second identify call as to a second probe).
 func identifyCluster(
 	ctx context.Context, ids []int64, batch []inspect.Unit, identifiers []model.Identifier, cfg model.ChainConfig,
-) []library.UnitDecision {
+) ([]library.UnitDecision, []model.ChainResult) {
 	decisions := make([]library.UnitDecision, len(batch))
+	results := make([]model.ChainResult, len(batch))
 	slots := make(chan struct{}, identifyParallelism)
 	var running sync.WaitGroup
 	for i, unit := range batch {
@@ -246,11 +271,11 @@ func identifyCluster(
 		go func(i int, unit inspect.Unit) {
 			defer running.Done()
 			defer func() { <-slots }()
-			decisions[i] = identifyUnit(ctx, ids[i], unit, identifiers, cfg)
+			decisions[i], results[i] = identifyUnit(ctx, ids[i], unit, identifiers, cfg)
 		}(i, unit)
 	}
 	running.Wait()
-	return decisions
+	return decisions, results
 }
 
 // identifyUnit runs IDENTIFY for one unit and turns DECIDE's outcome into a
@@ -260,7 +285,7 @@ func identifyCluster(
 // identifyBatch already applies at scan time.
 func identifyUnit(
 	ctx context.Context, unitID int64, unit inspect.Unit, identifiers []model.Identifier, cfg model.ChainConfig,
-) library.UnitDecision {
+) (library.UnitDecision, model.ChainResult) {
 	result, err := music.IdentifyUnit(ctx, unit, identifiers, cfg)
 	decision := model.DecisionFailed
 	var confidence float64
@@ -276,7 +301,7 @@ func identifyUnit(
 			}
 		}
 	}
-	return library.UnitDecision{UnitID: unitID, Decision: string(decision), Confidence: confidence, CandidatesJSON: candidatesJSON}
+	return library.UnitDecision{UnitID: unitID, Decision: string(decision), Confidence: confidence, CandidatesJSON: candidatesJSON}, result
 }
 
 // commitCluster probes one cluster's media files in a single batched call
@@ -339,12 +364,53 @@ func (j *Job) commitCluster(
 		return fmt.Errorf("importjob: add units: %w", err)
 	}
 
-	decisions := identifyCluster(ctx, ids, batch, identifiers, cfg)
+	decisions, results := identifyCluster(ctx, ids, batch, identifiers, cfg)
 	if err := j.sessions.SetUnitDecisions(ctx, sessionID, decisions); err != nil {
 		return fmt.Errorf("importjob: record decisions: %w", err)
 	}
+	if categoryID != nil && j.committer != nil {
+		j.placeCommitted(ctx, *categoryID, sourcePath, tagSource, ids, batch, decisions, results)
+	}
 	j.publishProgress(ctx, sessionID, categoryID, importPhaseWalking, batch[len(batch)-1].Directory)
 	return nil
+}
+
+// placeCommitted is ADR-48's own "COMMIT actually imports": every unit this
+// cluster just decided COMMIT is placed immediately, in the same pass --
+// inline rather than a genuinely separate resumable phase, because a unit's
+// own member file list (inspect.Unit.Media) is not persisted independently
+// of this in-memory batch, only its identity once resolved (import_unit's
+// own columns). A placement failure is logged and the unit is left
+// decided-but-unplaced (work_id stays NULL) rather than failing the
+// cluster -- the same "one bad unit does not fail the batch" tolerance
+// IDENTIFY already has, and matches DEFER's own "structured reason, not a
+// crash" (section 11.7). A crash mid-placement (as opposed to a returned
+// error) can leave a unit stuck decided-but-unplaced with nothing to retry
+// it automatically -- a known, narrow gap (private/notes.md), not handled
+// this pass.
+func (j *Job) placeCommitted(
+	ctx context.Context, categoryID int64, sourcePath string, tagSource music.Resolved,
+	ids []int64, batch []inspect.Unit, decisions []library.UnitDecision, results []model.ChainResult,
+) {
+	for i, decision := range decisions {
+		if decision.Decision != library.UnitCommit || results[i].Best == nil {
+			continue
+		}
+		placed, err := j.committer.CommitUnit(ctx, sourcePath, batch[i], *results[i].Best, tagSource, categoryID)
+		if err != nil {
+			j.logger.Warn("import commit: could not place unit",
+				slog.Int64("unit_id", ids[i]), slog.String("path", batch[i].Directory), slog.Any("error", err))
+			continue
+		}
+		if err := j.sessions.RecordPlacement(ctx, ids[i], library.Placement{
+			WorkID: placed.WorkID, WorkCreated: placed.WorkCreated,
+			EditionID: placed.EditionID, EditionCreated: placed.EditionCreated,
+			MediaObjectIDs: placed.MediaObjectIDs,
+		}); err != nil {
+			j.logger.Warn("import commit: could not record placement",
+				slog.Int64("unit_id", ids[i]), slog.Any("error", err))
+		}
+	}
 }
 
 // Import progress phases (todo 4.21's own SSE shape).
