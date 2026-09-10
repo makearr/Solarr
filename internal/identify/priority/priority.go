@@ -61,9 +61,14 @@ func (w Weights) forTrigger(t Trigger) int64 {
 // the bottom of the list never acquires anything.
 const AgingInterval = time.Hour
 
-// DefaultNewReleaseDays is ADR-36's own default: an item is "new" for 30 days
-// after its release date, not from when it was added to the library.
-const DefaultNewReleaseDays = 30
+// DefaultNewReleaseDays is ADR-55's release-date freshness window: an item is
+// "new" for 7 days after its release date, not from when it was added to the
+// library. Narrowed from ADR-36's original 30 on 2026-09-05 -- ADR-55's own
+// "consequence, accepted" is that a three-week-old album now competes as a
+// gap rather than a new release, which the second window (rss_fresh_hours,
+// not yet built: it needs candidate.first_seen_at, stage 5) exists to soften
+// for anything that actually shows up on an indexer.
+const DefaultNewReleaseDays = 7
 
 // Input is what one hunt_queue-shaped item needs computed. CategoryRank is
 // 1-based and user-ordered (drag-to-reorder in settings): 1 is the most
@@ -111,4 +116,33 @@ func ClassifyTrigger(releaseDate *time.Time, now time.Time, newReleaseDays int) 
 		return TriggerNewRelease
 	}
 	return TriggerGap
+}
+
+// ParseReleaseDate reads a work_date-shaped value (ADR-23: "2024", "2024-03"
+// or "2024-03-01") at day precision only -- todo 4.20's own accepted
+// simplification. A value shorter than a full date cannot say whether
+// something released in the last week, so it parses as unknown (ok=false)
+// rather than guessing from whatever precision is there.
+func ParseReleaseDate(raw string) (parsed time.Time, ok bool) {
+	parsed, err := time.Parse(time.DateOnly, raw)
+	return parsed, err == nil
+}
+
+// IsFresh is ADR-55's release-date window alone -- its indexer/RSS half
+// (rss_fresh_hours) needs candidate.first_seen_at, which nothing can write
+// before stage 5. This is the one definition the new_release trigger, the
+// Fresh list filter and the dashboard panel all read from.
+//
+// Deliberately not just ClassifyTrigger: that function treats a nil or
+// unparsed release date as new_release too, because for *searching* an
+// unknown release date should cost nothing to rank eagerly (ADR-23's
+// AvailabilityWindow is what actually gates the search, not this). Showing
+// something as freshly released is a different claim, and nothing supports
+// answering "yes" to it without a real date -- so here, and only here, a
+// nil date is never fresh.
+func IsFresh(releasedAt *time.Time, now time.Time, newReleaseDays int) bool {
+	if releasedAt == nil {
+		return false
+	}
+	return ClassifyTrigger(releasedAt, now, newReleaseDays) == TriggerNewRelease
 }

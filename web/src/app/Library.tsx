@@ -7,7 +7,7 @@ import { api } from "@/api/client";
 import { ListGrid } from "@/list/ListGrid";
 import { ListTable, type Column } from "@/list/ListTable";
 import { useLibraryList } from "@/list/useLibraryList";
-import { useRouteView } from "@/list/useRouteView";
+import { useRouteView, type ViewState } from "@/list/useRouteView";
 import { useNarrow } from "@/list/useNarrow";
 import { useRecordLastLevel } from "@/list/useRecordLastLevel";
 import type { SelectionRequest } from "@/list/selection";
@@ -132,7 +132,10 @@ function buildColumns(visible: ReadonlySet<OptionalColumn>): Column<Work>[] {
 
 // The route's own path param (/library/$categoryId/albums, ADR-54) -- no
 // longer a URL filter a user picks among several, so it is not in FILTER_KEYS.
-const FILTER_KEYS: readonly string[] = [];
+// "fresh" is the one real URL filter this list has (todo 4.20, ADR-55): a
+// shipped preset, not a generic filter-building UI -- see next.md's own
+// scope note on why this list has no media-type/year/language filters yet.
+const FILTER_KEYS: readonly string[] = ["fresh"];
 
 export function Library() {
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
@@ -142,7 +145,7 @@ export function Library() {
   // is what keeps the query cache key and bulk "select all matching" scoped
   // to the right category (query.key/selection.toRequest both read filters).
   const baseView = useRouteView(FILTER_KEYS);
-  const routeView = useMemo(
+  const routeView = useMemo<ViewState>(
     () => ({
       query: { ...baseView.query, filters: { ...baseView.query.filters, category_id: categoryId ?? "" } },
       setQuery: baseView.setQuery,
@@ -169,6 +172,7 @@ export function Library() {
               cursor,
               limit: 100,
               category_id: query.filters.category_id ? Number(query.filters.category_id) : undefined,
+              fresh: query.filters.fresh === "1" ? true : undefined,
               sort,
               dir: query.direction === "desc" ? "desc" : undefined,
             },
@@ -235,6 +239,28 @@ export function Library() {
         <h2 className="text-sm font-medium">Library</h2>
 
         <div className="ml-auto flex items-center gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() =>
+              routeView.setQuery({
+                ...routeView.query,
+                filters: {
+                  ...routeView.query.filters,
+                  fresh: routeView.query.filters.fresh === "1" ? "" : "1",
+                },
+              })
+            }
+            aria-pressed={routeView.query.filters.fresh === "1"}
+            title="Released within the last week"
+            className={
+              routeView.query.filters.fresh === "1"
+                ? "rounded-md border border-accent bg-accent/10 px-2 py-1 text-accent " +
+                  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                : quietButton
+            }
+          >
+            Fresh
+          </button>
           {!list.selectionIsEmpty && (
             <>
               <span className="text-ink-muted">

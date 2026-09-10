@@ -145,9 +145,9 @@ func TestCompute_ASkewedQueueEventuallyPutsTheLowestPriorityItemFirst(t *testing
 }
 
 func TestClassifyTrigger_WithinTheWindowIsNewRelease(t *testing.T) {
-	releaseDate := epoch.Add(-10 * 24 * time.Hour)
+	releaseDate := epoch.Add(-3 * 24 * time.Hour)
 	if got := priority.ClassifyTrigger(&releaseDate, epoch, priority.DefaultNewReleaseDays); got != priority.TriggerNewRelease {
-		t.Errorf("ClassifyTrigger = %q, want new_release for a 10-day-old release", got)
+		t.Errorf("ClassifyTrigger = %q, want new_release for a 3-day-old release", got)
 	}
 }
 
@@ -179,5 +179,51 @@ func TestClassifyTrigger_UnreleasedOrUnknownIsNewRelease(t *testing.T) {
 	}
 	if got := priority.ClassifyTrigger(nil, epoch, priority.DefaultNewReleaseDays); got != priority.TriggerNewRelease {
 		t.Errorf("ClassifyTrigger(nil) = %q, want new_release", got)
+	}
+}
+
+func TestParseReleaseDate_OnlyAFullDateParses(t *testing.T) {
+	cases := []struct {
+		raw string
+		ok  bool
+	}{
+		{"2026-09-05", true},
+		{"2026", false},
+		{"2026-09", false},
+		{"", false},
+		{"not-a-date", false},
+	}
+	for _, c := range cases {
+		_, ok := priority.ParseReleaseDate(c.raw)
+		if ok != c.ok {
+			t.Errorf("ParseReleaseDate(%q) ok = %v, want %v", c.raw, ok, c.ok)
+		}
+	}
+}
+
+// The one behaviour that must differ from ClassifyTrigger: a nil date is
+// never fresh, even though ClassifyTrigger itself calls the same case
+// new_release (for a different reason -- see IsFresh's own doc comment).
+func TestIsFresh_NilDateIsNeverFreshUnlikeClassifyTrigger(t *testing.T) {
+	if priority.IsFresh(nil, epoch, priority.DefaultNewReleaseDays) {
+		t.Error("IsFresh(nil) = true, want false")
+	}
+	if got := priority.ClassifyTrigger(nil, epoch, priority.DefaultNewReleaseDays); got != priority.TriggerNewRelease {
+		t.Fatalf("test premise broken: ClassifyTrigger(nil) = %q, want new_release", got)
+	}
+}
+
+func TestIsFresh_AgreesWithClassifyTriggerForARealDate(t *testing.T) {
+	recent := epoch.Add(-3 * 24 * time.Hour)
+	if !priority.IsFresh(&recent, epoch, priority.DefaultNewReleaseDays) {
+		t.Error("IsFresh(3 days ago) = false, want true")
+	}
+	old := epoch.Add(-365 * 24 * time.Hour)
+	if priority.IsFresh(&old, epoch, priority.DefaultNewReleaseDays) {
+		t.Error("IsFresh(1 year ago) = true, want false")
+	}
+	future := epoch.Add(30 * 24 * time.Hour)
+	if !priority.IsFresh(&future, epoch, priority.DefaultNewReleaseDays) {
+		t.Error("IsFresh(future) = false, want true -- not yet released is still fresh")
 	}
 }

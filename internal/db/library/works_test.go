@@ -311,6 +311,39 @@ func TestListWorks_SortDirectionDescendingReversesOrder(t *testing.T) {
 	}
 }
 
+// The one thing todo 4.20's Fresh filter must get right: a full day-precision
+// date on or after the cutoff matches, a year-only or month-only date never
+// does (day precision is the whole point), and a work with no date at all
+// is silently excluded rather than erroring.
+func TestListWorks_FreshFiltersToDayPreciseRecentReleases(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+
+	recent := createWorkWithDate(t, opened, "Recent Release", "2026-09-05")
+	createWorkWithDate(t, opened, "Old Release", "1997-05-21")
+	createWorkWithDate(t, opened, "Year Only Release", "2026")
+	createWork(t, opened, "music", "No Date At All")
+
+	page, err := works.List(t.Context(), library.WorkFilter{FreshSince: "2026-09-01"}, library.WorkCursor{}, 100)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(page) != 1 || page[0].ID != recent.ID {
+		t.Fatalf("Fresh page = %+v, want only %q (%d)", page, "Recent Release", recent.ID)
+	}
+}
+
+func createWorkWithDate(t *testing.T, opened *store.Store, title, date string) librarydb.Work {
+	t.Helper()
+	created := createWorkWithYear(t, opened, title, 0)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.SetWorkDate(ctx, librarydb.SetWorkDateParams{
+			WorkID: created.ID, Kind: library.WorkDateStreet, Region: "", Date: date, Source: "musicbrainz",
+		})
+	})
+	return created
+}
+
 func createWorkWithYear(t *testing.T, opened *store.Store, title string, year int64) librarydb.Work {
 	t.Helper()
 	var created librarydb.Work

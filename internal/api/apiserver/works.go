@@ -48,6 +48,10 @@ type WorksFilter struct {
 	CategoryIDs   []int64
 	Sort          WorkSort
 	Direction     SortDirection
+	// Fresh is ADR-55's release-date window alone (todo 4.20) -- the
+	// adapter resolves it against the live clock, never this package
+	// (forbidigo: no time.Now() here either).
+	Fresh bool
 }
 
 // WorksCursor is a position in the list. Only the field matching the active
@@ -108,7 +112,10 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 	}
 
 	rows, err := s.works.ListWorks(r.Context(),
-		WorksFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Sort: sort, Direction: direction},
+		WorksFilter{
+			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Sort: sort, Direction: direction,
+			Fresh: derefOr(params.Fresh, false),
+		},
 		worksCursorFor(sort, cursor), limit+1)
 	if err != nil {
 		writeError(w, s.logger, err)

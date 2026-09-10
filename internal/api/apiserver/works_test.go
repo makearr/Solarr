@@ -505,6 +505,36 @@ func TestListWorks_SortAndDirReachTheFilter(t *testing.T) {
 	}
 }
 
+func TestListWorks_FreshReachesTheFilter(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works?fresh=true"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	if !fixture.works.lastFilter.Fresh {
+		t.Errorf("Fresh = false, want true")
+	}
+}
+
+func TestListWorks_FreshDefaultsToFalse(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.works.lastFilter.Fresh {
+		t.Errorf("Fresh = true, want false when the query omits it")
+	}
+}
+
 func TestListWorks_UnknownSortAnswers400(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.createUser(t, "admin", settings.RoleAdmin)

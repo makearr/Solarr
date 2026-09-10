@@ -470,6 +470,11 @@ var planCases = []struct {
 	// over work_type_sort for this combination and still sorts -- a real, narrower,
 	// pre-existing gap unrelated to workArtistColumn's fix, left open (notes.md).
 	{"category visibility", library.WorkFilter{CategoryIDs: []int64{1}}, library.WorkCursor{}, "work_sort"},
+	// Fresh (todo 4.20): an EXISTS-correlated subquery against work_date, the
+	// same shape addVisibility's own EXISTS clauses already use rather than
+	// IN, for the same reason -- it must not make SQLite abandon the outer
+	// sort index the way an IN-based filter does (notes.md).
+	{"fresh", library.WorkFilter{FreshSince: "2026-01-01"}, library.WorkCursor{}, "work_sort"},
 }
 
 // A list that sorts its whole result cannot meet the ADR-28 page target at 500k, whatever

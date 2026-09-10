@@ -198,7 +198,7 @@ func refineWithReleaseMBIDForArtworkJob(t *testing.T, identity library.Identity,
 			continue
 		}
 		if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), edition.EditionID, edition.WorkID,
-			nil, library.EditionRefinement{Kind: "official"}, nil); err != nil {
+			nil, "", library.EditionRefinement{Kind: "official"}, nil); err != nil {
 			t.Fatalf("RefineEdition: %v", err)
 		}
 		return edition.WorkID

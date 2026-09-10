@@ -69,6 +69,14 @@ type WorkFilter struct {
 	// CategoryIDs restricts the list to works with a desired_item recorded
 	// against any of these categories -- see RootFolderIDs' own doc comment.
 	CategoryIDs []int64
+	// FreshSince is ADR-55's release-date freshness window (todo 4.20),
+	// already resolved to a cutoff date ("2006-01-02") by the caller --
+	// this package never calls time.Now() (forbidigo). Empty means the
+	// filter is not applied. A work_date shorter than a full date (a
+	// year- or month-only release) can never match: it always sorts before
+	// any real cutoff in the plain string comparison this uses, which is
+	// the point -- freshness needs day precision, not a guess from less.
+	FreshSince string
 	// Sort and Direction pick the list's order (section 21.2's configurable,
 	// sortable columns). Artist is not a WorkSort option yet -- work_primary_artist_sort
 	// (migration 0021) could support it now, but nothing has asked for it.
@@ -113,6 +121,9 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	predicates.AddIf(filter.YearTo != 0, "year <= ?", filter.YearTo)
 	addPrefix(&predicates, filter.TitlePrefix)
 	addVisibility(&predicates, filter.RootFolderIDs, filter.CategoryIDs)
+	predicates.AddIf(filter.FreshSince != "",
+		"EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = work.id AND wd.kind = ? AND wd.date >= ?)",
+		WorkDateStreet, filter.FreshSince)
 
 	column, cursorValue := sortColumn(filter.Sort, after)
 	operator := ">"

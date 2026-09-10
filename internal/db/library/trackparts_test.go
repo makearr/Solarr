@@ -50,7 +50,7 @@ func setUpAlbumWithParts(
 			Title:    trackTitle,
 		}
 	}
-	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, nil,
+	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, nil, "",
 		library.EditionRefinement{Kind: "album"}, parts); err != nil {
 		t.Fatalf("RefineEdition: %v", err)
 	}

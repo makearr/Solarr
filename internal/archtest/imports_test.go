@@ -36,8 +36,8 @@ var allowedInternalImports = map[string][]string{
 	},
 	"cmd/medianexus/adapters": {
 		"internal/api/apiserver", "internal/db/library", "internal/db/settings",
-		"internal/identify/model", "internal/importing/importjob", "internal/importing/inspect",
-		"internal/jobs", "internal/jobs/cachebudget", "internal/media/music",
+		"internal/identify/model", "internal/identify/priority", "internal/importing/importjob",
+		"internal/importing/inspect", "internal/jobs", "internal/jobs/cachebudget", "internal/media/music",
 		"internal/metadata/musicbrainz", "internal/moving/drainjob", "internal/moving/mover",
 		"internal/moving/moverjob", "internal/platform/clock", "internal/platform/egress",
 		"internal/platform/paginate",
