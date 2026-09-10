@@ -129,7 +129,11 @@ function NetworkForm({
           onChange={(event) => setPort(Number(event.target.value))}
           className={inputStyle}
         />
-        <span className="text-[0.6875rem]">0 leaves it unset -- config.yml (or 5454) governs.</span>
+        <span className="text-[0.6875rem]">
+          0 leaves it unset -- config.yml (or 5454) governs. If a chosen port turns out
+          unreachable, the MEDIANEXUS_SERVER_PORT environment variable always wins over this and
+          is the way back in.
+        </span>
       </label>
 
       <label className="flex flex-col gap-1">
@@ -172,7 +176,8 @@ function NetworkForm({
         />
         <span className="text-[0.6875rem]">
           One CIDR per line. Empty allows every address, the default. /api/v1/health always stays
-          reachable.
+          reachable, and a change that would exclude the address you're using right now is
+          refused outright.
         </span>
       </label>
 
