@@ -312,6 +312,15 @@ function LibraryNode({
               <span className="truncate">Unidentified</span>
             </Link>
           </li>
+          <li>
+            <Link
+              to="/library/$categoryId/discover"
+              params={{ categoryId: String(library.id) }}
+              className={sectionLinkClass(isActive && activePath === `/library/${library.id}/discover`, false)}
+            >
+              <span className="truncate">Discover</span>
+            </Link>
+          </li>
           {CONFIG_SECTIONS.map((section) =>
             section.key === "import-lists" ? (
               <li key={section.key}>

@@ -3,6 +3,7 @@ package httpx
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -137,7 +138,6 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 	defer release()
 
 	timedOut, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
 
 	if c.userAgent != "" && request.Header.Get("User-Agent") == "" {
 		request.Header.Set("User-Agent", c.userAgent)
@@ -145,6 +145,7 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 
 	response, err := c.inner.Do(request.WithContext(timedOut))
 	if err != nil {
+		cancel()
 		c.limiter.Observe(c.provider, Outcome{Success: false})
 		c.breaker.Observe(c.provider, false)
 		return nil, fmt.Errorf("httpx: %s %s: %w", request.Method, request.URL.Redacted(), err)
@@ -158,10 +159,18 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 	c.breaker.Observe(c.provider, class != ClassRetryable)
 
 	if class == ClassSuccess {
+		// cancel is deferred to the body's own Close, not run here: a caller
+		// reads the body after Do returns, and cancelling on return raced
+		// that read against net/http noticing the context was done --
+		// an intermittent "context canceled" on any slow or larger response
+		// (found live, todo 4.17's Discover search hit it against a real
+		// MusicBrainz search response).
+		response.Body = &cancelOnCloseBody{ReadCloser: response.Body, cancel: cancel}
 		return response, nil
 	}
 	// The body of an error response is discarded; the status is the whole
 	// signal, and a failed close on it tells the caller nothing useful.
+	cancel()
 	_ = response.Body.Close()
 	return nil, &StatusError{
 		Provider:   c.provider,
@@ -170,6 +179,19 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 		Class:      class,
 		RetryAfter: retryAfter,
 	}
+}
+
+// cancelOnCloseBody ties a Do call's own request-scoped timeout to the
+// response body's lifetime instead of Do's own stack frame -- see the
+// comment where this is constructed.
+type cancelOnCloseBody struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (b *cancelOnCloseBody) Close() error {
+	defer b.cancel()
+	return b.ReadCloser.Close()
 }
 
 // checkProxiedDestination validates the destination directly when this

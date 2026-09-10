@@ -150,6 +150,39 @@ func (p Provider) Search(
 	return nil, fmt.Errorf("musicbrainz: no source answered search %q/%q: %w", artist, title, errors.Join(errs...))
 }
 
+// SearchByQuery is Search's own free-text counterpart (todo 4.17, ADR-56):
+// only sources implementing QuerySearcher are tried, same reasoning as Search
+// itself -- the proxy does not implement it either.
+func (p Provider) SearchByQuery(ctx context.Context, _ Priority, query string, limit int) ([]ReleaseGroupMatch, error) {
+	key := queryCacheKey(query, limit)
+	if matches, ok := p.cachedSearch(ctx, key); ok {
+		return matches, nil
+	}
+
+	var errs []error
+	for _, source := range p.sources {
+		searcher, ok := source.(QuerySearcher)
+		if !ok {
+			continue
+		}
+		matches, err := searcher.SearchReleaseGroupsByQuery(ctx, query, limit)
+		if err != nil {
+			p.logger.WarnContext(ctx, "musicbrainz source query search failed",
+				slog.String("source", source.Name()), slog.Any("error", err))
+			errs = append(errs, err)
+			continue
+		}
+		p.rememberSearch(ctx, source.Name(), key, matches)
+		return matches, nil
+	}
+	if len(errs) == 0 {
+		// No configured source can search at all -- a wiring gap, not a failed
+		// lookup, so the caller's chain treats it exactly like "found nothing".
+		return nil, nil
+	}
+	return nil, fmt.Errorf("musicbrainz: no source answered query search %q: %w", query, errors.Join(errs...))
+}
+
 // Artist answers one artist's own detail, cache-first, permanent like Album.
 // Only sources implementing ArtistLookup are tried -- same reasoning as
 // Search, the proxy's artist shape is unverified live.
@@ -262,6 +295,13 @@ func (p Provider) rememberArtist(ctx context.Context, source, mbid string, artis
 func searchCacheKey(artist, title string, limit int) string {
 	return fmt.Sprintf("%s\x1f%s\x1f%d",
 		strings.ToLower(strings.TrimSpace(artist)), strings.ToLower(strings.TrimSpace(title)), limit)
+}
+
+// queryCacheKey is searchCacheKey's own free-text counterpart, prefixed so a
+// query search can never collide with a fielded (artist, title) one sharing
+// the same cache kind.
+func queryCacheKey(query string, limit int) string {
+	return fmt.Sprintf("q\x1f%s\x1f%d", strings.ToLower(strings.TrimSpace(query)), limit)
 }
 
 func (p Provider) cachedSearch(ctx context.Context, key string) ([]ReleaseGroupMatch, bool) {

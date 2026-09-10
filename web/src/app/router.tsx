@@ -10,6 +10,7 @@ import { api } from "@/api/client";
 
 import { Activity } from "./Activity";
 import { Dashboard } from "./Dashboard";
+import { Discover } from "./Discover";
 import { DownloadFolders } from "./DownloadFolders";
 import { Import } from "./Import";
 import { ImportLists } from "./ImportLists";
@@ -73,6 +74,9 @@ const routes = [
     path: "/library/$categoryId/config/$section",
     component: LibraryConfigPlaceholder,
   }),
+  // Registered ahead of the $level catch-all below, or "discover" would
+  // resolve as an (invalid) level key instead of this screen.
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/discover", component: Discover }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/$level", component: LibraryLevelList }),
   createRoute({ getParentRoute: () => rootRoute, path: "/works/$id", component: WorkDetail }),
   createRoute({ getParentRoute: () => rootRoute, path: "/people", component: People }),

@@ -236,6 +236,37 @@ func searcherFor(t *testing.T, source musicbrainz.Source) musicbrainz.Searcher {
 	return searcher
 }
 
+// querySearcherFor asserts a Source also implements QuerySearcher.
+func querySearcherFor(t *testing.T, source musicbrainz.Source) musicbrainz.QuerySearcher {
+	t.Helper()
+	searcher, ok := source.(musicbrainz.QuerySearcher)
+	if !ok {
+		t.Fatalf("%T does not implement QuerySearcher", source)
+	}
+	return searcher
+}
+
+// The free-text search (todo 4.17) sends the raw query unscoped -- no
+// artist:/releasegroup: fields to split it into -- and parses the exact same
+// response shape SearchReleaseGroups already does.
+func TestDirect_SearchReleaseGroupsByQueryParsesTheRealFieldShape(t *testing.T) {
+	query := "Vutu Doci Kick Inside"
+	requestURL := "https://musicbrainz.invalid/release-group/?query=" + url.QueryEscape(query) + "&fmt=json&limit=5"
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		requestURL: {status: http.StatusOK, body: directSearchBody},
+	}}
+	client := newTestClient(t, transport, musicbrainz.DirectName)
+	source := querySearcherFor(t, musicbrainz.NewDirect(client, "https://musicbrainz.invalid"))
+
+	matches, err := source.SearchReleaseGroupsByQuery(t.Context(), query, 5)
+	if err != nil {
+		t.Fatalf("SearchReleaseGroupsByQuery: %v", err)
+	}
+	if len(matches) != 2 || matches[0].MBID != "da9bbe78-2bcb-4bda-860c-9c5613182603" {
+		t.Errorf("matches = %+v, want the same two release groups the fielded search parses", matches)
+	}
+}
+
 const kateBushMBID = "c9f2c95c-291d-49a8-8864-e820662adf39"
 
 // Trimmed from a real live response (fetched while designing this method),

@@ -452,6 +452,11 @@ func (p *process) startServer(ctx context.Context) error {
 			Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
 			Logger: p.logger,
 		},
+		Discover: adapters.Discover{
+			Provider: p.musicBrainzProvider(), Identity: library.NewIdentity(p.library),
+			Desired: library.NewDesired(p.library), Categories: adapters.Categories{Cache: p.cache},
+			DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(),
+		},
 		Search:       adapters.Search{Search: library.NewSearch(p.library)},
 		Unidentified: adapters.Unidentified{Unidentified: library.NewUnidentified(p.library)},
 		UnidentifiedResolver: adapters.UnidentifiedResolver{

@@ -470,6 +470,32 @@ type Deferral struct {
 	Reason string `json:"reason"`
 }
 
+// DiscoverAddRequest defines model for DiscoverAddRequest.
+type DiscoverAddRequest struct {
+	CategoryId int64  `json:"category_id"`
+	ExternalId string `json:"external_id"`
+	Monitored  *bool  `json:"monitored,omitempty"`
+	Provider   string `json:"provider"`
+}
+
+// DiscoverAddResult defines model for DiscoverAddResult.
+type DiscoverAddResult struct {
+	DesiredItemId int64 `json:"desired_item_id"`
+
+	// Priority ADR-36's composite score, computed against the user_request trigger. There is no populated hunt_queue yet (stage 5/6), so this is the score alone, not a position within it.
+	Priority int64 `json:"priority"`
+	WorkId   int64 `json:"work_id"`
+}
+
+// DiscoverResult One candidate a search found (ADR-56) -- not yet in the library.
+type DiscoverResult struct {
+	Artist     *string `json:"artist,omitempty"`
+	ExternalId string  `json:"external_id"`
+	Provider   string  `json:"provider"`
+	Title      string  `json:"title"`
+	Year       *int64  `json:"year,omitempty"`
+}
+
 // DownloadFolder One watched upstream-download destination (todo 4.18, section 5.1). Registry only -- nothing acts on what lands here until stage 5.
 type DownloadFolder struct {
 	CategoryId *int64  `json:"category_id,omitempty"`
@@ -1335,6 +1361,15 @@ type CreateCategoryJSONBody struct {
 	PriorityRank *int64 `json:"priority_rank,omitempty"`
 }
 
+// DiscoverSearchParams defines parameters for DiscoverSearch.
+type DiscoverSearchParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+
+	// Q At least 2 characters (section 21.5's own floor).
+	Q     string `form:"q" json:"q"`
+	Limit *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // AddDownloadFolderJSONBody defines parameters for AddDownloadFolder.
 type AddDownloadFolderJSONBody struct {
 	CategoryId *int64  `json:"category_id,omitempty"`
@@ -1587,6 +1622,9 @@ type UpdateCacheBudgetJSONRequestBody UpdateCacheBudgetJSONBody
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody CreateCategoryJSONBody
 
+// DiscoverAddJSONRequestBody defines body for DiscoverAdd for application/json ContentType.
+type DiscoverAddJSONRequestBody = DiscoverAddRequest
+
 // AddDownloadFolderJSONRequestBody defines body for AddDownloadFolder for application/json ContentType.
 type AddDownloadFolderJSONRequestBody AddDownloadFolderJSONBody
 
@@ -1703,6 +1741,12 @@ type ServerInterface interface {
 	// Configured libraries and current state, for the landing page.
 	// (GET /dashboard)
 	GetDashboard(w http.ResponseWriter, r *http.Request)
+	// Add a search result as intent: resolves or creates the work and ensures a monitored album-level desired_item for it -- never a download (ADR-56). Administrator or a manage grant on category_id.
+	// (POST /discover/add)
+	DiscoverAdd(w http.ResponseWriter, r *http.Request)
+	// Search one category's own metadata provider for something not in the library yet (ADR-56's per-library half). The global, cross-media-type half with its destination-suggestion ladder is not built.
+	// (GET /discover/search)
+	DiscoverSearch(w http.ResponseWriter, r *http.Request, params DiscoverSearchParams)
 	// The configured download folders (todo 4.18, section 5.1).
 	// (GET /downloadfolders)
 	ListDownloadFolders(w http.ResponseWriter, r *http.Request)
@@ -1970,6 +2014,18 @@ func (_ Unimplemented) DeleteCategory(w http.ResponseWriter, r *http.Request, id
 // Configured libraries and current state, for the landing page.
 // (GET /dashboard)
 func (_ Unimplemented) GetDashboard(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add a search result as intent: resolves or creates the work and ensures a monitored album-level desired_item for it -- never a download (ADR-56). Administrator or a manage grant on category_id.
+// (POST /discover/add)
+func (_ Unimplemented) DiscoverAdd(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Search one category's own metadata provider for something not in the library yet (ADR-56's per-library half). The global, cross-media-type half with its destination-suggestion ladder is not built.
+// (GET /discover/search)
+func (_ Unimplemented) DiscoverSearch(w http.ResponseWriter, r *http.Request, params DiscoverSearchParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2640,6 +2696,93 @@ func (siw *ServerInterfaceWrapper) GetDashboard(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetDashboard(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DiscoverAdd operation middleware
+func (siw *ServerInterfaceWrapper) DiscoverAdd(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DiscoverAdd(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DiscoverSearch operation middleware
+func (siw *ServerInterfaceWrapper) DiscoverSearch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DiscoverSearchParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "q" -------------
+
+	if paramValue := r.URL.Query().Get("q"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DiscoverSearch(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4833,6 +4976,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/dashboard", wrapper.GetDashboard)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/discover/add", wrapper.DiscoverAdd)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/discover/search", wrapper.DiscoverSearch)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/downloadfolders", wrapper.ListDownloadFolders)

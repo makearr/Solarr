@@ -1040,6 +1040,67 @@ paths:
           $ref: "#/components/responses/Problem"
           description: category_id does not exist, or the caller cannot read it.
 
+  /discover/search:
+    get:
+      operationId: discoverSearch
+      tags: [library]
+      summary: >-
+        Search one category's own metadata provider for something not in the
+        library yet (ADR-56's per-library half). The global, cross-media-type
+        half with its destination-suggestion ladder is not built.
+      parameters:
+        - name: category_id
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: q
+          in: query
+          required: true
+          description: At least 2 characters (section 21.5's own floor).
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Up to limit candidates, ranked by the provider.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DiscoverResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: category_id does not exist, or the caller cannot read it.
+
+  /discover/add:
+    post:
+      operationId: discoverAdd
+      tags: [library]
+      summary: >-
+        Add a search result as intent: resolves or creates the work and
+        ensures a monitored album-level desired_item for it -- never a
+        download (ADR-56). Administrator or a manage grant on category_id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DiscoverAddRequest" }
+      responses:
+        "200":
+          description: The work and desired_item, and the priority the item will get.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiscoverAddResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: category_id does not exist, or the caller cannot read it.
+
   /works/{id}:
     parameters:
       - name: id
@@ -2649,6 +2710,40 @@ components:
           description: >-
             Empty on the last page, which is how a client knows to stop without
             one more request that returns nothing.
+
+    DiscoverResult:
+      type: object
+      description: One candidate a search found (ADR-56) -- not yet in the library.
+      required: [provider, external_id, title]
+      properties:
+        provider: { type: string, example: "musicbrainz:release-group" }
+        external_id: { type: string }
+        title: { type: string }
+        artist: { type: string }
+        year: { type: integer, format: int64 }
+
+    DiscoverAddRequest:
+      type: object
+      required: [category_id, provider, external_id]
+      properties:
+        category_id: { type: integer, format: int64 }
+        provider: { type: string }
+        external_id: { type: string }
+        monitored: { type: boolean, default: true }
+
+    DiscoverAddResult:
+      type: object
+      required: [work_id, desired_item_id, priority]
+      properties:
+        work_id: { type: integer, format: int64 }
+        desired_item_id: { type: integer, format: int64 }
+        priority:
+          type: integer
+          format: int64
+          description: >-
+            ADR-36's composite score, computed against the user_request
+            trigger. There is no populated hunt_queue yet (stage 5/6), so this
+            is the score alone, not a position within it.
 
     Person:
       type: object
