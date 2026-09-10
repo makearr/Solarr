@@ -12,11 +12,15 @@ import (
 	"github.com/makearr/MediaNexus/internal/importing/importjob"
 	"github.com/makearr/MediaNexus/internal/importing/inspect"
 	"github.com/makearr/MediaNexus/internal/jobs"
+	"github.com/makearr/MediaNexus/internal/platform/clock"
 )
 
-// ImportSessions implements apiserver.ImportSessionLister over library.ImportSessions.
+// ImportSessions implements apiserver.ImportSessionLister over
+// library.ImportSessions and library.ImportRevert.
 type ImportSessions struct {
 	Sessions library.ImportSessions
+	Revert   library.ImportRevert
+	Clock    clock.Clock
 }
 
 func (a ImportSessions) ListImportSessions(
@@ -51,6 +55,27 @@ func (a ImportSessions) CancelImportSession(ctx context.Context, id int64) error
 		return apiserver.ErrImportSessionNotRunning
 	}
 	return err
+}
+
+// RevertImportSession maps library.ErrSessionNotRevertible to
+// apiserver.ErrImportSessionNotRevertible, the same translation
+// CancelImportSession already does for library.ErrSessionNotCancellable.
+func (a ImportSessions) RevertImportSession(ctx context.Context, id int64, retainHours int) (apiserver.ImportRevertResult, error) {
+	result, err := a.Revert.Revert(ctx, id, time.Duration(retainHours)*time.Hour, a.Clock.Now().Unix())
+	if errors.Is(err, library.ErrSessionNotRevertible) {
+		return apiserver.ImportRevertResult{}, apiserver.ErrImportSessionNotRevertible
+	}
+	if err != nil {
+		return apiserver.ImportRevertResult{}, err
+	}
+	paths := make([]string, len(result.QuarantinedPaths))
+	for i, entry := range result.QuarantinedPaths {
+		paths[i] = entry.QuarantinePath
+	}
+	return apiserver.ImportRevertResult{
+		UnitsReverted: int64(result.UnitsReverted), WorksDeleted: int64(result.WorksDeleted),
+		EditionsDeleted: int64(result.EditionsDeleted), QuarantinedPaths: paths,
+	}, nil
 }
 
 func (a ImportSessions) ListImportUnits(

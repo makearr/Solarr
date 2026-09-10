@@ -710,6 +710,22 @@ type ImportListWrite struct {
 	Url              *string `json:"url,omitempty"`
 }
 
+// ImportRevertRequest defines model for ImportRevertRequest.
+type ImportRevertRequest struct {
+	// QuarantineRetainHours Defaults to 168 (one week), the same default RemoveAndBlockRequest uses.
+	QuarantineRetainHours *int `json:"quarantine_retain_hours,omitempty"`
+}
+
+// ImportRevertResult defines model for ImportRevertResult.
+type ImportRevertResult struct {
+	EditionsDeleted  int64    `json:"editions_deleted"`
+	QuarantinedPaths []string `json:"quarantined_paths"`
+	UnitsReverted    int64    `json:"units_reverted"`
+
+	// WorksDeleted Only a work this session's own CommitUnit created, never one it matched.
+	WorksDeleted int64 `json:"works_deleted"`
+}
+
 // ImportSession One inspection-and-import run over one source path (ADR-48).
 type ImportSession struct {
 	// BytesImported Only committed units' bytes.
@@ -1643,6 +1659,9 @@ type UpdateImportListJSONRequestBody = ImportListWrite
 // InspectImportJSONRequestBody defines body for InspectImport for application/json ContentType.
 type InspectImportJSONRequestBody = ImportInspectRequest
 
+// RevertImportSessionJSONRequestBody defines body for RevertImportSession for application/json ContentType.
+type RevertImportSessionJSONRequestBody = ImportRevertRequest
+
 // CreateImportListJSONRequestBody defines body for CreateImportList for application/json ContentType.
 type CreateImportListJSONRequestBody = ImportListWrite
 
@@ -1798,6 +1817,9 @@ type ServerInterface interface {
 	// Ask a running session to stop. Administrator only.
 	// (POST /import/sessions/{id}/cancel)
 	CancelImportSession(w http.ResponseWriter, r *http.Request, id int64)
+	// Undo every file this session placed. Administrator only.
+	// (POST /import/sessions/{id}/revert)
+	RevertImportSession(w http.ResponseWriter, r *http.Request, id int64)
 	// One session's own units, in the order they were committed.
 	// (GET /import/sessions/{id}/units)
 	ListImportUnits(w http.ResponseWriter, r *http.Request, id int64, params ListImportUnitsParams)
@@ -2128,6 +2150,12 @@ func (_ Unimplemented) GetImportSession(w http.ResponseWriter, r *http.Request, 
 // Ask a running session to stop. Administrator only.
 // (POST /import/sessions/{id}/cancel)
 func (_ Unimplemented) CancelImportSession(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Undo every file this session placed. Administrator only.
+// (POST /import/sessions/{id}/revert)
+func (_ Unimplemented) RevertImportSession(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3295,6 +3323,39 @@ func (siw *ServerInterfaceWrapper) CancelImportSession(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CancelImportSession(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevertImportSession operation middleware
+func (siw *ServerInterfaceWrapper) RevertImportSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevertImportSession(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5033,6 +5094,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/import/sessions/{id}/cancel", wrapper.CancelImportSession)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/import/sessions/{id}/revert", wrapper.RevertImportSession)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/import/sessions/{id}/units", wrapper.ListImportUnits)

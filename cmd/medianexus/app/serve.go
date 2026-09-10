@@ -478,7 +478,14 @@ func (p *process) startServer(ctx context.Context) error {
 			),
 			Physical: library.NewPhysical(p.library), Clock: clock.NewSystem(),
 		},
-		ImportSessions:  adapters.ImportSessions{Sessions: library.NewImportSessions(p.library)},
+		ImportSessions: adapters.ImportSessions{
+			Sessions: library.NewImportSessions(p.library),
+			Revert: library.NewImportRevert(
+				library.NewImportSessions(p.library), library.NewPhysical(p.library), library.NewIdentity(p.library),
+				library.NewQuarantine(p.library, p.fsys, clock.NewSystem()), adapters.RootFolderPath(p.cache),
+			),
+			Clock: clock.NewSystem(),
+		},
 		ImportInspector: adapters.ImportInspector{Queue: p.queue},
 		DrainStarter: adapters.Drain{
 			Config: drainjob.Config{

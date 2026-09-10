@@ -121,6 +121,13 @@ ON CONFLICT (provider, external_id) DO UPDATE SET
 SELECT provider, external_id, edition_id, confidence
 FROM edition_external_id WHERE edition_id = ? ORDER BY provider, external_id;
 
+-- Import revert's own use (todo 4.9): only ever called for an edition
+-- CommitUnit itself created (import_unit.edition_created), and only after
+-- every import_unit referencing it has been cleared (ClearImportUnitPlacement) --
+-- edition_external_id cascades; import_unit.edition_id does not.
+-- name: DeleteEdition :exec
+DELETE FROM edition WHERE id = ?;
+
 -- kind='unknown' is the cross-media-type placeholder marker an Identifier chain
 -- leaves behind when it resolves an edition's external id but has no real
 -- metadata yet (internal/db/library.EditionLink, internal/media/music's newEditionLink):

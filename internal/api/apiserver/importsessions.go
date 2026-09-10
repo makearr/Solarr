@@ -25,10 +25,22 @@ type ImportSessionLister interface {
 	ListImportUnits(ctx context.Context, sessionID int64, filterDecision string, afterID int64, limit int) ([]ImportUnitRow, error)
 	// CancelImportSession only flips the flag the job itself polls for (ADR-48).
 	CancelImportSession(ctx context.Context, id int64) error
+	// RevertImportSession undoes every file a session placed (ADR-48).
+	RevertImportSession(ctx context.Context, id int64, retainHours int) (ImportRevertResult, error)
 }
 
 // ErrImportSessionNotRunning is CancelImportSession's refusal to a non-running session.
 var ErrImportSessionNotRunning = errors.New("apiserver: import session is not running")
+
+// ErrImportSessionNotRevertible is RevertImportSession's refusal to a
+// session not yet finished, or already reverted.
+var ErrImportSessionNotRevertible = errors.New("apiserver: import session cannot be reverted from its current state")
+
+// ImportRevertResult is what one session's revert actually did.
+type ImportRevertResult struct {
+	UnitsReverted, WorksDeleted, EditionsDeleted int64
+	QuarantinedPaths                             []string
+}
 
 // ImportInspector enqueues ADR-48's own inspection job. Its own interface,
 // separate from ImportSessionLister, since a real caller might reasonably
@@ -152,6 +164,17 @@ func (s *Server) routeCancelImportSession(w http.ResponseWriter, r *http.Request
 	s.CancelImportSession(w, r, id)
 }
 
+// routeRevertImportSession parses the id path parameter, mirroring routeCancelImportSession.
+func (s *Server) routeRevertImportSession(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a session id must be a number")
+		return
+	}
+	s.RevertImportSession(w, r, id)
+}
+
 // routeListImportUnits parses the id path parameter and the decision/
 // after_id/limit query parameters, mirroring routeListBlockedContent.
 func (s *Server) routeListImportUnits(w http.ResponseWriter, r *http.Request) {
@@ -266,6 +289,53 @@ func (s *Server) CancelImportSession(w http.ResponseWriter, r *http.Request, id 
 		writeError(w, s.logger, err)
 	default:
 		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+// RevertImportSession undoes every file a session placed. Administrator
+// only, the same trust boundary CancelImportSession itself already carries.
+func (s *Server) RevertImportSession(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.importSessions == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "import sessions are not available")
+		return
+	}
+
+	var body gen.RevertImportSessionJSONRequestBody
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "the request body could not be read")
+			return
+		}
+	}
+	retainHours := derefOr(body.QuarantineRetainHours, 168)
+
+	result, err := s.importSessions.RevertImportSession(r.Context(), id, retainHours)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such import session")
+	case errors.Is(err, ErrImportSessionNotRevertible):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Not revertible", "this session cannot be reverted from its current state")
+	case err != nil:
+		writeError(w, s.logger, err)
+	default:
+		writeJSON(w, s.logger, http.StatusOK, importRevertResultView(result))
+	}
+}
+
+func importRevertResultView(result ImportRevertResult) gen.ImportRevertResult {
+	paths := result.QuarantinedPaths
+	if paths == nil {
+		paths = []string{}
+	}
+	return gen.ImportRevertResult{
+		UnitsReverted: result.UnitsReverted, WorksDeleted: result.WorksDeleted,
+		EditionsDeleted: result.EditionsDeleted, QuarantinedPaths: paths,
 	}
 }
 

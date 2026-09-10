@@ -149,3 +149,13 @@ FROM import_unit_file iuf
 JOIN import_unit iu ON iu.id = iuf.unit_id
 WHERE iu.session_id = ?
 ORDER BY iuf.id;
+
+-- Import revert's own first step for one unit (todo 4.9): work_id/edition_id
+-- going back to NULL is what makes it safe to then delete the work/edition
+-- row itself (import_unit's own FK to either carries no ON DELETE CASCADE,
+-- and every unit that ever referenced a work -- created or only matched --
+-- must be cleared before that work can be deleted, not only the unit that
+-- created it).
+-- name: ClearImportUnitPlacement :exec
+UPDATE import_unit SET work_id = NULL, edition_id = NULL, work_created = 0, edition_created = 0
+WHERE id = ?;

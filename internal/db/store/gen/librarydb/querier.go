@@ -29,6 +29,13 @@ type Querier interface {
 	AssignTag(ctx context.Context, arg AssignTagParams) error
 	AttachFile(ctx context.Context, arg AttachFileParams) error
 	BlocklistRelease(ctx context.Context, arg BlocklistReleaseParams) (BlocklistedRelease, error)
+	// Import revert's own first step for one unit (todo 4.9): work_id/edition_id
+	// going back to NULL is what makes it safe to then delete the work/edition
+	// row itself (import_unit's own FK to either carries no ON DELETE CASCADE,
+	// and every unit that ever referenced a work -- created or only matched --
+	// must be cleared before that work can be deleted, not only the unit that
+	// created it).
+	ClearImportUnitPlacement(ctx context.Context, id int64) error
 	// A provider refresh removes only what that provider assigned, never a user's
 	// own curation (ADR-33).
 	ClearProviderTagAssignments(ctx context.Context, arg ClearProviderTagAssignmentsParams) error
@@ -109,6 +116,11 @@ type Querier interface {
 	// two admins, or a retried request -- reports that nothing changed rather than
 	// silently overwriting who decided it and when.
 	DecideRequest(ctx context.Context, arg DecideRequestParams) (int64, error)
+	// Import revert's own use (todo 4.9): only ever called for an edition
+	// CommitUnit itself created (import_unit.edition_created), and only after
+	// every import_unit referencing it has been cleared (ClearImportUnitPlacement) --
+	// edition_external_id cascades; import_unit.edition_id does not.
+	DeleteEdition(ctx context.Context, id int64) error
 	// A DEFER is not a failure: the candidate stays cached until it expires (section 10.1).
 	DeleteExpiredCandidates(ctx context.Context, expiresAt int64) error
 	DeleteLibraryPath(ctx context.Context, id int64) error

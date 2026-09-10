@@ -268,6 +268,36 @@ func (s ImportSessions) RecordPlacement(ctx context.Context, unitID int64, place
 	})
 }
 
+// ClearUnitPlacement is revert's own first step for one unit: work_id/
+// edition_id/work_created/edition_created all go back to their pre-placement
+// values, which is what makes it safe to then delete the work/edition row
+// itself (RecordPlacement's own doc comment: import_unit's FK to either
+// carries no ON DELETE CASCADE).
+func (s ImportSessions) ClearUnitPlacement(ctx context.Context, unitID int64) error {
+	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).ClearImportUnitPlacement(ctx, unitID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: clear unit %d placement: %w", unitID, err)
+	}
+	return nil
+}
+
+// UnitFiles maps every placed unit in a session to the media_object rows its
+// own CommitUnit produced (import_unit_file) -- revert's own map of exactly
+// what to undo, grouped once per session rather than one query per unit.
+func (s ImportSessions) UnitFiles(ctx context.Context, sessionID int64) (map[int64][]int64, error) {
+	rows, err := librarydb.New(s.store.Read()).ListImportUnitFilesForSession(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("library: list unit files for session %d: %w", sessionID, err)
+	}
+	byUnit := make(map[int64][]int64, len(rows))
+	for _, row := range rows {
+		byUnit[row.UnitID] = append(byUnit[row.UnitID], row.MediaObjectID)
+	}
+	return byUnit, nil
+}
+
 // SetUnitsEstimated records inspect.EstimateUnits' one-off result (todo
 // 4.21's ETA). Callers only call this once per session -- Job.Run skips it
 // once Session.UnitsEstimated is non-nil.
