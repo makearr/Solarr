@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Link, useParams, useRouterState } from "@tanstack/react-router";
+import { Link, useParams, useRouterState, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -88,6 +88,10 @@ export function Sidebar() {
     level?: string;
     section?: string;
   };
+  // Only "/unidentified"'s own category_id filter is read here -- the queue
+  // stays cross-library (todo 4.16), this just tells a per-library link how
+  // to render itself active when the caller followed it here.
+  const search = useSearch({ strict: false }) as { category_id?: string };
   // Section 21.8's 700-1100px row: icons only, no decision panel to make room
   // for yet (that lands with a persisted Decision, stage 4+).
   const collapsed = useSidebarCollapsed();
@@ -160,6 +164,7 @@ export function Sidebar() {
                       activeLevel={routeParams.level}
                       activeSection={routeParams.section}
                       activePath={path}
+                      activeUnidentifiedCategoryId={path === "/unidentified" ? search.category_id : undefined}
                       isExpanded={collapsed ? false : expanded.has(library.id) || routeParams.categoryId === String(library.id)}
                       onToggle={() => toggle(library.id)}
                     />
@@ -206,6 +211,7 @@ function LibraryNode({
   activeLevel,
   activeSection,
   activePath,
+  activeUnidentifiedCategoryId,
   isExpanded,
   onToggle,
 }: {
@@ -215,6 +221,7 @@ function LibraryNode({
   activeLevel: string | undefined;
   activeSection: string | undefined;
   activePath: string;
+  activeUnidentifiedCategoryId: string | undefined;
   isExpanded: boolean;
   onToggle: () => void;
 }) {
@@ -266,6 +273,15 @@ function LibraryNode({
               </Link>
             </li>
           ))}
+          <li>
+            <Link
+              to="/unidentified"
+              search={{ category_id: String(library.id) }}
+              className={sectionLinkClass(activeUnidentifiedCategoryId === String(library.id), false)}
+            >
+              <span className="truncate">Unidentified</span>
+            </Link>
+          </li>
           {CONFIG_SECTIONS.map((section) =>
             section.key === "import-lists" ? (
               <li key={section.key}>
