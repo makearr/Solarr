@@ -101,12 +101,13 @@ func (p *process) musicBrainzProvider() musicbrainz.Provider {
 	})
 }
 
-// enqueueEnrichment submits one enrichment sweep, once at startup -- there is no
-// scheduler yet (the same gap enqueueLibraryScans carries), so a placeholder
-// edition a scan creates while this process is already running waits for the next
-// restart to be picked up.
-func (p *process) enqueueEnrichment(ctx context.Context) {
-	if _, err := music.EnqueueEnrichment(ctx, p.queue); err != nil {
+// enqueueEnrichment submits one enrichment sweep. Registered as a task with
+// internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
+// schedule, not only once at startup.
+func (p *process) enqueueEnrichment(ctx context.Context) (jobs.EnqueueResult, error) {
+	result, err := music.EnqueueEnrichment(ctx, p.queue)
+	if err != nil {
 		p.logger.Warn("enqueue music enrichment", slog.Any("error", err))
 	}
+	return result, err
 }

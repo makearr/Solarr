@@ -31,12 +31,13 @@ func (p *process) registerProbeJob(registry *jobs.Registry, executor *jobs.Execu
 	return nil
 }
 
-// enqueueProbe submits one probe sweep, once at startup -- there is no
-// scheduler yet, the same gap enqueueLibraryScans and enqueueEnrichment
-// already carry, so a file a scan registers while this process is already
-// running waits for the next restart to be measured.
-func (p *process) enqueueProbe(ctx context.Context) {
-	if _, err := probe.Enqueue(ctx, p.queue); err != nil {
+// enqueueProbe submits one probe sweep. Registered as a task with
+// internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
+// schedule, not only once at startup.
+func (p *process) enqueueProbe(ctx context.Context) (jobs.EnqueueResult, error) {
+	result, err := probe.Enqueue(ctx, p.queue)
+	if err != nil {
 		p.logger.Warn("enqueue probe sweep", slog.Any("error", err))
 	}
+	return result, err
 }

@@ -51,6 +51,14 @@ type process struct {
 	// defaultQualityProfileID is ensureDefaultQualityProfile's fallback,
 	// used when a category has none of its own configured (todo 4.4).
 	defaultQualityProfileID int64
+	// taskRegistry is ADR-59's own registry of every periodic action;
+	// taskRunners is one live TaskRunner per registered task, keyed by Key,
+	// so the API's Run now can reach the exact runner already driving that
+	// task's own mutex (todo 4.19) rather than starting a second, unrelated
+	// enqueue path.
+	taskRegistry   *jobs.TaskRegistry
+	scheduleStates *jobs.ScheduleStates
+	taskRunners    map[string]*jobs.TaskRunner
 }
 
 // serve is the startup sequence of architecture section 15.1, in order.
@@ -347,13 +355,19 @@ func (p *process) startServer(ctx context.Context) error {
 	}
 
 	p.reportRootFolders()
-	p.enqueueLibraryScans(ctx)
-	p.enqueueEnrichment(ctx)
-	p.enqueueSubscriptionExpand(ctx)
-	p.enqueueArtwork(ctx)
-	p.enqueueCategoryCounts(ctx)
-	p.enqueueProbe(ctx)
-	p.enqueueCapacity(ctx)
+	// Each is also a registered task (todo 4.19): this first call is what
+	// makes the library browsable immediately on a fresh start rather than
+	// waiting for the task's own first scheduled tick, which for a 30-minute
+	// cadence could otherwise be up to 30 minutes away. Errors are already
+	// logged inside each function; discarded here since there is nothing
+	// further for a one-off startup call to do with them.
+	_, _ = p.enqueueLibraryScans(ctx)
+	_, _ = p.enqueueEnrichment(ctx)
+	_, _ = p.enqueueSubscriptionExpand(ctx)
+	_, _ = p.enqueueArtwork(ctx)
+	_, _ = p.enqueueCategoryCounts(ctx)
+	_, _ = p.enqueueProbe(ctx)
+	_, _ = p.enqueueCapacity(ctx)
 	p.startSchedulers(ctx)
 	if err := p.seedAuthPolicy(ctx); err != nil {
 		return err
@@ -392,9 +406,13 @@ func (p *process) startServer(ctx context.Context) error {
 		WebUI:         webui.Handler(),
 		Roots:         apiserver.FilesystemRoots{FS: p.fsys},
 		DownloadRoots: apiserver.FilesystemRoots{FS: p.fsys},
-		LibrarySize:   library.NewCounters(p.library),
-		Works:         worksAdapter{works: library.NewWorks(p.library)},
-		WorkDetail:    workDetailAdapter{works: library.NewWorks(p.library)},
+		Scheduler: scheduleAdapter{
+			registry: p.taskRegistry, states: p.scheduleStates, runners: p.taskRunners,
+			cache: p.cache, clock: clock.NewSystem(),
+		},
+		LibrarySize: library.NewCounters(p.library),
+		Works:       worksAdapter{works: library.NewWorks(p.library)},
+		WorkDetail:  workDetailAdapter{works: library.NewWorks(p.library)},
 		WorksMonitor: worksMonitorAdapter{
 			works: library.NewWorks(p.library), desired: library.NewDesired(p.library),
 			categories: cacheCategories{cache: p.cache}, defaultProfileID: p.defaultQualityProfileID,

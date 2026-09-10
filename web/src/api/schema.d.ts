@@ -395,6 +395,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every registered periodic task (ADR-59). */
+        get: operations["listSchedules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schedules/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Override a task's cadence and/or enabled flag. Administrator only.
+         * @description cadence and enabled are independent -- omitting either leaves it unchanged. cadence is validated on write (ADR-44): a five-field cron expression that can actually fire, not merely one that parses (a nonexistent calendar date is rejected the same as a syntax error).
+         */
+        patch: operations["updateSchedule"];
+        trace?: never;
+    };
+    "/schedules/{key}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fire a task immediately. Administrator only.
+         * @description This is 4.8's "trigger a scan, a probe sweep or a metadata refresh from the interface" -- refused with 409 rather than double-queued when a fire, scheduled or manual, is already in flight for this task (ADR-59). Enqueuing is asynchronous: 202 means the trigger was accepted, not that the underlying job has finished.
+         */
+        post: operations["runSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rootfolders/{id}/drain": {
         parameters: {
             query?: never;
@@ -1322,6 +1383,33 @@ export interface components {
         DownloadFolderEntry: {
             name: string;
             is_dir: boolean;
+        };
+        /** @description One registered periodic task (ADR-59), its effective settings and run-state. */
+        Schedule: {
+            key: string;
+            name: string;
+            /**
+             * @description ADR-26's visibility tier.
+             * @enum {string}
+             */
+            tier: "normal" | "advanced" | "expert";
+            /** @description The registry's own fallback cadence. */
+            default_cadence: string;
+            /** @description Effective cadence -- a stored override if one exists, default_cadence otherwise. */
+            cadence: string;
+            enabled: boolean;
+            /** Format: date-time */
+            last_run_at?: string;
+            /** Format: int64 */
+            last_duration_ms?: number;
+            /**
+             * @description Absent until the task has fired at least once.
+             * @enum {string}
+             */
+            last_outcome?: "enqueued" | "duplicate" | "error";
+            last_error?: string;
+            /** Format: date-time */
+            next_run_at?: string;
         };
         /** @description What one drainRootFolder call computed -- a preview, a refusal, or an accepted and enqueued plan (ADR-51). */
         DrainPlan: {
@@ -2695,6 +2783,85 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listSchedules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every task, its effective cadence and its own run-state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    updateSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    cadence?: string;
+                    enabled?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    runSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Triggered. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description A fire is already in flight for this task. */
+            409: components["responses"]["Problem"];
         };
     };
     drainRootFolder: {

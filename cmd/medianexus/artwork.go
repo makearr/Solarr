@@ -59,10 +59,13 @@ func (p *process) registerArtworkJob(registry *jobs.Registry, executor *jobs.Exe
 	return nil
 }
 
-// enqueueArtwork submits one cover art sweep, once at startup -- the same
-// no-scheduler-yet gap enqueueEnrichment carries.
-func (p *process) enqueueArtwork(ctx context.Context) {
-	if _, err := music.EnqueueArtwork(ctx, p.queue); err != nil {
+// enqueueArtwork submits one cover art sweep. Registered as a task with
+// internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
+// schedule, not only once at startup.
+func (p *process) enqueueArtwork(ctx context.Context) (jobs.EnqueueResult, error) {
+	result, err := music.EnqueueArtwork(ctx, p.queue)
+	if err != nil {
 		p.logger.Warn("enqueue music artwork", slog.Any("error", err))
 	}
+	return result, err
 }

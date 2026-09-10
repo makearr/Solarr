@@ -56,8 +56,11 @@ func writeProblem(w http.ResponseWriter, logger *slog.Logger, status int, slug, 
 func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	switch {
 	case errors.Is(err, authz.ErrNotVisible), errors.Is(err, settings.ErrNotFound),
-		errors.Is(err, jobs.ErrNotFound):
+		errors.Is(err, jobs.ErrNotFound), errors.Is(err, jobs.ErrUnknownTask):
 		writeProblem(w, logger, http.StatusNotFound, TypeNotFound, "Not found", err.Error())
+
+	case errors.Is(err, jobs.ErrAlreadyRunning):
+		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Already running", err.Error())
 
 	case errors.Is(err, authz.ErrInsufficientPermission):
 		writeProblem(w, logger, http.StatusForbidden, TypeForbidden, "Forbidden", err.Error())

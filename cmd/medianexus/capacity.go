@@ -22,12 +22,13 @@ func (p *process) registerCapacityJob(registry *jobs.Registry, executor *jobs.Ex
 	return nil
 }
 
-// enqueueCapacity submits one capacity sweep, once at startup -- there is no
-// scheduler yet, the same gap every other job in this file carries, so a
-// root folder added while this process is already running waits for the
-// next restart to be measured.
-func (p *process) enqueueCapacity(ctx context.Context) {
-	if _, err := capacity.Enqueue(ctx, p.queue); err != nil {
+// enqueueCapacity submits one capacity sweep. Registered as a task with
+// internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
+// schedule, not only once at startup.
+func (p *process) enqueueCapacity(ctx context.Context) (jobs.EnqueueResult, error) {
+	result, err := capacity.Enqueue(ctx, p.queue)
+	if err != nil {
 		p.logger.Warn("enqueue capacity sweep", slog.Any("error", err))
 	}
+	return result, err
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/auth"
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/fsx"
+	"github.com/makearr/MediaNexus/internal/jobs"
 	"github.com/makearr/MediaNexus/internal/settings"
 	"github.com/makearr/MediaNexus/internal/store"
 	"github.com/makearr/MediaNexus/migrations"
@@ -71,6 +72,7 @@ type worksFixture struct {
 	moveJobs             *fakeMoveJobLister
 	renameStarter        *fakeRenameStarter
 	libraryTracks        *fakeLibraryTracksReader
+	scheduler            *fakeScheduler
 	fsys                 *fsx.Mem
 	clock                *clock.Fake
 }
@@ -189,6 +191,7 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 	moveJobs := &fakeMoveJobLister{}
 	renameStarter := &fakeRenameStarter{}
 	libraryTracks := &fakeLibraryTracksReader{}
+	scheduler := &fakeScheduler{states: map[string]jobs.ScheduleRun{}}
 	fsys := fsx.NewMem(fake)
 	server, err := apiserver.New(apiserver.Config{
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
@@ -211,6 +214,7 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 		RenameStarter:        renameStarter,
 		FS:                   fsys,
 		DownloadRoots:        apiserver.FilesystemRoots{FS: fsys},
+		Scheduler:            scheduler,
 		ImagesDir:            testImagesDir,
 		LibrarySize:          librarySize,
 		Navigation:           navigation,
@@ -235,7 +239,7 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 		blockedContent: blockedContent, removeAndBlocker: removeAndBlocker,
 		importSessions: importSessions, importInspector: importInspector,
 		drainStarter: drainStarter, moveJobs: moveJobs, renameStarter: renameStarter,
-		libraryTracks: libraryTracks, fsys: fsys, clock: fake,
+		libraryTracks: libraryTracks, scheduler: scheduler, fsys: fsys, clock: fake,
 	}
 }
 

@@ -28,6 +28,7 @@ type Querier interface {
 	FindActiveJobByActionKey(ctx context.Context, actionKey sql.NullString) (Job, error)
 	GetJob(ctx context.Context, id int64) (Job, error)
 	GetRetentionState(ctx context.Context, stream string) (RetentionState, error)
+	GetScheduleState(ctx context.Context, taskKey string) (ScheduleState, error)
 	ListAttempts(ctx context.Context, jobID int64) ([]JobAttempt, error)
 	ListEventsByKind(ctx context.Context, arg ListEventsByKindParams) ([]EventLog, error)
 	// What happened to this album, in the order it happened. Cursor on id, never OFFSET
@@ -36,6 +37,7 @@ type Querier interface {
 	// Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
 	// updated_at is not unique. A zero cursor is the start, hence the guarded comparison.
 	ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]Job, error)
+	ListScheduleStates(ctx context.Context) ([]ScheduleState, error)
 	// Pruning is bounded per pass and resumable, so retention never becomes one enormous
 	// transaction (Invariant 2).
 	PruneEventsBefore(ctx context.Context, arg PruneEventsBeforeParams) (int64, error)
@@ -50,6 +52,15 @@ type Querier interface {
 	RetryJob(ctx context.Context, arg RetryJobParams) (int64, error)
 	SetRetentionState(ctx context.Context, arg SetRetentionStateParams) error
 	StartJob(ctx context.Context, arg StartJobParams) error
+	// Called every tick, whether or not a fire actually happens (enabled=false
+	// still has a next-fire time to show), so it must never disturb last_run_at/
+	// last_duration_ms/last_outcome/last_error -- only UpsertScheduleState (after
+	// a real fire) writes those, or a restart's own first tick would wipe out
+	// the only evidence a task has not run in a week.
+	UpsertScheduleNextRun(ctx context.Context, arg UpsertScheduleNextRunParams) error
+	// ADR-59's task registry own run-state (migration 0004). One row per task
+	// key, upserted after every fire.
+	UpsertScheduleState(ctx context.Context, arg UpsertScheduleStateParams) error
 }
 
 var _ Querier = (*Queries)(nil)

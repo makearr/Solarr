@@ -238,6 +238,20 @@ const (
 	RootFolderDrainStatePAUSED   RootFolderDrainState = "PAUSED"
 )
 
+// Defines values for ScheduleLastOutcome.
+const (
+	Duplicate ScheduleLastOutcome = "duplicate"
+	Enqueued  ScheduleLastOutcome = "enqueued"
+	Error     ScheduleLastOutcome = "error"
+)
+
+// Defines values for ScheduleTier.
+const (
+	Advanced ScheduleTier = "advanced"
+	Expert   ScheduleTier = "expert"
+	Normal   ScheduleTier = "normal"
+)
+
 // Defines values for WantedState.
 const (
 	COMPLETE   WantedState = "COMPLETE"
@@ -1057,6 +1071,34 @@ type RootFolderCategory struct {
 	Name string `json:"name"`
 }
 
+// Schedule One registered periodic task (ADR-59), its effective settings and run-state.
+type Schedule struct {
+	// Cadence Effective cadence -- a stored override if one exists, default_cadence otherwise.
+	Cadence string `json:"cadence"`
+
+	// DefaultCadence The registry's own fallback cadence.
+	DefaultCadence string  `json:"default_cadence"`
+	Enabled        bool    `json:"enabled"`
+	Key            string  `json:"key"`
+	LastDurationMs *int64  `json:"last_duration_ms,omitempty"`
+	LastError      *string `json:"last_error,omitempty"`
+
+	// LastOutcome Absent until the task has fired at least once.
+	LastOutcome *ScheduleLastOutcome `json:"last_outcome,omitempty"`
+	LastRunAt   *time.Time           `json:"last_run_at,omitempty"`
+	Name        string               `json:"name"`
+	NextRunAt   *time.Time           `json:"next_run_at,omitempty"`
+
+	// Tier ADR-26's visibility tier.
+	Tier ScheduleTier `json:"tier"`
+}
+
+// ScheduleLastOutcome Absent until the task has fired at least once.
+type ScheduleLastOutcome string
+
+// ScheduleTier ADR-26's visibility tier.
+type ScheduleTier string
+
 // ScoreComponent One additive-stage contribution (ADR-40 stage 3). Breaks ties only.
 type ScoreComponent struct {
 	Delta float32 `json:"delta"`
@@ -1364,6 +1406,12 @@ type RenameRootFolderJSONBody struct {
 	Preview *bool `json:"preview,omitempty"`
 }
 
+// UpdateScheduleJSONBody defines parameters for UpdateSchedule.
+type UpdateScheduleJSONBody struct {
+	Cadence *string `json:"cadence,omitempty"`
+	Enabled *bool   `json:"enabled,omitempty"`
+}
+
 // SimulateScoreJSONBody defines parameters for SimulateScore.
 type SimulateScoreJSONBody struct {
 	LanguageProfileId      *int64    `json:"language_profile_id,omitempty"`
@@ -1517,6 +1565,9 @@ type SetRootFolderOnlineJSONRequestBody SetRootFolderOnlineJSONBody
 
 // RenameRootFolderJSONRequestBody defines body for RenameRootFolder for application/json ContentType.
 type RenameRootFolderJSONRequestBody RenameRootFolderJSONBody
+
+// UpdateScheduleJSONRequestBody defines body for UpdateSchedule for application/json ContentType.
+type UpdateScheduleJSONRequestBody UpdateScheduleJSONBody
 
 // SimulateScoreJSONRequestBody defines body for SimulateScore for application/json ContentType.
 type SimulateScoreJSONRequestBody SimulateScoreJSONBody
@@ -1688,6 +1739,15 @@ type ServerInterface interface {
 	// Preview or apply the shipped naming template to a root's own already-identified files (section 11.8). Administrator only.
 	// (POST /rootfolders/{id}/rename)
 	RenameRootFolder(w http.ResponseWriter, r *http.Request, id int64)
+	// Every registered periodic task (ADR-59).
+	// (GET /schedules)
+	ListSchedules(w http.ResponseWriter, r *http.Request)
+	// Override a task's cadence and/or enabled flag. Administrator only.
+	// (PATCH /schedules/{key})
+	UpdateSchedule(w http.ResponseWriter, r *http.Request, key string)
+	// Fire a task immediately. Administrator only.
+	// (POST /schedules/{key}/run)
+	RunSchedule(w http.ResponseWriter, r *http.Request, key string)
 	// F6: paste a release title, see how it would score against a profile -- no candidate, no acquisition, no side effects.
 	// (POST /score/simulate)
 	SimulateScore(w http.ResponseWriter, r *http.Request)
@@ -2033,6 +2093,24 @@ func (_ Unimplemented) SetRootFolderOnline(w http.ResponseWriter, r *http.Reques
 // Preview or apply the shipped naming template to a root's own already-identified files (section 11.8). Administrator only.
 // (POST /rootfolders/{id}/rename)
 func (_ Unimplemented) RenameRootFolder(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every registered periodic task (ADR-59).
+// (GET /schedules)
+func (_ Unimplemented) ListSchedules(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Override a task's cadence and/or enabled flag. Administrator only.
+// (PATCH /schedules/{key})
+func (_ Unimplemented) UpdateSchedule(w http.ResponseWriter, r *http.Request, key string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Fire a task immediately. Administrator only.
+// (POST /schedules/{key}/run)
+func (_ Unimplemented) RunSchedule(w http.ResponseWriter, r *http.Request, key string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3651,6 +3729,94 @@ func (siw *ServerInterfaceWrapper) RenameRootFolder(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ListSchedules operation middleware
+func (siw *ServerInterfaceWrapper) ListSchedules(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSchedules(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateSchedule operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSchedule(w, r, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RunSchedule operation middleware
+func (siw *ServerInterfaceWrapper) RunSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RunSchedule(w, r, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SimulateScore operation middleware
 func (siw *ServerInterfaceWrapper) SimulateScore(w http.ResponseWriter, r *http.Request) {
 
@@ -4498,6 +4664,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/rootfolders/{id}/rename", wrapper.RenameRootFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/schedules", wrapper.ListSchedules)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/schedules/{key}", wrapper.UpdateSchedule)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/schedules/{key}/run", wrapper.RunSchedule)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/score/simulate", wrapper.SimulateScore)

@@ -35,10 +35,13 @@ func (p *process) registerSubscriptionExpandJob(registry *jobs.Registry, executo
 	return nil
 }
 
-// enqueueSubscriptionExpand submits one expand sweep, once at startup -- the
-// same "no scheduler yet" gap enqueueEnrichment carries.
-func (p *process) enqueueSubscriptionExpand(ctx context.Context) {
-	if _, err := music.EnqueueSubscriptionExpand(ctx, p.queue); err != nil {
+// enqueueSubscriptionExpand submits one expand sweep. Registered as a task
+// with internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
+// schedule, not only once at startup.
+func (p *process) enqueueSubscriptionExpand(ctx context.Context) (jobs.EnqueueResult, error) {
+	result, err := music.EnqueueSubscriptionExpand(ctx, p.queue)
+	if err != nil {
 		p.logger.Warn("enqueue subscription expand", slog.Any("error", err))
 	}
+	return result, err
 }

@@ -131,6 +131,9 @@ type Config struct {
 	// AddDownloadFolder accepts a path unprobed rather than refusing to add
 	// folders at all.
 	DownloadRoots DownloadFolderChecker
+	// Scheduler exposes ADR-59's task registry, live settings and run-state
+	// (todo 4.19). Optional: without it, the schedule endpoints answer 503.
+	Scheduler Scheduler
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -174,6 +177,7 @@ type Server struct {
 	libraryTracks        LibraryTracksReader
 	libraryArtists       LibraryArtistsReader
 	downloadRoots        DownloadFolderChecker
+	scheduler            Scheduler
 
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
@@ -229,6 +233,7 @@ func New(config Config) (*Server, error) {
 		libraryTracks:        config.LibraryTracks,
 		libraryArtists:       config.LibraryArtists,
 		downloadRoots:        config.DownloadRoots,
+		scheduler:            config.Scheduler,
 		address:              net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
@@ -305,6 +310,9 @@ func New(config Config) (*Server, error) {
 			secured.Post("/downloadfolders", server.AddDownloadFolder)
 			secured.Delete("/downloadfolders/{id}", server.routeDeleteDownloadFolder)
 			secured.Get("/downloadfolders/{id}/contents", server.routeListDownloadFolderContents)
+			secured.Get("/schedules", server.ListSchedules)
+			secured.Patch("/schedules/{key}", server.routeUpdateSchedule)
+			secured.Post("/schedules/{key}/run", server.routeRunSchedule)
 			secured.Post("/rootfolders/{id}/drain", server.routeDrainRootFolder)
 			secured.Delete("/rootfolders/{id}/drain", server.routeStopDrainingRootFolder)
 			secured.Get("/moves", server.routeListMoveJobs)

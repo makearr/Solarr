@@ -57,3 +57,12 @@ type RetentionState struct {
 	Stream        string
 	PrunedThrough int64
 }
+
+type ScheduleState struct {
+	TaskKey        string
+	LastRunAt      sql.NullInt64
+	LastDurationMs sql.NullInt64
+	LastOutcome    sql.NullString
+	LastError      sql.NullString
+	NextRunAt      sql.NullInt64
+}

@@ -595,6 +595,80 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /schedules:
+    get:
+      operationId: listSchedules
+      tags: [settings]
+      summary: Every registered periodic task (ADR-59).
+      responses:
+        "200":
+          description: Every task, its effective cadence and its own run-state.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Schedule" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /schedules/{key}:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: updateSchedule
+      tags: [settings]
+      summary: Override a task's cadence and/or enabled flag. Administrator only.
+      description: >-
+        cadence and enabled are independent -- omitting either leaves it
+        unchanged. cadence is validated on write (ADR-44): a five-field cron
+        expression that can actually fire, not merely one that parses (a
+        nonexistent calendar date is rejected the same as a syntax error).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cadence: { type: string }
+                enabled: { type: boolean }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Schedule" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /schedules/{key}/run:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: runSchedule
+      tags: [settings]
+      summary: Fire a task immediately. Administrator only.
+      description: >-
+        This is 4.8's "trigger a scan, a probe sweep or a metadata refresh
+        from the interface" -- refused with 409 rather than double-queued
+        when a fire, scheduled or manual, is already in flight for this task
+        (ADR-59). Enqueuing is asynchronous: 202 means the trigger was
+        accepted, not that the underlying job has finished.
+      responses:
+        "202": { description: Triggered. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          $ref: "#/components/responses/Problem"
+          description: A fire is already in flight for this task.
+
   /rootfolders/{id}/drain:
     parameters:
       - name: id
@@ -2085,6 +2159,31 @@ components:
       properties:
         name: { type: string }
         is_dir: { type: boolean }
+
+    Schedule:
+      type: object
+      description: One registered periodic task (ADR-59), its effective settings and run-state.
+      required: [key, name, tier, default_cadence, cadence, enabled]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        tier:
+          type: string
+          enum: [normal, advanced, expert]
+          description: ADR-26's visibility tier.
+        default_cadence: { type: string, description: The registry's own fallback cadence. }
+        cadence:
+          type: string
+          description: Effective cadence -- a stored override if one exists, default_cadence otherwise.
+        enabled: { type: boolean }
+        last_run_at: { type: string, format: date-time }
+        last_duration_ms: { type: integer, format: int64 }
+        last_outcome:
+          type: string
+          enum: [enqueued, duplicate, error]
+          description: Absent until the task has fired at least once.
+        last_error: { type: string }
+        next_run_at: { type: string, format: date-time }
 
     DrainPlan:
       type: object

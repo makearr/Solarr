@@ -70,15 +70,16 @@ func (p *process) registerCategoryCountsJob(registry *jobs.Registry, executor *j
 	return nil
 }
 
-// enqueueCategoryCounts submits one sweep, once at startup -- there is no
-// scheduler yet, the same gap enqueueLibraryScans and enqueueEnrichment already
-// carry, so a category's counts go stale as the library changes until the next
-// restart repopulates them.
-func (p *process) enqueueCategoryCounts(ctx context.Context) {
-	if _, err := p.queue.Enqueue(ctx, jobs.Request{
+// enqueueCategoryCounts submits one sweep. Registered as a task with
+// internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
+// schedule, not only once at startup.
+func (p *process) enqueueCategoryCounts(ctx context.Context) (jobs.EnqueueResult, error) {
+	result, err := p.queue.Enqueue(ctx, jobs.Request{
 		Type: categoryCountsJobType, ActionKey: categoryCountsActionKey, Priority: jobs.PriorityLow,
 		Payload: []byte("{}"),
-	}); err != nil {
+	})
+	if err != nil {
 		p.logger.Warn("enqueue category counters", slog.Any("error", err))
 	}
+	return result, err
 }

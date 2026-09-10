@@ -6,13 +6,13 @@ import (
 
 	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/jobs"
+	"github.com/makearr/MediaNexus/internal/settings"
 )
 
-// Default cron expressions for every job that used to be "enqueued once at
-// startup, waits for a restart" (section 21.14's own words for the gap this
-// closes). Not yet configurable -- a fixed, reasonable default for each,
-// named here rather than buried in startSchedulers, so a future settings
-// registry (todo 4.14) has one obvious place to read a starting point from.
+// Default cadences for every registered task (ADR-59), the starting point a
+// stored settings.db override replaces. Named here rather than buried in
+// buildTaskRegistry, so a reader can see every task's own default in one
+// place.
 const (
 	scanScheduleCron               = "*/30 * * * *" // every 30 minutes
 	enrichmentScheduleCron         = "*/15 * * * *" // every 15 minutes
@@ -23,39 +23,72 @@ const (
 	capacityScheduleCron           = "0 */6 * * *"  // every 6 hours
 )
 
-// startSchedulers periodically re-runs every enqueue function startServer
-// already calls once at startup, so a placeholder edition, a newly-dropped
-// file or a subscription's new release does not wait for a restart to be
-// picked up. Each is its own goroutine, the same shape store.BackupSchedule
-// already uses per store -- one misbehaving schedule (an invalid expression,
-// which NewScheduler already refused at construction) never affects another.
+// cacheScheduleSource adapts settings.Cache to jobs.ScheduleSource -- the
+// snapshot is re-read on every call, so a cadence or enabled-flag change
+// takes effect on the task's own next tick, no restart needed.
+type cacheScheduleSource struct{ cache *settings.Cache }
+
+func (c cacheScheduleSource) Cadence(taskKey, defaultCadence string) string {
+	return c.cache.Snapshot().ScheduleCadence(taskKey, defaultCadence)
+}
+
+func (c cacheScheduleSource) Enabled(taskKey string) bool {
+	return c.cache.Snapshot().ScheduleEnabled(taskKey)
+}
+
+// buildTaskRegistry declares every periodic action this process has (ADR-59).
+// Every enqueueX function used to be "enqueued once at startup, waits for a
+// restart" (section 21.14's own words for the gap this closes) -- each is
+// now one Task, registered once, that also fires on its own schedule.
+func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
+	registry := jobs.NewTaskRegistry()
+	registry.MustRegister(jobs.Task{
+		Key: "scan", Name: "Library scan", DefaultCadence: scanScheduleCron,
+		Tier: string(settings.TierNormal), Enqueue: p.enqueueLibraryScans,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "enrichment", Name: "Music enrichment", DefaultCadence: enrichmentScheduleCron,
+		Tier: string(settings.TierNormal), Enqueue: p.enqueueEnrichment,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "subscription_expand", Name: "Subscription expand", DefaultCadence: subscriptionExpandScheduleCron,
+		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueSubscriptionExpand,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "artwork", Name: "Cover art sweep", DefaultCadence: artworkScheduleCron,
+		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueArtwork,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "category_counts", Name: "Category counters", DefaultCadence: categoryCountsScheduleCron,
+		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueCategoryCounts,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "probe", Name: "Attribute probe", DefaultCadence: probeScheduleCron,
+		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueProbe,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "capacity", Name: "Root folder capacity", DefaultCadence: capacityScheduleCron,
+		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueCapacity,
+	})
+	return registry
+}
+
+// startSchedulers builds one TaskRunner per registered task and drives each
+// on its own goroutine, the same per-task isolation the old flat Scheduler
+// loop already had: one misbehaving task (an invalid override, refused at
+// TaskRunner.resolveSchedule's own fallback) never affects another.
 func (p *process) startSchedulers(ctx context.Context) {
 	wall := clock.NewSystem()
-	schedules := []struct {
-		name string
-		cron string
-		fire func(context.Context)
-	}{
-		{"scan", scanScheduleCron, p.enqueueLibraryScans},
-		{"enrichment", enrichmentScheduleCron, p.enqueueEnrichment},
-		{"subscription_expand", subscriptionExpandScheduleCron, p.enqueueSubscriptionExpand},
-		{"artwork", artworkScheduleCron, p.enqueueArtwork},
-		{"category_counts", categoryCountsScheduleCron, p.enqueueCategoryCounts},
-		{"probe", probeScheduleCron, p.enqueueProbe},
-		{"capacity", capacityScheduleCron, p.enqueueCapacity},
-	}
+	source := cacheScheduleSource{cache: p.cache}
 
-	for _, s := range schedules {
-		schedule, err := jobs.NewScheduler(s.name, s.cron, wall, p.logger, s.fire)
-		if err != nil {
-			// Every cron expression above is a compile-time constant; this
-			// can only fire if one of them is malformed, which is a bug in
-			// this file, not a runtime condition -- logged loudly rather
-			// than silently skipping the schedule.
-			p.logger.Error("scheduler misconfigured, this schedule will never fire",
-				slog.String("schedule", s.name), slog.Any("error", err))
-			continue
-		}
-		go schedule.Run(ctx)
+	p.taskRegistry = p.buildTaskRegistry()
+	p.scheduleStates = jobs.NewScheduleStates(p.jobs)
+	p.taskRunners = make(map[string]*jobs.TaskRunner)
+
+	for _, task := range p.taskRegistry.All() {
+		runner := jobs.NewTaskRunner(task, source, p.scheduleStates, wall, p.logger)
+		p.taskRunners[task.Key] = runner
+		go runner.Run(ctx)
 	}
+	p.logger.Info("schedulers started", slog.Int("tasks", len(p.taskRunners)))
 }

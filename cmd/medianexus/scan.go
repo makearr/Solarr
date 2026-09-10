@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"github.com/makearr/MediaNexus/internal/clock"
@@ -95,12 +96,23 @@ func reportToolReadiness(ctx context.Context, tool mediatool.Tool, logger *slog.
 	}
 }
 
-// enqueueLibraryScans submits an incremental sweep for every online root folder
-// attached to a music category, once at startup. There is no scheduler yet -- stage 6
-// builds the periodic trigger -- so this is what makes the library browsable at all
-// meanwhile, and an incremental sweep of an unswept root reads everything regardless.
-func (p *process) enqueueLibraryScans(ctx context.Context) {
+// enqueueLibraryScans submits an incremental sweep for every online root
+// folder attached to a music category. An incremental sweep of a root that
+// has never been swept reads everything regardless, so this is also what
+// makes a freshly attached root browsable. Registered as a task with
+// internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
+// schedule, not only once at startup.
+//
+// Fans out to several jobs, one per root, unlike every other task in this
+// file -- the aggregate EnqueueResult reports Duplicate only when every
+// attempted root was already active, and joins every root's own error
+// (each still logged individually below) rather than reporting only the
+// first, so the scheduler's own recorded outcome does not hide a partial
+// failure across several roots.
+func (p *process) enqueueLibraryScans(ctx context.Context) (jobs.EnqueueResult, error) {
 	snapshot := p.cache.Snapshot()
+	var errs []error
+	attempted, duplicates := 0, 0
 	for _, category := range snapshot.Categories() {
 		if category.MediaType != "music" {
 			continue
@@ -109,10 +121,21 @@ func (p *process) enqueueLibraryScans(ctx context.Context) {
 			if !root.Online {
 				continue
 			}
-			if _, err := scan.Enqueue(ctx, p.queue, root.ID, category.ID, false); err != nil {
+			attempted++
+			result, err := scan.Enqueue(ctx, p.queue, root.ID, category.ID, false)
+			if err != nil {
 				p.logger.Warn("enqueue library scan",
 					slog.Int64("root_folder_id", root.ID), slog.Any("error", err))
+				errs = append(errs, err)
+				continue
+			}
+			if result.Duplicate {
+				duplicates++
 			}
 		}
 	}
+	if len(errs) > 0 {
+		return jobs.EnqueueResult{}, errors.Join(errs...)
+	}
+	return jobs.EnqueueResult{Duplicate: attempted > 0 && duplicates == attempted}, nil
 }
