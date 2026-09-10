@@ -116,6 +116,12 @@ type Unit struct {
 	EvidenceJSON   string
 	CandidatesJSON string
 	Reason         string
+	// WorkCreated/EditionCreated record whether this unit's own CommitUnit
+	// created the row or matched an existing one -- both false until
+	// RecordPlacement runs. A later session revert must only ever delete a
+	// row the session itself created (ADR-48).
+	WorkCreated    bool
+	EditionCreated bool
 }
 
 // NewUnit is what AddUnits needs for one discovered unit. Confidence, WorkID
@@ -221,6 +227,45 @@ func (s ImportSessions) SetUnitDecisions(ctx context.Context, sessionID int64, d
 		return fmt.Errorf("library: set import unit decisions for session %d: %w", sessionID, err)
 	}
 	return nil
+}
+
+// Placement is one unit's own CommitUnit result, ready to record --
+// import_unit's own work_id/edition_id/work_created/edition_created columns
+// plus every media_object row import_unit_file must remember, so a later
+// session revert (ADR-48) knows precisely which rows this unit's own commit
+// is responsible for.
+type Placement struct {
+	WorkID         int64
+	WorkCreated    bool
+	EditionID      *int64
+	EditionCreated bool
+	MediaObjectIDs []int64
+}
+
+// RecordPlacement writes one unit's placement, in one transaction: the
+// import_unit columns (work_id becoming non-null is what "actually placed"
+// means from here on, not merely decided -- job.go's own doc comment) and
+// one import_unit_file row per media_object CommitUnit placed.
+func (s ImportSessions) RecordPlacement(ctx context.Context, unitID int64, placement Placement) error {
+	return s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		if err := queries.SetImportUnitPlacement(ctx, librarydb.SetImportUnitPlacementParams{
+			ID: unitID, WorkID: sql.NullInt64{Int64: placement.WorkID, Valid: true},
+			EditionID:      nullInt64(placement.EditionID),
+			WorkCreated:    boolToInt(placement.WorkCreated),
+			EditionCreated: boolToInt(placement.EditionCreated),
+		}); err != nil {
+			return fmt.Errorf("set unit %d placement: %w", unitID, err)
+		}
+		for _, mediaObjectID := range placement.MediaObjectIDs {
+			if err := queries.InsertImportUnitFile(ctx, librarydb.InsertImportUnitFileParams{
+				UnitID: unitID, MediaObjectID: mediaObjectID,
+			}); err != nil {
+				return fmt.Errorf("insert unit %d file %d: %w", unitID, mediaObjectID, err)
+			}
+		}
+		return nil
+	})
 }
 
 // SetUnitsEstimated records inspect.EstimateUnits' one-off result (todo
@@ -369,6 +414,7 @@ func unitFromRow(row librarydb.ImportUnit) Unit {
 		FileCount: row.FileCount, Bytes: row.Bytes, Confidence: row.Confidence,
 		Decision: row.Decision, WorkID: int64Ptr(row.WorkID), EditionID: int64Ptr(row.EditionID),
 		EvidenceJSON: row.EvidenceJson, CandidatesJSON: row.CandidatesJson.String, Reason: row.Reason.String,
+		WorkCreated: row.WorkCreated != 0, EditionCreated: row.EditionCreated != 0,
 	}
 }
 

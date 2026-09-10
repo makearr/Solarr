@@ -123,7 +123,8 @@ func (q *Queries) GetImportSession(ctx context.Context, id int64) (ImportSession
 
 const getImportUnit = `-- name: GetImportUnit :one
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
-       work_id, edition_id, evidence_json, candidates_json, reason
+       work_id, edition_id, evidence_json, candidates_json, reason, work_created,
+       edition_created
 FROM import_unit WHERE id = ?
 `
 
@@ -144,6 +145,8 @@ func (q *Queries) GetImportUnit(ctx context.Context, id int64) (ImportUnit, erro
 		&i.EvidenceJson,
 		&i.CandidatesJson,
 		&i.Reason,
+		&i.WorkCreated,
+		&i.EditionCreated,
 	)
 	return i, err
 }
@@ -157,7 +160,8 @@ VALUES (?1, ?2, ?3, ?4,
         ?9, ?10, ?11,
         ?12)
 RETURNING id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
-          work_id, edition_id, evidence_json, candidates_json, reason
+          work_id, edition_id, evidence_json, candidates_json, reason, work_created,
+          edition_created
 `
 
 type InsertImportUnitParams struct {
@@ -205,8 +209,24 @@ func (q *Queries) InsertImportUnit(ctx context.Context, arg InsertImportUnitPara
 		&i.EvidenceJson,
 		&i.CandidatesJson,
 		&i.Reason,
+		&i.WorkCreated,
+		&i.EditionCreated,
 	)
 	return i, err
+}
+
+const insertImportUnitFile = `-- name: InsertImportUnitFile :exec
+INSERT INTO import_unit_file (unit_id, media_object_id) VALUES (?, ?)
+`
+
+type InsertImportUnitFileParams struct {
+	UnitID        int64
+	MediaObjectID int64
+}
+
+func (q *Queries) InsertImportUnitFile(ctx context.Context, arg InsertImportUnitFileParams) error {
+	_, err := q.db.ExecContext(ctx, insertImportUnitFile, arg.UnitID, arg.MediaObjectID)
+	return err
 }
 
 const listImportSessions = `-- name: ListImportSessions :many
@@ -271,9 +291,46 @@ func (q *Queries) ListImportSessions(ctx context.Context, arg ListImportSessions
 	return items, nil
 }
 
+const listImportUnitFilesForSession = `-- name: ListImportUnitFilesForSession :many
+SELECT iuf.unit_id, iuf.media_object_id
+FROM import_unit_file iuf
+JOIN import_unit iu ON iu.id = iuf.unit_id
+WHERE iu.session_id = ?
+ORDER BY iuf.id
+`
+
+type ListImportUnitFilesForSessionRow struct {
+	UnitID        int64
+	MediaObjectID int64
+}
+
+func (q *Queries) ListImportUnitFilesForSession(ctx context.Context, sessionID int64) ([]ListImportUnitFilesForSessionRow, error) {
+	rows, err := q.db.QueryContext(ctx, listImportUnitFilesForSession, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListImportUnitFilesForSessionRow{}
+	for rows.Next() {
+		var i ListImportUnitFilesForSessionRow
+		if err := rows.Scan(&i.UnitID, &i.MediaObjectID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listImportUnits = `-- name: ListImportUnits :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
-       work_id, edition_id, evidence_json, candidates_json, reason
+       work_id, edition_id, evidence_json, candidates_json, reason, work_created,
+       edition_created
 FROM import_unit WHERE session_id = ? ORDER BY id
 `
 
@@ -300,6 +357,8 @@ func (q *Queries) ListImportUnits(ctx context.Context, sessionID int64) ([]Impor
 			&i.EvidenceJson,
 			&i.CandidatesJson,
 			&i.Reason,
+			&i.WorkCreated,
+			&i.EditionCreated,
 		); err != nil {
 			return nil, err
 		}
@@ -316,7 +375,8 @@ func (q *Queries) ListImportUnits(ctx context.Context, sessionID int64) ([]Impor
 
 const listImportUnitsPage = `-- name: ListImportUnitsPage :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
-       work_id, edition_id, evidence_json, candidates_json, reason
+       work_id, edition_id, evidence_json, candidates_json, reason, work_created,
+       edition_created
 FROM import_unit
 WHERE session_id = ?1 AND id > ?2
   AND (?3 = 0 OR decision = ?4)
@@ -367,6 +427,61 @@ func (q *Queries) ListImportUnitsPage(ctx context.Context, arg ListImportUnitsPa
 			&i.EvidenceJson,
 			&i.CandidatesJson,
 			&i.Reason,
+			&i.WorkCreated,
+			&i.EditionCreated,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUnplacedCommitUnits = `-- name: ListUnplacedCommitUnits :many
+SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
+       work_id, edition_id, evidence_json, candidates_json, reason, work_created,
+       edition_created
+FROM import_unit
+WHERE session_id = ? AND decision = 'COMMIT' AND work_id IS NULL
+ORDER BY id
+`
+
+// Every unit this session decided COMMIT but has not yet actually placed --
+// decision alone means "confidence cleared the threshold", not "in the
+// library" (job.go's own doc comment); work_id staying NULL after DECIDE is
+// what distinguishes the two, since nothing sets it before the IMPORTING
+// phase runs.
+func (q *Queries) ListUnplacedCommitUnits(ctx context.Context, sessionID int64) ([]ImportUnit, error) {
+	rows, err := q.db.QueryContext(ctx, listUnplacedCommitUnits, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ImportUnit{}
+	for rows.Next() {
+		var i ImportUnit
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.RelPath,
+			&i.Shape,
+			&i.FileCount,
+			&i.Bytes,
+			&i.Confidence,
+			&i.Decision,
+			&i.WorkID,
+			&i.EditionID,
+			&i.EvidenceJson,
+			&i.CandidatesJson,
+			&i.Reason,
+			&i.WorkCreated,
+			&i.EditionCreated,
 		); err != nil {
 			return nil, err
 		}
@@ -480,6 +595,35 @@ func (q *Queries) SetImportUnitDecision(ctx context.Context, arg SetImportUnitDe
 		arg.EditionID,
 		arg.CandidatesJson,
 		arg.Reason,
+		arg.ID,
+	)
+	return err
+}
+
+const setImportUnitPlacement = `-- name: SetImportUnitPlacement :exec
+UPDATE import_unit SET work_id = ?1, edition_id = ?2,
+                        work_created = ?3,
+                        edition_created = ?4
+WHERE id = ?5
+`
+
+type SetImportUnitPlacementParams struct {
+	WorkID         sql.NullInt64
+	EditionID      sql.NullInt64
+	WorkCreated    int64
+	EditionCreated int64
+	ID             int64
+}
+
+// The IMPORTING phase's own write, once placement.Resolve, the move and
+// ResolveWorksDetailed have all succeeded for one unit -- work_id becoming
+// non-null is what "actually placed" means from here on.
+func (q *Queries) SetImportUnitPlacement(ctx context.Context, arg SetImportUnitPlacementParams) error {
+	_, err := q.db.ExecContext(ctx, setImportUnitPlacement,
+		arg.WorkID,
+		arg.EditionID,
+		arg.WorkCreated,
+		arg.EditionCreated,
 		arg.ID,
 	)
 	return err

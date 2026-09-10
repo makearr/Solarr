@@ -1024,7 +1024,7 @@ export interface paths {
         put?: never;
         /**
          * Point at any path and enqueue ADR-48's own inspection pipeline. Administrator only.
-         * @description Enqueues `import.inspect` (WALK/CLASSIFY/GROUP/EVIDENCE/IDENTIFY/ SHAPE/DECIDE) over `source_path`. It only inspects and records -- no file is moved and no work/edition row is created, so a unit recorded `COMMIT` means its confidence cleared the threshold, not that it is in the library yet. Poll `GET /import/sessions/{id}` for progress. A retry of an interrupted run resumes the same session rather than starting over.
+         * @description Enqueues `import.inspect` (WALK/CLASSIFY/GROUP/EVIDENCE/IDENTIFY/ SHAPE/DECIDE) over `source_path`. A unit whose confidence clears the threshold is placed immediately when `category_id` is given: the file is placed into that category's own library (reflink/hardlink/copy, never the source touched) and its work/edition resolved -- `work_id`/ `edition_id` on the unit becoming non-null is what "actually in the library" means, not the `COMMIT` decision alone. Omitting `category_id` leaves every unit decided but unplaced, since placement has nowhere to put anything. Poll `GET /import/sessions/{id}` for progress. A retry of an interrupted run resumes the same session rather than starting over. Session revert is not built yet.
          */
         post: operations["inspectImport"];
         delete?: never;
@@ -2174,7 +2174,7 @@ export interface components {
             decision: "COMMIT" | "QUEUE" | "SKIP" | "FAILED";
             /**
              * Format: int64
-             * @description Not yet resolved for a COMMIT decision -- ADR-48's own scope stops at DECIDE.
+             * @description Non-null once this unit is actually placed in the library, not merely decided COMMIT -- null with decision=COMMIT means the session has no category_id to place into, or placement has not run yet.
              */
             work_id?: number;
             /** Format: int64 */
