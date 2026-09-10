@@ -3354,6 +3354,8 @@ export interface operations {
                 /** @description Which column orders the list. artist is not a valid value here (Work.artist's own description explains why); title is the default. */
                 sort?: "title" | "year" | "added";
                 dir?: "asc" | "desc";
+                /** @description Only works released within priority.new_release_days (ADR-55's release-date window; the 48h indexer/RSS window is not built -- it needs candidate.first_seen_at, stage 5). A work with no known release date, or one known only to the year or month, never matches: day precision is required. */
+                fresh?: boolean;
             };
             header?: never;
             path?: never;

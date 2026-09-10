@@ -1019,6 +1019,15 @@ paths:
         - name: dir
           in: query
           schema: { type: string, enum: [asc, desc], default: asc }
+        - name: fresh
+          in: query
+          description: >-
+            Only works released within priority.new_release_days (ADR-55's
+            release-date window; the 48h indexer/RSS window is not built --
+            it needs candidate.first_seen_at, stage 5). A work with no known
+            release date, or one known only to the year or month, never
+            matches: day precision is required.
+          schema: { type: boolean, default: false }
       responses:
         "200":
           description: One page.

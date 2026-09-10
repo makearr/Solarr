@@ -11,11 +11,16 @@ import (
 
 // refinementFor turns one MusicBrainz answer into what library.RefineEdition
 // needs: interpreting MusicBrainz's own vocabulary into MediaNexus's is this
-// package's job, never core's (ADR-23).
+// package's job, never core's (ADR-23). workReleaseDate is the release
+// group's FirstReleaseDate at whatever precision MusicBrainz gave it
+// (YYYY, YYYY-MM or YYYY-MM-DD) -- kept alongside workYear rather than only
+// the parsed year, since todo 4.20's freshness window needs day precision a
+// year alone cannot give.
 func refinementFor(rg musicbrainz.ReleaseGroup, release musicbrainz.Release) (
-	workYear *int64, refinement library.EditionRefinement, parts []library.PartIdentity,
+	workYear *int64, workReleaseDate string, refinement library.EditionRefinement, parts []library.PartIdentity,
 ) {
 	workYear = parseYear(rg.FirstReleaseDate)
+	workReleaseDate = rg.FirstReleaseDate
 
 	refinement = library.EditionRefinement{
 		// Status is the closest thing a Release has to a "kind of edition"
@@ -35,7 +40,7 @@ func refinementFor(rg musicbrainz.ReleaseGroup, release musicbrainz.Release) (
 			parts = append(parts, partFor(medium, track))
 		}
 	}
-	return workYear, refinement, parts
+	return workYear, workReleaseDate, refinement, parts
 }
 
 // orUnknownStatus never writes an empty kind back -- an edition already refined

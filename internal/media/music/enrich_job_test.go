@@ -210,6 +210,15 @@ func TestEnrichJob_RefinesAPlaceholderEditionEndToEnd(t *testing.T) {
 		t.Errorf("work.Year = %+v, want 1997 parsed from the release group's first-release-date", work.Year)
 	}
 
+	dates, err := queries.ListWorkDates(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("ListWorkDates: %v", err)
+	}
+	if len(dates) != 1 || dates[0].Kind != library.WorkDateStreet || dates[0].Date != "1997-05-21" {
+		t.Errorf("work dates = %+v, want the full 1997-05-21 kept (todo 4.20, day precision the year alone loses)",
+			dates)
+	}
+
 	parts, err := queries.ListWorkParts(t.Context(), work.ID)
 	if err != nil {
 		t.Fatalf("ListWorkParts: %v", err)

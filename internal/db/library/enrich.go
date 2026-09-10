@@ -94,13 +94,24 @@ type PartExternalID struct {
 	Confidence float64
 }
 
+// WorkDateStreet is the work_date.kind this package writes a release group's
+// first-release-date under -- "street" (the industry term for when something
+// first became available), the closest of ADR-23's shared vocabulary
+// (theatrical|digital|physical|air|street|publication) to what MusicBrainz's
+// FirstReleaseDate actually means for a piece of music, which was never tied
+// to one specific format.
+const WorkDateStreet = "street"
+
 // RefineEdition replaces a placeholder edition's guessed fields with real ones and
 // resolves its parts, all in one transaction: an edition a concurrent scan is still
 // resolving must not see half-written enrichment. workYear, if non-nil, is set on
 // the work only when the column is still empty (Invariant-shaped: enrichment fills
-// a gap, it never overwrites a value already there, whoever set it).
+// a gap, it never overwrites a value already there, whoever set it). workReleaseDate,
+// when non-empty, is written to work_date unconditionally (SetWorkDate's own upsert
+// contract) -- there is no manual-override UI for it yet, so "the last provider to
+// enrich this work" is the only source there is to protect against.
 func (i Identity) RefineEdition(
-	ctx context.Context, at int64, editionID, workID int64, workYear *int64,
+	ctx context.Context, at int64, editionID, workID int64, workYear *int64, workReleaseDate string,
 	refinement EditionRefinement, parts []PartIdentity,
 ) error {
 	return i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
@@ -121,6 +132,15 @@ func (i Identity) RefineEdition(
 				ID: workID, Year: nullInt64(workYear), UpdatedAt: at,
 			}); err != nil {
 				return fmt.Errorf("update work year: %w", err)
+			}
+		}
+
+		if workReleaseDate != "" {
+			if err := queries.SetWorkDate(ctx, librarydb.SetWorkDateParams{
+				WorkID: workID, Kind: WorkDateStreet, Region: "",
+				Date: workReleaseDate, Source: "musicbrainz",
+			}); err != nil {
+				return fmt.Errorf("set work date: %w", err)
 			}
 		}
 

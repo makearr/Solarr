@@ -549,6 +549,15 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if raw := query.Get("fresh"); raw != "" {
+		fresh, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "fresh must be a boolean")
+			return
+		}
+		params.Fresh = &fresh
+	}
 
 	s.ListWorks(w, r, params)
 }

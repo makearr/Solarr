@@ -445,7 +445,7 @@ func (p *process) startServer(ctx context.Context) error {
 		},
 		CacheManager: adapters.CacheManager{Sweep: p.cacheSweep, Cache: p.cache, Clock: clock.NewSystem()},
 		LibrarySize:  library.NewCounters(p.library),
-		Works:        adapters.Works{Works: library.NewWorks(p.library)},
+		Works:        adapters.Works{Works: library.NewWorks(p.library), Clock: clock.NewSystem()},
 		WorkDetail:   adapters.WorkDetail{Works: library.NewWorks(p.library)},
 		WorksMonitor: adapters.WorksMonitor{
 			Works: library.NewWorks(p.library), Desired: library.NewDesired(p.library),

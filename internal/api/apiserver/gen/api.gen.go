@@ -1538,6 +1538,9 @@ type ListWorksParams struct {
 	// Sort Which column orders the list. artist is not a valid value here (Work.artist's own description explains why); title is the default.
 	Sort *ListWorksParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 	Dir  *ListWorksParamsDir  `form:"dir,omitempty" json:"dir,omitempty"`
+
+	// Fresh Only works released within priority.new_release_days (ADR-55's release-date window; the 48h indexer/RSS window is not built -- it needs candidate.first_seen_at, stage 5). A work with no known release date, or one known only to the year or month, never matches: day precision is required.
+	Fresh *bool `form:"fresh,omitempty" json:"fresh,omitempty"`
 }
 
 // ListWorksParamsSort defines parameters for ListWorks.
@@ -4486,6 +4489,14 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	err = runtime.BindQueryParameter("form", true, false, "dir", r.URL.Query(), &params.Dir)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dir", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "fresh" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "fresh", r.URL.Query(), &params.Fresh)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fresh", Err: err})
 		return
 	}
 
