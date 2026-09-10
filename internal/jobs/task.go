@@ -45,9 +45,7 @@ func NewTaskRegistry() *TaskRegistry {
 	return &TaskRegistry{tasks: make(map[string]Task)}
 }
 
-// Register adds a task. Refuses a duplicate key or an unparseable cadence --
-// the same "validated once, at registration" discipline Scheduler's own
-// NewScheduler already applies to a single cron expression.
+// Register adds a task, refusing a duplicate key or an unparseable cadence.
 func (r *TaskRegistry) Register(task Task) error {
 	if task.Key == "" {
 		return fmt.Errorf("jobs: task has no key")
