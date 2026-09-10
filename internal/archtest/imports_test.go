@@ -183,6 +183,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/importing/importjob": {
 		"internal/platform/clock", "internal/platform/fsx", "internal/importing/inspect", "internal/jobs",
 		"internal/db/library", "internal/platform/mediatool", "internal/identify/model", "internal/media/music",
+		"internal/platform/events",
 	},
 	// ADR-51's resumable Apply: claims a move_item, calls mover.ApplyOne, then
 	// records/unlinks through internal/db/library. No internal/db/settings import --

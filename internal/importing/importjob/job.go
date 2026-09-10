@@ -12,6 +12,7 @@ package importjob
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path"
@@ -22,6 +23,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/jobs"
 	"github.com/makearr/MediaNexus/internal/media/music"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/MediaNexus/internal/platform/events"
 	"github.com/makearr/MediaNexus/internal/platform/fsx"
 	"github.com/makearr/MediaNexus/internal/platform/mediatool"
 )
@@ -69,17 +71,21 @@ type Job struct {
 	// Searcher is deliberately deferred to whichever caller needs real
 	// auto-resolution against untagged scene content.
 	search music.Searcher
+	// events is optional: nil means no progress is published, the same as
+	// every other optional dependency in this codebase.
+	events *events.Bus
 	clock  clock.Clock
 	logger *slog.Logger
 }
 
-// Config is what a Job needs. Every field is required except Search and Logger.
+// Config is what a Job needs. Every field is required except Search, Events and Logger.
 type Config struct {
 	FS       fsx.FS
 	Sessions library.ImportSessions
 	Policy   Policy
 	Tool     mediatool.Tool
 	Search   music.Searcher
+	Events   *events.Bus
 	Clock    clock.Clock
 	Logger   *slog.Logger
 }
@@ -92,9 +98,13 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		fsys: config.FS, sessions: config.Sessions, policy: config.Policy,
-		tool: config.Tool, search: config.Search, clock: config.Clock, logger: logger,
+		tool: config.Tool, search: config.Search, events: config.Events, clock: config.Clock, logger: logger,
 	}
 }
+
+// errCancelled stops Walk once RequestCancel marks the session; Run turns it
+// into an ImportCancelled finish, never the executor's retryable failure.
+var errCancelled = errors.New("importjob: session cancelled")
 
 // Run walks payload.SourcePath, identifying and recording each unit it finds.
 // Retried by the executor on a plain (unlabelled, so retryable) error; a
@@ -107,10 +117,17 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		return jobs.Terminalf("importjob.payload", string(job.Type), err)
 	}
 
-	sessionID, cursor, err := j.resumeOrCreate(ctx, payload)
+	sessionID, cursor, cancelling, err := j.resumeOrCreate(ctx, payload)
 	if err != nil {
 		return err
 	}
+	if cancelling {
+		// Caught mid-cancel by a crash or retry -- honour it now rather than
+		// silently starting a duplicate session over the same path.
+		j.publishProgress(ctx, sessionID, payload.CategoryID, importPhaseCancelled, "")
+		return j.sessions.Finish(ctx, sessionID, library.ImportCancelled, j.clock.Now().Unix(), "")
+	}
+	j.publishProgress(ctx, sessionID, payload.CategoryID, importPhaseWalking, "")
 
 	identifyCfg := model.ChainConfig{
 		AcceptThreshold: music.DefaultAcceptThreshold, AmbiguityThreshold: j.policy.ImportAutoCommitConfidence(),
@@ -118,8 +135,14 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	result, err := inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{Cursor: cursor},
 		inspect.WalkOptions{},
 		func(ctx context.Context, batch []inspect.Unit) error {
-			return j.commitCluster(ctx, sessionID, payload.SourcePath, identifyCfg, batch)
+			return j.commitCluster(ctx, sessionID, payload.CategoryID, payload.SourcePath, identifyCfg, batch)
 		})
+	if errors.Is(err, errCancelled) {
+		j.logger.Info("import inspection cancelled",
+			slog.Int64("session_id", sessionID), slog.String("source_path", payload.SourcePath))
+		j.publishProgress(ctx, sessionID, payload.CategoryID, importPhaseCancelled, "")
+		return j.sessions.Finish(ctx, sessionID, library.ImportCancelled, j.clock.Now().Unix(), "")
+	}
 	if err != nil {
 		return err
 	}
@@ -127,32 +150,37 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		slog.Int64("session_id", sessionID), slog.String("source_path", payload.SourcePath),
 		slog.Int("units_emitted", result.UnitsEmitted), slog.Bool("completed", result.Completed))
 
-	return j.sessions.Finish(ctx, sessionID, library.ImportDone, j.clock.Now().Unix(), "")
+	if err := j.sessions.Finish(ctx, sessionID, library.ImportDone, j.clock.Now().Unix(), ""); err != nil {
+		return err
+	}
+	j.publishProgress(ctx, sessionID, payload.CategoryID, importPhaseDone, "")
+	return nil
 }
 
-// resumeOrCreate finds an in-progress session for this exact source path
-// (INSPECTING, this job's only state while it runs) and resumes it from its
-// own last-committed cluster, or starts a new one. Session rows are the
-// persisted progress a retry needs -- there is no separate cursor column, the
-// most recently inserted unit's own rel_path already names the cluster a
-// resumed walk should skip up to.
-func (j *Job) resumeOrCreate(ctx context.Context, payload Payload) (sessionID int64, cursor string, err error) {
-	existing, err := j.sessions.List(ctx, library.ImportInspecting)
-	if err != nil {
-		return 0, "", fmt.Errorf("importjob: list in-progress sessions: %w", err)
-	}
-	for _, session := range existing {
-		if session.SourcePath != payload.SourcePath {
-			continue
-		}
-		units, err := j.sessions.ListUnits(ctx, session.ID)
+// resumeOrCreate finds a not-yet-finished session for this exact source path
+// and resumes it, or starts a new one; one found CANCELLING is reported as such rather than resumed.
+func (j *Job) resumeOrCreate(ctx context.Context, payload Payload) (sessionID int64, cursor string, cancelling bool, err error) {
+	for _, state := range []string{library.ImportInspecting, library.ImportCancelling} {
+		existing, err := j.sessions.List(ctx, state)
 		if err != nil {
-			return 0, "", fmt.Errorf("importjob: list units for session %d: %w", session.ID, err)
+			return 0, "", false, fmt.Errorf("importjob: list %s sessions: %w", state, err)
 		}
-		if len(units) > 0 {
-			cursor = units[len(units)-1].RelPath
+		for _, session := range existing {
+			if session.SourcePath != payload.SourcePath {
+				continue
+			}
+			if state == library.ImportCancelling {
+				return session.ID, "", true, nil
+			}
+			units, err := j.sessions.ListUnits(ctx, session.ID)
+			if err != nil {
+				return 0, "", false, fmt.Errorf("importjob: list units for session %d: %w", session.ID, err)
+			}
+			if len(units) > 0 {
+				cursor = units[len(units)-1].RelPath
+			}
+			return session.ID, cursor, false, nil
 		}
-		return session.ID, cursor, nil
 	}
 
 	id, err := j.sessions.Create(ctx, library.NewSession{
@@ -161,9 +189,9 @@ func (j *Job) resumeOrCreate(ctx context.Context, payload Payload) (sessionID in
 		Threshold: j.policy.ImportAutoCommitConfidence(), StartedAt: j.clock.Now().Unix(),
 	})
 	if err != nil {
-		return 0, "", fmt.Errorf("importjob: create session: %w", err)
+		return 0, "", false, fmt.Errorf("importjob: create session: %w", err)
 	}
-	return id, "", nil
+	return id, "", false, nil
 }
 
 // commitCluster probes one cluster's media files in a single batched call
@@ -172,9 +200,19 @@ func (j *Job) resumeOrCreate(ctx context.Context, payload Payload) (sessionID in
 // -- at UnitQueue, the same default the schema already documents -- before
 // SetUnitDecision has an id to update, and inserting first means a probe
 // failure still leaves the unit visible rather than silently absent.
+//
+// Cancellation is checked first, before any work -- cheaper than probing a whole cluster to discard it.
 func (j *Job) commitCluster(
-	ctx context.Context, sessionID int64, sourcePath string, cfg model.ChainConfig, batch []inspect.Unit,
+	ctx context.Context, sessionID int64, categoryID *int64, sourcePath string, cfg model.ChainConfig, batch []inspect.Unit,
 ) error {
+	session, err := j.sessions.Get(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("importjob: check session %d: %w", sessionID, err)
+	}
+	if session.State == library.ImportCancelling {
+		return errCancelled
+	}
+
 	var relPaths []string
 	for _, unit := range batch {
 		for _, f := range unit.Media {
@@ -221,6 +259,7 @@ func (j *Job) commitCluster(
 			return err
 		}
 	}
+	j.publishProgress(ctx, sessionID, categoryID, importPhaseWalking, batch[len(batch)-1].Directory)
 	return nil
 }
 
@@ -253,6 +292,54 @@ func (j *Job) identifyAndRecord(
 		return fmt.Errorf("importjob: record decision for unit %d: %w", unitID, setErr)
 	}
 	return nil
+}
+
+// Import progress phases (todo 4.21's own SSE shape).
+const (
+	importPhaseWalking   = "walking"
+	importPhaseDone      = "done"
+	importPhaseCancelled = "cancelled"
+)
+
+// ImportProgress is one session's live update, published on topic "job",
+// entity "import_session:<id>" -- phase, the per-decision breakdown and the unit last processed.
+type ImportProgress struct {
+	SessionID      int64  `json:"session_id"`
+	Phase          string `json:"phase"`
+	CurrentUnit    string `json:"current_unit,omitempty"`
+	UnitsTotal     int64  `json:"units_total"`
+	UnitsCommitted int64  `json:"units_committed"`
+	UnitsQueued    int64  `json:"units_queued"`
+	UnitsSkipped   int64  `json:"units_skipped"`
+	UnitsFailed    int64  `json:"units_failed"`
+	BytesImported  int64  `json:"bytes_imported"`
+}
+
+// publishProgress re-reads and publishes the session; silent on any failure
+// or without an events.Bus -- a courtesy, never a reason to fail the run.
+func (j *Job) publishProgress(ctx context.Context, sessionID int64, categoryID *int64, phase, currentUnit string) {
+	if j.events == nil {
+		return
+	}
+	session, err := j.sessions.Get(ctx, sessionID)
+	if err != nil {
+		j.logger.Debug("could not read session for a progress event", slog.Any("error", err))
+		return
+	}
+	var category int64
+	if categoryID != nil {
+		category = *categoryID
+	}
+	j.events.Publish(events.Event{
+		Topic: events.TopicJob, Entity: fmt.Sprintf("import_session:%d", sessionID), CategoryID: category,
+		Kind: "progress",
+		Data: ImportProgress{
+			SessionID: sessionID, Phase: phase, CurrentUnit: currentUnit,
+			UnitsTotal: session.UnitsTotal, UnitsCommitted: session.UnitsCommitted,
+			UnitsQueued: session.UnitsQueued, UnitsSkipped: session.UnitsSkipped,
+			UnitsFailed: session.UnitsFailed, BytesImported: session.BytesImported,
+		},
+	})
 }
 
 // Enqueue submits an import inspection of one source path, deduplicated by

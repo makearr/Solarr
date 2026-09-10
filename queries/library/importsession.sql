@@ -8,12 +8,12 @@ VALUES (sqlc.arg(source_path), sqlc.arg(origin), sqlc.arg(acquisition_id),
         sqlc.arg(category_id), 'INSPECTING', sqlc.arg(threshold), sqlc.arg(started_at))
 RETURNING id, source_path, origin, acquisition_id, category_id, state, threshold,
           units_total, units_committed, units_queued, bytes_imported, extract_dir,
-          started_at, finished_at, error;
+          started_at, finished_at, error, units_skipped, units_failed;
 
 -- name: GetImportSession :one
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error
+       started_at, finished_at, error, units_skipped, units_failed
 FROM import_session WHERE id = ?;
 
 -- Small, operator-facing list -- session counts never approach library scale
@@ -25,7 +25,7 @@ FROM import_session WHERE id = ?;
 -- name: ListImportSessions :many
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error
+       started_at, finished_at, error, units_skipped, units_failed
 FROM import_session
 WHERE sqlc.arg(filter_by_state) = 0 OR state = sqlc.arg(state)
 ORDER BY started_at DESC;
@@ -38,6 +38,13 @@ UPDATE import_session SET state = sqlc.arg(state), finished_at = sqlc.arg(finish
                            error = sqlc.arg(error)
 WHERE id = sqlc.arg(id);
 
+-- Only from INSPECTING: refuses a no-op cancel of an already-terminal session
+-- and never overwrites CANCELLING with itself. :execrows lets the caller
+-- distinguish "already stopped/never running" (0 rows) from "now stopping".
+-- name: RequestImportSessionCancel :execrows
+UPDATE import_session SET state = 'CANCELLING'
+WHERE id = sqlc.arg(id) AND state = 'INSPECTING';
+
 -- Recomputed from import_unit rather than incremented as units are added or
 -- redecided -- the same drift-and-repair shape CategoryCounters already uses,
 -- cheaper to reason about than keeping a running total consistent through
@@ -49,6 +56,10 @@ UPDATE import_session SET
                       WHERE iu.session_id = sqlc.arg(session_id) AND iu.decision = 'COMMIT'),
   units_queued = (SELECT COUNT(*) FROM import_unit iu
                    WHERE iu.session_id = sqlc.arg(session_id) AND iu.decision = 'QUEUE'),
+  units_skipped = (SELECT COUNT(*) FROM import_unit iu
+                     WHERE iu.session_id = sqlc.arg(session_id) AND iu.decision = 'SKIP'),
+  units_failed = (SELECT COUNT(*) FROM import_unit iu
+                    WHERE iu.session_id = sqlc.arg(session_id) AND iu.decision = 'FAILED'),
   bytes_imported = (SELECT COALESCE(SUM(iu.bytes), 0) FROM import_unit iu
                       WHERE iu.session_id = sqlc.arg(session_id) AND iu.decision = 'COMMIT')
 WHERE id = sqlc.arg(session_id);

@@ -23,7 +23,12 @@ type ImportSessionLister interface {
 	ListImportSessions(ctx context.Context, filterState string) ([]ImportSessionRow, error)
 	GetImportSession(ctx context.Context, id int64) (ImportSessionRow, error)
 	ListImportUnits(ctx context.Context, sessionID int64, filterDecision string, afterID int64, limit int) ([]ImportUnitRow, error)
+	// CancelImportSession only flips the flag the job itself polls for (ADR-48).
+	CancelImportSession(ctx context.Context, id int64) error
 }
+
+// ErrImportSessionNotRunning is CancelImportSession's refusal to a non-running session.
+var ErrImportSessionNotRunning = errors.New("apiserver: import session is not running")
 
 // ImportInspector enqueues ADR-48's own inspection job. Its own interface,
 // separate from ImportSessionLister, since a real caller might reasonably
@@ -40,6 +45,7 @@ type ImportSessionRow struct {
 	State                                   string
 	Threshold                               float64
 	UnitsTotal, UnitsCommitted, UnitsQueued int64
+	UnitsSkipped, UnitsFailed               int64
 	BytesImported                           int64
 	StartedAt                               time.Time
 	FinishedAt                              *time.Time
@@ -134,6 +140,17 @@ func (s *Server) routeGetImportSession(w http.ResponseWriter, r *http.Request) {
 	s.GetImportSession(w, r, id)
 }
 
+// routeCancelImportSession parses the id path parameter, mirroring routeGetImportSession.
+func (s *Server) routeCancelImportSession(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a session id must be a number")
+		return
+	}
+	s.CancelImportSession(w, r, id)
+}
+
 // routeListImportUnits parses the id path parameter and the decision/
 // after_id/limit query parameters, mirroring routeListBlockedContent.
 func (s *Server) routeListImportUnits(w http.ResponseWriter, r *http.Request) {
@@ -226,6 +243,31 @@ func (s *Server) GetImportSession(w http.ResponseWriter, r *http.Request, id int
 	writeJSON(w, s.logger, http.StatusOK, importSessionView(row))
 }
 
+// CancelImportSession asks a running session to stop. Administrator only,
+// the same trust boundary InspectImport itself already carries.
+func (s *Server) CancelImportSession(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.importSessions == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "import sessions are not available")
+		return
+	}
+
+	err := s.importSessions.CancelImportSession(r.Context(), id)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such import session")
+	case errors.Is(err, ErrImportSessionNotRunning):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Not running", "this session is not currently running")
+	case err != nil:
+		writeError(w, s.logger, err)
+	default:
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
 // ListImportUnits returns one page of a session's units, cursor-paginated by
 // id (the same plain ascending cursor /blocked already uses).
 func (s *Server) ListImportUnits(w http.ResponseWriter, r *http.Request, id int64, params gen.ListImportUnitsParams) {
@@ -278,6 +320,7 @@ func importSessionView(row ImportSessionRow) gen.ImportSession {
 		CategoryId: row.CategoryID, State: gen.ImportSessionState(row.State),
 		Threshold: float32(row.Threshold), UnitsTotal: row.UnitsTotal,
 		UnitsCommitted: row.UnitsCommitted, UnitsQueued: row.UnitsQueued,
+		UnitsSkipped: row.UnitsSkipped, UnitsFailed: row.UnitsFailed,
 		BytesImported: row.BytesImported, StartedAt: row.StartedAt,
 	}
 	if row.FinishedAt != nil {

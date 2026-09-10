@@ -100,7 +100,10 @@ export function useLibraryList<T>(source: ListSource<T>, view: ViewState) {
 
     const stream = new EventSource(`/api/v1/events?topics=${topics}`);
     const invalidate = () => void client.invalidateQueries({ queryKey: [listName] });
-    for (const topic of topics.split(",")) stream.addEventListener(topic, invalidate);
+    // The server names every frame "update" or "resync" (never per-topic) --
+    // the ?topics= query string above is what already scopes the
+    // subscription, so any "update" received here is already one of ours.
+    stream.addEventListener("update", invalidate);
     // A resync means the client fell too far behind to replay.
     stream.addEventListener("resync", invalidate);
 

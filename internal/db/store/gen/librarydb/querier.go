@@ -420,6 +420,10 @@ type Querier interface {
 	RemoveBlockedContent(ctx context.Context, id int64) error
 	RemoveFromBlocklist(ctx context.Context, id int64) error
 	RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error
+	// Only from INSPECTING: refuses a no-op cancel of an already-terminal session
+	// and never overwrites CANCELLING with itself. :execrows lets the caller
+	// distinguish "already stopped/never running" (0 rows) from "now stopping".
+	RequestImportSessionCancel(ctx context.Context, id int64) (int64, error)
 	// Aged decision detail (section 5.7, Part VI Q5).
 	RollUpDecisions(ctx context.Context, arg RollUpDecisionsParams) error
 	// Ranked cross-media search over titles and aliases (migration 0010, section 21.1).

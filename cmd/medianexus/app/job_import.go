@@ -26,6 +26,7 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		Sessions: library.NewImportSessions(p.library),
 		Policy:   adapters.ImportPolicy{Cache: p.cache},
 		Tool:     mediatool.New(nil, 0),
+		Events:   p.bus,
 		Clock:    clock.NewSystem(),
 		Logger:   p.logger,
 	})

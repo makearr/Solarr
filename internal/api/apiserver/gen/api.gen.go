@@ -92,6 +92,8 @@ const (
 
 // Defines values for ImportSessionState.
 const (
+	ImportSessionStateCANCELLED  ImportSessionState = "CANCELLED"
+	ImportSessionStateCANCELLING ImportSessionState = "CANCELLING"
 	ImportSessionStateDONE       ImportSessionState = "DONE"
 	ImportSessionStateFAILED     ImportSessionState = "FAILED"
 	ImportSessionStateIMPORTING  ImportSessionState = "IMPORTING"
@@ -262,6 +264,8 @@ const (
 
 // Defines values for ListImportSessionsParamsState.
 const (
+	ListImportSessionsParamsStateCANCELLED  ListImportSessionsParamsState = "CANCELLED"
+	ListImportSessionsParamsStateCANCELLING ListImportSessionsParamsState = "CANCELLING"
 	ListImportSessionsParamsStateDONE       ListImportSessionsParamsState = "DONE"
 	ListImportSessionsParamsStateFAILED     ListImportSessionsParamsState = "FAILED"
 	ListImportSessionsParamsStateIMPORTING  ListImportSessionsParamsState = "IMPORTING"
@@ -696,7 +700,9 @@ type ImportSession struct {
 	// Threshold import.auto_commit_confidence's value in force for this run.
 	Threshold      float32 `json:"threshold"`
 	UnitsCommitted int64   `json:"units_committed"`
+	UnitsFailed    int64   `json:"units_failed"`
 	UnitsQueued    int64   `json:"units_queued"`
+	UnitsSkipped   int64   `json:"units_skipped"`
 	UnitsTotal     int64   `json:"units_total"`
 }
 
@@ -1739,6 +1745,9 @@ type ServerInterface interface {
 	// One session's own progress and counts.
 	// (GET /import/sessions/{id})
 	GetImportSession(w http.ResponseWriter, r *http.Request, id int64)
+	// Ask a running session to stop. Administrator only.
+	// (POST /import/sessions/{id}/cancel)
+	CancelImportSession(w http.ResponseWriter, r *http.Request, id int64)
 	// One session's own units, in the order they were committed.
 	// (GET /import/sessions/{id}/units)
 	ListImportUnits(w http.ResponseWriter, r *http.Request, id int64, params ListImportUnitsParams)
@@ -2051,6 +2060,12 @@ func (_ Unimplemented) ListImportSessions(w http.ResponseWriter, r *http.Request
 // One session's own progress and counts.
 // (GET /import/sessions/{id})
 func (_ Unimplemented) GetImportSession(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Ask a running session to stop. Administrator only.
+// (POST /import/sessions/{id}/cancel)
+func (_ Unimplemented) CancelImportSession(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3098,6 +3113,39 @@ func (siw *ServerInterfaceWrapper) GetImportSession(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetImportSession(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelImportSession operation middleware
+func (siw *ServerInterfaceWrapper) CancelImportSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelImportSession(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4819,6 +4867,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/import/sessions/{id}", wrapper.GetImportSession)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/import/sessions/{id}/cancel", wrapper.CancelImportSession)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/import/sessions/{id}/units", wrapper.ListImportUnits)

@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/makearr/MediaNexus/internal/db/store"
@@ -12,12 +13,16 @@ import (
 )
 
 // Import session states (import_session.state, migration 0018).
+// ImportCancelling/ImportCancelled reuse this same column (migration 0023) --
+// only the job itself writes ImportCancelled, after it stops recording units.
 const (
 	ImportInspecting = "INSPECTING"
 	ImportImporting  = "IMPORTING"
+	ImportCancelling = "CANCELLING"
 	ImportDone       = "DONE"
 	ImportFailed     = "FAILED"
 	ImportReverted   = "REVERTED"
+	ImportCancelled  = "CANCELLED"
 )
 
 // Import session origins (import_session.origin).
@@ -71,6 +76,8 @@ type Session struct {
 	UnitsTotal     int64
 	UnitsCommitted int64
 	UnitsQueued    int64
+	UnitsSkipped   int64
+	UnitsFailed    int64
 	BytesImported  int64
 	ExtractDir     string
 	StartedAt      int64
@@ -216,6 +223,28 @@ func (s ImportSessions) Finish(ctx context.Context, sessionID int64, state strin
 	return nil
 }
 
+// ErrSessionNotCancellable reports that a session was not INSPECTING, so
+// there was nothing running to ask to stop.
+var ErrSessionNotCancellable = errors.New("library: import session is not running")
+
+// RequestCancel only flips the flag the running job itself polls for; the
+// job is what actually stops the walk and transitions to ImportCancelled.
+func (s ImportSessions) RequestCancel(ctx context.Context, sessionID int64) error {
+	var affected int64
+	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		rows, err := librarydb.New(tx).RequestImportSessionCancel(ctx, sessionID)
+		affected = rows
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("library: request cancel for import session %d: %w", sessionID, err)
+	}
+	if affected == 0 {
+		return ErrSessionNotCancellable
+	}
+	return nil
+}
+
 // SetExtractDir records the workspace a session is using, so a startup sweep
 // can find and remove an orphan left behind by a crash (architecture.md §6.1).
 func (s ImportSessions) SetExtractDir(ctx context.Context, sessionID int64, dir string) error {
@@ -298,6 +327,7 @@ func sessionFromRow(row librarydb.ImportSession) Session {
 		AcquisitionID: int64Ptr(row.AcquisitionID), CategoryID: int64Ptr(row.CategoryID),
 		State: row.State, Threshold: row.Threshold, UnitsTotal: row.UnitsTotal,
 		UnitsCommitted: row.UnitsCommitted, UnitsQueued: row.UnitsQueued,
+		UnitsSkipped: row.UnitsSkipped, UnitsFailed: row.UnitsFailed,
 		BytesImported: row.BytesImported, ExtractDir: row.ExtractDir.String,
 		StartedAt: row.StartedAt, FinishedAt: int64Ptr(row.FinishedAt), Error: row.Error.String,
 	}

@@ -39,18 +39,26 @@ export function useNotifications(): Stream {
 
     source.onopen = () => setConnection("live");
     source.onerror = () => setConnection("dropped");
-    source.onmessage = (message) => {
-      let event: Notification;
+    // The server always names a live or replayed frame "update" (never the
+    // default unnamed message type) and coalesces several events into one
+    // frame every 250ms (architecture section 13.4), so one frame can carry
+    // more than one notification.
+    source.addEventListener("update", (message) => {
+      let batch: { events: Notification[] };
       try {
-        event = JSON.parse(message.data) as Notification;
+        batch = JSON.parse(message.data) as { events: Notification[] };
       } catch {
         // A frame we cannot read is not worth tearing the stream down for.
         return;
       }
-      setRecent((held) => [event, ...held].slice(0, SCROLLBACK));
-      setUnread((count) => count + 1);
-      seen.current += 1;
-    };
+      if (batch.events.length === 0) return;
+      // The bus does not order one flush's own batch, so oldest-to-newest is
+      // sorted here before reversing it into "most recent first".
+      const ordered = [...batch.events].sort((a, b) => a.id - b.id).reverse();
+      setRecent((held) => ordered.concat(held).slice(0, SCROLLBACK));
+      setUnread((count) => count + batch.events.length);
+      seen.current += batch.events.length;
+    });
 
     return () => source.close();
   }, []);

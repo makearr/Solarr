@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Ban } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -14,6 +15,42 @@ const ORIGINS: readonly { id: ImportOrigin; label: string }[] = [
   { id: "adoption", label: "Adopt existing library" },
 ];
 
+/** todo 4.21's own SSE shape (internal/importing/importjob.ImportProgress),
+ *  one "topic: job" event per cluster committed. */
+interface ImportProgress {
+  session_id: number;
+  phase: "walking" | "done" | "cancelled";
+  current_unit?: string;
+}
+
+/** Live progress, keyed by session id, most recently seen phase/current unit
+ *  per session. Kept outside React state until read, so a burst of events for
+ *  a session nobody has selected does not re-render the whole screen. */
+function useImportProgressStream(
+  onSessionUpdated: (sessionId: number, progress: ImportProgress) => void,
+) {
+  useEffect(() => {
+    const source = new EventSource("/api/v1/events?topics=job");
+    source.addEventListener("update", (message) => {
+      let batch: { events: { entity: string; data?: ImportProgress }[] };
+      try {
+        batch = JSON.parse(message.data) as typeof batch;
+      } catch {
+        return;
+      }
+      for (const event of batch.events) {
+        if (!event.entity.startsWith("import_session:") || !event.data) continue;
+        onSessionUpdated(event.data.session_id, event.data);
+      }
+    });
+    return () => source.close();
+    // onSessionUpdated is a fresh closure every render by design (it closes
+    // over selectedSessionId); re-subscribing on every change would thrash
+    // the connection, so it is intentionally excluded and read fresh via a ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
+
 /** ADR-48: point at any path, and the pipeline (WALK/CLASSIFY/GROUP/EVIDENCE/
  *  IDENTIFY/SHAPE/DECIDE) finds and records what it contains. This screen only
  *  inspects and records -- a COMMIT decision here means confidence cleared the
@@ -21,6 +58,16 @@ const ORIGINS: readonly { id: ImportOrigin; label: string }[] = [
  *  exist yet, so there is nothing to commit or revert from this screen either. */
 export function Import() {
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  const [liveProgress, setLiveProgress] = useState<Record<number, ImportProgress>>({});
+  const queryClient = useQueryClient();
+
+  useImportProgressStream((sessionId, progress) => {
+    setLiveProgress((held) => ({ ...held, [sessionId]: progress }));
+    void queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
+    if (sessionId === selectedSessionId) {
+      void queryClient.invalidateQueries({ queryKey: ["import-units", sessionId] });
+    }
+  });
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-4">
@@ -34,7 +81,11 @@ export function Import() {
       <InspectForm />
 
       <div className="flex min-h-0 flex-1 gap-4">
-        <SessionList selectedId={selectedSessionId} onSelect={setSelectedSessionId} />
+        <SessionList
+          selectedId={selectedSessionId}
+          onSelect={setSelectedSessionId}
+          liveProgress={liveProgress}
+        />
         {selectedSessionId !== null && <UnitList sessionId={selectedSessionId} />}
       </div>
     </div>
@@ -108,13 +159,18 @@ function InspectForm() {
   );
 }
 
+const RUNNING_STATES = new Set<ImportSession["state"]>(["INSPECTING", "CANCELLING"]);
+
 function SessionList({
   selectedId,
   onSelect,
+  liveProgress,
 }: {
   selectedId: number | null;
   onSelect: (id: number) => void;
+  liveProgress: Record<number, ImportProgress>;
 }) {
+  const queryClient = useQueryClient();
   const sessions = useQuery({
     queryKey: ["import-sessions"],
     queryFn: async () => {
@@ -125,6 +181,14 @@ function SessionList({
     refetchInterval: 5000,
   });
 
+  const cancel = useMutation({
+    mutationFn: async (id: number) => {
+      const { error } = await api.POST("/import/sessions/{id}/cancel", { params: { path: { id } } });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["import-sessions"] }),
+  });
+
   return (
     <div className="flex w-96 shrink-0 flex-col gap-2 overflow-y-auto">
       {sessions.isLoading && <Message>Loading sessions…</Message>}
@@ -133,30 +197,54 @@ function SessionList({
         <Message>No import has run yet.</Message>
       )}
       {sessions.data?.map((session) => (
-        <button
+        <div
           key={session.id}
-          type="button"
-          onClick={() => onSelect(session.id)}
-          className={`flex flex-col gap-1 rounded-lg border p-3 text-left text-xs
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-                       selectedId === session.id
-                         ? "border-accent bg-surface"
-                         : "border-border-subtle bg-surface hover:border-accent/50"
-                     }`}
+          className={`flex flex-col gap-1 rounded-lg border p-3 text-left text-xs ${
+            selectedId === session.id
+              ? "border-accent bg-surface"
+              : "border-border-subtle bg-surface hover:border-accent/50"
+          }`}
         >
-          <span className="truncate font-mono text-sm text-ink" title={session.source_path}>
-            {session.source_path}
-          </span>
-          <span className="flex flex-wrap items-center gap-1.5">
-            <StateBadge state={session.state} />
-            <span className="text-ink-muted">{session.origin}</span>
-          </span>
-          <span className="text-ink-muted">
-            {session.units_committed} committed / {session.units_queued} queued /{" "}
-            {session.units_total} total
-          </span>
-          {session.error && <span className="text-danger">{session.error}</span>}
-        </button>
+          <div className="flex items-start gap-2">
+            <button
+              type="button"
+              onClick={() => onSelect(session.id)}
+              className="flex min-w-0 flex-1 flex-col gap-1 text-left focus-visible:outline-2
+                         focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              <span className="truncate font-mono text-sm text-ink" title={session.source_path}>
+                {session.source_path}
+              </span>
+              <span className="flex flex-wrap items-center gap-1.5">
+                <StateBadge state={session.state} />
+                <span className="text-ink-muted">{session.origin}</span>
+              </span>
+              <span className="text-ink-muted">
+                {session.units_committed} committed / {session.units_queued} queued /{" "}
+                {session.units_skipped} skipped / {session.units_failed} failed /{" "}
+                {session.units_total} total
+              </span>
+              {RUNNING_STATES.has(session.state) && liveProgress[session.id]?.current_unit && (
+                <span className="truncate text-ink-muted" title={liveProgress[session.id]?.current_unit}>
+                  now: {liveProgress[session.id]?.current_unit}
+                </span>
+              )}
+              {session.error && <span className="text-danger">{session.error}</span>}
+            </button>
+            {RUNNING_STATES.has(session.state) && (
+              <button
+                type="button"
+                onClick={() => cancel.mutate(session.id)}
+                disabled={cancel.isPending}
+                title="Cancel this import"
+                className="shrink-0 rounded-md p-1 text-ink-muted hover:text-danger disabled:opacity-50
+                           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                <Ban aria-hidden className="size-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
       ))}
     </div>
   );
@@ -240,7 +328,7 @@ function UnitRow({ unit }: { unit: ImportUnit }) {
 }
 
 function StateBadge({ state }: { state: ImportSession["state"] }) {
-  const isTerminal = state === "DONE" || state === "FAILED" || state === "REVERTED";
+  const isTerminal = state === "DONE" || state === "FAILED" || state === "REVERTED" || state === "CANCELLED";
   return (
     <span
       className={`rounded-full border px-1.5 py-px text-[0.6875rem] ${

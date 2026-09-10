@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/makearr/MediaNexus/internal/api/apiserver"
@@ -40,6 +41,18 @@ func (a ImportSessions) GetImportSession(ctx context.Context, id int64) (apiserv
 	return importSessionRow(s), nil
 }
 
+// CancelImportSession checks existence first for a genuine 404 -- RequestCancel's own UPDATE cannot tell them apart.
+func (a ImportSessions) CancelImportSession(ctx context.Context, id int64) error {
+	if _, err := a.Sessions.Get(ctx, id); err != nil {
+		return err
+	}
+	err := a.Sessions.RequestCancel(ctx, id)
+	if errors.Is(err, library.ErrSessionNotCancellable) {
+		return apiserver.ErrImportSessionNotRunning
+	}
+	return err
+}
+
 func (a ImportSessions) ListImportUnits(
 	ctx context.Context, sessionID int64, filterDecision string, afterID int64, limit int,
 ) ([]apiserver.ImportUnitRow, error) {
@@ -58,7 +71,8 @@ func importSessionRow(s library.Session) apiserver.ImportSessionRow {
 	row := apiserver.ImportSessionRow{
 		ID: s.ID, SourcePath: s.SourcePath, Origin: s.Origin, CategoryID: s.CategoryID,
 		State: s.State, Threshold: s.Threshold, UnitsTotal: s.UnitsTotal,
-		UnitsCommitted: s.UnitsCommitted, UnitsQueued: s.UnitsQueued, BytesImported: s.BytesImported,
+		UnitsCommitted: s.UnitsCommitted, UnitsQueued: s.UnitsQueued,
+		UnitsSkipped: s.UnitsSkipped, UnitsFailed: s.UnitsFailed, BytesImported: s.BytesImported,
 		StartedAt: time.Unix(s.StartedAt, 0), Error: s.Error,
 	}
 	if s.FinishedAt != nil {

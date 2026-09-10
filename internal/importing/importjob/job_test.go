@@ -38,11 +38,27 @@ type pathTagTool struct {
 	byPath        map[string]mediatool.Tags
 	errPaths      map[string]bool
 	failBatchOnce string
+
+	// cancelAfterCalls, when non-zero, cancels cancelSourcePath's own session
+	// the Nth time ReadTags runs -- a concurrent Cancel arriving mid-walk.
+	cancelAfterCalls int
+	cancelSourcePath string
+	sessions         library.ImportSessions
+	calls            int
 }
 
 func (t *pathTagTool) Available(context.Context) error { return nil }
 
-func (t *pathTagTool) ReadTags(_ context.Context, paths []string) ([]mediatool.Probe, error) {
+func (t *pathTagTool) ReadTags(ctx context.Context, paths []string) ([]mediatool.Probe, error) {
+	t.calls++
+	if t.cancelAfterCalls != 0 && t.calls == t.cancelAfterCalls {
+		inspecting, _ := t.sessions.List(ctx, library.ImportInspecting)
+		for _, session := range inspecting {
+			if session.SourcePath == t.cancelSourcePath {
+				_ = t.sessions.RequestCancel(ctx, session.ID)
+			}
+		}
+	}
 	if t.failBatchOnce != "" {
 		for _, p := range paths {
 			if strings.Contains(p, t.failBatchOnce) {
@@ -347,6 +363,71 @@ func TestJob_ResumesTheMatchingSessionWhenSeveralAreInProgress(t *testing.T) {
 		if s.SourcePath == rootB && s.UnitsTotal != 1 {
 			t.Errorf("B's session has %d units, want 1, untouched by A's retry", s.UnitsTotal)
 		}
+	}
+}
+
+// A cancel between two clusters stops the walk at the next boundary and keeps whatever already committed.
+func TestJob_StopsAtTheNextClusterBoundaryWhenCancelled(t *testing.T) {
+	fx := newFixture(t, "Artist/Album1/01.flac", "Artist/Album2/01.flac")
+	fx.tool.byPath[filepath.Join(root, "Artist/Album1/01.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+	fx.tool.byPath[filepath.Join(root, "Artist/Album2/01.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+	fx.tool.sessions = fx.sessions()
+	fx.tool.cancelSourcePath = root
+	fx.tool.cancelAfterCalls = 1 // requested while Album1's own probe call runs
+
+	job := fx.job(t, 0.90)
+	payload := importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}
+	if err := fx.run(t, job, payload); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	cancelled, err := fx.sessions().List(t.Context(), library.ImportCancelled)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(cancelled) != 1 {
+		t.Fatalf("got %d CANCELLED sessions, want 1: %+v", len(cancelled), cancelled)
+	}
+	if cancelled[0].UnitsTotal != 1 {
+		t.Errorf("UnitsTotal = %d, want 1 (Album1 committed before the cancel stopped Album2)",
+			cancelled[0].UnitsTotal)
+	}
+	if fx.tool.calls != 1 {
+		t.Errorf("ReadTags was called %d times, want 1 -- Album2 must never have been probed", fx.tool.calls)
+	}
+}
+
+// A session left CANCELLING by a crash is finished as cancelled on the next Run, never resumed.
+func TestJob_FinishesAnAlreadyCancellingSessionWithoutResuming(t *testing.T) {
+	fx := newFixture(t, "Artist/Album1/01.flac")
+	sessions := fx.sessions()
+	id, err := sessions.Create(t.Context(), library.NewSession{
+		SourcePath: root, Origin: library.ImportOriginManual, StartedAt: fx.clock.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := sessions.RequestCancel(t.Context(), id); err != nil {
+		t.Fatalf("RequestCancel: %v", err)
+	}
+
+	job := fx.job(t, 0.90)
+	payload := importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}
+	if err := fx.run(t, job, payload); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if fx.tool.calls != 0 {
+		t.Errorf("ReadTags was called %d times, want 0 -- an already-cancelling session must not be walked", fx.tool.calls)
+	}
+	got, err := sessions.Get(t.Context(), id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.State != library.ImportCancelled {
+		t.Errorf("State = %q, want %q", got.State, library.ImportCancelled)
 	}
 }
 

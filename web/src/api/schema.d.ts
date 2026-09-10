@@ -1038,6 +1038,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/import/sessions/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask a running session to stop. Administrator only.
+         * @description Cooperative: the job itself checks between clusters and is what actually stops and records CANCELLED, so the session stays resumable up to whatever it had already committed (ADR-48). Refused with 409 if the session is not currently INSPECTING.
+         */
+        post: operations["cancelImportSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/import/sessions/{id}/units": {
         parameters: {
             query?: never;
@@ -2017,7 +2039,7 @@ export interface components {
             /** Format: int64 */
             category_id?: number;
             /** @enum {string} */
-            state: "INSPECTING" | "IMPORTING" | "DONE" | "FAILED" | "REVERTED";
+            state: "INSPECTING" | "IMPORTING" | "CANCELLING" | "DONE" | "FAILED" | "REVERTED" | "CANCELLED";
             /**
              * Format: float
              * @description import.auto_commit_confidence's value in force for this run.
@@ -2029,6 +2051,10 @@ export interface components {
             units_committed: number;
             /** Format: int64 */
             units_queued: number;
+            /** Format: int64 */
+            units_skipped: number;
+            /** Format: int64 */
+            units_failed: number;
             /**
              * Format: int64
              * @description Only committed units' bytes.
@@ -3833,7 +3859,7 @@ export interface operations {
     listImportSessions: {
         parameters: {
             query?: {
-                state?: "INSPECTING" | "IMPORTING" | "DONE" | "FAILED" | "REVERTED";
+                state?: "INSPECTING" | "IMPORTING" | "CANCELLING" | "DONE" | "FAILED" | "REVERTED" | "CANCELLED";
             };
             header?: never;
             path?: never;
@@ -3875,6 +3901,31 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    cancelImportSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancellation requested. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The session is not running. */
+            409: components["responses"]["Problem"];
         };
     };
     listImportUnits: {

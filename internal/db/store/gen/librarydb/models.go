@@ -293,6 +293,8 @@ type ImportSession struct {
 	StartedAt      int64
 	FinishedAt     sql.NullInt64
 	Error          sql.NullString
+	UnitsSkipped   int64
+	UnitsFailed    int64
 }
 
 type ImportUnit struct {

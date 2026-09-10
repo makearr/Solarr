@@ -18,7 +18,7 @@ VALUES (?1, ?2, ?3,
         ?4, 'INSPECTING', ?5, ?6)
 RETURNING id, source_path, origin, acquisition_id, category_id, state, threshold,
           units_total, units_committed, units_queued, bytes_imported, extract_dir,
-          started_at, finished_at, error
+          started_at, finished_at, error, units_skipped, units_failed
 `
 
 type CreateImportSessionParams struct {
@@ -58,6 +58,8 @@ func (q *Queries) CreateImportSession(ctx context.Context, arg CreateImportSessi
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.Error,
+		&i.UnitsSkipped,
+		&i.UnitsFailed,
 	)
 	return i, err
 }
@@ -88,7 +90,7 @@ func (q *Queries) FinishImportSession(ctx context.Context, arg FinishImportSessi
 const getImportSession = `-- name: GetImportSession :one
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error
+       started_at, finished_at, error, units_skipped, units_failed
 FROM import_session WHERE id = ?
 `
 
@@ -111,6 +113,8 @@ func (q *Queries) GetImportSession(ctx context.Context, id int64) (ImportSession
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.Error,
+		&i.UnitsSkipped,
+		&i.UnitsFailed,
 	)
 	return i, err
 }
@@ -206,7 +210,7 @@ func (q *Queries) InsertImportUnit(ctx context.Context, arg InsertImportUnitPara
 const listImportSessions = `-- name: ListImportSessions :many
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error
+       started_at, finished_at, error, units_skipped, units_failed
 FROM import_session
 WHERE ?1 = 0 OR state = ?2
 ORDER BY started_at DESC
@@ -248,6 +252,8 @@ func (q *Queries) ListImportSessions(ctx context.Context, arg ListImportSessions
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.Error,
+			&i.UnitsSkipped,
+			&i.UnitsFailed,
 		); err != nil {
 			return nil, err
 		}
@@ -379,6 +385,10 @@ UPDATE import_session SET
                       WHERE iu.session_id = ?1 AND iu.decision = 'COMMIT'),
   units_queued = (SELECT COUNT(*) FROM import_unit iu
                    WHERE iu.session_id = ?1 AND iu.decision = 'QUEUE'),
+  units_skipped = (SELECT COUNT(*) FROM import_unit iu
+                     WHERE iu.session_id = ?1 AND iu.decision = 'SKIP'),
+  units_failed = (SELECT COUNT(*) FROM import_unit iu
+                    WHERE iu.session_id = ?1 AND iu.decision = 'FAILED'),
   bytes_imported = (SELECT COALESCE(SUM(iu.bytes), 0) FROM import_unit iu
                       WHERE iu.session_id = ?1 AND iu.decision = 'COMMIT')
 WHERE id = ?1
@@ -391,6 +401,22 @@ WHERE id = ?1
 func (q *Queries) RecomputeImportSessionCounts(ctx context.Context, sessionID int64) error {
 	_, err := q.db.ExecContext(ctx, recomputeImportSessionCounts, sessionID)
 	return err
+}
+
+const requestImportSessionCancel = `-- name: RequestImportSessionCancel :execrows
+UPDATE import_session SET state = 'CANCELLING'
+WHERE id = ?1 AND state = 'INSPECTING'
+`
+
+// Only from INSPECTING: refuses a no-op cancel of an already-terminal session
+// and never overwrites CANCELLING with itself. :execrows lets the caller
+// distinguish "already stopped/never running" (0 rows) from "now stopping".
+func (q *Queries) RequestImportSessionCancel(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, requestImportSessionCancel, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const setImportSessionExtractDir = `-- name: SetImportSessionExtractDir :exec

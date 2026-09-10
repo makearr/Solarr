@@ -16,12 +16,20 @@ type fakeImportSessionLister struct {
 	sessions []apiserver.ImportSessionRow
 	units    []apiserver.ImportUnitRow
 	err      error
+	// cancelErr is what CancelImportSession returns; cancelled is the last id it was asked to cancel.
+	cancelErr error
+	cancelled int64
 
 	lastFilterState    string
 	lastSessionID      int64
 	lastFilterDecision string
 	lastAfterID        int64
 	lastLimit          int
+}
+
+func (f *fakeImportSessionLister) CancelImportSession(_ context.Context, id int64) error {
+	f.cancelled = id
+	return f.cancelErr
 }
 
 func (f *fakeImportSessionLister) ListImportSessions(
@@ -239,5 +247,57 @@ func TestInspectImport_EnqueuesAndDefaultsOriginToManual(t *testing.T) {
 	}
 	if fixture.importInspector.lastCategoryID != nil {
 		t.Errorf("lastCategoryID = %v, want nil when omitted", fixture.importInspector.lastCategoryID)
+	}
+}
+
+func TestCancelImportSession_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/1/cancel", ""))
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.importSessions.cancelled != 0 {
+		t.Error("cancel ran despite the caller not being an administrator")
+	}
+}
+
+func TestCancelImportSession_AnswersAcceptedOnSuccess(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/42/cancel", ""))
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202 (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.importSessions.cancelled != 42 {
+		t.Errorf("cancelled = %d, want 42", fixture.importSessions.cancelled)
+	}
+}
+
+func TestCancelImportSession_AnswersNotFound(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.importSessions.cancelErr = sql.ErrNoRows
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/99/cancel", ""))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+func TestCancelImportSession_AnswersConflictWhenNotRunning(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.importSessions.cancelErr = apiserver.ErrImportSessionNotRunning
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/7/cancel", ""))
+	if recorder.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409 (%s)", recorder.Code, recorder.Body)
 	}
 }

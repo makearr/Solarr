@@ -1,6 +1,7 @@
 package library_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
@@ -258,5 +259,89 @@ func TestImportSessions_ListFiltersByState(t *testing.T) {
 	}
 	if len(onlyFailed) != 1 || onlyFailed[0].ID != failed {
 		t.Errorf("List(FAILED) = %+v, want just session %d", onlyFailed, failed)
+	}
+}
+
+func TestImportSessions_RequestCancelOnlyFromInspecting(t *testing.T) {
+	opened, _ := newLibrary(t)
+	sessions := library.NewImportSessions(opened)
+	ctx := t.Context()
+
+	id, err := sessions.Create(ctx, library.NewSession{
+		SourcePath: "/downloads/a", Origin: library.ImportOriginManual, Threshold: 0.9, StartedAt: 100,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := sessions.RequestCancel(ctx, id); err != nil {
+		t.Fatalf("RequestCancel: %v", err)
+	}
+	got, err := sessions.Get(ctx, id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.State != library.ImportCancelling {
+		t.Errorf("State = %q, want %q", got.State, library.ImportCancelling)
+	}
+
+	// Already CANCELLING: a second request is refused, not a silent no-op.
+	if err := sessions.RequestCancel(ctx, id); !errors.Is(err, library.ErrSessionNotCancellable) {
+		t.Errorf("second RequestCancel = %v, want ErrSessionNotCancellable", err)
+	}
+}
+
+func TestImportSessions_RequestCancelRefusesATerminalSession(t *testing.T) {
+	opened, _ := newLibrary(t)
+	sessions := library.NewImportSessions(opened)
+	ctx := t.Context()
+
+	id, err := sessions.Create(ctx, library.NewSession{
+		SourcePath: "/downloads/a", Origin: library.ImportOriginManual, Threshold: 0.9, StartedAt: 100,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := sessions.Finish(ctx, id, library.ImportDone, 200, ""); err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+
+	if err := sessions.RequestCancel(ctx, id); !errors.Is(err, library.ErrSessionNotCancellable) {
+		t.Errorf("RequestCancel on a DONE session = %v, want ErrSessionNotCancellable", err)
+	}
+}
+
+func TestImportSessions_RecomputeCountsIncludesSkippedAndFailed(t *testing.T) {
+	opened, _ := newLibrary(t)
+	sessions := library.NewImportSessions(opened)
+	ctx := t.Context()
+
+	id, err := sessions.Create(ctx, library.NewSession{
+		SourcePath: "/downloads/a", Origin: library.ImportOriginManual, Threshold: 0.9, StartedAt: 100,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	ids, err := sessions.AddUnits(ctx, id, []library.NewUnit{
+		{RelPath: "commit", Shape: library.UnitSingle, FileCount: 1, Bytes: 10, EvidenceJSON: "{}"},
+		{RelPath: "skip", Shape: library.UnitSingle, FileCount: 1, Bytes: 20, EvidenceJSON: "{}"},
+		{RelPath: "failed", Shape: library.UnitSingle, FileCount: 1, Bytes: 30, EvidenceJSON: "{}"},
+	})
+	if err != nil {
+		t.Fatalf("AddUnits: %v", err)
+	}
+	for i, decision := range []string{library.UnitCommit, library.UnitSkip, library.UnitFailed} {
+		if err := sessions.SetUnitDecision(ctx, ids[i], decision, 0.5, nil, nil, "", ""); err != nil {
+			t.Fatalf("SetUnitDecision: %v", err)
+		}
+	}
+
+	got, err := sessions.Get(ctx, id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.UnitsCommitted != 1 || got.UnitsSkipped != 1 || got.UnitsFailed != 1 || got.UnitsTotal != 3 {
+		t.Errorf("counts = total %d, committed %d, skipped %d, failed %d, want 3/1/1/1",
+			got.UnitsTotal, got.UnitsCommitted, got.UnitsSkipped, got.UnitsFailed)
 	}
 }
