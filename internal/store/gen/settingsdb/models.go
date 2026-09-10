@@ -70,6 +70,19 @@ type ExclusionPattern struct {
 	Enabled    int64
 }
 
+type ImportList struct {
+	ID               int64
+	CategoryID       int64
+	Name             string
+	Type             string
+	Url              string
+	CadenceHours     int64
+	Monitor          int64
+	QualityProfileID sql.NullInt64
+	Exclusions       string
+	Enabled          int64
+}
+
 type InstanceSetting struct {
 	Key       string
 	ValueJson string

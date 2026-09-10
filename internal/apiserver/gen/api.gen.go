@@ -604,6 +604,36 @@ type ImportInspectResult struct {
 	Enqueued bool `json:"enqueued"`
 }
 
+// ImportList A per-library *Arr-shaped import list (ADR-38, todo 4.16). Scaffolding only -- nothing syncs against it yet (stage 12).
+type ImportList struct {
+	CadenceHours int   `json:"cadence_hours"`
+	CategoryId   int64 `json:"category_id"`
+	Enabled      bool  `json:"enabled"`
+
+	// Exclusions Free text; nothing reads this yet, since there is no sync job to enforce it.
+	Exclusions       string `json:"exclusions"`
+	Id               int64  `json:"id"`
+	Monitor          bool   `json:"monitor"`
+	Name             string `json:"name"`
+	QualityProfileId *int64 `json:"quality_profile_id,omitempty"`
+
+	// Type Free-form for now -- no music-specific list type is baked in ahead of a real provider integration to name one against.
+	Type string  `json:"type"`
+	Url  *string `json:"url,omitempty"`
+}
+
+// ImportListWrite defines model for ImportListWrite.
+type ImportListWrite struct {
+	CadenceHours     int     `json:"cadence_hours"`
+	Enabled          *bool   `json:"enabled,omitempty"`
+	Exclusions       *string `json:"exclusions,omitempty"`
+	Monitor          *bool   `json:"monitor,omitempty"`
+	Name             string  `json:"name"`
+	QualityProfileId *int64  `json:"quality_profile_id,omitempty"`
+	Type             string  `json:"type"`
+	Url              *string `json:"url,omitempty"`
+}
+
 // ImportSession One inspection-and-import run over one source path (ADR-48).
 type ImportSession struct {
 	// BytesImported Only committed units' bytes.
@@ -1395,8 +1425,14 @@ type UpdateExclusionPatternJSONRequestBody = ExclusionPatternWrite
 // RemoveAndBlockFileJSONRequestBody defines body for RemoveAndBlockFile for application/json ContentType.
 type RemoveAndBlockFileJSONRequestBody = RemoveAndBlockRequest
 
+// UpdateImportListJSONRequestBody defines body for UpdateImportList for application/json ContentType.
+type UpdateImportListJSONRequestBody = ImportListWrite
+
 // InspectImportJSONRequestBody defines body for InspectImport for application/json ContentType.
 type InspectImportJSONRequestBody = ImportInspectRequest
+
+// CreateImportListJSONRequestBody defines body for CreateImportList for application/json ContentType.
+type CreateImportListJSONRequestBody = ImportListWrite
 
 // SetLibraryLastLevelJSONRequestBody defines body for SetLibraryLastLevel for application/json ContentType.
 type SetLibraryLastLevelJSONRequestBody SetLibraryLastLevelJSONBody
@@ -1493,6 +1529,12 @@ type ServerInterface interface {
 	// Liveness.
 	// (GET /health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// Remove an import list. Administrator only.
+	// (DELETE /import-lists/{id})
+	DeleteImportList(w http.ResponseWriter, r *http.Request, id int64)
+	// Replace an import list's fields. Administrator only.
+	// (PATCH /import-lists/{id})
+	UpdateImportList(w http.ResponseWriter, r *http.Request, id int64)
 	// Point at any path and enqueue ADR-48's own inspection pipeline. Administrator only.
 	// (POST /import/inspect)
 	InspectImport(w http.ResponseWriter, r *http.Request)
@@ -1511,6 +1553,12 @@ type ServerInterface interface {
 	// The navigation tree -- libraries the caller may see, with their levels (ADR-54).
 	// (GET /libraries)
 	ListLibraries(w http.ResponseWriter, r *http.Request)
+	// A library's own *Arr-shaped import lists (ADR-38). Scaffolding only -- the sync job that admits anything from one is stage 12.
+	// (GET /libraries/{id}/import-lists)
+	ListImportLists(w http.ResponseWriter, r *http.Request, id int64)
+	// Add an import list to a library. Administrator only.
+	// (POST /libraries/{id}/import-lists)
+	CreateImportList(w http.ResponseWriter, r *http.Request, id int64)
 	// Remember the level last visited in this library (ADR-54).
 	// (PUT /libraries/{id}/last-level)
 	SetLibraryLastLevel(w http.ResponseWriter, r *http.Request, id int64)
@@ -1718,6 +1766,18 @@ func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Remove an import list. Administrator only.
+// (DELETE /import-lists/{id})
+func (_ Unimplemented) DeleteImportList(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace an import list's fields. Administrator only.
+// (PATCH /import-lists/{id})
+func (_ Unimplemented) UpdateImportList(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Point at any path and enqueue ADR-48's own inspection pipeline. Administrator only.
 // (POST /import/inspect)
 func (_ Unimplemented) InspectImport(w http.ResponseWriter, r *http.Request) {
@@ -1751,6 +1811,18 @@ func (_ Unimplemented) ListJobs(w http.ResponseWriter, r *http.Request, params L
 // The navigation tree -- libraries the caller may see, with their levels (ADR-54).
 // (GET /libraries)
 func (_ Unimplemented) ListLibraries(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A library's own *Arr-shaped import lists (ADR-38). Scaffolding only -- the sync job that admits anything from one is stage 12.
+// (GET /libraries/{id}/import-lists)
+func (_ Unimplemented) ListImportLists(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add an import list to a library. Administrator only.
+// (POST /libraries/{id}/import-lists)
+func (_ Unimplemented) CreateImportList(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2403,6 +2475,72 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteImportList operation middleware
+func (siw *ServerInterfaceWrapper) DeleteImportList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteImportList(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateImportList operation middleware
+func (siw *ServerInterfaceWrapper) UpdateImportList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateImportList(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // InspectImport operation middleware
 func (siw *ServerInterfaceWrapper) InspectImport(w http.ResponseWriter, r *http.Request) {
 
@@ -2617,6 +2755,72 @@ func (siw *ServerInterfaceWrapper) ListLibraries(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListLibraries(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListImportLists operation middleware
+func (siw *ServerInterfaceWrapper) ListImportLists(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListImportLists(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateImportList operation middleware
+func (siw *ServerInterfaceWrapper) CreateImportList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateImportList(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3907,6 +4111,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/health", wrapper.GetHealth)
 	})
 	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/import-lists/{id}", wrapper.DeleteImportList)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/import-lists/{id}", wrapper.UpdateImportList)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/import/inspect", wrapper.InspectImport)
 	})
 	r.Group(func(r chi.Router) {
@@ -3923,6 +4133,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/libraries", wrapper.ListLibraries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/libraries/{id}/import-lists", wrapper.ListImportLists)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/libraries/{id}/import-lists", wrapper.CreateImportList)
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/libraries/{id}/last-level", wrapper.SetLibraryLastLevel)

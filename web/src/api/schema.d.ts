@@ -897,6 +897,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/libraries/{id}/import-lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** A library's own *Arr-shaped import lists (ADR-38). Scaffolding only -- the sync job that admits anything from one is stage 12. */
+        get: operations["listImportLists"];
+        put?: never;
+        /** Add an import list to a library. Administrator only. */
+        post: operations["createImportList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/import-lists/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove an import list. Administrator only. */
+        delete: operations["deleteImportList"];
+        options?: never;
+        head?: never;
+        /** Replace an import list's fields. Administrator only. */
+        patch: operations["updateImportList"];
+        trace?: never;
+    };
     "/categories": {
         parameters: {
             query?: never;
@@ -1759,6 +1799,37 @@ export interface components {
             items: components["schemas"]["LibraryLevelItem"][];
             /** @description Empty on the last page. */
             next_cursor?: string;
+        };
+        /** @description A per-library *Arr-shaped import list (ADR-38, todo 4.16). Scaffolding only -- nothing syncs against it yet (stage 12). */
+        ImportList: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            category_id: number;
+            name: string;
+            /** @description Free-form for now -- no music-specific list type is baked in ahead of a real provider integration to name one against. */
+            type: string;
+            url?: string;
+            cadence_hours: number;
+            monitor: boolean;
+            /** Format: int64 */
+            quality_profile_id?: number;
+            /** @description Free text; nothing reads this yet, since there is no sync job to enforce it. */
+            exclusions: string;
+            enabled: boolean;
+        };
+        ImportListWrite: {
+            name: string;
+            type: string;
+            url?: string;
+            cadence_hours: number;
+            /** @default true */
+            monitor: boolean;
+            /** Format: int64 */
+            quality_profile_id?: number;
+            exclusions?: string;
+            /** @default true */
+            enabled: boolean;
         };
         /** @description A hard requirement, evaluated before any comparison (ADR-40 stage 1). */
         GateResult: {
@@ -3201,6 +3272,115 @@ export interface operations {
             404: components["responses"]["Problem"];
             /** @description This level exists but has no reader wired up yet. */
             503: components["responses"]["Problem"];
+        };
+    };
+    listImportLists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The import lists. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportList"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            /** @description The library does not exist, or the caller cannot read it. */
+            404: components["responses"]["Problem"];
+        };
+    };
+    createImportList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportListWrite"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportList"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            /** @description The library does not exist. */
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteImportList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateImportList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportListWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportList"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     listCategories: {

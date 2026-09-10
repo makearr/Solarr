@@ -1398,6 +1398,87 @@ paths:
           $ref: "#/components/responses/Problem"
           description: This level exists but has no reader wired up yet.
 
+  /libraries/{id}/import-lists:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listImportLists
+      tags: [library]
+      summary: >-
+        A library's own *Arr-shaped import lists (ADR-38). Scaffolding only
+        -- the sync job that admits anything from one is stage 12.
+      responses:
+        "200":
+          description: The import lists.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ImportList" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: The library does not exist, or the caller cannot read it.
+    post:
+      operationId: createImportList
+      tags: [settings]
+      summary: Add an import list to a library. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportListWrite" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportList" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: The library does not exist.
+
+  /import-lists/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    patch:
+      operationId: updateImportList
+      tags: [settings]
+      summary: Replace an import list's fields. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportListWrite" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportList" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteImportList
+      tags: [settings]
+      summary: Remove an import list. Administrator only.
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /categories:
     get:
       operationId: listCategories
@@ -2641,6 +2722,43 @@ components:
         next_cursor:
           type: string
           description: Empty on the last page.
+
+    ImportList:
+      type: object
+      description: >-
+        A per-library *Arr-shaped import list (ADR-38, todo 4.16).
+        Scaffolding only -- nothing syncs against it yet (stage 12).
+      required: [id, category_id, name, type, cadence_hours, monitor, exclusions, enabled]
+      properties:
+        id: { type: integer, format: int64 }
+        category_id: { type: integer, format: int64 }
+        name: { type: string }
+        type:
+          type: string
+          description: >-
+            Free-form for now -- no music-specific list type is baked in
+            ahead of a real provider integration to name one against.
+        url: { type: string }
+        cadence_hours: { type: integer }
+        monitor: { type: boolean }
+        quality_profile_id: { type: integer, format: int64 }
+        exclusions:
+          type: string
+          description: Free text; nothing reads this yet, since there is no sync job to enforce it.
+        enabled: { type: boolean }
+
+    ImportListWrite:
+      type: object
+      required: [name, type, cadence_hours]
+      properties:
+        name: { type: string, minLength: 1 }
+        type: { type: string, minLength: 1 }
+        url: { type: string }
+        cadence_hours: { type: integer, minimum: 1 }
+        monitor: { type: boolean, default: true }
+        quality_profile_id: { type: integer, format: int64 }
+        exclusions: { type: string }
+        enabled: { type: boolean, default: true }
 
     GateResult:
       type: object

@@ -11,6 +11,7 @@ import { api } from "@/api/client";
 import { Activity } from "./Activity";
 import { Dashboard } from "./Dashboard";
 import { Import } from "./Import";
+import { ImportLists } from "./ImportLists";
 import { Library } from "./Library";
 import { LibraryConfigPlaceholder } from "./LibraryConfigPlaceholder";
 import { LibraryLevelList } from "./LibraryLevelList";
@@ -58,6 +59,13 @@ const routes = [
     },
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/albums", component: Library }),
+  // A real screen (unlike quality/naming/language below), so it gets its own
+  // static route rather than falling through the generic $section catch-all.
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/library/$categoryId/config/import-lists",
+    component: ImportLists,
+  }),
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/library/$categoryId/config/$section",

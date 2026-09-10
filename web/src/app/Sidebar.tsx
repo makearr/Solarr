@@ -159,6 +159,7 @@ export function Sidebar() {
                       isActive={routeParams.categoryId === String(library.id)}
                       activeLevel={routeParams.level}
                       activeSection={routeParams.section}
+                      activePath={path}
                       isExpanded={collapsed ? false : expanded.has(library.id) || routeParams.categoryId === String(library.id)}
                       onToggle={() => toggle(library.id)}
                     />
@@ -195,6 +196,7 @@ const CONFIG_SECTIONS: readonly { key: string; label: string }[] = [
   { key: "quality", label: "Quality profiles" },
   { key: "naming", label: "Naming" },
   { key: "language", label: "Language" },
+  { key: "import-lists", label: "Import lists" },
 ];
 
 function LibraryNode({
@@ -203,6 +205,7 @@ function LibraryNode({
   isActive,
   activeLevel,
   activeSection,
+  activePath,
   isExpanded,
   onToggle,
 }: {
@@ -211,6 +214,7 @@ function LibraryNode({
   isActive: boolean;
   activeLevel: string | undefined;
   activeSection: string | undefined;
+  activePath: string;
   isExpanded: boolean;
   onToggle: () => void;
 }) {
@@ -262,17 +266,32 @@ function LibraryNode({
               </Link>
             </li>
           ))}
-          {CONFIG_SECTIONS.map((section) => (
-            <li key={section.key}>
-              <Link
-                to="/library/$categoryId/config/$section"
-                params={{ categoryId: String(library.id), section: section.key }}
-                className={sectionLinkClass(isActive && activeSection === section.key, false)}
-              >
-                <span className="truncate">{section.label}</span>
-              </Link>
-            </li>
-          ))}
+          {CONFIG_SECTIONS.map((section) =>
+            section.key === "import-lists" ? (
+              <li key={section.key}>
+                <Link
+                  to="/library/$categoryId/config/import-lists"
+                  params={{ categoryId: String(library.id) }}
+                  className={sectionLinkClass(
+                    isActive && activePath === `/library/${library.id}/config/import-lists`,
+                    false,
+                  )}
+                >
+                  <span className="truncate">{section.label}</span>
+                </Link>
+              </li>
+            ) : (
+              <li key={section.key}>
+                <Link
+                  to="/library/$categoryId/config/$section"
+                  params={{ categoryId: String(library.id), section: section.key }}
+                  className={sectionLinkClass(isActive && activeSection === section.key, false)}
+                >
+                  <span className="truncate">{section.label}</span>
+                </Link>
+              </li>
+            ),
+          )}
         </ul>
       )}
     </li>
