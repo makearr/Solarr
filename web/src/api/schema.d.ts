@@ -1094,6 +1094,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/import/sessions/{id}/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo every file this session placed. Administrator only.
+         * @description Every placed unit's own files move back through quarantine (section 10.8) and the rows this session created (never one it only matched against an existing work -- ADR-48) are removed: work_id/edition_id go back to null on the unit, and a work or edition CommitUnit itself created is deleted. Refused with 409 unless the session already finished (DONE or FAILED) -- there is nothing to undo from a session still running, and nothing left once it is already REVERTED.
+         */
+        post: operations["revertImportSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/import/sessions/{id}/units": {
         parameters: {
             query?: never;
@@ -2091,6 +2113,22 @@ export interface components {
         };
         ImportInspectResult: {
             enqueued: boolean;
+        };
+        ImportRevertRequest: {
+            /** @description Defaults to 168 (one week), the same default RemoveAndBlockRequest uses. */
+            quarantine_retain_hours?: number;
+        };
+        ImportRevertResult: {
+            /** Format: int64 */
+            units_reverted: number;
+            /**
+             * Format: int64
+             * @description Only a work this session's own CommitUnit created, never one it matched.
+             */
+            works_deleted: number;
+            /** Format: int64 */
+            editions_deleted: number;
+            quarantined_paths: string[];
         };
         /** @description One inspection-and-import run over one source path (ADR-48). */
         ImportSession: {
@@ -4053,6 +4091,37 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             /** @description The session is not running. */
+            409: components["responses"]["Problem"];
+        };
+    };
+    revertImportSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ImportRevertRequest"];
+            };
+        };
+        responses: {
+            /** @description Reverted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportRevertResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The session cannot be reverted from its current state. */
             409: components["responses"]["Problem"];
         };
     };

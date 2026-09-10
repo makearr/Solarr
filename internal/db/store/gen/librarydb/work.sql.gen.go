@@ -275,6 +275,19 @@ func (q *Queries) CreateWorkPart(ctx context.Context, arg CreateWorkPartParams) 
 	return i, err
 }
 
+const deleteEdition = `-- name: DeleteEdition :exec
+DELETE FROM edition WHERE id = ?
+`
+
+// Import revert's own use (todo 4.9): only ever called for an edition
+// CommitUnit itself created (import_unit.edition_created), and only after
+// every import_unit referencing it has been cleared (ClearImportUnitPlacement) --
+// edition_external_id cascades; import_unit.edition_id does not.
+func (q *Queries) DeleteEdition(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteEdition, id)
+	return err
+}
+
 const deleteWork = `-- name: DeleteWork :exec
 DELETE FROM work WHERE id = ?
 `

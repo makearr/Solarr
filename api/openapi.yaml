@@ -1696,6 +1696,41 @@ paths:
           $ref: "#/components/responses/Problem"
           description: The session is not running.
 
+  /import/sessions/{id}/revert:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: revertImportSession
+      tags: [library]
+      summary: Undo every file this session placed. Administrator only.
+      description: >-
+        Every placed unit's own files move back through quarantine (section
+        10.8) and the rows this session created (never one it only matched
+        against an existing work -- ADR-48) are removed: work_id/edition_id
+        go back to null on the unit, and a work or edition CommitUnit itself
+        created is deleted. Refused with 409 unless the session already
+        finished (DONE or FAILED) -- there is nothing to undo from a session
+        still running, and nothing left once it is already REVERTED.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportRevertRequest" }
+      responses:
+        "200":
+          description: Reverted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportRevertResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          $ref: "#/components/responses/Problem"
+          description: The session cannot be reverted from its current state.
+
   /import/sessions/{id}/units:
     parameters:
       - name: id
@@ -3142,6 +3177,27 @@ components:
       required: [enqueued]
       properties:
         enqueued: { type: boolean }
+
+    ImportRevertRequest:
+      type: object
+      properties:
+        quarantine_retain_hours:
+          type: integer
+          description: Defaults to 168 (one week), the same default RemoveAndBlockRequest uses.
+
+    ImportRevertResult:
+      type: object
+      required: [units_reverted, works_deleted, editions_deleted, quarantined_paths]
+      properties:
+        units_reverted: { type: integer, format: int64 }
+        works_deleted:
+          type: integer
+          format: int64
+          description: Only a work this session's own CommitUnit created, never one it matched.
+        editions_deleted: { type: integer, format: int64 }
+        quarantined_paths:
+          type: array
+          items: { type: string }
 
     ImportSession:
       type: object

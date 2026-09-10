@@ -329,6 +329,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/import/sessions", server.routeListImportSessions)
 			secured.Get("/import/sessions/{id}", server.routeGetImportSession)
 			secured.Post("/import/sessions/{id}/cancel", server.routeCancelImportSession)
+			secured.Post("/import/sessions/{id}/revert", server.routeRevertImportSession)
 			secured.Get("/import/sessions/{id}/units", server.routeListImportUnits)
 			secured.Get("/rootfolders", server.ListRootFolders)
 			secured.Patch("/rootfolders/{id}", server.routeUpdateRootFolderPolicy)

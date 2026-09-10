@@ -19,6 +19,12 @@ type fakeImportSessionLister struct {
 	// cancelErr is what CancelImportSession returns; cancelled is the last id it was asked to cancel.
 	cancelErr error
 	cancelled int64
+	// revertErr/revertResult are what RevertImportSession returns; reverted/lastRetainHours
+	// are the last id and retention it was asked to revert with.
+	revertErr       error
+	revertResult    apiserver.ImportRevertResult
+	reverted        int64
+	lastRetainHours int
 
 	lastFilterState    string
 	lastSessionID      int64
@@ -30,6 +36,14 @@ type fakeImportSessionLister struct {
 func (f *fakeImportSessionLister) CancelImportSession(_ context.Context, id int64) error {
 	f.cancelled = id
 	return f.cancelErr
+}
+
+func (f *fakeImportSessionLister) RevertImportSession(
+	_ context.Context, id int64, retainHours int,
+) (apiserver.ImportRevertResult, error) {
+	f.reverted = id
+	f.lastRetainHours = retainHours
+	return f.revertResult, f.revertErr
 }
 
 func (f *fakeImportSessionLister) ListImportSessions(
@@ -297,6 +311,86 @@ func TestCancelImportSession_AnswersConflictWhenNotRunning(t *testing.T) {
 	cookies := fixture.signIn(t, "admin")
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/7/cancel", ""))
+	if recorder.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+func TestRevertImportSession_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/1/revert", ""))
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.importSessions.reverted != 0 {
+		t.Error("revert ran despite the caller not being an administrator")
+	}
+}
+
+func TestRevertImportSession_DefaultsRetainToOneWeek(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.importSessions.revertResult = apiserver.ImportRevertResult{
+		UnitsReverted: 2, WorksDeleted: 1, EditionsDeleted: 1, QuarantinedPaths: []string{"/q/1", "/q/2"},
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/42/revert", ""))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.importSessions.reverted != 42 {
+		t.Errorf("reverted = %d, want 42", fixture.importSessions.reverted)
+	}
+	if fixture.importSessions.lastRetainHours != 168 {
+		t.Errorf("lastRetainHours = %d, want 168 (the default, no body given)", fixture.importSessions.lastRetainHours)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(recorder.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	paths, _ := body["quarantined_paths"].([]any)
+	if body["units_reverted"] != float64(2) || body["works_deleted"] != float64(1) || len(paths) != 2 {
+		t.Errorf("response = %+v, want the fake's revertResult echoed back", body)
+	}
+}
+
+func TestRevertImportSession_HonoursAnExplicitRetain(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/42/revert", `{"quarantine_retain_hours":24}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.importSessions.lastRetainHours != 24 {
+		t.Errorf("lastRetainHours = %d, want 24", fixture.importSessions.lastRetainHours)
+	}
+}
+
+func TestRevertImportSession_AnswersNotFound(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.importSessions.revertErr = sql.ErrNoRows
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/99/revert", ""))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+func TestRevertImportSession_AnswersConflictWhenNotRevertible(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.importSessions.revertErr = apiserver.ErrImportSessionNotRevertible
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/7/revert", ""))
 	if recorder.Code != http.StatusConflict {
 		t.Errorf("status = %d, want 409 (%s)", recorder.Code, recorder.Body)
 	}

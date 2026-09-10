@@ -155,6 +155,37 @@ func (i Identity) ResolveWorksDetailed(ctx context.Context, at time.Time, links 
 	return resolutions, nil
 }
 
+// DeleteWork removes a work outright, cascading to every table that
+// references it (edition, desired_item, credits, genres, alt titles,
+// work_root_folder, external ids -- every REFERENCES work(id) in the schema
+// is ON DELETE CASCADE). Import revert's own use (todo 4.9): only ever
+// called for a work CommitUnit itself created (import_unit.work_created),
+// and only after every import_unit referencing it -- created or only
+// matched -- has been cleared (ImportSessions.ClearUnitPlacement), since
+// import_unit.work_id carries no cascade of its own.
+func (i Identity) DeleteWork(ctx context.Context, workID int64) error {
+	err := i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).DeleteWork(ctx, workID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: delete work %d: %w", workID, err)
+	}
+	return nil
+}
+
+// DeleteEdition removes an edition outright, cascading edition_external_id.
+// The same import-revert-only use as DeleteWork, one level down ADR-7's
+// Work -> Edition chain.
+func (i Identity) DeleteEdition(ctx context.Context, editionID int64) error {
+	err := i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).DeleteEdition(ctx, editionID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: delete edition %d: %w", editionID, err)
+	}
+	return nil
+}
+
 func resolveWork(
 	ctx context.Context, queries *librarydb.Queries, at time.Time, link WorkLink,
 ) (workID int64, created bool, err error) {

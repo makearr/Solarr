@@ -10,6 +10,22 @@ import (
 	"database/sql"
 )
 
+const clearImportUnitPlacement = `-- name: ClearImportUnitPlacement :exec
+UPDATE import_unit SET work_id = NULL, edition_id = NULL, work_created = 0, edition_created = 0
+WHERE id = ?
+`
+
+// Import revert's own first step for one unit (todo 4.9): work_id/edition_id
+// going back to NULL is what makes it safe to then delete the work/edition
+// row itself (import_unit's own FK to either carries no ON DELETE CASCADE,
+// and every unit that ever referenced a work -- created or only matched --
+// must be cleared before that work can be deleted, not only the unit that
+// created it).
+func (q *Queries) ClearImportUnitPlacement(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, clearImportUnitPlacement, id)
+	return err
+}
+
 const createImportSession = `-- name: CreateImportSession :one
 
 INSERT INTO import_session (source_path, origin, acquisition_id, category_id, state,
