@@ -33,7 +33,7 @@ sentence where possible. Unexported code usually needs none.
 
 Never leave commented-out code. Git remembers it. The same goes for a comment describing what
 used to be there, or why an alternative was rejected — that is a design decision, and design
-decisions live in `architecture.md`.
+decisions live in the ADRs.
 
 Three consecutive comment lines is always too many, in every file: Go, TypeScript, the
 Dockerfile, the Makefile and the workflows. A bare `//` separator between paragraphs is the

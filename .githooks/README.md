@@ -8,8 +8,7 @@ git config core.hooksPath .githooks
 
 | Hook | Does |
 |------|------|
-| `pre-commit` | Nothing currently — commits do not change the version |
+| `pre-commit` | Refuses to commit local-only files (`private/`, `CLAUDE.md`, `config.yml`, `Makefile.local`, `*.db`) even when `git add -f` staged them |
 
-**Committing does not bump the version.** The build number advances only on a successful
-`make image`, and milestones are advanced by hand with `make milestone`. See
-`documentation/versioning.md`.
+**Committing does not bump the version** — only a successful `make image` does; milestones
+are names set with `make milestone NAME="…"`. See `documentation/versioning.md`.
