@@ -669,6 +669,43 @@ paths:
           $ref: "#/components/responses/Problem"
           description: A fire is already in flight for this task.
 
+  /network:
+    get:
+      operationId: getNetworkSettings
+      tags: [settings]
+      summary: Port resolution, egress proxy and IP allowlist (ADR-58).
+      responses:
+        "200":
+          description: The current policy, plus the port actually in effect.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NetworkSettings" }
+        "401": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateNetworkSettings
+      tags: [settings]
+      summary: Change the port, egress proxy or IP allowlist. Administrator only.
+      description: >-
+        Written wholesale, like the cache budget. A port change needs a
+        restart before it takes effect. An allow_cidrs list that would
+        exclude the address making this very change is refused outright
+        (ADR-44, Invariant 89) -- this is the one setting where a mistake
+        costs a container shell to undo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NetworkSettingsUpdate" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NetworkSettings" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /cache:
     get:
       operationId: getCache
@@ -2265,6 +2302,47 @@ components:
             physical file size, which does not shrink on eviction without a
             VACUUM this codebase deliberately does not run.
         measured_at: { type: string, format: date-time }
+
+    NetworkSettings:
+      type: object
+      description: >-
+        ADR-58's own port resolution, egress proxy and IP allowlist. The IP
+        allowlist can only ever deny -- it never authenticates and never
+        grants (Invariant 89).
+      required: [port, in_effect_port, restart_required, proxy_bypass, allow_cidrs]
+      properties:
+        port:
+          type: integer
+          description: >-
+            0 means nothing has been written from this screen yet --
+            config.yml (or its own 5454 default) governs until it is.
+        in_effect_port:
+          type: integer
+          description: The port this running instance actually bound to at startup.
+        restart_required:
+          type: boolean
+          description: port disagrees with in_effect_port -- the change is stored but not live yet.
+        proxy_url:
+          type: string
+          description: Empty means no egress proxy. Scheme is http, https or socks5.
+        proxy_bypass:
+          type: array
+          items: { type: string }
+          description: CIDRs and host suffixes (".lan") that always go direct.
+        allow_cidrs:
+          type: array
+          items: { type: string }
+          description: Empty means every address is allowed, the default.
+
+    NetworkSettingsUpdate:
+      type: object
+      description: The writable half of NetworkSettings.
+      required: [port, proxy_bypass, allow_cidrs]
+      properties:
+        port: { type: integer }
+        proxy_url: { type: string }
+        proxy_bypass: { type: array, items: { type: string } }
+        allow_cidrs: { type: array, items: { type: string } }
 
     DrainPlan:
       type: object

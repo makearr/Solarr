@@ -73,7 +73,7 @@ COPY --from=rootfs /etc/group /etc/group
 COPY --from=rootfs --chown=1000:1000 /skeleton/config /config
 COPY --from=rootfs --chown=1000:1000 /skeleton/data /data
 VOLUME ["/config"]
-EXPOSE 8080
+EXPOSE 5454
 
 # Root only until internal/platform/privilege drops to PUID:PGID, which it does before anything else.
 

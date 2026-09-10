@@ -164,22 +164,52 @@ func (s *Server) identifyByProxy(r *http.Request) (settings.User, error) {
 
 // fromTrustedNetwork reports whether the immediate peer is a configured proxy.
 func (s *Server) fromTrustedNetwork(remoteAddr string) bool {
-	host, _, err := net.SplitHostPort(remoteAddr)
-	if err != nil {
-		host = remoteAddr
-	}
-	peer, err := netip.ParseAddr(host)
-	if err != nil {
+	peer, ok := peerAddress(remoteAddr)
+	if !ok {
 		return false
 	}
-	peer = peer.Unmap()
-
 	for _, network := range s.auth.ProxyNetworks {
 		if network.Contains(peer) {
 			return true
 		}
 	}
 	return false
+}
+
+// peerAddress parses the socket's own remote address, unmapped to its plain
+// v4 or v6 form so it compares directly against a configured CIDR.
+func peerAddress(remoteAddr string) (netip.Addr, bool) {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		host = remoteAddr
+	}
+	peer, err := netip.ParseAddr(host)
+	if err != nil {
+		return netip.Addr{}, false
+	}
+	return peer.Unmap(), true
+}
+
+// resolvedClientAddress is the socket peer, promoted to X-Forwarded-For's
+// claim only from a trusted proxy -- else the header is decoration (Inv. 89).
+func (s *Server) resolvedClientAddress(r *http.Request) netip.Addr {
+	peer, ok := peerAddress(r.RemoteAddr)
+	if !ok {
+		return netip.Addr{}
+	}
+	if !s.fromTrustedNetwork(r.RemoteAddr) {
+		return peer
+	}
+
+	forwarded := r.Header.Get("X-Forwarded-For")
+	if forwarded == "" {
+		return peer
+	}
+	first := strings.TrimSpace(strings.Split(forwarded, ",")[0])
+	if claimed, err := netip.ParseAddr(first); err == nil {
+		return claimed.Unmap()
+	}
+	return peer
 }
 
 func bearerToken(header string) string {

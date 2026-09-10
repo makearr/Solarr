@@ -71,6 +71,9 @@ type process struct {
 	// cacheSweep is ADR-60's own measure/enforce/clear (todo 4.19), built once
 	// in registerCacheJob and reused by the API adapter in startServer.
 	cacheSweep *cachebudget.Sweep
+	// effectivePort is ADR-58's own resolution, computed once here and shown
+	// by the Network screen as "in effect" -- a port change needs a restart.
+	effectivePort int
 }
 
 // Serve is the startup sequence of architecture section 15.1, in order.
@@ -363,11 +366,25 @@ func (p *process) startJobs(ctx context.Context) error {
 	return nil
 }
 
+// resolvedServerPort applies ADR-58's order: env, then settings.db, then
+// config.yml's own value (or 5454) -- source is reported for the banner.
+func (p *process) resolvedServerPort() (port int, source string) {
+	if _, envSet := os.LookupEnv(config.EnvName("server.port")); envSet {
+		return p.config.Server.Port, "env"
+	}
+	if stored := p.cache.Snapshot().NetworkSettings().Port; stored != 0 {
+		return stored, "settings.db"
+	}
+	return p.config.Server.Port, "config.yml"
+}
+
 func (p *process) startServer(ctx context.Context) error {
 	authConfig, err := p.authConfig()
 	if err != nil {
 		return err
 	}
+	var portSource string
+	p.effectivePort, portSource = p.resolvedServerPort()
 
 	p.reportRootFolders()
 	// Each is also a registered task (todo 4.19): this first call is what
@@ -406,7 +423,7 @@ func (p *process) startServer(ctx context.Context) error {
 
 	server, err := apiserver.New(apiserver.Config{
 		Bind:    p.config.Server.Bind,
-		Port:    p.config.Server.Port,
+		Port:    p.effectivePort,
 		BaseURL: p.config.Server.BaseURL,
 		Build: apiserver.BuildInfo{
 			Version: p.build.Version, Milestone: p.build.Milestone, Commit: p.build.Commit,
@@ -507,6 +524,7 @@ func (p *process) startServer(ctx context.Context) error {
 	server.MarkReady()
 	p.logger.Info("serving",
 		slog.String("address", server.Address()),
+		slog.String("port_source", portSource),
 		slog.String("version", p.build.Version),
 		slog.String("sqlite_driver", store.DriverName()),
 		slog.String("mode", string(p.config.Mode)))

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"net/url"
 	"time"
 
 	"github.com/makearr/MediaNexus/internal/media/music"
@@ -10,6 +11,23 @@ import (
 	"github.com/makearr/MediaNexus/internal/platform/clock"
 	"github.com/makearr/MediaNexus/internal/platform/httpx"
 )
+
+// liveProxyPolicy is ADR-58's egress proxy, read live so every client shares
+// one closure and a Network screen change applies with no restart.
+func (p *process) liveProxyPolicy() httpx.LiveProxyPolicy {
+	return func() httpx.ProxyPolicy {
+		network := p.cache.Snapshot().NetworkSettings()
+		if network.ProxyURL == "" {
+			return httpx.ProxyPolicy{}
+		}
+		parsed, err := url.Parse(network.ProxyURL)
+		if err != nil {
+			p.logger.Warn("configured egress proxy no longer parses", "error", err)
+			return httpx.ProxyPolicy{}
+		}
+		return httpx.ProxyPolicy{URL: parsed, Bypass: network.ProxyBypass}
+	}
+}
 
 // wikidataFetcher builds ADR-8's biography lookup: two hosts, two ADR-13
 // rate-limit/breaker buckets, neither shared with MusicBrainz's own (a
@@ -26,7 +44,7 @@ func (p *process) wikidataFetcher() music.Biographer {
 		}, nil)
 		breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
 		return httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
-			Provider: providerName, UserAgent: agent,
+			Provider: providerName, UserAgent: agent, Proxy: p.liveProxyPolicy(),
 		})
 	}
 
@@ -57,13 +75,13 @@ func (p *process) musicBrainzProvider() musicbrainz.Provider {
 	agent := httpx.UserAgent(p.build.Version)
 	config := p.config.Metadata.MusicBrainz
 	direct := musicbrainz.NewDirect(httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
-		Provider: musicbrainz.DirectName, UserAgent: agent,
+		Provider: musicbrainz.DirectName, UserAgent: agent, Proxy: p.liveProxyPolicy(),
 	}), config.BaseURL)
 
 	sources := []musicbrainz.Source{direct}
 	if config.ProxyEnabled {
 		proxy := musicbrainz.NewProxy(httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
-			Provider: musicbrainz.ProxyName, UserAgent: agent,
+			Provider: musicbrainz.ProxyName, UserAgent: agent, Proxy: p.liveProxyPolicy(),
 		}), config.ProxyBaseURL)
 		// The proxy goes first (ADR-29: "preferred, never required") -- direct
 		// MusicBrainz is what a proxy failure (the breaker opening) falls back
@@ -89,5 +107,6 @@ func (p *process) publicIPClient() *httpx.Client {
 			Provider:  "public-ip",
 			UserAgent: httpx.UserAgent(p.build.Version),
 			Timeout:   10 * time.Second,
+			Proxy:     p.liveProxyPolicy(),
 		})
 }

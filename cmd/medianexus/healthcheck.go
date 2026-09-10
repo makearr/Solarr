@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -8,10 +9,15 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/makearr/MediaNexus/internal/api/apiserver"
+	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/MediaNexus/internal/db/store"
+	"github.com/makearr/MediaNexus/internal/platform/clock"
 	"github.com/makearr/MediaNexus/internal/platform/config"
 	"github.com/makearr/MediaNexus/internal/platform/fsx"
 )
@@ -35,7 +41,7 @@ func runHealthcheck(args []string, out, errOut io.Writer) error {
 		return err
 	}
 
-	endpoint := healthEndpoint(loaded)
+	endpoint := healthEndpoint(loaded, resolvedHealthcheckPort(loaded))
 	client := &http.Client{Timeout: healthcheckTimeout} //nolint:forbidigo // a probe against ourselves, not an outbound provider
 
 	response, err := client.Get(endpoint)
@@ -55,7 +61,7 @@ func runHealthcheck(args []string, out, errOut io.Writer) error {
 
 // healthEndpoint builds the URL from the same configuration the server binds with, so a non-
 // default port or base URL does not silently break the probe.
-func healthEndpoint(loaded config.Config) string {
+func healthEndpoint(loaded config.Config, port int) string {
 	host := loaded.Server.Bind
 	switch host {
 	case "", "0.0.0.0":
@@ -67,7 +73,38 @@ func healthEndpoint(loaded config.Config) string {
 	base := strings.TrimSuffix(loaded.Server.BaseURL, "/")
 	return (&url.URL{
 		Scheme: "http",
-		Host:   net.JoinHostPort(host, fmt.Sprint(loaded.Server.Port)),
+		Host:   net.JoinHostPort(host, fmt.Sprint(port)),
 		Path:   base + apiserver.APIPrefix + "/health",
 	}).String()
+}
+
+// resolvedHealthcheckPort re-derives ADR-58's order from scratch, or a port
+// change from the Network screen would make this probe the wrong one.
+func resolvedHealthcheckPort(loaded config.Config) int {
+	if _, envSet := os.LookupEnv(config.EnvName("server.port")); envSet {
+		return loaded.Server.Port
+	}
+
+	settingsPath := filepath.Join(loaded.Paths.DBDir, "settings.db")
+	if _, err := fsx.NewOS().Stat(settingsPath); err != nil {
+		return loaded.Server.Port
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), healthcheckTimeout)
+	defer cancel()
+
+	opened, err := store.Open(ctx, clock.NewSystem(), store.Config{Name: "settings", Path: settingsPath, ReadPoolSize: 1})
+	if err != nil {
+		return loaded.Server.Port
+	}
+	defer func() { _ = opened.Close() }()
+
+	cache, err := settings.NewCache(ctx, opened)
+	if err != nil {
+		return loaded.Server.Port
+	}
+	if stored := cache.Snapshot().NetworkSettings().Port; stored != 0 {
+		return stored
+	}
+	return loaded.Server.Port
 }
