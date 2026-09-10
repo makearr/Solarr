@@ -1,7 +1,7 @@
 # Generated output is committed and never hand-edited (ADR-31). A needed change
 # is made to openapi.yaml and regenerated; CI fails if the two disagree.
 package: gen
-output: internal/apiserver/gen/api.gen.go
+output: internal/api/apiserver/gen/api.gen.go
 generate:
   models: true
   chi-server: true

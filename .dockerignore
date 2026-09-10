@@ -12,7 +12,7 @@ CLAUDE.md
 config.local.yml
 documentation
 web/node_modules
-internal/webui/dist
+internal/api/webui/dist
 Makefile.local
 medianexus
 *.db

@@ -1,7 +1,7 @@
 # SQL and sqlc
 
 SQL lives in `queries/*.sql` and `migrations/*.sql`; typed Go is generated into
-`internal/store/gen/` and committed (ADR-31). Change the SQL and run
+`internal/db/store/gen/` and committed (ADR-31). Change the SQL and run
 `make sqlc`. CI fails on stale output.
 
 ## SQL files must be pure ASCII
@@ -159,6 +159,6 @@ and the optional `media_type` is a residual filter on the handful of rows that s
 it. Their plans were checked, not assumed.
 
 So: a list surface — anything where the filters *are* the query — composes its WHERE in
-Go with `store.Predicates`, adding only what is set. `internal/library/works.go` is the
+Go with `store.Predicates`, adding only what is set. `internal/db/library/works.go` is the
 worked example, and `ExplainList` beside it exists so a test can assert the plan rather
 than the timing. Everything else stays sqlc.

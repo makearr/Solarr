@@ -23,7 +23,7 @@ type Task struct {
 	// ScheduleSource resolves to when nothing overrides it.
 	DefaultCadence string
 	// Tier is ADR-26's normal/advanced/expert vocabulary. A plain string,
-	// not settings.Tier -- this package never imports internal/settings
+	// not settings.Tier -- this package never imports internal/db/settings
 	// (architecture §2), so the caller's own tier constant is passed as text.
 	Tier string
 	// Enqueue submits the actual work and reports what happened, so a

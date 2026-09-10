@@ -1,12 +1,12 @@
 # Benchmarks
 
 ADR-28 states performance as numbers, and numbers only mean something against a corpus.
-`internal/library/fixture` builds one; `internal/library/bench_test.go` measures against it.
+`internal/db/library/fixture` builds one; `internal/db/library/bench_test.go` measures against it.
 
 ## The corpus
 
 `fixture.Ensure` generates a `library.db` and caches it under
-`internal/library/testdata/fixtures/`, named for its spec. Generation is deterministic —
+`internal/db/library/testdata/fixtures/`, named for its spec. Generation is deterministic —
 same spec, same rows — so two runs, or two drivers, compare like with like. Nothing in
 that directory is committed (`*.db` is gitignored); delete it to force a rebuild.
 
@@ -49,7 +49,7 @@ the indexed-title-lookup stand-in this section used to describe.
 
 ## The driver (ADR-5)
 
-The driver is named in one place, behind a build tag: `internal/store/driver_modernc.go`
+The driver is named in one place, behind a build tag: `internal/db/store/driver_modernc.go`
 and `driver_ncruces.go`. `make bench-drivers` runs the same measurements under both.
 
 ```sh
@@ -139,7 +139,7 @@ rows each with interactive writes interleaved:
 | Beside the writer, `RESTART` when large | 18.7 MB, still climbing | 18.7-20.2 ms |
 | **Beside the writer, writer rewinds when large** | **2.2 MB** | **23.5-26 ms** |
 
-The last is what `internal/store/checkpoint.go` does. Copying frames out is the common
+The last is what `internal/db/store/checkpoint.go` does. Copying frames out is the common
 case and runs on its own connection beside the writer, where it costs nobody anything —
 checkpointing takes the checkpointer lock, not the writer lock. But a checkpoint on a
 second connection cannot rewind the file: SQLite does that when a transaction begins
@@ -156,7 +156,7 @@ batches; the benchmark's writer never pauses, so its test guards 30ms and says s
 ## Scan batch writes (`library.Physical`, `library.Identity`)
 
 Measured 2026-09-03 against the real 500k-file fixture, one query per file inside a single
-transaction (no bulk SQL), 200 files per batch matching `internal/scan`'s own batch size:
+transaction (no bulk SQL), 200 files per batch matching `internal/scanning/scan`'s own batch size:
 
 | Batch | p50 | p99 | Limit |
 |---|---|---|---|
@@ -170,4 +170,4 @@ scan rarely does (most files in a batch share an album, so most links resolve to
 the same transaction already created). No case here approached rewriting this as bulk SQL
 or splitting the two transactions differently; the numbers did not ask for it.
 `TestADR28_ScanRegisterBatch*` and `TestADR28_ScanResolveWorks*` in
-`internal/library/bench_scan_test.go` hold these as tests, not just a report.
+`internal/db/library/bench_scan_test.go` hold these as tests, not just a report.

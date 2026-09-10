@@ -4,21 +4,21 @@ const SECTIONS: Record<string, { title: string; description: string }> = {
   quality: {
     title: "Quality profiles",
     description:
-      "internal/score already interprets tier-list-or-target rules (ADR-40) and " +
-      "internal/settings.Cache already has full CRUD for them, but there is no REST API " +
+      "internal/identify/score already interprets tier-list-or-target rules (ADR-40) and " +
+      "internal/db/settings.Cache already has full CRUD for them, but there is no REST API " +
       "or builder UI to create one by hand yet -- no named default profile ships either.",
   },
   naming: {
     title: "Naming",
     description:
-      "internal/naming already compiles and renders templates, and the shipped music " +
+      "internal/moving/naming already compiles and renders templates, and the shipped music " +
       "default reproduces the existing library byte for byte (section 11.8), but there is " +
       "no template editor or a naming_profile table for a second one to live in yet.",
   },
   language: {
     title: "Language",
     description:
-      "internal/settings.Cache already has full CRUD for language profiles (required/" +
+      "internal/db/settings.Cache already has full CRUD for language profiles (required/" +
       "preferred audio and subtitle languages, ADR-40's language axis), but there is no " +
       "REST API or builder UI to create one by hand yet.",
   },

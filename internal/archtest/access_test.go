@@ -28,7 +28,7 @@ var forbiddenInHandlers = []string{
 // including those the caller must get a 404 for (ADR-27). The filtering belongs
 // below the handler, so this asserts handlers never reach past it.
 func TestHandlersCannotBypassCategoryFiltering(t *testing.T) {
-	directory := filepath.Join("..", "apiserver")
+	directory := filepath.Join("..", "api", "apiserver")
 
 	entries, err := os.ReadDir(directory)
 	if err != nil {

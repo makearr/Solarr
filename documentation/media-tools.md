@@ -98,7 +98,7 @@ kid3 and its Qt, or linking taglib — which means CGO and is what ADR-30 exists
 
 ## How the tools are called
 
-`internal/mediatool` is ADR-30's interface. `mediatool.Tool` rather than
+`internal/platform/mediatool` is ADR-30's interface. `mediatool.Tool` rather than
 `MediaTool`, because `mediatool.MediaTool` stutters.
 
 **ffprobe takes one file per invocation**, so ADR-30's "one invocation per import

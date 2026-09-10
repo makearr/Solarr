@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/makearr/MediaNexus/internal/clock"
-	"github.com/makearr/MediaNexus/internal/store"
-	"github.com/makearr/MediaNexus/internal/store/gen/jobsdb"
+	"github.com/makearr/MediaNexus/internal/db/store"
+	"github.com/makearr/MediaNexus/internal/db/store/gen/jobsdb"
+	"github.com/makearr/MediaNexus/internal/platform/clock"
 )
 
 // failBatchSize bounds each transaction against Invariant 2.

@@ -15,7 +15,7 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY web/ ./
-# outDir points at internal/webui/dist, where go:embed reaches it.
+# outDir points at internal/api/webui/dist, where go:embed reaches it.
 RUN npm run build
 
 FROM --platform=$BUILDPLATFORM golang:1 AS build
@@ -37,7 +37,7 @@ RUN go mod download
 
 COPY . .
 # Without this the image runs but serves no interface.
-COPY --from=web /internal/webui/dist ./internal/webui/dist
+COPY --from=web /internal/api/webui/dist ./internal/api/webui/dist
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath \
@@ -75,7 +75,7 @@ COPY --from=rootfs --chown=1000:1000 /skeleton/data /data
 VOLUME ["/config"]
 EXPOSE 8080
 
-# Root only until internal/privilege drops to PUID:PGID, which it does before anything else.
+# Root only until internal/platform/privilege drops to PUID:PGID, which it does before anything else.
 
 # A subcommand of the same binary, so the image needs no curl. start-period
 # covers migrations on a large database.

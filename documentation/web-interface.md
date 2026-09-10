@@ -4,7 +4,7 @@ Vite, React, TanStack Query and Tailwind, served from `embed.FS` (ADR-19, ADR-31
 
 ## Where the bundle lives
 
-`make web` writes it to `internal/webui/dist`, not `web/dist`: an embed pattern cannot climb
+`make web` writes it to `internal/api/webui/dist`, not `web/dist`: an embed pattern cannot climb
 out of its own package directory.
 
 Nothing in it is committed, but the directory must exist or `go:embed` has no pattern to match

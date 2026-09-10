@@ -99,7 +99,7 @@ export function Unidentified() {
 }
 
 /** Only a musicbrainz:release-group candidate can be confirmed today
- *  (internal/music.ErrUnsupportedProvider) -- other strategies (hash,
+ *  (internal/media/music.ErrUnsupportedProvider) -- other strategies (hash,
  *  fingerprint) do not carry a provider id the resolve action can look a
  *  title up from. */
 function ResolveAction({ file, onConfirm }: { file: UnidentifiedFile; onConfirm: () => void }) {

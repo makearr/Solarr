@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/clock"
+	"github.com/makearr/MediaNexus/internal/platform/clock"
 )
 
 // Mode is the dry-run level (ADR-20).

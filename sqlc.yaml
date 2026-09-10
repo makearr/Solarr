@@ -7,7 +7,7 @@ sql:
     gen:
       go:
         package: "settingsdb"
-        out: "internal/store/gen/settingsdb"
+        out: "internal/db/store/gen/settingsdb"
         emit_prepared_queries: false
         emit_interface: true
         emit_empty_slices: true
@@ -20,7 +20,7 @@ sql:
     gen:
       go:
         package: "jobsdb"
-        out: "internal/store/gen/jobsdb"
+        out: "internal/db/store/gen/jobsdb"
         emit_prepared_queries: false
         emit_interface: true
         emit_empty_slices: true
@@ -33,7 +33,7 @@ sql:
     gen:
       go:
         package: "librarydb"
-        out: "internal/store/gen/librarydb"
+        out: "internal/db/store/gen/librarydb"
         emit_prepared_queries: false
         emit_interface: true
         emit_empty_slices: true
@@ -46,7 +46,7 @@ sql:
     gen:
       go:
         package: "metadatadb"
-        out: "internal/store/gen/metadatadb"
+        out: "internal/db/store/gen/metadatadb"
         emit_prepared_queries: false
         emit_interface: true
         emit_empty_slices: true

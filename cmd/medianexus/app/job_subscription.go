@@ -1,0 +1,48 @@
+package app
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/makearr/MediaNexus/cmd/medianexus/adapters"
+	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/MediaNexus/internal/jobs"
+	"github.com/makearr/MediaNexus/internal/media/music"
+	"github.com/makearr/MediaNexus/internal/platform/clock"
+)
+
+// registerSubscriptionExpandJob wires section 19.6's discography expansion
+// into the registry and the executor: the same musicbrainz.Provider
+// enrichment already shares, this process's own category resolution
+// (adapters.Categories, already used by the scan wiring), and the fallback
+// quality profile ensureDefaultQualityProfile seeded at startup.
+func (p *process) registerSubscriptionExpandJob(registry *jobs.Registry, executor *jobs.Executor) error {
+	if err := registry.Register(music.SubscriptionExpandDefinition); err != nil {
+		return err
+	}
+	desired := library.NewDesired(p.library)
+	job := music.NewSubscriptionExpandJob(music.SubscriptionExpandConfig{
+		Subscriptions:    library.NewSubscriptions(p.library),
+		People:           library.NewPeople(p.library),
+		Identity:         library.NewIdentity(p.library),
+		Desired:          &desired,
+		Categories:       adapters.Categories{Cache: p.cache},
+		Provider:         p.musicBrainzProvider(),
+		DefaultProfileID: p.defaultQualityProfileID,
+		Clock:            clock.NewSystem(),
+		Logger:           p.logger,
+	})
+	executor.Handle(music.SubscriptionExpandJobType, job)
+	return nil
+}
+
+// enqueueSubscriptionExpand submits one expand sweep. Registered as a task
+// with internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
+// schedule, not only once at startup.
+func (p *process) enqueueSubscriptionExpand(ctx context.Context) (jobs.EnqueueResult, error) {
+	result, err := music.EnqueueSubscriptionExpand(ctx, p.queue)
+	if err != nil {
+		p.logger.Warn("enqueue subscription expand", slog.Any("error", err))
+	}
+	return result, err
+}

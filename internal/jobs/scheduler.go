@@ -9,10 +9,10 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/makearr/MediaNexus/internal/clock"
+	"github.com/makearr/MediaNexus/internal/platform/clock"
 )
 
-// cronParser matches internal/config's own validator and store.BackupSchedule's,
+// cronParser matches internal/platform/config's own validator and store.BackupSchedule's,
 // so a schedule accepted anywhere in this codebase parses identically everywhere.
 var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 
@@ -71,8 +71,8 @@ var ErrUnknownTask = errors.New("jobs: unknown task")
 
 // ScheduleSource resolves a task's live, current cadence and enabled flag,
 // re-read every tick so a setting change takes effect without a restart.
-// Implemented by a cmd/medianexus adapter over internal/settings.Cache --
-// this package never imports internal/settings (architecture §2).
+// Implemented by a cmd/medianexus adapter over internal/db/settings.Cache --
+// this package never imports internal/db/settings (architecture §2).
 type ScheduleSource interface {
 	// Cadence returns the task's effective cron expression: an override if
 	// one is stored, defaultCadence otherwise.

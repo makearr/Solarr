@@ -19,212 +19,226 @@ import (
 // allowedInternalImports is the dependency graph of architecture §2, written out.
 var allowedInternalImports = map[string][]string{
 	"cmd/medianexus": {
-		"internal/apiserver", "internal/auth", "internal/clock", "internal/config",
-		"internal/egress", "internal/events", "internal/fsx", "internal/health",
-		"internal/httpx", "internal/importjob", "internal/inspect", "internal/jobs",
-		"internal/library", "internal/mediatool", "internal/metacache", "internal/model",
-		"internal/drainjob", "internal/mover", "internal/moverjob", "internal/music", "internal/musicbrainz", "internal/paginate",
-		"internal/cachebudget", "internal/capacity", "internal/privilege", "internal/probe", "internal/recovery",
-		"internal/scan", "internal/settings", "internal/store", "internal/webui",
-		"internal/wikidata", "migrations",
+		"cmd/medianexus/app", "internal/api/apiserver", "internal/api/auth", "internal/db/settings",
+		"internal/db/store", "internal/platform/clock", "internal/platform/config", "internal/platform/fsx",
+		"migrations",
 	},
-	"internal/auth":  {"internal/clock", "internal/secrets"},
-	"internal/authz": {"internal/settings"},
-	"internal/apiserver": {
-		"internal/apiserver/gen", "internal/auth", "internal/authz", "internal/clock",
-		"internal/config", "internal/events", "internal/fsx", "internal/jobs",
-		"internal/model", "internal/paginate", "internal/parse", "internal/privilege",
-		"internal/score", "internal/settings",
+	"cmd/medianexus/app": {
+		"cmd/medianexus/adapters", "internal/api/apiserver", "internal/api/auth", "internal/api/health",
+		"internal/api/webui", "internal/db/library", "internal/db/recovery", "internal/db/settings",
+		"internal/db/store", "internal/importing/importjob", "internal/jobs", "internal/jobs/cachebudget",
+		"internal/jobs/capacity", "internal/media/music", "internal/metadata/metacache",
+		"internal/metadata/musicbrainz", "internal/metadata/wikidata", "internal/moving/drainjob",
+		"internal/moving/moverjob", "internal/platform/clock", "internal/platform/config",
+		"internal/platform/egress", "internal/platform/events", "internal/platform/fsx",
+		"internal/platform/httpx", "internal/platform/mediatool", "internal/platform/privilege",
+		"internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
-	"internal/clock":  {},
-	"internal/config": {"internal/fsx", "internal/privilege"},
-	"internal/events": {"internal/clock"},
-	"internal/fsx":    {"internal/clock"},
-	"internal/httpx":  {"internal/clock"},
-	"internal/health": {"internal/store"},
+	"cmd/medianexus/adapters": {
+		"internal/api/apiserver", "internal/db/library", "internal/db/settings",
+		"internal/identify/model", "internal/importing/importjob", "internal/importing/inspect",
+		"internal/jobs", "internal/jobs/cachebudget", "internal/media/music",
+		"internal/metadata/musicbrainz", "internal/moving/drainjob", "internal/moving/mover",
+		"internal/moving/moverjob", "internal/platform/clock", "internal/platform/egress",
+		"internal/platform/paginate",
+	},
+	"internal/api/auth":  {"internal/platform/clock", "internal/platform/secrets"},
+	"internal/api/authz": {"internal/db/settings"},
+	"internal/api/apiserver": {
+		"internal/api/apiserver/gen", "internal/api/auth", "internal/api/authz", "internal/platform/clock",
+		"internal/platform/config", "internal/platform/events", "internal/platform/fsx", "internal/jobs",
+		"internal/identify/model", "internal/platform/paginate", "internal/identify/parse", "internal/platform/privilege",
+		"internal/identify/score", "internal/db/settings",
+	},
+	"internal/platform/clock":  {},
+	"internal/platform/config": {"internal/platform/fsx", "internal/platform/privilege"},
+	"internal/platform/events": {"internal/platform/clock"},
+	"internal/platform/fsx":    {"internal/platform/clock"},
+	"internal/platform/httpx":  {"internal/platform/clock"},
+	"internal/api/health":      {"internal/db/store"},
 	"internal/jobs": {
-		"internal/clock", "internal/paginate", "internal/store", "internal/store/gen/jobsdb",
+		"internal/platform/clock", "internal/platform/paginate", "internal/db/store", "internal/db/store/gen/jobsdb",
 	},
 	// Builds a library.db at ADR-22 scale for the ADR-28 and ADR-5 benchmarks.
 	// Pure domain types (architecture section 6): no I/O, so it depends on nothing
 	// of ours.
-	"internal/model": {},
+	"internal/identify/model": {},
 	// ADR-18's parser: pure string-to-struct, no I/O, so it depends on nothing but
 	// the attribute vocabulary it shares with future scorers via model.Attributes.
-	"internal/parse": {"internal/model"},
+	"internal/identify/parse": {"internal/identify/model"},
 	// ADR-40's quality/language interpreter: pure rule evaluation producing a
 	// model.Decision, no I/O. A caller decodes settings.QualityProfile's raw JSON
-	// itself and passes the parsed rules in, so this never imports internal/settings.
-	"internal/score": {"internal/model"},
+	// itself and passes the parsed rules in, so this never imports internal/db/settings.
+	"internal/identify/score": {"internal/identify/model"},
 	// Section 10.2's weighted-distance identity matcher: pure, no I/O. Produces a
-	// model.Decision-shaped explanation the same way internal/score does.
-	"internal/match": {"internal/model"},
+	// model.Decision-shaped explanation the same way internal/identify/score does.
+	"internal/identify/match": {"internal/identify/model"},
 	// Field-level provider merge (ADR-8): no I/O, the caller fetches rows and
 	// priority order.
-	"internal/metaresolve": {},
-	"internal/library/fixture": {
-		"internal/clock", "internal/fsx", "internal/store",
-		"internal/store/gen/librarydb", "migrations",
+	"internal/metadata/metaresolve": {},
+	"internal/db/library/fixture": {
+		"internal/platform/clock", "internal/platform/fsx", "internal/db/store",
+		"internal/db/store/gen/librarydb", "migrations",
 	},
 	// Owns librarydb, as jobs owns jobsdb and settings owns settingsdb. fsx is the
 	// quick hash's read of a file's head and tail (section 5.2), nothing else here
 	// touches the filesystem. model is F29's queue entry shape (model.Identification,
 	// the ADR-24 chain's own candidate type) -- model has no dependencies of its own,
 	// so this stays a downward arrow like every other entry here.
-	"internal/library": {
-		"internal/clock", "internal/fsx", "internal/inspect", "internal/model", "internal/paginate",
-		"internal/store", "internal/store/gen/librarydb",
+	"internal/db/library": {
+		"internal/platform/clock", "internal/platform/fsx", "internal/importing/inspect", "internal/identify/model", "internal/platform/paginate",
+		"internal/db/store", "internal/db/store/gen/librarydb",
 	},
 	// The only unprompted outbound call, so it needs the one way out (Invariant 28).
-	"internal/egress": {"internal/clock", "internal/httpx"},
-	"internal/store":  {"internal/clock", "internal/fsx"},
+	"internal/platform/egress": {"internal/platform/clock", "internal/platform/httpx"},
+	"internal/db/store":        {"internal/platform/clock", "internal/platform/fsx"},
 	// ADR-30's external tools. It runs subprocesses and parses their output; it
 	// touches no database and no filesystem of ours.
-	"internal/mediatool": {},
+	"internal/platform/mediatool": {},
 	// Section 21.6's resize-and-encode step: pure image processing (stdlib image
 	// package plus a pure-Go WebP encoder dependency), no I/O of its own.
-	"internal/artwork": {},
+	"internal/platform/artwork": {},
 	// Section 11.8's path template compiler/renderer: parsing and string
 	// building only, no I/O of its own. fsx is the one dependency, for the
 	// ADR-14 sanitiser choke point every rendered component passes through.
-	"internal/naming": {"internal/fsx"},
+	"internal/moving/naming": {"internal/platform/fsx"},
 	// Section 11.7's root-folder chooser: pure ranking logic over candidates
 	// the caller already fetched, no I/O and no settings.db of its own --
-	// the same separation internal/score keeps from internal/settings.
-	"internal/placement": {},
-	// ADR-51's move engine. Plan is pure like internal/placement's own
+	// the same separation internal/identify/score keeps from internal/db/settings.
+	"internal/moving/placement": {},
+	// ADR-51's move engine. Plan is pure like internal/moving/placement's own
 	// Resolve, reusing placement.RootCandidate rather than a second,
 	// independent copy of the same root-policy shape (this project's own
 	// established lesson: two copies of one policy shape is how they
 	// drift). ApplyOne does real file I/O (fsx) but still touches no
 	// database of its own -- RECORD/UNLINK/TIDY stay the caller's job. The
 	// job orchestration layer (persistence, resumability) is its own,
-	// separate package when it lands, the same split internal/inspect
-	// keeps from internal/importjob.
-	"internal/mover": {"internal/fsx", "internal/placement"},
+	// separate package when it lands, the same split internal/importing/inspect
+	// keeps from internal/importing/importjob.
+	"internal/moving/mover": {"internal/platform/fsx", "internal/moving/placement"},
 	// ADR-48's import inspection: walk, classify, group. No media-type
 	// knowledge and no database of its own (ADR-23) -- tag reading and
 	// segment plausibility are both injected functions, so this never
-	// imports internal/mediatool, internal/parse or internal/music. fsx is
+	// imports internal/platform/mediatool, internal/identify/parse or internal/media/music. fsx is
 	// the one dependency, for the walk itself.
-	"internal/inspect": {"internal/fsx"},
+	"internal/importing/inspect": {"internal/platform/fsx"},
 	// ADR-36's composite acquisition priority: pure arithmetic over
 	// caller-supplied facts, no I/O and no database of its own -- the same
-	// separation internal/score and internal/placement keep from their own
+	// separation internal/identify/score and internal/moving/placement keep from their own
 	// callers. Ready ahead of its consumer (stage 5/6's planner, which does
 	// not exist yet), the same shape those two packages were before their
 	// own callers existed.
-	"internal/priority": {},
+	"internal/identify/priority": {},
 	// ADR-49's archive support: List (no writes) and Extract (workspace
 	// only, via fsx's SafeJoin choke point, Invariant 76). Reading the
 	// source archive itself uses the real filesystem directly, the same
-	// reasoning internal/mediatool's own real-path subprocess reads
+	// reasoning internal/platform/mediatool's own real-path subprocess reads
 	// already have -- rar/7z multi-volume support needs real sibling
 	// files next to the path given, not an abstraction over them.
-	"internal/archive": {"internal/fsx"},
+	"internal/platform/archive": {"internal/platform/fsx"},
 	// Section 11.7's capacity-polling job: probes every configured root via
 	// fsx and writes what it found back to settings.db.
-	"internal/capacity": {"internal/clock", "internal/fsx", "internal/jobs", "internal/settings"},
-	// ADR-60's bounded cache: measures and evicts internal/music's own flat
-	// images directory (fsx) and internal/metacache's own SQLite-backed
+	"internal/jobs/capacity": {"internal/platform/clock", "internal/platform/fsx", "internal/jobs", "internal/db/settings"},
+	// ADR-60's bounded cache: measures and evicts internal/media/music's own flat
+	// images directory (fsx) and internal/metadata/metacache's own SQLite-backed
 	// cache, then records what it found back to settings.db -- the same
-	// probe-then-write-facts shape internal/capacity already has.
-	"internal/cachebudget": {"internal/clock", "internal/fsx", "internal/metacache", "internal/settings"},
+	// probe-then-write-facts shape internal/jobs/capacity already has.
+	"internal/jobs/cachebudget": {"internal/platform/clock", "internal/platform/fsx", "internal/metadata/metacache", "internal/db/settings"},
 	// The music media type, direct-wired until stage 9 extracts it as a plugin. Its
 	// scan.Consumer needs the sweep's own types (scan), root folder paths (settings),
 	// the filesystem seam for the quick hash (fsx) and an injected clock (ADR-17) --
 	// but never store or librarydb directly, which stays library's alone to touch.
 	// The enrichment job adds musicbrainz (ADR-29) and jobs (its own handler,
 	// mirroring scan.Job).
-	"internal/music": {
-		"internal/artwork", "internal/clock", "internal/fsx", "internal/httpx",
-		"internal/inspect", "internal/jobs", "internal/library", "internal/match",
-		"internal/mediatool", "internal/model", "internal/mover", "internal/moverjob",
-		"internal/musicbrainz", "internal/naming", "internal/placement",
-		"internal/parse", "internal/scan", "internal/settings", "internal/wikidata",
+	"internal/media/music": {
+		"internal/platform/artwork", "internal/platform/clock", "internal/platform/fsx", "internal/platform/httpx",
+		"internal/importing/inspect", "internal/jobs", "internal/db/library", "internal/identify/match",
+		"internal/platform/mediatool", "internal/identify/model", "internal/moving/mover", "internal/moving/moverjob",
+		"internal/metadata/musicbrainz", "internal/moving/naming", "internal/moving/placement",
+		"internal/identify/parse", "internal/scanning/scan", "internal/db/settings", "internal/metadata/wikidata",
 	},
-	"internal/paginate": {},
+	"internal/platform/paginate": {},
 	// The section 10.4 sweep: a walk over the filesystem seam and nothing else.
 	// What it finds is persisted by the caller, so it touches no database.
 	// The sweep itself walks only the fsx seam; the job handler beside it composes
-	// the pieces a scan needs, the way internal/recovery does.
-	"internal/scan": {
-		"internal/clock", "internal/fsx", "internal/jobs", "internal/library",
-		"internal/mediatool", "internal/settings",
+	// the pieces a scan needs, the way internal/db/recovery does.
+	"internal/scanning/scan": {
+		"internal/platform/clock", "internal/platform/fsx", "internal/jobs", "internal/db/library",
+		"internal/platform/mediatool", "internal/db/settings",
 	},
 	// ADR-39's measured-half sweep: its own job handler, the same shape as
-	// internal/scan's -- a Roots lookup for path resolution, mediatool to
+	// internal/scanning/scan's -- a Roots lookup for path resolution, mediatool to
 	// probe with, library to record what it found. Deliberately separate
-	// from internal/scan (todo 4.2, confirmed with the user), so it imports
+	// from internal/scanning/scan (todo 4.2, confirmed with the user), so it imports
 	// no more than scan itself does.
-	"internal/probe": {
-		"internal/clock", "internal/jobs", "internal/library", "internal/mediatool",
-		"internal/settings",
+	"internal/scanning/probe": {
+		"internal/platform/clock", "internal/jobs", "internal/db/library", "internal/platform/mediatool",
+		"internal/db/settings",
 	},
-	// ADR-48's import.inspect job: internal/inspect for WALK/GROUP/SHAPE,
-	// internal/model for the ADR-24 chain's own types (RunChainForFiles,
-	// Decide), internal/music for the music Identifier implementations and
-	// the inspect.Unit-to-FileRef adapters -- the same shape internal/scan's
+	// ADR-48's import.inspect job: internal/importing/inspect for WALK/GROUP/SHAPE,
+	// internal/identify/model for the ADR-24 chain's own types (RunChainForFiles,
+	// Decide), internal/media/music for the music Identifier implementations and
+	// the inspect.Unit-to-FileRef adapters -- the same shape internal/scanning/scan's
 	// own job has for its Consumer, generalised to import's own pipeline.
-	"internal/importjob": {
-		"internal/clock", "internal/fsx", "internal/inspect", "internal/jobs",
-		"internal/library", "internal/mediatool", "internal/model", "internal/music",
+	"internal/importing/importjob": {
+		"internal/platform/clock", "internal/platform/fsx", "internal/importing/inspect", "internal/jobs",
+		"internal/db/library", "internal/platform/mediatool", "internal/identify/model", "internal/media/music",
 	},
 	// ADR-51's resumable Apply: claims a move_item, calls mover.ApplyOne, then
-	// records/unlinks through internal/library. No internal/settings import --
+	// records/unlinks through internal/db/library. No internal/db/settings import --
 	// a cmd/medianexus adapter bridges RootFolders the same way importjob's
 	// Policy is bridged.
-	"internal/moverjob": {
-		"internal/clock", "internal/fsx", "internal/jobs", "internal/library", "internal/mover",
+	"internal/moving/moverjob": {
+		"internal/platform/clock", "internal/platform/fsx", "internal/jobs", "internal/db/library", "internal/moving/mover",
 	},
 	// ADR-51's POST /rootfolders/{id}/drain: gathers real facts, calls
-	// mover.PlanDrain (which calls internal/placement itself), persists via
-	// internal/library, and enqueues internal/moverjob. internal/settings is
+	// mover.PlanDrain (which calls internal/moving/placement itself), persists via
+	// internal/db/library, and enqueues internal/moving/moverjob. internal/db/settings is
 	// imported for its types only (settings.RootFolder/CategoryRoot), the
-	// same lightweight use internal/scan's own Roots interface already makes
+	// same lightweight use internal/scanning/scan's own Roots interface already makes
 	// -- actual cache access stays behind this package's own Roots interface.
-	"internal/drainjob": {
-		"internal/clock", "internal/jobs", "internal/library", "internal/mover",
-		"internal/moverjob", "internal/placement", "internal/settings",
+	"internal/moving/drainjob": {
+		"internal/platform/clock", "internal/jobs", "internal/db/library", "internal/moving/mover",
+		"internal/moving/moverjob", "internal/moving/placement", "internal/db/settings",
 	},
 	// ADR-15's post-restore pass spans library.db and jobs.db, so it composes their
 	// owning packages rather than reaching into either gen package (section 4.3).
-	"internal/recovery": {
-		"internal/clock", "internal/jobs", "internal/library", "internal/store",
+	"internal/db/recovery": {
+		"internal/platform/clock", "internal/jobs", "internal/db/library", "internal/db/store",
 	},
-	"internal/secrets": {},
+	"internal/platform/secrets": {},
 	// config supplies the path-and-expectation problem shape, which section 14.4
 	// requires settings validation to reuse rather than invent a second one. score
 	// is ADR-40's rule parser, needed so a quality profile's shape is validated on
 	// write, not only its JSON syntax.
-	"internal/settings": {
-		"internal/clock", "internal/config", "internal/score",
-		"internal/store", "internal/store/gen/settingsdb",
+	"internal/db/settings": {
+		"internal/platform/clock", "internal/platform/config", "internal/identify/score",
+		"internal/db/store", "internal/db/store/gen/settingsdb",
 	},
 	// Generated by sqlc, never hand-edited. Listed rather than exempted, because
 	// generated code depending on ours would be worth knowing about.
-	"internal/store/gen/settingsdb": {},
-	"internal/store/gen/jobsdb":     {},
-	"internal/store/gen/librarydb":  {},
-	"internal/store/gen/metadatadb": {},
+	"internal/db/store/gen/settingsdb": {},
+	"internal/db/store/gen/jobsdb":     {},
+	"internal/db/store/gen/librarydb":  {},
+	"internal/db/store/gen/metadatadb": {},
 	// cache/metadata.db (ADR-2, ADR-29): deliberately generic, so every metadata
 	// provider shares one cache rather than each owning its own database.
-	"internal/metacache": {"internal/store", "internal/store/gen/metadatadb"},
+	"internal/metadata/metacache": {"internal/db/store", "internal/db/store/gen/metadatadb"},
 	// ADR-29's provider: two Source implementations over httpx, permanent cache
 	// in front. No store/gen import of its own -- caching goes through metacache.
-	"internal/musicbrainz": {"internal/clock", "internal/httpx", "internal/metacache"},
+	"internal/metadata/musicbrainz": {"internal/platform/clock", "internal/platform/httpx", "internal/metadata/metacache"},
 	// ADR-8's cross-provider identity bridge: a Wikidata QID (musicbrainz.Artist
 	// already extracts one) to a biography. No cache of its own -- see the
 	// package doc comment.
-	"internal/wikidata": {"internal/httpx"},
+	"internal/metadata/wikidata": {"internal/platform/httpx"},
 	// Generated by oapi-codegen from api/openapi.yaml (ADR-31).
-	"internal/apiserver/gen": {},
+	"internal/api/apiserver/gen": {},
 	// Serves the compiled bundle from embed.FS.
-	"internal/webui": {},
+	"internal/api/webui": {},
 	// Takes ownership of directories before dropping root, so it needs the
 	// filesystem seam and nothing else.
-	"internal/privilege": {"internal/fsx"},
-	"migrations":         {"internal/store"},
+	"internal/platform/privilege": {"internal/platform/fsx"},
+	"migrations":                  {"internal/db/store"},
 }
 
 // Plugins import internal/plugin and nothing else from core, which is what keeps

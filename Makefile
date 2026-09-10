@@ -112,8 +112,8 @@ bench: cache-init  ## Benchmarks and ADR-28 targets. Scale with BENCH_FILES=5000
 	$(RUN_GO_BENCH) go test -count=1 -p 1 -v -run=TestADR28 -bench=. -benchmem -timeout 60m ./...
 
 bench-drivers: cache-init  ## ADR-5: the same measurements under modernc and ncruces
-	$(RUN_GO_BENCH) go test -count=1 -p 1 -v -run=TestADR28 -bench=. -benchmem -timeout 60m ./internal/library/
-	$(RUN_GO_BENCH) go test -count=1 -p 1 -v -tags ncruces -run=TestADR28 -bench=. -benchmem -timeout 60m ./internal/library/
+	$(RUN_GO_BENCH) go test -count=1 -p 1 -v -run=TestADR28 -bench=. -benchmem -timeout 60m ./internal/db/library/
+	$(RUN_GO_BENCH) go test -count=1 -p 1 -v -tags ncruces -run=TestADR28 -bench=. -benchmem -timeout 60m ./internal/db/library/
 
 vet: cache-init
 	$(RUN_GO) go vet ./...
@@ -149,11 +149,11 @@ sqlc-check: ## Fail if generated SQL code is stale
 
 api:        ## Regenerate Go server + TS client from api/openapi.yaml
 	@test -f api/openapi.yaml || { echo "api: no spec yet, skipping"; exit 0; }
-	@mkdir -p internal/apiserver/gen web/src/api
+	@mkdir -p internal/api/apiserver/gen web/src/api
 	$(RUN_GO) go run $(OAPI_CODEGEN) -config api/oapi-codegen.yaml api/openapi.yaml
 	$(RUN_NODE_ROOT) npx --yes openapi-typescript@$(OPENAPI_TS_VERSION) \
 	  api/openapi.yaml -o web/src/api/schema.d.ts
-	$(RUN_GO) gofmt -w internal/apiserver/gen
+	$(RUN_GO) gofmt -w internal/api/apiserver/gen
 
 ## ---- web ----
 web:        ## Production build, embedded via embed.FS. Lints and tests first.

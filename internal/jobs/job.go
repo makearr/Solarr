@@ -49,7 +49,7 @@ const (
 type Priority int
 
 // Priorities. These order the job queue, and are separate from the write
-// queue's priorities in internal/store, which order database transactions.
+// queue's priorities in internal/db/store, which order database transactions.
 const (
 	PriorityLow         Priority = 10
 	PriorityNormal      Priority = 50

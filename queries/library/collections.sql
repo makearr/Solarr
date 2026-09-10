@@ -78,8 +78,8 @@ SELECT cache_key FROM artwork WHERE subject_type = ? AND subject_id = ? AND kind
 -- with one is a usable source. is_default is never set to 1 anywhere in this
 -- codebase today (found writing this query), so the lowest edition id per work
 -- is the deterministic tie-break instead, not a real "preferred edition" signal.
--- 'musicbrainz:release' must match internal/music.ProviderRelease -- the
--- release-group id (internal/music.ProviderReleaseGroup) identifies the work,
+-- 'musicbrainz:release' must match internal/media/music.ProviderRelease -- the
+-- release-group id (internal/media/music.ProviderReleaseGroup) identifies the work,
 -- not the edition, and is the wrong id for this API (section 19.6's tag table).
 -- name: ListWorksNeedingArtwork :many
 SELECT e.work_id AS work_id, x.external_id AS release_mbid

@@ -191,7 +191,7 @@ Chosen so that no framework owns the shape of the code. Rationale in ADR-31.
 
 | Layer | Choice |
 |---|---|
-| SQL | **sqlc** — SQL in `queries/*.sql`, typed Go generated into `internal/store/gen/` |
+| SQL | **sqlc** — SQL in `queries/*.sql`, typed Go generated into `internal/db/store/gen/` |
 | Router | **stdlib `net/http` + chi** — everything stays an `http.Handler` |
 | Logging | **`log/slog`** — JSON handler, correlation ID from context |
 | API | **OpenAPI spec-first** — `api/openapi.yaml` generates Go interfaces and the TS client |
@@ -199,7 +199,7 @@ Chosen so that no framework owns the shape of the code. Rationale in ADR-31.
 
 ### Generated code
 
-`internal/store/gen/`, the Go API interfaces, and `web/src/api/` are **generated, committed,
+`internal/db/store/gen/`, the Go API interfaces, and `web/src/api/` are **generated, committed,
 and never edited by hand.** Change the source and regenerate:
 
 ```bash

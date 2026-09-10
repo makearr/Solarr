@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/apiserver"
-	"github.com/makearr/MediaNexus/internal/config"
-	"github.com/makearr/MediaNexus/internal/fsx"
+	"github.com/makearr/MediaNexus/internal/api/apiserver"
+	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/MediaNexus/internal/platform/fsx"
 )
 
 // healthcheckTimeout is under the image's HEALTHCHECK timeout, so a slow answer

@@ -85,7 +85,7 @@ each was over a gigabyte on hardware that is often a NAS.
 
 `database.cache_size_kb` in `config.yml` therefore sizes `library.db`, the only one that
 grows. The others take their size and pool from what they hold, in
-`cmd/medianexus/serve.go`:
+`cmd/medianexus/app/serve.go`:
 
 | Database | Read pool | Page cache | Why |
 |---|---|---|---|
@@ -97,7 +97,7 @@ grows. The others take their size and pool from what they hold, in
 That is a ceiling of about 354 MiB, and `TestDatabaseProfiles_KeepTheCacheCeilingInHand`
 fails if a pool or a size pushes it past 384 MiB.
 
-**The driver is not configurable.** It is chosen by a build tag (`internal/store/
+**The driver is not configurable.** It is chosen by a build tag (`internal/db/store/
 driver_modernc.go` and `driver_ncruces.go`, ADR-5) and reported at startup and in
 `/api/v1/about`. `config.yml` naming one would be a setting that decides nothing.
 
@@ -140,7 +140,7 @@ restore runs with no probe in front of it.
 
 ## The library sweep
 
-`internal/scan` is section 10.4's mtime sweep: at ADR-22's 500k files a full rescan is
+`internal/scanning/scan` is section 10.4's mtime sweep: at ADR-22's 500k files a full rescan is
 not an answer, so only directories whose mtime has moved are read. The whole tree is
 still traversed — a directory's mtime moves when its **own** entries change, never
 when a grandchild's do — but traversal is stat calls and reading is the expensive
@@ -174,12 +174,12 @@ will not become valid on a retry.
 
 **A test must not mix a fake clock with the real filesystem here.** The sweep compares
 the injected clock against filesystem mtimes, so a `clock.Fake` at epoch over real
-files makes every directory look newer than every watermark. `internal/scan`'s job
+files makes every directory look newer than every watermark. `internal/scanning/scan`'s job
 tests walk an `fsx.Mem` on the same fake clock, with a real `library.db` beside it.
 
 ## Post-restore reconciliation
 
-After any restore, and before workers start, `internal/recovery` fails every
+After any restore, and before workers start, `internal/db/recovery` fails every
 unfinished job with a reason, marks every `desired_item` dirty so the planner
 re-evaluates the whole library (ADR-6), reports the `settings.db` references the
 restore orphaned — `library.db` holds no foreign key to it (ADR-25) — and writes all

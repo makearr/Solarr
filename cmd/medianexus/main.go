@@ -11,8 +11,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/makearr/MediaNexus/internal/config"
-	"github.com/makearr/MediaNexus/internal/fsx"
+	"github.com/makearr/MediaNexus/cmd/medianexus/app"
+	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/MediaNexus/internal/platform/fsx"
 )
 
 // Injected with -ldflags -X at build time; see documentation/versioning.md (§13).
@@ -131,5 +132,8 @@ func runServe(args []string, out, errOut io.Writer) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	return serve(context.Background(), *path, out)
+	return app.Serve(context.Background(), *path, out, app.Build{
+		Version: version, Milestone: milestone, Commit: commit, BuildDate: buildDate,
+		SourceURL: sourceURL, License: license,
+	})
 }

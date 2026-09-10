@@ -13,8 +13,8 @@
 # embeds it. Everything in it is generated, so none of it is committed -- but the
 # directory itself must exist or `go:embed` has no pattern to match and the build
 # fails before anyone has run `make web`. Hence the kept placeholder.
-/internal/webui/dist/*
-!/internal/webui/dist/.gitkeep
+/internal/api/webui/dist/*
+!/internal/api/webui/dist/.gitkeep
 
 # Runtime data — never committed
 /data/
@@ -48,8 +48,8 @@ config.local.yml
 /private/fixtures/
 
 # The generated ADR-28 benchmark corpus and the migration backups beside it. Big,
-# reproducible from internal/library/fixture, and rebuilt on demand.
-/internal/library/testdata/fixtures/
+# reproducible from internal/db/library/fixture, and rebuilt on demand.
+/internal/db/library/testdata/fixtures/
 
 # Machine-specific Makefile overrides (DNS, image pins)
 /Makefile.local

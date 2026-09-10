@@ -2180,7 +2180,7 @@ export interface components {
             /** @description Decision.Score() -- the sum of components. */
             score: number;
         };
-        /** @description internal/parse's own reading of the pasted title, shown so a simulation is not a black box. */
+        /** @description internal/identify/parse's own reading of the pasted title, shown so a simulation is not a black box. */
         ParsedTitle: {
             artist?: string;
             album?: string;

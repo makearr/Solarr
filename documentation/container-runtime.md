@@ -8,7 +8,7 @@ How the image decides who it runs as, what it owns, and what it refuses to touch
 it writes. `1000:1000` is not a policy — it is only what happens when neither is set.
 
 They are deliberately **not** declared as `ENV` defaults in the image. The default lives in
-`internal/privilege` alone, so a variable being present means the operator set it. That
+`internal/platform/privilege` alone, so a variable being present means the operator set it. That
 distinction is what lets a request that cannot be honoured be reported as one.
 
 ## Startup sequence
@@ -71,5 +71,5 @@ Sets the container's timezone. Air dates are timezone-dependent (architecture se
 log timestamps are read by people, so an unset `TZ` leaving everything in UTC is a recurring
 support question in this ecosystem.
 
-Applied by `internal/privilege` before anything logs. An unknown zone is reported and UTC is
+Applied by `internal/platform/privilege` before anything logs. An unknown zone is reported and UTC is
 kept, rather than failing to start over a display preference.

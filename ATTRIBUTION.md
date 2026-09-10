@@ -35,7 +35,7 @@ later is unreliable, and AGPL-3.0 §5 requires that modified files carry promine
   - **RE2 has no backreferences or lookaround.** `PercentRegex`, `NormalizeRegex`,
     `ReleaseGroupRegex`, `ExceptionReleaseGroupRegex`, `AnimeReleaseGroupRegex`, `VersionRegex`,
     `AirDateRegex` and `SixDigitAirDateRegex` all used one or the other. Each is rewritten in
-    `internal/parse/lidarr.go` as an explicit two-pass match — find without the assertion, then
+    `internal/identify/parse/lidarr.go` as an explicit two-pass match — find without the assertion, then
     check the same condition directly against the surrounding bytes — documented at each
     function. No upstream pattern used an actual backreference (`\1`/`\k<name>`) in this scope;
     only lookaround needed rewriting. Proven against the golden corpus (`testdata/releases/`),
@@ -57,7 +57,7 @@ later is unreliable, and AGPL-3.0 §5 requires that modified files carry promine
     Thugs-n-Sabedup") as its own dash-token candidate; the artist portion is stripped first here
     (`stripArtistPrefixForGroup`) before the cascade runs. Both are recorded as behaviour changes
     per the reuse table's own obligation, not silent fixes.
-  - `internal/parse/parse.go`'s own artist/album segmentation (dash-splitting, per-segment
+  - `internal/identify/parse/parse.go`'s own artist/album segmentation (dash-splitting, per-segment
     trailing-token trimming) is **not** replaced by Lidarr's literal `ReportAlbumTitleRegex`
     cascade — it is a smaller, generic engine this project already had, hardened against real
     scene names during 2026-09-03's live verification, and measurably more accurate on at least
@@ -69,8 +69,8 @@ later is unreliable, and AGPL-3.0 §5 requires that modified files carry promine
     genuine upstream behaviour, once actually available to test against, turned out to be the
     more consistent — and more defensible — answer than the guess an earlier session made without
     it.
-- Files: `internal/parse/lidarr.go` (new), `internal/parse/parse.go` (wiring),
-  `internal/model/attributes.go` (`BitDepth`, `ProperRepack` fields).
+- Files: `internal/identify/parse/lidarr.go` (new), `internal/identify/parse/parse.go` (wiring),
+  `internal/identify/model/attributes.go` (`BitDepth`, `ProperRepack` fields).
 - **Deferred, not forgotten** (ADR-18's own text: "so 'everything is ported' stays a checkable
   claim rather than an assumption"):
 
@@ -94,14 +94,14 @@ When code is incorporated, record it as:
 
 ## Corpus data (not code)
 
-`internal/parse/testdata/releases/seed.jsonl` — the ADR-18 parser golden corpus's original 45
+`internal/identify/parse/testdata/releases/seed.jsonl` — the ADR-18 parser golden corpus's original 45
 seed entries use real release-name strings drawn from Lidarr's own public test fixtures
 (`src/NzbDrone.Core.Test/ParserTests/ParserFixture.cs`, `Lidarr/Lidarr`, GPL-3.0). ADR-18 is
 explicit that this needs no permission at all ("release names are facts and short strings;
 collecting them raises no licensing concern") and it is not incorporated code — recorded here
 anyway for transparency.
 
-`internal/parse/testdata/releases/download_folder.jsonl` (274 entries) and
+`internal/identify/parse/testdata/releases/download_folder.jsonl` (274 entries) and
 `user_verified.jsonl` (15 entries) — grown 2026-09-04 from directory names in the user's own
 real `/mnt/downloads/sabnzbd` folder (never the audio itself; ADR-18's "release names are facts
 and short strings" applies the same way here). Adult-content and video-only names were excluded
@@ -113,7 +113,7 @@ out rather than encoded as if their current, imperfect output were ground truth.
 **Historical note, kept for the record**: earlier sessions (through 2026-09-03) had no outbound
 network access at all, so Lidarr's actual C# source could only have reached this project through
 a summarising fetch — unsafe to trust for regex syntax, where one wrong escape changes behaviour
-silently. `internal/parse/parse.go`'s artist/album segmentation was written as an original
+silently. `internal/identify/parse/parse.go`'s artist/album segmentation was written as an original
 grammar instead, proven against the corpus above. **This sandbox gained real, verified network
 access 2026-09-04** (a direct `curl` to `raw.githubusercontent.com` returns exact bytes), which
 is what unblocked the real port recorded under "Incorporated code" above. The original grammar

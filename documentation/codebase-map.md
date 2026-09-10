@@ -1,89 +1,98 @@
 # Codebase map
 
-Where things live and what depends on what. The dependency rules here are enforced by
+Where things live and what depends on what. The dependency rules are enforced by
 `internal/archtest`, which holds the graph as an explicit allowlist: a new package fails the
 build until it declares what it imports.
 
-## Packages
+## Layout
 
-Roughly in dependency order — everything below depends only on things above it.
+Packages are grouped by pipeline. Each leaf directory is one Go package and its name is the
+package name, so `internal/metadata/musicbrainz` is imported as `musicbrainz`.
 
-| Package | Responsibility |
+```text
+cmd/medianexus/            CLI: serve, config check, user, healthcheck, version
+├── app/                   the server process: startup order, job registration (job_*.go),
+│                          schedules, shutdown
+└── adapters/              bridges apiserver/job interfaces to library and settings
+
+internal/
+├── api/        apiserver (+gen)  auth  authz  health  webui
+├── platform/   clock config egress events fsx httpx paginate privilege secrets
+│               mediatool archive artwork
+├── db/         store (+gen)  settings  library (+fixture)  recovery
+├── jobs/       the durable queue, executor, dispatcher, task registry
+│               + capacity  cachebudget
+├── metadata/   musicbrainz  wikidata  metacache  metaresolve
+├── identify/   model  parse  match  score  priority
+├── scanning/   scan  probe
+├── importing/  inspect  importjob
+├── moving/     mover  moverjob  drainjob  placement  naming
+├── media/      music
+└── archtest/   layering, access and Invariant-90 checks, as tests
+```
+
+| Group | What it holds |
 |---|---|
-| `internal/clock` | Injected time. No production code calls `time.Now` (ADR-17) |
-| `internal/privilege` | `PUID`/`PGID`/`TZ`, ownership of managed directories, the privilege drop |
-| `internal/fsx` | Injected filesystem, and the one place paths are made safe (ADR-14) |
-| `internal/secrets` | Encryption at rest, and a `Secret` type that redacts itself everywhere |
-| `internal/paginate` | Cursor pagination. `OFFSET` is banned |
-| `internal/httpx` | Every outbound request: SSRF guard, rate limiter, circuit breaker |
-| `internal/events` | Bounded, lossy notification bus |
-| `internal/config` | `config.yml` bootstrap: parse, validate, env overrides, first run |
-| `internal/store` | One writer and a read pool per database; migrations; backups |
-| `internal/settings` | `settings.db`, cached as an immutable snapshot |
-| `internal/authz` | Per-category access. The category repository |
-| `internal/auth` | Passwords, API keys, sessions |
-| `internal/jobs` | Durable queue, executor, dispatcher |
-| `internal/health` | Liveness and readiness |
-| `internal/apiserver` | Routing, problem responses, authentication, SSE, setup, settings |
-| `internal/webui` | The compiled interface, embedded and served from the binary |
-| `cmd/medianexus` | Wiring only. No logic |
+| `api` | HTTP surface: routing, problem responses, SSE, authentication, per-category access, probes, the embedded UI |
+| `platform` | Seams and infrastructure with no domain knowledge: time, filesystem, outbound HTTP, config, secrets, external tools, archives, image encoding |
+| `db` | One writer and a read pool per database (`store`), `settings.db` cached in memory, the `library.db` repositories, post-restore reconciliation |
+| `jobs` | The durable queue, and the maintenance jobs that belong to no pipeline |
+| `metadata` | Providers and the shared cache in front of them; field-level provider merge |
+| `identify` | Pure decision logic, no I/O: domain types, the release-name parser, identity matching, quality scoring, acquisition priority |
+| `scanning` | The library sweep and the background probe that fills measured attributes |
+| `importing` | Import inspection (WALK to DECIDE) and its resumable job |
+| `moving` | The move engine, its apply job, drain orchestration, root-folder placement, path templates |
+| `media` | Media types. Direct-wired until stage 9 extracts them as plugins |
 
-`migrations/` holds embedded SQL, one directory per database; `queries/` holds sqlc source;
-`internal/store/gen/` and `internal/apiserver/gen/` hold generated code that is committed and
-never hand-edited. `web/` is the interface source; `make web` compiles it into
-`internal/webui/dist`, which is generated and gitignored.
+`migrations/` holds embedded SQL, one directory per database; `queries/` holds sqlc source.
+`internal/db/store/gen/` and `internal/api/apiserver/gen/` are generated, committed and never
+hand-edited. `web/` is the interface source; `make web` compiles it into
+`internal/api/webui/dist`, which is generated and gitignored.
 
-Which database a table belongs in, and why the boundary is where it is:
-`database-layout.md`.
+Which database a table belongs in, and why: `database-layout.md`.
 
 ## The front end
 
 `web/src/list/` is the headless list core. `useLibraryList()` owns fetching, cursor pagination,
 sort and filter state, the selection model and virtualisation; `ListTable` and `ListGrid`
-decide only what a row looks like. A new filter, column or bulk action is implemented once, in
-the hook. See `web-interface.md`.
+decide only what a row looks like. See `web-interface.md`.
 
 `api/openapi.yaml` is the source of truth for the HTTP surface. It generates the Go server
 interface and the TypeScript client, and `*Server` is asserted to implement the interface, so
-an operation added to the spec stops the build until a handler exists. See
-`api-generation.md`.
+an operation added to the spec stops the build until a handler exists. See `api-generation.md`.
 
 ## The seams
 
-Three things exist so the rest can be tested without a clock, a disk or a network, and are
-enforced by `forbidigo` rather than by convention:
+Enforced by `forbidigo`, not by convention:
 
 - `clock.Clock` — no `time.Now`, no `time.NewTicker`
 - `fsx.FS` — no `os` filesystem calls
 - `httpx.Client` — no bare `http.Get`
 
-The only exemptions are the seam implementations themselves, and `cmd/`, which writes to
+The only exemptions are the seam implementations themselves and `cmd/`, which writes to
 standard output by definition.
 
 ## Where authorisation happens
 
 In the repository layer, never in a handler (Invariant 36):
 
-- `authz.Access.Categories()` is the category repository. Handlers call it rather than reaching
-  for the settings snapshot.
+- `authz.Access.Categories()` is the category repository. Handlers call it rather than reading
+  the settings snapshot; `archtest` fails a handler that does.
 - `jobs.Queue.ListPage` takes a required `Visibility` and narrows **in the query**. Filtering
-  results afterwards returns short pages and breaks the cursor.
+  afterwards returns short pages and breaks the cursor.
 - The SSE stream filters each event before buffering it, not at render time.
 
-A category the caller cannot see is 404, never 403. A category they can see but may not act on
-is 403. Collapsing the two either leaks private categories or disguises ordinary permission
-errors as missing records.
+A category the caller cannot see is 404, never 403. One they can see but may not act on is 403.
 
 ## Where the dry-run gate is
 
 One place: `jobs.Executor`. It refuses to run a job type declared mutating when the mode is
-`observe` or `shadow`, and nothing else in the codebase consults the mode (ADR-20,
-Invariant 31). A flag checked in many places is a flag that gets missed in one.
+`observe` or `shadow`; nothing else consults the mode (ADR-20, Invariant 31).
 
 ## Reading order for a newcomer
 
-1. `internal/clock` and `internal/fsx` — small, and they establish the testing style.
-2. `internal/store` — the write queue explains the concurrency model.
+1. `internal/platform/clock` and `internal/platform/fsx` — small, and they set the testing style.
+2. `internal/db/store` — the write queue explains the concurrency model.
 3. `internal/jobs` — the queue, then the executor, then the dispatcher.
-4. `internal/apiserver/server.go` — how a request becomes an identity and then an answer.
-5. `cmd/medianexus/serve.go` — the startup order, which is architecture section 15.1 in code.
+4. `internal/api/apiserver/server.go` — how a request becomes an identity and then an answer.
+5. `cmd/medianexus/app/serve.go` — the startup order, architecture section 15.1 in code.

@@ -19,7 +19,7 @@ export default defineConfig({
     setupFiles: ["./src/test-setup.ts"],
   },
   build: {
-    outDir: "../internal/webui/dist",
+    outDir: "../internal/api/webui/dist",
     emptyOutDir: false,
     sourcemap: true,
   },

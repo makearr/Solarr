@@ -39,7 +39,7 @@ WHERE work_id IN (
 -- The "artists" count for one category (ADR-54's person-entity navigation levels,
 -- e.g. music's Artists): distinct persons credited with role 'artist' on a work
 -- visible to the category. Hard-codes the 'artist' role, the same way
--- workArtistColumn already does (internal/library/works.go) -- generalising which
+-- workArtistColumn already does (internal/db/library/works.go) -- generalising which
 -- role counts as a level's "primary person" waits for a second media type that
 -- needs a different one.
 -- name: CountArtistCreditsVisibleToCategory :one

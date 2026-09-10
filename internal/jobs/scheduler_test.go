@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/clock"
 	"github.com/makearr/MediaNexus/internal/jobs"
+	"github.com/makearr/MediaNexus/internal/platform/clock"
 )
 
 func TestNewScheduler_RejectsAnInvalidExpression(t *testing.T) {

@@ -7,7 +7,7 @@
 -- candidate set down from the full corpus.
 --
 -- ADR-27 category visibility (migration 0012's work_root_folder bridge, same as
--- addVisibility in internal/library/works.go) is applied as a static predicate here
+-- addVisibility in internal/db/library/works.go) is applied as a static predicate here
 -- rather than composed in Go: MATCH has already cut ranked down to a handful of rows, so
 -- an index on that filter does not matter the way it does for the unfiltered work-table
 -- scan composeList guards against. filter_root_folders=0 and filter_categories=0 together

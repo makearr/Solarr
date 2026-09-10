@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/clock"
+	"github.com/makearr/MediaNexus/internal/db/store"
 	"github.com/makearr/MediaNexus/internal/jobs"
-	"github.com/makearr/MediaNexus/internal/paginate"
-	"github.com/makearr/MediaNexus/internal/store"
+	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/MediaNexus/internal/platform/paginate"
 	"github.com/makearr/MediaNexus/migrations"
 )
 

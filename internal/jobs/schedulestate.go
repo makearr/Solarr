@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/store"
-	"github.com/makearr/MediaNexus/internal/store/gen/jobsdb"
+	"github.com/makearr/MediaNexus/internal/db/store"
+	"github.com/makearr/MediaNexus/internal/db/store/gen/jobsdb"
 )
 
 // ScheduleRun is one task's own persisted run-state (migration 0004) --

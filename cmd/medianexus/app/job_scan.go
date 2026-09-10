@@ -1,0 +1,113 @@
+package app
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+
+	"github.com/makearr/MediaNexus/cmd/medianexus/adapters"
+	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/MediaNexus/internal/jobs"
+	"github.com/makearr/MediaNexus/internal/media/music"
+	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/MediaNexus/internal/scanning/scan"
+)
+
+// registerScanJob wires the first job handler in the codebase into the registry and
+// the executor: the library sweep, its music consumer, and the tools it probes files
+// with. The registry entry is required before Enqueue will accept the type at all
+// (Queue.Enqueue looks the definition up to route it).
+func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, executor *jobs.Executor) error {
+	if err := registry.Register(scan.Definition); err != nil {
+		return err
+	}
+	tool := mediatool.New(nil, 0)
+	reportToolReadiness(ctx, tool, p.logger)
+	physical := library.NewPhysical(p.library)
+	provider := p.musicBrainzProvider()
+	desired := library.NewDesired(p.library)
+	consumer := music.NewConsumer(music.ConsumerConfig{
+		FS:           p.fsys,
+		Physical:     physical,
+		Identity:     library.NewIdentity(p.library),
+		Unidentified: library.NewUnidentified(p.library),
+		Search:       provider,
+		Clock:        clock.NewSystem(),
+		Logger:       p.logger,
+		Desired:      &desired,
+		Categories:   adapters.Categories{Cache: p.cache},
+		// The user's own default when they haven't configured one for the
+		// category yet -- ensureDefaultQualityProfile seeded it at startup.
+		DefaultProfileID: p.defaultQualityProfileID,
+	})
+	job := scan.NewJob(scan.Config{
+		FS:       p.fsys,
+		Scans:    library.NewScans(p.library),
+		Roots:    adapters.Roots{Cache: p.cache},
+		Tool:     tool,
+		Consumer: consumer,
+		Physical: physical,
+		Clock:    clock.NewSystem(),
+		Logger:   p.logger,
+		Include:  scan.IsAudio,
+	})
+	executor.Handle(scan.JobType, job)
+	return nil
+}
+
+// reportToolReadiness logs what ADR-30's external tools are missing, once, at
+// startup -- the same "reported, never enforced" shape section 20.2 already uses
+// for host permissions: every scanned file would otherwise fail its own probe
+// individually, which finds the same fact one file at a time instead of once,
+// loudly, before the first scan even runs.
+func reportToolReadiness(ctx context.Context, tool mediatool.Tool, logger *slog.Logger) {
+	if err := tool.Available(ctx); err != nil {
+		logger.Warn("media tools unavailable; file identification will fail until they are installed",
+			slog.Any("error", err))
+	}
+}
+
+// enqueueLibraryScans submits an incremental sweep for every online root
+// folder attached to a music category. An incremental sweep of a root that
+// has never been swept reads everything regardless, so this is also what
+// makes a freshly attached root browsable. Registered as a task with
+// internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
+// schedule, not only once at startup.
+//
+// Fans out to several jobs, one per root, unlike every other task in this
+// file -- the aggregate EnqueueResult reports Duplicate only when every
+// attempted root was already active, and joins every root's own error
+// (each still logged individually below) rather than reporting only the
+// first, so the scheduler's own recorded outcome does not hide a partial
+// failure across several roots.
+func (p *process) enqueueLibraryScans(ctx context.Context) (jobs.EnqueueResult, error) {
+	snapshot := p.cache.Snapshot()
+	var errs []error
+	attempted, duplicates := 0, 0
+	for _, category := range snapshot.Categories() {
+		if category.MediaType != "music" {
+			continue
+		}
+		for _, root := range snapshot.RootFoldersForCategory(category.ID) {
+			if !root.Online {
+				continue
+			}
+			attempted++
+			result, err := scan.Enqueue(ctx, p.queue, root.ID, category.ID, false)
+			if err != nil {
+				p.logger.Warn("enqueue library scan",
+					slog.Int64("root_folder_id", root.ID), slog.Any("error", err))
+				errs = append(errs, err)
+				continue
+			}
+			if result.Duplicate {
+				duplicates++
+			}
+		}
+	}
+	if len(errs) > 0 {
+		return jobs.EnqueueResult{}, errors.Join(errs...)
+	}
+	return jobs.EnqueueResult{Duplicate: attempted > 0 && duplicates == attempted}, nil
+}

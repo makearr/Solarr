@@ -8,7 +8,7 @@ import type { components } from "@/api/schema";
 type RootFolder = components["schemas"]["RootFolder"];
 
 /** todo 4.18: the root folder overview screen that never existed --
- *  internal/capacity has computed used/free/total for every root since
+ *  internal/jobs/capacity has computed used/free/total for every root since
  *  2026-09-04 and nothing rendered it until now. Every number here is what
  *  the last capacity sweep found, not a live stat -- "capacity is polled,
  *  not assumed" (section 11.7). */

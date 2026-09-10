@@ -12,12 +12,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/auth"
-	"github.com/makearr/MediaNexus/internal/clock"
-	"github.com/makearr/MediaNexus/internal/config"
-	"github.com/makearr/MediaNexus/internal/fsx"
-	"github.com/makearr/MediaNexus/internal/settings"
-	"github.com/makearr/MediaNexus/internal/store"
+	"github.com/makearr/MediaNexus/internal/api/auth"
+	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/MediaNexus/internal/db/store"
+	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/MediaNexus/internal/platform/fsx"
 	"github.com/makearr/MediaNexus/migrations"
 )
 

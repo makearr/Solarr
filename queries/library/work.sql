@@ -25,11 +25,11 @@ WHERE e.provider = ? AND e.external_id = ?;
 
 -- name: SetWorkPrimaryArtist :exec
 -- The Tracks navigation level's own denormalized sort key (0021_work_primary_artist.sql's
--- doc comment) -- written only by internal/library.People.AddCredit, the one place a
+-- doc comment) -- written only by internal/db/library.People.AddCredit, the one place a
 -- role='artist' ord=0 credit is ever recorded.
 UPDATE work SET primary_artist_id = ?, primary_artist_sort_name = ? WHERE id = ?;
 
--- The list surface composes its own WHERE in internal/library/works.go: a filter
+-- The list surface composes its own WHERE in internal/db/library/works.go: a filter
 -- written here as an is-it-empty test is not sargable, so SQLite uses no index for that
 -- column and sorts the whole table for every page (documentation/sql-and-sqlc.md).
 
@@ -123,7 +123,7 @@ FROM edition_external_id WHERE edition_id = ? ORDER BY provider, external_id;
 
 -- kind='unknown' is the cross-media-type placeholder marker an Identifier chain
 -- leaves behind when it resolves an edition's external id but has no real
--- metadata yet (internal/library.EditionLink, internal/music's newEditionLink):
+-- metadata yet (internal/db/library.EditionLink, internal/media/music's newEditionLink):
 -- label is that external id itself, chosen so it can never collide with a real
 -- edition's UNIQUE(work_id, kind, label). Once refined, kind changes away from
 -- 'unknown' and the row stops being returned here -- no separate cursor needed,

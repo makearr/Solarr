@@ -7,8 +7,8 @@ import (
 	"math/rand/v2"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/store"
-	"github.com/makearr/MediaNexus/internal/store/gen/jobsdb"
+	"github.com/makearr/MediaNexus/internal/db/store"
+	"github.com/makearr/MediaNexus/internal/db/store/gen/jobsdb"
 )
 
 // Outcome is how one attempt ended, recorded on job_attempt.
