@@ -105,9 +105,17 @@ func (p *process) musicBrainzProvider() musicbrainz.Provider {
 // timeout well above httpx's own 30s default): the *Arr instance on the
 // other end is someone's own real server, often also busy with its own
 // imports, not infrastructure this project operates.
+//
+// The guard is built fresh per call, allowing baseURL's own host -- an
+// *Arr instance lives on the LAN or a Docker network in almost every real
+// deployment (ADR-52 is explicitly about a self-hosted instance), and an
+// admin-entered, persisted connection is exactly the "opt-out for indexers
+// that genuinely live on the LAN" httpx.Guard's own allowedHosts already
+// exists for (its own doc comment), not the attacker-controlled, per-request
+// URL the guard exists to stop. Found needed live: a real sync against the
+// user's own Lidarr on a private address was refused outright until this.
 func (p *process) arrClientFactory() adapters.LidarrClientFactory {
 	wall := clock.NewSystem()
-	guard := httpx.NewGuard(nil, nil, nil)
 	limiter := httpx.NewLimiter(wall, httpx.Config{
 		Providers: map[string]httpx.Limits{"arr": {MinInterval: 500 * time.Millisecond}},
 	}, nil)
@@ -115,6 +123,11 @@ func (p *process) arrClientFactory() adapters.LidarrClientFactory {
 	agent := httpx.UserAgent(p.build.Version)
 
 	return func(baseURL, apiKey string) arrimport.LidarrClient {
+		var allowedHosts []string
+		if parsed, err := url.Parse(baseURL); err == nil && parsed.Hostname() != "" {
+			allowedHosts = []string{parsed.Hostname()}
+		}
+		guard := httpx.NewGuard(nil, nil, allowedHosts)
 		client := httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
 			Provider: "arr", UserAgent: agent, Proxy: p.liveProxyPolicy(), Timeout: 60 * time.Second,
 		})

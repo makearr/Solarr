@@ -115,6 +115,28 @@ func TestLidarrClient_AlbumsQueriesByArtistID(t *testing.T) {
 	}
 }
 
+// A response over the size limit must be reported as ErrResponseTooLarge,
+// not fed truncated to json.Unmarshal (which fails with a confusing
+// "unexpected end of JSON input" that gives no hint why) -- found live
+// against a real prolific artist's own Albums response (2,050 albums,
+// measured 28 MiB), which silently truncated at the old 16 MiB limit.
+func TestLidarrClient_ArtistsRefusesAResponseOverTheSizeLimit(t *testing.T) {
+	// One byte over the limit: a valid-looking (if truncated) JSON array
+	// padded with whitespace, so a bug that went back to plain truncate-
+	// and-decode would hit "unexpected end of JSON input" here too, not
+	// some unrelated syntax error -- the size check has to fire first.
+	oversized := "[" + strings.Repeat(" ", 128<<20) + "]"
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"http://lidarr.local/api/v1/artist": {status: 200, body: oversized},
+	}}
+	client := arrimport.NewLidarrClient(newTestClient(t, transport), "http://lidarr.local", "key")
+
+	_, err := client.Artists(t.Context())
+	if !errors.Is(err, arrimport.ErrResponseTooLarge) {
+		t.Fatalf("err = %v, want it to wrap ErrResponseTooLarge", err)
+	}
+}
+
 func TestLidarrClient_SystemStatusReportsAnUnauthorizedResponse(t *testing.T) {
 	transport := &fakeTransport{responses: map[string]fakeResponse{
 		"http://lidarr.local/api/v1/system/status": {status: 401, body: ""},
