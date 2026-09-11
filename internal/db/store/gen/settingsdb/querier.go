@@ -24,6 +24,8 @@ type Querier interface {
 	CountUsers(ctx context.Context) (int64, error)
 	CountUsersWithCategoryAccess(ctx context.Context, categoryID int64) (int64, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
+	// *Arr instance connections (todo 4.13, ADR-52). Column lists follow table order.
+	CreateArrInstance(ctx context.Context, arg CreateArrInstanceParams) (ArrInstance, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	// Autonomous discovery jobs (ADR-38). Policy, so this stays in settings.db.
 	CreateDiscoveryJob(ctx context.Context, arg CreateDiscoveryJobParams) (DiscoveryJob, error)
@@ -41,6 +43,7 @@ type Querier interface {
 	CreateRootFolder(ctx context.Context, arg CreateRootFolderParams) (RootFolder, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (AppUser, error)
 	DeleteAPIKey(ctx context.Context, id int64) error
+	DeleteArrInstance(ctx context.Context, id int64) error
 	DeleteCategory(ctx context.Context, id int64) error
 	DeleteDiscoveryJob(ctx context.Context, id int64) error
 	DeleteDownloadFolder(ctx context.Context, id int64) error
@@ -53,6 +56,7 @@ type Querier interface {
 	DeleteUser(ctx context.Context, id int64) error
 	DetachRootFolderFromCategory(ctx context.Context, arg DetachRootFolderFromCategoryParams) error
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
+	GetArrInstance(ctx context.Context, id int64) (ArrInstance, error)
 	GetCategory(ctx context.Context, id int64) (Category, error)
 	GetDiscoveryJob(ctx context.Context, id int64) (DiscoveryJob, error)
 	GetDownloadFolder(ctx context.Context, id int64) (DownloadFolder, error)
@@ -71,6 +75,7 @@ type Querier interface {
 	GetUserByUsername(ctx context.Context, username string) (AppUser, error)
 	ListAPIKeysForUser(ctx context.Context, userID int64) ([]ApiKey, error)
 	ListAllCategoryAccess(ctx context.Context) ([]UserCategoryAccess, error)
+	ListArrInstances(ctx context.Context) ([]ArrInstance, error)
 	ListCategories(ctx context.Context) ([]Category, error)
 	ListCategoryAccessForUser(ctx context.Context, userID int64) ([]UserCategoryAccess, error)
 	ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFolder, error)
@@ -90,6 +95,12 @@ type Querier interface {
 	ListUsers(ctx context.Context) ([]AppUser, error)
 	RecordDiscoveryJobRun(ctx context.Context, arg RecordDiscoveryJobRunParams) error
 	RevokeCategoryAccess(ctx context.Context, arg RevokeCategoryAccessParams) error
+	// A separate statement from UpdateArrInstance so a caller that is not
+	// changing the key never re-seals and rewrites it -- Seal generates a fresh
+	// nonce every call, so writing it back unconditionally would be silent,
+	// pointless churn on every unrelated edit.
+	SetArrInstanceAPIKey(ctx context.Context, arg SetArrInstanceAPIKeyParams) error
+	SetArrInstanceSyncResult(ctx context.Context, arg SetArrInstanceSyncResultParams) error
 	SetCategoryAccess(ctx context.Context, arg SetCategoryAccessParams) error
 	SetCategoryLanguageProfile(ctx context.Context, arg SetCategoryLanguageProfileParams) error
 	SetCategoryMonitorDiscovered(ctx context.Context, arg SetCategoryMonitorDiscoveredParams) error
@@ -115,6 +126,7 @@ type Querier interface {
 	SetUserRole(ctx context.Context, arg SetUserRoleParams) error
 	SetUserTier(ctx context.Context, arg SetUserTierParams) error
 	TouchAPIKey(ctx context.Context, arg TouchAPIKeyParams) error
+	UpdateArrInstance(ctx context.Context, arg UpdateArrInstanceParams) error
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) error
 	UpdateDiscoveryJob(ctx context.Context, arg UpdateDiscoveryJobParams) error
 	UpdateExclusionPattern(ctx context.Context, arg UpdateExclusionPatternParams) error

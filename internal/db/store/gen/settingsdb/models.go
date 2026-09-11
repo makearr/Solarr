@@ -26,6 +26,20 @@ type AppUser struct {
 	UiTier       string
 }
 
+type ArrInstance struct {
+	ID            int64
+	App           string
+	Name          string
+	BaseUrl       string
+	ApiKey        []byte
+	CategoryID    sql.NullInt64
+	Enabled       int64
+	CreatedAt     int64
+	UpdatedAt     int64
+	LastSyncedAt  sql.NullInt64
+	LastSyncError sql.NullString
+}
+
 type Category struct {
 	ID                int64
 	MediaType         string

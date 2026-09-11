@@ -348,6 +348,25 @@ func (p People) Subscribe(
 	return subscriptionID, nil
 }
 
+// Delete removes a person outright, cascading person_alias, credit and
+// person_external_id (every REFERENCES person(id) with ON DELETE CASCADE).
+// Revert-only use so far (todo 4.13's ArrImportRevert): only ever called for
+// a person this package itself created (arr_import_item.person_created), and
+// only after the person's own subscription (no cascade of its own,
+// subscription.subject_id is a polymorphic reference with no FK) and any
+// work crediting them as primary_artist_id (also no cascade) are already
+// gone, or this fails on the same foreign key work.primary_artist_id
+// enforces.
+func (p People) Delete(ctx context.Context, personID int64) error {
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).DeletePerson(ctx, personID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: delete person %d: %w", personID, err)
+	}
+	return nil
+}
+
 // biographyFromFields decodes fields_json back out, empty when there is none
 // or it does not decode -- a row this package itself wrote should always
 // decode, so a failure here is treated as "no biography" rather than a hard

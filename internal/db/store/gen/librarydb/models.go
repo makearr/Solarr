@@ -47,6 +47,38 @@ type AltNumbering struct {
 	AltRef   string
 }
 
+type ArrImport struct {
+	ID             int64
+	InstanceID     int64
+	App            string
+	State          string
+	StartedAt      int64
+	FinishedAt     sql.NullInt64
+	Error          sql.NullString
+	ArtistsCreated int64
+	ArtistsMatched int64
+	AlbumsCreated  int64
+	AlbumsMatched  int64
+	ItemsParked    int64
+}
+
+type ArrImportItem struct {
+	ID                 int64
+	ImportID           int64
+	Kind               string
+	SourceID           string
+	Title              string
+	PersonID           sql.NullInt64
+	PersonCreated      int64
+	SubscriptionID     sql.NullInt64
+	WorkID             sql.NullInt64
+	WorkCreated        int64
+	DesiredItemID      sql.NullInt64
+	DesiredItemCreated int64
+	PayloadJson        sql.NullString
+	CreatedAt          int64
+}
+
 type Artwork struct {
 	ID          int64
 	SubjectType string
