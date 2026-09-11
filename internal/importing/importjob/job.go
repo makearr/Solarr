@@ -22,6 +22,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/db/library"
 	"github.com/makearr/MediaNexus/internal/identify/model"
 	"github.com/makearr/MediaNexus/internal/importing/inspect"
+	"github.com/makearr/MediaNexus/internal/importing/pack"
 	"github.com/makearr/MediaNexus/internal/jobs"
 	"github.com/makearr/MediaNexus/internal/media/music"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
@@ -89,6 +90,10 @@ type Job struct {
 	// (private/questions.md) or a caller (a test) with no real library to
 	// place into.
 	committer Committer
+	// packs is todo 4.11's own detection sink, required like sessions/tool --
+	// unlike committer, detection needs no category and no destination, so
+	// it runs whether or not a session was ever placed.
+	packs library.Packs
 	// events is optional: nil means no progress is published, the same as
 	// every other optional dependency in this codebase.
 	events *events.Bus
@@ -105,6 +110,7 @@ type Config struct {
 	Tool      mediatool.Tool
 	Search    music.Searcher
 	Committer Committer
+	Packs     library.Packs
 	Events    *events.Bus
 	Clock     clock.Clock
 	Logger    *slog.Logger
@@ -118,7 +124,7 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		fsys: config.FS, sessions: config.Sessions, policy: config.Policy,
-		tool: config.Tool, search: config.Search, committer: config.Committer,
+		tool: config.Tool, search: config.Search, committer: config.Committer, packs: config.Packs,
 		events: config.Events, clock: config.Clock, logger: logger,
 	}
 }
@@ -171,6 +177,8 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	j.logger.Info("import inspection finished",
 		slog.Int64("session_id", sessionID), slog.String("source_path", payload.SourcePath),
 		slog.Int("units_emitted", result.UnitsEmitted), slog.Bool("completed", result.Completed))
+
+	j.detectPacks(ctx, sessionID, payload.SourcePath, payload.Origin)
 
 	if err := j.sessions.Finish(ctx, sessionID, library.ImportDone, j.clock.Now().Unix(), ""); err != nil {
 		return err
@@ -237,6 +245,69 @@ func (j *Job) estimateOnce(ctx context.Context, sessionID int64, sourcePath stri
 	}
 	if err := j.sessions.SetUnitsEstimated(ctx, sessionID, int64(estimate)); err != nil {
 		j.logger.Warn("could not record import unit estimate", slog.Any("error", err))
+	}
+}
+
+// detectPacks runs todo 4.11's own detection once a walk finishes cleanly
+// (Run's own caller: never on a cancelled or still-interrupted run) --
+// pack.Detect is pure and in-memory (ADR-23); this is where the result is
+// persisted. Adoption sessions are skipped: an existing, already-organised
+// library naturally has many same-artist sibling directories that are an
+// established catalogue, not "one source, many works" in ADR-50's own sense
+// (private/questions.md). Failure is logged and otherwise ignored, the same
+// "a courtesy, never a reason to fail the run" rule estimateOnce already
+// follows -- a missed pack is a worse UI than a stalled import, and every
+// member unit is still fully imported on its own regardless.
+func (j *Job) detectPacks(ctx context.Context, sessionID int64, sourcePath, origin string) {
+	if origin == library.ImportOriginAdoption {
+		return
+	}
+	units, err := j.sessions.ListUnits(ctx, sessionID)
+	if err != nil {
+		j.logger.Warn("could not list units for pack detection", slog.Int64("session_id", sessionID), slog.Any("error", err))
+		return
+	}
+	candidates := make([]pack.Candidate, len(units))
+	byID := make(map[int64]library.Unit, len(units))
+	for i, unit := range units {
+		candidates[i] = pack.Candidate{UnitID: unit.ID, RelPath: unit.RelPath}
+		byID[unit.ID] = unit
+	}
+
+	for _, group := range pack.Detect(path.Base(sourcePath), candidates) {
+		items := make([]library.NewPackItem, len(group.Members))
+		for i, member := range group.Members {
+			unit := byID[member.UnitID]
+			items[i] = library.NewPackItem{
+				WorkID: unit.WorkID, EditionID: unit.EditionID, ImportUnitID: unit.ID,
+				State: packItemStateFor(unit),
+			}
+		}
+		if _, err := j.packs.Create(ctx, group.Kind, group.DetectedFrom, group.Confidence, group.Title,
+			sessionID, j.clock.Now().Unix(), items,
+		); err != nil {
+			j.logger.Warn("could not record detected pack",
+				slog.String("title", group.Title), slog.Int("members", len(group.Members)), slog.Any("error", err))
+		}
+	}
+}
+
+// packItemStateFor maps one unit's own decision (and whether it actually
+// placed, for COMMIT) onto pack_item's narrower vocabulary -- COMMIT with no
+// work_id yet (no category on the session at WALK time) reads as QUEUED,
+// same as a real QUEUE decision: neither has resolved into the library yet,
+// and ManualCommitter's own ResolveItem is what moves either one to RESOLVED
+// once it does.
+func packItemStateFor(unit library.Unit) string {
+	switch {
+	case unit.Decision == library.UnitCommit && unit.WorkID != nil:
+		return library.PackItemResolved
+	case unit.Decision == library.UnitCommit, unit.Decision == library.UnitQueue:
+		return library.PackItemQueued
+	case unit.Decision == library.UnitSkip:
+		return library.PackItemSkipped
+	default:
+		return library.PackItemFailed
 	}
 }
 

@@ -86,8 +86,8 @@ var allowedInternalImports = map[string][]string{
 	// the ADR-24 chain's own candidate type) -- model has no dependencies of its own,
 	// so this stays a downward arrow like every other entry here.
 	"internal/db/library": {
-		"internal/platform/clock", "internal/platform/fsx", "internal/importing/inspect", "internal/identify/model", "internal/platform/paginate",
-		"internal/db/store", "internal/db/store/gen/librarydb",
+		"internal/platform/clock", "internal/platform/fsx", "internal/importing/inspect", "internal/importing/pack",
+		"internal/identify/model", "internal/platform/paginate", "internal/db/store", "internal/db/store/gen/librarydb",
 	},
 	// The only unprompted outbound call, so it needs the one way out (Invariant 28).
 	"internal/platform/egress": {"internal/platform/clock", "internal/platform/httpx"},
@@ -122,6 +122,12 @@ var allowedInternalImports = map[string][]string{
 	// imports internal/platform/mediatool, internal/identify/parse or internal/media/music. fsx is
 	// the one dependency, for the walk itself.
 	"internal/importing/inspect": {"internal/platform/fsx"},
+	// ADR-50's own detection (todo 4.11): pure grouping over caller-supplied
+	// candidates, the same "no I/O, no database" separation
+	// internal/moving/placement and internal/identify/priority keep. The one
+	// dependency is the release-name parser, reused for its own Artist/
+	// Discography fields rather than a second, independent parse.
+	"internal/importing/pack": {"internal/identify/parse"},
 	// ADR-36's composite acquisition priority: pure arithmetic over
 	// caller-supplied facts, no I/O and no database of its own -- the same
 	// separation internal/identify/score and internal/moving/placement keep from their own
@@ -181,9 +187,9 @@ var allowedInternalImports = map[string][]string{
 	// the inspect.Unit-to-FileRef adapters -- the same shape internal/scanning/scan's
 	// own job has for its Consumer, generalised to import's own pipeline.
 	"internal/importing/importjob": {
-		"internal/platform/clock", "internal/platform/fsx", "internal/importing/inspect", "internal/jobs",
-		"internal/db/library", "internal/platform/mediatool", "internal/identify/model", "internal/media/music",
-		"internal/platform/events",
+		"internal/platform/clock", "internal/platform/fsx", "internal/importing/inspect", "internal/importing/pack",
+		"internal/jobs", "internal/db/library", "internal/platform/mediatool", "internal/identify/model",
+		"internal/media/music", "internal/platform/events",
 	},
 	// ADR-51's resumable Apply: claims a move_item, calls mover.ApplyOne, then
 	// records/unlinks through internal/db/library. No internal/db/settings import --

@@ -18,6 +18,7 @@ import { Library } from "./Library";
 import { LibraryConfigPlaceholder } from "./LibraryConfigPlaceholder";
 import { LibraryLevelList } from "./LibraryLevelList";
 import { Moves } from "./Moves";
+import { Packs } from "./Packs";
 import { People } from "./People";
 import { PersonDetail } from "./PersonDetail";
 import { RootFolders } from "./RootFolders";
@@ -89,6 +90,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/moves", component: Moves }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/downloads", component: DownloadFolders }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/import", component: Import }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/storage/packs", component: Packs }),
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/import",

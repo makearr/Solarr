@@ -101,7 +101,7 @@ func TestManualCommitter_CommitHeldPlacesAQueuedUnitUsingItsTopCandidate(t *test
 
 	workID := seedWork(t, fx)
 	committer := &fakeCommitter{workID: workID}
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer)
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
 	placed, err := manual.CommitHeld(t.Context(), units[0].ID)
 	if err != nil {
 		t.Fatalf("CommitHeld: %v", err)
@@ -148,7 +148,7 @@ func TestManualCommitter_CommitHeldRefusesAUnitThatIsNotQueued(t *testing.T) {
 		t.Fatalf("unit decision = %q, want COMMIT (test setup)", units[0].Decision)
 	}
 
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{})
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
 	_, err := manual.CommitHeld(t.Context(), units[0].ID)
 	if !errors.Is(err, importjob.ErrUnitNotQueued) {
 		t.Errorf("err = %v, want ErrUnitNotQueued", err)
@@ -171,7 +171,7 @@ func TestManualCommitter_CommitHeldRefusesAUnitWithNoCandidate(t *testing.T) {
 		t.Fatalf("unit = %+v, want QUEUE with no candidates (test setup)", units[0])
 	}
 
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{})
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
 	_, err := manual.CommitHeld(t.Context(), units[0].ID)
 	if !errors.Is(err, importjob.ErrNoCandidate) {
 		t.Errorf("err = %v, want ErrNoCandidate", err)
@@ -191,7 +191,7 @@ func TestManualCommitter_CommitHeldRefusesWithNoSessionCategory(t *testing.T) {
 	done, _ := sessions.List(t.Context(), library.ImportDone)
 	units, _ := sessions.ListUnits(t.Context(), done[0].ID)
 
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{})
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
 	_, err := manual.CommitHeld(t.Context(), units[0].ID)
 	if !errors.Is(err, importjob.ErrSessionHasNoCategory) {
 		t.Errorf("err = %v, want ErrSessionHasNoCategory", err)
@@ -222,7 +222,7 @@ func TestManualCommitter_CommitHeldRefusesWhenTheUnitChangedSinceInspection(t *t
 		t.Fatalf("Remove: %v", err)
 	}
 
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{})
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
 	_, err := manual.CommitHeld(t.Context(), units[0].ID)
 	if !errors.Is(err, importjob.ErrUnitChanged) {
 		t.Errorf("err = %v, want ErrUnitChanged", err)
@@ -266,7 +266,7 @@ func TestManualCommitter_CommitHeldRefusesAUnitThatSharesItsDirectory(t *testing
 		t.Fatalf("units = %+v, want 2 sharing one rel_path (test setup)", units)
 	}
 
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{})
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
 	_, err := manual.CommitHeld(t.Context(), units[0].ID)
 	if !errors.Is(err, importjob.ErrUnitSharesDirectory) {
 		t.Errorf("err = %v, want ErrUnitSharesDirectory", err)
@@ -295,7 +295,7 @@ func TestManualCommitter_CommitHeldRefusesAReveredSession(t *testing.T) {
 		t.Fatalf("Finish: %v", err)
 	}
 
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{})
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
 	_, err := manual.CommitHeld(t.Context(), units[0].ID)
 	if !errors.Is(err, importjob.ErrSessionReverted) {
 		t.Errorf("err = %v, want ErrSessionReverted", err)
@@ -327,7 +327,7 @@ func TestManualCommitter_PlaceUnplacedPlacesEveryUndecidedCommitUnit(t *testing.
 	}
 
 	committer := &fakeCommitter{workID: seedWork(t, fx)}
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer)
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
 	placed, errs := manual.PlaceUnplaced(t.Context(), done[0].ID)
 	if len(errs) != 0 {
 		t.Fatalf("errs = %v, want none", errs)
@@ -360,7 +360,7 @@ func TestManualCommitter_PlaceUnplacedRefusesWithNoCategory(t *testing.T) {
 	sessions := fx.sessions()
 	done, _ := sessions.List(t.Context(), library.ImportDone)
 
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{})
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
 	_, errs := manual.PlaceUnplaced(t.Context(), done[0].ID)
 	if len(errs) != 1 || !errors.Is(errs[0], importjob.ErrSessionHasNoCategory) {
 		t.Errorf("errs = %v, want one ErrSessionHasNoCategory", errs)
@@ -390,7 +390,7 @@ func TestManualCommitter_PlaceUnplacedIsBestEffortAcrossSeveralUnits(t *testing.
 
 	failRoot := filepath.Join(root, units[0].RelPath)
 	committer := &fakeCommitter{workID: seedWork(t, fx), errFor: map[string]error{failRoot: errors.New("no room")}}
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer)
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
 	placed, errs := manual.PlaceUnplaced(t.Context(), done[0].ID)
 	if placed != 1 {
 		t.Errorf("placed = %d, want 1 (the other unit)", placed)

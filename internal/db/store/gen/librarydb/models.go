@@ -314,6 +314,7 @@ type ImportUnit struct {
 	Reason         sql.NullString
 	WorkCreated    int64
 	EditionCreated int64
+	PackID         sql.NullInt64
 }
 
 type ImportUnitFile struct {
@@ -427,6 +428,28 @@ type OrganisationExternalID struct {
 	Provider       string
 	ExternalID     string
 	OrganisationID int64
+}
+
+type Pack struct {
+	ID            int64
+	Kind          string
+	DetectedFrom  string
+	Confidence    float64
+	Title         string
+	AcquisitionID sql.NullInt64
+	SessionID     sql.NullInt64
+	MemberCount   int64
+	ResolvedCount int64
+	CreatedAt     int64
+}
+
+type PackItem struct {
+	PackID       int64
+	Ord          int64
+	WorkID       sql.NullInt64
+	EditionID    sql.NullInt64
+	ImportUnitID sql.NullInt64
+	State        string
 }
 
 type Person struct {

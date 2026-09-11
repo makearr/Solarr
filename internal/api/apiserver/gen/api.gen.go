@@ -182,6 +182,28 @@ const (
 	MoveJobStateRUNNING MoveJobState = "RUNNING"
 )
 
+// Defines values for PackDetectedFrom.
+const (
+	Structure        PackDetectedFrom = "structure"
+	StructureAndName PackDetectedFrom = "structure_and_name"
+)
+
+// Defines values for PackKind.
+const (
+	ANTHOLOGY   PackKind = "ANTHOLOGY"
+	TAKELA      PackKind = "BOX_SET"
+	COMPILATION PackKind = "COMPILATION"
+	DISCOGRAPHY PackKind = "DISCOGRAPHY"
+)
+
+// Defines values for PackItemState.
+const (
+	PackItemStateFAILED   PackItemState = "FAILED"
+	PackItemStateQUEUED   PackItemState = "QUEUED"
+	PackItemStateRESOLVED PackItemState = "RESOLVED"
+	PackItemStateSKIPPED  PackItemState = "SKIPPED"
+)
+
 // Defines values for Permission.
 const (
 	PermissionManage  Permission = "manage"
@@ -275,10 +297,10 @@ const (
 
 // Defines values for ListImportUnitsParamsDecision.
 const (
-	ListImportUnitsParamsDecisionCOMMIT ListImportUnitsParamsDecision = "COMMIT"
-	ListImportUnitsParamsDecisionFAILED ListImportUnitsParamsDecision = "FAILED"
-	ListImportUnitsParamsDecisionQUEUE  ListImportUnitsParamsDecision = "QUEUE"
-	ListImportUnitsParamsDecisionSKIP   ListImportUnitsParamsDecision = "SKIP"
+	COMMIT ListImportUnitsParamsDecision = "COMMIT"
+	FAILED ListImportUnitsParamsDecision = "FAILED"
+	QUEUE  ListImportUnitsParamsDecision = "QUEUE"
+	SKIP   ListImportUnitsParamsDecision = "SKIP"
 )
 
 // Defines values for ListMoveJobsParamsReason.
@@ -782,7 +804,10 @@ type ImportUnit struct {
 	Evidence  *ImportEvidence `json:"evidence,omitempty"`
 	FileCount int64           `json:"file_count"`
 	Id        int64           `json:"id"`
-	Reason    *string         `json:"reason,omitempty"`
+
+	// PackId Non-null once todo 4.11's own detection finds this unit belongs to a pack.
+	PackId *int64  `json:"pack_id,omitempty"`
+	Reason *string `json:"reason,omitempty"`
 
 	// RelPath The unit's own root, relative to the session's source_path.
 	RelPath   string          `json:"rel_path"`
@@ -981,6 +1006,50 @@ type NetworkSettingsUpdate struct {
 	ProxyBypass []string `json:"proxy_bypass"`
 	ProxyUrl    *string  `json:"proxy_url,omitempty"`
 }
+
+// Pack One source, many works (ADR-50, todo 4.11) -- a provenance fact, not an identity tier.
+type Pack struct {
+	AcquisitionId *int64           `json:"acquisition_id,omitempty"`
+	Confidence    float32          `json:"confidence"`
+	CreatedAt     time.Time        `json:"created_at"`
+	DetectedFrom  PackDetectedFrom `json:"detected_from"`
+	Id            int64            `json:"id"`
+	Kind          PackKind         `json:"kind"`
+	MemberCount   int64            `json:"member_count"`
+
+	// ResolvedCount Members that identified and placed.
+	ResolvedCount int64  `json:"resolved_count"`
+	SessionId     *int64 `json:"session_id,omitempty"`
+
+	// Title As released
+	Title string `json:"title"`
+}
+
+// PackDetectedFrom defines model for Pack.DetectedFrom.
+type PackDetectedFrom string
+
+// PackKind defines model for Pack.Kind.
+type PackKind string
+
+// PackDetail One pack plus its own members, in the order they were recorded.
+type PackDetail struct {
+	Items []PackItem `json:"items"`
+
+	// Pack One source, many works (ADR-50, todo 4.11) -- a provenance fact, not an identity tier.
+	Pack Pack `json:"pack"`
+}
+
+// PackItem One member of a pack.
+type PackItem struct {
+	EditionId    *int64        `json:"edition_id,omitempty"`
+	ImportUnitId *int64        `json:"import_unit_id,omitempty"`
+	Ord          int64         `json:"ord"`
+	State        PackItemState `json:"state"`
+	WorkId       *int64        `json:"work_id,omitempty"`
+}
+
+// PackItemState defines model for PackItem.State.
+type PackItemState string
 
 // ParsedTitle internal/identify/parse's own reading of the pasted title, shown so a simulation is not a black box.
 type ParsedTitle struct {
@@ -1487,6 +1556,12 @@ type ListMoveJobsParamsReason string
 // ListMoveJobsParamsState defines parameters for ListMoveJobs.
 type ListMoveJobsParamsState string
 
+// ListPacksParams defines parameters for ListPacks.
+type ListPacksParams struct {
+	AfterId *int64 `form:"after_id,omitempty" json:"after_id,omitempty"`
+	Limit   *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListPeopleParams defines parameters for ListPeople.
 type ListPeopleParams struct {
 	// Cursor From `next_cursor` of the previous page. Absent on the first page.
@@ -1895,6 +1970,12 @@ type ServerInterface interface {
 	// Change the port, egress proxy or IP allowlist. Administrator only.
 	// (PATCH /network)
 	UpdateNetworkSettings(w http.ResponseWriter, r *http.Request)
+	// Every detected pack (ADR-50, todo 4.11), newest first.
+	// (GET /packs)
+	ListPacks(w http.ResponseWriter, r *http.Request, params ListPacksParams)
+	// One pack and its own members, in the order they were recorded.
+	// (GET /packs/{id})
+	GetPack(w http.ResponseWriter, r *http.Request, id int64)
 	// A page of people (ADR-32) -- first-class monitorable entities, not just credits.
 	// (GET /people)
 	ListPeople(w http.ResponseWriter, r *http.Request, params ListPeopleParams)
@@ -2294,6 +2375,18 @@ func (_ Unimplemented) GetNetworkSettings(w http.ResponseWriter, r *http.Request
 // Change the port, egress proxy or IP allowlist. Administrator only.
 // (PATCH /network)
 func (_ Unimplemented) UpdateNetworkSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every detected pack (ADR-50, todo 4.11), newest first.
+// (GET /packs)
+func (_ Unimplemented) ListPacks(w http.ResponseWriter, r *http.Request, params ListPacksParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One pack and its own members, in the order they were recorded.
+// (GET /packs/{id})
+func (_ Unimplemented) GetPack(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4030,6 +4123,82 @@ func (siw *ServerInterfaceWrapper) UpdateNetworkSettings(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// ListPacks operation middleware
+func (siw *ServerInterfaceWrapper) ListPacks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPacksParams
+
+	// ------------- Optional query parameter "after_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "after_id", r.URL.Query(), &params.AfterId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPacks(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPack operation middleware
+func (siw *ServerInterfaceWrapper) GetPack(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPack(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListPeople operation middleware
 func (siw *ServerInterfaceWrapper) ListPeople(w http.ResponseWriter, r *http.Request) {
 
@@ -5327,6 +5496,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/network", wrapper.UpdateNetworkSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/packs", wrapper.ListPacks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/packs/{id}", wrapper.GetPack)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/people", wrapper.ListPeople)

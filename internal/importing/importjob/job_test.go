@@ -161,7 +161,7 @@ func (f *fixture) job(t *testing.T, policy float64) *importjob.Job {
 	t.Helper()
 	return importjob.NewJob(importjob.Config{
 		FS: f.fsys, Sessions: library.NewImportSessions(f.store), Policy: fixedPolicy(policy),
-		Tool: f.tool, Clock: f.clock, Logger: slog.New(slog.DiscardHandler),
+		Tool: f.tool, Packs: library.NewPacks(f.store), Clock: f.clock, Logger: slog.New(slog.DiscardHandler),
 	})
 }
 
@@ -610,7 +610,7 @@ func TestJob_PicksUpACategoryAssignedMidRun(t *testing.T) {
 
 	job := importjob.NewJob(importjob.Config{
 		FS: fx.fsys, Sessions: sessions, Policy: fixedPolicy(0.90),
-		Tool: fx.tool, Committer: committer, Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+		Tool: fx.tool, Committer: committer, Packs: library.NewPacks(fx.store), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
 	})
 	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -643,6 +643,89 @@ func TestJob_PicksUpACategoryAssignedMidRun(t *testing.T) {
 	}
 	if committer.calls[0].directory != "Artist/Album2" {
 		t.Errorf("committer was called for %q, want Artist/Album2", committer.calls[0].directory)
+	}
+}
+
+// Two releases by the same artist, each its own top-level directory under
+// the walked source (the real scene-fixture shape /storage/test/medianexus/
+// music/ itself has for this exact artist) -- todo 4.11's own detector
+// groups them into one pack once the whole walk finishes, whatever each
+// unit's own decision turned out to be (both QUEUE here, no embedded MBID).
+func TestJob_DetectsAPackFromSiblingArtistAgreement(t *testing.T) {
+	fx := newFixture(t,
+		"Lamig Vu Linumudo-Cedak Tivilute-CDM-FLAC-1996-CHS/01.flac",
+		"Lamig Vu Linumudo-The Mukaminu Rerer-SINGLE-16BIT-WEB-FLAC-2018-FLACED/01.flac",
+		"Vutu Doci-The Sezo Siluko-Remastered-24BIT-WEB-FLAC-2018-TiMES/01.flac",
+	)
+
+	job := fx.job(t, 0.90)
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	sessions := fx.sessions()
+	done, err := sessions.List(t.Context(), library.ImportDone)
+	if err != nil || len(done) != 1 {
+		t.Fatalf("List: %v, %+v", err, done)
+	}
+	units, err := sessions.ListUnits(t.Context(), done[0].ID)
+	if err != nil || len(units) != 3 {
+		t.Fatalf("ListUnits: %v, %+v", err, units)
+	}
+
+	packs := library.NewPacks(fx.store)
+	page, err := packs.ListPage(t.Context(), 0, 10)
+	if err != nil {
+		t.Fatalf("ListPage: %v", err)
+	}
+	if len(page) != 1 {
+		t.Fatalf("packs = %+v, want exactly 1 (Weird Al only, not Vutu Doci)", page)
+	}
+	if page[0].Kind != library.PackDiscography || page[0].MemberCount != 2 {
+		t.Errorf("pack = %+v, want DISCOGRAPHY with 2 members", page[0])
+	}
+
+	var kateBushUnit library.Unit
+	packedCount := 0
+	for _, u := range units {
+		if u.PackID != nil {
+			packedCount++
+			if *u.PackID != page[0].ID {
+				t.Errorf("unit %d PackID = %d, want %d", u.ID, *u.PackID, page[0].ID)
+			}
+		} else if strings.Contains(u.RelPath, "Vutu Doci") {
+			kateBushUnit = u
+		}
+	}
+	if packedCount != 2 {
+		t.Errorf("packedCount = %d, want 2", packedCount)
+	}
+	if kateBushUnit.ID == 0 {
+		t.Error("Vutu Doci's own unit was not found unpacked")
+	}
+}
+
+// An adoption session (an existing, already-organised library) never
+// triggers pack detection, even when its own units would otherwise agree by
+// artist -- an established catalogue is not "one source, many works"
+// (private/questions.md).
+func TestJob_SkipsPackDetectionForAdoption(t *testing.T) {
+	fx := newFixture(t,
+		"Lamig Vu Linumudo-Cedak Tivilute-CDM-FLAC-1996-CHS/01.flac",
+		"Lamig Vu Linumudo-The Mukaminu Rerer-SINGLE-16BIT-WEB-FLAC-2018-FLACED/01.flac",
+	)
+
+	job := fx.job(t, 0.90)
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginAdoption}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	page, err := library.NewPacks(fx.store).ListPage(t.Context(), 0, 10)
+	if err != nil {
+		t.Fatalf("ListPage: %v", err)
+	}
+	if len(page) != 0 {
+		t.Errorf("packs = %+v, want none for an adoption session", page)
 	}
 }
 

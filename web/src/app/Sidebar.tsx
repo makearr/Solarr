@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   ArrowLeftRight,
+  Boxes,
   ChevronDown,
   ChevronRight,
   Download,
@@ -45,6 +46,7 @@ const STORAGE_SECTIONS: readonly { to: string; label: string; icon: LucideIcon }
   { to: "/storage/moves", label: "Move & drain", icon: ArrowLeftRight },
   { to: "/storage/downloads", label: "Download folders", icon: Download },
   { to: "/storage/import", label: "Import", icon: ScanSearch },
+  { to: "/storage/packs", label: "Packs", icon: Boxes },
 ];
 
 const EXPANDED_STORAGE_KEY = "medianexus.sidebar.expandedLibraries";

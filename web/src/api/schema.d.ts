@@ -1204,6 +1204,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every detected pack (ADR-50, todo 4.11), newest first.
+         * @description `after_id` pages through the list (the id of the last item already seen, 0 for the first page) -- the same plain ascending id cursor `/blocked` already uses. Detected once, at the end of a non-adoption session's own WALK (private/questions.md has the exact rule); an adoption session (an existing, already-organised library) never produces one.
+         */
+        get: operations["listPacks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/packs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** One pack and its own members, in the order they were recorded. */
+        get: operations["getPack"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/libraries": {
         parameters: {
             query?: never;
@@ -2301,6 +2340,55 @@ export interface components {
             evidence?: components["schemas"]["ImportEvidence"];
             candidates?: components["schemas"]["ImportCandidate"][];
             reason?: string;
+            /**
+             * Format: int64
+             * @description Non-null once todo 4.11's own detection finds this unit belongs to a pack.
+             */
+            pack_id?: number;
+        };
+        /** @description One source, many works (ADR-50, todo 4.11) -- a provenance fact, not an identity tier. */
+        Pack: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "DISCOGRAPHY" | "BOX_SET" | "ANTHOLOGY" | "COMPILATION";
+            /** @enum {string} */
+            detected_from: "structure" | "structure_and_name";
+            /** Format: float */
+            confidence: number;
+            /** @description As released */
+            title: string;
+            /** Format: int64 */
+            acquisition_id?: number;
+            /** Format: int64 */
+            session_id?: number;
+            /** Format: int64 */
+            member_count: number;
+            /**
+             * Format: int64
+             * @description Members that identified and placed.
+             */
+            resolved_count: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /** @description One member of a pack. */
+        PackItem: {
+            /** Format: int64 */
+            ord: number;
+            /** Format: int64 */
+            work_id?: number;
+            /** Format: int64 */
+            edition_id?: number;
+            /** Format: int64 */
+            import_unit_id?: number;
+            /** @enum {string} */
+            state: "RESOLVED" | "QUEUED" | "FAILED" | "SKIPPED";
+        };
+        /** @description One pack plus its own members, in the order they were recorded. */
+        PackDetail: {
+            pack: components["schemas"]["Pack"];
+            items: components["schemas"]["PackItem"][];
         };
         /** @description A category as a navigation target: no `permission` field, since the list is already narrowed to what the caller may read (unlike `Me`'s `categories`, which reports the caller's level on each). */
         LibraryCategory: {
@@ -4342,6 +4430,54 @@ export interface operations {
             404: components["responses"]["Problem"];
             /** @description Not QUEUE, no candidate, no category on the session, the session was reverted, or the unit's own files changed since inspection. */
             409: components["responses"]["Problem"];
+        };
+    };
+    listPacks: {
+        parameters: {
+            query?: {
+                after_id?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of packs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pack"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    getPack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pack. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackDetail"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     listLibraries: {

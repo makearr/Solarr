@@ -89,12 +89,12 @@ VALUES (sqlc.arg(session_id), sqlc.arg(rel_path), sqlc.arg(shape), sqlc.arg(file
         sqlc.arg(reason))
 RETURNING id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
           work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-          edition_created;
+          edition_created, pack_id;
 
 -- name: ListImportUnits :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created
+       edition_created, pack_id
 FROM import_unit WHERE session_id = ? ORDER BY id;
 
 -- Cursor-paginated, unlike ListImportUnits above: a session's own unit count
@@ -106,7 +106,7 @@ FROM import_unit WHERE session_id = ? ORDER BY id;
 -- name: ListImportUnitsPage :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created
+       edition_created, pack_id
 FROM import_unit
 WHERE session_id = sqlc.arg(session_id) AND id > sqlc.arg(after_id)
   AND (sqlc.arg(filter_by_decision) = 0 OR decision = sqlc.arg(decision))
@@ -116,7 +116,7 @@ LIMIT sqlc.arg(page_size);
 -- name: GetImportUnit :one
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created
+       edition_created, pack_id
 FROM import_unit WHERE id = ?;
 
 -- The only mutation IDENTIFY needs once it exists: a unit starts QUEUE with no
@@ -136,7 +136,7 @@ WHERE id = sqlc.arg(id);
 -- name: ListUnplacedCommitUnits :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created
+       edition_created, pack_id
 FROM import_unit
 WHERE session_id = ? AND decision = 'COMMIT' AND work_id IS NULL
 ORDER BY id;

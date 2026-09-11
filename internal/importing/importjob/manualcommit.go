@@ -34,11 +34,22 @@ type ManualCommitter struct {
 	tool      mediatool.Tool
 	sessions  library.ImportSessions
 	committer Committer
+	// packs is todo 4.11's own pack_item state keeper: a unit resolved
+	// through this package moves its pack membership (if any) from QUEUED to
+	// RESOLVED too, the same way commitCluster's own inline placement does
+	// (job.go). Safe to leave zero-valued in a caller that never places a
+	// unit with a non-nil PackID (every existing test but the pack-specific
+	// ones), since place() checks unit.PackID first.
+	packs library.Packs
 }
 
-// NewManualCommitter builds one. All four are required.
-func NewManualCommitter(fsys fsx.FS, tool mediatool.Tool, sessions library.ImportSessions, committer Committer) ManualCommitter {
-	return ManualCommitter{fsys: fsys, tool: tool, sessions: sessions, committer: committer}
+// NewManualCommitter builds one. packs may be a zero-valued library.Packs in
+// a caller that never places a unit with a non-nil PackID (place() checks
+// PackID first); every other argument is required.
+func NewManualCommitter(
+	fsys fsx.FS, tool mediatool.Tool, sessions library.ImportSessions, committer Committer, packs library.Packs,
+) ManualCommitter {
+	return ManualCommitter{fsys: fsys, tool: tool, sessions: sessions, committer: committer, packs: packs}
 }
 
 // ErrSessionHasNoCategory means the session must be given a category
@@ -257,6 +268,11 @@ func (m ManualCommitter) place(
 		MediaObjectIDs: placed.MediaObjectIDs,
 	}); err != nil {
 		return music.Placed{}, fmt.Errorf("importjob: record placement for unit %d: %w", unit.ID, err)
+	}
+	if unit.PackID != nil {
+		if err := m.packs.ResolveItem(ctx, unit.ID, placed.WorkID, placed.EditionID); err != nil {
+			return music.Placed{}, fmt.Errorf("importjob: resolve pack item for unit %d: %w", unit.ID, err)
+		}
 	}
 	return placed, nil
 }
