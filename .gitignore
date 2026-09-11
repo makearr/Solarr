@@ -54,6 +54,10 @@ config.local.yml
 # Machine-specific Makefile overrides (DNS, image pins)
 /Makefile.local
 
+# The local standing test instance's own compose file -- host-specific paths
+# (/mnt/media/music etc.), never portable, never committed
+/docker-compose.test.yml
+
 # Claude Code harness state, including worktree-isolated subagent checkouts
 # (each a full nested working tree -- never something to commit)
 /.claude/
