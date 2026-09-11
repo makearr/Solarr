@@ -25,6 +25,9 @@ type fakeArrSync struct {
 	lastGetImportID    int64
 	lastRevertImportID int64
 	revertCalls        int
+
+	rootFolders               []string
+	lastRootFoldersInstanceID int64
 }
 
 func (f *fakeArrSync) Sync(_ context.Context, instanceID int64) (apiserver.ArrImportRun, error) {
@@ -59,6 +62,14 @@ func (f *fakeArrSync) Revert(_ context.Context, id int64) (apiserver.ArrImportRe
 		return apiserver.ArrImportRevertResult{}, f.err
 	}
 	return f.revert, nil
+}
+
+func (f *fakeArrSync) RootFolders(_ context.Context, instanceID int64) ([]string, error) {
+	f.lastRootFoldersInstanceID = instanceID
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.rootFolders, nil
 }
 
 func TestSyncArrInstance_ReachesTheSyncerAndRendersTheRun(t *testing.T) {
@@ -112,6 +123,41 @@ func TestSyncArrInstance_AppNotYetSupportedAnswers409(t *testing.T) {
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/arr/instances/3/sync", ""))
 	if recorder.Code != http.StatusConflict {
 		t.Errorf("status = %d, want 409 for an app with no real sync yet (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+func TestListArrInstanceRootFolders_ReachesTheReaderAndRendersPaths(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.arrSync.rootFolders = []string{"/music", "/music2"}
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/arr/instances/3/rootfolders"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if fixture.arrSync.lastRootFoldersInstanceID != 3 {
+		t.Errorf("RootFolders called with instance=%d, want 3", fixture.arrSync.lastRootFoldersInstanceID)
+	}
+	var body []struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 2 || body[0].Path != "/music" || body[1].Path != "/music2" {
+		t.Errorf("root folders = %+v, want [/music /music2]", body)
+	}
+}
+
+func TestListArrInstanceRootFolders_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "viewer", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "viewer")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/arr/instances/3/rootfolders"))
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 for a non-administrator", recorder.Code)
 	}
 }
 

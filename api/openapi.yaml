@@ -1291,6 +1291,41 @@ paths:
             (connect/preview/park only), or this instance already has a sync
             running.
 
+  /arr/instances/{id}/rootfolders:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listArrInstanceRootFolders
+      tags: [settings]
+      summary: >-
+        The instance's own configured root folders, read live. Administrator
+        only.
+      description: >-
+        For the setup wizard's own "import the root folder(s)" step: the
+        paths as *this* instance's own container sees them, not translated
+        against MediaNexus's own mounts -- creating a MediaNexus root folder
+        at one of them only succeeds when the two containers share the same
+        mount layout, the common case for sibling containers in one compose
+        file. A path that does not exist here is refused the same way any
+        other POST /rootfolders is, not silently accepted.
+      responses:
+        "200":
+          description: Every root folder the instance itself reports.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ArrRootFolder" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          $ref: "#/components/responses/Problem"
+          description: This app is not yet wired for a real connection (connect/preview/park only).
+
   /arr/imports:
     get:
       operationId: listArrImports
@@ -3301,6 +3336,14 @@ components:
         updated_at: { type: string, format: date-time }
         last_synced_at: { type: string, format: date-time }
         last_sync_error: { type: string }
+
+    ArrRootFolder:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+          description: As the *Arr instance's own container sees it.
 
     AddArrInstanceRequest:
       type: object

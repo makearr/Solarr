@@ -135,6 +135,34 @@ func (a ArrSync) runAndFinish(
 	}
 }
 
+// RootFolders reads one instance's own configured root folders live -- the
+// setup wizard's own "import the root folder(s)" step, and the only place
+// this package builds a client without also running a sync.
+func (a ArrSync) RootFolders(ctx context.Context, instanceID int64) ([]string, error) {
+	instance, err := a.Cache.GetArrInstance(ctx, instanceID)
+	if err != nil {
+		return nil, err
+	}
+	if instance.App != settings.ArrAppLidarr {
+		return nil, fmt.Errorf("%w: %s", apiserver.ErrArrAppNotYetSupported, instance.App)
+	}
+	apiKey, err := a.Cache.DecryptedAPIKey(ctx, instanceID)
+	if err != nil {
+		return nil, err
+	}
+
+	client := a.Lidarr(instance.BaseURL, apiKey.Reveal())
+	folders, err := client.RootFolders(ctx)
+	if err != nil {
+		return nil, err
+	}
+	paths := make([]string, len(folders))
+	for index, folder := range folders {
+		paths[index] = folder.Path
+	}
+	return paths, nil
+}
+
 // ListImports answers every run for one instance, newest first.
 func (a ArrSync) ListImports(ctx context.Context, instanceID int64) ([]apiserver.ArrImportRun, error) {
 	runs, err := a.Imports.ListForInstance(ctx, instanceID)

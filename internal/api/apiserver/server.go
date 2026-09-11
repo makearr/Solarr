@@ -315,6 +315,7 @@ func New(config Config) (*Server, error) {
 			secured.Delete("/arr/instances/{id}", server.routeDeleteArrInstance)
 			secured.Post("/arr/instances/{id}/apikey", server.routeSetArrInstanceKey)
 			secured.Post("/arr/instances/{id}/sync", server.routeSyncArrInstance)
+			secured.Get("/arr/instances/{id}/rootfolders", server.routeListArrInstanceRootFolders)
 			secured.Get("/arr/imports", server.routeListArrImports)
 			secured.Get("/arr/imports/{id}", server.routeGetArrImport)
 			secured.Post("/arr/imports/{id}/revert", server.routeRevertArrImport)

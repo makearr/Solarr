@@ -464,6 +464,12 @@ type ArrInstance struct {
 	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
+// ArrRootFolder defines model for ArrRootFolder.
+type ArrRootFolder struct {
+	// Path As the *Arr instance's own container sees it.
+	Path string `json:"path"`
+}
+
 // AuthPolicy defines model for AuthPolicy.
 type AuthPolicy struct {
 	// Administrator The account a login would use, when one exists. Shown rather than asked for: turning a login on sets a password on this account.
@@ -2030,6 +2036,9 @@ type ServerInterface interface {
 	// Replace a connection's own API key. Administrator only. A separate endpoint from PATCH: resealing on every unrelated edit would be silent, pointless churn.
 	// (POST /arr/instances/{id}/apikey)
 	SetArrInstanceKey(w http.ResponseWriter, r *http.Request, id int64)
+	// The instance's own configured root folders, read live. Administrator only.
+	// (GET /arr/instances/{id}/rootfolders)
+	ListArrInstanceRootFolders(w http.ResponseWriter, r *http.Request, id int64)
 	// Start one import (todo 4.13). Administrator only.
 	// (POST /arr/instances/{id}/sync)
 	SyncArrInstance(w http.ResponseWriter, r *http.Request, id int64)
@@ -2348,6 +2357,12 @@ func (_ Unimplemented) UpdateArrInstance(w http.ResponseWriter, r *http.Request,
 // Replace a connection's own API key. Administrator only. A separate endpoint from PATCH: resealing on every unrelated edit would be silent, pointless churn.
 // (POST /arr/instances/{id}/apikey)
 func (_ Unimplemented) SetArrInstanceKey(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The instance's own configured root folders, read live. Administrator only.
+// (GET /arr/instances/{id}/rootfolders)
+func (_ Unimplemented) ListArrInstanceRootFolders(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3138,6 +3153,39 @@ func (siw *ServerInterfaceWrapper) SetArrInstanceKey(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetArrInstanceKey(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListArrInstanceRootFolders operation middleware
+func (siw *ServerInterfaceWrapper) ListArrInstanceRootFolders(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListArrInstanceRootFolders(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6022,6 +6070,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/arr/instances/{id}/apikey", wrapper.SetArrInstanceKey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/arr/instances/{id}/rootfolders", wrapper.ListArrInstanceRootFolders)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/arr/instances/{id}/sync", wrapper.SyncArrInstance)

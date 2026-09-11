@@ -820,6 +820,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/arr/instances/{id}/rootfolders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * The instance's own configured root folders, read live. Administrator only.
+         * @description For the setup wizard's own "import the root folder(s)" step: the paths as *this* instance's own container sees them, not translated against MediaNexus's own mounts -- creating a MediaNexus root folder at one of them only succeeds when the two containers share the same mount layout, the common case for sibling containers in one compose file. A path that does not exist here is refused the same way any other POST /rootfolders is, not silently accepted.
+         */
+        get: operations["listArrInstanceRootFolders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/arr/imports": {
         parameters: {
             query?: never;
@@ -2142,6 +2164,10 @@ export interface components {
             /** Format: date-time */
             last_synced_at?: string;
             last_sync_error?: string;
+        };
+        ArrRootFolder: {
+            /** @description As the *Arr instance's own container sees it. */
+            path: string;
         };
         AddArrInstanceRequest: {
             app: components["schemas"]["ArrApp"];
@@ -4209,6 +4235,33 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             /** @description Either this app is not yet wired for a real sync (connect/preview/park only), or this instance already has a sync running. */
+            409: components["responses"]["Problem"];
+        };
+    };
+    listArrInstanceRootFolders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every root folder the instance itself reports. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrRootFolder"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description This app is not yet wired for a real connection (connect/preview/park only). */
             409: components["responses"]["Problem"];
         };
     };

@@ -76,6 +76,9 @@ type ArrSync interface {
 	ListImports(ctx context.Context, instanceID int64) ([]ArrImportRun, error)
 	GetImport(ctx context.Context, id int64) (ArrImportDetail, error)
 	Revert(ctx context.Context, id int64) (ArrImportRevertResult, error)
+	// RootFolders answers this instance's own configured root folders, read
+	// live -- the setup wizard's "import the root folder(s)" step.
+	RootFolders(ctx context.Context, instanceID int64) ([]string, error)
 }
 
 // routeSyncArrInstance parses the id path parameter.
@@ -111,6 +114,44 @@ func (s *Server) SyncArrInstance(w http.ResponseWriter, r *http.Request, id int6
 		writeError(w, s.logger, err)
 	default:
 		writeJSON(w, s.logger, http.StatusOK, arrImportRunView(run))
+	}
+}
+
+// routeListArrInstanceRootFolders parses the id path parameter, mirroring routeSyncArrInstance.
+func (s *Server) routeListArrInstanceRootFolders(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an instance id must be a number")
+		return
+	}
+	s.ListArrInstanceRootFolders(w, r, id)
+}
+
+// ListArrInstanceRootFolders reads one instance's own configured root
+// folders live. Administrator only -- it exercises a stored credential
+// against an outside system, the same reason SyncArrInstance is.
+func (s *Server) ListArrInstanceRootFolders(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.arrSync == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "*Arr import is not available")
+		return
+	}
+
+	paths, err := s.arrSync.RootFolders(r.Context(), id)
+	switch {
+	case errors.Is(err, ErrArrAppNotYetSupported):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Not yet supported", "this app only connects and parks its own intent so far")
+	case err != nil:
+		writeError(w, s.logger, err)
+	default:
+		views := make([]gen.ArrRootFolder, len(paths))
+		for index, path := range paths {
+			views[index] = gen.ArrRootFolder{Path: path}
+		}
+		writeJSON(w, s.logger, http.StatusOK, views)
 	}
 }
 
