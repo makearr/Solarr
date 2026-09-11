@@ -62,6 +62,7 @@ func (p *process) importCommitter() music.Committer {
 	return music.NewCommitter(music.CommitterConfig{
 		FS:               p.fsys,
 		Roots:            adapters.DrainRoots{Cache: p.cache},
+		Affinity:         p.cache,
 		Physical:         library.NewPhysical(p.library),
 		Identity:         library.NewIdentity(p.library),
 		Desired:          &desired,

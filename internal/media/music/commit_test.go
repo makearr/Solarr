@@ -1,7 +1,9 @@
 package music_test
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -23,10 +25,12 @@ import (
 )
 
 const (
-	commitSourceRoot = "/downloads/inbox"
-	commitDestRoot   = "/library"
-	commitCategoryID = 3
-	commitDestRootID = 5
+	commitSourceRoot        = "/downloads/inbox"
+	commitDestRoot          = "/library"
+	commitDestRootEmptier   = "/library2"
+	commitCategoryID        = 3
+	commitDestRootID        = 5
+	commitDestRootEmptierID = 6
 )
 
 // fakePlacementRoots is music.PlacementRoots over a fixed map, standing in
@@ -36,18 +40,38 @@ type fakePlacementRoots struct {
 	categoryRoots []settings.CategoryRoot
 }
 
-func (f fakePlacementRoots) RootFolder(id int64) (settings.RootFolder, bool) {
+func (f *fakePlacementRoots) RootFolder(id int64) (settings.RootFolder, bool) {
 	root, found := f.roots[id]
 	return root, found
 }
 
-func (f fakePlacementRoots) CategoryRoots() []settings.CategoryRoot { return f.categoryRoots }
+func (f *fakePlacementRoots) CategoryRoots() []settings.CategoryRoot { return f.categoryRoots }
 
-// newCommitter builds a Committer over a real (temp file) library.db and an
-// in-memory filesystem, with one destination root accepting placements for
-// commitCategoryID -- the same shape newConsumerWithDiscovery already uses
-// for scan-time discovery, since CommitUnit shares DiscoverWanted with it.
-func newCommitter(t *testing.T, accepts bool) (music.Committer, *store.Store, *fsx.Mem) {
+// fakePlacementAffinity is music.PlacementAffinity over an in-memory map,
+// standing in for settings.Cache's own placement_affinity table (which
+// *settings.Cache satisfies directly in production, no adapter needed).
+type fakePlacementAffinity struct {
+	byKey map[string]int64
+}
+
+func newFakePlacementAffinity() *fakePlacementAffinity {
+	return &fakePlacementAffinity{byKey: map[string]int64{}}
+}
+
+func (f *fakePlacementAffinity) PlacementAffinity(_ context.Context, categoryID int64, affinityKey string) (int64, bool, error) {
+	id, found := f.byKey[fmt.Sprintf("%d/%s", categoryID, affinityKey)]
+	return id, found, nil
+}
+
+func (f *fakePlacementAffinity) SetPlacementAffinity(_ context.Context, categoryID int64, affinityKey string, rootFolderID, _ int64) error {
+	f.byKey[fmt.Sprintf("%d/%s", categoryID, affinityKey)] = rootFolderID
+	return nil
+}
+
+// newCommitterEnv builds a real (temp file) library.db and an in-memory
+// filesystem -- the setup every CommitUnit test shares regardless of how
+// many destination roots it wires up.
+func newCommitterEnv(t *testing.T) (*store.Store, *fsx.Mem, *clock.Fake) {
 	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
@@ -80,10 +104,20 @@ func newCommitter(t *testing.T, accepts bool) (music.Committer, *store.Store, *f
 	if err := fsys.MkdirAll(commitDestRoot, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
+	return opened, fsys, fake
+}
+
+// newCommitter builds a Committer with one destination root accepting
+// placements for commitCategoryID -- the same shape newConsumerWithDiscovery
+// already uses for scan-time discovery, since CommitUnit shares
+// DiscoverWanted with it.
+func newCommitter(t *testing.T, accepts bool) (music.Committer, *store.Store, *fsx.Mem) {
+	t.Helper()
+	opened, fsys, fake := newCommitterEnv(t)
 
 	desired := library.NewDesired(opened)
 	plentyFree := int64(1 << 30)
-	roots := fakePlacementRoots{
+	roots := &fakePlacementRoots{
 		roots: map[int64]settings.RootFolder{
 			commitDestRootID: {
 				ID: commitDestRootID, Path: commitDestRoot, Online: true, Writable: true,
@@ -96,7 +130,8 @@ func newCommitter(t *testing.T, accepts bool) (music.Committer, *store.Store, *f
 	}
 
 	committer := music.NewCommitter(music.CommitterConfig{
-		FS: fsys, Roots: roots, Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened),
+		FS: fsys, Roots: roots, Affinity: newFakePlacementAffinity(),
+		Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened),
 		Desired: &desired,
 		Categories: fakeCategories{
 			commitCategoryID: {ID: commitCategoryID, MonitorDiscovered: settings.MonitorDiscoveredMonitored},
@@ -104,6 +139,52 @@ func newCommitter(t *testing.T, accepts bool) (music.Committer, *store.Store, *f
 		Clock: fake, DefaultProfileID: 42,
 	})
 	return committer, opened, fsys
+}
+
+// newCommitterTwoRoots builds a Committer with two destination roots
+// accepting placements for commitCategoryID, the second holding more free
+// space than the first -- so most_free_space strategy prefers the second
+// root absent any affinity. Returns the roots fake itself so a test can
+// flip which root looks emptier between two CommitUnit calls, telling
+// "affinity kept it on the first root" apart from "most_free_space happened
+// to pick it anyway".
+func newCommitterTwoRoots(t *testing.T) (music.Committer, *store.Store, *fsx.Mem, *fakePlacementRoots) {
+	t.Helper()
+	opened, fsys, fake := newCommitterEnv(t)
+	if err := fsys.MkdirAll(commitDestRootEmptier, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	desired := library.NewDesired(opened)
+	fuller := int64(1 << 20)
+	emptier := int64(1 << 30)
+	roots := &fakePlacementRoots{
+		roots: map[int64]settings.RootFolder{
+			commitDestRootID: {
+				ID: commitDestRootID, Path: commitDestRoot, Online: true, Writable: true,
+				FreeBytes: &fuller, TotalBytes: &fuller,
+			},
+			commitDestRootEmptierID: {
+				ID: commitDestRootEmptierID, Path: commitDestRootEmptier, Online: true, Writable: true,
+				FreeBytes: &emptier, TotalBytes: &emptier,
+			},
+		},
+		categoryRoots: []settings.CategoryRoot{
+			{CategoryID: commitCategoryID, RootFolderID: commitDestRootID, AcceptsNew: true},
+			{CategoryID: commitCategoryID, RootFolderID: commitDestRootEmptierID, AcceptsNew: true},
+		},
+	}
+
+	committer := music.NewCommitter(music.CommitterConfig{
+		FS: fsys, Roots: roots, Affinity: newFakePlacementAffinity(),
+		Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened),
+		Desired: &desired,
+		Categories: fakeCategories{
+			commitCategoryID: {ID: commitCategoryID, MonitorDiscovered: settings.MonitorDiscoveredMonitored},
+		},
+		Clock: fake, DefaultProfileID: 42,
+	})
+	return committer, opened, fsys, roots
 }
 
 func writeCommitSourceFile(t *testing.T, fsys *fsx.Mem, relPath string, content []byte) {
@@ -330,5 +411,89 @@ func TestCommitUnit_RefusesAnIdentificationWithNoExternalID(t *testing.T) {
 	_, err := committer.CommitUnit(t.Context(), commitSourceRoot, unit, model.Identification{Confidence: 0.95}, tags, commitCategoryID)
 	if err == nil {
 		t.Fatal("CommitUnit succeeded with no ExternalID on the identification")
+	}
+}
+
+// Section 11.7: "affinity keeps an artist or series on one disk once
+// placed". Two Katupoken units, two separate works (different external
+// ids), one root with far more free space than the other -- without
+// affinity, most_free_space would send the second unit to the emptier root.
+// It must not: the first commit's own placement.Resolve call establishes the
+// artist's affinity, and the second commit must read and honour it.
+func TestCommitUnit_ReusesArtistPlacementAffinityAcrossUnits(t *testing.T) {
+	committer, opened, fsys, roots := newCommitterTwoRoots(t)
+	physical := library.NewPhysical(opened)
+
+	track1 := []byte("airbag bytes")
+	writeCommitSourceFile(t, fsys, "Katupoken/KI Pecezinu/01 Sesoge.flac", track1)
+	unit1 := testUnit("Katupoken/KI Pecezinu", []inspect.File{
+		{RelPath: "Katupoken/KI Pecezinu/01 Sesoge.flac", SizeBytes: int64(len(track1))},
+	})
+	probes1 := []mediatool.Probe{{
+		Path: path.Join(commitSourceRoot, "Katupoken/KI Pecezinu/01 Sesoge.flac"),
+		Tags: mediatool.Tags{"album": "KI Pecezinu", "albumartist": "Katupoken", "tracknumber": "1", "title": "Sesoge"},
+	}}
+	tags1 := music.UnitTagSourceFor(commitSourceRoot, probes1)
+	best1 := model.Identification{
+		Confidence: 0.95,
+		ExternalID: &model.ExternalID{Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 0.95},
+	}
+	first, err := committer.CommitUnit(t.Context(), commitSourceRoot, unit1, best1, tags1, commitCategoryID)
+	if err != nil {
+		t.Fatalf("first CommitUnit: %v", err)
+	}
+	firstPaths, err := physical.PathsForObject(t.Context(), first.MediaObjectIDs[0])
+	if err != nil || len(firstPaths) != 1 {
+		t.Fatalf("PathsForObject: paths=%+v err=%v", firstPaths, err)
+	}
+	firstRoot := firstPaths[0].RootFolderID
+	if firstRoot != commitDestRootEmptierID {
+		t.Fatalf("first commit landed on root %d, want the emptier root %d (most_free_space, no affinity recorded yet)",
+			firstRoot, commitDestRootEmptierID)
+	}
+
+	// Flip which root looks emptier before the second commit -- swap only the
+	// free/total byte counts, keeping each entry's own ID and Path, so
+	// without affinity most_free_space would now send it to
+	// commitDestRootID instead.
+	rootA, rootB := roots.roots[commitDestRootID], roots.roots[commitDestRootEmptierID]
+	rootA.FreeBytes, rootB.FreeBytes = rootB.FreeBytes, rootA.FreeBytes
+	rootA.TotalBytes, rootB.TotalBytes = rootB.TotalBytes, rootA.TotalBytes
+	roots.roots[commitDestRootID] = rootA
+	roots.roots[commitDestRootEmptierID] = rootB
+
+	track2 := []byte("zor a bytes")
+	writeCommitSourceFile(t, fsys, "Katupoken/Zor A/01 Everything In Its Right Place.flac", track2)
+	unit2 := testUnit("Katupoken/Zor A", []inspect.File{
+		{RelPath: "Katupoken/Zor A/01 Everything In Its Right Place.flac", SizeBytes: int64(len(track2))},
+	})
+	probes2 := []mediatool.Probe{{
+		Path: path.Join(commitSourceRoot, "Katupoken/Zor A/01 Everything In Its Right Place.flac"),
+		Tags: mediatool.Tags{
+			"album": "Zor A", "albumartist": "Katupoken", "tracknumber": "1",
+			"title": "Everything In Its Right Place",
+		},
+	}}
+	tags2 := music.UnitTagSourceFor(commitSourceRoot, probes2)
+	best2 := model.Identification{
+		Confidence: 0.95,
+		ExternalID: &model.ExternalID{
+			Provider: "musicbrainz:release-group", ExternalID: "65b491cb-1bd7-4cc3-8558-b552908c67da", Confidence: 0.95,
+		},
+	}
+	second, err := committer.CommitUnit(t.Context(), commitSourceRoot, unit2, best2, tags2, commitCategoryID)
+	if err != nil {
+		t.Fatalf("second CommitUnit: %v", err)
+	}
+	if !second.WorkCreated {
+		t.Fatal("second commit: WorkCreated = false, want true (a different release)")
+	}
+	secondPaths, err := physical.PathsForObject(t.Context(), second.MediaObjectIDs[0])
+	if err != nil || len(secondPaths) != 1 {
+		t.Fatalf("PathsForObject: paths=%+v err=%v", secondPaths, err)
+	}
+	if secondPaths[0].RootFolderID != firstRoot {
+		t.Errorf("second commit landed on root %d, want %d (the same root artist affinity already chose)",
+			secondPaths[0].RootFolderID, firstRoot)
 	}
 }
