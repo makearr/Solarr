@@ -69,6 +69,13 @@ func (s *Server) UpdateNetworkSettings(w http.ResponseWriter, r *http.Request) {
 		wanted.ProxyURL = *body.ProxyUrl
 	}
 
+	if err := s.auth.Registry.LookupAll(
+		settings.KeyNetworkPort, settings.KeyNetworkProxyURL, settings.KeyNetworkProxyBypass, settings.KeyNetworkAllowCIDRs,
+	); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+
 	caller := s.resolvedClientAddress(r)
 	if err := s.auth.Settings.SetNetworkSettings(r.Context(), clock.NewSystem(), wanted, caller); err != nil {
 		var problems config.Problems

@@ -87,3 +87,21 @@ func TestUpdateImportSettings_RejectsAnOutOfRangeConfidence(t *testing.T) {
 		t.Fatalf("status = %d, want 400 (%s)", recorder.Code, recorder.Body)
 	}
 }
+
+// ADR-26 (todo 4.14): "a setting not in the registry cannot be written." An
+// empty registry stands in for a write path that forgot to register its own
+// key -- the mutation the Registry.LookupAll check in UpdateImportSettings
+// guards against.
+func TestUpdateImportSettings_RefusesWhenTheKeyIsNotRegistered(t *testing.T) {
+	fixture := newWorksFixtureWithRegistry(t, settings.NewRegistry())
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/import/settings", `{"auto_commit_confidence":0.85}`))
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, body = %s, want 500", recorder.Code, recorder.Body)
+	}
+	if got := fixture.cache.Snapshot().ImportAutoCommitConfidence(); got != settings.DefaultImportAutoCommitConfidence {
+		t.Errorf("ImportAutoCommitConfidence = %v, want unchanged (the default)", got)
+	}
+}

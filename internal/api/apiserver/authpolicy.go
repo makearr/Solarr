@@ -76,6 +76,10 @@ func (s *Server) SetAuthPolicy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if err := s.auth.Registry.LookupAll(settings.KeyAuthRequired); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
 	if err := s.auth.Settings.SetAuthRequired(r.Context(), s.auth.Clock, *request.AuthRequired); err != nil {
 		writeError(w, s.logger, err)
 		return

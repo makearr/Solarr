@@ -81,6 +81,13 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		writeProblem(w, logger, http.StatusInternalServerError, TypeInternal,
 			"Internal error", "the request could not be authorised")
 
+	case errors.Is(err, settings.ErrSettingNotRegistered):
+		// A write path used a key ADR-26's registry has never heard of --
+		// always a bug in the write path itself, never something the caller did.
+		logger.Error("write path used an unregistered setting key", slog.Any("error", err))
+		writeProblem(w, logger, http.StatusInternalServerError, TypeInternal,
+			"Internal error", "this setting is not available yet")
+
 	default:
 		logger.Error("unhandled error", slog.Any("error", err))
 		writeProblem(w, logger, http.StatusInternalServerError, TypeInternal,

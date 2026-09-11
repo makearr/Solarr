@@ -137,19 +137,33 @@ func newWorksFixtureWithLibrarySizeAndNavigation(
 	t *testing.T, librarySize apiserver.LibrarySize, navigation apiserver.NavigationProvider,
 ) worksFixture {
 	t.Helper()
-	return newWorksFixtureWithLibrarySizeNavigationAndArtists(t, librarySize, navigation, nil)
+	return newWorksFixtureWithLibrarySizeNavigationAndArtists(t, librarySize, navigation, nil, nil)
+}
+
+// newWorksFixtureWithRegistry is newWorksFixture plus an injectable
+// settings.Registry, for network_test.go/importsettings_test.go/
+// authpolicy_test.go's proof that a write path refuses a key the registry
+// does not know (ADR-26, todo 4.14) -- the mutation this guards against is
+// a Set* handler forgetting its own Registry.LookupAll check.
+func newWorksFixtureWithRegistry(t *testing.T, registry *settings.Registry) worksFixture {
+	t.Helper()
+	return newWorksFixtureWithLibrarySizeNavigationAndArtists(t, nil, nil, nil, registry)
 }
 
 // newWorksFixtureWithLibrarySizeNavigationAndArtists is
 // newWorksFixtureWithLibrarySizeAndNavigation plus an injectable
 // LibraryArtistsReader, for libraries_test.go's assertion that the Artists
 // level dispatches when one is actually wired (nil elsewhere, so the "no
-// reader yet" 503 case stays real).
+// reader yet" 503 case stays real). registry nil means
+// settings.NewDefaultRegistry(), the shape every other parameter here uses.
 func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 	t *testing.T, librarySize apiserver.LibrarySize, navigation apiserver.NavigationProvider,
-	libraryArtists apiserver.LibraryArtistsReader,
+	libraryArtists apiserver.LibraryArtistsReader, registry *settings.Registry,
 ) worksFixture {
 	t.Helper()
+	if registry == nil {
+		registry = settings.NewDefaultRegistry()
+	}
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
 	if err := os.MkdirAll(backups, 0o755); err != nil {
@@ -238,6 +252,7 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 			Mode:     apiserver.AuthLocal,
 			Sessions: auth.NewSessions([]byte("0123456789abcdef0123456789abcdef"), fake, time.Hour),
 			Settings: cache,
+			Registry: registry,
 			Clock:    fake,
 		},
 	})

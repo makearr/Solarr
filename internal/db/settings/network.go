@@ -15,10 +15,10 @@ import (
 // ADR-58's own keys, the same instance_setting shape auth.required and the
 // cache budget already use.
 const (
-	keyNetworkPort        = "network.port"
-	keyNetworkProxyURL    = "network.proxy_url"
-	keyNetworkProxyBypass = "network.proxy_bypass"
-	keyNetworkAllowCIDRs  = "network.allow_cidrs"
+	KeyNetworkPort        = "network.port"
+	KeyNetworkProxyURL    = "network.proxy_url"
+	KeyNetworkProxyBypass = "network.proxy_bypass"
+	KeyNetworkAllowCIDRs  = "network.allow_cidrs"
 )
 
 // NetworkSettings is ADR-58's own policy. Port 0 means unset -- config.yml
@@ -34,10 +34,10 @@ type NetworkSettings struct {
 // whatever nothing has stored yet.
 func (s *Snapshot) NetworkSettings() NetworkSettings {
 	return NetworkSettings{
-		Port:        int(s.policyInt(keyNetworkPort, 0)),
-		ProxyURL:    s.policy[keyNetworkProxyURL],
-		ProxyBypass: s.policyStringList(keyNetworkProxyBypass),
-		AllowCIDRs:  s.policyStringList(keyNetworkAllowCIDRs),
+		Port:        int(s.policyInt(KeyNetworkPort, 0)),
+		ProxyURL:    s.policy[KeyNetworkProxyURL],
+		ProxyBypass: s.policyStringList(KeyNetworkProxyBypass),
+		AllowCIDRs:  s.policyStringList(KeyNetworkAllowCIDRs),
 	}
 }
 
@@ -70,10 +70,10 @@ func (c *Cache) SetNetworkSettings(ctx context.Context, cl clock.Clock, ns Netwo
 	}
 
 	for key, value := range map[string]string{
-		keyNetworkPort:        strconv.Itoa(ns.Port),
-		keyNetworkProxyURL:    ns.ProxyURL,
-		keyNetworkProxyBypass: string(proxyBypass),
-		keyNetworkAllowCIDRs:  string(allowCIDRs),
+		KeyNetworkPort:        strconv.Itoa(ns.Port),
+		KeyNetworkProxyURL:    ns.ProxyURL,
+		KeyNetworkProxyBypass: string(proxyBypass),
+		KeyNetworkAllowCIDRs:  string(allowCIDRs),
 	} {
 		if err := c.setPolicy(ctx, cl, key, value); err != nil {
 			return err
