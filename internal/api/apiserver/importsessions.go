@@ -69,12 +69,6 @@ var ErrImportUnitHasNoCandidate = errors.New("apiserver: import unit has no cand
 // unit's own directory no longer matches what WALK originally found.
 var ErrImportUnitChanged = errors.New("apiserver: import unit's own files no longer match what was inspected")
 
-// ErrImportUnitSharesDirectory is CommitImportUnit's refusal when another
-// unit in the same session shares this one's own rel_path -- a flat
-// directory GROUP split into several units by track continuity alone,
-// which a re-walk by directory cannot safely tell apart.
-var ErrImportUnitSharesDirectory = errors.New("apiserver: import unit shares its directory with other units")
-
 // ImportRevertResult is what one session's revert actually did.
 type ImportRevertResult struct {
 	UnitsReverted, WorksDeleted, EditionsDeleted int64
@@ -480,9 +474,6 @@ func (s *Server) CommitImportUnit(w http.ResponseWriter, r *http.Request, id, un
 	case errors.Is(err, ErrImportUnitChanged):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
 			"Changed", "this unit's own files no longer match what was inspected")
-	case errors.Is(err, ErrImportUnitSharesDirectory):
-		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
-			"Ambiguous", "this unit shares its directory with other units and cannot be safely re-derived; commit or place it during import instead")
 	case err != nil:
 		writeError(w, s.logger, err)
 	default:

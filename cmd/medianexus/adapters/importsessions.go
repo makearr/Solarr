@@ -129,8 +129,6 @@ func (a ImportSessions) CommitImportUnit(ctx context.Context, sessionID, unitID 
 			return apiserver.ImportUnitRow{}, apiserver.ErrImportSessionReverted
 		case errors.Is(err, importjob.ErrUnitChanged):
 			return apiserver.ImportUnitRow{}, apiserver.ErrImportUnitChanged
-		case errors.Is(err, importjob.ErrUnitSharesDirectory):
-			return apiserver.ImportUnitRow{}, apiserver.ErrImportUnitSharesDirectory
 		default:
 			return apiserver.ImportUnitRow{}, err
 		}

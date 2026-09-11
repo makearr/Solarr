@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -34,6 +35,13 @@ type fakeCommitterCall struct {
 	sourceRoot string
 	directory  string
 	fileCount  int
+	// mediaPaths is every file's own RelPath the caller actually reconstructed
+	// -- externalID alone cannot catch a sibling-mismatch bug: it comes from
+	// the unit's own already-decided CandidatesJSON, fixed independently of
+	// which files reconstructUnit hands over, so a swapped-index bug leaves
+	// externalID (and fileCount, when siblings happen to be the same size)
+	// looking correct while committing the wrong sibling's actual files.
+	mediaPaths []string
 	externalID string
 	categoryID int64
 }
@@ -42,8 +50,12 @@ func (f *fakeCommitter) CommitUnit(
 	_ context.Context, sourceRoot string, unit inspect.Unit, best model.Identification, _ music.Resolved, categoryID int64,
 ) (music.Placed, error) {
 	key := sourceRoot
+	mediaPaths := make([]string, len(unit.Media))
+	for i, m := range unit.Media {
+		mediaPaths[i] = m.RelPath
+	}
 	f.calls = append(f.calls, fakeCommitterCall{
-		sourceRoot: sourceRoot, directory: unit.Directory, fileCount: len(unit.Media),
+		sourceRoot: sourceRoot, directory: unit.Directory, fileCount: len(unit.Media), mediaPaths: mediaPaths,
 		externalID: best.ExternalID.ExternalID, categoryID: categoryID,
 	})
 	if err, ok := f.errFor[key]; ok {
@@ -233,10 +245,12 @@ func TestManualCommitter_CommitHeldRefusesWhenTheUnitChangedSinceInspection(t *t
 // numbers split into two sibling units sharing one rel_path (the same
 // structural-fallback shape TestJob_MapsEachUnitInAClusterToItsOwnDecision
 // exercises for the inline WALK-time path) -- found live-verifying todo 4.9
-// against a real scene fixture: a re-walk by rel_path alone cannot tell the
-// siblings apart, so CommitHeld must refuse rather than risk placing the
-// wrong sibling's files under this unit's own identity.
-func TestManualCommitter_CommitHeldRefusesAUnitThatSharesItsDirectory(t *testing.T) {
+// against a real scene fixture. CommitHeld must place each sibling's own
+// files, not the other one's: reconstructUnit re-derives through
+// inspect.SplitDirectory (Walker's own per-cluster split order) and matches
+// each unit back to its own group by position in ascending id order, the
+// same order WALK originally emitted and persisted them in.
+func TestManualCommitter_CommitHeldPlacesTheCorrectSiblingWhenUnitsShareADirectory(t *testing.T) {
 	const otherReleaseGroupMBID = "8c08f153-7820-4e0d-89ba-12c034eb022a"
 	fx := newFixture(t)
 	write := func(relPath string) {
@@ -266,10 +280,38 @@ func TestManualCommitter_CommitHeldRefusesAUnitThatSharesItsDirectory(t *testing
 		t.Fatalf("units = %+v, want 2 sharing one rel_path (test setup)", units)
 	}
 
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
-	_, err := manual.CommitHeld(t.Context(), units[0].ID)
-	if !errors.Is(err, importjob.ErrUnitSharesDirectory) {
-		t.Errorf("err = %v, want ErrUnitSharesDirectory", err)
+	workID := seedWork(t, fx)
+	committer := &fakeCommitter{workID: workID}
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
+	if _, err := manual.CommitHeld(t.Context(), units[0].ID); err != nil {
+		t.Fatalf("CommitHeld(%d): %v", units[0].ID, err)
+	}
+	if _, err := manual.CommitHeld(t.Context(), units[1].ID); err != nil {
+		t.Fatalf("CommitHeld(%d): %v", units[1].ID, err)
+	}
+
+	if len(committer.calls) != 2 {
+		t.Fatalf("committer was called %d times, want 2: %+v", len(committer.calls), committer.calls)
+	}
+	// units is in ascending id order (ListUnits' own ORDER BY id), the same
+	// order WALK's own splitByTrackContinuity produced its two groups in:
+	// {01 First, 02 Second} first, {01 Third, 02 Fourth} second. Checking the
+	// actual reconstructed file set per call (not just externalID, which
+	// comes from the unit's own already-decided CandidatesJSON regardless of
+	// which files got reconstructed, or fileCount, which is 2 for both
+	// siblings here) is what catches the two calls being handed each other's
+	// files.
+	// unit.Media's own RelPath is relative to the unit's own directory (root
+	// above), not the session's source_path -- no "Messy/" prefix.
+	if committer.calls[0].externalID != releaseGroupMBID ||
+		!slices.Equal(committer.calls[0].mediaPaths, []string{"01 First.flac", "02 Second.flac"}) {
+		t.Errorf("call for unit %d = %+v, want externalID=%s mediaPaths=[01 First.flac, 02 Second.flac]",
+			units[0].ID, committer.calls[0], releaseGroupMBID)
+	}
+	if committer.calls[1].externalID != otherReleaseGroupMBID ||
+		!slices.Equal(committer.calls[1].mediaPaths, []string{"01 Third.flac", "02 Fourth.flac"}) {
+		t.Errorf("call for unit %d = %+v, want externalID=%s mediaPaths=[01 Third.flac, 02 Fourth.flac]",
+			units[1].ID, committer.calls[1], otherReleaseGroupMBID)
 	}
 }
 
