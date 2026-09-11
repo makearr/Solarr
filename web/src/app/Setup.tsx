@@ -3,8 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { MEDIA_TYPES } from "./Categories";
 
 type ArrApp = components["schemas"]["ArrApp"];
+type MediaType = components["schemas"]["MediaType"];
 
 const ARR_APPS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr", "readarr", "whisparr"];
 
@@ -43,7 +45,10 @@ export function Setup({ onDone }: { onDone: () => void }) {
         {status.data.needs_administrator ? (
           <CreateAdministrator />
         ) : !arrStepDone ? (
-          <ConnectArr onSkip={() => setArrStepDone(true)} onConnected={() => setArrStepDone(true)} />
+          <ConnectArr
+            onSkip={() => setArrStepDone(true)}
+            onConnected={(rootFoldersImported) => (rootFoldersImported ? onDone() : setArrStepDone(true))}
+          />
         ) : (
           <AddRootFolder onSkip={onDone} onAdded={onDone} />
         )}
@@ -52,20 +57,107 @@ export function Setup({ onDone }: { onDone: () => void }) {
   );
 }
 
-function ConnectArr({ onSkip, onConnected }: { onSkip: () => void; onConnected: () => void }) {
+// What a fresh connection to each app suggests for its own library -- a
+// starting point, always editable, not a rule (nothing stops naming a
+// Lidarr-backed library "Vinyl" instead).
+const LIBRARY_SUGGESTION: Record<ArrApp, { name: string; mediaType: MediaType }> = {
+  lidarr: { name: "Music", mediaType: "music" },
+  sonarr: { name: "TV", mediaType: "tv" },
+  radarr: { name: "Movies", mediaType: "movie" },
+  readarr: { name: "Books", mediaType: "book" },
+  whisparr: { name: "Adult", mediaType: "adult" },
+};
+
+interface ConnectOutcome {
+  rootFoldersImported: boolean;
+  rootFolderErrors: string[];
+}
+
+function ConnectArr({
+  onSkip,
+  onConnected,
+}: {
+  onSkip: () => void;
+  onConnected: (rootFoldersImported: boolean) => void;
+}) {
   const [app, setApp] = useState<ArrApp>("lidarr");
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [libraryName, setLibraryName] = useState(LIBRARY_SUGGESTION.lidarr.name);
+  const [libraryNameTouched, setLibraryNameTouched] = useState(false);
+  const [mediaType, setMediaType] = useState<MediaType>(LIBRARY_SUGGESTION.lidarr.mediaType);
+  const [mediaTypeTouched, setMediaTypeTouched] = useState(false);
+  const [importRootFolders, setImportRootFolders] = useState(true);
+  const [importContent, setImportContent] = useState(false);
+  const [outcome, setOutcome] = useState<ConnectOutcome | null>(null);
+
+  const changeApp = (value: ArrApp) => {
+    setApp(value);
+    const suggestion = LIBRARY_SUGGESTION[value];
+    if (!libraryNameTouched) setLibraryName(suggestion.name);
+    if (!mediaTypeTouched) setMediaType(suggestion.mediaType);
+  };
 
   const connect = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.POST("/arr/instances", {
-        body: { app, name, base_url: baseUrl, api_key: apiKey, enabled: true },
+    mutationFn: async (): Promise<ConnectOutcome> => {
+      const { data: category, error: categoryError } = await api.POST("/categories", {
+        body: { name: libraryName, media_type: mediaType },
       });
-      if (error) throw error;
+      if (categoryError) throw categoryError;
+
+      const { data: instance, error: instanceError } = await api.POST("/arr/instances", {
+        body: { app, name, base_url: baseUrl, api_key: apiKey, category_id: category!.id, enabled: true },
+      });
+      if (instanceError) throw instanceError;
+
+      let rootFoldersImported = false;
+      const rootFolderErrors: string[] = [];
+      if (importRootFolders) {
+        const { data: remoteRoots, error: rootsError } = await api.GET("/arr/instances/{id}/rootfolders", {
+          params: { path: { id: instance!.id } },
+        });
+        if (rootsError) {
+          rootFolderErrors.push(
+            typeof rootsError === "object" && rootsError !== null && "detail" in rootsError
+              ? String((rootsError as { detail: unknown }).detail)
+              : "The instance's own root folders could not be read.",
+          );
+        } else {
+          for (const remote of remoteRoots ?? []) {
+            const { data: root, error: rootError } = await api.POST("/rootfolders", {
+              body: { path: remote.path },
+            });
+            if (rootError || !root) {
+              rootFolderErrors.push(`${remote.path}: could not be used here -- check it is mounted.`);
+              continue;
+            }
+            const { error: attachError } = await api.POST("/categories/{id}/rootfolders", {
+              params: { path: { id: category!.id } },
+              body: { root_folder_id: root.id },
+            });
+            if (attachError) {
+              rootFolderErrors.push(`${remote.path}: added, but could not be attached to ${libraryName}.`);
+              continue;
+            }
+            rootFoldersImported = true;
+          }
+        }
+      }
+
+      if (importContent) {
+        const { error: syncError } = await api.POST("/arr/instances/{id}/sync", {
+          params: { path: { id: instance!.id } },
+        });
+        if (syncError) rootFolderErrors.push("Connected, but the import could not be started.");
+      }
+
+      return { rootFoldersImported, rootFolderErrors };
     },
-    onSuccess: onConnected,
+    onSuccess: (result) => {
+      setOutcome(result);
+      if (result.rootFolderErrors.length === 0) onConnected(result.rootFoldersImported);
+    },
   });
 
   return (
@@ -75,14 +167,14 @@ function ConnectArr({ onSkip, onConnected }: { onSkip: () => void; onConnected: 
         "Already run Lidarr (or one of the others)? Connect it now and what it monitors " +
         "comes in as intent -- artists become monitored people, albums become wanted items. " +
         "Only Lidarr syncs for real yet; the rest can still be connected for when their own " +
-        "stage ships. The actual import runs once a library folder exists (next step, or " +
-        "later from Settings)."
+        "stage ships."
       }
     >
       <form
         className="space-y-3"
         onSubmit={(event) => {
           event.preventDefault();
+          setOutcome(null);
           connect.mutate();
         }}
       >
@@ -90,7 +182,7 @@ function ConnectArr({ onSkip, onConnected }: { onSkip: () => void; onConnected: 
           <select
             className={inputStyle}
             value={app}
-            onChange={(event) => setApp(event.target.value as ArrApp)}
+            onChange={(event) => changeApp(event.target.value as ArrApp)}
           >
             {ARR_APPS.map((value) => (
               <option key={value} value={value}>
@@ -127,12 +219,68 @@ function ConnectArr({ onSkip, onConnected }: { onSkip: () => void; onConnected: 
           />
         </Field>
 
+        <div className="flex gap-2">
+          <Field label="Library name">
+            <input
+              className={inputStyle}
+              value={libraryName}
+              onChange={(event) => {
+                setLibraryNameTouched(true);
+                setLibraryName(event.target.value);
+              }}
+            />
+          </Field>
+          <Field label="Media type">
+            <select
+              className={inputStyle}
+              value={mediaType}
+              onChange={(event) => {
+                setMediaTypeTouched(true);
+                setMediaType(event.target.value as MediaType);
+              }}
+            >
+              {MEDIA_TYPES.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={importRootFolders}
+            onChange={(event) => setImportRootFolders(event.target.checked)}
+          />
+          Import the root folder(s) from {app}
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={importContent}
+            onChange={(event) => setImportContent(event.target.checked)}
+          />
+          Import content now (artists and albums; can take a while for a large library)
+        </label>
+
         {connect.isError && <Problem error={connect.error} />}
+        {outcome && outcome.rootFolderErrors.length > 0 && (
+          <div className="space-y-1 rounded-md border border-warn/40 bg-warn/10 p-2 text-xs text-warn">
+            {outcome.rootFolderErrors.map((message, index) => (
+              <p key={index}>{message}</p>
+            ))}
+            <p>Connected regardless -- fix the rest from Settings, or add the folder manually next.</p>
+          </div>
+        )}
 
         <div className="flex gap-2">
           <button
             type="submit"
-            disabled={!name.trim() || !baseUrl.trim() || !apiKey.trim() || connect.isPending}
+            disabled={
+              !name.trim() || !baseUrl.trim() || !apiKey.trim() || !libraryName.trim() || connect.isPending
+            }
             className={primaryButtonStyle}
           >
             {connect.isPending ? "Connecting…" : "Connect"}
@@ -140,6 +288,15 @@ function ConnectArr({ onSkip, onConnected }: { onSkip: () => void; onConnected: 
           <button type="button" onClick={onSkip} className={quietButtonStyle}>
             Skip for now
           </button>
+          {outcome && outcome.rootFolderErrors.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onConnected(outcome.rootFoldersImported)}
+              className={quietButtonStyle}
+            >
+              Continue anyway
+            </button>
+          )}
         </div>
       </form>
     </Panel>
