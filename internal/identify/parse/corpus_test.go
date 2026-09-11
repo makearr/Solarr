@@ -22,6 +22,7 @@ type corpusCase struct {
 	YearEnd        int     `json:"year_end"`
 	Format         string  `json:"format"`
 	Lossless       bool    `json:"lossless"`
+	Container      string  `json:"container"`
 	BitrateKbps    int     `json:"bitrate_kbps"`
 	Source         string  `json:"source"`
 	Edition        string  `json:"edition"`
@@ -94,6 +95,9 @@ func TestGoldenCorpus(t *testing.T) {
 			}
 			if result.Attributes.Lossless != c.Lossless {
 				t.Errorf("Lossless = %v, want %v", result.Attributes.Lossless, c.Lossless)
+			}
+			if result.Attributes.Container != c.Container {
+				t.Errorf("Container = %q, want %q", result.Attributes.Container, c.Container)
 			}
 			if result.Attributes.BitrateKbps != c.BitrateKbps {
 				t.Errorf("BitrateKbps = %d, want %d", result.Attributes.BitrateKbps, c.BitrateKbps)

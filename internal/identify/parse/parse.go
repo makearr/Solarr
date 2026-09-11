@@ -75,7 +75,14 @@ var bareBitrates = map[string]int{"128": 128, "160": 160, "192": 192, "224": 224
 // canonical name -- "tr24" is a scene alias for FLAC (Lidarr's CodecRegex
 // treats it identically), so it aliases rather than storing "tr24" literally.
 var losslessFormats = map[string]string{"flac": "flac", "alac": "alac", "ape": "ape", "wav": "wav", "tr24": "flac"}
-var lossyFormats = map[string]string{"mp3": "mp3", "aac": "aac", "m4a": "m4a", "ogg": "ogg", "opus": "opus", "wma": "wma"}
+var lossyFormats = map[string]string{"mp3": "mp3", "aac": "aac", "ogg": "ogg", "opus": "opus", "wma": "wma"}
+
+// containerFormats map a recognised container token to its canonical name --
+// a container, unlike a codec, does not by itself say what is inside (an
+// M4A can hold lossy AAC or lossless ALAC), so it is claimed onto
+// Attributes.Container rather than Attributes.Format (todo 4.2: "m4a" was
+// previously misclassified as a codec in lossyFormats).
+var containerFormats = map[string]string{"m4a": "m4a"}
 
 // sourceWords maps a recognised source token to its canonical value -- most
 // map to themselves, but scene abbreviations found against this project's own
@@ -180,7 +187,7 @@ func Parse(title string) Result {
 
 	attributes := model.Attributes{
 		Format: claims.format, Lossless: claims.lossless, BitrateKbps: claims.bitrateKbps,
-		BitrateMode: claims.bitrateMode, VBRPreset: claims.vbrPreset,
+		BitrateMode: claims.bitrateMode, VBRPreset: claims.vbrPreset, Container: claims.container,
 		Source: claims.source, Edition: claims.edition, ReleaseGroup: group,
 		Discs: claims.discs, BitDepth: claims.bitDepth, SampleRate: claims.sampleRate,
 		ProperRepack: properRepack,
@@ -195,10 +202,10 @@ func Parse(title string) Result {
 
 // claimSet accumulates what bracket, segment and tail-token classification found.
 type claimSet struct {
-	year, yearEnd, bitrateKbps, discs, bitDepth, sampleRate int
-	format, source, edition, bitrateMode, vbrPreset         string
-	lossless                                                bool
-	unparsed                                                []string
+	year, yearEnd, bitrateKbps, discs, bitDepth, sampleRate    int
+	format, source, edition, bitrateMode, vbrPreset, container string
+	lossless                                                   bool
+	unparsed                                                   []string
 }
 
 // extractBrackets removes every (...)/[...]/{...} group that classifies as noise
@@ -453,6 +460,9 @@ func claimField(field string, claims *claimSet) bool {
 		return true
 	case lossyFormats[field] != "":
 		claims.format = lossyFormats[field]
+		return true
+	case containerFormats[field] != "":
+		claims.container = containerFormats[field]
 		return true
 	case sourceWords[field] != "":
 		claims.source = sourceWords[field]

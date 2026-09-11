@@ -505,6 +505,12 @@ type Querier interface {
 	SetAcquisitionPath(ctx context.Context, arg SetAcquisitionPathParams) error
 	SetAcquisitionState(ctx context.Context, arg SetAcquisitionStateParams) error
 	SetArrImportState(ctx context.Context, arg SetArrImportStateParams) error
+	// The claimed half (todo 4.2): derived once per release folder at scan time,
+	// from the release name rather than the file's own bytes, so it needs no
+	// scalar columns or mismatch comparison of its own (RecordMeasured's own
+	// namesakes) -- those only mean something once a measured claim exists to
+	// compare against.
+	SetClaimedAttributes(ctx context.Context, arg SetClaimedAttributesParams) error
 	SetCounter(ctx context.Context, arg SetCounterParams) error
 	SetDesiredItemAvailability(ctx context.Context, arg SetDesiredItemAvailabilityParams) error
 	SetDesiredItemMonitored(ctx context.Context, arg SetDesiredItemMonitoredParams) error

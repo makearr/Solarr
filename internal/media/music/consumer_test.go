@@ -146,6 +146,96 @@ func TestObserve_IdentifiedFileRegistersPhysicallyAndCreatesAWork(t *testing.T) 
 	}
 }
 
+// ADR-39/todo 4.2: the claimed half is derived from the release folder's own
+// name at scan time, not from the file's tags or bytes -- this is the
+// producer RecordClaimed exists for, proven end to end through Observe
+// rather than just at the parse.Parse/RecordClaimed unit level.
+func TestObserve_RecordsClaimedAttributesFromTheReleaseFolderName(t *testing.T) {
+	consumer, opened, fsys := newConsumer(t)
+	content := []byte("katupoken - ki pecezinu - 01 airbag")
+	writeMusicFile(t, fsys, "Katupoken/KI Pecezinu (1997) [FLAC]/01 Sesoge.flac", content)
+
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+	batch := []scan.Observed{observedFile(
+		"Katupoken/KI Pecezinu (1997) [FLAC]/01 Sesoge.flac", int64(len(content)), mediatool.Tags{},
+	)}
+
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queries := librarydb.New(opened.Read())
+	libraryPath, err := queries.GetPathByLocation(t.Context(), librarydb.GetPathByLocationParams{
+		RootFolderID: 1, RelPath: "Katupoken/KI Pecezinu (1997) [FLAC]/01 Sesoge.flac",
+	})
+	if err != nil {
+		t.Fatalf("GetPathByLocation: %v", err)
+	}
+
+	claim, found, err := library.NewPhysical(opened).ClaimedAttributesFor(t.Context(), libraryPath.MediaObjectID)
+	if err != nil {
+		t.Fatalf("ClaimedAttributesFor: %v", err)
+	}
+	if !found {
+		t.Fatal("ClaimedAttributesFor found = false, want a claim recorded from the release folder name")
+	}
+	if claim.AudioCodec != "flac" || !claim.Lossless {
+		t.Errorf("claim = %+v, want AudioCodec flac, Lossless true", claim)
+	}
+}
+
+// Two files in the same release folder share one parse of that folder's
+// name -- proven indirectly by both files' media_object ending up with the
+// same claimed_attributes_id, which only interning the same claim twice
+// produces.
+func TestObserve_ClaimedAttributesShareOneInternedRowPerReleaseFolder(t *testing.T) {
+	consumer, opened, fsys := newConsumer(t)
+	track1 := []byte("track one")
+	track2 := []byte("track two")
+	writeMusicFile(t, fsys, "Katupoken/KI Pecezinu (1997) [FLAC]/01 Sesoge.flac", track1)
+	writeMusicFile(t, fsys, "Katupoken/KI Pecezinu (1997) [FLAC]/02 Zosidedu Bukerez.flac", track2)
+
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+	batch := []scan.Observed{
+		observedFile("Katupoken/KI Pecezinu (1997) [FLAC]/01 Sesoge.flac", int64(len(track1)), mediatool.Tags{}),
+		observedFile("Katupoken/KI Pecezinu (1997) [FLAC]/02 Zosidedu Bukerez.flac", int64(len(track2)), mediatool.Tags{}),
+	}
+
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queries := librarydb.New(opened.Read())
+	first, err := queries.GetPathByLocation(t.Context(), librarydb.GetPathByLocationParams{
+		RootFolderID: 1, RelPath: "Katupoken/KI Pecezinu (1997) [FLAC]/01 Sesoge.flac",
+	})
+	if err != nil {
+		t.Fatalf("GetPathByLocation: %v", err)
+	}
+	second, err := queries.GetPathByLocation(t.Context(), librarydb.GetPathByLocationParams{
+		RootFolderID: 1, RelPath: "Katupoken/KI Pecezinu (1997) [FLAC]/02 Zosidedu Bukerez.flac",
+	})
+	if err != nil {
+		t.Fatalf("GetPathByLocation: %v", err)
+	}
+
+	firstObject, err := queries.GetMediaObject(t.Context(), first.MediaObjectID)
+	if err != nil {
+		t.Fatalf("GetMediaObject: %v", err)
+	}
+	secondObject, err := queries.GetMediaObject(t.Context(), second.MediaObjectID)
+	if err != nil {
+		t.Fatalf("GetMediaObject: %v", err)
+	}
+	if !firstObject.ClaimedAttributesID.Valid || !secondObject.ClaimedAttributesID.Valid {
+		t.Fatalf("claimed_attributes_id not set: first=%+v second=%+v", firstObject, secondObject)
+	}
+	if firstObject.ClaimedAttributesID.Int64 != secondObject.ClaimedAttributesID.Int64 {
+		t.Errorf("claimed_attributes_id = %d and %d, want the same interned row",
+			firstObject.ClaimedAttributesID.Int64, secondObject.ClaimedAttributesID.Int64)
+	}
+}
+
 func TestObserve_ReleaseMBIDCreatesAPlaceholderEdition(t *testing.T) {
 	consumer, opened, fsys := newConsumer(t)
 	content := []byte("katupoken - ki pecezinu - 01 airbag")

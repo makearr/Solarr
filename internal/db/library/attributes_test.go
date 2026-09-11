@@ -93,6 +93,39 @@ func TestPhysical_RecordMeasuredWritesAttributesAndScalars(t *testing.T) {
 	}
 }
 
+// TestPhysical_RecordClaimedWritesInternedAttributes mirrors
+// TestPhysical_RecordMeasuredWritesAttributesAndScalars -- the same
+// intern-then-point shape, minus the scalar fields and mismatch comparison
+// that only mean something once a measured claim exists too.
+func TestPhysical_RecordClaimedWritesInternedAttributes(t *testing.T) {
+	opened, queries := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	object := createObject(t, opened, "quickhash-claimed-1", 1000)
+
+	err := physical.RecordClaimed(t.Context(), object.ID, library.AttributeClaim{
+		AudioCodec: "flac", Lossless: true, Container: "m4a", ReleaseGroup: "OBZEN",
+	})
+	if err != nil {
+		t.Fatalf("RecordClaimed: %v", err)
+	}
+
+	updated, err := queries.GetMediaObject(t.Context(), object.ID)
+	if err != nil {
+		t.Fatalf("GetMediaObject: %v", err)
+	}
+	if !updated.ClaimedAttributesID.Valid {
+		t.Fatal("ClaimedAttributesID is not set")
+	}
+
+	attrs, err := queries.GetAttributes(t.Context(), updated.ClaimedAttributesID.Int64)
+	if err != nil {
+		t.Fatalf("GetAttributes: %v", err)
+	}
+	if attrs.AudioCodec.String != "flac" || attrs.Container.String != "m4a" || attrs.ReleaseGroup.String != "OBZEN" {
+		t.Errorf("interned attributes = %+v, want flac/m4a/OBZEN", attrs)
+	}
+}
+
 func TestPhysical_ClaimedAttributesFor_NoneSetYet(t *testing.T) {
 	opened, _ := newLibrary(t)
 	physical := library.NewPhysical(opened)
@@ -107,10 +140,9 @@ func TestPhysical_ClaimedAttributesFor_NoneSetYet(t *testing.T) {
 	}
 }
 
-// TestPhysical_ClaimedAttributesFor_ReadsWhatWasInterned proves the read side
-// works now, even though nothing in this codebase writes claimed_attributes_id
-// yet (todo 4.2's remaining item) -- the column is set directly here, the way
-// a future claimed-side writer eventually will.
+// TestPhysical_ClaimedAttributesFor_ReadsWhatWasInterned proves the read
+// side alone, independent of RecordClaimed's own producer test above -- the
+// column is set directly here rather than through RecordClaimed.
 func TestPhysical_ClaimedAttributesFor_ReadsWhatWasInterned(t *testing.T) {
 	opened, _ := newLibrary(t)
 	attributes := library.NewAttributes(opened)

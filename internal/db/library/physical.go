@@ -294,10 +294,8 @@ func (p Physical) DeleteObject(ctx context.Context, mediaObjectID int64) error {
 }
 
 // ClaimedAttributesFor answers the claimed half of ADR-39 for one file, when
-// there is one -- the claimed side is not wired up from a release name yet
-// (todo 4.2's own remaining item), so found is false for every file today,
-// but the read path exists and is exercised so that wiring is a producer
-// change only, not a new consumer too.
+// there is one -- found is false for a file whose release name RecordClaimed
+// (todo 4.2) has not been run against yet, or one that predates it.
 func (p Physical) ClaimedAttributesFor(ctx context.Context, mediaObjectID int64) (AttributeClaim, bool, error) {
 	queries := librarydb.New(p.store.Read())
 	object, err := queries.GetMediaObject(ctx, mediaObjectID)
@@ -329,8 +327,8 @@ type MeasuredScalars struct {
 // into media_attributes and pointing media_object at it, in one transaction so
 // a crash between the two never leaves media_object referencing a row that was
 // never actually committed. mismatchJSON is empty when there is no claimed
-// side yet to compare against (todo 4.2: claimed-side wiring from a release
-// name is not built yet, so this is the common case today).
+// side to compare against -- a file whose scan predates RecordClaimed
+// (todo 4.2), or whose release name claimed nothing at all.
 func (p Physical) RecordMeasured(
 	ctx context.Context, mediaObjectID int64, claim AttributeClaim, scalars MeasuredScalars,
 	mismatchJSON string, verifiedAt int64,
@@ -353,6 +351,26 @@ func (p Physical) RecordMeasured(
 			ProbeJson:             nullString(scalars.ProbeJSON),
 			VerifiedAt:            sql.NullInt64{Int64: verifiedAt, Valid: true},
 			ID:                    mediaObjectID,
+		})
+	})
+}
+
+// RecordClaimed writes ADR-39's claimed half for one file (todo 4.2):
+// interning claim into media_attributes and pointing media_object at it, the
+// same intern-then-point shape RecordMeasured uses. Unlike RecordMeasured,
+// there are no scalar fields and no mismatch to record -- those only mean
+// something once a measured claim exists to compare against, and claim here
+// comes from the release name, not the file's own bytes.
+func (p Physical) RecordClaimed(ctx context.Context, mediaObjectID int64, claim AttributeClaim) error {
+	return p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		attrRow, err := queries.InternAttributes(ctx, internParams(claim))
+		if err != nil {
+			return fmt.Errorf("intern claimed attributes: %w", err)
+		}
+		return queries.SetClaimedAttributes(ctx, librarydb.SetClaimedAttributesParams{
+			ClaimedAttributesID: sql.NullInt64{Int64: attrRow.ID, Valid: true},
+			ID:                  mediaObjectID,
 		})
 	})
 }
