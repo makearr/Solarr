@@ -18,6 +18,30 @@ const (
 	SessionScopes = "session.Scopes"
 )
 
+// Defines values for ArrApp.
+const (
+	Lidarr   ArrApp = "lidarr"
+	Radarr   ArrApp = "radarr"
+	Readarr  ArrApp = "readarr"
+	Sonarr   ArrApp = "sonarr"
+	Whisparr ArrApp = "whisparr"
+)
+
+// Defines values for ArrImportItemKind.
+const (
+	Album  ArrImportItemKind = "album"
+	Artist ArrImportItemKind = "artist"
+	Parked ArrImportItemKind = "parked"
+)
+
+// Defines values for ArrImportRunState.
+const (
+	ArrImportRunStateDONE     ArrImportRunState = "DONE"
+	ArrImportRunStateFAILED   ArrImportRunState = "FAILED"
+	ArrImportRunStateREVERTED ArrImportRunState = "REVERTED"
+	ArrImportRunStateRUNNING  ArrImportRunState = "RUNNING"
+)
+
 // Defines values for AuthPolicyConfiguredMode.
 const (
 	AuthPolicyConfiguredModeApikeyOnly AuthPolicyConfiguredMode = "apikey_only"
@@ -297,10 +321,10 @@ const (
 
 // Defines values for ListImportUnitsParamsDecision.
 const (
-	COMMIT ListImportUnitsParamsDecision = "COMMIT"
-	FAILED ListImportUnitsParamsDecision = "FAILED"
-	QUEUE  ListImportUnitsParamsDecision = "QUEUE"
-	SKIP   ListImportUnitsParamsDecision = "SKIP"
+	ListImportUnitsParamsDecisionCOMMIT ListImportUnitsParamsDecision = "COMMIT"
+	ListImportUnitsParamsDecisionFAILED ListImportUnitsParamsDecision = "FAILED"
+	ListImportUnitsParamsDecisionQUEUE  ListImportUnitsParamsDecision = "QUEUE"
+	ListImportUnitsParamsDecisionSKIP   ListImportUnitsParamsDecision = "SKIP"
 )
 
 // Defines values for ListMoveJobsParamsReason.
@@ -339,6 +363,98 @@ const (
 	Small GetWorkArtworkParamsSize = "small"
 	Thumb GetWorkArtworkParamsSize = "thumb"
 )
+
+// AddArrInstanceRequest defines model for AddArrInstanceRequest.
+type AddArrInstanceRequest struct {
+	ApiKey string `json:"api_key"`
+
+	// App Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships.
+	App        ArrApp `json:"app"`
+	BaseUrl    string `json:"base_url"`
+	CategoryId *int64 `json:"category_id,omitempty"`
+	Enabled    *bool  `json:"enabled,omitempty"`
+	Name       string `json:"name"`
+}
+
+// ArrApp Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships.
+type ArrApp string
+
+// ArrImportDetail defines model for ArrImportDetail.
+type ArrImportDetail struct {
+	Items []ArrImportItem `json:"items"`
+	Run   ArrImportRun    `json:"run"`
+}
+
+// ArrImportItem defines model for ArrImportItem.
+type ArrImportItem struct {
+	CreatedAt          time.Time         `json:"created_at"`
+	DesiredItemCreated bool              `json:"desired_item_created"`
+	DesiredItemId      *int64            `json:"desired_item_id,omitempty"`
+	Id                 int64             `json:"id"`
+	ImportId           int64             `json:"import_id"`
+	Kind               ArrImportItemKind `json:"kind"`
+	PersonCreated      bool              `json:"person_created"`
+	PersonId           *int64            `json:"person_id,omitempty"`
+
+	// SourceId The *Arr app's own id for this entity.
+	SourceId       string `json:"source_id"`
+	SubscriptionId *int64 `json:"subscription_id,omitempty"`
+	Title          string `json:"title"`
+	WorkCreated    bool   `json:"work_created"`
+	WorkId         *int64 `json:"work_id,omitempty"`
+}
+
+// ArrImportItemKind defines model for ArrImportItem.Kind.
+type ArrImportItemKind string
+
+// ArrImportRevertResult defines model for ArrImportRevertResult.
+type ArrImportRevertResult struct {
+	Errors               []string `json:"errors"`
+	PeopleDeleted        int      `json:"people_deleted"`
+	SubscriptionsDeleted int      `json:"subscriptions_deleted"`
+	WorksDeleted         int      `json:"works_deleted"`
+}
+
+// ArrImportRun defines model for ArrImportRun.
+type ArrImportRun struct {
+	AlbumsCreated int64 `json:"albums_created"`
+	AlbumsMatched int64 `json:"albums_matched"`
+
+	// App Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships.
+	App            ArrApp            `json:"app"`
+	ArtistsCreated int64             `json:"artists_created"`
+	ArtistsMatched int64             `json:"artists_matched"`
+	Error          *string           `json:"error,omitempty"`
+	FinishedAt     *time.Time        `json:"finished_at,omitempty"`
+	Id             int64             `json:"id"`
+	InstanceId     int64             `json:"instance_id"`
+	ItemsParked    int64             `json:"items_parked"`
+	StartedAt      time.Time         `json:"started_at"`
+	State          ArrImportRunState `json:"state"`
+}
+
+// ArrImportRunState defines model for ArrImportRun.State.
+type ArrImportRunState string
+
+// ArrInstance defines model for ArrInstance.
+type ArrInstance struct {
+	// ApiKey A credential, shown without ever exposing it (section 13.1). The raw value exists only between the database and the one outbound request that needs it.
+	ApiKey SecretMask `json:"api_key"`
+
+	// App Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships.
+	App     ArrApp `json:"app"`
+	BaseUrl string `json:"base_url"`
+
+	// CategoryId Where imported intent lands. Unset means match each artist's own root folder path against a configured root folder instead.
+	CategoryId    *int64     `json:"category_id,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	Enabled       bool       `json:"enabled"`
+	Id            int64      `json:"id"`
+	LastSyncError *string    `json:"last_sync_error,omitempty"`
+	LastSyncedAt  *time.Time `json:"last_synced_at,omitempty"`
+	Name          string     `json:"name"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+}
 
 // AuthPolicy defines model for AuthPolicy.
 type AuthPolicy struct {
@@ -1301,6 +1417,14 @@ type SearchResult struct {
 	Work  Work    `json:"work"`
 }
 
+// SecretMask A credential, shown without ever exposing it (section 13.1). The raw value exists only between the database and the one outbound request that needs it.
+type SecretMask struct {
+	HasValue bool `json:"has_value"`
+
+	// Masked A short hint ("abc…xyz"), present only when has_value is true.
+	Masked *string `json:"masked,omitempty"`
+}
+
 // SetupStatus defines model for SetupStatus.
 type SetupStatus struct {
 	HasRootFolder bool `json:"has_root_folder"`
@@ -1343,6 +1467,14 @@ type UnidentifiedPage struct {
 
 	// NextCursor Empty on the last page, which is how a client knows to stop without one more request that returns nothing.
 	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
+// UpdateArrInstanceRequest defines model for UpdateArrInstanceRequest.
+type UpdateArrInstanceRequest struct {
+	BaseUrl    string `json:"base_url"`
+	CategoryId *int64 `json:"category_id,omitempty"`
+	Enabled    *bool  `json:"enabled,omitempty"`
+	Name       string `json:"name"`
 }
 
 // UserAccount defines model for UserAccount.
@@ -1430,6 +1562,16 @@ type WorkPart struct {
 	RuntimeMs   *int64       `json:"runtime_ms,omitempty"`
 	SortKey     string       `json:"sort_key"`
 	Title       *string      `json:"title,omitempty"`
+}
+
+// ListArrImportsParams defines parameters for ListArrImports.
+type ListArrImportsParams struct {
+	InstanceId int64 `form:"instance_id" json:"instance_id"`
+}
+
+// SetArrInstanceKeyJSONBody defines parameters for SetArrInstanceKey.
+type SetArrInstanceKeyJSONBody struct {
+	ApiKey string `json:"api_key"`
 }
 
 // LoginJSONBody defines parameters for Login.
@@ -1725,6 +1867,15 @@ type SetPartMonitoredJSONBody struct {
 	Monitored bool `json:"monitored"`
 }
 
+// AddArrInstanceJSONRequestBody defines body for AddArrInstance for application/json ContentType.
+type AddArrInstanceJSONRequestBody = AddArrInstanceRequest
+
+// UpdateArrInstanceJSONRequestBody defines body for UpdateArrInstance for application/json ContentType.
+type UpdateArrInstanceJSONRequestBody = UpdateArrInstanceRequest
+
+// SetArrInstanceKeyJSONRequestBody defines body for SetArrInstanceKey for application/json ContentType.
+type SetArrInstanceKeyJSONRequestBody SetArrInstanceKeyJSONBody
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody LoginJSONBody
 
@@ -1829,6 +1980,33 @@ type ServerInterface interface {
 	// Build identity and the source offer.
 	// (GET /about)
 	GetAbout(w http.ResponseWriter, r *http.Request)
+	// Every import run for one instance, newest first.
+	// (GET /arr/imports)
+	ListArrImports(w http.ResponseWriter, r *http.Request, params ListArrImportsParams)
+	// One run's own detail, including every item it touched.
+	// (GET /arr/imports/{id})
+	GetArrImport(w http.ResponseWriter, r *http.Request, id int64)
+	// Undo one run. Administrator only.
+	// (POST /arr/imports/{id}/revert)
+	RevertArrImport(w http.ResponseWriter, r *http.Request, id int64)
+	// Every configured *Arr connection (todo 4.13, ADR-52).
+	// (GET /arr/instances)
+	ListArrInstances(w http.ResponseWriter, r *http.Request)
+	// Connect a new *Arr instance. Administrator only.
+	// (POST /arr/instances)
+	AddArrInstance(w http.ResponseWriter, r *http.Request)
+	// Remove a connection. Administrator only.
+	// (DELETE /arr/instances/{id})
+	DeleteArrInstance(w http.ResponseWriter, r *http.Request, id int64)
+	// Change a connection's own facts. Administrator only. Never touches api_key -- see /arr/instances/{id}/apikey.
+	// (PATCH /arr/instances/{id})
+	UpdateArrInstance(w http.ResponseWriter, r *http.Request, id int64)
+	// Replace a connection's own API key. Administrator only. A separate endpoint from PATCH: resealing on every unrelated edit would be silent, pointless churn.
+	// (POST /arr/instances/{id}/apikey)
+	SetArrInstanceKey(w http.ResponseWriter, r *http.Request, id int64)
+	// Run one import (todo 4.13). Administrator only.
+	// (POST /arr/instances/{id}/sync)
+	SyncArrInstance(w http.ResponseWriter, r *http.Request, id int64)
 	// Exchange a username and password for a session cookie.
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -2090,6 +2268,60 @@ type Unimplemented struct{}
 // Build identity and the source offer.
 // (GET /about)
 func (_ Unimplemented) GetAbout(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every import run for one instance, newest first.
+// (GET /arr/imports)
+func (_ Unimplemented) ListArrImports(w http.ResponseWriter, r *http.Request, params ListArrImportsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One run's own detail, including every item it touched.
+// (GET /arr/imports/{id})
+func (_ Unimplemented) GetArrImport(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Undo one run. Administrator only.
+// (POST /arr/imports/{id}/revert)
+func (_ Unimplemented) RevertArrImport(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every configured *Arr connection (todo 4.13, ADR-52).
+// (GET /arr/instances)
+func (_ Unimplemented) ListArrInstances(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Connect a new *Arr instance. Administrator only.
+// (POST /arr/instances)
+func (_ Unimplemented) AddArrInstance(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a connection. Administrator only.
+// (DELETE /arr/instances/{id})
+func (_ Unimplemented) DeleteArrInstance(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change a connection's own facts. Administrator only. Never touches api_key -- see /arr/instances/{id}/apikey.
+// (PATCH /arr/instances/{id})
+func (_ Unimplemented) UpdateArrInstance(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace a connection's own API key. Administrator only. A separate endpoint from PATCH: resealing on every unrelated edit would be silent, pointless churn.
+// (POST /arr/instances/{id}/apikey)
+func (_ Unimplemented) SetArrInstanceKey(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Run one import (todo 4.13). Administrator only.
+// (POST /arr/instances/{id}/sync)
+func (_ Unimplemented) SyncArrInstance(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2611,6 +2843,290 @@ func (siw *ServerInterfaceWrapper) GetAbout(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAbout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListArrImports operation middleware
+func (siw *ServerInterfaceWrapper) ListArrImports(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListArrImportsParams
+
+	// ------------- Required query parameter "instance_id" -------------
+
+	if paramValue := r.URL.Query().Get("instance_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "instance_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "instance_id", r.URL.Query(), &params.InstanceId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListArrImports(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArrImport operation middleware
+func (siw *ServerInterfaceWrapper) GetArrImport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArrImport(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevertArrImport operation middleware
+func (siw *ServerInterfaceWrapper) RevertArrImport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevertArrImport(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListArrInstances operation middleware
+func (siw *ServerInterfaceWrapper) ListArrInstances(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListArrInstances(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddArrInstance operation middleware
+func (siw *ServerInterfaceWrapper) AddArrInstance(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddArrInstance(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteArrInstance operation middleware
+func (siw *ServerInterfaceWrapper) DeleteArrInstance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteArrInstance(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateArrInstance operation middleware
+func (siw *ServerInterfaceWrapper) UpdateArrInstance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateArrInstance(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetArrInstanceKey operation middleware
+func (siw *ServerInterfaceWrapper) SetArrInstanceKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetArrInstanceKey(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SyncArrInstance operation middleware
+func (siw *ServerInterfaceWrapper) SyncArrInstance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SyncArrInstance(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5355,6 +5871,33 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/about", wrapper.GetAbout)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/arr/imports", wrapper.ListArrImports)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/arr/imports/{id}", wrapper.GetArrImport)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/arr/imports/{id}/revert", wrapper.RevertArrImport)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/arr/instances", wrapper.ListArrInstances)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/arr/instances", wrapper.AddArrInstance)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/arr/instances/{id}", wrapper.DeleteArrInstance)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/arr/instances/{id}", wrapper.UpdateArrInstance)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/arr/instances/{id}/apikey", wrapper.SetArrInstanceKey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/arr/instances/{id}/sync", wrapper.SyncArrInstance)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/login", wrapper.Login)

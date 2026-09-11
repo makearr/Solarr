@@ -145,6 +145,7 @@ type Config struct {
 	// as intent (todo 4.17, ADR-56). Optional: without it, the discover
 	// endpoints answer 503.
 	Discover Discover
+	ArrSync  ArrSync
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -192,6 +193,7 @@ type Server struct {
 	scheduler            Scheduler
 	cacheManager         CacheManager
 	discover             Discover
+	arrSync              ArrSync
 	// effectivePort is the port this process actually bound to, resolved at
 	// startup (ADR-58). The Network screen reports it beside whatever
 	// settings.db now holds, since a port change written from the screen
@@ -261,6 +263,7 @@ func New(config Config) (*Server, error) {
 		scheduler:            config.Scheduler,
 		cacheManager:         config.CacheManager,
 		discover:             config.Discover,
+		arrSync:              config.ArrSync,
 		effectivePort:        config.Port,
 		healthPath:           base + APIPrefix + "/health",
 		address:              net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
@@ -306,6 +309,15 @@ func New(config Config) (*Server, error) {
 			secured.Get("/works/{id}/artwork", server.routeGetWorkArtwork)
 			secured.Get("/discover/search", server.routeDiscoverSearch)
 			secured.Post("/discover/add", server.DiscoverAdd)
+			secured.Get("/arr/instances", server.ListArrInstances)
+			secured.Post("/arr/instances", server.AddArrInstance)
+			secured.Patch("/arr/instances/{id}", server.routeUpdateArrInstance)
+			secured.Delete("/arr/instances/{id}", server.routeDeleteArrInstance)
+			secured.Post("/arr/instances/{id}/apikey", server.routeSetArrInstanceKey)
+			secured.Post("/arr/instances/{id}/sync", server.routeSyncArrInstance)
+			secured.Get("/arr/imports", server.routeListArrImports)
+			secured.Get("/arr/imports/{id}", server.routeGetArrImport)
+			secured.Post("/arr/imports/{id}/revert", server.routeRevertArrImport)
 			secured.Get("/library/unidentified", server.routeListUnidentified)
 			secured.Post("/library/unidentified/{mediaObjectId}/resolve", server.routeResolveUnidentified)
 			secured.Get("/search", server.routeSearch)

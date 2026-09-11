@@ -738,6 +738,146 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/arr/instances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every configured *Arr connection (todo 4.13, ADR-52). */
+        get: operations["listArrInstances"];
+        put?: never;
+        /**
+         * Connect a new *Arr instance. Administrator only.
+         * @description api_key is sealed at rest (secrets.Cipher) and never returned in plaintext again -- every response shows Masked instead. Only Lidarr has a real sync this pass; the other four apps can still be connected, for when their own stage ships.
+         */
+        post: operations["addArrInstance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/arr/instances/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a connection. Administrator only. */
+        delete: operations["deleteArrInstance"];
+        options?: never;
+        head?: never;
+        /** Change a connection's own facts. Administrator only. Never touches api_key -- see /arr/instances/{id}/apikey. */
+        patch: operations["updateArrInstance"];
+        trace?: never;
+    };
+    "/arr/instances/{id}/apikey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace a connection's own API key. Administrator only. A separate endpoint from PATCH: resealing on every unrelated edit would be silent, pointless churn. */
+        post: operations["setArrInstanceKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/arr/instances/{id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run one import (todo 4.13). Administrator only.
+         * @description Synchronous: a Lidarr library's own realistic scale (hundreds to low thousands of artists, no file I/O involved) completes well within one request. A monitored artist becomes person+subscription, a monitored album becomes a desired_item, each matched by its own MusicBrainz id -- idempotent and additive (Invariant 80): re-running never duplicates what a previous run already created, and never resurrects something unmonitored locally since. Records the run either way, so a connection failure still shows as a DONE run with its own error, not a silently missing one.
+         */
+        post: operations["syncArrInstance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/arr/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every import run for one instance, newest first. */
+        get: operations["listArrImports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/arr/imports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** One run's own detail, including every item it touched. */
+        get: operations["getArrImport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/arr/imports/{id}/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo one run. Administrator only.
+         * @description Only what the run itself created (its own arr_import_item *_created flags), never something it only matched -- the same distinction library.ImportRevert already draws for a normal import. Best-effort per item; a person or work still referenced elsewhere is a real, reported failure, not a reason to abandon the rest.
+         */
+        post: operations["revertArrImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}": {
         parameters: {
             query?: never;
@@ -1923,6 +2063,114 @@ export interface components {
              * @description ADR-36's composite score, computed against the user_request trigger. There is no populated hunt_queue yet (stage 5/6), so this is the score alone, not a position within it.
              */
             priority: number;
+        };
+        /**
+         * @description Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships.
+         * @enum {string}
+         */
+        ArrApp: "lidarr" | "sonarr" | "radarr" | "readarr" | "whisparr";
+        /** @description A credential, shown without ever exposing it (section 13.1). The raw value exists only between the database and the one outbound request that needs it. */
+        SecretMask: {
+            has_value: boolean;
+            /** @description A short hint ("abc…xyz"), present only when has_value is true. */
+            masked?: string;
+        };
+        ArrInstance: {
+            /** Format: int64 */
+            id: number;
+            app: components["schemas"]["ArrApp"];
+            name: string;
+            base_url: string;
+            /**
+             * Format: int64
+             * @description Where imported intent lands. Unset means match each artist's own root folder path against a configured root folder instead.
+             */
+            category_id?: number;
+            enabled: boolean;
+            api_key: components["schemas"]["SecretMask"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            last_synced_at?: string;
+            last_sync_error?: string;
+        };
+        AddArrInstanceRequest: {
+            app: components["schemas"]["ArrApp"];
+            name: string;
+            base_url: string;
+            api_key: string;
+            /** Format: int64 */
+            category_id?: number;
+            /** @default true */
+            enabled: boolean;
+        };
+        UpdateArrInstanceRequest: {
+            name: string;
+            base_url: string;
+            /** Format: int64 */
+            category_id?: number;
+            /** @default true */
+            enabled: boolean;
+        };
+        ArrImportRun: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            instance_id: number;
+            app: components["schemas"]["ArrApp"];
+            /** @enum {string} */
+            state: "RUNNING" | "DONE" | "FAILED" | "REVERTED";
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            finished_at?: string;
+            error?: string;
+            /** Format: int64 */
+            artists_created: number;
+            /** Format: int64 */
+            artists_matched: number;
+            /** Format: int64 */
+            albums_created: number;
+            /** Format: int64 */
+            albums_matched: number;
+            /** Format: int64 */
+            items_parked: number;
+        };
+        ArrImportItem: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            import_id: number;
+            /** @enum {string} */
+            kind: "artist" | "album" | "parked";
+            /** @description The *Arr app's own id for this entity. */
+            source_id: string;
+            title: string;
+            /** Format: int64 */
+            person_id?: number;
+            person_created: boolean;
+            /** Format: int64 */
+            subscription_id?: number;
+            /** Format: int64 */
+            work_id?: number;
+            work_created: boolean;
+            /** Format: int64 */
+            desired_item_id?: number;
+            desired_item_created: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ArrImportDetail: {
+            run: components["schemas"]["ArrImportRun"];
+            items: components["schemas"]["ArrImportItem"][];
+        };
+        ArrImportRevertResult: {
+            works_deleted: number;
+            subscriptions_deleted: number;
+            people_deleted: number;
+            errors: string[];
         };
         /** @description A person, first-class and monitorable in their own right (ADR-32). */
         Person: {
@@ -3754,6 +4002,239 @@ export interface operations {
             403: components["responses"]["Problem"];
             /** @description category_id does not exist, or the caller cannot read it. */
             404: components["responses"]["Problem"];
+        };
+    };
+    listArrInstances: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every connection. api_key is always masked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrInstance"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    addArrInstance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddArrInstanceRequest"];
+            };
+        };
+        responses: {
+            /** @description Connected. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrInstance"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            /** @description The given category_id does not exist. */
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteArrInstance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    updateArrInstance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateArrInstanceRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrInstance"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setArrInstanceKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    api_key: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Replaced. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    syncArrInstance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run, whatever it did or did not manage to do. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrImportRun"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description This app is not yet wired for a real sync (connect/preview/park only). */
+            409: components["responses"]["Problem"];
+        };
+    };
+    listArrImports: {
+        parameters: {
+            query: {
+                instance_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every run. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrImportRun"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    getArrImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run and its items. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrImportDetail"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    revertArrImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What was actually undone, and any per-item failure. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrImportRevertResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The run is not in a revertible state (still running, or already reverted). */
+            409: components["responses"]["Problem"];
         };
     };
     getWork: {

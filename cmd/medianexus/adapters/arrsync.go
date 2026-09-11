@@ -1,0 +1,354 @@
+package adapters
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/makearr/MediaNexus/internal/api/apiserver"
+	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/MediaNexus/internal/importing/arrimport"
+	"github.com/makearr/MediaNexus/internal/media/music"
+	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/MediaNexus/internal/platform/fsx"
+)
+
+// LidarrClientFactory builds a REST client for one instance's own base URL
+// and decrypted API key -- injected so this package never builds an
+// httpx.Client itself (cmd/medianexus/app/providers.go's own job, the same
+// rate limiter/breaker/proxy wiring every other provider already gets).
+type LidarrClientFactory func(baseURL, apiKey string) arrimport.LidarrClient
+
+// ArrSync runs one *Arr import (todo 4.13, ADR-52): a monitored artist
+// becomes person+subscription, a monitored album becomes a desired_item,
+// each matched by its own MusicBrainz id (ADR-8) so a Lidarr-driven work
+// and a scan- or search-driven one always land on the same row. Synchronous,
+// not a background job: a Lidarr library's own realistic scale (hundreds to
+// low thousands of artists, no file I/O or ffprobe involved) is nowhere
+// near WALK/GROUP's 500k-file design point that justifies a resumable job;
+// revisit if a real large library proves this wrong.
+type ArrSync struct {
+	Cache            *settings.Cache
+	Identity         library.Identity
+	People           library.People
+	Subscriptions    library.Subscriptions
+	Desired          library.Desired
+	Imports          library.ArrImports
+	Reverter         library.ArrImportRevert
+	DefaultProfileID int64
+	Clock            clock.Clock
+	Lidarr           LidarrClientFactory
+}
+
+// Sync runs one instance's own import, recording it as a new library.ArrImports
+// run regardless of outcome -- a connection failure still leaves a DONE run
+// with an error and zero counts, not a silently missing one, so the UI
+// always has something to show for an attempt.
+func (a ArrSync) Sync(ctx context.Context, instanceID int64) (apiserver.ArrImportRun, error) {
+	instance, err := a.Cache.GetArrInstance(ctx, instanceID)
+	if err != nil {
+		return apiserver.ArrImportRun{}, err
+	}
+	if instance.App != settings.ArrAppLidarr {
+		return apiserver.ArrImportRun{}, fmt.Errorf("%w: %s", apiserver.ErrArrAppNotYetSupported, instance.App)
+	}
+	apiKey, err := a.Cache.DecryptedAPIKey(ctx, instanceID)
+	if err != nil {
+		return apiserver.ArrImportRun{}, err
+	}
+
+	now := a.Clock.Now()
+	importID, err := a.Imports.Start(ctx, instanceID, string(instance.App), now.Unix())
+	if err != nil {
+		return apiserver.ArrImportRun{}, err
+	}
+
+	client := a.Lidarr(instance.BaseURL, apiKey.Reveal())
+	counts, syncErr := a.syncLidarr(ctx, importID, instance, client)
+
+	finishedAt := a.Clock.Now().Unix()
+	errMsg := ""
+	if syncErr != nil {
+		errMsg = syncErr.Error()
+	}
+	if err := a.Imports.Finish(ctx, importID, library.ArrImportDone, finishedAt, errMsg, counts); err != nil {
+		return apiserver.ArrImportRun{}, err
+	}
+	// Best-effort: a failure here would otherwise hide a completed run
+	// behind an error, and the run's own DONE row is already the source of
+	// truth for what happened.
+	_ = a.Cache.SetArrInstanceSyncResult(ctx, instanceID, finishedAt, errMsg)
+
+	run, err := a.Imports.Get(ctx, importID)
+	if err != nil {
+		return apiserver.ArrImportRun{}, err
+	}
+	return arrImportRunView(run), nil
+}
+
+// ListImports answers every run for one instance, newest first.
+func (a ArrSync) ListImports(ctx context.Context, instanceID int64) ([]apiserver.ArrImportRun, error) {
+	runs, err := a.Imports.ListForInstance(ctx, instanceID)
+	if err != nil {
+		return nil, err
+	}
+	views := make([]apiserver.ArrImportRun, len(runs))
+	for index, run := range runs {
+		views[index] = arrImportRunView(run)
+	}
+	return views, nil
+}
+
+// GetImport answers one run's own detail, including every item it touched.
+func (a ArrSync) GetImport(ctx context.Context, id int64) (apiserver.ArrImportDetail, error) {
+	run, err := a.Imports.Get(ctx, id)
+	if err != nil {
+		return apiserver.ArrImportDetail{}, err
+	}
+	items, err := a.Imports.ListItems(ctx, id)
+	if err != nil {
+		return apiserver.ArrImportDetail{}, err
+	}
+	views := make([]apiserver.ArrImportItem, len(items))
+	for index, item := range items {
+		views[index] = arrImportItemView(item)
+	}
+	return apiserver.ArrImportDetail{Run: arrImportRunView(run), Items: views}, nil
+}
+
+// Revert undoes one run -- library.ErrArrImportNotDone translated to this
+// package's own boundary error, the same shape every other adapter keeps
+// (ImportRevert's own ErrImportSessionReverted pair).
+func (a ArrSync) Revert(ctx context.Context, id int64) (apiserver.ArrImportRevertResult, error) {
+	result, err := a.Reverter.Revert(ctx, id)
+	if errors.Is(err, library.ErrArrImportNotDone) {
+		return apiserver.ArrImportRevertResult{}, apiserver.ErrArrImportNotDone
+	}
+	if err != nil {
+		return apiserver.ArrImportRevertResult{}, err
+	}
+	errs := make([]string, len(result.Errors))
+	for index, itemErr := range result.Errors {
+		errs[index] = itemErr.Error()
+	}
+	return apiserver.ArrImportRevertResult{
+		WorksDeleted: result.WorksDeleted, SubscriptionsDeleted: result.SubscriptionsDeleted,
+		PeopleDeleted: result.PeopleDeleted, Errors: errs,
+	}, nil
+}
+
+func arrImportRunView(run library.ArrImportRun) apiserver.ArrImportRun {
+	return apiserver.ArrImportRun{
+		ID: run.ID, InstanceID: run.InstanceID, App: run.App, State: run.State,
+		StartedAt: run.StartedAt, FinishedAt: run.FinishedAt, Error: run.Error,
+		ArtistsCreated: run.ArtistsCreated, ArtistsMatched: run.ArtistsMatched,
+		AlbumsCreated: run.AlbumsCreated, AlbumsMatched: run.AlbumsMatched, ItemsParked: run.ItemsParked,
+	}
+}
+
+func arrImportItemView(item library.ArrImportItem) apiserver.ArrImportItem {
+	return apiserver.ArrImportItem{
+		ID: item.ID, ImportID: item.ImportID, Kind: item.Kind, SourceID: item.SourceID, Title: item.Title,
+		PersonID: item.PersonID, PersonCreated: item.PersonCreated, SubscriptionID: item.SubscriptionID,
+		WorkID: item.WorkID, WorkCreated: item.WorkCreated,
+		DesiredItemID: item.DesiredItemID, DesiredItemCreated: item.DesiredItemCreated,
+		CreatedAt: item.CreatedAt,
+	}
+}
+
+// syncLidarr walks every monitored artist and their monitored albums,
+// best-effort per artist/album (the same tolerance commitCluster's own
+// per-unit loop already has for a bad file mid-batch): one artist Lidarr
+// cannot be matched to a category, or one album with no MusicBrainz id,
+// does not stop the rest. A failure connecting or listing artists at all is
+// the one thing that fails the whole run.
+func (a ArrSync) syncLidarr(
+	ctx context.Context, importID int64, instance settings.ArrInstance, client arrimport.LidarrClient,
+) (library.ArrImportCounts, error) {
+	if _, err := client.SystemStatus(ctx); err != nil {
+		return library.ArrImportCounts{}, fmt.Errorf("connect: %w", err)
+	}
+	artists, err := client.Artists(ctx)
+	if err != nil {
+		return library.ArrImportCounts{}, fmt.Errorf("list artists: %w", err)
+	}
+
+	roots := a.Cache.Snapshot().RootFolders()
+
+	var counts library.ArrImportCounts
+	var failures []string
+	fail := func(format string, args ...any) { failures = append(failures, fmt.Sprintf(format, args...)) }
+
+	for _, artist := range artists {
+		if !artist.Monitored {
+			continue
+		}
+		categoryID, ok := a.categoryFor(instance, artist.RootFolderPath, roots)
+		if !ok {
+			fail("%s: no category matches root folder %q", artist.ArtistName, artist.RootFolderPath)
+			continue
+		}
+		personID, created, err := a.syncArtist(ctx, importID, artist)
+		if err != nil {
+			fail("%s: %v", artist.ArtistName, err)
+			continue
+		}
+		if created {
+			counts.ArtistsCreated++
+		} else {
+			counts.ArtistsMatched++
+		}
+
+		albums, err := client.Albums(ctx, artist.ID)
+		if err != nil {
+			fail("%s: list albums: %v", artist.ArtistName, err)
+			continue
+		}
+		for _, album := range albums {
+			if !album.Monitored {
+				continue
+			}
+			workCreated, err := a.syncAlbum(ctx, importID, categoryID, personID, album)
+			if err != nil {
+				fail("%s - %s: %v", artist.ArtistName, album.Title, err)
+				continue
+			}
+			if workCreated {
+				counts.AlbumsCreated++
+			} else {
+				counts.AlbumsMatched++
+			}
+		}
+	}
+
+	if len(failures) > 0 {
+		return counts, errors.New(strings.Join(failures, "; "))
+	}
+	return counts, nil
+}
+
+// syncArtist resolves-or-creates the person behind artist's own MusicBrainz
+// id and ensures their subscription, recording one arr_import_item either
+// way. created reports whether this call is the one that created the
+// person -- a brand-new person cannot have had a prior subscription either,
+// so the subscription is created exactly when the person is.
+func (a ArrSync) syncArtist(ctx context.Context, importID int64, artist arrimport.LidarrArtist) (personID int64, created bool, err error) {
+	if artist.ForeignArtistID == "" {
+		return 0, false, errors.New("no MusicBrainz artist id")
+	}
+	now := a.Clock.Now()
+
+	_, found, err := a.People.FindByExternalID(ctx, music.ProviderArtist, artist.ForeignArtistID)
+	if err != nil {
+		return 0, false, err
+	}
+	personID, err = a.People.ResolvePerson(ctx, now, library.PersonLink{
+		Provider: music.ProviderArtist, ExternalID: artist.ForeignArtistID,
+		Person: library.PersonIdentity{Name: artist.ArtistName, SortName: artist.SortName},
+	})
+	if err != nil {
+		return 0, false, err
+	}
+	created = !found
+
+	subscriptionID, err := a.People.Subscribe(ctx, now, personID, 0, library.SubscriptionRequest{
+		MediaTypes: []string{"music"}, Roles: []string{"artist"},
+	})
+	if err != nil {
+		return 0, false, err
+	}
+
+	if _, err := a.Imports.AddItem(ctx, importID, library.NewArrImportItem{
+		Kind: library.ArrImportItemArtist, SourceID: strconv.FormatInt(artist.ID, 10), Title: artist.ArtistName,
+		PersonID: &personID, PersonCreated: created, SubscriptionID: &subscriptionID,
+	}, now.Unix()); err != nil {
+		return 0, false, err
+	}
+	return personID, created, nil
+}
+
+// syncAlbum resolves-or-creates the work behind album's own MusicBrainz
+// release-group id and ensures its album-level desired_item, recording one
+// arr_import_item either way. A newly created work gets personID credited
+// as its primary artist (AddCredit's own role="artist" ord=0 case) -- an
+// already-matched work is left exactly as whatever created it already
+// credited, never overwritten.
+func (a ArrSync) syncAlbum(ctx context.Context, importID, categoryID, personID int64, album arrimport.LidarrAlbum) (workCreated bool, err error) {
+	if album.ForeignAlbumID == "" {
+		return false, errors.New("no MusicBrainz release-group id")
+	}
+	now := a.Clock.Now()
+
+	resolutions, err := a.Identity.ResolveWorksDetailed(ctx, now, []library.WorkLink{{
+		Provider: music.ProviderReleaseGroup, ExternalID: album.ForeignAlbumID, Confidence: 1.0,
+		Work: library.WorkIdentity{
+			MediaType: "music", CanonicalTitle: album.Title, SortTitle: music.SortTitle(album.Title),
+		},
+	}})
+	if err != nil {
+		return false, err
+	}
+	resolution := resolutions[0]
+
+	if resolution.WorkCreated {
+		if err := a.People.AddCredit(ctx, resolution.WorkID, personID, "artist", 0); err != nil {
+			return false, err
+		}
+	}
+
+	profileID := a.DefaultProfileID
+	if category, ok := a.Cache.Snapshot().Category(categoryID); ok && category.QualityProfileID != nil {
+		profileID = *category.QualityProfileID
+	}
+	item, err := a.Desired.EnsureAlbumItem(ctx, library.AlbumRequest{
+		WorkID: resolution.WorkID, CategoryID: categoryID, ProfileID: profileID, Monitored: true,
+	})
+	if err != nil {
+		return false, err
+	}
+
+	workID, itemID := resolution.WorkID, item.ID
+	if _, err := a.Imports.AddItem(ctx, importID, library.NewArrImportItem{
+		Kind: library.ArrImportItemAlbum, SourceID: strconv.FormatInt(album.ID, 10), Title: album.Title,
+		WorkID: &workID, WorkCreated: resolution.WorkCreated,
+		// A work this call did not create cannot be told apart from one
+		// whose desired_item already existed without a pre-check this pass
+		// skips (desired_item_created is informational only -- revert acts
+		// on WorkCreated, which cascades desired_item with it).
+		DesiredItemID: &itemID, DesiredItemCreated: resolution.WorkCreated,
+	}, now.Unix()); err != nil {
+		return false, err
+	}
+	return resolution.WorkCreated, nil
+}
+
+// categoryFor answers which category a Lidarr artist's own root folder path
+// belongs to. instance.CategoryID, when set, always wins -- the simple
+// "everything from this instance goes to one category" case ADR-52 allows
+// without requiring path matching at all. Otherwise the longest-matching
+// configured root folder (fsx.Within) names the category, the same
+// longest-prefix reasoning a real filesystem's own mount resolution uses.
+func (a ArrSync) categoryFor(instance settings.ArrInstance, rootFolderPath string, roots []settings.RootFolder) (int64, bool) {
+	if instance.CategoryID != nil {
+		return *instance.CategoryID, true
+	}
+
+	var best settings.RootFolder
+	bestLen := -1
+	for _, root := range roots {
+		if fsx.Within(root.Path, rootFolderPath) && len(root.Path) > bestLen {
+			best, bestLen = root, len(root.Path)
+		}
+	}
+	if bestLen < 0 {
+		return 0, false
+	}
+	categories := a.Cache.Snapshot().CategoriesForRootFolder(best.ID)
+	if len(categories) == 0 {
+		return 0, false
+	}
+	return categories[0], true
+}

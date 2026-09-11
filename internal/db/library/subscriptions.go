@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/makearr/MediaNexus/internal/db/store"
@@ -60,6 +61,24 @@ func subscriptionFrom(row librarydb.Subscription) Subscription {
 		MonitorBackCatalogue: row.MonitorBackCatalogue == 1,
 		FiltersJSON:          row.FiltersJson.String,
 	}
+}
+
+// Find answers the subscription for one subject and user, without creating
+// one -- the same "did this call create it or only match it" question
+// People.Subscribe's own idempotent return value cannot answer on its own,
+// needed by a caller that must record which is which (todo 4.13's
+// ArrImportRevert).
+func (s Subscriptions) Find(ctx context.Context, subjectType string, subjectID, userID int64) (int64, bool, error) {
+	row, err := librarydb.New(s.store.Read()).GetSubscriptionForSubject(ctx, librarydb.GetSubscriptionForSubjectParams{
+		SubjectType: subjectType, SubjectID: subjectID, UserID: sql.NullInt64{Int64: userID, Valid: userID != 0},
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("library: find subscription for %s %d: %w", subjectType, subjectID, err)
+	}
+	return row.ID, true, nil
 }
 
 // Delete removes a subscription outright. Revert-only use so far (todo
