@@ -365,6 +365,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/downloadfolders", server.AddDownloadFolder)
 			secured.Delete("/downloadfolders/{id}", server.routeDeleteDownloadFolder)
 			secured.Get("/downloadfolders/{id}/contents", server.routeListDownloadFolderContents)
+			secured.Get("/settings/registry", server.ListSettingDefinitions)
 			secured.Get("/schedules", server.ListSchedules)
 			secured.Patch("/schedules/{key}", server.routeUpdateSchedule)
 			secured.Post("/schedules/{key}/run", server.routeRunSchedule)

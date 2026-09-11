@@ -669,6 +669,28 @@ paths:
           $ref: "#/components/responses/Problem"
           description: A fire is already in flight for this task.
 
+  /settings/registry:
+    get:
+      operationId: listSettingDefinitions
+      tags: [settings]
+      summary: Every registered scalar setting (ADR-26) -- its tier, kind, default and help text.
+      description: >-
+        todo 4.14's first slice: the registry mechanism and the scalar
+        settings that already exist (auth, import commit line, network,
+        cache budget). Read-side only for now -- the per-user tier switch,
+        cross-tier search and full YAML export integration are a fast
+        follow. A registered task's own tier (ADR-59) is not repeated here;
+        see GET /schedules.
+      responses:
+        "200":
+          description: Every registered setting, sorted by key.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SettingDefinition" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /network:
     get:
       operationId: getNetworkSettings
@@ -2944,6 +2966,27 @@ components:
           description: Absent until the task has fired at least once.
         last_error: { type: string }
         next_run_at: { type: string, format: date-time }
+
+    SettingDefinition:
+      type: object
+      description: >-
+        One scalar setting registered once in Go (ADR-26, todo 4.14) -- the
+        single source for its tier, default and help text.
+      required: [key, name, tier, kind, default]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        tier:
+          type: string
+          enum: [normal, advanced, expert]
+          description: ADR-26's visibility tier.
+        kind:
+          type: string
+          enum: [string, int, float, bool, string_list]
+        default:
+          type: string
+          description: Encoded the same way the value itself is stored (a JSON array for string_list).
+        help_text: { type: string }
 
     CacheReport:
       type: object

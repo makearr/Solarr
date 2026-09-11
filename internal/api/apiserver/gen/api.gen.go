@@ -295,9 +295,25 @@ const (
 
 // Defines values for ScheduleTier.
 const (
-	Advanced ScheduleTier = "advanced"
-	Expert   ScheduleTier = "expert"
-	Normal   ScheduleTier = "normal"
+	ScheduleTierAdvanced ScheduleTier = "advanced"
+	ScheduleTierExpert   ScheduleTier = "expert"
+	ScheduleTierNormal   ScheduleTier = "normal"
+)
+
+// Defines values for SettingDefinitionKind.
+const (
+	Bool       SettingDefinitionKind = "bool"
+	Float      SettingDefinitionKind = "float"
+	Int        SettingDefinitionKind = "int"
+	String     SettingDefinitionKind = "string"
+	StringList SettingDefinitionKind = "string_list"
+)
+
+// Defines values for SettingDefinitionTier.
+const (
+	SettingDefinitionTierAdvanced SettingDefinitionTier = "advanced"
+	SettingDefinitionTierExpert   SettingDefinitionTier = "expert"
+	SettingDefinitionTierNormal   SettingDefinitionTier = "normal"
 )
 
 // Defines values for WantedState.
@@ -1449,6 +1465,25 @@ type SecretMask struct {
 	Masked *string `json:"masked,omitempty"`
 }
 
+// SettingDefinition One scalar setting registered once in Go (ADR-26, todo 4.14) -- the single source for its tier, default and help text.
+type SettingDefinition struct {
+	// Default Encoded the same way the value itself is stored (a JSON array for string_list).
+	Default  string                `json:"default"`
+	HelpText *string               `json:"help_text,omitempty"`
+	Key      string                `json:"key"`
+	Kind     SettingDefinitionKind `json:"kind"`
+	Name     string                `json:"name"`
+
+	// Tier ADR-26's visibility tier.
+	Tier SettingDefinitionTier `json:"tier"`
+}
+
+// SettingDefinitionKind defines model for SettingDefinition.Kind.
+type SettingDefinitionKind string
+
+// SettingDefinitionTier ADR-26's visibility tier.
+type SettingDefinitionTier string
+
 // SetupStatus defines model for SetupStatus.
 type SetupStatus struct {
 	HasRootFolder bool `json:"has_root_folder"`
@@ -2279,6 +2314,9 @@ type ServerInterface interface {
 	// Apply a configuration document, entirely or not at all.
 	// (POST /settings/import)
 	ImportSettings(w http.ResponseWriter, r *http.Request)
+	// Every registered scalar setting (ADR-26) -- its tier, kind, default and help text.
+	// (GET /settings/registry)
+	ListSettingDefinitions(w http.ResponseWriter, r *http.Request)
 	// What the first-run wizard still has to do.
 	// (GET /setup)
 	GetSetupStatus(w http.ResponseWriter, r *http.Request)
@@ -2828,6 +2866,12 @@ func (_ Unimplemented) ExportSettings(w http.ResponseWriter, r *http.Request) {
 // Apply a configuration document, entirely or not at all.
 // (POST /settings/import)
 func (_ Unimplemented) ImportSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every registered scalar setting (ADR-26) -- its tier, kind, default and help text.
+// (GET /settings/registry)
+func (_ Unimplemented) ListSettingDefinitions(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5552,6 +5596,28 @@ func (siw *ServerInterfaceWrapper) ImportSettings(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ListSettingDefinitions operation middleware
+func (siw *ServerInterfaceWrapper) ListSettingDefinitions(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSettingDefinitions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSetupStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetSetupStatus(w http.ResponseWriter, r *http.Request) {
 
@@ -6366,6 +6432,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/settings/import", wrapper.ImportSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/settings/registry", wrapper.ListSettingDefinitions)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/setup", wrapper.GetSetupStatus)

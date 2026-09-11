@@ -456,6 +456,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/registry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every registered scalar setting (ADR-26) -- its tier, kind, default and help text.
+         * @description todo 4.14's first slice: the registry mechanism and the scalar settings that already exist (auth, import commit line, network, cache budget). Read-side only for now -- the per-user tier switch, cross-tier search and full YAML export integration are a fast follow. A registered task's own tier (ADR-59) is not repeated here; see GET /schedules.
+         */
+        get: operations["listSettingDefinitions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/network": {
         parameters: {
             query?: never;
@@ -1881,6 +1901,21 @@ export interface components {
             last_error?: string;
             /** Format: date-time */
             next_run_at?: string;
+        };
+        /** @description One scalar setting registered once in Go (ADR-26, todo 4.14) -- the single source for its tier, default and help text. */
+        SettingDefinition: {
+            key: string;
+            name: string;
+            /**
+             * @description ADR-26's visibility tier.
+             * @enum {string}
+             */
+            tier: "normal" | "advanced" | "expert";
+            /** @enum {string} */
+            kind: "string" | "int" | "float" | "bool" | "string_list";
+            /** @description Encoded the same way the value itself is stored (a JSON array for string_list). */
+            default: string;
+            help_text?: string;
         };
         /** @description The cache's own budgets and last-measured size per namespace (ADR-60). */
         CacheReport: {
@@ -3620,6 +3655,27 @@ export interface operations {
             404: components["responses"]["Problem"];
             /** @description A fire is already in flight for this task. */
             409: components["responses"]["Problem"];
+        };
+    };
+    listSettingDefinitions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every registered setting, sorted by key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingDefinition"][];
+                };
+            };
+            401: components["responses"]["Problem"];
         };
     };
     getNetworkSettings: {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
 	"github.com/makearr/MediaNexus/internal/api/authz"
+	"github.com/makearr/MediaNexus/internal/db/settings"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
 	"github.com/makearr/MediaNexus/internal/platform/config"
 )
@@ -37,6 +38,10 @@ func (s *Server) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := s.auth.Registry.LookupAll(settings.KeyImportAutoCommitConfidence); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
 	if err := s.auth.Settings.SetImportAutoCommitConfidence(r.Context(), clock.NewSystem(), float64(body.AutoCommitConfidence)); err != nil {
 		var problems config.Problems
 		if errors.As(err, &problems) {

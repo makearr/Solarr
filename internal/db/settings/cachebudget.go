@@ -11,10 +11,10 @@ import (
 // ADR-60's cache budget keys, the same instance_setting shape auth.required
 // already uses.
 const (
-	keyCacheMaxBytes      = "cache.max_bytes"
-	keyCacheMaxAgeDays    = "cache.max_age_days"
-	keyCacheImagesShare   = "cache.namespace_share.images"
-	keyCacheMetadataShare = "cache.namespace_share.metadata"
+	KeyCacheMaxBytes      = "cache.max_bytes"
+	KeyCacheMaxAgeDays    = "cache.max_age_days"
+	KeyCacheImagesShare   = "cache.namespace_share.images"
+	KeyCacheMetadataShare = "cache.namespace_share.metadata"
 )
 
 // ADR-60's own shipped defaults.
@@ -39,10 +39,10 @@ type CacheBudget struct {
 // any key nothing has stored yet.
 func (s *Snapshot) CacheBudget() CacheBudget {
 	return CacheBudget{
-		MaxBytes:             s.policyInt(keyCacheMaxBytes, DefaultCacheMaxBytes),
-		MaxAgeDays:           s.policyInt(keyCacheMaxAgeDays, DefaultCacheMaxAgeDays),
-		ImagesSharePercent:   s.policyInt(keyCacheImagesShare, DefaultCacheImagesSharePercent),
-		MetadataSharePercent: s.policyInt(keyCacheMetadataShare, DefaultCacheMetadataSharePercent),
+		MaxBytes:             s.policyInt(KeyCacheMaxBytes, DefaultCacheMaxBytes),
+		MaxAgeDays:           s.policyInt(KeyCacheMaxAgeDays, DefaultCacheMaxAgeDays),
+		ImagesSharePercent:   s.policyInt(KeyCacheImagesShare, DefaultCacheImagesSharePercent),
+		MetadataSharePercent: s.policyInt(KeyCacheMetadataShare, DefaultCacheMetadataSharePercent),
 	}
 }
 
@@ -66,8 +66,8 @@ func (c *Cache) SetCacheBudget(ctx context.Context, cl clock.Clock, budget Cache
 		return problems
 	}
 	for key, value := range map[string]int64{
-		keyCacheMaxBytes: budget.MaxBytes, keyCacheMaxAgeDays: budget.MaxAgeDays,
-		keyCacheImagesShare: budget.ImagesSharePercent, keyCacheMetadataShare: budget.MetadataSharePercent,
+		KeyCacheMaxBytes: budget.MaxBytes, KeyCacheMaxAgeDays: budget.MaxAgeDays,
+		KeyCacheImagesShare: budget.ImagesSharePercent, KeyCacheMetadataShare: budget.MetadataSharePercent,
 	} {
 		if err := c.setPolicy(ctx, cl, key, strconv.FormatInt(value, 10)); err != nil {
 			return err

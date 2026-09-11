@@ -340,7 +340,7 @@ func TestListLibraryLevel_PersonEntityWithNoReaderAnswers503(t *testing.T) {
 func TestListLibraryLevel_PersonEntityDelegatesToLibraryArtistsReader(t *testing.T) {
 	navigation := fakeNavigation{"music": {{Key: "artists", Label: "Artists", Entity: model.LevelEntityPerson}}}
 	artists := &fakeLibraryArtistsReader{rows: []apiserver.ArtistRow{{ID: 5, Name: "Katupoken", SortName: "Katupoken"}}}
-	fixture := newWorksFixtureWithLibrarySizeNavigationAndArtists(t, nil, navigation, artists)
+	fixture := newWorksFixtureWithLibrarySizeNavigationAndArtists(t, nil, navigation, artists, nil)
 	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 100)
 	if err != nil {
 		t.Fatalf("CreateCategory: %v", err)

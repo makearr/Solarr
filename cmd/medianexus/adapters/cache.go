@@ -12,9 +12,10 @@ import (
 
 // CacheManager satisfies apiserver.CacheManager over cachebudget.Sweep and settings.Cache.
 type CacheManager struct {
-	Sweep *cachebudget.Sweep
-	Cache *settings.Cache
-	Clock clock.Clock
+	Sweep    *cachebudget.Sweep
+	Cache    *settings.Cache
+	Registry *settings.Registry
+	Clock    clock.Clock
 }
 
 func (a CacheManager) Report(_ context.Context) (apiserver.CacheReport, error) {
@@ -35,6 +36,11 @@ func (a CacheManager) Report(_ context.Context) (apiserver.CacheReport, error) {
 }
 
 func (a CacheManager) SetBudget(ctx context.Context, budget apiserver.CacheBudget) error {
+	if err := a.Registry.LookupAll(
+		settings.KeyCacheMaxBytes, settings.KeyCacheMaxAgeDays, settings.KeyCacheImagesShare, settings.KeyCacheMetadataShare,
+	); err != nil {
+		return err
+	}
 	return a.Cache.SetCacheBudget(ctx, a.Clock, settings.CacheBudget{
 		MaxBytes: budget.MaxBytes, MaxAgeDays: budget.MaxAgeDays,
 		ImagesSharePercent: budget.ImagesSharePercent, MetadataSharePercent: budget.MetadataSharePercent,

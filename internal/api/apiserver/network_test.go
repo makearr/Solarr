@@ -118,6 +118,25 @@ func TestUpdateNetworkSettings_RejectsAMalformedBody(t *testing.T) {
 	}
 }
 
+// ADR-26 (todo 4.14): "a setting not in the registry cannot be written."
+// An empty registry stands in for a write path that forgot to register its
+// own key -- this is the mutation the Registry.LookupAll check in
+// UpdateNetworkSettings guards against.
+func TestUpdateNetworkSettings_RefusesWhenNetworkKeysAreNotRegistered(t *testing.T) {
+	fixture := newWorksFixtureWithRegistry(t, settings.NewRegistry())
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	request := authedPatch(t, cookies, "/api/v1/network", `{"port":6000,"proxy_bypass":[],"allow_cidrs":[]}`)
+	recorder := fixture.do(request)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, body = %s, want 500", recorder.Code, recorder.Body)
+	}
+	if got := fixture.cache.Snapshot().NetworkSettings().Port; got != 0 {
+		t.Errorf("Port = %d, want unchanged (nothing should have been written)", got)
+	}
+}
+
 // ipAllowlist runs before routing, so it refuses even an unauthenticated route.
 func TestIPAllowlist_RefusesAnExcludedAddressEvenOnAnUnauthenticatedRoute(t *testing.T) {
 	fixture := newWorksFixture(t)

@@ -69,6 +69,10 @@ type process struct {
 	taskRegistry   *jobs.TaskRegistry
 	scheduleStates *jobs.ScheduleStates
 	taskRunners    map[string]*jobs.TaskRunner
+	// settingsRegistry is ADR-26's own registry of every scalar setting
+	// (todo 4.14), built once alongside cache -- write paths refuse a key
+	// this does not know about (settings.ErrSettingNotRegistered).
+	settingsRegistry *settings.Registry
 	// cacheSweep is ADR-60's own measure/enforce/clear (todo 4.19), built once
 	// in registerCacheJob and reused by the API adapter in startServer.
 	cacheSweep *cachebudget.Sweep
@@ -201,6 +205,7 @@ func (p *process) openDatabases(ctx context.Context) error {
 		return err
 	}
 	p.cache = cache
+	p.settingsRegistry = settings.NewDefaultRegistry()
 
 	// Equips the cache to seal/open an *Arr instance's own API key
 	// (todo 4.13): the same encryption key authConfig decodes for session
@@ -463,10 +468,12 @@ func (p *process) startServer(ctx context.Context) error {
 			Registry: p.taskRegistry, States: p.scheduleStates, Runners: p.taskRunners,
 			Cache: p.cache, Clock: clock.NewSystem(),
 		},
-		CacheManager: adapters.CacheManager{Sweep: p.cacheSweep, Cache: p.cache, Clock: clock.NewSystem()},
-		LibrarySize:  library.NewCounters(p.library),
-		Works:        adapters.Works{Works: library.NewWorks(p.library), Clock: clock.NewSystem()},
-		WorkDetail:   adapters.WorkDetail{Works: library.NewWorks(p.library)},
+		CacheManager: adapters.CacheManager{
+			Sweep: p.cacheSweep, Cache: p.cache, Registry: p.settingsRegistry, Clock: clock.NewSystem(),
+		},
+		LibrarySize: library.NewCounters(p.library),
+		Works:       adapters.Works{Works: library.NewWorks(p.library), Clock: clock.NewSystem()},
+		WorkDetail:  adapters.WorkDetail{Works: library.NewWorks(p.library)},
 		WorksMonitor: adapters.WorksMonitor{
 			Works: library.NewWorks(p.library), Desired: library.NewDesired(p.library),
 			Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
@@ -634,6 +641,7 @@ func (p *process) authConfig() (apiserver.AuthConfig, error) {
 		Mode:          apiserver.AuthMode(p.config.Security.AuthMode),
 		Sessions:      auth.NewSessions(key, wall, auth.DefaultSessionTTL),
 		Settings:      p.cache,
+		Registry:      p.settingsRegistry,
 		Clock:         wall,
 		ProxyHeader:   p.config.Security.TrustedProxyHeader,
 		ProxyNetworks: networks,
