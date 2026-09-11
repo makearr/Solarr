@@ -196,7 +196,8 @@ func splitByTags(files []File, tags TagReader) (groups [][]File, signals [][]Sig
 // splitByTrackContinuity is the one purely-structural splitter: track numbers
 // that restart (drop back down rather than keep climbing) mark a new group.
 // ok is false when fewer than two files carry a parseable track number, since
-// one data point proves nothing.
+// one data point proves nothing, and also when no number repeats anywhere in
+// the set -- see the duplicate gate below.
 //
 // Files are read in modification-time order, not filename order: two albums
 // dropped into one flat folder each keep their own 01, 02, 03... run in the
@@ -218,6 +219,7 @@ func splitByTrackContinuity(files []File) (groups [][]File, signals [][]Signal, 
 		}
 		return sorted[i].RelPath < sorted[j].RelPath
 	})
+	counts := map[int]int{}
 	for i, f := range sorted {
 		match := leadingTrackNumberRe.FindStringSubmatch(path.Base(f.RelPath))
 		if match == nil {
@@ -226,15 +228,27 @@ func splitByTrackContinuity(files []File) (groups [][]File, signals [][]Signal, 
 		}
 		n, _ := strconv.Atoi(match[1])
 		ordered[i] = numbered{file: f, number: n, has: true}
+		counts[n]++
 	}
 
 	numberedCount := 0
-	for _, o := range ordered {
-		if o.has {
-			numberedCount++
+	duplicate := false
+	for _, c := range counts {
+		numberedCount += c
+		if c > 1 {
+			duplicate = true
 		}
 	}
 	if numberedCount < 2 {
+		return nil, nil, false
+	}
+	// A real release's own track numbers are unique; mtime order is only a
+	// weak proxy for track order -- a segmented usenet/torrent download can
+	// finish files in any order regardless of track number -- so a "decrease"
+	// with no number actually repeated is mtime noise, not a second release.
+	// Confirmed live: a real, cleanly-tagged Vutu Doci album (unique 01-13,
+	// scrambled mtimes) split 6 ways on this alone before the gate.
+	if !duplicate {
 		return nil, nil, false
 	}
 
