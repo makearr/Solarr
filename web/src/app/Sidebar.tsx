@@ -1,11 +1,8 @@
-import { useState } from "react";
-
 import { Link, useParams, useRouterState, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   ArrowLeftRight,
-  Boxes,
   ChevronDown,
   ChevronRight,
   Download,
@@ -34,41 +31,26 @@ type LibraryEntry = components["schemas"]["Library"];
 const SECTIONS: readonly { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/unidentified", label: "Unidentified", icon: HelpCircle },
   { to: "/activity", label: "Activity", icon: Activity },
-  { to: "/settings", label: "Settings", icon: Settings },
 ];
 
-// Storage (todo 4.18): Import and Move & drain retire from the flat SECTIONS
-// list above in favour of this group. Root folders is new (the overview
-// screen that never existed); Download folders lands as its own follow-up
-// commit right after this one.
+// Storage (todo 4.18): Root folders, Move & drain, Download folders and the
+// general (category-undecided) Import entry point. Packs moved out
+// 2026-09-11 on the user's own word -- a pack is a fact about one library's
+// own works (ADR-50), not a storage concern; it now lives under each
+// library instead (LibraryNode's own CONFIG_SECTIONS-adjacent list below).
 const STORAGE_SECTIONS: readonly { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/storage/roots", label: "Root folders", icon: HardDrive },
   { to: "/storage/moves", label: "Move & drain", icon: ArrowLeftRight },
   { to: "/storage/downloads", label: "Download folders", icon: Download },
   { to: "/storage/import", label: "Import", icon: ScanSearch },
-  { to: "/storage/packs", label: "Packs", icon: Boxes },
 ];
 
-const EXPANDED_STORAGE_KEY = "medianexus.sidebar.expandedLibraries";
-
-function loadExpanded(): Set<number> {
-  try {
-    const raw = localStorage.getItem(EXPANDED_STORAGE_KEY);
-    if (!raw) return new Set();
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? new Set(parsed.filter((id) => typeof id === "number")) : new Set();
-  } catch {
-    return new Set();
-  }
-}
-
-function saveExpanded(ids: ReadonlySet<number>) {
-  try {
-    localStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify([...ids]));
-  } catch {
-    // A per-browser convenience; losing it costs nothing worth failing over.
-  }
-}
+const SETTINGS_SECTIONS: readonly { to: string; label: string }[] = [
+  { to: "/settings/general", label: "General" },
+  { to: "/settings/user", label: "User" },
+  { to: "/settings/scheduler", label: "Scheduler" },
+  { to: "/settings/cache", label: "Cache" },
+];
 
 /** Libraries sharing a media type are grouped once there is more than one of
  *  that type (ADR-54) -- encounter order preserved, the caller's own
@@ -94,6 +76,13 @@ export function defaultLevelKey(library: LibraryEntry): string | undefined {
   return library.levels.find((level) => level.key === "albums")?.key ?? library.levels[0]?.key;
 }
 
+/** Every section's own submenu stays collapsed until that section is where
+ *  the caller actually is -- the *Arr apps' own behaviour, asked for
+ *  explicitly 2026-09-11 after the sidebar showed every library's and every
+ *  section's children at once regardless of where the caller was. Purely
+ *  path-driven: no click-to-toggle state to fall out of sync with the
+ *  route, so following a deep link always opens the right branch and
+ *  nothing else. */
 export function Sidebar() {
   const path = useRouterState({ select: (state) => state.location.pathname });
   const routeParams = useParams({ strict: false }) as {
@@ -108,7 +97,6 @@ export function Sidebar() {
   // Section 21.8's 700-1100px row: icons only, no decision panel to make room
   // for yet (that lands with a persisted Decision, stage 4+).
   const collapsed = useSidebarCollapsed();
-  const [expanded, setExpanded] = useState<Set<number>>(loadExpanded);
 
   const libraries = useQuery({
     queryKey: ["libraries"],
@@ -119,22 +107,14 @@ export function Sidebar() {
     },
   });
 
-  const toggle = (id: number) => {
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      saveExpanded(next);
-      return next;
-    });
-  };
-
   const groups = groupByMediaType(libraries.data ?? []);
+  const storageOpen = path.startsWith("/storage");
+  const settingsOpen = path.startsWith("/settings");
 
   return (
     <nav
       aria-label="Sections"
-      className={`flex shrink-0 flex-col border-r border-border-subtle bg-surface ${
+      className={`flex shrink-0 flex-col overflow-y-auto border-r border-border-subtle bg-surface ${
         collapsed ? "w-14" : "w-48"
       }`}
     >
@@ -178,8 +158,6 @@ export function Sidebar() {
                       activeSection={routeParams.section}
                       activePath={path}
                       activeUnidentifiedCategoryId={path === "/unidentified" ? search.category_id : undefined}
-                      isExpanded={collapsed ? false : expanded.has(library.id) || routeParams.categoryId === String(library.id)}
-                      onToggle={() => toggle(library.id)}
                     />
                   ))}
                 </ul>
@@ -195,17 +173,37 @@ export function Sidebar() {
         </div>
       )}
       <ul className={`flex flex-col gap-0.5 px-2 ${collapsed ? "pt-4" : ""}`}>
-        {STORAGE_SECTIONS.map(({ to, label, icon: Icon }) => {
-          const active = path.startsWith(to);
-          return (
-            <li key={to}>
-              <Link to={to} title={collapsed ? label : undefined} className={sectionLinkClass(active, collapsed)}>
-                <Icon aria-hidden className="size-4 shrink-0" />
-                {!collapsed && label}
-              </Link>
-            </li>
-          );
-        })}
+        <li>
+          <Link
+            to="/storage/roots"
+            title={collapsed ? "Storage" : undefined}
+            className={sectionLinkClass(storageOpen, collapsed)}
+          >
+            <HardDrive aria-hidden className="size-4 shrink-0" />
+            {!collapsed && "Storage"}
+            {!collapsed &&
+              (storageOpen ? (
+                <ChevronDown aria-hidden className="ml-auto size-3.5" />
+              ) : (
+                <ChevronRight aria-hidden className="ml-auto size-3.5" />
+              ))}
+          </Link>
+        </li>
+        {!collapsed && storageOpen && (
+          <ul className="ml-5 flex flex-col gap-0.5 border-l border-border-subtle pl-2">
+            {STORAGE_SECTIONS.map(({ to, label, icon: Icon }) => {
+              const active = path.startsWith(to);
+              return (
+                <li key={to}>
+                  <Link to={to} className={sectionLinkClass(active, false)}>
+                    <Icon aria-hidden className="size-4 shrink-0" />
+                    {label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </ul>
 
       <ul className="flex flex-col gap-0.5 px-2 pt-4">
@@ -220,6 +218,33 @@ export function Sidebar() {
             </li>
           );
         })}
+        <li>
+          <Link
+            to="/settings/general"
+            title={collapsed ? "Settings" : undefined}
+            className={sectionLinkClass(settingsOpen, collapsed)}
+          >
+            <Settings aria-hidden className="size-4 shrink-0" />
+            {!collapsed && "Settings"}
+            {!collapsed &&
+              (settingsOpen ? (
+                <ChevronDown aria-hidden className="ml-auto size-3.5" />
+              ) : (
+                <ChevronRight aria-hidden className="ml-auto size-3.5" />
+              ))}
+          </Link>
+        </li>
+        {!collapsed && settingsOpen && (
+          <ul className="ml-5 flex flex-col gap-0.5 border-l border-border-subtle pl-2">
+            {SETTINGS_SECTIONS.map(({ to, label }) => (
+              <li key={to}>
+                <Link to={to} className={sectionLinkClass(path === to, false)}>
+                  <span className="truncate">{label}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </ul>
     </nav>
   );
@@ -244,8 +269,6 @@ function LibraryNode({
   activeSection,
   activePath,
   activeUnidentifiedCategoryId,
-  isExpanded,
-  onToggle,
 }: {
   library: LibraryEntry;
   collapsed: boolean;
@@ -254,25 +277,15 @@ function LibraryNode({
   activeSection: string | undefined;
   activePath: string;
   activeUnidentifiedCategoryId: string | undefined;
-  isExpanded: boolean;
-  onToggle: () => void;
 }) {
   const target = defaultLevelKey(library);
+  // Open purely because the caller is somewhere under this library -- no
+  // separate toggle state (this Sidebar's own doc comment).
+  const isOpen = isActive || activeUnidentifiedCategoryId === String(library.id);
 
   return (
     <li>
       <div className="flex items-center">
-        {!collapsed && (
-          <button
-            type="button"
-            aria-label={isExpanded ? `Collapse ${library.name}` : `Expand ${library.name}`}
-            onClick={onToggle}
-            className="p-1 text-ink-muted hover:text-ink focus-visible:outline-2
-                       focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-          </button>
-        )}
         {target ? (
           <Link
             to="/library/$categoryId/$level"
@@ -282,6 +295,12 @@ function LibraryNode({
           >
             <LibraryIcon aria-hidden className="size-4 shrink-0" />
             {!collapsed && <span className="truncate">{library.name}</span>}
+            {!collapsed &&
+              (isOpen ? (
+                <ChevronDown aria-hidden className="ml-auto size-3.5 shrink-0" />
+              ) : (
+                <ChevronRight aria-hidden className="ml-auto size-3.5 shrink-0" />
+              ))}
           </Link>
         ) : (
           <span className={sectionLinkClass(false, collapsed) + " flex-1 cursor-default"}>
@@ -291,8 +310,35 @@ function LibraryNode({
         )}
       </div>
 
-      {!collapsed && isExpanded && (library.levels.length > 0 || CONFIG_SECTIONS.length > 0) && (
+      {!collapsed && isOpen && (
         <ul className="ml-5 flex flex-col gap-0.5 border-l border-border-subtle pl-2">
+          <li>
+            <Link
+              to="/library/$categoryId/overview"
+              params={{ categoryId: String(library.id) }}
+              className={sectionLinkClass(isActive && activePath === `/library/${library.id}/overview`, false)}
+            >
+              <span className="truncate">Overview</span>
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/library/$categoryId/discover"
+              params={{ categoryId: String(library.id) }}
+              className={sectionLinkClass(isActive && activePath === `/library/${library.id}/discover`, false)}
+            >
+              <span className="truncate">Add new</span>
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/library/$categoryId/wanted"
+              params={{ categoryId: String(library.id) }}
+              className={sectionLinkClass(isActive && activePath === `/library/${library.id}/wanted`, false)}
+            >
+              <span className="truncate">Wanted</span>
+            </Link>
+          </li>
           {library.levels.map((level) => (
             <li key={level.key}>
               <Link
@@ -316,11 +362,29 @@ function LibraryNode({
           </li>
           <li>
             <Link
-              to="/library/$categoryId/discover"
+              to="/library/$categoryId/packs"
               params={{ categoryId: String(library.id) }}
-              className={sectionLinkClass(isActive && activePath === `/library/${library.id}/discover`, false)}
+              className={sectionLinkClass(isActive && activePath === `/library/${library.id}/packs`, false)}
             >
-              <span className="truncate">Discover</span>
+              <span className="truncate">Packs</span>
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/library/$categoryId/import"
+              params={{ categoryId: String(library.id) }}
+              className={sectionLinkClass(isActive && activePath === `/library/${library.id}/import`, false)}
+            >
+              <span className="truncate">Import</span>
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/library/$categoryId/activity"
+              params={{ categoryId: String(library.id) }}
+              className={sectionLinkClass(isActive && activePath === `/library/${library.id}/activity`, false)}
+            >
+              <span className="truncate">Activity</span>
             </Link>
           </li>
           {CONFIG_SECTIONS.map((section) =>

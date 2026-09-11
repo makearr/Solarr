@@ -1,12 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { HardDrive, Plus, X } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { MEDIA_TYPES } from "./Categories";
 
 type RootFolder = components["schemas"]["RootFolder"];
 type LibraryCategory = components["schemas"]["LibraryCategory"];
+type MediaType = components["schemas"]["MediaType"];
+
+const NEW_LIBRARY = "__new__";
 
 /** todo 4.18: the root folder overview screen that never existed --
  *  internal/jobs/capacity has computed used/free/total for every root since
@@ -122,7 +126,13 @@ export function RootFolders() {
         <p className="text-xs text-danger">That change was refused.</p>
       )}
 
-      <AddRootFolder onAdded={invalidate} />
+      <AddRootFolder
+        categories={categories.data ?? []}
+        onAdded={() => {
+          invalidate();
+          void queryClient.invalidateQueries({ queryKey: ["categories"] });
+        }}
+      />
     </div>
   );
 }
@@ -340,21 +350,72 @@ function AttachCategory({
   );
 }
 
-function AddRootFolder({ onAdded }: { onAdded: () => void }) {
+// A new root folder is useless until something attaches it to a category --
+// found live 2026-09-11 against a genuinely fresh instance (notes.md), fixed
+// first by adding the attach endpoint (previous commit) and now by folding
+// the attach step into this same form: a root folder is added *for* a
+// library, the way a folder in Sonarr/Radarr is added under a series/movie
+// root. "Library" doubles as "category" (ADR-54: a library is a category);
+// New library lets several libraries share one media_type (a Music library
+// and a separate Soundtracks library, say) rather than forcing one category
+// per media type.
+function AddRootFolder({
+  categories,
+  onAdded,
+}: {
+  categories: LibraryCategory[];
+  onAdded: () => void;
+}) {
   const [path, setPath] = useState("");
   const [label, setLabel] = useState("");
+  const [libraryChoice, setLibraryChoice] = useState<string>(NEW_LIBRARY);
+  const [libraryChoiceTouched, setLibraryChoiceTouched] = useState(false);
+  const [newLibraryName, setNewLibraryName] = useState("");
+  const [newLibraryMediaType, setNewLibraryMediaType] = useState<MediaType>("music");
+
+  // categories arrives asynchronously (its own useQuery, one render behind
+  // this form's first paint); once it does, default to the first real
+  // library instead of leaving "+ New library" selected under someone who
+  // already has libraries -- but only until they have touched the field
+  // themselves.
+  useEffect(() => {
+    if (!libraryChoiceTouched && categories[0]) setLibraryChoice(String(categories[0].id));
+  }, [categories, libraryChoiceTouched]);
 
   const create = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/rootfolders", { body: { path, label: label || undefined } });
-      if (error) throw error;
+      const { data: root, error: rootError } = await api.POST("/rootfolders", {
+        body: { path, label: label || undefined },
+      });
+      if (rootError) throw rootError;
+
+      let categoryId: number;
+      if (libraryChoice === NEW_LIBRARY) {
+        const { data: category, error: categoryError } = await api.POST("/categories", {
+          body: { name: newLibraryName, media_type: newLibraryMediaType },
+        });
+        if (categoryError) throw categoryError;
+        categoryId = category!.id;
+      } else {
+        categoryId = Number(libraryChoice);
+      }
+
+      const { error: attachError } = await api.POST("/categories/{id}/rootfolders", {
+        params: { path: { id: categoryId } },
+        body: { root_folder_id: root!.id },
+      });
+      if (attachError) throw attachError;
     },
     onSuccess: () => {
       setPath("");
       setLabel("");
+      setNewLibraryName("");
       onAdded();
     },
   });
+
+  const creatingNewLibrary = libraryChoice === NEW_LIBRARY;
+  const ready = path.trim() !== "" && (!creatingNewLibrary || newLibraryName.trim() !== "");
 
   return (
     <form
@@ -384,9 +445,55 @@ function AddRootFolder({ onAdded }: { onAdded: () => void }) {
           onChange={(event) => setLabel(event.target.value)}
         />
       </label>
+      <label className="flex min-w-40 flex-col gap-1 text-xs text-ink-muted">
+        Library
+        <select
+          className={inputStyle}
+          value={libraryChoice}
+          onChange={(event) => {
+            setLibraryChoiceTouched(true);
+            setLibraryChoice(event.target.value);
+          }}
+        >
+          {categories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name} ({category.media_type})
+            </option>
+          ))}
+          <option value={NEW_LIBRARY}>+ New library…</option>
+        </select>
+      </label>
+      {creatingNewLibrary && (
+        <>
+          <label className="flex min-w-32 flex-col gap-1 text-xs text-ink-muted">
+            Library name
+            <input
+              className={inputStyle}
+              value={newLibraryName}
+              placeholder="Music"
+              autoComplete="off"
+              onChange={(event) => setNewLibraryName(event.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+            Media type
+            <select
+              className={inputStyle}
+              value={newLibraryMediaType}
+              onChange={(event) => setNewLibraryMediaType(event.target.value as MediaType)}
+            >
+              {MEDIA_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
       <button
         type="submit"
-        disabled={!path.trim() || create.isPending}
+        disabled={!ready || create.isPending}
         className="flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink
                    disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2
                    focus-visible:outline-accent"
@@ -396,7 +503,8 @@ function AddRootFolder({ onAdded }: { onAdded: () => void }) {
       </button>
       {create.isError && (
         <p className="w-full text-xs text-danger">
-          That path could not be used -- check it exists and is mounted inside the container.
+          That could not be added -- check the path exists and is mounted inside the container,
+          and the library name is not empty.
         </p>
       )}
     </form>

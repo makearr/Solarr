@@ -7,6 +7,21 @@ import type { components } from "@/api/schema";
 
 type CacheReport = components["schemas"]["CacheReport"];
 
+/** The Cache settings page: CacheSettings' own section, given its own page
+ *  2026-09-11 (split out of one long Settings scroll). */
+export function CacheSettingsPage() {
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
+        <header className="flex flex-col gap-1">
+          <h1 className="text-base font-semibold">Cache</h1>
+        </header>
+        <CacheSettings />
+      </div>
+    </div>
+  );
+}
+
 /** todo 4.19, ADR-60: the cache is bounded by size and age, and reports its
  *  own size -- current size per namespace with when it was measured, both
  *  budgets, and a manual clear that is always safe (Invariant 5). */

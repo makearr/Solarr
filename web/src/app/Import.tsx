@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, Undo2 } from "lucide-react";
 
@@ -159,9 +160,15 @@ function ThresholdControl() {
 
 function InspectForm() {
   const queryClient = useQueryClient();
+  // Opened from a library's own sidebar (/library/$categoryId/import): the
+  // category is already known, so the form starts on it rather than making
+  // the caller pick what they just navigated from.
+  const { categoryId: routeCategoryId } = useParams({ strict: false }) as { categoryId?: string };
   const [sourcePath, setSourcePath] = useState("");
   const [origin, setOrigin] = useState<ImportOrigin>("manual");
-  const [categoryId, setCategoryId] = useState<number | "">("");
+  const [categoryId, setCategoryId] = useState<number | "">(
+    routeCategoryId ? Number(routeCategoryId) : "",
+  );
   const categories = useCategories();
 
   const inspect = useMutation({

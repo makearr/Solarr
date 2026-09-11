@@ -8,7 +8,7 @@ import type { components } from "@/api/schema";
 type Category = components["schemas"]["LibraryCategory"];
 type MediaType = components["schemas"]["MediaType"];
 
-const MEDIA_TYPES: readonly MediaType[] = [
+export const MEDIA_TYPES: readonly MediaType[] = [
   "music", "tv", "movie", "audiobook", "book", "adult", "comic", "rom",
   "podcast", "news", "youtube",
 ];

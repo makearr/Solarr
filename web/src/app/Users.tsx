@@ -1,12 +1,125 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
+import { useAuthPolicy, useSetAuthRequired } from "@/lib/useAuthPolicy";
 import type { components } from "@/api/schema";
 
 type UserAccount = components["schemas"]["UserAccount"];
 type Role = components["schemas"]["Role"];
+
+/** The User settings page: who can sign in (Access) and the accounts
+ *  themselves. Split out of one long Settings scroll 2026-09-11. */
+export function UserSettings() {
+  const me = useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/me");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
+        <header className="flex flex-col gap-1">
+          <h1 className="text-base font-semibold">User</h1>
+        </header>
+
+        <AccessSection />
+
+        {me.data && <Users currentUserId={me.data.user_id} />}
+      </div>
+    </div>
+  );
+}
+
+/** The login requirement. Kept at the top of User settings because it is the
+ *  one setting that changes who everything else is answered as. */
+function AccessSection() {
+  const policy = useAuthPolicy();
+  const change = useSetAuthRequired();
+  const [password, setPassword] = useState("");
+
+  if (!policy.data) return null;
+  const required = policy.data.auth_required;
+  // Turning a login back on has to set a password in the same step when no
+  // account has one, or the interface locks itself out.
+  const needsPassword = !required && !policy.data.can_sign_in;
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Access</h2>
+      <div
+        className={`flex flex-col gap-3 rounded-lg border bg-surface p-3 ${
+          required ? "border-border-subtle" : "border-warn"
+        }`}
+      >
+        <div className="flex items-start gap-2.5">
+          {required ? (
+            <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-ok" />
+          ) : (
+            <ShieldAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warn" />
+          )}
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium">
+              {required ? "A login is required" : "No login is required"}
+            </span>
+            <span className="text-xs text-ink-muted">
+              {required
+                ? `Callers authenticate by ${policy.data.configured_mode}, set in config.yml.`
+                : "Every request is served as the administrator. Only appropriate where " +
+                  "something else already controls who can reach the port."}
+            </span>
+          </div>
+        </div>
+
+        {needsPassword && (
+          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+            Password for{" "}
+            <span className="font-mono text-ink">{policy.data.administrator ?? "the administrator"}</span>
+            <input
+              type="password"
+              value={password}
+              autoComplete="new-password"
+              onChange={(event) => setPassword(event.target.value)}
+              className="rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm
+                         text-ink focus-visible:outline-2 focus-visible:outline-offset-2
+                         focus-visible:outline-accent"
+            />
+          </label>
+        )}
+
+        {change.isError && (
+          <p className="text-xs text-danger">That could not be saved.</p>
+        )}
+
+        <button
+          type="button"
+          onClick={() =>
+            change.mutate({
+              authRequired: !required,
+              password: needsPassword ? password : undefined,
+            })
+          }
+          disabled={change.isPending || (needsPassword && password === "")}
+          className="self-start rounded-md border border-border-subtle px-2.5 py-1 text-xs
+                     text-ink-muted hover:text-ink disabled:opacity-50
+                     focus-visible:outline-2 focus-visible:outline-offset-2
+                     focus-visible:outline-accent"
+        >
+          {change.isPending
+            ? "Saving…"
+            : required
+              ? "Stop requiring a login"
+              : "Require a login"}
+        </button>
+      </div>
+    </section>
+  );
+}
 
 const ROLES: readonly { id: Role; label: string; blurb: string }[] = [
   { id: "admin", label: "Administrator", blurb: "Changes settings, indexers and downloaders." },

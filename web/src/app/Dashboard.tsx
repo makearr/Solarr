@@ -1,20 +1,33 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { Library as LibraryIcon } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { defaultLevelKey } from "./Sidebar";
 
 type RootFolder = components["schemas"]["RootFolder"];
+type LibraryEntry = components["schemas"]["Library"];
 
-/** The landing page. Configured storage and work in flight, because "is this
- *  thing set up and is it doing anything" is what someone opens it to learn.
- *  One request: section 21.12 wants these figures precomputed, not aggregated
- *  live, and three round trips on the first screen reads as slow. */
+/** The landing page -- the *Arr apps' own default view, asked for
+ *  2026-09-11: libraries first, not a cross-library stats screen. Configured
+ *  storage and work in flight stay below, because "is this thing set up and
+ *  is it doing anything" still matters -- just second to "what's in it".
+ *  One request each: section 21.12 wants these figures precomputed, not
+ *  aggregated live. */
 export function Dashboard() {
   const summary = useQuery({
     queryKey: ["dashboard"],
     queryFn: async () => {
       const { data, error } = await api.GET("/dashboard");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const libraries = useQuery({
+    queryKey: ["libraries"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/libraries");
       if (error) throw error;
       return data;
     },
@@ -32,24 +45,20 @@ export function Dashboard() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-        <Section title="Library">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            <Tile label="Works" value={library.works} to="/library" />
-            <Tile label="Files" value={library.files} to="/library" />
-            <Tile label="Monitored" value={library.monitored} to="/library" />
-            <Tile label="Missing" value={library.missing} to="/library" tone="warn" />
-            <Tile
-              label="Fresh"
-              value={library.fresh}
-              to="/library"
-              search={{ fresh: "1" }}
-              tone="accent"
-            />
-          </div>
-          {library.works === 0 && (
+        <Section title="Libraries">
+          {libraries.data && libraries.data.length > 0 ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {libraries.data.map((entry) => (
+                <LibraryCard key={entry.id} library={entry} />
+              ))}
+            </div>
+          ) : (
             <Note>
-              Nothing has been imported yet. Counts come from the counter table, so they stay
-              instant whatever the library size.
+              No library yet.{" "}
+              <Link to="/storage/roots" className="text-accent underline underline-offset-2">
+                Add a root folder
+              </Link>{" "}
+              and a category to create one.
             </Note>
           )}
         </Section>
@@ -107,6 +116,29 @@ export function Dashboard() {
         </Section>
       </div>
     </div>
+  );
+}
+
+function LibraryCard({ library }: { library: LibraryEntry }) {
+  const target = defaultLevelKey(library);
+  const primaryLevel = library.levels[0];
+  return (
+    <Link
+      to={target ? "/library/$categoryId/$level" : "/library/$categoryId/overview"}
+      params={{ categoryId: String(library.id), level: target ?? "" }}
+      className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3
+                 hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2
+                 focus-visible:outline-accent"
+    >
+      <span className="flex items-center gap-2">
+        <LibraryIcon aria-hidden className="size-4 shrink-0 text-ink-muted" />
+        <span className="truncate font-medium">{library.name}</span>
+      </span>
+      <span className="text-xs text-ink-muted">
+        {library.media_type}
+        {primaryLevel?.count != null && ` · ${primaryLevel.count.toLocaleString()} ${primaryLevel.label.toLowerCase()}`}
+      </span>
+    </Link>
   );
 }
 

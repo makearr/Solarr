@@ -15,18 +15,23 @@ import { Discover } from "./Discover";
 import { DownloadFolders } from "./DownloadFolders";
 import { Import } from "./Import";
 import { ImportLists } from "./ImportLists";
+import { CacheSettingsPage } from "./CacheSettings";
 import { Library } from "./Library";
 import { LibraryConfigPlaceholder } from "./LibraryConfigPlaceholder";
 import { LibraryLevelList } from "./LibraryLevelList";
 import { Moves } from "./Moves";
+import { Overview } from "./Overview";
 import { Packs } from "./Packs";
 import { People } from "./People";
 import { PersonDetail } from "./PersonDetail";
 import { RootFolders } from "./RootFolders";
-import { Settings } from "./Settings";
+import { GeneralSettings } from "./Settings";
+import { SchedulerPage } from "./Scheduler";
 import { Shell } from "./Shell";
 import { defaultLevelKey } from "./Sidebar";
 import { Unidentified } from "./Unidentified";
+import { UserSettings } from "./Users";
+import { Wanted } from "./Wanted";
 import { WorkDetail } from "./WorkDetail";
 
 const rootRoute = createRootRoute({
@@ -76,9 +81,19 @@ const routes = [
     path: "/library/$categoryId/config/$section",
     component: LibraryConfigPlaceholder,
   }),
-  // Registered ahead of the $level catch-all below, or "discover" would
-  // resolve as an (invalid) level key instead of this screen.
+  // Registered ahead of the $level catch-all below, or these would each
+  // resolve as an (invalid) level key instead of their own screen.
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/discover", component: Discover }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/overview", component: Overview }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/wanted", component: Wanted }),
+  // Packs moved here from Storage 2026-09-11 (a pack is one library's own
+  // provenance fact, ADR-50, not a storage concern) -- still the same
+  // global /packs data underneath (no category_id on pack itself, only on
+  // its own session, which can be null), so every library's Packs page
+  // shows every pack today. Narrowing this is a real follow-up, not done here.
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/packs", component: Packs }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/import", component: Import }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/activity", component: Activity }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/$level", component: LibraryLevelList }),
   createRoute({ getParentRoute: () => rootRoute, path: "/works/$id", component: WorkDetail }),
   createRoute({ getParentRoute: () => rootRoute, path: "/people", component: People }),
@@ -91,7 +106,19 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/moves", component: Moves }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/downloads", component: DownloadFolders }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/import", component: Import }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/storage/packs", component: Packs }),
+  // Packs moved to each library 2026-09-11; redirected rather than 404ing,
+  // same as /import and /moves below.
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/storage/packs",
+    beforeLoad: async () => {
+      const { data } = await api.GET("/libraries");
+      const first = data?.[0];
+      throw redirect(
+        first ? { to: "/library/$categoryId/packs", params: { categoryId: String(first.id) } } : { to: "/" },
+      );
+    },
+  }),
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/import",
@@ -107,7 +134,20 @@ const routes = [
     },
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity", component: Activity }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: Settings }),
+  // Settings split into General/User/Scheduler/Cache 2026-09-11 (asked for
+  // twice before this) -- /settings itself now just redirects to the first
+  // of the four, the same courtesy the old flat /library got.
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/settings",
+    beforeLoad: () => {
+      throw redirect({ to: "/settings/general" });
+    },
+  }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/general", component: GeneralSettings }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/user", component: UserSettings }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/scheduler", component: SchedulerPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/cache", component: CacheSettingsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/arr", component: ArrImport }),
 ];
 
