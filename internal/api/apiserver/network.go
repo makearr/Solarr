@@ -93,6 +93,16 @@ func (s *Server) networkSettingsView() gen.NetworkSettings {
 	if stored.ProxyURL != "" {
 		view.ProxyUrl = &stored.ProxyURL
 	}
+	// A fresh instance has never written these; nil serialises to JSON null,
+	// which crashed the Network screen's own network.proxy_bypass.join(...)
+	// (found live against a genuinely fresh install, never hit before since
+	// every prior test instance already had these set from earlier use).
+	if view.ProxyBypass == nil {
+		view.ProxyBypass = []string{}
+	}
+	if view.AllowCidrs == nil {
+		view.AllowCidrs = []string{}
+	}
 	return view
 }
 
