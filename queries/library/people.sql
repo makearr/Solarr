@@ -209,6 +209,16 @@ SELECT id, subject_type, subject_id, media_types_json, roles_json, category_id,
        profile_id, filters_json, monitor_back_catalogue, enabled, user_id, created_at
 FROM subscription WHERE enabled = 1 ORDER BY id;
 
+-- Subscribe's own idempotency check (Invariant 80): the UNIQUE(subject_type,
+-- subject_id, user_id) constraint means a second Subscribe call for the same
+-- person and user must look before it inserts, not rely on the constraint to
+-- refuse -- "user_id IS ?" matches SQLite's own NULL semantics for a global
+-- (no per-user) subscription.
+-- name: GetSubscriptionForSubject :one
+SELECT id, subject_type, subject_id, media_types_json, roles_json, category_id,
+       profile_id, filters_json, monitor_back_catalogue, enabled, user_id, created_at
+FROM subscription WHERE subject_type = ? AND subject_id = ? AND user_id IS ?;
+
 -- name: DeleteSubscription :exec
 DELETE FROM subscription WHERE id = ?;
 

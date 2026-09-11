@@ -203,6 +203,12 @@ type Querier interface {
 	// Per-root sweep progress (section 10.4). Column lists follow table order, or sqlc
 	// stops reusing models.
 	GetScanState(ctx context.Context, rootFolderID int64) (ScanState, error)
+	// Subscribe's own idempotency check (Invariant 80): the UNIQUE(subject_type,
+	// subject_id, user_id) constraint means a second Subscribe call for the same
+	// person and user must look before it inserts, not rely on the constraint to
+	// refuse -- "user_id IS ?" matches SQLite's own NULL semantics for a global
+	// (no per-user) subscription.
+	GetSubscriptionForSubject(ctx context.Context, arg GetSubscriptionForSubjectParams) (Subscription, error)
 	GetTagBySlug(ctx context.Context, slug string) (Tag, error)
 	// One entry, for the manual resolve action -- confirming a candidate needs the
 	// file's own root_folder_id (to link work_root_folder), which the ranked

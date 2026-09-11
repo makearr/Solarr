@@ -283,6 +283,13 @@ type SubscriptionRequest struct {
 // of studio". CategoryID and ProfileID are deliberately left unset: both are
 // acquisition-planner concerns (which category's profile decides what to
 // grab), and there is no acquisition planner for music yet.
+//
+// Idempotent on (person, user): a second call for the same pair returns the
+// existing subscription's id rather than erroring on the UNIQUE(subject_type,
+// subject_id, user_id) constraint or creating a duplicate -- Invariant 80,
+// the same "existing facts never overwritten" shape ResolvePerson's own doc
+// comment already states for a person. Found needed live: SubscribePerson's
+// own API handler had no other guard against a double-subscribe before this.
 func (p People) Subscribe(
 	ctx context.Context, at time.Time, personID, userID int64, request SubscriptionRequest,
 ) (int64, error) {
@@ -298,6 +305,7 @@ func (p People) Subscribe(
 		}
 		rolesJSON = sql.NullString{String: string(encoded), Valid: true}
 	}
+	subscriptionUserID := sql.NullInt64{Int64: userID, Valid: userID != 0}
 
 	var subscriptionID int64
 	err = p.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
@@ -309,6 +317,15 @@ func (p People) Subscribe(
 		if _, err := queries.GetPerson(ctx, personID); err != nil {
 			return err
 		}
+		if existing, err := queries.GetSubscriptionForSubject(ctx, librarydb.GetSubscriptionForSubjectParams{
+			SubjectType: "person", SubjectID: personID, UserID: subscriptionUserID,
+		}); err == nil {
+			subscriptionID = existing.ID
+			return nil
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("look up existing subscription: %w", err)
+		}
+
 		monitorBackCatalogue := int64(0)
 		if request.MonitorBackCatalogue {
 			monitorBackCatalogue = 1
@@ -317,7 +334,7 @@ func (p People) Subscribe(
 			SubjectType: "person", SubjectID: personID,
 			MediaTypesJson: string(mediaTypesJSON), RolesJson: rolesJSON,
 			MonitorBackCatalogue: monitorBackCatalogue, Enabled: 1,
-			UserID: sql.NullInt64{Int64: userID, Valid: userID != 0}, CreatedAt: at.Unix(),
+			UserID: subscriptionUserID, CreatedAt: at.Unix(),
 		})
 		if err != nil {
 			return fmt.Errorf("create subscription: %w", err)

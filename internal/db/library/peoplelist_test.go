@@ -224,3 +224,44 @@ func TestSubscribe_MarksThePersonMonitored(t *testing.T) {
 		t.Error("Monitored = false after Subscribe, want true (ADR-32: subscribing monitors them)")
 	}
 }
+
+// A second Subscribe for the same person and user must return the existing
+// subscription, not error on the UNIQUE(subject_type, subject_id, user_id)
+// constraint or create a duplicate row (Invariant 80) -- found needed live
+// while wiring the Lidarr importer's own re-run: a re-import subscribing an
+// artist a second time must be a no-op, the same idempotent shape
+// ResolvePerson and Desired.EnsureAlbumItem already have.
+func TestSubscribe_SecondCallForTheSamePersonIsIdempotent(t *testing.T) {
+	opened, queries := newLibrary(t)
+	people := library.NewPeople(opened)
+	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci", "Bush, Vutu")
+
+	first, err := people.Subscribe(t.Context(), firstSeen, personID, 1,
+		library.SubscriptionRequest{MediaTypes: []string{"music"}, Roles: []string{"artist"}})
+	if err != nil {
+		t.Fatalf("first Subscribe: %v", err)
+	}
+
+	second, err := people.Subscribe(t.Context(), firstSeen, personID, 1,
+		library.SubscriptionRequest{MediaTypes: []string{"music"}, Roles: []string{"artist"}})
+	if err != nil {
+		t.Fatalf("second Subscribe: %v", err)
+	}
+	if second != first {
+		t.Errorf("second Subscribe returned id %d, want the same id %d as the first", second, first)
+	}
+
+	rows, err := queries.ListEnabledSubscriptions(t.Context())
+	if err != nil {
+		t.Fatalf("ListEnabledSubscriptions: %v", err)
+	}
+	count := 0
+	for _, row := range rows {
+		if row.SubjectType == "person" && row.SubjectID == personID {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("subscription rows for person %d = %d, want exactly 1", personID, count)
+	}
+}
