@@ -128,6 +128,30 @@ func TestRun_TwoUnrelatedAlbumsFlatWithNoTagsSplitByTrackContinuity(t *testing.T
 	}
 }
 
+// Hard case 2b: one real album, unique track numbers, but mtimes scrambled
+// relative to track order (a segmented download finishing files out of
+// order) -- must not split. Regression for the real Vutu Doci fixture that
+// split 6 ways on mtime noise alone before the duplicate gate.
+func TestRun_OneAlbumUniqueTrackNumbersScrambledMtimeDoesNotSplit(t *testing.T) {
+	tr := newTree(t,
+		"album/03-track.flac", "album/01-track.flac", "album/05-track.flac",
+		"album/02-track.flac", "album/04-track.flac",
+	)
+	session, err := inspect.Run(t.Context(), tr.fsys, root, inspect.Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(session.Units) != 1 {
+		t.Fatalf("got %d units, want 1: %+v", len(session.Units), session.Units)
+	}
+	if len(session.Units[0].Media) != 5 {
+		t.Errorf("got %d media files, want 5", len(session.Units[0].Media))
+	}
+	if session.Units[0].Evidence.Ambiguous {
+		t.Error("want no ambiguous split -- there was none")
+	}
+}
+
 // The same two-albums-in-one-directory case, but with embedded release ids
 // disagreeing -- the decisive signal, so no ambiguity this time.
 func TestRun_TwoUnrelatedAlbumsFlatWithDisagreeingTagsSplitDecisively(t *testing.T) {
