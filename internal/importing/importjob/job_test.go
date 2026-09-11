@@ -25,10 +25,14 @@ import (
 const root = "/downloads/incoming"
 const releaseGroupMBID = "2a6bec3f-b635-464a-8072-f462e388ab05"
 
-// fixedPolicy answers a constant commit threshold.
+// fixedPolicy answers a constant commit threshold and never refuses anything
+// by exclusion pattern -- the tests exercising ADR-53's own gate use their
+// own fake (see poisoningPolicy below).
 type fixedPolicy float64
 
 func (p fixedPolicy) ImportAutoCommitConfidence() float64 { return float64(p) }
+
+func (p fixedPolicy) RefusedByExclusion(string, string, *int64) (string, bool) { return "", false }
 
 // pathTagTool answers ReadTags from a fixed table keyed by absolute path,
 // carrying an error for any path listed in errPaths. failBatchOnce, when set,
@@ -212,6 +216,70 @@ func TestJob_IdentifiesAndCommitsAConfidentUnit(t *testing.T) {
 	}
 	if units[0].Shape != library.UnitSet {
 		t.Errorf("Shape = %q, want %q", units[0].Shape, library.UnitSet)
+	}
+}
+
+// poisoningPolicy refuses one exact file name -- ADR-53's own refuse action,
+// stood in for a real settings.MatchExclusion lookup the way fixedPolicy
+// stands in for a real commit threshold.
+type poisoningPolicy struct {
+	fixedPolicy
+	refuseName string
+}
+
+func (p poisoningPolicy) RefusedByExclusion(name, _ string, _ *int64) (string, bool) {
+	if name == p.refuseName {
+		return "*.exe", true
+	}
+	return "", false
+}
+
+// ADR-53/todo 4.15: an executable beside real audio poisons the whole unit --
+// even though "virus.exe" itself never classifies as media (it lands in
+// inspect.Unit.Other, not Media), the unit's own two real tracks must still
+// be refused, not committed with the executable quietly ignored. Confident
+// embedded MBIDs on both tracks prove the override actually happens: without
+// it, this exact fixture would otherwise clear the commit threshold (see
+// TestJob_IdentifiesAndCommitsAConfidentUnit's own identical tags).
+func TestJob_PoisonsAUnitCarryingARefusedFile(t *testing.T) {
+	fx := newFixture(t, "Artist/Album/01.flac", "Artist/Album/02.flac", "Artist/Album/virus.exe")
+	fx.tool.byPath[filepath.Join(root, "Artist/Album/01.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+	fx.tool.byPath[filepath.Join(root, "Artist/Album/02.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+
+	job := importjob.NewJob(importjob.Config{
+		FS: fx.fsys, Sessions: library.NewImportSessions(fx.store), Policy: poisoningPolicy{refuseName: "virus.exe"},
+		Tool: fx.tool, Packs: library.NewPacks(fx.store), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+	})
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	sessions := fx.sessions()
+	list, err := sessions.List(t.Context(), library.ImportDone)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("got %d done sessions, want 1", len(list))
+	}
+	if list[0].UnitsCommitted != 0 {
+		t.Errorf("UnitsCommitted = %d, want 0", list[0].UnitsCommitted)
+	}
+
+	units, err := sessions.ListUnits(t.Context(), list[0].ID)
+	if err != nil {
+		t.Fatalf("ListUnits: %v", err)
+	}
+	if len(units) != 1 || units[0].Decision != library.UnitSkip {
+		t.Fatalf("units = %+v, want one SKIP", units)
+	}
+	if !strings.HasPrefix(units[0].Reason, "BLOCKED_PATTERN") {
+		t.Errorf("Reason = %q, want a BLOCKED_PATTERN prefix", units[0].Reason)
+	}
+	if !strings.Contains(units[0].Reason, "virus.exe") {
+		t.Errorf("Reason = %q, want it to name the refused file", units[0].Reason)
 	}
 }
 

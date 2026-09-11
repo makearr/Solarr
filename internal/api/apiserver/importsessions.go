@@ -79,6 +79,12 @@ var ErrImportUnitChanged = errors.New("apiserver: import unit's own files no lon
 // name bug was, fixed the same session.
 var ErrNoPlacement = errors.New("apiserver: no writable root folder to place this unit under")
 
+// ErrBlockedContent is CommitImportUnit's refusal when a unit's own hash
+// matches blocked_content (ADR-53 part 2, todo 4.15) -- music.ErrBlockedContent
+// at this package's own boundary, the same translation ErrNoPlacement's own
+// doc comment describes.
+var ErrBlockedContent = errors.New("apiserver: this content is blocked and cannot be committed")
+
 // ImportRevertResult is what one session's revert actually did.
 type ImportRevertResult struct {
 	UnitsReverted, WorksDeleted, EditionsDeleted int64
@@ -487,6 +493,9 @@ func (s *Server) CommitImportUnit(w http.ResponseWriter, r *http.Request, id, un
 	case errors.Is(err, ErrNoPlacement):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
 			"No writable root", "this unit's own category has no writable root folder to place it under")
+	case errors.Is(err, ErrBlockedContent):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Blocked", "this content is blocked and cannot be committed")
 	case err != nil:
 		writeError(w, s.logger, err)
 	default:

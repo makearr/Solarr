@@ -45,6 +45,17 @@ func (c ImportPolicy) ImportAutoCommitConfidence() float64 {
 	return c.Cache.Snapshot().ImportAutoCommitConfidence()
 }
 
+// RefusedByExclusion implements importjob.Policy's own ADR-53 gate (todo
+// 4.15) over settings.MatchExclusion -- an ignore-action match is never
+// reported found, since only a refuse action poisons a unit.
+func (c ImportPolicy) RefusedByExclusion(name, mediaType string, categoryID *int64) (string, bool) {
+	action, matched, ok := settings.MatchExclusion(c.Cache.Snapshot().ExclusionPatterns(), name, mediaType, categoryID)
+	if !ok || action != settings.ExclusionRefuse {
+		return "", false
+	}
+	return matched.Pattern, true
+}
+
 // MoverRoots adapts Roots to moverjob.RootFolders -- same settings snapshot,
 // just the path and filesystem id Apply needs rather than scan's own policy fields.
 type MoverRoots struct{ Roots Roots }

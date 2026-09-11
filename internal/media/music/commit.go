@@ -60,8 +60,17 @@ type Committer struct {
 	identity         library.Identity
 	desired          *library.Desired
 	categories       Categories
+	blockedContent   BlockedContent
 	clock            clock.Clock
 	defaultProfileID int64
+}
+
+// BlockedContent is the ADR-53 part 2 check CommitUnit's import gate needs
+// (todo 4.15) -- library.BlockedContentStore's own shape, narrowed to an
+// interface so a test can fake it without a real library.db the way
+// Committer already does for Physical/Identity's own real dependencies.
+type BlockedContent interface {
+	FindByHash(ctx context.Context, oshash, quickHash string, now int64) ([]library.BlockedContent, error)
 }
 
 // CommitterConfig is what a Committer needs. Every field is required except
@@ -75,6 +84,7 @@ type CommitterConfig struct {
 	Identity         library.Identity
 	Desired          *library.Desired
 	Categories       Categories
+	BlockedContent   BlockedContent
 	Clock            clock.Clock
 	DefaultProfileID int64
 }
@@ -83,7 +93,8 @@ type CommitterConfig struct {
 func NewCommitter(config CommitterConfig) Committer {
 	return Committer{
 		fsys: config.FS, roots: config.Roots, affinity: config.Affinity, physical: config.Physical,
-		identity: config.Identity, desired: config.Desired, categories: config.Categories, clock: config.Clock,
+		identity: config.Identity, desired: config.Desired, categories: config.Categories,
+		blockedContent: config.BlockedContent, clock: config.Clock,
 		defaultProfileID: config.DefaultProfileID,
 	}
 }
@@ -106,6 +117,13 @@ type Placed struct {
 // (import_unit.work_id still NULL) for a later retry, the same as any other
 // DEFER (section 11.7).
 var ErrNoPlacement = errors.New("music: no root folder available to place this unit")
+
+// ErrBlockedContent means one of unit.Media's own quick hashes matched
+// blocked_content (ADR-53 part 2, todo 4.15's import gate): the message
+// itself carries model.ReasonBlockedContent as a matchable prefix, so a
+// caller distinguishing this from ErrNoPlacement can also record the
+// block's own reason directly, without re-deriving it.
+var ErrBlockedContent = errors.New(model.ReasonBlockedContent)
 
 // errNoExternalID means best carries no ExternalID at all -- today's own
 // identifiers (MBIDIdentifier, SearchIdentifier) never produce that (see
@@ -132,6 +150,38 @@ func (c Committer) CommitUnit(
 	var totalBytes int64
 	for _, f := range unit.Media {
 		totalBytes += f.SizeBytes
+	}
+
+	// ADR-53 part 2's own gate (todo 4.15): hashed from the source, before
+	// any file reaches the library -- "nothing about a blocked file reaches
+	// the library" only holds if the check runs before mover.PlaceOne, not
+	// after. Every file's hash is computed and checked before any of them
+	// are placed, so a block on file 2 of 3 never leaves file 1 already
+	// copied in (ADR-53: "unit contains a refuse pattern -> whole unit
+	// refused", the same all-or-nothing shape the exclusion-pattern gate
+	// gives at DECIDE time). quickHashes is reused below instead of hashing
+	// the destination a second time -- source and destination bytes are
+	// identical after placement (ADR-11: reflink/hardlink/copy, never a
+	// transform).
+	quickHashes := make([]string, len(unit.Media))
+	for index, media := range unit.Media {
+		hash, err := library.QuickHash(c.fsys, path.Join(sourceRoot, media.RelPath), media.SizeBytes)
+		if err != nil {
+			return Placed{}, fmt.Errorf("music: quick hash %q: %w", media.RelPath, err)
+		}
+		quickHashes[index] = hash
+	}
+	if c.blockedContent != nil {
+		now := c.clock.Now().Unix()
+		for index, hash := range quickHashes {
+			blocks, err := c.blockedContent.FindByHash(ctx, "", hash, now)
+			if err != nil {
+				return Placed{}, fmt.Errorf("music: check blocked content for unit %q: %w", unit.Directory, err)
+			}
+			if len(blocks) > 0 {
+				return Placed{}, fmt.Errorf("%w: %s matched %s", ErrBlockedContent, blocks[0].Reason, unit.Media[index].RelPath)
+			}
+		}
 	}
 
 	representative, err := tags.TagsFor(ctx, model.FileRef{RelPath: unit.Media[0].RelPath})
@@ -193,12 +243,8 @@ func (c Committer) CommitUnit(
 		if _, err := mover.PlaceOne(c.fsys, sourceAbs, destAbs, media.SizeBytes); err != nil {
 			return Placed{}, fmt.Errorf("music: place %q: %w", media.RelPath, err)
 		}
-		hash, err := library.QuickHash(c.fsys, destAbs, media.SizeBytes)
-		if err != nil {
-			return Placed{}, fmt.Errorf("music: quick hash %q: %w", destAbs, err)
-		}
 		files[index] = library.PhysicalFile{
-			RelPath: destRelPath, SizeBytes: media.SizeBytes, QuickHash: hash, FirstSeenAt: now,
+			RelPath: destRelPath, SizeBytes: media.SizeBytes, QuickHash: quickHashes[index], FirstSeenAt: now,
 		}
 		trackFiles[index] = track
 	}
