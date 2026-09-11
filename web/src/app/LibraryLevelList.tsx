@@ -5,11 +5,24 @@ import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
 import { useRecordLastLevel } from "@/list/useRecordLastLevel";
 import type { components } from "@/api/schema";
+import { CoverArt } from "./CoverArt";
 
 type LevelItem = components["schemas"]["LibraryLevelItem"];
 
 const ROW_HEIGHT = 44;
 const FILTER_KEYS: readonly string[] = [];
+
+/** Which /{subject}/{id}/artwork this row's own image comes from, or null
+ *  for a level with no image source at all -- Artists reads the person's
+ *  own id directly; Tracks reads its own album's work_id, so a song falls
+ *  back to its album's cover (which itself falls back server-side to the
+ *  artist's, GetWorkArtwork's own chain) rather than needing a source of
+ *  its own, since no track-level image concept exists (2026-09-11). */
+function imageSourceFor(level: string | undefined, item: LevelItem): { subject: "works" | "people"; id: number } | null {
+  if (level === "artists") return { subject: "people", id: item.id };
+  if (item.work_id != null) return { subject: "works", id: item.work_id };
+  return null;
+}
 
 /** The generic browse view for any navigation level besides Albums (ADR-54)
  *  -- Tracks today, a future Artists once a reader exists. One generic row
@@ -58,6 +71,7 @@ export function LibraryLevelList() {
             {list.virtualItems.map((virtual) => {
               const item = list.items[virtual.index];
               if (!item) return null;
+              const image = imageSourceFor(level, item);
               return (
                 <div
                   key={item.id}
@@ -65,6 +79,17 @@ export function LibraryLevelList() {
                              border-border-subtle px-4 text-sm"
                   style={{ height: virtual.size, transform: `translateY(${virtual.start}px)` }}
                 >
+                  {image && (
+                    <CoverArt
+                      subject={image.subject}
+                      workId={image.id}
+                      title={item.title}
+                      size="thumb"
+                      className={`h-8 w-8 shrink-0 object-cover ${
+                        image.subject === "people" ? "rounded-full" : "rounded"
+                      }`}
+                    />
+                  )}
                   <span className="min-w-0 flex-1 truncate font-medium">{item.title}</span>
                   {item.subtitle && (
                     <span className="min-w-0 flex-1 truncate text-ink-muted">{item.subtitle}</span>

@@ -3,21 +3,28 @@ import { useState } from "react";
 import { API_PREFIX } from "@/api/client";
 
 type Size = "thumb" | "small" | "full";
+type Subject = "works" | "people";
 
 interface CoverArtProps {
+  /** Which /{subject}/{id}/artwork endpoint to read from -- "works" (an
+   *  album's own cover, itself falling back server-side to its primary
+   *  artist's image when it has none) or "people" (an artist's own Wikidata
+   *  photo directly, 2026-09-11's own fallback chain). Defaults to "works",
+   *  every caller before people existed. */
+  subject?: Subject;
   workId: number;
   title: string;
   size?: Size;
   className?: string;
 }
 
-// A work with no cover recorded yet answers 404 (section 21.6) -- onError
+// A subject with no image recorded yet answers 404 (section 21.6) -- onError
 // swaps to a title-initial placeholder rather than the browser's broken-image
-// icon. Reset per workId/size so a virtualised row reused for a different work
-// does not keep showing a stale failure.
-export function CoverArt({ workId, title, size = "small", className }: CoverArtProps) {
+// icon. Reset per subject/workId/size so a virtualised row reused for a
+// different subject does not keep showing a stale failure.
+export function CoverArt({ subject = "works", workId, title, size = "small", className }: CoverArtProps) {
   const [failed, setFailed] = useState(false);
-  const key = `${workId}-${size}`;
+  const key = `${subject}-${workId}-${size}`;
 
   if (failed) {
     return (
@@ -34,7 +41,7 @@ export function CoverArt({ workId, title, size = "small", className }: CoverArtP
   return (
     <img
       key={key}
-      src={`${API_PREFIX}/works/${workId}/artwork?size=${size}`}
+      src={`${API_PREFIX}/${subject}/${workId}/artwork?size=${size}`}
       alt={title}
       loading="lazy"
       className={className}
