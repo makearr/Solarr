@@ -9,6 +9,7 @@ package wikidata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -18,9 +19,13 @@ import (
 )
 
 // maxResponseBytes bounds one lookup. A Wikipedia summary extract is a few
-// paragraphs at most; a provider answering more than this is a reason to stop
-// reading, not a reason to buffer it all first.
-const maxResponseBytes = 1 << 20
+// paragraphs at most, but wbgetentities' own claims are unbounded per entity
+// (props=claims was added for P18 alone; a prolific entity can carry
+// hundreds of unrelated statements) -- raised from the original 1 MiB
+// (description/sitelinks only) with the same "generous but still bounded"
+// reasoning arrimport's own response cap learned the hard way (16 MiB
+// silently truncated a real 28 MiB response, todo 4.13).
+const maxResponseBytes = 8 << 20
 
 // Biography is what this package can answer for one Wikidata QID.
 type Biography struct {
@@ -31,6 +36,13 @@ type Biography struct {
 	// Extract is the linked Wikipedia article's summary, real prose, empty
 	// when the entity has no English Wikipedia sitelink at all.
 	Extract string
+	// ImageURL is a direct, fetchable URL for the entity's own P18 ("image")
+	// claim, empty when it has none -- the common case for anyone without a
+	// Wikipedia-notable photo. Built from the Commons file name via
+	// Special:FilePath rather than a second API call: that endpoint 302s
+	// straight to the file's own bytes, which is all a caller here ever
+	// wants (never the Commons page itself).
+	ImageURL string
 }
 
 // entitiesResponse is Wikidata's wbgetentities action API shape (verified
@@ -49,7 +61,44 @@ type entitiesResponse struct {
 		Sitelinks map[string]struct {
 			Title string `json:"title"`
 		} `json:"sitelinks"`
+		// Claims carries P18 ("image") among many others this package never
+		// reads -- decoded loosely (json.RawMessage per property) rather than
+		// wikibase's own full claim shape, which this package has no other use for.
+		Claims map[string][]struct {
+			Mainsnak struct {
+				Datavalue struct {
+					Value string `json:"value"`
+				} `json:"datavalue"`
+			} `json:"mainsnak"`
+		} `json:"claims"`
 	} `json:"entities"`
+}
+
+// wikidataImageProperty is P18, Wikidata's own "image" claim.
+const wikidataImageProperty = "P18"
+
+// commonsFilePathBase redirects straight to a Commons file's own bytes --
+// MediaWiki's Special:FilePath, not the API, since this package wants an
+// image to hand an httpx.Client, not Commons page metadata.
+const commonsFilePathBase = "https://commons.wikimedia.org/wiki/Special:FilePath/"
+
+// imageURLFor builds the direct file URL from a P18 claim's own Commons file
+// name, reusing pathEscape's own space-to-underscore convention (MediaWiki's
+// own title normalisation, not just a Wikipedia-summary-path quirk --
+// Special:FilePath/Vutu_Doci_1981.jpg redirects correctly live, verified
+// while adding this).
+func imageURLFor(claims map[string][]struct {
+	Mainsnak struct {
+		Datavalue struct {
+			Value string `json:"value"`
+		} `json:"datavalue"`
+	} `json:"mainsnak"`
+}) string {
+	images := claims[wikidataImageProperty]
+	if len(images) == 0 || images[0].Mainsnak.Datavalue.Value == "" {
+		return ""
+	}
+	return commonsFilePathBase + pathEscape(images[0].Mainsnak.Datavalue.Value)
 }
 
 // summaryResponse is Wikipedia's REST summary endpoint shape.
@@ -84,7 +133,7 @@ func New(config Config) Fetcher {
 // empty -- not an error, since a description alone is still worth having.
 func (f Fetcher) Biography(ctx context.Context, qid string) (Biography, error) {
 	query := url.Values{
-		"action": {"wbgetentities"}, "ids": {qid}, "props": {"descriptions|sitelinks"},
+		"action": {"wbgetentities"}, "ids": {qid}, "props": {"descriptions|sitelinks|claims"},
 		"languages": {"en"}, "format": {"json"},
 	}
 	entitiesURL := "https://www.wikidata.org/w/api.php?" + query.Encode()
@@ -98,7 +147,10 @@ func (f Fetcher) Biography(ctx context.Context, qid string) (Biography, error) {
 		return Biography{}, fmt.Errorf("wikidata: entity %s not found", qid)
 	}
 
-	biography := Biography{Description: entity.Descriptions["en"].Value}
+	biography := Biography{
+		Description: entity.Descriptions["en"].Value,
+		ImageURL:    imageURLFor(entity.Claims),
+	}
 
 	sitelink, ok := entity.Sitelinks["enwiki"]
 	if !ok || sitelink.Title == "" {
@@ -122,6 +174,13 @@ func pathEscape(title string) string {
 	return url.PathEscape(strings.ReplaceAll(title, " ", "_"))
 }
 
+// ErrResponseTooLarge reports a response this package refused to finish
+// reading past maxResponseBytes -- arrimport.ErrResponseTooLarge's own
+// reasoning: read one byte past the limit so an over-limit response is
+// refused honestly instead of silently truncated into a confusing decode
+// error with no hint why.
+var ErrResponseTooLarge = errors.New("wikidata: response exceeded the size limit")
+
 func getJSON(ctx context.Context, client *httpx.Client, url string, into any) error {
 	response, err := client.Get(ctx, url)
 	if err != nil {
@@ -129,9 +188,12 @@ func getJSON(ctx context.Context, client *httpx.Client, url string, into any) er
 	}
 	defer func() { _ = response.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil {
 		return fmt.Errorf("read response: %w", err)
+	}
+	if len(body) > maxResponseBytes {
+		return fmt.Errorf("%w (over %d bytes)", ErrResponseTooLarge, maxResponseBytes)
 	}
 	if err := json.Unmarshal(body, into); err != nil {
 		return fmt.Errorf("decode response: %w", err)

@@ -17,5 +17,14 @@ func (a Artwork) GetWorkArtwork(ctx context.Context, workID int64) (apiserver.Wo
 	}
 	return apiserver.WorkArtworkRow{
 		CacheKey: found.CacheKey, Found: found.Found, RootFolderIDs: found.RootFolderIDs,
+		PrimaryArtistID: found.PrimaryArtistID,
 	}, nil
+}
+
+func (a Artwork) GetPersonArtwork(ctx context.Context, personID int64) (apiserver.PersonArtworkRow, error) {
+	found, err := a.Artworks.GetForPerson(ctx, personID)
+	if err != nil {
+		return apiserver.PersonArtworkRow{}, err
+	}
+	return apiserver.PersonArtworkRow{CacheKey: found.CacheKey, Found: found.Found}, nil
 }

@@ -3,14 +3,26 @@ package music
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
+	"path/filepath"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
 	"github.com/makearr/MediaNexus/internal/jobs"
 	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
 	"github.com/makearr/MediaNexus/internal/metadata/wikidata"
+	"github.com/makearr/MediaNexus/internal/platform/artwork"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/MediaNexus/internal/platform/httpx"
 )
+
+// maxPersonImageBytes mirrors ArtworkJob's own maxImageBytes -- a person's
+// Wikidata photo is not expected to be any larger than a release cover, and
+// a source serving far more is a reason to stop reading, not to buffer it
+// all first.
+const maxPersonImageBytes = 20 << 20
 
 // Biographer is what EnrichJob needs to turn a Wikidata QID into a real
 // biography (ADR-8's cross-provider bridge) -- internal/metadata/wikidata.Fetcher's
@@ -54,18 +66,27 @@ type EnrichJob struct {
 	people    library.People
 	provider  musicbrainz.Provider
 	biography Biographer
+	artworks  library.Artworks
+	http      *httpx.Client
+	fs        fsx.FS
+	imagesDir string
 	clock     clock.Clock
 	logger    *slog.Logger
 }
 
 // EnrichJobConfig is what an EnrichJob needs. Every field is required except
 // Biography and Logger -- a nil Biography resolves people with MusicBrainz's
-// own facts only, no prose biography.
+// own facts only, no prose biography (and, following from that, no image
+// either: Wikidata's own P18 claim is read from the same lookup).
 type EnrichJobConfig struct {
 	Identity  library.Identity
 	People    library.People
 	Provider  musicbrainz.Provider
 	Biography Biographer
+	Artworks  library.Artworks
+	HTTP      *httpx.Client
+	FS        fsx.FS
+	ImagesDir string
 	Clock     clock.Clock
 	Logger    *slog.Logger
 }
@@ -78,7 +99,8 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 	}
 	return &EnrichJob{
 		identity: config.Identity, people: config.People, provider: config.Provider,
-		biography: config.Biography, clock: config.Clock, logger: logger,
+		biography: config.Biography, artworks: config.Artworks, http: config.HTTP,
+		fs: config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
 	}
 }
 
@@ -88,6 +110,12 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 // set shrinks as work succeeds -- a restart simply asks the same question again
 // and gets whatever is left (library.PlaceholderEditions's doc comment).
 func (j *EnrichJob) Run(ctx context.Context, _ jobs.Job) error {
+	if j.fs != nil && j.imagesDir != "" {
+		if err := j.fs.MkdirAll(j.imagesDir, 0o755); err != nil {
+			return fmt.Errorf("music: enrich: create %s: %w", j.imagesDir, err)
+		}
+	}
+
 	total, failed := 0, 0
 	for {
 		if err := ctx.Err(); err != nil {
@@ -235,35 +263,122 @@ func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.Artist
 	if sortName == "" {
 		sortName = artist.Name
 	}
-	return j.people.ResolvePerson(ctx, j.clock.Now(), library.PersonLink{
+	bio := j.wikidataBiographyFor(ctx, artist)
+	personID, err := j.people.ResolvePerson(ctx, j.clock.Now(), library.PersonLink{
 		Provider: ProviderArtist, ExternalID: artist.MBID,
 		Person: library.PersonIdentity{
 			Name: artist.Name, SortName: sortName, Disambiguation: artist.Disambiguation,
 			Kind: artist.Type, Gender: artist.Gender, Country: artist.Country,
-			Born: artist.Born, Died: artist.Died, Biography: j.biographyFor(ctx, artist),
+			Born: artist.Born, Died: artist.Died, Biography: biographyText(bio),
 		},
 	})
+	if err != nil {
+		return 0, err
+	}
+	// Best-effort, same as the biography text above: a person is still worth
+	// having with no image at all. Album covers falling back to this image
+	// (todo 4.13's own follow-up, asked for 2026-09-11) is what makes fetching
+	// it here, rather than only when someone opens the Artists screen, worth
+	// doing proactively.
+	j.fetchPersonImage(ctx, personID, bio.ImageURL)
+	return personID, nil
 }
 
-// biographyFor answers real prose when it can: a Wikipedia extract, or
-// Wikidata's own short description as a fallback, empty when neither is
-// available -- j.biography is nil, the artist has no Wikidata QID, or the
-// lookup itself failed. Never fails resolveArtist over this: a person is
-// still worth having with no biography at all.
-func (j *EnrichJob) biographyFor(ctx context.Context, artist musicbrainz.Artist) string {
+// wikidataBiographyFor is biographyFor's own lookup, factored out so its one
+// Wikidata response feeds both the biography text (biographyText) and the
+// image fetch (fetchPersonImage) rather than being fetched twice. Returns
+// the zero Biography (empty ImageURL and text) when j.biography is nil, the
+// artist has no Wikidata QID, or the lookup itself failed -- never fails
+// resolveArtist over this.
+func (j *EnrichJob) wikidataBiographyFor(ctx context.Context, artist musicbrainz.Artist) wikidata.Biography {
 	if j.biography == nil || artist.WikidataQID == "" {
-		return ""
+		return wikidata.Biography{}
 	}
 	bio, err := j.biography.Biography(ctx, artist.WikidataQID)
 	if err != nil {
 		j.logger.WarnContext(ctx, "biography lookup failed",
 			slog.String("qid", artist.WikidataQID), slog.Any("error", err))
-		return ""
+		return wikidata.Biography{}
 	}
+	return bio
+}
+
+// biographyText picks the Wikipedia extract when there is one, Wikidata's
+// own short description otherwise -- biographyFor's own preference, kept as
+// a pure function now that the fetch itself lives in wikidataBiographyFor.
+func biographyText(bio wikidata.Biography) string {
 	if bio.Extract != "" {
 		return bio.Extract
 	}
 	return bio.Description
+}
+
+// fetchPersonImage downloads, processes and records personID's own Wikidata
+// photo -- ArtworkJob.processOne's own shape, duplicated rather than shared
+// (two callers, ADR-23's own "three similar things: extract" threshold not
+// met yet, and the two differ in subject type and cache key). Never fails
+// the credit it was resolved for: a person is still worth having with no
+// image, the same tolerance every other best-effort step in this job keeps.
+func (j *EnrichJob) fetchPersonImage(ctx context.Context, personID int64, imageURL string) {
+	if imageURL == "" || j.artworks == (library.Artworks{}) || j.http == nil || j.fs == nil {
+		return
+	}
+	existing, err := j.artworks.GetForPerson(ctx, personID)
+	if err != nil {
+		j.logger.WarnContext(ctx, "person artwork lookup failed",
+			slog.Int64("person_id", personID), slog.Any("error", err))
+		return
+	}
+	if existing.Found {
+		return
+	}
+
+	response, err := j.http.Get(ctx, imageURL)
+	if err != nil {
+		j.logger.WarnContext(ctx, "person image fetch failed",
+			slog.Int64("person_id", personID), slog.Any("error", err))
+		return
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		j.logger.WarnContext(ctx, "person image fetch failed",
+			slog.Int64("person_id", personID), slog.Int("status", response.StatusCode))
+		return
+	}
+	source, err := io.ReadAll(io.LimitReader(response.Body, maxPersonImageBytes))
+	if err != nil {
+		j.logger.WarnContext(ctx, "person image read failed",
+			slog.Int64("person_id", personID), slog.Any("error", err))
+		return
+	}
+
+	sizes, err := artwork.Process(source)
+	if err != nil {
+		j.logger.WarnContext(ctx, "person image process failed",
+			slog.Int64("person_id", personID), slog.Any("error", err))
+		return
+	}
+
+	cacheKey := fmt.Sprintf("person-%d-cover", personID)
+	for size, image := range sizes {
+		destination := filepath.Join(j.imagesDir, fmt.Sprintf("%s-%s.webp", cacheKey, artworkSizeName(size)))
+		if err := fsx.WriteAtomic(j.fs, destination, func(w io.Writer) error {
+			_, err := w.Write(image.Bytes)
+			return err
+		}); err != nil {
+			j.logger.WarnContext(ctx, "person image write failed",
+				slog.Int64("person_id", personID), slog.Any("error", err))
+			return
+		}
+	}
+
+	full := sizes[artwork.Full]
+	if err := j.artworks.RecordForPerson(
+		ctx, personID, imageURL, cacheKey, full.Width, full.Height, j.clock.Now().Unix(),
+	); err != nil {
+		j.logger.WarnContext(ctx, "person artwork record failed",
+			slog.Int64("person_id", personID), slog.Any("error", err))
+	}
 }
 
 // EnqueueEnrichment submits one sweep, deduplicated by EnrichActionKey.

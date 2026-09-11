@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"log/slog"
+	"path/filepath"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
 	"github.com/makearr/MediaNexus/internal/jobs"
 	"github.com/makearr/MediaNexus/internal/media/music"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/MediaNexus/internal/platform/httpx"
 )
 
 // registerEnrichJob wires the background metadata sweep into the registry and the
@@ -18,12 +20,28 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 	if err := registry.Register(music.EnrichDefinition); err != nil {
 		return err
 	}
+	wall := clock.NewSystem()
+	// Person images ride the same Commons/Wikimedia hosts biographies
+	// already fetch from -- its own guard/limiter/breaker, not shared with
+	// wikidataFetcher's two clients, the same one-bucket-per-host reasoning
+	// every other provider in this codebase already follows (ADR-13).
+	guard := httpx.NewGuard(nil, nil, nil)
+	limiter := httpx.NewLimiter(wall, httpx.Config{}, nil)
+	breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
+	imageClient := httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
+		Provider: "wikimedia-image", UserAgent: httpx.UserAgent(p.build.Version), Proxy: p.liveProxyPolicy(),
+	})
+
 	job := music.NewEnrichJob(music.EnrichJobConfig{
 		Identity:  library.NewIdentity(p.library),
 		People:    library.NewPeople(p.library),
 		Provider:  p.musicBrainzProvider(),
 		Biography: p.wikidataFetcher(),
-		Clock:     clock.NewSystem(),
+		Artworks:  library.NewArtworks(p.library),
+		HTTP:      imageClient,
+		FS:        p.fsys,
+		ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"),
+		Clock:     wall,
 		Logger:    p.logger,
 	})
 	executor.Handle(music.EnrichJobType, job)

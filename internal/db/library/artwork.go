@@ -46,14 +46,17 @@ func (a Artworks) NeedingArtwork(ctx context.Context, pageSize int64) ([]Artwork
 }
 
 // WorkArtwork is what a caller needs to serve a work's cover art file itself:
-// the cache key ArtworkJob wrote it under, and the root folders it must check
+// the cache key ArtworkJob wrote it under, the root folders it must check
 // the caller can see (the same ADR-27 visibility GetWorkDetail already applies,
 // reused here rather than requiring a full work-detail fetch just to serve an
-// image).
+// image), and its primary artist -- the album-falls-back-to-artist-image
+// chain asked for 2026-09-11, since a work with no cover of its own still
+// answers with its own artist's when that one exists.
 type WorkArtwork struct {
-	CacheKey      string
-	Found         bool
-	RootFolderIDs []int64
+	CacheKey        string
+	Found           bool
+	RootFolderIDs   []int64
+	PrimaryArtistID *int64
 }
 
 // GetForWork answers a work's recorded cover art, if any. Found is false (not
@@ -66,16 +69,23 @@ func (a Artworks) GetForWork(ctx context.Context, workID int64) (WorkArtwork, er
 		return WorkArtwork{}, fmt.Errorf("library: root folders for work %d: %w", workID, err)
 	}
 
+	var primaryArtistID *int64
+	if work, err := queries.GetWork(ctx, workID); err == nil && work.PrimaryArtistID.Valid {
+		primaryArtistID = &work.PrimaryArtistID.Int64
+	}
+
 	cacheKey, err := queries.GetArtwork(ctx, librarydb.GetArtworkParams{
 		SubjectType: "work", SubjectID: workID, Kind: artworkKindCover,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
-		return WorkArtwork{RootFolderIDs: rootFolderIDs}, nil
+		return WorkArtwork{RootFolderIDs: rootFolderIDs, PrimaryArtistID: primaryArtistID}, nil
 	}
 	if err != nil {
 		return WorkArtwork{}, fmt.Errorf("library: artwork for work %d: %w", workID, err)
 	}
-	return WorkArtwork{CacheKey: cacheKey, Found: true, RootFolderIDs: rootFolderIDs}, nil
+	return WorkArtwork{
+		CacheKey: cacheKey, Found: true, RootFolderIDs: rootFolderIDs, PrimaryArtistID: primaryArtistID,
+	}, nil
 }
 
 // Record upserts the cover art row for a work (ADR-2: the row is persistent, the
@@ -87,6 +97,51 @@ func (a Artworks) Record(
 		return librarydb.New(a.store.Read()).WithTx(tx).UpsertArtwork(ctx, librarydb.UpsertArtworkParams{
 			SubjectType: "work",
 			SubjectID:   workID,
+			Kind:        artworkKindCover,
+			SourceUrl:   sql.NullString{String: sourceURL, Valid: sourceURL != ""},
+			CacheKey:    cacheKey,
+			Width:       sql.NullInt64{Int64: int64(width), Valid: width > 0},
+			Height:      sql.NullInt64{Int64: int64(height), Valid: height > 0},
+			FetchedAt:   sql.NullInt64{Int64: fetchedAt, Valid: true},
+		})
+	})
+}
+
+// PersonArtwork is what a caller needs to serve a person's own image: the
+// cache key it was written under. Unlike WorkArtwork there is no
+// RootFolderIDs to visibility-check against -- a person is a shared entity
+// with no category-scoped access of its own (ADR-54's "the entity stays
+// shared"; GetPerson itself has no such check either).
+type PersonArtwork struct {
+	CacheKey string
+	Found    bool
+}
+
+// GetForPerson answers a person's recorded image, if any. Found is false
+// (not an error) when nobody has fetched one yet -- most people never will,
+// since a Wikidata P18 claim is the exception, not the rule.
+func (a Artworks) GetForPerson(ctx context.Context, personID int64) (PersonArtwork, error) {
+	cacheKey, err := librarydb.New(a.store.Read()).GetArtwork(ctx, librarydb.GetArtworkParams{
+		SubjectType: "person", SubjectID: personID, Kind: artworkKindCover,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return PersonArtwork{}, nil
+	}
+	if err != nil {
+		return PersonArtwork{}, fmt.Errorf("library: artwork for person %d: %w", personID, err)
+	}
+	return PersonArtwork{CacheKey: cacheKey, Found: true}, nil
+}
+
+// RecordForPerson upserts the cover art row for a person -- Record's own
+// twin, subject_type="person" instead of "work".
+func (a Artworks) RecordForPerson(
+	ctx context.Context, personID int64, sourceURL, cacheKey string, width, height int, fetchedAt int64,
+) error {
+	return a.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(a.store.Read()).WithTx(tx).UpsertArtwork(ctx, librarydb.UpsertArtworkParams{
+			SubjectType: "person",
+			SubjectID:   personID,
 			Kind:        artworkKindCover,
 			SourceUrl:   sql.NullString{String: sourceURL, Valid: sourceURL != ""},
 			CacheKey:    cacheKey,

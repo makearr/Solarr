@@ -24,7 +24,7 @@ func (a Tracks) ListLibraryTracks(
 
 	views := make([]apiserver.TrackRow, len(rows))
 	for index, row := range rows {
-		view := apiserver.TrackRow{ID: row.ID, AlbumTitle: row.AlbumTitle}
+		view := apiserver.TrackRow{ID: row.ID, AlbumWorkID: row.AlbumWorkID, AlbumTitle: row.AlbumTitle}
 		if row.Title.Valid {
 			view.Title = &row.Title.String
 		}

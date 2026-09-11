@@ -48,12 +48,19 @@ func newTestClient(t *testing.T, transport http.RoundTripper, provider string) *
 }
 
 // Trimmed from real live responses (fetched while designing this package):
-// Wikidata's Q636 (Vutu Doci) and the linked English Wikipedia summary.
+// Wikidata's Q636 (Vutu Doci) and the linked English Wikipedia summary. The
+// P18 claim's own shape -- mainsnak.datavalue.value as a plain Commons file
+// name string, "Vutu Doci 1981.jpg" -- is the real live value too, not
+// invented (Wikidata's Q636 carries several P18 claims across her career;
+// this package always takes the first).
 const wikidataEntityBody = `{
   "entities": {
     "Q636": {
       "descriptions": {"en": {"language": "en", "value": "English singer, pianist and songwriter (born 1958)"}},
-      "sitelinks": {"enwiki": {"site": "enwiki", "title": "Vutu Doci", "badges": []}}
+      "sitelinks": {"enwiki": {"site": "enwiki", "title": "Vutu Doci", "badges": []}},
+      "claims": {
+        "P18": [{"mainsnak": {"datavalue": {"value": "Vutu Doci 1981.jpg"}}}]
+      }
     }
   }
 }`
@@ -64,7 +71,7 @@ const wikipediaSummaryBody = `{
 
 func TestBiography_ParsesTheRealFieldShapeAcrossBothHops(t *testing.T) {
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q636&languages=en&props=descriptions%7Csitelinks": {
+		"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q636&languages=en&props=descriptions%7Csitelinks%7Cclaims": {
 			status: http.StatusOK, body: wikidataEntityBody,
 		},
 		"https://en.wikipedia.org/api/rest_v1/page/summary/Vutu_Doci": {
@@ -86,6 +93,53 @@ func TestBiography_ParsesTheRealFieldShapeAcrossBothHops(t *testing.T) {
 	if !strings.Contains(biography.Extract, "Catherine Bush is an English singer") {
 		t.Errorf("Extract = %q, want the Wikipedia summary text", biography.Extract)
 	}
+	const wantImage = "https://commons.wikimedia.org/wiki/Special:FilePath/Vutu_Doci_1981.jpg"
+	if biography.ImageURL != wantImage {
+		t.Errorf("ImageURL = %q, want %q", biography.ImageURL, wantImage)
+	}
+}
+
+// No P18 claim at all: ImageURL stays empty, not an error -- most people
+// simply have no Wikidata-recorded photo.
+func TestBiography_NoImageClaimLeavesImageURLEmpty(t *testing.T) {
+	entity := `{"entities":{"Q2":{"descriptions":{"en":{"language":"en","value":"a minor artist"}},"sitelinks":{},"claims":{}}}}`
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q2&languages=en&props=descriptions%7Csitelinks%7Cclaims": {
+			status: http.StatusOK, body: entity,
+		},
+	}}
+	fetcher := wikidata.New(wikidata.Config{
+		WikidataClient: newTestClient(t, transport, "wikidata"), WikipediaClient: newTestClient(t, transport, "wikipedia"),
+	})
+
+	biography, err := fetcher.Biography(t.Context(), "Q2")
+	if err != nil {
+		t.Fatalf("Biography: %v", err)
+	}
+	if biography.ImageURL != "" {
+		t.Errorf("ImageURL = %q, want empty with no P18 claim", biography.ImageURL)
+	}
+}
+
+// A response over the size limit must be reported as ErrResponseTooLarge,
+// not fed truncated to json.Unmarshal -- arrimport's own regression
+// (16 MiB silently truncated a real 28 MiB response, todo 4.13), the same
+// class of bug now guarded against here too.
+func TestGetJSON_RefusesAResponseOverTheSizeLimit(t *testing.T) {
+	oversized := "{" + strings.Repeat(" ", 8<<20) + "}"
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q636&languages=en&props=descriptions%7Csitelinks%7Cclaims": {
+			status: http.StatusOK, body: oversized,
+		},
+	}}
+	fetcher := wikidata.New(wikidata.Config{
+		WikidataClient: newTestClient(t, transport, "wikidata"), WikipediaClient: newTestClient(t, transport, "wikipedia"),
+	})
+
+	_, err := fetcher.Biography(t.Context(), "Q636")
+	if !errors.Is(err, wikidata.ErrResponseTooLarge) {
+		t.Fatalf("err = %v, want it to wrap ErrResponseTooLarge", err)
+	}
 }
 
 // A title with a space must become an underscore in the Wikipedia path
@@ -94,7 +148,7 @@ func TestBiography_ParsesTheRealFieldShapeAcrossBothHops(t *testing.T) {
 func TestBiography_TitleWithSpacesBecomesUnderscoresInTheWikipediaPath(t *testing.T) {
 	entity := `{"entities":{"Q1":{"descriptions":{},"sitelinks":{"enwiki":{"site":"enwiki","title":"Some Long Title","badges":[]}}}}}`
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q1&languages=en&props=descriptions%7Csitelinks": {
+		"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q1&languages=en&props=descriptions%7Csitelinks%7Cclaims": {
 			status: http.StatusOK, body: entity,
 		},
 		"https://en.wikipedia.org/api/rest_v1/page/summary/Some_Long_Title": {
@@ -120,7 +174,7 @@ func TestBiography_TitleWithSpacesBecomesUnderscoresInTheWikipediaPath(t *testin
 func TestBiography_NoSitelinkStillAnswersTheDescription(t *testing.T) {
 	entity := `{"entities":{"Q2":{"descriptions":{"en":{"language":"en","value":"a minor artist"}},"sitelinks":{}}}}`
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q2&languages=en&props=descriptions%7Csitelinks": {
+		"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q2&languages=en&props=descriptions%7Csitelinks%7Cclaims": {
 			status: http.StatusOK, body: entity,
 		},
 	}}
@@ -142,7 +196,7 @@ func TestBiography_NoSitelinkStillAnswersTheDescription(t *testing.T) {
 func TestBiography_AFailedWikipediaFetchStillAnswersTheDescription(t *testing.T) {
 	entity := `{"entities":{"Q636":{"descriptions":{"en":{"language":"en","value":"English singer"}},"sitelinks":{"enwiki":{"site":"enwiki","title":"Vutu Doci","badges":[]}}}}}`
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q636&languages=en&props=descriptions%7Csitelinks": {
+		"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q636&languages=en&props=descriptions%7Csitelinks%7Cclaims": {
 			status: http.StatusOK, body: entity,
 		},
 		// No entry for the Wikipedia summary URL -- the fake transport errors.
@@ -163,7 +217,7 @@ func TestBiography_AFailedWikipediaFetchStillAnswersTheDescription(t *testing.T)
 // Trimmed from a real live response for a well-formed but nonexistent QID.
 func TestBiography_UnknownQIDErrors(t *testing.T) {
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q999&languages=en&props=descriptions%7Csitelinks": {
+		"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q999&languages=en&props=descriptions%7Csitelinks%7Cclaims": {
 			status: http.StatusOK, body: `{"entities":{"Q999":{"id":"Q999","missing":""}},"success":1}`,
 		},
 	}}

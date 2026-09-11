@@ -2569,6 +2569,38 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /people/{id}/artwork:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getPersonArtwork
+      tags: [people]
+      summary: A person's cached Wikidata image, if one was found.
+      description: >-
+        WebP bytes straight from the on-disk cache EnrichJob wrote from the
+        artist's own Wikidata P18 claim, when they have one -- most people do
+        not, so 404 is the common case, indistinguishable from "no such
+        person" the same way GET /works/{id}/artwork's own 404 is. An
+        album's own cover falls back to this same image when the album has
+        none of its own (that fallback lives in GET /works/{id}/artwork
+        itself, not here).
+      parameters:
+        - name: size
+          in: query
+          schema: { type: string, enum: [thumb, small, full], default: small }
+      responses:
+        "200":
+          description: The image.
+          content:
+            image/webp:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /people/{id}/subscribe:
     parameters:
       - name: id
@@ -4097,6 +4129,14 @@ components:
           description: A secondary line -- an artist credit, an album title, whatever the level has.
         year: { type: integer }
         monitored: { type: boolean }
+        work_id:
+          type: integer
+          format: int64
+          description: >-
+            The work (album) this row's own cover art comes from -- set on a
+            Tracks-level row (the track's own parent album), absent on an
+            Albums row (its own id already is the work id) or an Artists row
+            (see GET /people/{id}/artwork instead).
 
     LibraryLevelPage:
       type: object

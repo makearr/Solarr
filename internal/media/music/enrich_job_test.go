@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
 	"github.com/makearr/MediaNexus/internal/db/store"
@@ -18,6 +20,8 @@ import (
 	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
 	"github.com/makearr/MediaNexus/internal/metadata/wikidata"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/MediaNexus/internal/platform/httpx"
 	"github.com/makearr/MediaNexus/migrations"
 )
 
@@ -128,6 +132,83 @@ func newEnrichJobWithBiographer(
 		Biography: biographer, Clock: fake, Logger: slog.New(slog.DiscardHandler),
 	})
 	return job, libraryStore, librarydb.New(libraryStore.Read())
+}
+
+// newEnrichJobWithImageFetch is newEnrichJobWithBiographer plus the artwork
+// wiring (Artworks/HTTP/FS/ImagesDir) fetchPersonImage needs -- a separate
+// constructor rather than growing the first one's own signature, since every
+// other test has no use for it (fetchPersonImage no-ops with any of these
+// nil, biographyFor's own tests never noticed).
+func newEnrichJobWithImageFetch(
+	t *testing.T, source musicbrainz.Source, biographer music.Biographer, imageServerURL string,
+) (*music.EnrichJob, *store.Store, *librarydb.Queries, *fsx.Mem) {
+	t.Helper()
+	directory := t.TempDir()
+	backups := filepath.Join(directory, "backups")
+	if err := os.MkdirAll(backups, 0o755); err != nil {
+		t.Fatalf("create backup directory: %v", err)
+	}
+	fake := clock.NewFakeAtEpoch()
+
+	libraryStore, err := store.Open(t.Context(), fake, store.Config{
+		Name: "library", Path: filepath.Join(directory, "library.db"),
+		Logger: slog.New(slog.DiscardHandler),
+	})
+	if err != nil {
+		t.Fatalf("Open library: %v", err)
+	}
+	t.Cleanup(func() { _ = libraryStore.Close() })
+	libraryOwner, err := migrations.Library()
+	if err != nil {
+		t.Fatalf("migrations.Library: %v", err)
+	}
+	if err := store.Migrate(t.Context(), libraryStore, backups, libraryOwner); err != nil {
+		t.Fatalf("Migrate library: %v", err)
+	}
+
+	metadataStore, err := store.Open(t.Context(), fake, store.Config{
+		Name: "metadata", Path: filepath.Join(directory, "metadata.db"),
+		Logger: slog.New(slog.DiscardHandler),
+	})
+	if err != nil {
+		t.Fatalf("Open metadata: %v", err)
+	}
+	t.Cleanup(func() { _ = metadataStore.Close() })
+	metadataOwner, err := migrations.Metadata()
+	if err != nil {
+		t.Fatalf("migrations.Metadata: %v", err)
+	}
+	if err := store.Migrate(t.Context(), metadataStore, backups, metadataOwner); err != nil {
+		t.Fatalf("Migrate metadata: %v", err)
+	}
+
+	identity := library.NewIdentity(libraryStore)
+	provider := musicbrainz.New(musicbrainz.Config{
+		Sources: []musicbrainz.Source{source}, Cache: metacache.New(metadataStore),
+		Clock: fake, Logger: slog.New(slog.DiscardHandler),
+	})
+
+	// The image server is httptest (loopback); the SSRF guard's allowlist has
+	// to name it explicitly, artwork_job_test.go's own newArtworkJob pattern.
+	parsed, err := url.Parse(imageServerURL)
+	if err != nil {
+		t.Fatalf("parse image server URL: %v", err)
+	}
+	guard := httpx.NewGuard(nil, nil, []string{parsed.Hostname()})
+	limiter := httpx.NewLimiter(fake, httpx.Config{}, func(time.Duration) time.Duration { return 0 })
+	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{})
+	client := httpx.NewClient(fake, guard, limiter, breaker, httpx.ClientConfig{
+		Provider: "test-image-server", UserAgent: "test",
+	})
+	memFS := fsx.NewMem(fake)
+
+	job := music.NewEnrichJob(music.EnrichJobConfig{
+		Identity: identity, People: library.NewPeople(libraryStore), Provider: provider,
+		Biography: biographer, Artworks: library.NewArtworks(libraryStore),
+		HTTP: client, FS: memFS, ImagesDir: "/cache/images",
+		Clock: fake, Logger: slog.New(slog.DiscardHandler),
+	})
+	return job, libraryStore, librarydb.New(libraryStore.Read()), memFS
 }
 
 func createPlaceholder(t *testing.T, opened *store.Store, releaseGroupMBID, releaseMBID string) {
@@ -384,6 +465,58 @@ func TestEnrichJob_ResolvesABiographyFromTheArtistsWikidataQID(t *testing.T) {
 	}
 	if !person.FieldsJson.Valid || !strings.Contains(person.FieldsJson.String, "Catherine Bush is an English singer") {
 		t.Errorf("fields_json = %+v, want the Wikipedia extract, not just the short description", person.FieldsJson)
+	}
+}
+
+// The image fallback chain asked for 2026-09-11 (song -> album -> artist)
+// starts here: an artist credit whose Wikidata entity carries a P18 image
+// gets that image fetched, resized and recorded against the resolved
+// person, end to end -- real bytes through a real httptest server, real
+// artwork.Process resizing, a real (in-memory) filesystem write.
+func TestEnrichJob_FetchesAndRecordsTheArtistsWikidataImage(t *testing.T) {
+	server := testImageServer(t)
+	source := &fakeArtistSource{
+		fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{
+				MBID: "rg-1", Title: "The Sezo Siluko", PrimaryType: "Album",
+				ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "artist-1", Name: "Vutu Doci"}},
+			},
+			release: musicbrainz.Release{MBID: "rel-1", Title: "The Sezo Siluko", Status: "official"},
+		},
+		artists: map[string]musicbrainz.Artist{
+			"artist-1": {MBID: "artist-1", Name: "Vutu Doci", SortName: "Bush, Vutu", WikidataQID: "Q636"},
+		},
+	}
+	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{
+		"Q636": {Description: "English singer", ImageURL: server.URL + "/cover.png"},
+	}}
+	job, opened, queries, memFS := newEnrichJobWithImageFetch(t, source, biographer, server.URL)
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	person, err := queries.GetPersonByExternalID(t.Context(), librarydb.GetPersonByExternalIDParams{
+		Provider: music.ProviderArtist, ExternalID: "artist-1",
+	})
+	if err != nil {
+		t.Fatalf("GetPersonByExternalID: %v", err)
+	}
+
+	artworks := library.NewArtworks(opened)
+	recorded, err := artworks.GetForPerson(t.Context(), person.ID)
+	if err != nil {
+		t.Fatalf("GetForPerson: %v", err)
+	}
+	if !recorded.Found {
+		t.Fatal("no artwork recorded for the resolved person")
+	}
+	for _, size := range []string{"thumb", "small", "full"} {
+		path := "/cache/images/" + recorded.CacheKey + "-" + size + ".webp"
+		if _, err := memFS.Stat(path); err != nil {
+			t.Errorf("%s was not written: %v", path, err)
+		}
 	}
 }
 

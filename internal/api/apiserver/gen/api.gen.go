@@ -352,6 +352,13 @@ const (
 	ListMoveJobsParamsStateRUNNING ListMoveJobsParamsState = "RUNNING"
 )
 
+// Defines values for GetPersonArtworkParamsSize.
+const (
+	GetPersonArtworkParamsSizeFull  GetPersonArtworkParamsSize = "full"
+	GetPersonArtworkParamsSizeSmall GetPersonArtworkParamsSize = "small"
+	GetPersonArtworkParamsSizeThumb GetPersonArtworkParamsSize = "thumb"
+)
+
 // Defines values for ListWorksParamsSort.
 const (
 	Added ListWorksParamsSort = "added"
@@ -367,9 +374,9 @@ const (
 
 // Defines values for GetWorkArtworkParamsSize.
 const (
-	Full  GetWorkArtworkParamsSize = "full"
-	Small GetWorkArtworkParamsSize = "small"
-	Thumb GetWorkArtworkParamsSize = "thumb"
+	GetWorkArtworkParamsSizeFull  GetWorkArtworkParamsSize = "full"
+	GetWorkArtworkParamsSizeSmall GetWorkArtworkParamsSize = "small"
+	GetWorkArtworkParamsSizeThumb GetWorkArtworkParamsSize = "thumb"
 )
 
 // AddArrInstanceRequest defines model for AddArrInstanceRequest.
@@ -1061,7 +1068,10 @@ type LibraryLevelItem struct {
 	// Subtitle A secondary line -- an artist credit, an album title, whatever the level has.
 	Subtitle *string `json:"subtitle,omitempty"`
 	Title    string  `json:"title"`
-	Year     *int    `json:"year,omitempty"`
+
+	// WorkId The work (album) this row's own cover art comes from -- set on a Tracks-level row (the track's own parent album), absent on an Albums row (its own id already is the work id) or an Artists row (see GET /people/{id}/artwork instead).
+	WorkId *int64 `json:"work_id,omitempty"`
+	Year   *int   `json:"year,omitempty"`
 }
 
 // LibraryLevelPage defines model for LibraryLevelPage.
@@ -1744,6 +1754,14 @@ type ListPeopleParams struct {
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
 }
 
+// GetPersonArtworkParams defines parameters for GetPersonArtwork.
+type GetPersonArtworkParams struct {
+	Size *GetPersonArtworkParamsSize `form:"size,omitempty" json:"size,omitempty"`
+}
+
+// GetPersonArtworkParamsSize defines parameters for GetPersonArtwork.
+type GetPersonArtworkParamsSize string
+
 // SubscribePersonJSONBody defines parameters for SubscribePerson.
 type SubscribePersonJSONBody struct {
 	MediaTypes           []string `json:"media_types"`
@@ -2204,6 +2222,9 @@ type ServerInterface interface {
 	// A person's full detail, including their discography.
 	// (GET /people/{id})
 	GetPerson(w http.ResponseWriter, r *http.Request, id int64)
+	// A person's cached Wikidata image, if one was found.
+	// (GET /people/{id}/artwork)
+	GetPersonArtwork(w http.ResponseWriter, r *http.Request, id int64, params GetPersonArtworkParams)
 	// Subscribe to a person (ADR-32) -- media types x roles x filters.
 	// (POST /people/{id}/subscribe)
 	SubscribePerson(w http.ResponseWriter, r *http.Request, id int64)
@@ -2693,6 +2714,12 @@ func (_ Unimplemented) ListPeople(w http.ResponseWriter, r *http.Request, params
 // A person's full detail, including their discography.
 // (GET /people/{id})
 func (_ Unimplemented) GetPerson(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A person's cached Wikidata image, if one was found.
+// (GET /people/{id}/artwork)
+func (_ Unimplemented) GetPersonArtwork(w http.ResponseWriter, r *http.Request, id int64, params GetPersonArtworkParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4977,6 +5004,50 @@ func (siw *ServerInterfaceWrapper) GetPerson(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetPersonArtwork operation middleware
+func (siw *ServerInterfaceWrapper) GetPersonArtwork(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetPersonArtworkParams
+
+	// ------------- Optional query parameter "size" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "size", r.URL.Query(), &params.Size)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "size", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPersonArtwork(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SubscribePerson operation middleware
 func (siw *ServerInterfaceWrapper) SubscribePerson(w http.ResponseWriter, r *http.Request) {
 
@@ -6238,6 +6309,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/people/{id}", wrapper.GetPerson)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/people/{id}/artwork", wrapper.GetPersonArtwork)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/people/{id}/subscribe", wrapper.SubscribePerson)

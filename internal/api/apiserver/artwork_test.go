@@ -16,6 +16,10 @@ type fakeArtworkReader struct {
 	row    apiserver.WorkArtworkRow
 	err    error
 	lastID int64
+
+	personRow    apiserver.PersonArtworkRow
+	personErr    error
+	lastPersonID int64
 }
 
 func (f *fakeArtworkReader) GetWorkArtwork(_ context.Context, id int64) (apiserver.WorkArtworkRow, error) {
@@ -24,6 +28,14 @@ func (f *fakeArtworkReader) GetWorkArtwork(_ context.Context, id int64) (apiserv
 		return apiserver.WorkArtworkRow{}, f.err
 	}
 	return f.row, nil
+}
+
+func (f *fakeArtworkReader) GetPersonArtwork(_ context.Context, id int64) (apiserver.PersonArtworkRow, error) {
+	f.lastPersonID = id
+	if f.personErr != nil {
+		return apiserver.PersonArtworkRow{}, f.personErr
+	}
+	return f.personRow, nil
 }
 
 // writeFixtureImage puts bytes at <testImagesDir>/<cacheKey>-<size>.webp in the
@@ -107,15 +119,69 @@ func TestGetWorkArtwork_InvalidSizeAnswers400(t *testing.T) {
 	}
 }
 
-func TestGetWorkArtwork_NoCoverRecordedAnswers404(t *testing.T) {
+// The row's own RootFolderIDs must actually be visible to the caller, or
+// this exercises the visibility check's own 404 (below) rather than the
+// not-found path this test means to cover -- a real root folder and grant,
+// not the bare admin-with-nothing-configured shape the visibility check
+// would also 404 on for an unrelated reason.
+func TestGetWorkArtwork_NoCoverRecordedAndNoArtistAnswers404(t *testing.T) {
 	fixture := newWorksFixture(t)
+	_, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
-	fixture.artwork.row = apiserver.WorkArtworkRow{Found: false}
+	fixture.artwork.row = apiserver.WorkArtworkRow{Found: false, RootFolderIDs: []int64{root.ID}}
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/1/artwork"))
 	if recorder.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want 404 when no cover has been recorded yet", recorder.Code)
+		t.Errorf("status = %d, want 404 when no cover has been recorded and the work has no artist either", recorder.Code)
+	}
+}
+
+// The album-falls-back-to-artist-image chain, 2026-09-11: a work with no
+// cover of its own, but a primary artist with a recorded image, serves that
+// image instead of 404ing.
+func TestGetWorkArtwork_FallsBackToThePrimaryArtistsImage(t *testing.T) {
+	fixture := newWorksFixture(t)
+	_, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	artistID := int64(42)
+	fixture.artwork.row = apiserver.WorkArtworkRow{
+		Found: false, RootFolderIDs: []int64{root.ID}, PrimaryArtistID: &artistID,
+	}
+	fixture.artwork.personRow = apiserver.PersonArtworkRow{CacheKey: "person-42-cover", Found: true}
+	fixture.writeFixtureImage(t, "person-42-cover", "small", []byte("the artist's own photo"))
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/1/artwork"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	if recorder.Body.String() != "the artist's own photo" {
+		t.Errorf("body = %q, want the primary artist's own cached image", recorder.Body.String())
+	}
+	if fixture.artwork.lastPersonID != 42 {
+		t.Errorf("GetPersonArtwork called with id %d, want 42", fixture.artwork.lastPersonID)
+	}
+}
+
+// A primary artist with no image of their own (the common case) still 404s
+// -- the fallback has nothing to fall back to.
+func TestGetWorkArtwork_PrimaryArtistWithNoImageStillAnswers404(t *testing.T) {
+	fixture := newWorksFixture(t)
+	_, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	artistID := int64(42)
+	fixture.artwork.row = apiserver.WorkArtworkRow{
+		Found: false, RootFolderIDs: []int64{root.ID}, PrimaryArtistID: &artistID,
+	}
+	fixture.artwork.personRow = apiserver.PersonArtworkRow{Found: false}
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/1/artwork"))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 when the primary artist has no image either", recorder.Code)
 	}
 }
 
@@ -147,5 +213,39 @@ func TestGetWorkArtwork_MalformedIDAnswers400(t *testing.T) {
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/not-a-number/artwork"))
 	if recorder.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400 for a non-numeric id", recorder.Code)
+	}
+}
+
+// GetPersonArtwork has no visibility check of its own (a person is shared,
+// GetPerson itself has none either) -- any signed-in caller reaches it.
+func TestGetPersonArtwork_ServesTheCachedImage(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	fixture.artwork.personRow = apiserver.PersonArtworkRow{CacheKey: "person-7-cover", Found: true}
+	fixture.writeFixtureImage(t, "person-7-cover", "small", []byte("vutu doci 1981"))
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/7/artwork"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	if recorder.Body.String() != "vutu doci 1981" {
+		t.Errorf("body = %q, want the cached image bytes", recorder.Body.String())
+	}
+	if fixture.artwork.lastPersonID != 7 {
+		t.Errorf("GetPersonArtwork called with id %d, want 7", fixture.artwork.lastPersonID)
+	}
+}
+
+func TestGetPersonArtwork_NoImageAnswers404(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+	fixture.artwork.personRow = apiserver.PersonArtworkRow{Found: false}
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/7/artwork"))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 when no image has been recorded", recorder.Code)
 	}
 }

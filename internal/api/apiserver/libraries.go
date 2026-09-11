@@ -213,12 +213,15 @@ type TracksCursor struct {
 }
 
 // TrackRow is one work_part with its parent album's display fields.
+// AlbumWorkID is the album's own work id -- the song-falls-back-to-album-
+// image chain (2026-09-11) points a track's own cover art at it.
 type TrackRow struct {
-	ID         int64
-	Title      *string
-	AlbumTitle string
-	AlbumYear  *int64
-	ArtistName *string
+	ID          int64
+	Title       *string
+	AlbumWorkID int64
+	AlbumTitle  string
+	AlbumYear   *int64
+	ArtistName  *string
 }
 
 // LibraryTracksReader lists the Tracks navigation level. Defined here and
@@ -461,8 +464,10 @@ func (s *Server) listLibraryLevelTracks(
 
 	views := make([]gen.LibraryLevelItem, len(rows))
 	for index, row := range rows {
+		workID := row.AlbumWorkID
 		views[index] = gen.LibraryLevelItem{
 			Id: row.ID, Title: derefOr(row.Title, ""), Subtitle: trackSubtitle(row), Year: yearOf(row.AlbumYear),
+			WorkId: &workID,
 		}
 	}
 	writeLibraryLevelPage(w, s.logger, views, nextEncoded)

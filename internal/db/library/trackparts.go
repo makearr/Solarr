@@ -27,12 +27,16 @@ type TrackAlbumCursor struct {
 }
 
 // TrackRow is one work_part with its parent album's display fields -- what
-// the Tracks level actually shows a row of.
+// the Tracks level actually shows a row of. AlbumWorkID is the album's own
+// work id, not the track's (WorkPart.ID is the track's own work_part id) --
+// what a caller needs to point a track's own cover art at its album's
+// (the song-falls-back-to-album-image chain, 2026-09-11).
 type TrackRow struct {
 	librarydb.WorkPart
-	AlbumTitle string
-	AlbumYear  sql.NullInt64
-	ArtistName sql.NullString
+	AlbumWorkID int64
+	AlbumTitle  string
+	AlbumYear   sql.NullInt64
+	ArtistName  sql.NullString
 }
 
 // trackAlbum is one album in the page, before its parts are fetched.
@@ -119,7 +123,8 @@ func (t TrackParts) List(
 		}
 		for _, part := range parts {
 			rows = append(rows, TrackRow{
-				WorkPart: part, AlbumTitle: album.title, AlbumYear: album.year, ArtistName: album.artistName,
+				WorkPart: part, AlbumWorkID: album.id, AlbumTitle: album.title,
+				AlbumYear: album.year, ArtistName: album.artistName,
 			})
 		}
 	}

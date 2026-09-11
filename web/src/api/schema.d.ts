@@ -1638,6 +1638,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/people/{id}/artwork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * A person's cached Wikidata image, if one was found.
+         * @description WebP bytes straight from the on-disk cache EnrichJob wrote from the artist's own Wikidata P18 claim, when they have one -- most people do not, so 404 is the common case, indistinguishable from "no such person" the same way GET /works/{id}/artwork's own 404 is. An album's own cover falls back to this same image when the album has none of its own (that fallback lives in GET /works/{id}/artwork itself, not here).
+         */
+        get: operations["getPersonArtwork"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/people/{id}/subscribe": {
         parameters: {
             query?: never;
@@ -2760,6 +2782,11 @@ export interface components {
             subtitle?: string;
             year?: number;
             monitored?: boolean;
+            /**
+             * Format: int64
+             * @description The work (album) this row's own cover art comes from -- set on a Tracks-level row (the track's own parent album), absent on an Albums row (its own id already is the work id) or an Artists row (see GET /people/{id}/artwork instead).
+             */
+            work_id?: number;
         };
         LibraryLevelPage: {
             items: components["schemas"]["LibraryLevelItem"][];
@@ -5442,6 +5469,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PersonDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getPersonArtwork: {
+        parameters: {
+            query?: {
+                size?: "thumb" | "small" | "full";
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/webp": string;
                 };
             };
             400: components["responses"]["Problem"];
