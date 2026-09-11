@@ -1281,6 +1281,24 @@ type PersonWork struct {
 	Year      *int   `json:"year,omitempty"`
 }
 
+// PrioritySettings ADR-36's trigger weights and ADR-55's release-date freshness window.
+type PrioritySettings struct {
+	// GapWeight Bigger is more urgent. Default 20.
+	GapWeight int64 `json:"gap_weight"`
+
+	// NewReleaseDays Days after release an item still counts as new rather than a gap. Default 7.
+	NewReleaseDays int64 `json:"new_release_days"`
+
+	// NewReleaseWeight Bigger is more urgent. Default 30.
+	NewReleaseWeight int64 `json:"new_release_weight"`
+
+	// UpgradeWeight Bigger is more urgent. Default 10.
+	UpgradeWeight int64 `json:"upgrade_weight"`
+
+	// UserRequestWeight Bigger is more urgent. Default 40.
+	UserRequestWeight int64 `json:"user_request_weight"`
+}
+
 // Problem RFC 7807. Every error uses this, including 404 and 405.
 type Problem struct {
 	Detail *string     `json:"detail,omitempty"`
@@ -2015,6 +2033,9 @@ type UpdateNetworkSettingsJSONRequestBody = NetworkSettingsUpdate
 // SubscribePersonJSONRequestBody defines body for SubscribePerson for application/json ContentType.
 type SubscribePersonJSONRequestBody SubscribePersonJSONBody
 
+// UpdatePrioritySettingsJSONRequestBody defines body for UpdatePrioritySettings for application/json ContentType.
+type UpdatePrioritySettingsJSONRequestBody = PrioritySettings
+
 // AddRootFolderJSONRequestBody defines body for AddRootFolder for application/json ContentType.
 type AddRootFolderJSONRequestBody AddRootFolderJSONBody
 
@@ -2263,6 +2284,12 @@ type ServerInterface interface {
 	// Subscribe to a person (ADR-32) -- media types x roles x filters.
 	// (POST /people/{id}/subscribe)
 	SubscribePerson(w http.ResponseWriter, r *http.Request, id int64)
+	// ADR-36's trigger weights and ADR-55's freshness window.
+	// (GET /priority)
+	GetPrioritySettings(w http.ResponseWriter, r *http.Request)
+	// Change the weights or the freshness window. Administrator only.
+	// (PATCH /priority)
+	UpdatePrioritySettings(w http.ResponseWriter, r *http.Request)
 	// Readiness.
 	// (GET /ready)
 	GetReady(w http.ResponseWriter, r *http.Request)
@@ -2764,6 +2791,18 @@ func (_ Unimplemented) GetPersonArtwork(w http.ResponseWriter, r *http.Request, 
 // Subscribe to a person (ADR-32) -- media types x roles x filters.
 // (POST /people/{id}/subscribe)
 func (_ Unimplemented) SubscribePerson(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ADR-36's trigger weights and ADR-55's freshness window.
+// (GET /priority)
+func (_ Unimplemented) GetPrioritySettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change the weights or the freshness window. Administrator only.
+// (PATCH /priority)
+func (_ Unimplemented) UpdatePrioritySettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5125,6 +5164,50 @@ func (siw *ServerInterfaceWrapper) SubscribePerson(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// GetPrioritySettings operation middleware
+func (siw *ServerInterfaceWrapper) GetPrioritySettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPrioritySettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePrioritySettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePrioritySettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePrioritySettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetReady operation middleware
 func (siw *ServerInterfaceWrapper) GetReady(w http.ResponseWriter, r *http.Request) {
 
@@ -6381,6 +6464,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/people/{id}/subscribe", wrapper.SubscribePerson)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/priority", wrapper.GetPrioritySettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/priority", wrapper.UpdatePrioritySettings)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/ready", wrapper.GetReady)

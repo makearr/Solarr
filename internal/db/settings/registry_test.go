@@ -102,6 +102,8 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 		settings.KeyImportAutoCommitConfidence,
 		settings.KeyNetworkPort, settings.KeyNetworkProxyURL, settings.KeyNetworkProxyBypass, settings.KeyNetworkAllowCIDRs,
 		settings.KeyCacheMaxBytes, settings.KeyCacheMaxAgeDays, settings.KeyCacheImagesShare, settings.KeyCacheMetadataShare,
+		settings.KeyPriorityUserRequestWeight, settings.KeyPriorityNewReleaseWeight,
+		settings.KeyPriorityGapWeight, settings.KeyPriorityUpgradeWeight, settings.KeyPriorityNewReleaseDays,
 	}
 	for _, key := range known {
 		if _, found := registry.Lookup(key); !found {

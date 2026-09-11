@@ -1,0 +1,94 @@
+package settings
+
+import (
+	"context"
+	"strconv"
+
+	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/MediaNexus/internal/platform/config"
+)
+
+// ADR-36's own keys, the same instance_setting shape the cache budget and
+// network settings already use.
+const (
+	KeyPriorityUserRequestWeight = "priority.weight.user_request"
+	KeyPriorityNewReleaseWeight  = "priority.weight.new_release"
+	KeyPriorityGapWeight         = "priority.weight.gap"
+	KeyPriorityUpgradeWeight     = "priority.weight.upgrade"
+	KeyPriorityNewReleaseDays    = "priority.new_release_days"
+)
+
+// ADR-36/ADR-55's own shipped defaults -- duplicated from
+// internal/identify/priority's own DefaultWeights/DefaultNewReleaseDays
+// rather than imported: internal/db/settings and internal/identify/priority
+// share no dependency edge (architecture §2), the same reasoning
+// schedule.go's own cron parser duplication already gives, and a stage 5/6
+// caller composing internal/identify/priority.Weights from this policy is
+// where the two shapes meet, not here.
+const (
+	DefaultPriorityUserRequestWeight = 40
+	DefaultPriorityNewReleaseWeight  = 30
+	DefaultPriorityGapWeight         = 20
+	DefaultPriorityUpgradeWeight     = 10
+	DefaultPriorityNewReleaseDays    = 7
+)
+
+// PrioritySettings is ADR-36's own policy: the four trigger weights (bigger
+// is more urgent) and ADR-55's release-date freshness window, in days. One
+// set for the whole instance -- unlike a quality or language profile, ADR-36
+// never scoped these per category.
+type PrioritySettings struct {
+	UserRequestWeight, NewReleaseWeight, GapWeight, UpgradeWeight int64
+	NewReleaseDays                                                int64
+}
+
+// PrioritySettings reads the configured policy, or the shipped defaults for
+// whatever nothing has stored yet.
+func (s *Snapshot) PrioritySettings() PrioritySettings {
+	return PrioritySettings{
+		UserRequestWeight: s.policyInt(KeyPriorityUserRequestWeight, DefaultPriorityUserRequestWeight),
+		NewReleaseWeight:  s.policyInt(KeyPriorityNewReleaseWeight, DefaultPriorityNewReleaseWeight),
+		GapWeight:         s.policyInt(KeyPriorityGapWeight, DefaultPriorityGapWeight),
+		UpgradeWeight:     s.policyInt(KeyPriorityUpgradeWeight, DefaultPriorityUpgradeWeight),
+		NewReleaseDays:    s.policyInt(KeyPriorityNewReleaseDays, DefaultPriorityNewReleaseDays),
+	}
+}
+
+// SetPrioritySettings writes ADR-36's policy wholesale, like the cache budget
+// and network settings (ADR-44: validated on write).
+func (c *Cache) SetPrioritySettings(ctx context.Context, cl clock.Clock, ps PrioritySettings) error {
+	if problems := validatePrioritySettings(ps); len(problems) > 0 {
+		return problems
+	}
+	for key, value := range map[string]int64{
+		KeyPriorityUserRequestWeight: ps.UserRequestWeight, KeyPriorityNewReleaseWeight: ps.NewReleaseWeight,
+		KeyPriorityGapWeight: ps.GapWeight, KeyPriorityUpgradeWeight: ps.UpgradeWeight,
+		KeyPriorityNewReleaseDays: ps.NewReleaseDays,
+	} {
+		if err := c.setPolicy(ctx, cl, key, strconv.FormatInt(value, 10)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validatePrioritySettings(ps PrioritySettings) config.Problems {
+	var problems config.Problems
+	for name, weight := range map[string]int64{
+		"user_request_weight": ps.UserRequestWeight, "new_release_weight": ps.NewReleaseWeight,
+		"gap_weight": ps.GapWeight, "upgrade_weight": ps.UpgradeWeight,
+	} {
+		if weight < 0 {
+			problems = append(problems, config.Problem{
+				Path: name, Value: strconv.FormatInt(weight, 10), Expectation: "zero or a positive weight",
+			})
+		}
+	}
+	if ps.NewReleaseDays <= 0 {
+		problems = append(problems, config.Problem{
+			Path: "new_release_days", Value: strconv.FormatInt(ps.NewReleaseDays, 10),
+			Expectation: "a positive number of days",
+		})
+	}
+	return problems
+}

@@ -203,5 +203,33 @@ func NewDefaultRegistry() *Registry {
 		Default:  fmt.Sprintf("%d", DefaultCacheMetadataSharePercent),
 	})
 
+	// Priority (ADR-36/ADR-55): scoring rules, advanced per ADR-26's own table.
+	registry.MustRegister(SettingDef{
+		Key: KeyPriorityUserRequestWeight, Kind: KindInt, Tier: TierAdvanced,
+		Name: "Priority weight: user request", HelpText: "Bigger is more urgent.",
+		Default: fmt.Sprintf("%d", DefaultPriorityUserRequestWeight),
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyPriorityNewReleaseWeight, Kind: KindInt, Tier: TierAdvanced,
+		Name: "Priority weight: new release", HelpText: "Bigger is more urgent.",
+		Default: fmt.Sprintf("%d", DefaultPriorityNewReleaseWeight),
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyPriorityGapWeight, Kind: KindInt, Tier: TierAdvanced,
+		Name: "Priority weight: gap", HelpText: "Bigger is more urgent.",
+		Default: fmt.Sprintf("%d", DefaultPriorityGapWeight),
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyPriorityUpgradeWeight, Kind: KindInt, Tier: TierAdvanced,
+		Name: "Priority weight: upgrade", HelpText: "Bigger is more urgent.",
+		Default: fmt.Sprintf("%d", DefaultPriorityUpgradeWeight),
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyPriorityNewReleaseDays, Kind: KindInt, Tier: TierAdvanced,
+		Name:     "Freshness window",
+		HelpText: "Days after release an item still counts as newly released rather than a gap (ADR-55).",
+		Default:  fmt.Sprintf("%d", DefaultPriorityNewReleaseDays),
+	})
+
 	return registry
 }
