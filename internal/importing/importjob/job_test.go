@@ -46,6 +46,10 @@ type pathTagTool struct {
 	cancelSourcePath string
 	sessions         library.ImportSessions
 	calls            int
+	// onCall, when set, runs before every ReadTags call with the 1-based call
+	// number -- a generic hook for injecting a concurrent action mid-walk
+	// (todo 4.9's "assign a category later" test needs one between clusters).
+	onCall func(callNumber int)
 }
 
 func (t *pathTagTool) Available(context.Context) error { return nil }
@@ -59,6 +63,9 @@ func (t *pathTagTool) ReadTags(ctx context.Context, paths []string) ([]mediatool
 				_ = t.sessions.RequestCancel(ctx, session.ID)
 			}
 		}
+	}
+	if t.onCall != nil {
+		t.onCall(t.calls)
 	}
 	if t.failBatchOnce != "" {
 		for _, p := range paths {
@@ -554,6 +561,88 @@ func TestJob_MapsEachUnitInAClusterToItsOwnDecision(t *testing.T) {
 		if u.Decision != library.UnitCommit || u.Confidence == 0 {
 			t.Errorf("unit %+v, want COMMIT with a real confidence -- QUEUE/0 is what a dropped decision looks like", u)
 		}
+	}
+}
+
+// commitCluster reads the session's own category fresh every cluster rather
+// than trusting the job's frozen enqueue-time payload (job.go's own doc
+// comment on commitCluster) -- todo 4.9's "assign a category later" UI
+// action can set import_session.category_id while a session is still
+// INSPECTING, and a cluster committed after that must place into it. Two
+// separate top-level directories make two separate clusters
+// (TestJob_StopsAtTheNextClusterBoundaryWhenCancelled already relies on the
+// same split); the category is set between them, during the first cluster's
+// own probe.
+func TestJob_PicksUpACategoryAssignedMidRun(t *testing.T) {
+	fx := newFixture(t, "Artist/Album1/01.flac", "Artist/Album2/01.flac")
+	fx.tool.byPath[filepath.Join(root, "Artist/Album1/01.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+	fx.tool.byPath[filepath.Join(root, "Artist/Album2/01.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+
+	sessions := fx.sessions()
+	identity := library.NewIdentity(fx.store)
+	resolutions, err := identity.ResolveWorksDetailed(t.Context(), fx.clock.Now(), []library.WorkLink{{
+		Provider: "test", ExternalID: t.Name(),
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: t.Name(), SortTitle: t.Name()},
+	}})
+	if err != nil {
+		t.Fatalf("seed work: %v", err)
+	}
+	committer := &fakeCommitter{workID: resolutions[0].WorkID}
+
+	fx.tool.onCall = func(callNumber int) {
+		if callNumber != 1 {
+			return
+		}
+		inspecting, err := sessions.List(t.Context(), library.ImportInspecting)
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		for _, s := range inspecting {
+			if s.SourcePath == root {
+				if err := sessions.SetCategory(t.Context(), s.ID, 9); err != nil {
+					t.Fatalf("SetCategory: %v", err)
+				}
+			}
+		}
+	}
+
+	job := importjob.NewJob(importjob.Config{
+		FS: fx.fsys, Sessions: sessions, Policy: fixedPolicy(0.90),
+		Tool: fx.tool, Committer: committer, Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+	})
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	done, err := sessions.List(t.Context(), library.ImportDone)
+	if err != nil || len(done) != 1 {
+		t.Fatalf("List: %v, %+v", err, done)
+	}
+	units, err := sessions.ListUnits(t.Context(), done[0].ID)
+	if err != nil || len(units) != 2 {
+		t.Fatalf("ListUnits: %v, %+v", err, units)
+	}
+	for _, u := range units {
+		switch u.RelPath {
+		case "Artist/Album1":
+			if u.WorkID != nil {
+				t.Errorf("Album1 WorkID = %v, want nil -- its own cluster ran before the category was set", u.WorkID)
+			}
+		case "Artist/Album2":
+			if u.WorkID == nil {
+				t.Error("Album2 WorkID is nil, want placed -- its own cluster ran after the category was set")
+			}
+		default:
+			t.Errorf("unexpected unit rel_path %q", u.RelPath)
+		}
+	}
+	if len(committer.calls) != 1 {
+		t.Fatalf("committer was called %d times, want 1 (Album2 only)", len(committer.calls))
+	}
+	if committer.calls[0].directory != "Artist/Album2" {
+		t.Errorf("committer was called for %q, want Artist/Album2", committer.calls[0].directory)
 	}
 }
 

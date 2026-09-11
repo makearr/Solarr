@@ -27,6 +27,14 @@ type ImportSessionLister interface {
 	CancelImportSession(ctx context.Context, id int64) error
 	// RevertImportSession undoes every file a session placed (ADR-48).
 	RevertImportSession(ctx context.Context, id int64, retainHours int) (ImportRevertResult, error)
+	// AssignImportCategory gives a session a destination category and places
+	// everything it already decided COMMIT but never placed (todo 4.9's
+	// "assign a category later" UI action -- a session can start with none).
+	AssignImportCategory(ctx context.Context, id, categoryID int64) (ImportPlacementResult, error)
+	// CommitImportUnit force-commits one QUEUE-decision unit by hand
+	// ("commit what was held"), using the same top-ranked candidate IDENTIFY
+	// already found.
+	CommitImportUnit(ctx context.Context, sessionID, unitID int64) (ImportUnitRow, error)
 }
 
 // ErrImportSessionNotRunning is CancelImportSession's refusal to a non-running session.
@@ -36,10 +44,49 @@ var ErrImportSessionNotRunning = errors.New("apiserver: import session is not ru
 // session not yet finished, or already reverted.
 var ErrImportSessionNotRevertible = errors.New("apiserver: import session cannot be reverted from its current state")
 
+// ErrImportSessionCategoryAlreadySet is AssignImportCategory's refusal to
+// re-point an already-targeted session at a different category.
+var ErrImportSessionCategoryAlreadySet = errors.New("apiserver: import session already has a category")
+
+// ErrImportSessionReverted is AssignImportCategory's and CommitImportUnit's
+// refusal to place anything new into a session whose own placements were
+// already undone.
+var ErrImportSessionReverted = errors.New("apiserver: import session was reverted")
+
+// ErrImportSessionHasNoCategory is CommitImportUnit's refusal when the
+// session has no destination yet -- assign one first.
+var ErrImportSessionHasNoCategory = errors.New("apiserver: import session has no category")
+
+// ErrImportUnitNotQueued is CommitImportUnit's refusal to override a unit
+// that is not currently QUEUE.
+var ErrImportUnitNotQueued = errors.New("apiserver: import unit is not queued for review")
+
+// ErrImportUnitHasNoCandidate is CommitImportUnit's refusal when IDENTIFY
+// never ranked anything for this unit.
+var ErrImportUnitHasNoCandidate = errors.New("apiserver: import unit has no candidate to commit")
+
+// ErrImportUnitChanged is CommitImportUnit's refusal when a re-walk of the
+// unit's own directory no longer matches what WALK originally found.
+var ErrImportUnitChanged = errors.New("apiserver: import unit's own files no longer match what was inspected")
+
+// ErrImportUnitSharesDirectory is CommitImportUnit's refusal when another
+// unit in the same session shares this one's own rel_path -- a flat
+// directory GROUP split into several units by track continuity alone,
+// which a re-walk by directory cannot safely tell apart.
+var ErrImportUnitSharesDirectory = errors.New("apiserver: import unit shares its directory with other units")
+
 // ImportRevertResult is what one session's revert actually did.
 type ImportRevertResult struct {
 	UnitsReverted, WorksDeleted, EditionsDeleted int64
 	QuarantinedPaths                             []string
+}
+
+// ImportPlacementResult is AssignImportCategory's own outcome: every unit
+// the session had already decided COMMIT but not yet placed, placed
+// best-effort.
+type ImportPlacementResult struct {
+	UnitsPlaced int64
+	Errors      []string
 }
 
 // ImportInspector enqueues ADR-48's own inspection job. Its own interface,
@@ -173,6 +220,34 @@ func (s *Server) routeRevertImportSession(w http.ResponseWriter, r *http.Request
 		return
 	}
 	s.RevertImportSession(w, r, id)
+}
+
+// routeAssignImportCategory parses the id path parameter, mirroring routeCancelImportSession.
+func (s *Server) routeAssignImportCategory(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a session id must be a number")
+		return
+	}
+	s.AssignImportSessionCategory(w, r, id)
+}
+
+// routeCommitImportUnit parses the id and unitId path parameters, mirroring routeListImportUnits.
+func (s *Server) routeCommitImportUnit(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a session id must be a number")
+		return
+	}
+	unitID, err := strconv.ParseInt(chi.URLParam(r, "unitId"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a unit id must be a number")
+		return
+	}
+	s.CommitImportUnit(w, r, id, unitID)
 }
 
 // routeListImportUnits parses the id path parameter and the decision/
@@ -325,6 +400,93 @@ func (s *Server) RevertImportSession(w http.ResponseWriter, r *http.Request, id 
 		writeError(w, s.logger, err)
 	default:
 		writeJSON(w, s.logger, http.StatusOK, importRevertResultView(result))
+	}
+}
+
+// AssignImportSessionCategory gives a session a destination category and
+// places everything it already decided COMMIT. Administrator only, the same
+// trust boundary CancelImportSession/RevertImportSession already carry.
+func (s *Server) AssignImportSessionCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.importSessions == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "import sessions are not available")
+		return
+	}
+
+	var body gen.AssignImportSessionCategoryJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "category_id is required")
+		return
+	}
+
+	result, err := s.importSessions.AssignImportCategory(r.Context(), id, body.CategoryId)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such import session")
+	case errors.Is(err, ErrImportSessionCategoryAlreadySet):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Already has a category", "this session already has a category")
+	case errors.Is(err, ErrImportSessionReverted):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Reverted", "this session was reverted; nothing further can be placed into it")
+	case err != nil:
+		writeError(w, s.logger, err)
+	default:
+		writeJSON(w, s.logger, http.StatusOK, importPlacementResultView(result))
+	}
+}
+
+func importPlacementResultView(result ImportPlacementResult) gen.ImportPlacementResult {
+	errs := result.Errors
+	if errs == nil {
+		errs = []string{}
+	}
+	return gen.ImportPlacementResult{UnitsPlaced: result.UnitsPlaced, Errors: errs}
+}
+
+// CommitImportUnit force-commits one QUEUE-decision unit by hand ("commit
+// what was held"). Administrator only, the same trust boundary
+// RevertImportSession already carries.
+func (s *Server) CommitImportUnit(w http.ResponseWriter, r *http.Request, id, unitID int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.importSessions == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "import sessions are not available")
+		return
+	}
+
+	row, err := s.importSessions.CommitImportUnit(r.Context(), id, unitID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such import session or unit")
+	case errors.Is(err, ErrImportUnitNotQueued):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Not queued", "this unit is not currently queued for review")
+	case errors.Is(err, ErrImportUnitHasNoCandidate):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"No candidate", "identification found nothing to commit for this unit")
+	case errors.Is(err, ErrImportSessionHasNoCategory):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"No category", "this session has no category yet; assign one first")
+	case errors.Is(err, ErrImportSessionReverted):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Reverted", "this session was reverted; nothing further can be placed into it")
+	case errors.Is(err, ErrImportUnitChanged):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Changed", "this unit's own files no longer match what was inspected")
+	case errors.Is(err, ErrImportUnitSharesDirectory):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Ambiguous", "this unit shares its directory with other units and cannot be safely re-derived; commit or place it during import instead")
+	case err != nil:
+		writeError(w, s.logger, err)
+	default:
+		writeJSON(w, s.logger, http.StatusOK, importUnitView(row))
 	}
 }
 

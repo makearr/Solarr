@@ -710,6 +710,13 @@ type ImportListWrite struct {
 	Url              *string `json:"url,omitempty"`
 }
 
+// ImportPlacementResult POST .../category's own outcome: every unit the session had already decided COMMIT but not yet placed, placed best-effort.
+type ImportPlacementResult struct {
+	// Errors One entry per unit that could not be placed; never fatal to the rest.
+	Errors      []string `json:"errors"`
+	UnitsPlaced int64    `json:"units_placed"`
+}
+
 // ImportRevertRequest defines model for ImportRevertRequest.
 type ImportRevertRequest struct {
 	// QuarantineRetainHours Defaults to 168 (one week), the same default RemoveAndBlockRequest uses.
@@ -756,6 +763,12 @@ type ImportSessionOrigin string
 
 // ImportSessionState defines model for ImportSession.State.
 type ImportSessionState string
+
+// ImportSettings ADR-48's own single commit-line knob (import.auto_commit_confidence).
+type ImportSettings struct {
+	// AutoCommitConfidence 0.75-0.95, the section 11.4 table's five named levels. Default 0.90.
+	AutoCommitConfidence float32 `json:"auto_commit_confidence"`
+}
 
 // ImportUnit One unit ADR-48's pipeline found and decided.
 type ImportUnit struct {
@@ -1408,6 +1421,11 @@ type ListImportSessionsParams struct {
 // ListImportSessionsParamsState defines parameters for ListImportSessions.
 type ListImportSessionsParamsState string
 
+// AssignImportSessionCategoryJSONBody defines parameters for AssignImportSessionCategory.
+type AssignImportSessionCategoryJSONBody struct {
+	CategoryId int64 `json:"category_id"`
+}
+
 // ListImportUnitsParams defines parameters for ListImportUnits.
 type ListImportUnitsParams struct {
 	Decision *ListImportUnitsParamsDecision `form:"decision,omitempty" json:"decision,omitempty"`
@@ -1659,8 +1677,14 @@ type UpdateImportListJSONRequestBody = ImportListWrite
 // InspectImportJSONRequestBody defines body for InspectImport for application/json ContentType.
 type InspectImportJSONRequestBody = ImportInspectRequest
 
+// AssignImportSessionCategoryJSONRequestBody defines body for AssignImportSessionCategory for application/json ContentType.
+type AssignImportSessionCategoryJSONRequestBody AssignImportSessionCategoryJSONBody
+
 // RevertImportSessionJSONRequestBody defines body for RevertImportSession for application/json ContentType.
 type RevertImportSessionJSONRequestBody = ImportRevertRequest
+
+// UpdateImportSettingsJSONRequestBody defines body for UpdateImportSettings for application/json ContentType.
+type UpdateImportSettingsJSONRequestBody = ImportSettings
 
 // CreateImportListJSONRequestBody defines body for CreateImportList for application/json ContentType.
 type CreateImportListJSONRequestBody = ImportListWrite
@@ -1817,12 +1841,24 @@ type ServerInterface interface {
 	// Ask a running session to stop. Administrator only.
 	// (POST /import/sessions/{id}/cancel)
 	CancelImportSession(w http.ResponseWriter, r *http.Request, id int64)
+	// Give a session a destination category, and place everything it already decided COMMIT (ADR-48). Administrator only.
+	// (POST /import/sessions/{id}/category)
+	AssignImportSessionCategory(w http.ResponseWriter, r *http.Request, id int64)
 	// Undo every file this session placed. Administrator only.
 	// (POST /import/sessions/{id}/revert)
 	RevertImportSession(w http.ResponseWriter, r *http.Request, id int64)
 	// One session's own units, in the order they were committed.
 	// (GET /import/sessions/{id}/units)
 	ListImportUnits(w http.ResponseWriter, r *http.Request, id int64, params ListImportUnitsParams)
+	// Commit one unit DECIDE queued below the confidence threshold, by hand ("commit what was held", ADR-48). Administrator only.
+	// (POST /import/sessions/{id}/units/{unitId}/commit)
+	CommitImportUnit(w http.ResponseWriter, r *http.Request, id int64, unitId int64)
+	// The commit line (ADR-48's own single knob, import.auto_commit_confidence).
+	// (GET /import/settings)
+	GetImportSettings(w http.ResponseWriter, r *http.Request)
+	// Change the commit line. Administrator only.
+	// (PATCH /import/settings)
+	UpdateImportSettings(w http.ResponseWriter, r *http.Request)
 	// A page of jobs the caller may see.
 	// (GET /jobs)
 	ListJobs(w http.ResponseWriter, r *http.Request, params ListJobsParams)
@@ -2153,6 +2189,12 @@ func (_ Unimplemented) CancelImportSession(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Give a session a destination category, and place everything it already decided COMMIT (ADR-48). Administrator only.
+// (POST /import/sessions/{id}/category)
+func (_ Unimplemented) AssignImportSessionCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Undo every file this session placed. Administrator only.
 // (POST /import/sessions/{id}/revert)
 func (_ Unimplemented) RevertImportSession(w http.ResponseWriter, r *http.Request, id int64) {
@@ -2162,6 +2204,24 @@ func (_ Unimplemented) RevertImportSession(w http.ResponseWriter, r *http.Reques
 // One session's own units, in the order they were committed.
 // (GET /import/sessions/{id}/units)
 func (_ Unimplemented) ListImportUnits(w http.ResponseWriter, r *http.Request, id int64, params ListImportUnitsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Commit one unit DECIDE queued below the confidence threshold, by hand ("commit what was held", ADR-48). Administrator only.
+// (POST /import/sessions/{id}/units/{unitId}/commit)
+func (_ Unimplemented) CommitImportUnit(w http.ResponseWriter, r *http.Request, id int64, unitId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The commit line (ADR-48's own single knob, import.auto_commit_confidence).
+// (GET /import/settings)
+func (_ Unimplemented) GetImportSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change the commit line. Administrator only.
+// (PATCH /import/settings)
+func (_ Unimplemented) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3332,6 +3392,39 @@ func (siw *ServerInterfaceWrapper) CancelImportSession(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// AssignImportSessionCategory operation middleware
+func (siw *ServerInterfaceWrapper) AssignImportSessionCategory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AssignImportSessionCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RevertImportSession operation middleware
 func (siw *ServerInterfaceWrapper) RevertImportSession(w http.ResponseWriter, r *http.Request) {
 
@@ -3416,6 +3509,92 @@ func (siw *ServerInterfaceWrapper) ListImportUnits(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListImportUnits(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CommitImportUnit operation middleware
+func (siw *ServerInterfaceWrapper) CommitImportUnit(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "unitId" -------------
+	var unitId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "unitId", chi.URLParam(r, "unitId"), &unitId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "unitId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CommitImportUnit(w, r, id, unitId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetImportSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetImportSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetImportSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateImportSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateImportSettings(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5096,10 +5275,22 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/import/sessions/{id}/cancel", wrapper.CancelImportSession)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/import/sessions/{id}/category", wrapper.AssignImportSessionCategory)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/import/sessions/{id}/revert", wrapper.RevertImportSession)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/import/sessions/{id}/units", wrapper.ListImportUnits)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/import/sessions/{id}/units/{unitId}/commit", wrapper.CommitImportUnit)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/import/settings", wrapper.GetImportSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/import/settings", wrapper.UpdateImportSettings)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/jobs", wrapper.ListJobs)

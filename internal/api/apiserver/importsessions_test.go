@@ -31,6 +31,34 @@ type fakeImportSessionLister struct {
 	lastFilterDecision string
 	lastAfterID        int64
 	lastLimit          int
+
+	// assignErr/assignResult are what AssignImportCategory returns; assignedSession/
+	// assignedCategory are the last arguments it was called with.
+	assignErr        error
+	assignResult     apiserver.ImportPlacementResult
+	assignedSession  int64
+	assignedCategory int64
+
+	// commitErr/commitResult are what CommitImportUnit returns; commitSessionID/
+	// commitUnitID are the last arguments it was called with.
+	commitErr       error
+	commitResult    apiserver.ImportUnitRow
+	commitSessionID int64
+	commitUnitID    int64
+}
+
+func (f *fakeImportSessionLister) AssignImportCategory(
+	_ context.Context, id, categoryID int64,
+) (apiserver.ImportPlacementResult, error) {
+	f.assignedSession, f.assignedCategory = id, categoryID
+	return f.assignResult, f.assignErr
+}
+
+func (f *fakeImportSessionLister) CommitImportUnit(
+	_ context.Context, sessionID, unitID int64,
+) (apiserver.ImportUnitRow, error) {
+	f.commitSessionID, f.commitUnitID = sessionID, unitID
+	return f.commitResult, f.commitErr
 }
 
 func (f *fakeImportSessionLister) CancelImportSession(_ context.Context, id int64) error {
@@ -393,5 +421,170 @@ func TestRevertImportSession_AnswersConflictWhenNotRevertible(t *testing.T) {
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/7/revert", ""))
 	if recorder.Code != http.StatusConflict {
 		t.Errorf("status = %d, want 409 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+func TestAssignImportSessionCategory_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/1/category", `{"category_id":9}`))
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.importSessions.assignedSession != 0 {
+		t.Error("assign ran despite the caller not being an administrator")
+	}
+}
+
+func TestAssignImportSessionCategory_RejectsAMissingBody(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/1/category", ""))
+	if recorder.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+func TestAssignImportSessionCategory_AnswersTheLister(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.importSessions.assignResult = apiserver.ImportPlacementResult{
+		UnitsPlaced: 2, Errors: []string{"unit 5: no room"},
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/42/category", `{"category_id":9}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.importSessions.assignedSession != 42 || fixture.importSessions.assignedCategory != 9 {
+		t.Errorf("assigned = (%d, %d), want (42, 9)",
+			fixture.importSessions.assignedSession, fixture.importSessions.assignedCategory)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(recorder.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	errs, _ := body["errors"].([]any)
+	if body["units_placed"] != float64(2) || len(errs) != 1 {
+		t.Errorf("response = %+v, want the fake's assignResult echoed back", body)
+	}
+}
+
+func TestAssignImportSessionCategory_AnswersNotFound(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.importSessions.assignErr = sql.ErrNoRows
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/99/category", `{"category_id":9}`))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+func TestAssignImportSessionCategory_AnswersConflictWhenAlreadySet(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.importSessions.assignErr = apiserver.ErrImportSessionCategoryAlreadySet
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/7/category", `{"category_id":9}`))
+	if recorder.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+func TestAssignImportSessionCategory_AnswersConflictWhenReverted(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.importSessions.assignErr = apiserver.ErrImportSessionReverted
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/7/category", `{"category_id":9}`))
+	if recorder.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+func TestCommitImportUnit_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/1/units/5/commit", ""))
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.importSessions.commitUnitID != 0 {
+		t.Error("commit ran despite the caller not being an administrator")
+	}
+}
+
+func TestCommitImportUnit_AnswersTheLister(t *testing.T) {
+	fixture := newWorksFixture(t)
+	workID := int64(3)
+	fixture.importSessions.commitResult = apiserver.ImportUnitRow{
+		ID: 5, SessionID: 42, RelPath: "Artist/Album", Decision: "COMMIT", WorkID: &workID,
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/42/units/5/commit", ""))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.importSessions.commitSessionID != 42 || fixture.importSessions.commitUnitID != 5 {
+		t.Errorf("commit args = (%d, %d), want (42, 5)",
+			fixture.importSessions.commitSessionID, fixture.importSessions.commitUnitID)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(recorder.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body["decision"] != "COMMIT" || body["work_id"] != float64(3) {
+		t.Errorf("response = %+v, want the fake's commitResult echoed back", body)
+	}
+}
+
+func TestCommitImportUnit_AnswersNotFound(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.importSessions.commitErr = sql.ErrNoRows
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/1/units/999/commit", ""))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+func TestCommitImportUnit_AnswersConflictVariants(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+	}{
+		{"not queued", apiserver.ErrImportUnitNotQueued},
+		{"no candidate", apiserver.ErrImportUnitHasNoCandidate},
+		{"no category", apiserver.ErrImportSessionHasNoCategory},
+		{"reverted", apiserver.ErrImportSessionReverted},
+		{"changed", apiserver.ErrImportUnitChanged},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newWorksFixture(t)
+			fixture.importSessions.commitErr = tc.err
+			fixture.createUser(t, "admin", settings.RoleAdmin)
+			cookies := fixture.signIn(t, "admin")
+
+			recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/1/units/5/commit", ""))
+			if recorder.Code != http.StatusConflict {
+				t.Errorf("status = %d, want 409 (%s)", recorder.Code, recorder.Body)
+			}
+		})
 	}
 }

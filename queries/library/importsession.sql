@@ -33,6 +33,16 @@ ORDER BY started_at DESC;
 -- name: SetImportSessionExtractDir :exec
 UPDATE import_session SET extract_dir = ? WHERE id = ?;
 
+-- From no category, or a no-op onto the same one -- the second form is what
+-- makes re-running the placement catch-up idempotent (a caller retrying
+-- after a transient placement failure, e.g. capacity not probed yet, sends
+-- the same category_id again). Re-pointing at a *different* category is out
+-- of scope, still refused. :execrows lets the caller tell that apart from
+-- "no such session".
+-- name: SetImportSessionCategory :execrows
+UPDATE import_session SET category_id = sqlc.arg(category_id)
+WHERE id = sqlc.arg(id) AND (category_id IS NULL OR category_id = sqlc.arg(category_id));
+
 -- Set once, the first time a session's estimate is computed (todo 4.21's ETA);
 -- never recomputed on a later resume of the same session.
 -- name: SetImportSessionUnitsEstimated :exec
