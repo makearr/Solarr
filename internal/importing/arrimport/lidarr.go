@@ -8,6 +8,7 @@ package arrimport
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,12 +18,17 @@ import (
 	"github.com/makearr/MediaNexus/internal/platform/httpx"
 )
 
-// maxLidarrResponseBytes bounds what one call can make this process read --
-// a full artist or album listing for even a large library is well under
-// this; a misbehaving or malicious instance answering more is refused
-// rather than read without limit, the same reasoning musicbrainz's own
-// maxResponseBytes states.
-const maxLidarrResponseBytes = 16 << 20
+// maxLidarrResponseBytes bounds what one call can make this process read.
+// 128 MiB, not the 16 MiB musicbrainz's own per-release lookups use:
+// Lidarr's own Album objects carry far more than this package's minimal
+// fields read, and one real prolific artist's own Albums response measured
+// 28 MiB for 2,050 albums live -- a misbehaving or malicious instance
+// answering more than this is still refused rather than read without limit.
+const maxLidarrResponseBytes = 128 << 20
+
+// ErrResponseTooLarge reports a response this package refused to finish
+// reading past maxLidarrResponseBytes.
+var ErrResponseTooLarge = errors.New("arrimport: response exceeded the size limit")
 
 // LidarrStatus is GET /api/v1/system/status's own shape, trimmed to what a
 // connection test needs.
@@ -169,9 +175,19 @@ func (c LidarrClient) get(ctx context.Context, path string, into any) error {
 	}
 	defer func() { _ = response.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxLidarrResponseBytes))
+	// Read one byte past the limit so a response that exactly fills it is
+	// reported honestly (ErrResponseTooLarge) instead of silently truncated
+	// into a confusing "unexpected end of JSON input" from Unmarshal --
+	// found live against a real prolific artist's own Albums response
+	// (2,050 albums, 28 MiB: Lidarr's own album objects carry much more than
+	// this package's minimal fields read, nothing like musicbrainz's own
+	// per-object size).
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxLidarrResponseBytes+1))
 	if err != nil {
 		return fmt.Errorf("arrimport: read response for %s: %w", path, err)
+	}
+	if len(body) > maxLidarrResponseBytes {
+		return fmt.Errorf("arrimport: %s: %w (over %d bytes)", path, ErrResponseTooLarge, maxLidarrResponseBytes)
 	}
 	if err := json.Unmarshal(body, into); err != nil {
 		return fmt.Errorf("arrimport: decode response for %s: %w", path, err)
