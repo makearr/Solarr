@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 
@@ -59,6 +60,20 @@ func subscriptionFrom(row librarydb.Subscription) Subscription {
 		MonitorBackCatalogue: row.MonitorBackCatalogue == 1,
 		FiltersJSON:          row.FiltersJson.String,
 	}
+}
+
+// Delete removes a subscription outright. Revert-only use so far (todo
+// 4.13's ArrImportRevert): must run before People.Delete for the same
+// person, since subscription.subject_id carries no FK/cascade of its own to
+// clean up after a deleted person.
+func (s Subscriptions) Delete(ctx context.Context, subscriptionID int64) error {
+	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).DeleteSubscription(ctx, subscriptionID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: delete subscription %d: %w", subscriptionID, err)
+	}
+	return nil
 }
 
 // ExternalIDFor returns a person's external id for one provider (e.g.

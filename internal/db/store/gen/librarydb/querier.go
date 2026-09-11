@@ -11,6 +11,7 @@ import (
 
 type Querier interface {
 	AddAltNumbering(ctx context.Context, arg AddAltNumberingParams) error
+	AddArrImportItem(ctx context.Context, arg AddArrImportItemParams) (ArrImportItem, error)
 	AddCollectionMember(ctx context.Context, arg AddCollectionMemberParams) error
 	// edition_id and part_id are 0 for a credit on the work itself (Appendix E, D2).
 	AddCredit(ctx context.Context, arg AddCreditParams) error
@@ -87,6 +88,8 @@ type Querier interface {
 	// scanned, monitored work has rows on both sides and must count once.
 	CountWorksVisibleToCategory(ctx context.Context, arg CountWorksVisibleToCategoryParams) (int64, error)
 	CreateAcquisition(ctx context.Context, arg CreateAcquisitionParams) (Acquisition, error)
+	// *Arr import runs (todo 4.13, ADR-52). Column lists follow table order.
+	CreateArrImport(ctx context.Context, arg CreateArrImportParams) (ArrImport, error)
 	// ADR-53 part 2 (migration 0019). Column lists follow table order, or sqlc
 	// stops reusing models.
 	CreateBlockedContent(ctx context.Context, arg CreateBlockedContentParams) (BlockedContent, error)
@@ -169,6 +172,7 @@ type Querier interface {
 	FindWorksByClassification(ctx context.Context, arg FindWorksByClassificationParams) ([]Work, error)
 	// Every stored variant is matched during import, not just the canonical one (ADR-41).
 	FindWorksByNormalizedTitle(ctx context.Context, arg FindWorksByNormalizedTitleParams) ([]Work, error)
+	FinishArrImport(ctx context.Context, arg FinishArrImportParams) error
 	FinishImportSession(ctx context.Context, arg FinishImportSessionParams) error
 	FinishMoveJob(ctx context.Context, arg FinishMoveJobParams) error
 	// Only a completed sweep moves the watermark and clears the cursor.
@@ -176,6 +180,7 @@ type Querier interface {
 	GetAcquisition(ctx context.Context, id int64) (Acquisition, error)
 	// Identity is the client reference; the path is re-read on every poll.
 	GetAcquisitionByClientRef(ctx context.Context, arg GetAcquisitionByClientRefParams) (Acquisition, error)
+	GetArrImport(ctx context.Context, id int64) (ArrImport, error)
 	GetArtwork(ctx context.Context, arg GetArtworkParams) (string, error)
 	GetAttributes(ctx context.Context, id int64) (MediaAttribute, error)
 	GetBlockedContent(ctx context.Context, id int64) (BlockedContent, error)
@@ -253,6 +258,11 @@ type Querier interface {
 	// Every credit anywhere under a work, at any scope. Coverage counts use this;
 	// the work-level listing above deliberately does not.
 	ListAllCreditsUnderWork(ctx context.Context, workID int64) ([]Credit, error)
+	ListArrImportItems(ctx context.Context, importID int64) ([]ArrImportItem, error)
+	// Revert's own lookup (library.ArrImportRevert): every item this run itself
+	// created something for, the only rows a revert is allowed to touch.
+	ListArrImportItemsCreatedByRun(ctx context.Context, importID int64) ([]ArrImportItem, error)
+	ListArrImportsForInstance(ctx context.Context, instanceID int64) ([]ArrImport, error)
 	ListArtworkForSubject(ctx context.Context, arg ListArtworkForSubjectParams) ([]Artwork, error)
 	ListBlockedContent(ctx context.Context, arg ListBlockedContentParams) ([]BlockedContent, error)
 	ListBlocklist(ctx context.Context, arg ListBlocklistParams) ([]BlocklistedRelease, error)
@@ -494,6 +504,7 @@ type Querier interface {
 	SearchWorks(ctx context.Context, arg SearchWorksParams) ([]SearchWorksRow, error)
 	SetAcquisitionPath(ctx context.Context, arg SetAcquisitionPathParams) error
 	SetAcquisitionState(ctx context.Context, arg SetAcquisitionStateParams) error
+	SetArrImportState(ctx context.Context, arg SetArrImportStateParams) error
 	SetCounter(ctx context.Context, arg SetCounterParams) error
 	SetDesiredItemAvailability(ctx context.Context, arg SetDesiredItemAvailabilityParams) error
 	SetDesiredItemMonitored(ctx context.Context, arg SetDesiredItemMonitoredParams) error
