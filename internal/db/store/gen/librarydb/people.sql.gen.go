@@ -516,6 +516,43 @@ func (q *Queries) GetPersonByExternalID(ctx context.Context, arg GetPersonByExte
 	return i, err
 }
 
+const getSubscriptionForSubject = `-- name: GetSubscriptionForSubject :one
+SELECT id, subject_type, subject_id, media_types_json, roles_json, category_id,
+       profile_id, filters_json, monitor_back_catalogue, enabled, user_id, created_at
+FROM subscription WHERE subject_type = ? AND subject_id = ? AND user_id IS ?
+`
+
+type GetSubscriptionForSubjectParams struct {
+	SubjectType string
+	SubjectID   int64
+	UserID      sql.NullInt64
+}
+
+// Subscribe's own idempotency check (Invariant 80): the UNIQUE(subject_type,
+// subject_id, user_id) constraint means a second Subscribe call for the same
+// person and user must look before it inserts, not rely on the constraint to
+// refuse -- "user_id IS ?" matches SQLite's own NULL semantics for a global
+// (no per-user) subscription.
+func (q *Queries) GetSubscriptionForSubject(ctx context.Context, arg GetSubscriptionForSubjectParams) (Subscription, error) {
+	row := q.db.QueryRowContext(ctx, getSubscriptionForSubject, arg.SubjectType, arg.SubjectID, arg.UserID)
+	var i Subscription
+	err := row.Scan(
+		&i.ID,
+		&i.SubjectType,
+		&i.SubjectID,
+		&i.MediaTypesJson,
+		&i.RolesJson,
+		&i.CategoryID,
+		&i.ProfileID,
+		&i.FiltersJson,
+		&i.MonitorBackCatalogue,
+		&i.Enabled,
+		&i.UserID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getTagBySlug = `-- name: GetTagBySlug :one
 SELECT id, name, slug, parent_id, description, source FROM tag WHERE slug = ?
 `
