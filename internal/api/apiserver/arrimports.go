@@ -21,6 +21,11 @@ var ErrArrAppNotYetSupported = errors.New("apiserver: this *Arr app is not yet w
 // own boundary, the same shape ErrImportSessionReverted's own pair keeps.
 var ErrArrImportNotDone = errors.New("apiserver: this import is not in a revertible state")
 
+// ErrArrSyncAlreadyRunning means this instance already has a RUNNING import
+// -- refused rather than started twice, the same "refused rather than
+// double-queued" rule ADR-59's own Run now has for a registered task.
+var ErrArrSyncAlreadyRunning = errors.New("apiserver: this instance already has a sync running")
+
 // ArrImportRun is one *Arr import's own progress and outcome.
 type ArrImportRun struct {
 	ID                             int64
@@ -99,6 +104,9 @@ func (s *Server) SyncArrInstance(w http.ResponseWriter, r *http.Request, id int6
 	case errors.Is(err, ErrArrAppNotYetSupported):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
 			"Not yet supported", "this app only connects and parks its own intent so far, no real sync")
+	case errors.Is(err, ErrArrSyncAlreadyRunning):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Already running", "this instance already has a sync in progress")
 	case err != nil:
 		writeError(w, s.logger, err)
 	default:

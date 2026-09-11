@@ -197,6 +197,14 @@ function InstanceCard({
 }
 
 function RunSummary({ run }: { run: ArrImportRun }) {
+  if (run.state === "RUNNING") {
+    return (
+      <p className="rounded-md bg-canvas px-2 py-1.5 text-xs text-ink-muted">
+        Started -- a real library can take a few minutes (one Albums call per artist). Expand
+        history below to watch it finish.
+      </p>
+    );
+  }
   return (
     <p className="rounded-md bg-canvas px-2 py-1.5 text-xs text-ink-muted">
       {run.state === "DONE" ? (
@@ -222,6 +230,11 @@ function InstanceHistory({ instanceId }: { instanceId: number }) {
       if (error) throw error;
       return data;
     },
+    // Sync starts in the background and can take minutes over a real
+    // library (POST /arr/instances/{id}/sync's own doc comment) -- poll
+    // while anything is still RUNNING, stop once nothing is.
+    refetchInterval: (query) =>
+      query.state.data?.some((run) => run.state === "RUNNING") ? 3000 : false,
   });
 
   const revert = useMutation({

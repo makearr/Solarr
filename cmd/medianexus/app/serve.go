@@ -486,6 +486,7 @@ func (p *process) startServer(ctx context.Context) error {
 				library.NewPeople(p.library), library.NewSubscriptions(p.library),
 			),
 			DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Lidarr: p.arrClientFactory(),
+			Logger: p.logger,
 		},
 		Search:       adapters.Search{Search: library.NewSearch(p.library)},
 		Unidentified: adapters.Unidentified{Unidentified: library.NewUnidentified(p.library)},

@@ -101,19 +101,22 @@ func (p *process) musicBrainzProvider() musicbrainz.Provider {
 // limit/breaker bucket across every *Arr instance sync (todo 4.13) -- these
 // are rare, admin-triggered, one-at-a-time operations, not a high-frequency
 // provider like MusicBrainz, so one shared "arr" bucket is enough rather
-// than one per instance.
+// than one per instance. Deliberately gentle (2 req/s, a 60s per-request
+// timeout well above httpx's own 30s default): the *Arr instance on the
+// other end is someone's own real server, often also busy with its own
+// imports, not infrastructure this project operates.
 func (p *process) arrClientFactory() adapters.LidarrClientFactory {
 	wall := clock.NewSystem()
 	guard := httpx.NewGuard(nil, nil, nil)
 	limiter := httpx.NewLimiter(wall, httpx.Config{
-		Providers: map[string]httpx.Limits{"arr": {MinInterval: 100 * time.Millisecond}},
+		Providers: map[string]httpx.Limits{"arr": {MinInterval: 500 * time.Millisecond}},
 	}, nil)
 	breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
 	agent := httpx.UserAgent(p.build.Version)
 
 	return func(baseURL, apiKey string) arrimport.LidarrClient {
 		client := httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
-			Provider: "arr", UserAgent: agent, Proxy: p.liveProxyPolicy(),
+			Provider: "arr", UserAgent: agent, Proxy: p.liveProxyPolicy(), Timeout: 60 * time.Second,
 		})
 		return arrimport.NewLidarrClient(client, baseURL, apiKey)
 	}
