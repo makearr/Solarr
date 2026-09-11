@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
 
@@ -59,6 +60,22 @@ export function Settings() {
         <Scheduler />
 
         <CacheSettings />
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Import</h2>
+          <Link
+            to="/settings/arr"
+            className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface
+                       px-3 py-2.5 hover:border-accent focus-visible:outline-2
+                       focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <span className="text-sm font-medium">*Arr import</span>
+            <span className="text-xs text-ink-muted">
+              Bring in what Lidarr (and, once their own stage ships, Sonarr/Radarr/Readarr/
+              Whisparr) already monitors, as intent -- todo 4.13.
+            </span>
+          </Link>
+        </section>
 
         <section className="flex flex-col gap-2">
           <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Sections</h2>
