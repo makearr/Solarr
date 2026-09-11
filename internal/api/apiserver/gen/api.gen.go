@@ -2004,7 +2004,7 @@ type ServerInterface interface {
 	// Replace a connection's own API key. Administrator only. A separate endpoint from PATCH: resealing on every unrelated edit would be silent, pointless churn.
 	// (POST /arr/instances/{id}/apikey)
 	SetArrInstanceKey(w http.ResponseWriter, r *http.Request, id int64)
-	// Run one import (todo 4.13). Administrator only.
+	// Start one import (todo 4.13). Administrator only.
 	// (POST /arr/instances/{id}/sync)
 	SyncArrInstance(w http.ResponseWriter, r *http.Request, id int64)
 	// Exchange a username and password for a session cookie.
@@ -2319,7 +2319,7 @@ func (_ Unimplemented) SetArrInstanceKey(w http.ResponseWriter, r *http.Request,
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Run one import (todo 4.13). Administrator only.
+// Start one import (todo 4.13). Administrator only.
 // (POST /arr/instances/{id}/sync)
 func (_ Unimplemented) SyncArrInstance(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)

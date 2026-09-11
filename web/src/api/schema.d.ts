@@ -810,8 +810,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Run one import (todo 4.13). Administrator only.
-         * @description Synchronous: a Lidarr library's own realistic scale (hundreds to low thousands of artists, no file I/O involved) completes well within one request. A monitored artist becomes person+subscription, a monitored album becomes a desired_item, each matched by its own MusicBrainz id -- idempotent and additive (Invariant 80): re-running never duplicates what a previous run already created, and never resurrects something unmonitored locally since. Records the run either way, so a connection failure still shows as a DONE run with its own error, not a silently missing one.
+         * Start one import (todo 4.13). Administrator only.
+         * @description Starts the run and answers immediately with it in state RUNNING -- a real library (hundreds of artists, each needing its own Albums call) can run for minutes, well past this process's own HTTP write timeout, so the caller polls GET /arr/imports/{id} for DONE/FAILED rather than waiting on this response. A monitored artist becomes person+subscription, a monitored album becomes a desired_item, each matched by its own MusicBrainz id -- idempotent and additive (Invariant 80): re-running never duplicates what a previous run already created, and never resurrects something unmonitored locally since. The run is recorded either way, so a connection failure still shows as its own FAILED run, not a silently missing one.
          */
         post: operations["syncArrInstance"];
         delete?: never;
@@ -4147,7 +4147,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The run, whatever it did or did not manage to do. */
+            /** @description The run, just started (state RUNNING). */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4159,7 +4159,7 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            /** @description This app is not yet wired for a real sync (connect/preview/park only). */
+            /** @description Either this app is not yet wired for a real sync (connect/preview/park only), or this instance already has a sync running. */
             409: components["responses"]["Problem"];
         };
     };

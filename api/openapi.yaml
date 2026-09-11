@@ -1255,20 +1255,22 @@ paths:
     post:
       operationId: syncArrInstance
       tags: [settings]
-      summary: Run one import (todo 4.13). Administrator only.
+      summary: Start one import (todo 4.13). Administrator only.
       description: >-
-        Synchronous: a Lidarr library's own realistic scale (hundreds to low
-        thousands of artists, no file I/O involved) completes well within one
-        request. A monitored artist becomes person+subscription, a monitored
-        album becomes a desired_item, each matched by its own MusicBrainz id
-        -- idempotent and additive (Invariant 80): re-running never
-        duplicates what a previous run already created, and never resurrects
-        something unmonitored locally since. Records the run either way, so
-        a connection failure still shows as a DONE run with its own error,
-        not a silently missing one.
+        Starts the run and answers immediately with it in state RUNNING --
+        a real library (hundreds of artists, each needing its own Albums
+        call) can run for minutes, well past this process's own HTTP write
+        timeout, so the caller polls GET /arr/imports/{id} for DONE/FAILED
+        rather than waiting on this response. A monitored artist becomes
+        person+subscription, a monitored album becomes a desired_item, each
+        matched by its own MusicBrainz id -- idempotent and additive
+        (Invariant 80): re-running never duplicates what a previous run
+        already created, and never resurrects something unmonitored locally
+        since. The run is recorded either way, so a connection failure still
+        shows as its own FAILED run, not a silently missing one.
       responses:
         "200":
-          description: The run, whatever it did or did not manage to do.
+          description: The run, just started (state RUNNING).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ArrImportRun" }
@@ -1277,7 +1279,10 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409":
           $ref: "#/components/responses/Problem"
-          description: This app is not yet wired for a real sync (connect/preview/park only).
+          description: >-
+            Either this app is not yet wired for a real sync
+            (connect/preview/park only), or this instance already has a sync
+            running.
 
   /arr/imports:
     get:

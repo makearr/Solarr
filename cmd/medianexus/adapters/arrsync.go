@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -25,11 +26,17 @@ type LidarrClientFactory func(baseURL, apiKey string) arrimport.LidarrClient
 // ArrSync runs one *Arr import (todo 4.13, ADR-52): a monitored artist
 // becomes person+subscription, a monitored album becomes a desired_item,
 // each matched by its own MusicBrainz id (ADR-8) so a Lidarr-driven work
-// and a scan- or search-driven one always land on the same row. Synchronous,
-// not a background job: a Lidarr library's own realistic scale (hundreds to
-// low thousands of artists, no file I/O or ffprobe involved) is nowhere
-// near WALK/GROUP's 500k-file design point that justifies a resumable job;
-// revisit if a real large library proves this wrong.
+// and a scan- or search-driven one always land on the same row.
+//
+// Sync returns as soon as the run is recorded RUNNING; the actual walk runs
+// detached in its own goroutine, and a caller polls GET /arr/imports/{id}
+// for DONE/FAILED. Originally built synchronous ("a Lidarr library's own
+// realistic scale is nowhere near WALK/GROUP's 500k-file design point");
+// live-verified wrong the same day against a real 766-artist library (one
+// artist alone with 251 albums, each needing its own Albums call) that
+// would have run well past this process's own HTTP write timeout -- exactly
+// the "revisit if a real large library proves this wrong" this type's
+// earlier doc comment already named as the thing to watch for.
 type ArrSync struct {
 	Cache            *settings.Cache
 	Identity         library.Identity
@@ -41,12 +48,15 @@ type ArrSync struct {
 	DefaultProfileID int64
 	Clock            clock.Clock
 	Lidarr           LidarrClientFactory
+	Logger           *slog.Logger
 }
 
-// Sync runs one instance's own import, recording it as a new library.ArrImports
-// run regardless of outcome -- a connection failure still leaves a DONE run
-// with an error and zero counts, not a silently missing one, so the UI
-// always has something to show for an attempt.
+// Sync starts one instance's own import and returns immediately with the
+// RUNNING run -- recorded regardless of outcome, so a connection failure
+// still leaves a row the UI can show, not a silently missing one. The
+// actual walk (runAndFinish) runs detached from ctx: an HTTP request's own
+// context is cancelled the instant this method returns, but the sync it
+// started must keep running.
 func (a ArrSync) Sync(ctx context.Context, instanceID int64) (apiserver.ArrImportRun, error) {
 	instance, err := a.Cache.GetArrInstance(ctx, instanceID)
 	if err != nil {
@@ -60,6 +70,16 @@ func (a ArrSync) Sync(ctx context.Context, instanceID int64) (apiserver.ArrImpor
 		return apiserver.ArrImportRun{}, err
 	}
 
+	existing, err := a.Imports.ListForInstance(ctx, instanceID)
+	if err != nil {
+		return apiserver.ArrImportRun{}, err
+	}
+	for _, run := range existing {
+		if run.State == library.ArrImportRunning {
+			return apiserver.ArrImportRun{}, apiserver.ErrArrSyncAlreadyRunning
+		}
+	}
+
 	now := a.Clock.Now()
 	importID, err := a.Imports.Start(ctx, instanceID, string(instance.App), now.Unix())
 	if err != nil {
@@ -67,6 +87,22 @@ func (a ArrSync) Sync(ctx context.Context, instanceID int64) (apiserver.ArrImpor
 	}
 
 	client := a.Lidarr(instance.BaseURL, apiKey.Reveal())
+	go a.runAndFinish(context.WithoutCancel(ctx), importID, instanceID, instance, client)
+
+	run, err := a.Imports.Get(ctx, importID)
+	if err != nil {
+		return apiserver.ArrImportRun{}, err
+	}
+	return arrImportRunView(run), nil
+}
+
+// runAndFinish is Sync's own detached second half: the real walk, then
+// recording its outcome. ctx has already had Sync's own cancellation
+// stripped (context.WithoutCancel) -- it must outlive the HTTP request that
+// started it.
+func (a ArrSync) runAndFinish(
+	ctx context.Context, importID, instanceID int64, instance settings.ArrInstance, client arrimport.LidarrClient,
+) {
 	counts, syncErr := a.syncLidarr(ctx, importID, instance, client)
 
 	finishedAt := a.Clock.Now().Unix()
@@ -74,19 +110,29 @@ func (a ArrSync) Sync(ctx context.Context, instanceID int64) (apiserver.ArrImpor
 	if syncErr != nil {
 		errMsg = syncErr.Error()
 	}
-	if err := a.Imports.Finish(ctx, importID, library.ArrImportDone, finishedAt, errMsg, counts); err != nil {
-		return apiserver.ArrImportRun{}, err
+	// A connection or artist-listing failure leaves every count at zero --
+	// the run never got started, FAILED rather than a DONE with nothing to
+	// show for it. A per-artist/per-album failure still leaves real counts
+	// (syncLidarr's own best-effort tolerance), so that stays DONE with its
+	// own error summarising what did not import.
+	state := library.ArrImportDone
+	if syncErr != nil && counts == (library.ArrImportCounts{}) {
+		state = library.ArrImportFailed
+	}
+	if err := a.Imports.Finish(ctx, importID, state, finishedAt, errMsg, counts); err != nil {
+		if a.Logger != nil {
+			a.Logger.Error("arr import: recording run outcome failed",
+				slog.Int64("import_id", importID), slog.Any("error", err))
+		}
+		return
 	}
 	// Best-effort: a failure here would otherwise hide a completed run
 	// behind an error, and the run's own DONE row is already the source of
 	// truth for what happened.
-	_ = a.Cache.SetArrInstanceSyncResult(ctx, instanceID, finishedAt, errMsg)
-
-	run, err := a.Imports.Get(ctx, importID)
-	if err != nil {
-		return apiserver.ArrImportRun{}, err
+	if err := a.Cache.SetArrInstanceSyncResult(ctx, instanceID, finishedAt, errMsg); err != nil && a.Logger != nil {
+		a.Logger.Warn("arr import: recording instance sync result failed",
+			slog.Int64("instance_id", instanceID), slog.Any("error", err))
 	}
-	return arrImportRunView(run), nil
 }
 
 // ListImports answers every run for one instance, newest first.
