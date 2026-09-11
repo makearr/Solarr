@@ -1140,6 +1140,213 @@ paths:
           $ref: "#/components/responses/Problem"
           description: category_id does not exist, or the caller cannot read it.
 
+  /arr/instances:
+    get:
+      operationId: listArrInstances
+      tags: [settings]
+      summary: Every configured *Arr connection (todo 4.13, ADR-52).
+      responses:
+        "200":
+          description: Every connection. api_key is always masked.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ArrInstance" }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: addArrInstance
+      tags: [settings]
+      summary: Connect a new *Arr instance. Administrator only.
+      description: >-
+        api_key is sealed at rest (secrets.Cipher) and never returned in
+        plaintext again -- every response shows Masked instead. Only Lidarr
+        has a real sync this pass; the other four apps can still be
+        connected, for when their own stage ships.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddArrInstanceRequest" }
+      responses:
+        "201":
+          description: Connected.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArrInstance" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: The given category_id does not exist.
+
+  /arr/instances/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    patch:
+      operationId: updateArrInstance
+      tags: [settings]
+      summary: >-
+        Change a connection's own facts. Administrator only. Never touches
+        api_key -- see /arr/instances/{id}/apikey.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateArrInstanceRequest" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArrInstance" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteArrInstance
+      tags: [settings]
+      summary: Remove a connection. Administrator only.
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /arr/instances/{id}/apikey:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: setArrInstanceKey
+      tags: [settings]
+      summary: >-
+        Replace a connection's own API key. Administrator only. A separate
+        endpoint from PATCH: resealing on every unrelated edit would be
+        silent, pointless churn.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [api_key]
+              properties:
+                api_key: { type: string, minLength: 1 }
+      responses:
+        "204": { description: Replaced. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /arr/instances/{id}/sync:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: syncArrInstance
+      tags: [settings]
+      summary: Run one import (todo 4.13). Administrator only.
+      description: >-
+        Synchronous: a Lidarr library's own realistic scale (hundreds to low
+        thousands of artists, no file I/O involved) completes well within one
+        request. A monitored artist becomes person+subscription, a monitored
+        album becomes a desired_item, each matched by its own MusicBrainz id
+        -- idempotent and additive (Invariant 80): re-running never
+        duplicates what a previous run already created, and never resurrects
+        something unmonitored locally since. Records the run either way, so
+        a connection failure still shows as a DONE run with its own error,
+        not a silently missing one.
+      responses:
+        "200":
+          description: The run, whatever it did or did not manage to do.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArrImportRun" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          $ref: "#/components/responses/Problem"
+          description: This app is not yet wired for a real sync (connect/preview/park only).
+
+  /arr/imports:
+    get:
+      operationId: listArrImports
+      tags: [settings]
+      summary: Every import run for one instance, newest first.
+      parameters:
+        - name: instance_id
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: Every run.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ArrImportRun" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /arr/imports/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getArrImport
+      tags: [settings]
+      summary: One run's own detail, including every item it touched.
+      responses:
+        "200":
+          description: The run and its items.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArrImportDetail" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /arr/imports/{id}/revert:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: revertArrImport
+      tags: [settings]
+      summary: Undo one run. Administrator only.
+      description: >-
+        Only what the run itself created (its own arr_import_item
+        *_created flags), never something it only matched -- the same
+        distinction library.ImportRevert already draws for a normal import.
+        Best-effort per item; a person or work still referenced elsewhere is
+        a real, reported failure, not a reason to abandon the rest.
+      responses:
+        "200":
+          description: What was actually undone, and any per-item failure.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArrImportRevertResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          $ref: "#/components/responses/Problem"
+          description: The run is not in a revertible state (still running, or already reverted).
+
   /works/{id}:
     parameters:
       - name: id
@@ -2978,6 +3185,125 @@ components:
             ADR-36's composite score, computed against the user_request
             trigger. There is no populated hunt_queue yet (stage 5/6), so this
             is the score alone, not a position within it.
+
+    ArrApp:
+      type: string
+      enum: [lidarr, sonarr, radarr, readarr, whisparr]
+      description: >-
+        Which *Arr application a connection talks to (ADR-52). Only lidarr
+        has a real sync this pass (music exists); the other four can be
+        connected for when their own stage ships.
+
+    SecretMask:
+      type: object
+      required: [has_value]
+      description: >-
+        A credential, shown without ever exposing it (section 13.1). The raw
+        value exists only between the database and the one outbound request
+        that needs it.
+      properties:
+        has_value: { type: boolean }
+        masked:
+          type: string
+          description: A short hint ("abc…xyz"), present only when has_value is true.
+
+    ArrInstance:
+      type: object
+      required: [id, app, name, base_url, enabled, api_key, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        app: { $ref: "#/components/schemas/ArrApp" }
+        name: { type: string }
+        base_url: { type: string }
+        category_id:
+          type: integer
+          format: int64
+          description: >-
+            Where imported intent lands. Unset means match each artist's own
+            root folder path against a configured root folder instead.
+        enabled: { type: boolean }
+        api_key: { $ref: "#/components/schemas/SecretMask" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        last_synced_at: { type: string, format: date-time }
+        last_sync_error: { type: string }
+
+    AddArrInstanceRequest:
+      type: object
+      required: [app, name, base_url, api_key]
+      properties:
+        app: { $ref: "#/components/schemas/ArrApp" }
+        name: { type: string, minLength: 1 }
+        base_url: { type: string, minLength: 1 }
+        api_key: { type: string, minLength: 1 }
+        category_id: { type: integer, format: int64 }
+        enabled: { type: boolean, default: true }
+
+    UpdateArrInstanceRequest:
+      type: object
+      required: [name, base_url]
+      properties:
+        name: { type: string, minLength: 1 }
+        base_url: { type: string, minLength: 1 }
+        category_id: { type: integer, format: int64 }
+        enabled: { type: boolean, default: true }
+
+    ArrImportRun:
+      type: object
+      required:
+        [id, instance_id, app, state, started_at, artists_created, artists_matched,
+         albums_created, albums_matched, items_parked]
+      properties:
+        id: { type: integer, format: int64 }
+        instance_id: { type: integer, format: int64 }
+        app: { $ref: "#/components/schemas/ArrApp" }
+        state: { type: string, enum: [RUNNING, DONE, FAILED, REVERTED] }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        error: { type: string }
+        artists_created: { type: integer, format: int64 }
+        artists_matched: { type: integer, format: int64 }
+        albums_created: { type: integer, format: int64 }
+        albums_matched: { type: integer, format: int64 }
+        items_parked: { type: integer, format: int64 }
+
+    ArrImportItem:
+      type: object
+      required: [id, import_id, kind, source_id, title, person_created, work_created, desired_item_created, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        import_id: { type: integer, format: int64 }
+        kind: { type: string, enum: [artist, album, parked] }
+        source_id: { type: string, description: The *Arr app's own id for this entity. }
+        title: { type: string }
+        person_id: { type: integer, format: int64 }
+        person_created: { type: boolean }
+        subscription_id: { type: integer, format: int64 }
+        work_id: { type: integer, format: int64 }
+        work_created: { type: boolean }
+        desired_item_id: { type: integer, format: int64 }
+        desired_item_created: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    ArrImportDetail:
+      type: object
+      required: [run, items]
+      properties:
+        run: { $ref: "#/components/schemas/ArrImportRun" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ArrImportItem" }
+
+    ArrImportRevertResult:
+      type: object
+      required: [works_deleted, subscriptions_deleted, people_deleted, errors]
+      properties:
+        works_deleted: { type: integer }
+        subscriptions_deleted: { type: integer }
+        people_deleted: { type: integer }
+        errors:
+          type: array
+          items: { type: string }
 
     Person:
       type: object

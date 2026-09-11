@@ -4,6 +4,8 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/makearr/MediaNexus/cmd/medianexus/adapters"
+	"github.com/makearr/MediaNexus/internal/importing/arrimport"
 	"github.com/makearr/MediaNexus/internal/media/music"
 	"github.com/makearr/MediaNexus/internal/metadata/metacache"
 	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
@@ -93,6 +95,28 @@ func (p *process) musicBrainzProvider() musicbrainz.Provider {
 		Sources: sources, Cache: metacache.New(p.metadata), Clock: wall, Logger: p.logger,
 		RefreshAfter: config.RefreshAfter.AsDuration(),
 	})
+}
+
+// arrClientFactory builds adapters.LidarrClientFactory: one shared rate-
+// limit/breaker bucket across every *Arr instance sync (todo 4.13) -- these
+// are rare, admin-triggered, one-at-a-time operations, not a high-frequency
+// provider like MusicBrainz, so one shared "arr" bucket is enough rather
+// than one per instance.
+func (p *process) arrClientFactory() adapters.LidarrClientFactory {
+	wall := clock.NewSystem()
+	guard := httpx.NewGuard(nil, nil, nil)
+	limiter := httpx.NewLimiter(wall, httpx.Config{
+		Providers: map[string]httpx.Limits{"arr": {MinInterval: 100 * time.Millisecond}},
+	}, nil)
+	breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
+	agent := httpx.UserAgent(p.build.Version)
+
+	return func(baseURL, apiKey string) arrimport.LidarrClient {
+		client := httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
+			Provider: "arr", UserAgent: agent, Proxy: p.liveProxyPolicy(),
+		})
+		return arrimport.NewLidarrClient(client, baseURL, apiKey)
+	}
 }
 
 // publicIPClient is the one outbound client the process builds for itself. Every

@@ -75,6 +75,24 @@ func (p People) ResolvePerson(ctx context.Context, at time.Time, link PersonLink
 	return personID, nil
 }
 
+// FindByExternalID answers the person behind an external id, without
+// creating one -- the "did this call create it or only match it" question
+// ResolvePerson's own return value cannot answer, needed by a caller that
+// must record which is which (todo 4.13's ArrImportRevert: only a person a
+// run itself created may be undone).
+func (p People) FindByExternalID(ctx context.Context, provider, externalID string) (int64, bool, error) {
+	person, err := librarydb.New(p.store.Read()).GetPersonByExternalID(ctx, librarydb.GetPersonByExternalIDParams{
+		Provider: provider, ExternalID: externalID,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("library: find person %s:%s: %w", provider, externalID, err)
+	}
+	return person.ID, true, nil
+}
+
 func findOrCreatePerson(
 	ctx context.Context, queries *librarydb.Queries, at time.Time, link PersonLink,
 ) (int64, error) {
