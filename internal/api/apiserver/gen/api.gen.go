@@ -1604,6 +1604,12 @@ type CreateCategoryJSONBody struct {
 	PriorityRank *int64 `json:"priority_rank,omitempty"`
 }
 
+// AttachRootFolderToCategoryJSONBody defines parameters for AttachRootFolderToCategory.
+type AttachRootFolderToCategoryJSONBody struct {
+	AcceptsNew   *bool `json:"accepts_new,omitempty"`
+	RootFolderId int64 `json:"root_folder_id"`
+}
+
 // DiscoverSearchParams defines parameters for DiscoverSearch.
 type DiscoverSearchParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
@@ -1885,6 +1891,9 @@ type UpdateCacheBudgetJSONRequestBody UpdateCacheBudgetJSONBody
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody CreateCategoryJSONBody
 
+// AttachRootFolderToCategoryJSONRequestBody defines body for AttachRootFolderToCategory for application/json ContentType.
+type AttachRootFolderToCategoryJSONRequestBody AttachRootFolderToCategoryJSONBody
+
 // DiscoverAddJSONRequestBody defines body for DiscoverAdd for application/json ContentType.
 type DiscoverAddJSONRequestBody = DiscoverAddRequest
 
@@ -2037,6 +2046,12 @@ type ServerInterface interface {
 	// Remove a category. Administrator only.
 	// (DELETE /categories/{id})
 	DeleteCategory(w http.ResponseWriter, r *http.Request, id int64)
+	// Put a root folder into a category. Administrator only.
+	// (POST /categories/{id}/rootfolders)
+	AttachRootFolderToCategory(w http.ResponseWriter, r *http.Request, id int64)
+	// Take a root folder out of a category. Administrator only.
+	// (DELETE /categories/{id}/rootfolders/{rootFolderId})
+	DetachRootFolderFromCategory(w http.ResponseWriter, r *http.Request, id int64, rootFolderId int64)
 	// Configured libraries and current state, for the landing page.
 	// (GET /dashboard)
 	GetDashboard(w http.ResponseWriter, r *http.Request)
@@ -2382,6 +2397,18 @@ func (_ Unimplemented) CreateCategory(w http.ResponseWriter, r *http.Request) {
 // Remove a category. Administrator only.
 // (DELETE /categories/{id})
 func (_ Unimplemented) DeleteCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Put a root folder into a category. Administrator only.
+// (POST /categories/{id}/rootfolders)
+func (_ Unimplemented) AttachRootFolderToCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Take a root folder out of a category. Administrator only.
+// (DELETE /categories/{id}/rootfolders/{rootFolderId})
+func (_ Unimplemented) DetachRootFolderFromCategory(w http.ResponseWriter, r *http.Request, id int64, rootFolderId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3374,6 +3401,81 @@ func (siw *ServerInterfaceWrapper) DeleteCategory(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AttachRootFolderToCategory operation middleware
+func (siw *ServerInterfaceWrapper) AttachRootFolderToCategory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AttachRootFolderToCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DetachRootFolderFromCategory operation middleware
+func (siw *ServerInterfaceWrapper) DetachRootFolderFromCategory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "rootFolderId" -------------
+	var rootFolderId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "rootFolderId", chi.URLParam(r, "rootFolderId"), &rootFolderId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rootFolderId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DetachRootFolderFromCategory(w, r, id, rootFolderId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5928,6 +6030,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/categories/{id}", wrapper.DeleteCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/categories/{id}/rootfolders", wrapper.AttachRootFolderToCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/categories/{id}/rootfolders/{rootFolderId}", wrapper.DetachRootFolderFromCategory)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/dashboard", wrapper.GetDashboard)

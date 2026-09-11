@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { HardDrive, Plus } from "lucide-react";
+import { HardDrive, Plus, X } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
 type RootFolder = components["schemas"]["RootFolder"];
+type LibraryCategory = components["schemas"]["LibraryCategory"];
 
 /** todo 4.18: the root folder overview screen that never existed --
  *  internal/jobs/capacity has computed used/free/total for every root since
@@ -23,7 +24,37 @@ export function RootFolders() {
     },
   });
 
+  const categories = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/categories");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["rootfolders"] });
+
+  const attachCategory = useMutation({
+    mutationFn: async (args: { rootFolderId: number; categoryId: number }) => {
+      const { error } = await api.POST("/categories/{id}/rootfolders", {
+        params: { path: { id: args.categoryId } },
+        body: { root_folder_id: args.rootFolderId },
+      });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const detachCategory = useMutation({
+    mutationFn: async (args: { rootFolderId: number; categoryId: number }) => {
+      const { error } = await api.DELETE("/categories/{id}/rootfolders/{rootFolderId}", {
+        params: { path: { id: args.categoryId, rootFolderId: args.rootFolderId } },
+      });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
 
   const setPolicy = useMutation({
     mutationFn: async (args: { id: number; readOnly: boolean; allowRename: boolean; minFreeBytes: number }) => {
@@ -67,11 +98,15 @@ export function RootFolders() {
             <RootFolderCard
               key={root.id}
               root={root}
+              categories={categories.data ?? []}
               onSavePolicy={(readOnly, allowRename, minFreeBytes) =>
                 setPolicy.mutate({ id: root.id, readOnly, allowRename, minFreeBytes })
               }
               onToggleOnline={() => setOnline.mutate({ id: root.id, online: !root.online })}
+              onAttachCategory={(categoryId) => attachCategory.mutate({ rootFolderId: root.id, categoryId })}
+              onDetachCategory={(categoryId) => detachCategory.mutate({ rootFolderId: root.id, categoryId })}
               busy={setPolicy.isPending || setOnline.isPending}
+              categoryBusy={attachCategory.isPending || detachCategory.isPending}
             />
           ))}
         </ul>
@@ -94,14 +129,22 @@ export function RootFolders() {
 
 function RootFolderCard({
   root,
+  categories,
   onSavePolicy,
   onToggleOnline,
+  onAttachCategory,
+  onDetachCategory,
   busy,
+  categoryBusy,
 }: {
   root: RootFolder;
+  categories: LibraryCategory[];
   onSavePolicy: (readOnly: boolean, allowRename: boolean, minFreeBytes: number) => void;
   onToggleOnline: () => void;
+  onAttachCategory: (categoryId: number) => void;
+  onDetachCategory: (categoryId: number) => void;
   busy: boolean;
+  categoryBusy: boolean;
 }) {
   const [readOnly, setReadOnly] = useState(root.read_only ?? false);
   const [allowRename, setAllowRename] = useState(root.allow_rename ?? false);
@@ -133,17 +176,36 @@ function RootFolderCard({
         </span>
       </div>
 
-      {root.categories && root.categories.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {root.categories.map((category) => (
-            <span
-              key={category.id}
-              className="rounded-full border border-border-subtle px-1.5 py-px text-[0.6875rem] text-ink-muted"
+      <div className="flex flex-wrap items-center gap-1.5">
+        {(root.categories ?? []).map((category) => (
+          <span
+            key={category.id}
+            className="flex items-center gap-1 rounded-full border border-border-subtle
+                       py-px pl-1.5 pr-1 text-[0.6875rem] text-ink-muted"
+          >
+            {category.name}
+            <button
+              type="button"
+              aria-label={`Remove ${category.name} from this root folder`}
+              onClick={() => onDetachCategory(category.id)}
+              disabled={categoryBusy}
+              className="rounded-full p-0.5 hover:text-danger disabled:opacity-50"
             >
-              {category.name}
-            </span>
-          ))}
-        </div>
+              <X aria-hidden className="size-2.5" />
+            </button>
+          </span>
+        ))}
+        <AttachCategory
+          alreadyAttached={root.categories ?? []}
+          categories={categories}
+          busy={categoryBusy}
+          onAttach={onAttachCategory}
+        />
+      </div>
+      {(!root.categories || root.categories.length === 0) && (
+        <p className="text-xs text-warn">
+          Not in any category -- nothing will place files here until it is attached to one.
+        </p>
       )}
 
       {total > 0 ? (
@@ -225,6 +287,56 @@ function RootFolderCard({
         </button>
       </div>
     </li>
+  );
+}
+
+function AttachCategory({
+  alreadyAttached,
+  categories,
+  busy,
+  onAttach,
+}: {
+  alreadyAttached: { id: number }[];
+  categories: LibraryCategory[];
+  busy: boolean;
+  onAttach: (categoryId: number) => void;
+}) {
+  const attachedIds = new Set(alreadyAttached.map((category) => category.id));
+  const available = categories.filter((category) => !attachedIds.has(category.id));
+  const [selected, setSelected] = useState("");
+
+  if (available.length === 0) return null;
+
+  return (
+    <span className="flex items-center gap-1">
+      <select
+        value={selected}
+        disabled={busy}
+        onChange={(event) => setSelected(event.target.value)}
+        className="rounded-full border border-dashed border-border-subtle bg-canvas
+                   px-1.5 py-px text-[0.6875rem] text-ink-muted disabled:opacity-50"
+      >
+        <option value="">+ category</option>
+        {available.map((category) => (
+          <option key={category.id} value={category.id}>
+            {category.name}
+          </option>
+        ))}
+      </select>
+      {selected && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            onAttach(Number(selected));
+            setSelected("");
+          }}
+          className="rounded-full bg-accent px-1.5 py-px text-[0.6875rem] text-accent-ink disabled:opacity-50"
+        >
+          Add
+        </button>
+      )}
+    </span>
   );
 }
 

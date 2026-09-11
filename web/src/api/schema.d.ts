@@ -1535,6 +1535,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/rootfolders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Put a root folder into a category. Administrator only.
+         * @description A category spans many roots (section 11.7); this is the many-to-many join. accepts_new defaults true -- draining is a separate, explicit action (ADR-51), never the default state of a freshly attached root.
+         */
+        post: operations["attachRootFolderToCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{id}/rootfolders/{rootFolderId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                rootFolderId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Take a root folder out of a category. Administrator only. */
+        delete: operations["detachRootFolderFromCategory"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/people": {
         parameters: {
             query?: never;
@@ -5232,6 +5274,65 @@ export interface operations {
             404: components["responses"]["Problem"];
             /** @description Still referenced; the detail names what by. */
             409: components["responses"]["Problem"];
+        };
+    };
+    attachRootFolderToCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    root_folder_id: number;
+                    /** @default true */
+                    accepts_new?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The root folder, with its updated category list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RootFolder"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            /** @description The category or the root folder does not exist. */
+            404: components["responses"]["Problem"];
+        };
+    };
+    detachRootFolderFromCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                rootFolderId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     listPeople: {

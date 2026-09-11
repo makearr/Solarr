@@ -381,3 +381,76 @@ func TestDeleteCategory_MissingCategoryAnswers404(t *testing.T) {
 		t.Errorf("status = %d, want 404 for a missing category", recorder.Code)
 	}
 }
+
+// Attach is the only way a fresh install's root folder ever gets into a
+// category -- neither screen offered it until this endpoint existed (found
+// live: an added root folder never placed anything, since nothing attached
+// it to a category).
+func TestAttachRootFolderToCategory_PutsTheRootIntoTheCategory(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 1)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	root, err := fixture.cache.CreateRootFolder(t.Context(), "/media/music", "")
+	if err != nil {
+		t.Fatalf("CreateRootFolder: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	target := "/api/v1/categories/" + strconv.FormatInt(category.ID, 10) + "/rootfolders"
+	body := `{"root_folder_id":` + strconv.FormatInt(root.ID, 10) + `}`
+	recorder := fixture.do(authedPost(t, cookies, target, body))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+
+	attached := fixture.cache.Snapshot().CategoriesForRootFolder(root.ID)
+	if len(attached) != 1 || attached[0] != category.ID {
+		t.Errorf("CategoriesForRootFolder = %v, want [%d]", attached, category.ID)
+	}
+}
+
+// A non-administrator must not be able to attach a root folder either.
+func TestAttachRootFolderToCategory_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 1)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	root, err := fixture.cache.CreateRootFolder(t.Context(), "/media/music", "")
+	if err != nil {
+		t.Fatalf("CreateRootFolder: %v", err)
+	}
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	target := "/api/v1/categories/" + strconv.FormatInt(category.ID, 10) + "/rootfolders"
+	body := `{"root_folder_id":` + strconv.FormatInt(root.ID, 10) + `}`
+	recorder := fixture.do(authedPost(t, cookies, target, body))
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 for a non-administrator", recorder.Code)
+	}
+}
+
+// Detach is the reverse: DeleteCategory's own 409 refusal (above) stays
+// refused until this actually removes the attachment.
+func TestDetachRootFolderFromCategory_RemovesTheAttachment(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	target := "/api/v1/categories/" + strconv.FormatInt(category.ID, 10) +
+		"/rootfolders/" + strconv.FormatInt(root.ID, 10)
+	recorder := fixture.do(authedDelete(t, cookies, target))
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+
+	attached := fixture.cache.Snapshot().CategoriesForRootFolder(root.ID)
+	if len(attached) != 0 {
+		t.Errorf("CategoriesForRootFolder = %v, want none after detach", attached)
+	}
+}

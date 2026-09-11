@@ -125,6 +125,90 @@ func (s *Server) DeleteCategory(w http.ResponseWriter, r *http.Request, id int64
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// routeAttachRootFolderToCategory parses the id path parameter, mirroring
+// routeDeleteCategory.
+func (s *Server) routeAttachRootFolderToCategory(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a category id must be a number")
+		return
+	}
+	s.AttachRootFolderToCategory(w, r, id)
+}
+
+// routeDetachRootFolderFromCategory parses the id and rootFolderId path
+// parameters, mirroring routeDeleteCategory.
+func (s *Server) routeDetachRootFolderFromCategory(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a category id must be a number")
+		return
+	}
+	rootFolderID, err := strconv.ParseInt(chi.URLParam(r, "rootFolderId"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a root folder id must be a number")
+		return
+	}
+	s.DetachRootFolderFromCategory(w, r, id, rootFolderID)
+}
+
+// AttachRootFolderToCategory puts a root folder into a category (section
+// 11.7's "a category spans many roots"). Administrator only. AcceptsNew
+// defaults true -- an attach is never a drain (ADR-51's own separate action).
+func (s *Server) AttachRootFolderToCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+
+	var body gen.AttachRootFolderToCategoryJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "expected a JSON object with root_folder_id")
+		return
+	}
+
+	acceptsNew := true
+	if body.AcceptsNew != nil {
+		acceptsNew = *body.AcceptsNew
+	}
+
+	err := s.auth.Settings.AttachRootFolder(r.Context(), settings.CategoryRoot{
+		CategoryID: id, RootFolderID: body.RootFolderId, Weight: 1, AcceptsNew: acceptsNew,
+	})
+	if err != nil {
+		if errors.Is(err, settings.ErrNotFound) {
+			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound,
+				"Not found", "the category or the root folder does not exist")
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+
+	folder, found := s.auth.Settings.Snapshot().RootFolder(body.RootFolderId)
+	if !found {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such root folder")
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, s.rootFolderView(folder))
+}
+
+// DetachRootFolderFromCategory takes a root folder out of a category.
+// Administrator only.
+func (s *Server) DetachRootFolderFromCategory(w http.ResponseWriter, r *http.Request, id int64, rootFolderID int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if err := s.auth.Settings.DetachRootFolder(r.Context(), id, rootFolderID); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // categoryCounts reads the "works"/"files" metrics library.CategoryCounters
 // reconciles (never a live COUNT, section 21.12). Unavailable or never-reconciled
 // answers 0, the same "render without the tile" fallback libraryCounts uses,

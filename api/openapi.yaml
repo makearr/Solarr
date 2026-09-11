@@ -2416,6 +2416,62 @@ paths:
           $ref: "#/components/responses/Problem"
           description: Still referenced; the detail names what by.
 
+  /categories/{id}/rootfolders:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: attachRootFolderToCategory
+      tags: [settings]
+      summary: Put a root folder into a category. Administrator only.
+      description: >-
+        A category spans many roots (section 11.7); this is the many-to-many
+        join. accepts_new defaults true -- draining is a separate, explicit
+        action (ADR-51), never the default state of a freshly attached root.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [root_folder_id]
+              properties:
+                root_folder_id: { type: integer, format: int64 }
+                accepts_new: { type: boolean, default: true }
+      responses:
+        "200":
+          description: The root folder, with its updated category list.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RootFolder" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: The category or the root folder does not exist.
+
+  /categories/{id}/rootfolders/{rootFolderId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: rootFolderId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    delete:
+      operationId: detachRootFolderFromCategory
+      tags: [settings]
+      summary: Take a root folder out of a category. Administrator only.
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /people:
     get:
       operationId: listPeople
