@@ -122,6 +122,10 @@ type Unit struct {
 	// row the session itself created (ADR-48).
 	WorkCreated    bool
 	EditionCreated bool
+	// PackID is non-nil once todo 4.11's own detection (run once, after WALK
+	// finishes) finds this unit belongs to a pack -- nil is the overwhelming
+	// common case (a single-release import).
+	PackID *int64
 }
 
 // NewUnit is what AddUnits needs for one discovered unit. Confidence, WorkID
@@ -503,6 +507,7 @@ func unitFromRow(row librarydb.ImportUnit) Unit {
 		Decision: row.Decision, WorkID: int64Ptr(row.WorkID), EditionID: int64Ptr(row.EditionID),
 		EvidenceJSON: row.EvidenceJson, CandidatesJSON: row.CandidatesJson.String, Reason: row.Reason.String,
 		WorkCreated: row.WorkCreated != 0, EditionCreated: row.EditionCreated != 0,
+		PackID: int64Ptr(row.PackID),
 	}
 }
 

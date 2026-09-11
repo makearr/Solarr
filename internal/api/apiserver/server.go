@@ -97,6 +97,9 @@ type Config struct {
 	// BlockedContent lists and removes ADR-53 part 2's hash blocks. Optional:
 	// without it, ListBlockedContent/RemoveBlockedContent answer 503.
 	BlockedContent BlockedContentLister
+	// Packs lists ADR-50's own detected packs (todo 4.11). Optional:
+	// without it, ListPacks/GetPack answer 503.
+	Packs PackLister
 	// RemoveAndBlocker runs ADR-53 section 3's compound action. Optional:
 	// without it, RemoveAndBlockFile answers 503.
 	RemoveAndBlocker RemoveAndBlocker
@@ -175,6 +178,7 @@ type Server struct {
 	people               PeopleReader
 	peopleSubscriber     PeopleSubscriber
 	blockedContent       BlockedContentLister
+	packs                PackLister
 	removeAndBlocker     RemoveAndBlocker
 	importSessions       ImportSessionLister
 	importInspector      ImportInspector
@@ -243,6 +247,7 @@ func New(config Config) (*Server, error) {
 		people:               config.People,
 		peopleSubscriber:     config.PeopleSubscriber,
 		blockedContent:       config.BlockedContent,
+		packs:                config.Packs,
 		removeAndBlocker:     config.RemoveAndBlocker,
 		importSessions:       config.ImportSessions,
 		importInspector:      config.ImportInspector,
@@ -335,6 +340,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/import/sessions/{id}/units/{unitId}/commit", server.routeCommitImportUnit)
 			secured.Get("/import/settings", server.GetImportSettings)
 			secured.Patch("/import/settings", server.UpdateImportSettings)
+			secured.Get("/packs", server.routeListPacks)
+			secured.Get("/packs/{id}", server.routeGetPack)
 			secured.Get("/rootfolders", server.ListRootFolders)
 			secured.Patch("/rootfolders/{id}", server.routeUpdateRootFolderPolicy)
 			secured.Patch("/rootfolders/{id}/online", server.routeSetRootFolderOnline)

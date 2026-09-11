@@ -469,6 +469,7 @@ func (p *process) startServer(ctx context.Context) error {
 		People:           adapters.People{People: library.NewPeople(p.library)},
 		PeopleSubscriber: adapters.People{People: library.NewPeople(p.library)},
 		BlockedContent:   adapters.BlockedContent{Blocks: library.NewBlockedContentStore(p.library)},
+		Packs:            adapters.Packs{Packs: library.NewPacks(p.library)},
 		RemoveAndBlocker: adapters.RemoveAndBlock{
 			Action: library.NewRemoveAndBlock(
 				library.NewQuarantine(p.library, p.fsys, clock.NewSystem()),

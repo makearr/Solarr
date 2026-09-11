@@ -65,6 +65,7 @@ type worksFixture struct {
 	people               *fakePeopleReader
 	subscriber           *fakePeopleSubscriber
 	blockedContent       *fakeBlockedContentLister
+	packs                *fakePackLister
 	removeAndBlocker     *fakeRemoveAndBlocker
 	importSessions       *fakeImportSessionLister
 	importInspector      *fakeImportInspector
@@ -186,6 +187,7 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 	people := &fakePeopleReader{}
 	subscriber := &fakePeopleSubscriber{}
 	blockedContent := &fakeBlockedContentLister{}
+	packs := &fakePackLister{}
 	removeAndBlocker := &fakeRemoveAndBlocker{}
 	importSessions := &fakeImportSessionLister{}
 	importInspector := &fakeImportInspector{}
@@ -210,6 +212,7 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 		People:               people,
 		PeopleSubscriber:     subscriber,
 		BlockedContent:       blockedContent,
+		Packs:                packs,
 		RemoveAndBlocker:     removeAndBlocker,
 		ImportSessions:       importSessions,
 		ImportInspector:      importInspector,
@@ -242,7 +245,7 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 		server: server, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor,
 		search: search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,
 		artwork: artwork, people: people, subscriber: subscriber,
-		blockedContent: blockedContent, removeAndBlocker: removeAndBlocker,
+		blockedContent: blockedContent, packs: packs, removeAndBlocker: removeAndBlocker,
 		importSessions: importSessions, importInspector: importInspector,
 		drainStarter: drainStarter, moveJobs: moveJobs, renameStarter: renameStarter,
 		libraryTracks: libraryTracks, scheduler: scheduler, cacheManager: cacheManager, discover: discover,

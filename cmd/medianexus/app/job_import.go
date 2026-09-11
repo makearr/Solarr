@@ -42,6 +42,7 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		Tool:      p.mediaTool(),
 		Search:    p.musicBrainzProvider(),
 		Committer: p.importCommitter(),
+		Packs:     library.NewPacks(p.library),
 		Events:    p.bus,
 		Clock:     clock.NewSystem(),
 		Logger:    p.logger,
@@ -86,5 +87,6 @@ func (p *process) mediaTool() mediatool.Tool {
 func (p *process) manualCommitter() importjob.ManualCommitter {
 	return importjob.NewManualCommitter(
 		p.fsys, p.mediaTool(), library.NewImportSessions(p.library), p.importCommitter(),
+		library.NewPacks(p.library),
 	)
 }

@@ -140,7 +140,7 @@ func (q *Queries) GetImportSession(ctx context.Context, id int64) (ImportSession
 const getImportUnit = `-- name: GetImportUnit :one
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created
+       edition_created, pack_id
 FROM import_unit WHERE id = ?
 `
 
@@ -163,6 +163,7 @@ func (q *Queries) GetImportUnit(ctx context.Context, id int64) (ImportUnit, erro
 		&i.Reason,
 		&i.WorkCreated,
 		&i.EditionCreated,
+		&i.PackID,
 	)
 	return i, err
 }
@@ -177,7 +178,7 @@ VALUES (?1, ?2, ?3, ?4,
         ?12)
 RETURNING id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
           work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-          edition_created
+          edition_created, pack_id
 `
 
 type InsertImportUnitParams struct {
@@ -227,6 +228,7 @@ func (q *Queries) InsertImportUnit(ctx context.Context, arg InsertImportUnitPara
 		&i.Reason,
 		&i.WorkCreated,
 		&i.EditionCreated,
+		&i.PackID,
 	)
 	return i, err
 }
@@ -346,7 +348,7 @@ func (q *Queries) ListImportUnitFilesForSession(ctx context.Context, sessionID i
 const listImportUnits = `-- name: ListImportUnits :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created
+       edition_created, pack_id
 FROM import_unit WHERE session_id = ? ORDER BY id
 `
 
@@ -375,6 +377,7 @@ func (q *Queries) ListImportUnits(ctx context.Context, sessionID int64) ([]Impor
 			&i.Reason,
 			&i.WorkCreated,
 			&i.EditionCreated,
+			&i.PackID,
 		); err != nil {
 			return nil, err
 		}
@@ -392,7 +395,7 @@ func (q *Queries) ListImportUnits(ctx context.Context, sessionID int64) ([]Impor
 const listImportUnitsPage = `-- name: ListImportUnitsPage :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created
+       edition_created, pack_id
 FROM import_unit
 WHERE session_id = ?1 AND id > ?2
   AND (?3 = 0 OR decision = ?4)
@@ -445,6 +448,7 @@ func (q *Queries) ListImportUnitsPage(ctx context.Context, arg ListImportUnitsPa
 			&i.Reason,
 			&i.WorkCreated,
 			&i.EditionCreated,
+			&i.PackID,
 		); err != nil {
 			return nil, err
 		}
@@ -462,7 +466,7 @@ func (q *Queries) ListImportUnitsPage(ctx context.Context, arg ListImportUnitsPa
 const listUnplacedCommitUnits = `-- name: ListUnplacedCommitUnits :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created
+       edition_created, pack_id
 FROM import_unit
 WHERE session_id = ? AND decision = 'COMMIT' AND work_id IS NULL
 ORDER BY id
@@ -498,6 +502,7 @@ func (q *Queries) ListUnplacedCommitUnits(ctx context.Context, sessionID int64) 
 			&i.Reason,
 			&i.WorkCreated,
 			&i.EditionCreated,
+			&i.PackID,
 		); err != nil {
 			return nil, err
 		}

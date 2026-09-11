@@ -101,6 +101,8 @@ type Querier interface {
 	// reusing models.
 	CreateMoveJob(ctx context.Context, arg CreateMoveJobParams) (MoveJob, error)
 	CreateOrganisation(ctx context.Context, arg CreateOrganisationParams) (Organisation, error)
+	// ADR-50, todo 4.11 (migration 0026). Column lists follow table order.
+	CreatePack(ctx context.Context, arg CreatePackParams) (Pack, error)
 	// People, organisations, tags and subscriptions. Column lists follow table order.
 	CreatePerson(ctx context.Context, arg CreatePersonParams) (Person, error)
 	// The request workflow's table (ADR-14, stage 12). Carried from stage 1 so approval
@@ -188,6 +190,7 @@ type Querier interface {
 	GetMediaObjectByOshash(ctx context.Context, oshash sql.NullString) (MediaObject, error)
 	GetMoveJob(ctx context.Context, id int64) (MoveJob, error)
 	GetOrganisation(ctx context.Context, id int64) (Organisation, error)
+	GetPack(ctx context.Context, id int64) (Pack, error)
 	GetPathByLocation(ctx context.Context, arg GetPathByLocationParams) (LibraryPath, error)
 	GetPerson(ctx context.Context, id int64) (Person, error)
 	GetPersonByExternalID(ctx context.Context, arg GetPersonByExternalIDParams) (Person, error)
@@ -212,6 +215,7 @@ type Querier interface {
 	// shape ImportSessions.AddUnits already uses) -- modernc's sqlite driver
 	// does not support :copyfrom (pgx/mysql only).
 	InsertMoveItem(ctx context.Context, arg InsertMoveItemParams) error
+	InsertPackItem(ctx context.Context, arg InsertPackItemParams) error
 	// Physical files. Column lists follow table order, or sqlc stops reusing models.
 	InternAttributes(ctx context.Context, arg InternAttributesParams) (MediaAttribute, error)
 	// The pipeline filters against this between dedupe and evaluate (section 10.11).
@@ -295,6 +299,12 @@ type Querier interface {
 	// imprints and sub-labels are real in every domain (ADR-32).
 	ListOrganisationSubtree(ctx context.Context, id int64) ([]Organisation, error)
 	ListOrganisationsForWork(ctx context.Context, workID int64) ([]WorkOrganisation, error)
+	ListPackItems(ctx context.Context, packID int64) ([]PackItem, error)
+	// Cursor-paginated by id ascending, the same plain cursor /blocked and
+	// import_unit's own page already use -- pack counts stay small today (one
+	// discography import makes one row) but nothing bounds them the way a
+	// session count is bounded (Invariant 22's own reasoning).
+	ListPacksPage(ctx context.Context, arg ListPacksPageParams) ([]Pack, error)
 	ListPathsForObject(ctx context.Context, mediaObjectID int64) ([]LibraryPath, error)
 	// ADR-51's drain: every real file to evacuate, with its size for
 	// mover.PlanDrain's own affinity-group byte totals. Primary paths only,
@@ -421,6 +431,9 @@ type Querier interface {
 	// Recomputed from move_item rather than incremented as items complete -- the
 	// same drift-and-repair shape RecomputeImportSessionCounts already uses.
 	RecomputeMoveJobProgress(ctx context.Context, moveJobID int64) error
+	// Recomputed from pack_item rather than incremented as members resolve --
+	// the same drift-and-repair shape RecomputeImportSessionCounts already uses.
+	RecomputePackCounts(ctx context.Context, packID int64) error
 	// The reconciliation job compares this against present_count. Drift is
 	// inevitable, so the repair path is not optional.
 	RecomputePresentCount(ctx context.Context, id int64) error
@@ -444,6 +457,11 @@ type Querier interface {
 	// and never overwrites CANCELLING with itself. :execrows lets the caller
 	// distinguish "already stopped/never running" (0 rows) from "now stopping".
 	RequestImportSessionCancel(ctx context.Context, id int64) (int64, error)
+	// A later placement (todo 4.9's ManualCommitter, an "assign a category
+	// later" or "commit what was held" action reaching a unit that turned out
+	// to belong to a pack) moves that one member from QUEUED to RESOLVED --
+	// RecomputePackCounts is then what updates the pack's own resolved_count.
+	ResolvePackItem(ctx context.Context, arg ResolvePackItemParams) error
 	// Aged decision detail (section 5.7, Part VI Q5).
 	RollUpDecisions(ctx context.Context, arg RollUpDecisionsParams) error
 	// Ranked cross-media search over titles and aliases (migration 0010, section 21.1).
@@ -492,6 +510,7 @@ type Querier interface {
 	// identity (F29's own default) and this is what fills in a real result later,
 	// without this package needing to know how that result was produced.
 	SetImportUnitDecision(ctx context.Context, arg SetImportUnitDecisionParams) error
+	SetImportUnitPack(ctx context.Context, arg SetImportUnitPackParams) error
 	// The IMPORTING phase's own write, once placement.Resolve, the move and
 	// ResolveWorksDetailed have all succeeded for one unit -- work_id becoming
 	// non-null is what "actually placed" means from here on.

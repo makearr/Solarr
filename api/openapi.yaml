@@ -1910,6 +1910,54 @@ paths:
             Not QUEUE, no candidate, no category on the session, the session
             was reverted, or the unit's own files changed since inspection.
 
+  /packs:
+    get:
+      operationId: listPacks
+      tags: [library]
+      summary: Every detected pack (ADR-50, todo 4.11), newest first.
+      description: >-
+        `after_id` pages through the list (the id of the last item already
+        seen, 0 for the first page) -- the same plain ascending id cursor
+        `/blocked` already uses. Detected once, at the end of a non-adoption
+        session's own WALK (private/questions.md has the exact rule); an
+        adoption session (an existing, already-organised library) never
+        produces one.
+      parameters:
+        - name: after_id
+          in: query
+          schema: { type: integer, format: int64, default: 0 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: A page of packs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Pack" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /packs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getPack
+      tags: [library]
+      summary: One pack and its own members, in the order they were recorded.
+      responses:
+        "200":
+          description: The pack.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PackDetail" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /libraries:
     get:
       operationId: listLibraries
@@ -3475,6 +3523,50 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ImportCandidate" }
         reason: { type: string }
+        pack_id:
+          type: integer
+          format: int64
+          description: Non-null once todo 4.11's own detection finds this unit belongs to a pack.
+
+    Pack:
+      type: object
+      description: One source, many works (ADR-50, todo 4.11) -- a provenance fact, not an identity tier.
+      required: [id, kind, detected_from, confidence, title, member_count, resolved_count, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string, enum: [DISCOGRAPHY, BOX_SET, ANTHOLOGY, COMPILATION] }
+        detected_from: { type: string, enum: [structure, structure_and_name] }
+        confidence: { type: number, format: float }
+        title: { type: string, description: As released, for display only. }
+        acquisition_id: { type: integer, format: int64 }
+        session_id: { type: integer, format: int64 }
+        member_count: { type: integer, format: int64 }
+        resolved_count:
+          type: integer
+          format: int64
+          description: Members that identified and placed.
+        created_at: { type: string, format: date-time }
+
+    PackItem:
+      type: object
+      description: One member of a pack.
+      required: [ord, state]
+      properties:
+        ord: { type: integer, format: int64 }
+        work_id: { type: integer, format: int64 }
+        edition_id: { type: integer, format: int64 }
+        import_unit_id: { type: integer, format: int64 }
+        state: { type: string, enum: [RESOLVED, QUEUED, FAILED, SKIPPED] }
+
+    PackDetail:
+      type: object
+      description: One pack plus its own members, in the order they were recorded.
+      required: [pack, items]
+      properties:
+        pack: { $ref: "#/components/schemas/Pack" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PackItem" }
 
     LibraryCategory:
       type: object
