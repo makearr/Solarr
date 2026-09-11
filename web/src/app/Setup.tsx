@@ -2,9 +2,22 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
+import type { components } from "@/api/schema";
+
+type ArrApp = components["schemas"]["ArrApp"];
+
+const ARR_APPS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr", "readarr", "whisparr"];
 
 // A convenience, not a gate (section 21.11): every step can be skipped.
 export function Setup({ onDone }: { onDone: () => void }) {
+  // Local to this mount, same as App.tsx's own "skipped" -- there is no
+  // backend concept of "the *Arr step is done", since connecting is
+  // optional and idempotent (POST /arr/instances again just adds a second
+  // connection). Asked for 2026-09-11: between the account and the first
+  // root folder, since the connection's own root folder paths are what a
+  // real user picks their first library folder from.
+  const [arrStepDone, setArrStepDone] = useState(false);
+
   const status = useQuery({
     queryKey: ["setup"],
     queryFn: async () => {
@@ -23,17 +36,113 @@ export function Setup({ onDone }: { onDone: () => void }) {
         <header className="space-y-1">
           <h1 className="text-lg font-semibold tracking-tight">Set up MediaNexus</h1>
           <p className="text-sm text-ink-muted">
-            Two steps. You can skip either and change it later.
+            Three steps. You can skip any of them and change it later.
           </p>
         </header>
 
         {status.data.needs_administrator ? (
           <CreateAdministrator />
+        ) : !arrStepDone ? (
+          <ConnectArr onSkip={() => setArrStepDone(true)} onConnected={() => setArrStepDone(true)} />
         ) : (
           <AddRootFolder onSkip={onDone} onAdded={onDone} />
         )}
       </div>
     </Centered>
+  );
+}
+
+function ConnectArr({ onSkip, onConnected }: { onSkip: () => void; onConnected: () => void }) {
+  const [app, setApp] = useState<ArrApp>("lidarr");
+  const [name, setName] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
+
+  const connect = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST("/arr/instances", {
+        body: { app, name, base_url: baseUrl, api_key: apiKey, enabled: true },
+      });
+      if (error) throw error;
+    },
+    onSuccess: onConnected,
+  });
+
+  return (
+    <Panel
+      title="Step 2 — Import from an *Arr application"
+      description={
+        "Already run Lidarr (or one of the others)? Connect it now and what it monitors " +
+        "comes in as intent -- artists become monitored people, albums become wanted items. " +
+        "Only Lidarr syncs for real yet; the rest can still be connected for when their own " +
+        "stage ships. The actual import runs once a library folder exists (next step, or " +
+        "later from Settings)."
+      }
+    >
+      <form
+        className="space-y-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          connect.mutate();
+        }}
+      >
+        <Field label="Application">
+          <select
+            className={inputStyle}
+            value={app}
+            onChange={(event) => setApp(event.target.value as ArrApp)}
+          >
+            {ARR_APPS.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Name" hint="Shown in the interface, e.g. Home Lidarr.">
+          <input
+            className={inputStyle}
+            value={name}
+            placeholder="Home Lidarr"
+            autoComplete="off"
+            onChange={(event) => setName(event.target.value)}
+          />
+        </Field>
+        <Field label="Base URL">
+          <input
+            className={inputStyle}
+            value={baseUrl}
+            placeholder="http://lidarr:8686"
+            autoComplete="off"
+            onChange={(event) => setBaseUrl(event.target.value)}
+          />
+        </Field>
+        <Field label="API key">
+          <input
+            className={inputStyle}
+            type="password"
+            value={apiKey}
+            autoComplete="off"
+            onChange={(event) => setApiKey(event.target.value)}
+          />
+        </Field>
+
+        {connect.isError && <Problem error={connect.error} />}
+
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={!name.trim() || !baseUrl.trim() || !apiKey.trim() || connect.isPending}
+            className={primaryButtonStyle}
+          >
+            {connect.isPending ? "Connecting…" : "Connect"}
+          </button>
+          <button type="button" onClick={onSkip} className={quietButtonStyle}>
+            Skip for now
+          </button>
+        </div>
+      </form>
+    </Panel>
   );
 }
 
@@ -115,7 +224,7 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
 
   return (
     <Panel
-      title="Step 2 — Add a library folder"
+      title="Step 3 — Add a library folder"
       description="The path as the container sees it, not as your host sees it. It is checked before it is saved."
     >
       <form
