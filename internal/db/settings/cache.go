@@ -13,6 +13,7 @@ import (
 
 	"github.com/makearr/MediaNexus/internal/db/store"
 	"github.com/makearr/MediaNexus/internal/db/store/gen/settingsdb"
+	"github.com/makearr/MediaNexus/internal/platform/secrets"
 )
 
 // ErrInUse reports a configuration entity that something still references (Invariant 41).
@@ -33,7 +34,11 @@ type Cache struct {
 	// backupOnChange is optional (EnableBackupOnChange): without it, a write never
 	// backs up settings.db.
 	backupOnChange *backupOnChange
-	logger         *slog.Logger
+	// cipher is optional (EnableSecrets): without it, an *Arr instance's
+	// own API key can be neither sealed nor opened (ErrSecretsUnavailable),
+	// rather than ever stored in plaintext.
+	cipher *secrets.Cipher
+	logger *slog.Logger
 }
 
 // backupOnChange is config.Backup's settings_on_change policy, in the form Cache
@@ -52,6 +57,14 @@ func (c *Cache) EnableBackupOnChange(dir string, keep int, logger *slog.Logger) 
 	if logger != nil {
 		c.logger = logger
 	}
+}
+
+// EnableSecrets equips the cache to seal and open an *Arr instance's own API
+// key -- optional the same way EnableBackupOnChange is: without calling
+// this, CreateArrInstance/SetArrInstanceAPIKey/DecryptedAPIKey all refuse
+// with ErrSecretsUnavailable rather than ever writing an unencrypted key.
+func (c *Cache) EnableSecrets(cipher *secrets.Cipher) {
+	c.cipher = cipher
 }
 
 // NewCache builds a cache and loads it.
