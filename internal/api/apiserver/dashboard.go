@@ -111,5 +111,6 @@ func (s *Server) libraryCounts(ctx context.Context) gen.LibraryCounts {
 	// distinct metrics, not a collision.
 	counts.Probed = int(values["probed"])
 	counts.Unprobed = int(values["total_files"] - values["probed"])
+	counts.Fresh = int(values["fresh"])
 	return counts
 }

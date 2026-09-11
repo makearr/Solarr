@@ -56,6 +56,10 @@ type Querier interface {
 	CountDesiredItemsByCategory(ctx context.Context) ([]CountDesiredItemsByCategoryRow, error)
 	// The truth the reconciliation job compares a counter against.
 	CountDesiredItemsByState(ctx context.Context, categoryID int64) ([]CountDesiredItemsByStateRow, error)
+	// The dashboard's fresh-works count (ADR-55, todo 4.20): every work with a
+	// work_date of kind on or after the cutoff. Distinct since a work can carry
+	// more than one region's own date row for the same kind.
+	CountFreshWorks(ctx context.Context, arg CountFreshWorksParams) (int64, error)
 	// Recomputable from the observations, which is why they are kept individually.
 	CountGroupOutcomes(ctx context.Context, arg CountGroupOutcomesParams) ([]CountGroupOutcomesRow, error)
 	// The root_folder_id half of the ADR-25 orphan check. See CountDesiredItemsByCategory.

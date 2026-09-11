@@ -119,6 +119,26 @@ func (q *Queries) ClearWorkClassification(ctx context.Context, arg ClearWorkClas
 	return err
 }
 
+const countFreshWorks = `-- name: CountFreshWorks :one
+SELECT CAST(COUNT(DISTINCT work_id) AS INTEGER) AS total FROM work_date
+WHERE kind = ? AND date >= ?
+`
+
+type CountFreshWorksParams struct {
+	Kind string
+	Date string
+}
+
+// The dashboard's fresh-works count (ADR-55, todo 4.20): every work with a
+// work_date of kind on or after the cutoff. Distinct since a work can carry
+// more than one region's own date row for the same kind.
+func (q *Queries) CountFreshWorks(ctx context.Context, arg CountFreshWorksParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countFreshWorks, arg.Kind, arg.Date)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const countMonitoredParts = `-- name: CountMonitoredParts :one
 SELECT CAST(COUNT(*) AS INTEGER) AS monitored_parts
 FROM work_part WHERE work_id = ? AND monitored = 1

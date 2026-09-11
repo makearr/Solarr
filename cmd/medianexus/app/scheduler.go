@@ -20,6 +20,7 @@ const (
 	subscriptionExpandScheduleCron = "0 */6 * * *"  // every 6 hours
 	artworkScheduleCron            = "*/30 * * * *" // every 30 minutes
 	categoryCountsScheduleCron     = "*/15 * * * *" // every 15 minutes
+	freshCountsScheduleCron        = "*/15 * * * *" // every 15 minutes
 	probeScheduleCron              = "0 * * * *"    // every hour
 	capacityScheduleCron           = "0 */6 * * *"  // every 6 hours
 	cacheMaintenanceScheduleCron   = "0 3 * * *"    // once a day, at 03:00
@@ -50,6 +51,10 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(jobs.Task{
 		Key: "category_counts", Name: "Category counters", DefaultCadence: categoryCountsScheduleCron,
 		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueCategoryCounts,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "fresh_counts", Name: "Fresh works counter", DefaultCadence: freshCountsScheduleCron,
+		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueFreshCounts,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "probe", Name: "Attribute probe", DefaultCadence: probeScheduleCron,

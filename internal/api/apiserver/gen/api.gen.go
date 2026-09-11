@@ -893,7 +893,10 @@ type LibraryCategory struct {
 
 // LibraryCounts Read from the `counter` table, never aggregated live (section 21.12, ADR-28). Absent counters report zero, so an empty library and an uncounted one look the same until the reconciliation job has run.
 type LibraryCounts struct {
-	Files     int `json:"files"`
+	Files int `json:"files"`
+
+	// Fresh Works released within the freshness window (ADR-55, todo 4.20). Same "library" counter scope, a distinct metric (library.FreshCounts) reconciled by its own sweep.
+	Fresh     int `json:"fresh"`
 	Missing   int `json:"missing"`
 	Monitored int `json:"monitored"`
 

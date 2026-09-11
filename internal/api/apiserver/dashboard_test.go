@@ -66,3 +66,32 @@ func TestGetDashboard_UnreconciledProbeCoverageAnswersZero(t *testing.T) {
 		t.Errorf("library = %+v, want probed=0 unprobed=0, not an error or a negative", body.Library)
 	}
 }
+
+// fresh comes from library.FreshCounts' own "fresh" metric, reconciled into
+// the same "library" counter scope -- ADR-55's dashboard "new arrivals"
+// figure, todo 4.20's own deferred piece.
+func TestGetDashboard_IncludesFreshCount(t *testing.T) {
+	librarySize := fakeLibrarySize{byScope: map[string]map[string]int64{
+		"library": {"works": 10, "fresh": 3},
+	}}
+	fixture := newWorksFixtureWithLibrarySize(t, librarySize)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/dashboard"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+
+	var body struct {
+		Library struct {
+			Fresh int `json:"fresh"`
+		} `json:"library"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.Library.Fresh != 3 {
+		t.Errorf("library.fresh = %d, want 3", body.Library.Fresh)
+	}
+}

@@ -23,8 +23,7 @@ func (a Works) ListWorks(
 ) ([]apiserver.WorkRow, error) {
 	var freshSince string
 	if filter.Fresh {
-		cutoff := a.Clock.Now().AddDate(0, 0, -priority.DefaultNewReleaseDays)
-		freshSince = cutoff.Format(time.DateOnly)
+		freshSince = FreshSinceCutoff(a.Clock)
 	}
 	rows, err := a.Works.List(ctx,
 		library.WorkFilter{
@@ -57,4 +56,14 @@ func (a Works) ListWorks(
 		views[index] = view
 	}
 	return views, nil
+}
+
+// FreshSinceCutoff resolves ADR-55's freshness window to a cutoff date
+// string -- the one place library.WorkFilter.FreshSince's day-precision
+// format boundary is crossed from a raw clock, shared by the Library list's
+// own fresh=true filter (ListWorks above) and the dashboard's fresh-works
+// counter sweep (cmd/medianexus/app's freshCountsJob), so the two can never
+// disagree about what "fresh" means.
+func FreshSinceCutoff(cl clock.Clock) string {
+	return cl.Now().AddDate(0, 0, -priority.DefaultNewReleaseDays).Format(time.DateOnly)
 }

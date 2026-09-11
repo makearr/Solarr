@@ -1841,6 +1841,8 @@ export interface components {
             probed: number;
             /** @description total_files minus probed, computed here rather than stored twice. */
             unprobed: number;
+            /** @description Works released within the freshness window (ADR-55, todo 4.20). Same "library" counter scope, a distinct metric (library.FreshCounts) reconciled by its own sweep. */
+            fresh: number;
         };
         /** @enum {string} */
         JobState: "PENDING" | "PENDING_RETRY" | "LEASED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED";
