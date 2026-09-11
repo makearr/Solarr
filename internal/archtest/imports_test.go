@@ -128,6 +128,11 @@ var allowedInternalImports = map[string][]string{
 	// dependency is the release-name parser, reused for its own Artist/
 	// Discography fields rather than a second, independent parse.
 	"internal/importing/pack": {"internal/identify/parse"},
+	// ADR-52's own REST client package (todo 4.13): one client per *Arr
+	// application, over its documented API and an API key only -- httpx is
+	// the one dependency, the same "just a client" shape musicbrainz/
+	// wikidata keep. No database of its own, no write back to the source.
+	"internal/importing/arrimport": {"internal/platform/httpx"},
 	// ADR-36's composite acquisition priority: pure arithmetic over
 	// caller-supplied facts, no I/O and no database of its own -- the same
 	// separation internal/identify/score and internal/moving/placement keep from their own
