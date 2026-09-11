@@ -83,7 +83,7 @@ func SegmentConfidence(segment string) float64 {
 // matched "(Year)" suffix.
 func isNoiseWord(word string) bool {
 	return editionWords[word] || sourceWords[word] != "" ||
-		losslessFormats[word] != "" || lossyFormats[word] != ""
+		losslessFormats[word] != "" || lossyFormats[word] != "" || containerFormats[word] != ""
 }
 
 func isAllDigits(s string) bool {

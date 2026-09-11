@@ -861,6 +861,25 @@ func (q *Queries) RelocateLibraryPath(ctx context.Context, arg RelocateLibraryPa
 	return result.RowsAffected()
 }
 
+const setClaimedAttributes = `-- name: SetClaimedAttributes :exec
+UPDATE media_object SET claimed_attributes_id = ? WHERE id = ?
+`
+
+type SetClaimedAttributesParams struct {
+	ClaimedAttributesID sql.NullInt64
+	ID                  int64
+}
+
+// The claimed half (todo 4.2): derived once per release folder at scan time,
+// from the release name rather than the file's own bytes, so it needs no
+// scalar columns or mismatch comparison of its own (RecordMeasured's own
+// namesakes) -- those only mean something once a measured claim exists to
+// compare against.
+func (q *Queries) SetClaimedAttributes(ctx context.Context, arg SetClaimedAttributesParams) error {
+	_, err := q.db.ExecContext(ctx, setClaimedAttributes, arg.ClaimedAttributesID, arg.ID)
+	return err
+}
+
 const setFingerprints = `-- name: SetFingerprints :exec
 UPDATE media_object
 SET oshash = ?, phash = ?, audio_fp = ?, audio_fp_prefix = ?, fingerprinted_at = ?

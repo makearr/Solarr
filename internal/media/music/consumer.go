@@ -153,6 +153,9 @@ func (c Consumer) Observe(
 	if err != nil {
 		return fmt.Errorf("music: %w", err)
 	}
+	if err := c.recordClaimedAttributes(ctx, readable, mediaObjectIDs); err != nil {
+		return fmt.Errorf("music: %w", err)
+	}
 
 	tags := tagSourceFor(root, readable)
 	identifiers := []model.Identifier{NewMBIDIdentifier(tags)}

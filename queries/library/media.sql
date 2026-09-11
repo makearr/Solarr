@@ -71,6 +71,14 @@ SET measured_attributes_id = ?, attribute_mismatch_json = ?,
     probe_json = ?, verified_at = ?
 WHERE id = ?;
 
+-- The claimed half (todo 4.2): derived once per release folder at scan time,
+-- from the release name rather than the file's own bytes, so it needs no
+-- scalar columns or mismatch comparison of its own (RecordMeasured's own
+-- namesakes) -- those only mean something once a measured claim exists to
+-- compare against.
+-- name: SetClaimedAttributes :exec
+UPDATE media_object SET claimed_attributes_id = ? WHERE id = ?;
+
 -- Fingerprint generation is the lowest-priority background work and resumable,
 -- so it asks for the next unfingerprinted rows rather than scanning (ADR-35).
 -- name: ListUnfingerprinted :many

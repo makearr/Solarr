@@ -32,10 +32,8 @@ type Attributes struct {
 	// recorded -- todo 4.2 gives it a field to land on.
 	SampleRate int
 	// Container is empty unless a release name states one distinct from its
-	// codec (e.g. an M4A container around an AAC or ALAC stream). No release
-	// name in this project's corpus has been found doing so yet; the field
-	// exists so a future one does not need another model change, the same
-	// shape SampleRate carried before this one.
+	// codec (e.g. an M4A container around an AAC or ALAC stream) -- todo 4.2's
+	// fix for "m4a" previously being misclassified as a codec in Format.
 	Container string
 	// Source is where the release claims to originate: "cd", "web", "vinyl",
 	// "cassette" -- empty when unstated.
