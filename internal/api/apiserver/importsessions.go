@@ -69,6 +69,16 @@ var ErrImportUnitHasNoCandidate = errors.New("apiserver: import unit has no cand
 // unit's own directory no longer matches what WALK originally found.
 var ErrImportUnitChanged = errors.New("apiserver: import unit's own files no longer match what was inspected")
 
+// ErrNoPlacement is CommitImportUnit's refusal when the unit's own category
+// has no writable root folder to place it under -- music.ErrNoPlacement at
+// this package's own boundary, the same shape every other engine error here
+// keeps. Previously fell through writeError's default case to a bare
+// "the request could not be completed" (found live testing the image
+// fallback chain against a deliberately read-only test root, 2026-09-11) --
+// the same unclassified-domain-error shape CreateCategory's own duplicate-
+// name bug was, fixed the same session.
+var ErrNoPlacement = errors.New("apiserver: no writable root folder to place this unit under")
+
 // ImportRevertResult is what one session's revert actually did.
 type ImportRevertResult struct {
 	UnitsReverted, WorksDeleted, EditionsDeleted int64
@@ -474,6 +484,9 @@ func (s *Server) CommitImportUnit(w http.ResponseWriter, r *http.Request, id, un
 	case errors.Is(err, ErrImportUnitChanged):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
 			"Changed", "this unit's own files no longer match what was inspected")
+	case errors.Is(err, ErrNoPlacement):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"No writable root", "this unit's own category has no writable root folder to place it under")
 	case err != nil:
 		writeError(w, s.logger, err)
 	default:

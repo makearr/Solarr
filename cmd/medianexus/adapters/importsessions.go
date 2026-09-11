@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/importing/importjob"
 	"github.com/makearr/MediaNexus/internal/importing/inspect"
 	"github.com/makearr/MediaNexus/internal/jobs"
+	"github.com/makearr/MediaNexus/internal/media/music"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
 )
 
@@ -129,6 +130,8 @@ func (a ImportSessions) CommitImportUnit(ctx context.Context, sessionID, unitID 
 			return apiserver.ImportUnitRow{}, apiserver.ErrImportSessionReverted
 		case errors.Is(err, importjob.ErrUnitChanged):
 			return apiserver.ImportUnitRow{}, apiserver.ErrImportUnitChanged
+		case errors.Is(err, music.ErrNoPlacement):
+			return apiserver.ImportUnitRow{}, apiserver.ErrNoPlacement
 		default:
 			return apiserver.ImportUnitRow{}, err
 		}

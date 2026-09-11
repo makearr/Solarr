@@ -573,6 +573,7 @@ func TestCommitImportUnit_AnswersConflictVariants(t *testing.T) {
 		{"no category", apiserver.ErrImportSessionHasNoCategory},
 		{"reverted", apiserver.ErrImportSessionReverted},
 		{"changed", apiserver.ErrImportUnitChanged},
+		{"no placement", apiserver.ErrNoPlacement},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
