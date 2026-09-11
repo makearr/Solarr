@@ -67,6 +67,7 @@ func (p *process) importCommitter() music.Committer {
 		Identity:         library.NewIdentity(p.library),
 		Desired:          &desired,
 		Categories:       adapters.Categories{Cache: p.cache},
+		BlockedContent:   library.NewBlockedContentStore(p.library),
 		Clock:            clock.NewSystem(),
 		DefaultProfileID: p.defaultQualityProfileID,
 	})

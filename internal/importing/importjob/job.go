@@ -56,11 +56,21 @@ type Payload struct {
 	AcquisitionID *int64 `json:"acquisition_id,omitempty"`
 }
 
-// Policy is the one setting this job needs from settings.db -- asked fresh
-// per run rather than cached, the same "ask, don't cache" discipline every
-// other job's settings dependency already uses.
+// Policy is what this job needs from settings.db -- asked fresh per run
+// rather than cached, the same "ask, don't cache" discipline every other
+// job's settings dependency already uses. No internal/db/settings import
+// here (architecture §2) -- cmd/medianexus/adapters bridges both methods
+// over a real settings.Cache the same way it already bridges
+// ImportAutoCommitConfidence.
 type Policy interface {
 	ImportAutoCommitConfidence() float64
+	// RefusedByExclusion reports the ADR-53 refuse-action pattern that
+	// matched name, if any -- the import gate's own exclusion-pattern check
+	// (todo 4.15). An ignore-action match is never surfaced here: CLASSIFY
+	// already treats an ignore-shaped file as junk by its own hardcoded
+	// extension list (internal/importing/inspect), and nothing today asks
+	// this for anything but the poison case.
+	RefusedByExclusion(name, mediaType string, categoryID *int64) (pattern string, found bool)
 }
 
 // Committer places one COMMIT-decided unit into the library --
@@ -376,6 +386,31 @@ func identifyUnit(
 	return library.UnitDecision{UnitID: unitID, Decision: string(decision), Confidence: confidence, CandidatesJSON: candidatesJSON}, result
 }
 
+// poisonedByExclusion checks every file a unit carries -- Media and Other
+// alike, since a refuse-action file does not have to be classified as media
+// itself (a ".exe" beside audio classifies as ClassUnknown, landing in
+// Other, not Media) -- against ADR-53's refuse action (todo 4.15's import
+// gate). Positionally aligned with batch; an empty string means the unit is
+// not poisoned. Runs before IDENTIFY commits any work to a doomed unit.
+func (j *Job) poisonedByExclusion(batch []inspect.Unit, categoryID *int64) []string {
+	const mediaType = "music" // this package is music-coupled today; see the package doc comment
+	reasons := make([]string, len(batch))
+	for i, unit := range batch {
+		for _, files := range [][]inspect.File{unit.Media, unit.Other} {
+			for _, f := range files {
+				if pattern, found := j.policy.RefusedByExclusion(path.Base(f.RelPath), mediaType, categoryID); found {
+					reasons[i] = fmt.Sprintf("%s: %q matched %s", model.ReasonBlockedPattern, pattern, f.RelPath)
+					break
+				}
+			}
+			if reasons[i] != "" {
+				break
+			}
+		}
+	}
+	return reasons
+}
+
 // commitCluster probes one cluster's media files in a single batched call
 // (ADR-28), identifies and shapes every unit in it, and records the result.
 // AddUnits is called before IDENTIFY runs, not after: a unit's row must exist
@@ -444,12 +479,22 @@ func (j *Job) commitCluster(
 		return fmt.Errorf("importjob: add units: %w", err)
 	}
 
+	poisonReasons := j.poisonedByExclusion(batch, categoryID)
+
 	decisions, results := identifyCluster(ctx, ids, batch, identifiers, cfg)
+	for i, reason := range poisonReasons {
+		if reason != "" {
+			// Overrides whatever IDENTIFY decided -- ADR-53's refuse action
+			// poisons the whole unit regardless of how confidently it would
+			// otherwise have resolved.
+			decisions[i] = library.UnitDecision{UnitID: ids[i], Decision: library.UnitSkip, Reason: reason}
+		}
+	}
 	if err := j.sessions.SetUnitDecisions(ctx, sessionID, decisions); err != nil {
 		return fmt.Errorf("importjob: record decisions: %w", err)
 	}
 	if categoryID != nil && j.committer != nil {
-		j.placeCommitted(ctx, *categoryID, sourcePath, tagSource, ids, batch, decisions, results)
+		j.placeCommitted(ctx, sessionID, *categoryID, sourcePath, tagSource, ids, batch, decisions, results)
 	}
 	j.publishProgress(ctx, sessionID, importPhaseWalking, batch[len(batch)-1].Directory)
 	return nil
@@ -469,7 +514,7 @@ func (j *Job) commitCluster(
 // it automatically -- a known, narrow gap (private/notes.md), not handled
 // this pass.
 func (j *Job) placeCommitted(
-	ctx context.Context, categoryID int64, sourcePath string, tagSource music.Resolved,
+	ctx context.Context, sessionID, categoryID int64, sourcePath string, tagSource music.Resolved,
 	ids []int64, batch []inspect.Unit, decisions []library.UnitDecision, results []model.ChainResult,
 ) {
 	for i, decision := range decisions {
@@ -478,6 +523,21 @@ func (j *Job) placeCommitted(
 		}
 		placed, err := j.committer.CommitUnit(ctx, sourcePath, batch[i], *results[i].Best, tagSource, categoryID)
 		if err != nil {
+			// ADR-53 part 2 (todo 4.15): a blocked hash is loud, not a silent
+			// decided-but-unplaced unit indistinguishable from "no root had
+			// room" -- DECIDE already chose COMMIT before the hash was known,
+			// so this is the one case that overrides a decision after
+			// SetUnitDecisions already ran, not before it (unlike the
+			// exclusion-pattern gate above, checked before IDENTIFY).
+			if errors.Is(err, music.ErrBlockedContent) {
+				if setErr := j.sessions.SetUnitDecisions(ctx, sessionID, []library.UnitDecision{
+					{UnitID: ids[i], Decision: library.UnitSkip, Reason: err.Error()},
+				}); setErr != nil {
+					j.logger.Warn("import commit: could not record blocked-content decision",
+						slog.Int64("unit_id", ids[i]), slog.Any("error", setErr))
+				}
+				continue
+			}
 			j.logger.Warn("import commit: could not place unit",
 				slog.Int64("unit_id", ids[i]), slog.String("path", batch[i].Directory), slog.Any("error", err))
 			continue

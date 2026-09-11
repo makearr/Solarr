@@ -132,6 +132,8 @@ func (a ImportSessions) CommitImportUnit(ctx context.Context, sessionID, unitID 
 			return apiserver.ImportUnitRow{}, apiserver.ErrImportUnitChanged
 		case errors.Is(err, music.ErrNoPlacement):
 			return apiserver.ImportUnitRow{}, apiserver.ErrNoPlacement
+		case errors.Is(err, music.ErrBlockedContent):
+			return apiserver.ImportUnitRow{}, apiserver.ErrBlockedContent
 		default:
 			return apiserver.ImportUnitRow{}, err
 		}

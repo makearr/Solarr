@@ -321,6 +321,72 @@ func TestCommitUnit_PlacesFilesRegistersAndDiscoversWithoutTouchingTheSource(t *
 	}
 }
 
+// ADR-53 part 2 / todo 4.15's import gate: a hash already in blocked_content
+// must never reach the library, and per that ADR's own text ("nothing about
+// a blocked file reaches the library -- nothing has to be undone") the
+// check must run before mover.PlaceOne, not after -- so this also proves no
+// bytes ever landed at the destination, not just that no media_object row
+// was created.
+func TestCommitUnit_RefusesBlockedContent(t *testing.T) {
+	opened, fsys, fake := newCommitterEnv(t)
+	track := []byte("this is a known fake")
+	writeCommitSourceFile(t, fsys, "Katupoken/KI Pecezinu/01 Sesoge.flac", track)
+
+	quickHash, err := library.QuickHash(fsys, path.Join(commitSourceRoot, "Katupoken/KI Pecezinu/01 Sesoge.flac"), int64(len(track)))
+	if err != nil {
+		t.Fatalf("QuickHash: %v", err)
+	}
+	blockedContent := library.NewBlockedContentStore(opened)
+	if _, err := blockedContent.Create(t.Context(), library.NewBlock{
+		QuickHash: quickHash, SizeBytes: int64(len(track)), Reason: library.BlockReasonFake,
+		Source: library.BlockSourceUser, CreatedAt: fake.Now().Unix(),
+	}); err != nil {
+		t.Fatalf("Create block: %v", err)
+	}
+
+	plentyFree := int64(1 << 30)
+	roots := &fakePlacementRoots{
+		roots: map[int64]settings.RootFolder{
+			commitDestRootID: {ID: commitDestRootID, Path: commitDestRoot, Online: true, Writable: true, FreeBytes: &plentyFree, TotalBytes: &plentyFree},
+		},
+		categoryRoots: []settings.CategoryRoot{{CategoryID: commitCategoryID, RootFolderID: commitDestRootID, AcceptsNew: true}},
+	}
+	desired := library.NewDesired(opened)
+	committer := music.NewCommitter(music.CommitterConfig{
+		FS: fsys, Roots: roots, Affinity: newFakePlacementAffinity(),
+		Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened), Desired: &desired,
+		Categories: fakeCategories{
+			commitCategoryID: {ID: commitCategoryID, MonitorDiscovered: settings.MonitorDiscoveredMonitored},
+		},
+		BlockedContent: blockedContent, Clock: fake, DefaultProfileID: 42,
+	})
+
+	unit := testUnit("Katupoken/KI Pecezinu", []inspect.File{
+		{RelPath: "Katupoken/KI Pecezinu/01 Sesoge.flac", SizeBytes: int64(len(track))},
+	})
+	probes := []mediatool.Probe{{
+		Path: path.Join(commitSourceRoot, "Katupoken/KI Pecezinu/01 Sesoge.flac"),
+		Tags: mediatool.Tags{"album": "KI Pecezinu", "tracknumber": "1"},
+	}}
+	tags := music.UnitTagSourceFor(commitSourceRoot, probes)
+	best := model.Identification{
+		Confidence: 0.95,
+		ExternalID: &model.ExternalID{Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 0.95},
+	}
+
+	_, err = committer.CommitUnit(t.Context(), commitSourceRoot, unit, best, tags, commitCategoryID)
+	if !errors.Is(err, music.ErrBlockedContent) {
+		t.Fatalf("CommitUnit error = %v, want ErrBlockedContent", err)
+	}
+
+	if _, err := fsys.Open(path.Join(commitDestRoot, "Katupoken", "KI Pecezinu", "01 Sesoge.flac")); err == nil {
+		t.Error("a blocked file was placed at its destination path")
+	}
+	if _, err := fsys.Open(path.Join(commitDestRoot, "Katupoken")); err == nil {
+		t.Error("a blocked unit's own artist directory was created at all")
+	}
+}
+
 // A second unit resolving to the same external id must match the existing
 // work rather than creating a second one -- WorkCreated must say so, since
 // a later revert must never delete a work another unit (or this same one,
