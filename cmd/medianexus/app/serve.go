@@ -33,6 +33,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/platform/events"
 	"github.com/makearr/MediaNexus/internal/platform/fsx"
 	"github.com/makearr/MediaNexus/internal/platform/privilege"
+	"github.com/makearr/MediaNexus/internal/platform/secrets"
 	"github.com/makearr/MediaNexus/migrations"
 )
 
@@ -200,6 +201,21 @@ func (p *process) openDatabases(ctx context.Context) error {
 		return err
 	}
 	p.cache = cache
+
+	// Equips the cache to seal/open an *Arr instance's own API key
+	// (todo 4.13): the same encryption key authConfig decodes for session
+	// signing, config.Create already having generated one on first run
+	// (Invariant 61 -- validated at startup, so this decode cannot fail here
+	// having already succeeded once during config load).
+	encryptionKey, err := config.DecodeKey(p.config.Security.EncryptionKey)
+	if err != nil {
+		return err
+	}
+	cipher, err := secrets.New(encryptionKey)
+	if err != nil {
+		return err
+	}
+	cache.EnableSecrets(cipher)
 
 	// cache/metadata.db (ADR-2) is disposable -- unlike the three above, a
 	// corrupt copy is the operator's to delete, not OpenChecked's to restore
