@@ -9,6 +9,7 @@ import {
 import { api } from "@/api/client";
 
 import { Activity } from "./Activity";
+import { ArrImport } from "./ArrImport";
 import { Dashboard } from "./Dashboard";
 import { Discover } from "./Discover";
 import { DownloadFolders } from "./DownloadFolders";
@@ -107,6 +108,7 @@ const routes = [
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity", component: Activity }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: Settings }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/arr", component: ArrImport }),
 ];
 
 export const router = createRouter({
