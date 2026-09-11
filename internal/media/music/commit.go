@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
 	"github.com/makearr/MediaNexus/internal/db/settings"
@@ -29,6 +30,18 @@ type PlacementRoots interface {
 	CategoryRoots() []settings.CategoryRoot
 }
 
+// PlacementAffinity is the settings-side placement_affinity read/write
+// CommitUnit's artist-affinity step needs (section 11.7: "affinity keeps an
+// artist or series on one disk once placed" -- a general placement rule, not
+// pack-specific). *settings.Cache already satisfies this directly --
+// PlacementAffinity/SetPlacementAffinity are its own methods, not routed
+// through a Snapshot the way PlacementRoots's fields are -- so callers can
+// wire the cache straight through with no adapter needed.
+type PlacementAffinity interface {
+	PlacementAffinity(ctx context.Context, categoryID int64, affinityKey string) (int64, bool, error)
+	SetPlacementAffinity(ctx context.Context, categoryID int64, affinityKey string, rootFolderID, updatedAt int64) error
+}
+
 // Committer is ADR-48's own "COMMIT actually imports" (todo 4.9): place
 // every file a unit's IDENTIFY/DECIDE steps already decided to commit
 // (mover.PlaceOne, ADR-11 A -- reflink/hardlink/copy, never the source
@@ -42,6 +55,7 @@ type PlacementRoots interface {
 type Committer struct {
 	fsys             fsx.FS
 	roots            PlacementRoots
+	affinity         PlacementAffinity
 	physical         library.Physical
 	identity         library.Identity
 	desired          *library.Desired
@@ -56,6 +70,7 @@ type Committer struct {
 type CommitterConfig struct {
 	FS               fsx.FS
 	Roots            PlacementRoots
+	Affinity         PlacementAffinity
 	Physical         library.Physical
 	Identity         library.Identity
 	Desired          *library.Desired
@@ -67,8 +82,8 @@ type CommitterConfig struct {
 // NewCommitter builds one.
 func NewCommitter(config CommitterConfig) Committer {
 	return Committer{
-		fsys: config.FS, roots: config.Roots, physical: config.Physical, identity: config.Identity,
-		desired: config.Desired, categories: config.Categories, clock: config.Clock,
+		fsys: config.FS, roots: config.Roots, affinity: config.Affinity, physical: config.Physical,
+		identity: config.Identity, desired: config.Desired, categories: config.Categories, clock: config.Clock,
 		defaultProfileID: config.DefaultProfileID,
 	}
 }
@@ -118,8 +133,29 @@ func (c Committer) CommitUnit(
 	for _, f := range unit.Media {
 		totalBytes += f.SizeBytes
 	}
+
+	representative, err := tags.TagsFor(ctx, model.FileRef{RelPath: unit.Media[0].RelPath})
+	if err != nil {
+		return Placed{}, fmt.Errorf("music: commit unit %q: %w", unit.Directory, err)
+	}
+	work := unitWorkIdentity(unit, representative)
+	edition := unitEditionLink(representative)
+	artist := representative.First("albumartist", "album_artist", "artist")
+	year := parseYear(representative.First("date", "year"))
+
+	affinityKey := artistAffinityKey(artist)
+	var existingAffinityRoot *int64
+	if affinityKey != "" {
+		if rootFolderID, found, err := c.affinity.PlacementAffinity(ctx, categoryID, affinityKey); err != nil {
+			return Placed{}, fmt.Errorf("music: read placement affinity for unit %q: %w", unit.Directory, err)
+		} else if found {
+			existingAffinityRoot = &rootFolderID
+		}
+	}
+
 	root, decision, err := placement.Resolve(placement.Request{
 		CategoryID: categoryID, SizeBytes: totalBytes, Strategy: placement.StrategyMostFreeSpace,
+		AffinityEnabled: affinityKey != "", AffinityKey: affinityKey, ExistingAffinityRoot: existingAffinityRoot,
 	}, c.rootCandidates(categoryID))
 	if err != nil {
 		return Placed{}, fmt.Errorf("music: resolve placement for unit %q: %w", unit.Directory, err)
@@ -132,16 +168,13 @@ func (c Committer) CommitUnit(
 		return Placed{}, fmt.Errorf("music: commit unit %q: root folder %d has no known path", unit.Directory, root.RootFolderID)
 	}
 
-	representative, err := tags.TagsFor(ctx, model.FileRef{RelPath: unit.Media[0].RelPath})
-	if err != nil {
-		return Placed{}, fmt.Errorf("music: commit unit %q: %w", unit.Directory, err)
-	}
-	work := unitWorkIdentity(unit, representative)
-	edition := unitEditionLink(representative)
-	artist := representative.First("albumartist", "album_artist", "artist")
-	year := parseYear(representative.First("date", "year"))
-
 	now := c.clock.Now()
+	if affinityKey != "" {
+		if err := c.affinity.SetPlacementAffinity(ctx, categoryID, affinityKey, root.RootFolderID, now.Unix()); err != nil {
+			return Placed{}, fmt.Errorf("music: record placement affinity for unit %q: %w", unit.Directory, err)
+		}
+	}
+
 	files := make([]library.PhysicalFile, len(unit.Media))
 	trackFiles := make([]TrackFile, len(unit.Media))
 	for index, media := range unit.Media {
@@ -245,6 +278,21 @@ func (c Committer) rootCandidates(categoryID int64) []placement.RootCandidate {
 		})
 	}
 	return candidates
+}
+
+// artistAffinityKey builds section 11.7's artist-scoped placement affinity
+// key from a unit's own tag-read artist name -- the same lowercased/trimmed
+// comparison key internal/importing/pack's own sibling-artist grouping
+// already uses, so a separator or casing difference never fragments one
+// artist's affinity across two keys. An empty/unknown artist returns "",
+// which the caller reads as "affinity does not apply to this unit" rather
+// than colliding every unknown-artist unit onto one key.
+func artistAffinityKey(artist string) string {
+	key := strings.ToLower(strings.TrimSpace(artist))
+	if key == "" {
+		return ""
+	}
+	return "artist:" + key
 }
 
 // unitWorkIdentity names the work a unit resolves to if one has to be
