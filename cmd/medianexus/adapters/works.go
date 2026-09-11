@@ -32,6 +32,7 @@ func (a Works) ListWorks(
 			Sort:          library.WorkSort(filter.Sort),
 			Direction:     library.SortDirection(filter.Direction),
 			FreshSince:    freshSince,
+			WantedOnly:    filter.Wanted,
 		},
 		library.WorkCursor{
 			SortTitle: cursor.SortTitle, SortYear: cursor.SortYear, SortAdded: cursor.SortAdded, ID: cursor.ID,
@@ -52,6 +53,9 @@ func (a Works) ListWorks(
 		}
 		if row.Artist.Valid {
 			view.Artist = &row.Artist.String
+		}
+		if row.WantedState.Valid {
+			view.WantedState = &row.WantedState.String
 		}
 		views[index] = view
 	}

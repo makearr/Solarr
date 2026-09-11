@@ -52,6 +52,9 @@ type WorksFilter struct {
 	// adapter resolves it against the live clock, never this package
 	// (forbidigo: no time.Now() here either).
 	Fresh bool
+	// Wanted restricts to works with a monitored, not-yet-COMPLETE
+	// desired_item -- the per-library Wanted screen, 2026-09-11.
+	Wanted bool
 }
 
 // WorksCursor is a position in the list. Only the field matching the active
@@ -75,6 +78,9 @@ type WorkRow struct {
 	Artist    *string
 	AddedAt   time.Time
 	UpdatedAt time.Time
+	// WantedState is the state of the desired_item ListWorks joined against
+	// when the row has a monitored one -- nil when it has none.
+	WantedState *string
 }
 
 // ListWorks returns a page of the library the caller may see (ADR-27). A work
@@ -114,7 +120,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 	rows, err := s.works.ListWorks(r.Context(),
 		WorksFilter{
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Sort: sort, Direction: direction,
-			Fresh: derefOr(params.Fresh, false),
+			Fresh: derefOr(params.Fresh, false), Wanted: derefOr(params.Wanted, false),
 		},
 		worksCursorFor(sort, cursor), limit+1)
 	if err != nil {
@@ -192,6 +198,7 @@ func buildWorkPage(rows []WorkRow, limit int, sort WorkSort) gen.WorkPage {
 		views[index] = gen.Work{
 			Id: row.ID, MediaType: row.MediaType, Title: row.Title, SortTitle: row.SortTitle,
 			Year: yearOf(row.Year), Artist: row.Artist, AddedAt: row.AddedAt, UpdatedAt: row.UpdatedAt,
+			WantedState: wantedStateOf(row.WantedState),
 		}
 	}
 
@@ -213,6 +220,14 @@ func cursorValueFor(sort WorkSort, row WorkRow) string {
 	default:
 		return row.SortTitle
 	}
+}
+
+func wantedStateOf(state *string) *gen.WorkWantedState {
+	if state == nil {
+		return nil
+	}
+	value := gen.WorkWantedState(*state)
+	return &value
 }
 
 func yearOf(year *int64) *int {

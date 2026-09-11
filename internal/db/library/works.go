@@ -28,6 +28,16 @@ const workArtistColumn = `primary_artist.name AS artist`
 const workArtistJoin = `
 LEFT JOIN person primary_artist ON primary_artist.id = work.primary_artist_id`
 
+// workStateColumn reports one monitored desired_item's own state for the
+// work (NULL when it has none) -- a scalar subquery rather than a join, so a
+// work with more than one desired_item (rare: an edition-specific SET
+// alongside the album-level one) still yields exactly one row here, matching
+// every other column. ORDER BY id makes the pick deterministic rather than
+// SQLite's own arbitrary one.
+const workStateColumn = `(SELECT di.state FROM desired_item di
+      WHERE di.work_id = work.id AND di.monitored = 1
+      ORDER BY di.id LIMIT 1) AS wanted_state`
+
 // WorkSort selects which column the list is ordered by. The zero value sorts
 // by title, matching every caller that does not set it.
 type WorkSort string
@@ -82,6 +92,11 @@ type WorkFilter struct {
 	// (migration 0021) could support it now, but nothing has asked for it.
 	Sort      WorkSort
 	Direction SortDirection
+	// WantedOnly restricts to works with a monitored desired_item that is
+	// not yet COMPLETE -- todo 4.13's follow-up "Wanted" per-library screen,
+	// asked for 2026-09-11. Reuses this list's own pagination/sort/visibility
+	// rather than a second query.
+	WantedOnly bool
 }
 
 // WorkCursor is a position in the list: the id always breaks ties, since without it a
@@ -94,10 +109,12 @@ type WorkCursor struct {
 	ID        int64
 }
 
-// WorkListRow is one row of the library list plus its primary artist credit.
+// WorkListRow is one row of the library list plus its primary artist credit
+// and, when it has a monitored desired_item, that item's own state.
 type WorkListRow struct {
 	librarydb.Work
-	Artist sql.NullString
+	Artist      sql.NullString
+	WantedState sql.NullString
 }
 
 // Works reads the library list surface.
@@ -124,6 +141,8 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	predicates.AddIf(filter.FreshSince != "",
 		"EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = work.id AND wd.kind = ? AND wd.date >= ?)",
 		WorkDateStreet, filter.FreshSince)
+	predicates.AddIf(filter.WantedOnly,
+		"EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = work.id AND di.monitored = 1 AND di.state != 'COMPLETE')")
 
 	column, cursorValue := sortColumn(filter.Sort, after)
 	operator := ">"
@@ -139,7 +158,8 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		"("+column+" "+operator+" ? OR ("+column+" = ? AND work.id > ?))",
 		cursorValue, cursorValue, after.ID)
 
-	query := "SELECT " + workColumns + ",\n       " + workArtistColumn + "\nFROM work" + workArtistJoin +
+	query := "SELECT " + workColumns + ",\n       " + workArtistColumn + ",\n       " + workStateColumn +
+		"\nFROM work" + workArtistJoin +
 		predicates.Where() + "\nORDER BY " + column + orderDirection + ", work.id\nLIMIT ?"
 	return query, predicates.Args(pageSize)
 }
@@ -264,7 +284,7 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 		var work WorkListRow
 		if err := rows.Scan(&work.ID, &work.MediaType, &work.CanonicalTitle, &work.SortTitle,
 			&work.OriginalLanguage, &work.Year, &work.RuntimeMs, &work.AddedAt,
-			&work.UpdatedAt, &work.AddedBy, &work.Artist); err != nil {
+			&work.UpdatedAt, &work.AddedBy, &work.Artist, &work.WantedState); err != nil {
 			return nil, fmt.Errorf("library: scan work: %w", err)
 		}
 		works = append(works, work)

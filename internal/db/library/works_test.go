@@ -333,6 +333,48 @@ func TestListWorks_FreshFiltersToDayPreciseRecentReleases(t *testing.T) {
 	}
 }
 
+// The Wanted screen's own filter (2026-09-11): monitored and not COMPLETE
+// includes a work, an unmonitored one is excluded even with the same state,
+// and a monitored-but-COMPLETE one is excluded too -- COMPLETE means nothing
+// is missing, so it is not "wanted" regardless of monitored. wanted_state
+// comes back set only for the row that actually matched.
+func TestListWorks_WantedFiltersToMonitoredIncompleteDesiredItems(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+
+	missing := createWork(t, opened, "music", "Missing Album")
+	createDesired(t, opened, missing.ID, "SET", 10)
+
+	complete := createWork(t, opened, "music", "Complete Album")
+	completeItem := createDesired(t, opened, complete.ID, "SET", 10)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{
+			ID: completeItem.ID, State: "COMPLETE", PresentCount: 10,
+		})
+	})
+
+	unmonitored := createWork(t, opened, "music", "Unmonitored Album")
+	unmonitoredItem := createDesired(t, opened, unmonitored.ID, "SET", 10)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.SetDesiredItemMonitored(ctx, librarydb.SetDesiredItemMonitoredParams{
+			ID: unmonitoredItem.ID, Monitored: 0,
+		})
+	})
+
+	createWork(t, opened, "music", "No Desired Item At All")
+
+	page, err := works.List(t.Context(), library.WorkFilter{WantedOnly: true}, library.WorkCursor{}, 100)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(page) != 1 || page[0].ID != missing.ID {
+		t.Fatalf("wanted page = %+v, want only %q (%d)", page, "Missing Album", missing.ID)
+	}
+	if !page[0].WantedState.Valid || page[0].WantedState.String != "MISSING" {
+		t.Errorf("WantedState = %+v, want MISSING", page[0].WantedState)
+	}
+}
+
 func createWorkWithDate(t *testing.T, opened *store.Store, title, date string) librarydb.Work {
 	t.Helper()
 	created := createWorkWithYear(t, opened, title, 0)

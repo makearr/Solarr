@@ -1067,6 +1067,13 @@ paths:
             release date, or one known only to the year or month, never
             matches: day precision is required.
           schema: { type: boolean, default: false }
+        - name: wanted
+          in: query
+          description: >-
+            Only works with a monitored desired_item that is not yet
+            COMPLETE (the per-library Wanted screen). Its own state, when the
+            work has one, comes back as wanted_state.
+          schema: { type: boolean, default: false }
       responses:
         "200":
           description: One page.
@@ -3199,6 +3206,12 @@ components:
             sort option on this endpoint yet -- nothing has asked for it.
         added_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        wanted_state:
+          type: string
+          enum: [MISSING, PARTIAL, COMPLETE, UPGRADABLE]
+          description: >-
+            Set when this work has a monitored desired_item, regardless of
+            whether the wanted filter was used.
 
     WorkPage:
       type: object

@@ -302,10 +302,18 @@ const (
 
 // Defines values for WantedState.
 const (
-	COMPLETE   WantedState = "COMPLETE"
-	MISSING    WantedState = "MISSING"
-	PARTIAL    WantedState = "PARTIAL"
-	UPGRADABLE WantedState = "UPGRADABLE"
+	WantedStateCOMPLETE   WantedState = "COMPLETE"
+	WantedStateMISSING    WantedState = "MISSING"
+	WantedStatePARTIAL    WantedState = "PARTIAL"
+	WantedStateUPGRADABLE WantedState = "UPGRADABLE"
+)
+
+// Defines values for WorkWantedState.
+const (
+	WorkWantedStateCOMPLETE   WorkWantedState = "COMPLETE"
+	WorkWantedStateMISSING    WorkWantedState = "MISSING"
+	WorkWantedStatePARTIAL    WorkWantedState = "PARTIAL"
+	WorkWantedStateUPGRADABLE WorkWantedState = "UPGRADABLE"
 )
 
 // Defines values for ListImportSessionsParamsState.
@@ -1514,8 +1522,14 @@ type Work struct {
 	SortTitle string    `json:"sort_title"`
 	Title     string    `json:"title"`
 	UpdatedAt time.Time `json:"updated_at"`
-	Year      *int      `json:"year,omitempty"`
+
+	// WantedState Set when this work has a monitored desired_item, regardless of whether the wanted filter was used.
+	WantedState *WorkWantedState `json:"wanted_state,omitempty"`
+	Year        *int             `json:"year,omitempty"`
 }
+
+// WorkWantedState Set when this work has a monitored desired_item, regardless of whether the wanted filter was used.
+type WorkWantedState string
 
 // WorkDetail defines model for WorkDetail.
 type WorkDetail struct {
@@ -1836,6 +1850,9 @@ type ListWorksParams struct {
 
 	// Fresh Only works released within priority.new_release_days (ADR-55's release-date window; the 48h indexer/RSS window is not built -- it needs candidate.first_seen_at, stage 5). A work with no known release date, or one known only to the year or month, never matches: day precision is required.
 	Fresh *bool `form:"fresh,omitempty" json:"fresh,omitempty"`
+
+	// Wanted Only works with a monitored desired_item that is not yet COMPLETE (the per-library Wanted screen). Its own state, when the work has one, comes back as wanted_state.
+	Wanted *bool `form:"wanted,omitempty" json:"wanted,omitempty"`
 }
 
 // ListWorksParamsSort defines parameters for ListWorks.
@@ -5670,6 +5687,14 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	err = runtime.BindQueryParameter("form", true, false, "fresh", r.URL.Query(), &params.Fresh)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fresh", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "wanted" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "wanted", r.URL.Query(), &params.Wanted)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wanted", Err: err})
 		return
 	}
 

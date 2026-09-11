@@ -2071,6 +2071,11 @@ export interface components {
             added_at: string;
             /** Format: date-time */
             updated_at: string;
+            /**
+             * @description Set when this work has a monitored desired_item, regardless of whether the wanted filter was used.
+             * @enum {string}
+             */
+            wanted_state?: "MISSING" | "PARTIAL" | "COMPLETE" | "UPGRADABLE";
         };
         WorkPage: {
             items: components["schemas"]["Work"][];
@@ -3966,6 +3971,8 @@ export interface operations {
                 dir?: "asc" | "desc";
                 /** @description Only works released within priority.new_release_days (ADR-55's release-date window; the 48h indexer/RSS window is not built -- it needs candidate.first_seen_at, stage 5). A work with no known release date, or one known only to the year or month, never matches: day precision is required. */
                 fresh?: boolean;
+                /** @description Only works with a monitored desired_item that is not yet COMPLETE (the per-library Wanted screen). Its own state, when the work has one, comes back as wanted_state. */
+                wanted?: boolean;
             };
             header?: never;
             path?: never;
