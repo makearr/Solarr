@@ -2851,7 +2851,7 @@ components:
         Read from the `counter` table, never aggregated live (section 21.12,
         ADR-28). Absent counters report zero, so an empty library and an
         uncounted one look the same until the reconciliation job has run.
-      required: [works, files, monitored, missing, probed, unprobed]
+      required: [works, files, monitored, missing, probed, unprobed, fresh]
       properties:
         works: { type: integer }
         files: { type: integer }
@@ -2866,6 +2866,12 @@ components:
         unprobed:
           type: integer
           description: total_files minus probed, computed here rather than stored twice.
+        fresh:
+          type: integer
+          description: >-
+            Works released within the freshness window (ADR-55, todo 4.20).
+            Same "library" counter scope, a distinct metric
+            (library.FreshCounts) reconciled by its own sweep.
 
     JobState:
       type: string

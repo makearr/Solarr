@@ -33,11 +33,18 @@ export function Dashboard() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
         <Section title="Library">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <Tile label="Works" value={library.works} to="/library" />
             <Tile label="Files" value={library.files} to="/library" />
             <Tile label="Monitored" value={library.monitored} to="/library" />
             <Tile label="Missing" value={library.missing} to="/library" tone="warn" />
+            <Tile
+              label="Fresh"
+              value={library.fresh}
+              to="/library"
+              search={{ fresh: "1" }}
+              tone="accent"
+            />
           </div>
           {library.works === 0 && (
             <Note>
@@ -133,11 +140,13 @@ function Tile({
   label,
   value,
   to,
+  search,
   tone,
 }: {
   label: string;
   value: number;
   to: string;
+  search?: Record<string, string>;
   tone?: "accent" | "danger" | "warn";
 }) {
   const emphasis =
@@ -153,6 +162,7 @@ function Tile({
   return (
     <Link
       to={to}
+      search={search}
       className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface px-3 py-2.5
                  hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2
                  focus-visible:outline-accent"

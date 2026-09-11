@@ -167,6 +167,13 @@ ON CONFLICT (work_id, kind, region) DO UPDATE SET
 SELECT work_id, kind, region, date, source
 FROM work_date WHERE work_id = ? ORDER BY kind, region;
 
+-- The dashboard's fresh-works count (ADR-55, todo 4.20): every work with a
+-- work_date of kind on or after the cutoff. Distinct since a work can carry
+-- more than one region's own date row for the same kind.
+-- name: CountFreshWorks :one
+SELECT CAST(COUNT(DISTINCT work_id) AS INTEGER) AS total FROM work_date
+WHERE kind = ? AND date >= ?;
+
 -- name: SetWorkClassification :exec
 INSERT INTO work_classification (work_id, kind, value, source)
 VALUES (?, ?, ?, ?)
