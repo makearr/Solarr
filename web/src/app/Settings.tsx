@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 
 import { Categories } from "./Categories";
 import { Network } from "./Network";
+import { Priority } from "./Priority";
 import { UnwantedFiles } from "./UnwantedFiles";
 
 /** Settings sections in the order they matter to someone setting the thing up.
@@ -34,6 +35,8 @@ export function GeneralSettings() {
         <UnwantedFiles />
 
         <Network />
+
+        <Priority />
 
         <section className="flex flex-col gap-2">
           <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Import</h2>

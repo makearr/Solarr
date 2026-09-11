@@ -538,6 +538,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/priority": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * ADR-36's trigger weights and ADR-55's freshness window.
+         * @description Settings only -- internal/identify/priority.Compute has no caller until stage 5/6's planner exists, so this cannot yet show a waiting item's own priority broken into its components (todo 4.7's own remaining piece).
+         */
+        get: operations["getPrioritySettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the weights or the freshness window. Administrator only.
+         * @description Written wholesale, like the cache budget and network settings (ADR-44: validated on write -- every weight non-negative, new_release_days positive).
+         */
+        patch: operations["updatePrioritySettings"];
+        trace?: never;
+    };
     "/import/settings": {
         parameters: {
             query?: never;
@@ -2582,6 +2606,34 @@ export interface components {
             /** @description Every desired_item id detached and recomputed. */
             reopened_items: number[];
         };
+        /** @description ADR-36's trigger weights and ADR-55's release-date freshness window. */
+        PrioritySettings: {
+            /**
+             * Format: int64
+             * @description Bigger is more urgent. Default 40.
+             */
+            user_request_weight: number;
+            /**
+             * Format: int64
+             * @description Bigger is more urgent. Default 30.
+             */
+            new_release_weight: number;
+            /**
+             * Format: int64
+             * @description Bigger is more urgent. Default 20.
+             */
+            gap_weight: number;
+            /**
+             * Format: int64
+             * @description Bigger is more urgent. Default 10.
+             */
+            upgrade_weight: number;
+            /**
+             * Format: int64
+             * @description Days after release an item still counts as new rather than a gap. Default 7.
+             */
+            new_release_days: number;
+        };
         /** @description ADR-48's own single commit-line knob (import.auto_commit_confidence). */
         ImportSettings: {
             /**
@@ -3801,6 +3853,54 @@ export interface operations {
                     "application/json": components["schemas"]["CacheReport"];
                 };
             };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getPrioritySettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current policy. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrioritySettings"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    updatePrioritySettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrioritySettings"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrioritySettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
         };
