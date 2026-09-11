@@ -1,12 +1,14 @@
 package settings_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/goccy/go-yaml"
 
 	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/MediaNexus/internal/platform/config"
 )
 
 // An export that cannot be imported is a backup that cannot be restored.
@@ -303,6 +305,45 @@ func TestCreateCategory_RefusesAnUnknownMediaType(t *testing.T) {
 
 	if categories := cache.Snapshot().Categories(); len(categories) != 0 {
 		t.Errorf("%d categories were created by a rejected request", len(categories))
+	}
+}
+
+// A duplicate (media_type, name) must be refused with a named-field error a
+// caller can act on, not left to category(media_type, name)'s own raw
+// UNIQUE constraint -- writeError has nothing to map that to, so it fell
+// through to a bare "the request could not be completed" (found live via
+// the setup wizard's own *Arr connect step, submitted twice against the
+// same suggested library name).
+func TestCreateCategory_RefusesADuplicateNameAndMediaType(t *testing.T) {
+	cache, _ := newCache(t)
+
+	if _, err := cache.CreateCategory(t.Context(), "music", "Music", 10); err != nil {
+		t.Fatalf("CreateCategory (first): %v", err)
+	}
+
+	_, err := cache.CreateCategory(t.Context(), "music", "Music", 20)
+	if err == nil {
+		t.Fatal("a duplicate (media_type, name) was accepted")
+	}
+	// Specifically config.Problems, not the raw SQLite UNIQUE constraint
+	// error surfacing unhandled -- the latter's own text also happens to
+	// contain "category.name", so a plain substring check on err.Error()
+	// would pass even with the duplicate check removed entirely.
+	var problems config.Problems
+	if !errors.As(err, &problems) {
+		t.Fatalf("err = %v (%T), want it to unwrap to config.Problems", err, err)
+	}
+	if len(problems) != 1 || problems[0].Path != "name" {
+		t.Errorf("problems = %+v, want exactly one problem on the name field", problems)
+	}
+
+	// A different media_type with the same name is not a duplicate.
+	if _, err := cache.CreateCategory(t.Context(), "tv", "Music", 30); err != nil {
+		t.Errorf("a same-name, different-media_type category was refused: %v", err)
+	}
+
+	if categories := cache.Snapshot().Categories(); len(categories) != 2 {
+		t.Errorf("%d categories exist, want exactly the 2 that should have been created", len(categories))
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/makearr/MediaNexus/internal/db/store/gen/settingsdb"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/MediaNexus/internal/platform/config"
 )
 
 // Reference is one kind of thing holding on to an entity, and how many there are (§6).
@@ -39,6 +40,19 @@ func (e *InUseError) Unwrap() error { return ErrInUse }
 func (c *Cache) CreateCategory(ctx context.Context, mediaType, name string, priorityRank int64) (Category, error) {
 	if problems := validateCategory(mediaType, name, priorityRank); len(problems) > 0 {
 		return Category{}, problems
+	}
+	// category(media_type, name) is UNIQUE (migration 0001); checked here
+	// rather than left to that constraint's own raw error, which writeError
+	// has nothing to map and so answers a bare "the request could not be
+	// completed" -- found live via the setup wizard's own *Arr connect step
+	// re-submitted against a category that already existed.
+	for _, existing := range c.Snapshot().Categories() {
+		if existing.MediaType == mediaType && existing.Name == name {
+			return Category{}, config.Problems{{
+				Path: "name", Value: name,
+				Expectation: fmt.Sprintf("a name not already used by another %s category", mediaType),
+			}}
+		}
 	}
 
 	administrators := c.administratorIDs()
