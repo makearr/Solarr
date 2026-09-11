@@ -553,6 +553,30 @@ func (q *Queries) RequestImportSessionCancel(ctx context.Context, id int64) (int
 	return result.RowsAffected()
 }
 
+const setImportSessionCategory = `-- name: SetImportSessionCategory :execrows
+UPDATE import_session SET category_id = ?1
+WHERE id = ?2 AND (category_id IS NULL OR category_id = ?1)
+`
+
+type SetImportSessionCategoryParams struct {
+	CategoryID sql.NullInt64
+	ID         int64
+}
+
+// From no category, or a no-op onto the same one -- the second form is what
+// makes re-running the placement catch-up idempotent (a caller retrying
+// after a transient placement failure, e.g. capacity not probed yet, sends
+// the same category_id again). Re-pointing at a *different* category is out
+// of scope, still refused. :execrows lets the caller tell that apart from
+// "no such session".
+func (q *Queries) SetImportSessionCategory(ctx context.Context, arg SetImportSessionCategoryParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setImportSessionCategory, arg.CategoryID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setImportSessionExtractDir = `-- name: SetImportSessionExtractDir :exec
 UPDATE import_session SET extract_dir = ? WHERE id = ?
 `

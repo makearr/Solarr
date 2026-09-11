@@ -477,6 +477,13 @@ type Querier interface {
 	SetDownloadProgress(ctx context.Context, arg SetDownloadProgressParams) error
 	SetFingerprints(ctx context.Context, arg SetFingerprintsParams) error
 	SetGroupReputation(ctx context.Context, arg SetGroupReputationParams) error
+	// From no category, or a no-op onto the same one -- the second form is what
+	// makes re-running the placement catch-up idempotent (a caller retrying
+	// after a transient placement failure, e.g. capacity not probed yet, sends
+	// the same category_id again). Re-pointing at a *different* category is out
+	// of scope, still refused. :execrows lets the caller tell that apart from
+	// "no such session".
+	SetImportSessionCategory(ctx context.Context, arg SetImportSessionCategoryParams) (int64, error)
 	SetImportSessionExtractDir(ctx context.Context, arg SetImportSessionExtractDirParams) error
 	// Set once, the first time a session's estimate is computed (todo 4.21's ETA);
 	// never recomputed on a later resume of the same session.

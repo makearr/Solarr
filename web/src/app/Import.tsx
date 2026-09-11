@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban } from "lucide-react";
+import { Ban, Undo2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -52,10 +52,11 @@ function useImportProgressStream(
 }
 
 /** ADR-48: point at any path, and the pipeline (WALK/CLASSIFY/GROUP/EVIDENCE/
- *  IDENTIFY/SHAPE/DECIDE) finds and records what it contains. This screen only
- *  inspects and records -- a COMMIT decision here means confidence cleared the
- *  threshold, not that the file has moved; the move engine (ADR-51) does not
- *  exist yet, so there is nothing to commit or revert from this screen either. */
+ *  IDENTIFY/SHAPE/DECIDE) finds and records what it contains. A COMMIT
+ *  decision places a file the instant its session has a category -- given up
+ *  front on the Inspect form, or assigned to a running or finished session
+ *  from its own card below (todo 4.9: "decide per unit" stays available via
+ *  the API, but this screen always offers assigning one). */
 export function Import() {
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [liveProgress, setLiveProgress] = useState<Record<number, ImportProgress>>({});
@@ -78,7 +79,10 @@ export function Import() {
         </span>
       </div>
 
-      <InspectForm />
+      <div className="flex flex-wrap items-start gap-4">
+        <InspectForm />
+        <ThresholdControl />
+      </div>
 
       <div className="flex min-h-0 flex-1 gap-4">
         <SessionList
@@ -92,15 +96,78 @@ export function Import() {
   );
 }
 
+/** The section 11.4 table's own five named levels for
+ *  import.auto_commit_confidence -- a fixed vocabulary, not derived from
+ *  anything the API returns. */
+const THRESHOLD_LEVELS: readonly { value: number; label: string; description: string }[] = [
+  { value: 0.95, label: "Only what was proven", description: "Embedded MBID, exact hash or acoustic fingerprint" },
+  { value: 0.9, label: "Confident", description: "The above, plus tags and path and provider all agreeing" },
+  { value: 0.85, label: "Balanced", description: "Strong agreement with one weak signal" },
+  { value: 0.8, label: "Trusting", description: "Good path evidence and a clean parse, no provider corroboration" },
+  { value: 0.75, label: "Permissive", description: "A parsed name and one plausible match" },
+];
+
+function ThresholdControl() {
+  const queryClient = useQueryClient();
+  const settings = useQuery({
+    queryKey: ["import-settings"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/import/settings");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const update = useMutation({
+    mutationFn: async (value: number) => {
+      const { error } = await api.PATCH("/import/settings", {
+        body: { auto_commit_confidence: value },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["import-settings"] }),
+  });
+
+  if (!settings.data) return null;
+  const current = settings.data.auto_commit_confidence;
+
+  return (
+    <fieldset className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
+      <legend className="px-1 text-ink-muted">Commit line</legend>
+      {THRESHOLD_LEVELS.map((level) => (
+        <label key={level.value} className="flex items-start gap-2">
+          <input
+            type="radio"
+            name="threshold"
+            className="mt-0.5"
+            checked={current === level.value}
+            disabled={update.isPending}
+            onChange={() => update.mutate(level.value)}
+          />
+          <span className="flex flex-col">
+            <span className="text-ink">
+              {level.label} <span className="text-ink-muted">({level.value})</span>
+            </span>
+            <span className="text-[0.6875rem] text-ink-muted">{level.description}</span>
+          </span>
+        </label>
+      ))}
+      {update.isError && <p className="text-danger">That could not be changed.</p>}
+    </fieldset>
+  );
+}
+
 function InspectForm() {
   const queryClient = useQueryClient();
   const [sourcePath, setSourcePath] = useState("");
   const [origin, setOrigin] = useState<ImportOrigin>("manual");
+  const [categoryId, setCategoryId] = useState<number | "">("");
+  const categories = useCategories();
 
   const inspect = useMutation({
     mutationFn: async () => {
       const { error } = await api.POST("/import/inspect", {
-        body: { source_path: sourcePath, origin },
+        body: { source_path: sourcePath, origin, category_id: categoryId === "" ? undefined : categoryId },
       });
       if (error) throw error;
     },
@@ -142,6 +209,21 @@ function InspectForm() {
           ))}
         </select>
       </label>
+      <label className="flex flex-col gap-1 text-xs text-ink-muted">
+        Category
+        <select
+          className={inputStyle}
+          value={categoryId}
+          onChange={(event) => setCategoryId(event.target.value === "" ? "" : Number(event.target.value))}
+        >
+          <option value="">Decide later</option>
+          {categories.data?.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+      </label>
       <button
         type="submit"
         disabled={!sourcePath.trim() || inspect.isPending}
@@ -159,7 +241,22 @@ function InspectForm() {
   );
 }
 
+/** Shared with the per-session "assign a category" action below -- same
+ *  query key as Categories.tsx/DownloadFolders.tsx, so the list is cached
+ *  once across the whole app. */
+function useCategories() {
+  return useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/categories");
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 const RUNNING_STATES = new Set<ImportSession["state"]>(["INSPECTING", "CANCELLING"]);
+const REVERTIBLE_STATES = new Set<ImportSession["state"]>(["DONE", "FAILED", "CANCELLED"]);
 
 /** Rate from measured throughput, absent while the sample is small (todo
  *  4.21's own wording) -- no total is known ahead of time (units_estimated
@@ -195,7 +292,6 @@ function SessionList({
   onSelect: (id: number) => void;
   liveProgress: Record<number, ImportProgress>;
 }) {
-  const queryClient = useQueryClient();
   const sessions = useQuery({
     queryKey: ["import-sessions"],
     queryFn: async () => {
@@ -206,14 +302,6 @@ function SessionList({
     refetchInterval: 5000,
   });
 
-  const cancel = useMutation({
-    mutationFn: async (id: number) => {
-      const { error } = await api.POST("/import/sessions/{id}/cancel", { params: { path: { id } } });
-      if (error) throw error;
-    },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["import-sessions"] }),
-  });
-
   return (
     <div className="flex w-96 shrink-0 flex-col gap-2 overflow-y-auto">
       {sessions.isLoading && <Message>Loading sessions…</Message>}
@@ -222,58 +310,173 @@ function SessionList({
         <Message>No import has run yet.</Message>
       )}
       {sessions.data?.map((session) => (
-        <div
+        <SessionRow
           key={session.id}
-          className={`flex flex-col gap-1 rounded-lg border p-3 text-left text-xs ${
-            selectedId === session.id
-              ? "border-accent bg-surface"
-              : "border-border-subtle bg-surface hover:border-accent/50"
-          }`}
-        >
-          <div className="flex items-start gap-2">
-            <button
-              type="button"
-              onClick={() => onSelect(session.id)}
-              className="flex min-w-0 flex-1 flex-col gap-1 text-left focus-visible:outline-2
-                         focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
-              <span className="truncate font-mono text-sm text-ink" title={session.source_path}>
-                {session.source_path}
-              </span>
-              <span className="flex flex-wrap items-center gap-1.5">
-                <StateBadge state={session.state} />
-                <span className="text-ink-muted">{session.origin}</span>
-              </span>
-              <span className="text-ink-muted">
-                {session.units_committed} committed / {session.units_queued} queued /{" "}
-                {session.units_skipped} skipped / {session.units_failed} failed /{" "}
-                {session.units_total} total
-              </span>
-              {RUNNING_STATES.has(session.state) && liveProgress[session.id]?.current_unit && (
-                <span className="truncate text-ink-muted" title={liveProgress[session.id]?.current_unit}>
-                  now: {liveProgress[session.id]?.current_unit}
-                </span>
-              )}
-              {RUNNING_STATES.has(session.state) && describeProgress(session) && (
-                <span className="text-ink-muted">{describeProgress(session)}</span>
-              )}
-              {session.error && <span className="text-danger">{session.error}</span>}
-            </button>
-            {RUNNING_STATES.has(session.state) && (
-              <button
-                type="button"
-                onClick={() => cancel.mutate(session.id)}
-                disabled={cancel.isPending}
-                title="Cancel this import"
-                className="shrink-0 rounded-md p-1 text-ink-muted hover:text-danger disabled:opacity-50
-                           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              >
-                <Ban aria-hidden className="size-3.5" />
-              </button>
-            )}
-          </div>
-        </div>
+          session={session}
+          selected={selectedId === session.id}
+          onSelect={() => onSelect(session.id)}
+          progress={liveProgress[session.id]}
+        />
       ))}
+    </div>
+  );
+}
+
+function SessionRow({
+  session,
+  selected,
+  onSelect,
+  progress,
+}: {
+  session: ImportSession;
+  selected: boolean;
+  onSelect: () => void;
+  progress: ImportProgress | undefined;
+}) {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
+
+  const cancel = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST("/import/sessions/{id}/cancel", { params: { path: { id: session.id } } });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const revert = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST("/import/sessions/{id}/revert", { params: { path: { id: session.id } } });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidate();
+      void queryClient.invalidateQueries({ queryKey: ["import-units", session.id] });
+    },
+  });
+
+  return (
+    <div
+      className={`flex flex-col gap-1.5 rounded-lg border p-3 text-left text-xs ${
+        selected ? "border-accent bg-surface" : "border-border-subtle bg-surface hover:border-accent/50"
+      }`}
+    >
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          onClick={onSelect}
+          className="flex min-w-0 flex-1 flex-col gap-1 text-left focus-visible:outline-2
+                     focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          <span className="truncate font-mono text-sm text-ink" title={session.source_path}>
+            {session.source_path}
+          </span>
+          <span className="flex flex-wrap items-center gap-1.5">
+            <StateBadge state={session.state} />
+            <span className="text-ink-muted">{session.origin}</span>
+          </span>
+          <span className="text-ink-muted">
+            {session.units_committed} committed / {session.units_queued} queued /{" "}
+            {session.units_skipped} skipped / {session.units_failed} failed /{" "}
+            {session.units_total} total
+          </span>
+          {RUNNING_STATES.has(session.state) && progress?.current_unit && (
+            <span className="truncate text-ink-muted" title={progress.current_unit}>
+              now: {progress.current_unit}
+            </span>
+          )}
+          {RUNNING_STATES.has(session.state) && describeProgress(session) && (
+            <span className="text-ink-muted">{describeProgress(session)}</span>
+          )}
+          {session.error && <span className="text-danger">{session.error}</span>}
+        </button>
+        {RUNNING_STATES.has(session.state) && (
+          <button
+            type="button"
+            onClick={() => cancel.mutate()}
+            disabled={cancel.isPending}
+            title="Cancel this import"
+            className="shrink-0 rounded-md p-1 text-ink-muted hover:text-danger disabled:opacity-50
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <Ban aria-hidden className="size-3.5" />
+          </button>
+        )}
+        {REVERTIBLE_STATES.has(session.state) && session.units_committed > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm("Revert this session? Every placed file moves back through quarantine.")) {
+                revert.mutate();
+              }
+            }}
+            disabled={revert.isPending}
+            title="Revert this session"
+            className="shrink-0 rounded-md p-1 text-ink-muted hover:text-danger disabled:opacity-50
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <Undo2 aria-hidden className="size-3.5" />
+          </button>
+        )}
+      </div>
+      {session.category_id === undefined && session.state !== "REVERTED" && (
+        <AssignCategory sessionId={session.id} />
+      )}
+    </div>
+  );
+}
+
+/** todo 4.9's "assign a category later": a session that started with
+ *  "decide per unit" gets one from here, which also places every unit it
+ *  already decided COMMIT but never placed. */
+function AssignCategory({ sessionId }: { sessionId: number }) {
+  const queryClient = useQueryClient();
+  const categories = useCategories();
+  const [categoryId, setCategoryId] = useState<number | "">("");
+
+  const assign = useMutation({
+    mutationFn: async (id: number) => {
+      const { data, error } = await api.POST("/import/sessions/{id}/category", {
+        params: { path: { id: sessionId } },
+        body: { category_id: id },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
+      void queryClient.invalidateQueries({ queryKey: ["import-units", sessionId] });
+    },
+  });
+
+  return (
+    <div className="flex items-center gap-1.5 border-t border-border-subtle pt-1.5">
+      <select
+        className={`${inputStyle} flex-1`}
+        value={categoryId}
+        disabled={assign.isPending}
+        onChange={(event) => setCategoryId(event.target.value === "" ? "" : Number(event.target.value))}
+      >
+        <option value="">No category yet</option>
+        {categories.data?.map((category) => (
+          <option key={category.id} value={category.id}>
+            {category.name}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        disabled={categoryId === "" || assign.isPending}
+        onClick={() => categoryId !== "" && assign.mutate(categoryId)}
+        className="shrink-0 rounded-md border border-border-subtle px-2 py-1 text-ink-muted hover:text-ink
+                   disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        Assign
+      </button>
+      {assign.isError && <span className="text-danger">Could not assign.</span>}
+      {assign.isSuccess && assign.data.units_placed > 0 && (
+        <span className="text-ink-muted">{assign.data.units_placed} placed</span>
+      )}
     </div>
   );
 }
@@ -298,7 +501,7 @@ function UnitList({ sessionId }: { sessionId: number }) {
       {units.data && units.data.length > 0 && (
         <ul className="divide-y divide-border-subtle">
           {units.data.map((unit) => (
-            <UnitRow key={unit.id} unit={unit} />
+            <UnitRow key={unit.id} sessionId={sessionId} unit={unit} />
           ))}
         </ul>
       )}
@@ -306,23 +509,53 @@ function UnitList({ sessionId }: { sessionId: number }) {
   );
 }
 
-function UnitRow({ unit }: { unit: ImportUnit }) {
+function UnitRow({ sessionId, unit }: { sessionId: number; unit: ImportUnit }) {
   const [expanded, setExpanded] = useState(false);
+  const queryClient = useQueryClient();
+
+  const commit = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST("/import/sessions/{id}/units/{unitId}/commit", {
+        params: { path: { id: sessionId, unitId: unit.id } },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["import-units", sessionId] });
+      void queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
+    },
+  });
+
   return (
     <li className="flex flex-col gap-1.5 px-3 py-2.5 text-xs">
-      <button
-        type="button"
-        onClick={() => setExpanded((value) => !value)}
-        className="flex flex-wrap items-center gap-2 text-left focus-visible:outline-2
-                   focus-visible:outline-offset-2 focus-visible:outline-accent"
-      >
-        <span className="font-mono text-sm text-ink">{unit.rel_path}</span>
-        <ShapeBadge shape={unit.shape} />
-        <DecisionBadge decision={unit.decision} />
-        <span className="text-ink-muted">
-          {unit.file_count} files, {Math.round(unit.confidence * 100)}% confidence
-        </span>
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="flex flex-1 flex-wrap items-center gap-2 text-left focus-visible:outline-2
+                     focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          <span className="font-mono text-sm text-ink">{unit.rel_path}</span>
+          <ShapeBadge shape={unit.shape} />
+          <DecisionBadge decision={unit.decision} />
+          <span className="text-ink-muted">
+            {unit.file_count} files, {Math.round(unit.confidence * 100)}% confidence
+          </span>
+        </button>
+        {unit.decision === "QUEUE" && (unit.candidates?.length ?? 0) > 0 && (
+          <button
+            type="button"
+            onClick={() => commit.mutate()}
+            disabled={commit.isPending}
+            title="Commit using the top-ranked candidate, overriding the threshold"
+            className="shrink-0 rounded-md border border-border-subtle px-2 py-1 text-ink-muted hover:text-ink
+                       disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            {commit.isPending ? "Committing…" : "Commit anyway"}
+          </button>
+        )}
+      </div>
+      {commit.isError && <span className="text-danger">That could not be committed.</span>}
       {expanded && (
         <div className="flex flex-col gap-1 rounded-md bg-canvas p-2 text-ink-muted">
           {unit.evidence?.signals && unit.evidence.signals.length > 0 ? (

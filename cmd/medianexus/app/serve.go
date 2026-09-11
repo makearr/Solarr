@@ -484,7 +484,8 @@ func (p *process) startServer(ctx context.Context) error {
 				library.NewImportSessions(p.library), library.NewPhysical(p.library), library.NewIdentity(p.library),
 				library.NewQuarantine(p.library, p.fsys, clock.NewSystem()), adapters.RootFolderPath(p.cache),
 			),
-			Clock: clock.NewSystem(),
+			Manual: p.manualCommitter(),
+			Clock:  clock.NewSystem(),
 		},
 		ImportInspector: adapters.ImportInspector{Queue: p.queue},
 		DrainStarter: adapters.Drain{

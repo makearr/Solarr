@@ -1,12 +1,13 @@
 // Package importjob is ADR-48's import.inspect job: the resumable
 // WALK/CLASSIFY/GROUP/EVIDENCE/IDENTIFY/SHAPE/DECIDE pipeline, wired to
-// internal/db/library.ImportSessions -- its first real caller. It only inspects
-// and records; it never moves a file (internal/moving/mover, todo 4.12, does not
-// exist yet) and never resolves an identity into a real work/edition row, so a
-// COMMIT decision here means "this unit's confidence cleared the threshold",
-// not "this unit is in the library" -- turning that into a placed file is a
-// later, separate action ("commit what was held", architecture.md section
-// 21.14's own Import screen), not this job's job.
+// internal/db/library.ImportSessions -- its first real caller. Job places a
+// COMMIT-decided unit inline, the instant the session has a category to place
+// into (todo 4.9's "COMMIT actually imports"); a COMMIT decision with no
+// category set yet, or a unit DECIDE queued below the confidence threshold,
+// stays merely decided -- ManualCommitter (manualcommit.go, same package) is
+// where the Import screen's own two remaining actions live: place what a
+// session decided before it had a category, and override one unit's own
+// QUEUE decision by hand ("commit what was held").
 package importjob
 
 import (
@@ -144,11 +145,11 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	if cancelling {
 		// Caught mid-cancel by a crash or retry -- honour it now rather than
 		// silently starting a duplicate session over the same path.
-		j.publishProgress(ctx, sessionID, payload.CategoryID, importPhaseCancelled, "")
+		j.publishProgress(ctx, sessionID, importPhaseCancelled, "")
 		return j.sessions.Finish(ctx, sessionID, library.ImportCancelled, j.clock.Now().Unix(), "")
 	}
 	j.estimateOnce(ctx, sessionID, payload.SourcePath)
-	j.publishProgress(ctx, sessionID, payload.CategoryID, importPhaseWalking, "")
+	j.publishProgress(ctx, sessionID, importPhaseWalking, "")
 
 	identifyCfg := model.ChainConfig{
 		AcceptThreshold: music.DefaultAcceptThreshold, AmbiguityThreshold: j.policy.ImportAutoCommitConfidence(),
@@ -156,12 +157,12 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	result, err := inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{Cursor: cursor},
 		inspect.WalkOptions{},
 		func(ctx context.Context, batch []inspect.Unit) error {
-			return j.commitCluster(ctx, sessionID, payload.CategoryID, payload.SourcePath, identifyCfg, batch)
+			return j.commitCluster(ctx, sessionID, payload.SourcePath, identifyCfg, batch)
 		})
 	if errors.Is(err, errCancelled) {
 		j.logger.Info("import inspection cancelled",
 			slog.Int64("session_id", sessionID), slog.String("source_path", payload.SourcePath))
-		j.publishProgress(ctx, sessionID, payload.CategoryID, importPhaseCancelled, "")
+		j.publishProgress(ctx, sessionID, importPhaseCancelled, "")
 		return j.sessions.Finish(ctx, sessionID, library.ImportCancelled, j.clock.Now().Unix(), "")
 	}
 	if err != nil {
@@ -174,7 +175,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	if err := j.sessions.Finish(ctx, sessionID, library.ImportDone, j.clock.Now().Unix(), ""); err != nil {
 		return err
 	}
-	j.publishProgress(ctx, sessionID, payload.CategoryID, importPhaseDone, "")
+	j.publishProgress(ctx, sessionID, importPhaseDone, "")
 	return nil
 }
 
@@ -312,8 +313,15 @@ func identifyUnit(
 // failure still leaves the unit visible rather than silently absent.
 //
 // Cancellation is checked first, before any work -- cheaper than probing a whole cluster to discard it.
+//
+// The session's own category is re-read here rather than trusted from the
+// job's own payload (captured once, at Run's own start): todo 4.9's "assign
+// a category later" UI action can PATCH import_session.category_id while
+// this very session is still INSPECTING, and a cluster committed after that
+// PATCH must place into it -- the same "ask, don't cache" rule Policy's own
+// per-run read already follows.
 func (j *Job) commitCluster(
-	ctx context.Context, sessionID int64, categoryID *int64, sourcePath string, cfg model.ChainConfig, batch []inspect.Unit,
+	ctx context.Context, sessionID int64, sourcePath string, cfg model.ChainConfig, batch []inspect.Unit,
 ) error {
 	session, err := j.sessions.Get(ctx, sessionID)
 	if err != nil {
@@ -322,6 +330,7 @@ func (j *Job) commitCluster(
 	if session.State == library.ImportCancelling {
 		return errCancelled
 	}
+	categoryID := session.CategoryID
 
 	var relPaths []string
 	for _, unit := range batch {
@@ -371,7 +380,7 @@ func (j *Job) commitCluster(
 	if categoryID != nil && j.committer != nil {
 		j.placeCommitted(ctx, *categoryID, sourcePath, tagSource, ids, batch, decisions, results)
 	}
-	j.publishProgress(ctx, sessionID, categoryID, importPhaseWalking, batch[len(batch)-1].Directory)
+	j.publishProgress(ctx, sessionID, importPhaseWalking, batch[len(batch)-1].Directory)
 	return nil
 }
 
@@ -436,7 +445,10 @@ type ImportProgress struct {
 
 // publishProgress re-reads and publishes the session; silent on any failure
 // or without an events.Bus -- a courtesy, never a reason to fail the run.
-func (j *Job) publishProgress(ctx context.Context, sessionID int64, categoryID *int64, phase, currentUnit string) {
+// The session's own category_id is read fresh here too, not passed in --
+// commitCluster's own doc comment gives the reason (todo 4.9's "assign a
+// category later" can change it mid-run).
+func (j *Job) publishProgress(ctx context.Context, sessionID int64, phase, currentUnit string) {
 	if j.events == nil {
 		return
 	}
@@ -446,8 +458,8 @@ func (j *Job) publishProgress(ctx context.Context, sessionID int64, categoryID *
 		return
 	}
 	var category int64
-	if categoryID != nil {
-		category = *categoryID
+	if session.CategoryID != nil {
+		category = *session.CategoryID
 	}
 	j.events.Publish(events.Event{
 		Topic: events.TopicJob, Entity: fmt.Sprintf("import_session:%d", sessionID), CategoryID: category,

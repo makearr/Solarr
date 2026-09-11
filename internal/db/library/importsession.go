@@ -372,6 +372,38 @@ func (s ImportSessions) Get(ctx context.Context, id int64) (Session, error) {
 	return sessionFromRow(row), nil
 }
 
+// ErrSessionCategoryAlreadySet reports that a session already has a
+// *different* category -- todo 4.9's "assign a category later" path is for a
+// session that started with none (questions.md); re-pointing an
+// already-targeted session at a different category is out of scope, not
+// silently allowed. Calling SetCategory again with the *same* categoryID is
+// not an error (see its own doc comment).
+var ErrSessionCategoryAlreadySet = errors.New("library: import session already has a category")
+
+// SetCategory assigns categoryID to a session that started without one, or
+// is a no-op success when categoryID already matches -- deliberately
+// idempotent so a caller can retry ManualCommitter.PlaceUnplaced (the
+// adapter's own AssignImportCategory calls both together) after a transient
+// placement failure, such as a root folder's capacity not having been
+// probed yet, by sending the identical request again.
+func (s ImportSessions) SetCategory(ctx context.Context, sessionID, categoryID int64) error {
+	var affected int64
+	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		rows, err := librarydb.New(tx).SetImportSessionCategory(ctx, librarydb.SetImportSessionCategoryParams{
+			ID: sessionID, CategoryID: sql.NullInt64{Int64: categoryID, Valid: true},
+		})
+		affected = rows
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("library: set import session %d category: %w", sessionID, err)
+	}
+	if affected == 0 {
+		return ErrSessionCategoryAlreadySet
+	}
+	return nil
+}
+
 // List returns every session, newest first, optionally filtered to one state.
 // A plain list rather than cursor-paginated: session counts never approach
 // library scale (Invariant 22 is about files, not import runs).
@@ -417,6 +449,32 @@ func (s ImportSessions) ListUnitsPage(
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: list units page for import session %d: %w", sessionID, err)
+	}
+	units := make([]Unit, len(rows))
+	for i, row := range rows {
+		units[i] = unitFromRow(row)
+	}
+	return units, nil
+}
+
+// GetUnit answers one unit by id. A missing id surfaces sql.ErrNoRows, wrapped.
+func (s ImportSessions) GetUnit(ctx context.Context, id int64) (Unit, error) {
+	row, err := librarydb.New(s.store.Read()).GetImportUnit(ctx, id)
+	if err != nil {
+		return Unit{}, fmt.Errorf("library: get import unit %d: %w", id, err)
+	}
+	return unitFromRow(row), nil
+}
+
+// ListUnplacedCommitUnits answers every unit this session decided COMMIT but
+// has not yet actually placed -- todo 4.9's "assign a category later" UI
+// action needs these once a session gets a category it did not have while
+// walking. work_id staying NULL after DECIDE is what distinguishes the two
+// (job.go's own doc comment).
+func (s ImportSessions) ListUnplacedCommitUnits(ctx context.Context, sessionID int64) ([]Unit, error) {
+	rows, err := librarydb.New(s.store.Read()).ListUnplacedCommitUnits(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("library: list unplaced commit units for session %d: %w", sessionID, err)
 	}
 	units := make([]Unit, len(rows))
 	for i, row := range rows {

@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"time"
@@ -16,10 +17,11 @@ import (
 )
 
 // ImportSessions implements apiserver.ImportSessionLister over
-// library.ImportSessions and library.ImportRevert.
+// library.ImportSessions, library.ImportRevert and importjob.ManualCommitter.
 type ImportSessions struct {
 	Sessions library.ImportSessions
 	Revert   library.ImportRevert
+	Manual   importjob.ManualCommitter
 	Clock    clock.Clock
 }
 
@@ -76,6 +78,69 @@ func (a ImportSessions) RevertImportSession(ctx context.Context, id int64, retai
 		UnitsReverted: int64(result.UnitsReverted), WorksDeleted: int64(result.WorksDeleted),
 		EditionsDeleted: int64(result.EditionsDeleted), QuarantinedPaths: paths,
 	}, nil
+}
+
+// AssignImportCategory maps library.ErrSessionCategoryAlreadySet and
+// importjob.ErrSessionReverted to their apiserver sentinels, the same
+// translation RevertImportSession already does for its own errors.
+func (a ImportSessions) AssignImportCategory(ctx context.Context, id, categoryID int64) (apiserver.ImportPlacementResult, error) {
+	session, err := a.Sessions.Get(ctx, id)
+	if err != nil {
+		return apiserver.ImportPlacementResult{}, err
+	}
+	if session.State == library.ImportReverted {
+		return apiserver.ImportPlacementResult{}, apiserver.ErrImportSessionReverted
+	}
+	if err := a.Sessions.SetCategory(ctx, id, categoryID); err != nil {
+		if errors.Is(err, library.ErrSessionCategoryAlreadySet) {
+			return apiserver.ImportPlacementResult{}, apiserver.ErrImportSessionCategoryAlreadySet
+		}
+		return apiserver.ImportPlacementResult{}, err
+	}
+
+	placed, placeErrs := a.Manual.PlaceUnplaced(ctx, id)
+	messages := make([]string, len(placeErrs))
+	for i, placeErr := range placeErrs {
+		messages[i] = placeErr.Error()
+	}
+	return apiserver.ImportPlacementResult{UnitsPlaced: int64(placed), Errors: messages}, nil
+}
+
+// CommitImportUnit maps importjob.ManualCommitter's own sentinel errors to
+// their apiserver counterparts.
+func (a ImportSessions) CommitImportUnit(ctx context.Context, sessionID, unitID int64) (apiserver.ImportUnitRow, error) {
+	unit, err := a.Sessions.GetUnit(ctx, unitID)
+	if err != nil {
+		return apiserver.ImportUnitRow{}, err
+	}
+	if unit.SessionID != sessionID {
+		return apiserver.ImportUnitRow{}, sql.ErrNoRows
+	}
+
+	if _, err := a.Manual.CommitHeld(ctx, unitID); err != nil {
+		switch {
+		case errors.Is(err, importjob.ErrUnitNotQueued):
+			return apiserver.ImportUnitRow{}, apiserver.ErrImportUnitNotQueued
+		case errors.Is(err, importjob.ErrNoCandidate):
+			return apiserver.ImportUnitRow{}, apiserver.ErrImportUnitHasNoCandidate
+		case errors.Is(err, importjob.ErrSessionHasNoCategory):
+			return apiserver.ImportUnitRow{}, apiserver.ErrImportSessionHasNoCategory
+		case errors.Is(err, importjob.ErrSessionReverted):
+			return apiserver.ImportUnitRow{}, apiserver.ErrImportSessionReverted
+		case errors.Is(err, importjob.ErrUnitChanged):
+			return apiserver.ImportUnitRow{}, apiserver.ErrImportUnitChanged
+		case errors.Is(err, importjob.ErrUnitSharesDirectory):
+			return apiserver.ImportUnitRow{}, apiserver.ErrImportUnitSharesDirectory
+		default:
+			return apiserver.ImportUnitRow{}, err
+		}
+	}
+
+	updated, err := a.Sessions.GetUnit(ctx, unitID)
+	if err != nil {
+		return apiserver.ImportUnitRow{}, err
+	}
+	return importUnitRow(updated), nil
 }
 
 func (a ImportSessions) ListImportUnits(

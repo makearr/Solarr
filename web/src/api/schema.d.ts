@@ -518,6 +518,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/import/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The commit line (ADR-48's own single knob, import.auto_commit_confidence). */
+        get: operations["getImportSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the commit line. Administrator only.
+         * @description Applies to every entry point (manual import, watched folder, post-download import and bulk adoption alike): read once when each import.inspect run starts, so a session already INSPECTING keeps the threshold it was recorded with (ImportSession.threshold) until it next resumes, not retroactively (todo 4.9's own five named levels: 0.95 "Only what was proven" down to 0.75 "Permissive", 0.90 "Confident" the shipped default). Validated on write (ADR-44).
+         */
+        patch: operations["updateImportSettings"];
+        trace?: never;
+    };
     "/rootfolders/{id}/drain": {
         parameters: {
             query?: never;
@@ -1072,6 +1093,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/import/sessions/{id}/category": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give a session a destination category, and place everything it already decided COMMIT (ADR-48). Administrator only.
+         * @description `POST /import/inspect` may omit category_id and decide per unit later (questions.md) -- this is that later. Idempotent for the category already on the session: calling it again with the same category_id re-runs the placement catch-up rather than refusing, which is how a caller retries after a transient placement failure (a root folder's capacity not probed yet, say). Refused with 409 only for a genuinely *different* category_id than the one already set, or if the session was reverted (its own placements were already undone, never resurrected by this). Every unit this session already decided COMMIT but has not yet placed (work_id still null -- a session that started INSPECTING before it had a category never places anything as it walks) is placed now, best-effort: one bad unit is reported (its reason included -- a unit sharing its own rel_path with siblings, the same known gap `POST .../commit` documents, is one such case), not fatal to the rest. A session still INSPECTING also starts placing its own future clusters immediately, since the running job re-reads its category every cluster rather than trusting what it was given at enqueue time.
+         */
+        post: operations["assignImportSessionCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/import/sessions/{id}/cancel": {
         parameters: {
             query?: never;
@@ -1132,6 +1175,29 @@ export interface paths {
         get: operations["listImportUnits"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/import/sessions/{id}/units/{unitId}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                unitId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commit one unit DECIDE queued below the confidence threshold, by hand ("commit what was held", ADR-48). Administrator only.
+         * @description A human override of DECIDE's own threshold, not a second identification: places the unit using the same top-ranked candidate IDENTIFY already found (GET .../units already shows it), never a re-run of IDENTIFY and never a choice among the other candidates. Refused with 409 if the unit is not currently QUEUE, if it has no candidate to commit (IDENTIFY found nothing at all), if the session has no category yet (assign one first, POST .../category), or if the session was reverted. Refused with 409, distinctly, if the unit's own files no longer match what WALK originally found (re-walked to place it, since import_unit keeps no member-file list of its own) -- the source changed since inspection. Also refused with 409 when this unit's own rel_path is not unique within the session: a flat directory GROUP split into several sibling units by track continuity alone re-walks back into all of them at once, with no reliable way to say which one this was -- a known, narrow gap (private/questions.md), not attempted this pass.
+         */
+        post: operations["commitImportUnit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2097,6 +2163,14 @@ export interface components {
             /** @description Every desired_item id detached and recomputed. */
             reopened_items: number[];
         };
+        /** @description ADR-48's own single commit-line knob (import.auto_commit_confidence). */
+        ImportSettings: {
+            /**
+             * Format: float
+             * @description 0.75-0.95, the section 11.4 table's five named levels. Default 0.90.
+             */
+            auto_commit_confidence: number;
+        };
         /** @description Where to look, and what kind of import this is (ADR-48). */
         ImportInspectRequest: {
             source_path: string;
@@ -2117,6 +2191,13 @@ export interface components {
         ImportRevertRequest: {
             /** @description Defaults to 168 (one week), the same default RemoveAndBlockRequest uses. */
             quarantine_retain_hours?: number;
+        };
+        /** @description POST .../category's own outcome: every unit the session had already decided COMMIT but not yet placed, placed best-effort. */
+        ImportPlacementResult: {
+            /** Format: int64 */
+            units_placed: number;
+            /** @description One entry per unit that could not be placed; never fatal to the rest. */
+            errors: string[];
         };
         ImportRevertResult: {
             /** Format: int64 */
@@ -3230,6 +3311,54 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
+    getImportSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current threshold. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSettings"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    updateImportSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportSettings"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
     drainRootFolder: {
         parameters: {
             query?: never;
@@ -4069,6 +4198,40 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
+    assignImportSessionCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    category_id: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Assigned; every already-decided unit placed or reported. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPlacementResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The session already has a category, or was reverted. */
+            409: components["responses"]["Problem"];
+        };
+    };
     cancelImportSession: {
         parameters: {
             query?: never;
@@ -4151,6 +4314,34 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    commitImportUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                unitId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Placed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportUnit"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description Not QUEUE, no candidate, no category on the session, the session was reverted, or the unit's own files changed since inspection. */
+            409: components["responses"]["Problem"];
         };
     };
     listLibraries: {

@@ -35,8 +35,30 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 	if err := registry.Register(importjob.Definition); err != nil {
 		return err
 	}
+	job := importjob.NewJob(importjob.Config{
+		FS:        p.fsys,
+		Sessions:  library.NewImportSessions(p.library),
+		Policy:    adapters.ImportPolicy{Cache: p.cache},
+		Tool:      p.mediaTool(),
+		Search:    p.musicBrainzProvider(),
+		Committer: p.importCommitter(),
+		Events:    p.bus,
+		Clock:     clock.NewSystem(),
+		Logger:    p.logger,
+	})
+	executor.Handle(importjob.JobType, job)
+	return nil
+}
+
+// importCommitter builds ADR-48's own COMMIT step. A fresh instance each
+// call, the same "ask, don't cache" style p.musicBrainzProvider() already
+// uses -- every field it closes over is itself cheap to construct or already
+// long-lived (p.cache, p.library). Shared by the import.inspect job's own
+// inline WALK-time placement and manualCommitter's own ManualCommitter below,
+// so the two never drift apart on how a unit gets placed.
+func (p *process) importCommitter() music.Committer {
 	desired := library.NewDesired(p.library)
-	committer := music.NewCommitter(music.CommitterConfig{
+	return music.NewCommitter(music.CommitterConfig{
 		FS:               p.fsys,
 		Roots:            adapters.DrainRoots{Cache: p.cache},
 		Physical:         library.NewPhysical(p.library),
@@ -46,17 +68,23 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		Clock:            clock.NewSystem(),
 		DefaultProfileID: p.defaultQualityProfileID,
 	})
-	job := importjob.NewJob(importjob.Config{
-		FS:        p.fsys,
-		Sessions:  library.NewImportSessions(p.library),
-		Policy:    adapters.ImportPolicy{Cache: p.cache},
-		Tool:      mediatool.New(nil, 0),
-		Search:    p.musicBrainzProvider(),
-		Committer: committer,
-		Events:    p.bus,
-		Clock:     clock.NewSystem(),
-		Logger:    p.logger,
-	})
-	executor.Handle(importjob.JobType, job)
-	return nil
+}
+
+// mediaTool builds the ffprobe reader every import path needs -- the same
+// mediatool.New(nil, 0) registerImportJob already used, named so
+// manualCommitter can build the identical instance without importing
+// mediatool.New's own zero-value convention twice.
+func (p *process) mediaTool() mediatool.Tool {
+	return mediatool.New(nil, 0)
+}
+
+// manualCommitter builds the Import screen's two remaining UI actions
+// (manualcommit.go): commit-what-was-held and assign-a-category-later. A
+// second Committer instance, not the same value registerImportJob's own job
+// holds -- both are cheap, stateless wrappers over the same long-lived
+// dependencies, and importjob.Job keeps its own unexported.
+func (p *process) manualCommitter() importjob.ManualCommitter {
+	return importjob.NewManualCommitter(
+		p.fsys, p.mediaTool(), library.NewImportSessions(p.library), p.importCommitter(),
+	)
 }

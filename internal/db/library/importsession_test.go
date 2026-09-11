@@ -351,3 +351,76 @@ func TestImportSessions_RecomputeCountsIncludesSkippedAndFailed(t *testing.T) {
 			got.UnitsTotal, got.UnitsCommitted, got.UnitsSkipped, got.UnitsFailed)
 	}
 }
+
+func TestImportSessions_SetCategoryFromNone(t *testing.T) {
+	opened, _ := newLibrary(t)
+	sessions := library.NewImportSessions(opened)
+	ctx := t.Context()
+
+	id, err := sessions.Create(ctx, library.NewSession{
+		SourcePath: "/downloads/a", Origin: library.ImportOriginManual, Threshold: 0.9, StartedAt: 100,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := sessions.SetCategory(ctx, id, 7); err != nil {
+		t.Fatalf("SetCategory: %v", err)
+	}
+	got, err := sessions.Get(ctx, id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.CategoryID == nil || *got.CategoryID != 7 {
+		t.Errorf("CategoryID = %v, want 7", got.CategoryID)
+	}
+}
+
+// Calling SetCategory again with the *same* category is deliberately not an
+// error -- it is how a caller retries ManualCommitter.PlaceUnplaced after a
+// transient placement failure (notes.md: a root folder's capacity not probed
+// yet is exactly this shape, found live-verifying todo 4.9's UI half).
+func TestImportSessions_SetCategoryIsIdempotentForTheSameCategory(t *testing.T) {
+	opened, _ := newLibrary(t)
+	sessions := library.NewImportSessions(opened)
+	ctx := t.Context()
+
+	id, err := sessions.Create(ctx, library.NewSession{
+		SourcePath: "/downloads/a", Origin: library.ImportOriginManual, Threshold: 0.9, StartedAt: 100,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := sessions.SetCategory(ctx, id, 7); err != nil {
+		t.Fatalf("first SetCategory: %v", err)
+	}
+	if err := sessions.SetCategory(ctx, id, 7); err != nil {
+		t.Errorf("second SetCategory with the same category = %v, want nil", err)
+	}
+}
+
+func TestImportSessions_SetCategoryRefusesADifferentCategory(t *testing.T) {
+	opened, _ := newLibrary(t)
+	sessions := library.NewImportSessions(opened)
+	ctx := t.Context()
+
+	id, err := sessions.Create(ctx, library.NewSession{
+		SourcePath: "/downloads/a", Origin: library.ImportOriginManual, Threshold: 0.9, StartedAt: 100,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := sessions.SetCategory(ctx, id, 7); err != nil {
+		t.Fatalf("first SetCategory: %v", err)
+	}
+	err = sessions.SetCategory(ctx, id, 8)
+	if !errors.Is(err, library.ErrSessionCategoryAlreadySet) {
+		t.Errorf("err = %v, want ErrSessionCategoryAlreadySet", err)
+	}
+	got, getErr := sessions.Get(ctx, id)
+	if getErr != nil {
+		t.Fatalf("Get: %v", getErr)
+	}
+	if got.CategoryID == nil || *got.CategoryID != 7 {
+		t.Errorf("CategoryID = %v, want unchanged at 7", got.CategoryID)
+	}
+}
