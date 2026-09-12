@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
@@ -152,7 +153,7 @@ func TestRenameStart_PersistsAndEnqueuesWhenSomethingChanged(t *testing.T) {
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	plan, jobID, err := music.RenameStart(t.Context(), cfg, 1, false)
+	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}
@@ -184,7 +185,7 @@ func TestRenameStart_PreviewComputesThePlanWithoutPersistingAnything(t *testing.
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	plan, jobID, err := music.RenameStart(t.Context(), cfg, 1, true)
+	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, true)
 	if err != nil {
 		t.Fatalf("RenameStart: %v", err)
 	}
@@ -196,6 +197,37 @@ func TestRenameStart_PreviewComputesThePlanWithoutPersistingAnything(t *testing.
 	}
 	if moveJobs.items != nil {
 		t.Error("MoveJobs.AddItems was called during a preview")
+	}
+}
+
+// TestRenameStart_ReturnsPathWarningsKeyedByMediaObjectID is the total-path-
+// limit warning threaded all the way from naming.RenderPath through
+// RenameTargetFor to RenameStart's own return -- mover.Plan itself never
+// sees this (ADR-23: it is generic across every move reason), so this is
+// the one place the thread can be asserted end to end.
+func TestRenameStart_ReturnsPathWarningsKeyedByMediaObjectID(t *testing.T) {
+	longWork := renameWorkDetailFixture()
+	longWork.Work.CanonicalTitle = strings.Repeat("A Very Long Album Title Indeed ", 10)
+
+	moveJobs := &fakeRenameMoveJobs{}
+	cfg := music.RenameConfig{
+		Roots: fakeRenameRoots{1: {ID: 1, Online: true, Writable: true, FSID: "fs-a"}},
+		Files: fakeRenameFiles{1: {
+			{MediaObjectID: 1, RelPath: "Old/01.flac", SizeBytes: 100},
+		}},
+		Identities: fakeRenameIdentities{1: {WorkID: 1, MediaRef: "disc1:track1"}},
+		Works:      fakeRenameWorks{1: longWork},
+		MoveJobs:   moveJobs,
+		Queue:      newRenameQueue(t),
+		Clock:      clock.NewFakeAtEpoch(),
+	}
+
+	_, _, warnings, err := music.RenameStart(t.Context(), cfg, 1, true)
+	if err != nil {
+		t.Fatalf("RenameStart: %v", err)
+	}
+	if len(warnings[1]) != 1 {
+		t.Fatalf("warnings[1] = %v, want exactly one path-length warning for media object 1", warnings[1])
 	}
 }
 
@@ -213,7 +245,7 @@ func TestRenameStart_DoesNothingWhenNothingChanged(t *testing.T) {
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	plan, jobID, err := music.RenameStart(t.Context(), cfg, 1, false)
+	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}
@@ -241,7 +273,7 @@ func TestRenameStart_DoesNothingForAnUnknownRootWithNothingToRename(t *testing.T
 		Works:      fakeRenameWorks{1: renameWorkDetailFixture()},
 	}
 
-	plan, jobID, err := music.RenameStart(t.Context(), cfg, 99, false)
+	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 99, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}
@@ -264,7 +296,7 @@ func TestRenameStart_RefusesOnAReadOnlyRootWithoutAllowRename(t *testing.T) {
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	plan, jobID, err := music.RenameStart(t.Context(), cfg, 1, false)
+	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}

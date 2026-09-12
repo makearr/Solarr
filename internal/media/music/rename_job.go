@@ -111,19 +111,34 @@ func RenamePreview(ctx context.Context, cfg RenameConfig, rootFolderID int64) ([
 // RENAME request). With preview true, or when the plan refuses outright or
 // there is nothing to rename, nothing is persisted and moveJobID is 0 --
 // the caller reads plan.Refused for why. Otherwise the move job is
-// persisted and moverjob's own Apply is enqueued.
-func RenameStart(ctx context.Context, cfg RenameConfig, rootFolderID int64, preview bool) (mover.MovePlan, int64, error) {
+// persisted and moverjob's own Apply is enqueued. warnings is keyed by
+// MediaObjectID, RenameTargetFor's own naming.RenderPath warnings carried
+// through -- mover.Plan is generic across every move reason and does not
+// know what a naming warning is (ADR-23), so this stays a separate return
+// rather than a new field on mover.Move.
+func RenameStart(ctx context.Context, cfg RenameConfig, rootFolderID int64, preview bool) (mover.MovePlan, int64, map[int64][]string, error) {
 	targets, err := RenamePreview(ctx, cfg, rootFolderID)
 	if err != nil {
-		return mover.MovePlan{}, 0, err
+		return mover.MovePlan{}, 0, nil, err
 	}
 	if len(targets) == 0 {
-		return mover.MovePlan{}, 0, nil
+		return mover.MovePlan{}, 0, nil, nil
+	}
+	warnings := make(map[int64][]string, len(targets))
+	for _, target := range targets {
+		if len(target.Warnings) == 0 {
+			continue
+		}
+		messages := make([]string, len(target.Warnings))
+		for i, w := range target.Warnings {
+			messages[i] = w.Message
+		}
+		warnings[target.MediaObjectID] = messages
 	}
 
 	root, ok := cfg.Roots.RootFolder(rootFolderID)
 	if !ok {
-		return mover.MovePlan{}, 0, fmt.Errorf("music: root folder %d not found", rootFolderID)
+		return mover.MovePlan{}, 0, nil, fmt.Errorf("music: root folder %d not found", rootFolderID)
 	}
 
 	files := make([]mover.FileToMove, len(targets))
@@ -144,10 +159,10 @@ func RenameStart(ctx context.Context, cfg RenameConfig, rootFolderID int64, prev
 		SourceAllowRename: map[int64]bool{rootFolderID: root.AllowRename},
 	})
 	if err != nil {
-		return mover.MovePlan{}, 0, fmt.Errorf("music: plan rename for root %d: %w", rootFolderID, err)
+		return mover.MovePlan{}, 0, nil, fmt.Errorf("music: plan rename for root %d: %w", rootFolderID, err)
 	}
 	if preview || len(plan.Moves) == 0 {
-		return plan, 0, nil
+		return plan, 0, warnings, nil
 	}
 
 	items := make([]library.NewMoveItem, len(plan.Moves))
@@ -161,7 +176,7 @@ func RenameStart(ctx context.Context, cfg RenameConfig, rootFolderID int64, prev
 	}
 	planJSON, err := json.Marshal(plan)
 	if err != nil {
-		return mover.MovePlan{}, 0, fmt.Errorf("music: encode rename plan: %w", err)
+		return mover.MovePlan{}, 0, nil, fmt.Errorf("music: encode rename plan: %w", err)
 	}
 
 	cl := cfg.Clock
@@ -173,16 +188,16 @@ func RenameStart(ctx context.Context, cfg RenameConfig, rootFolderID int64, prev
 		PlanJSON: string(planJSON), CreatedAt: cl.Now().Unix(),
 	})
 	if err != nil {
-		return mover.MovePlan{}, 0, fmt.Errorf("music: create move job for root %d: %w", rootFolderID, err)
+		return mover.MovePlan{}, 0, nil, fmt.Errorf("music: create move job for root %d: %w", rootFolderID, err)
 	}
 	if err := cfg.MoveJobs.AddItems(ctx, jobID, items); err != nil {
-		return mover.MovePlan{}, 0, fmt.Errorf("music: add items to move job %d: %w", jobID, err)
+		return mover.MovePlan{}, 0, nil, fmt.Errorf("music: add items to move job %d: %w", jobID, err)
 	}
 	if _, err := moverjob.Enqueue(ctx, cfg.Queue, jobID); err != nil {
-		return mover.MovePlan{}, 0, fmt.Errorf("music: enqueue move job %d: %w", jobID, err)
+		return mover.MovePlan{}, 0, nil, fmt.Errorf("music: enqueue move job %d: %w", jobID, err)
 	}
 
-	return plan, jobID, nil
+	return plan, jobID, warnings, nil
 }
 
 func renameRootCandidate(rootFolderID int64, root settings.RootFolder) placement.RootCandidate {

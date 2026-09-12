@@ -550,6 +550,21 @@ func (j *Job) placeCommitted(
 			j.logger.Warn("import commit: could not record placement",
 				slog.Int64("unit_id", ids[i]), slog.Any("error", err))
 		}
+		logPathWarnings(j.logger, ids[i], placed.PathWarnings)
+	}
+}
+
+// logPathWarnings surfaces naming.RenderPath's own non-fatal notices (today:
+// only the total-length recommendation) at COMMIT time -- ADR-48's inline
+// commit has no separate preview step to block on the way rename does, so a
+// log line is this path's own "notification only" (architecture §2), not a
+// UI-blocking decision.
+func logPathWarnings(logger *slog.Logger, unitID int64, warnings map[int64][]string) {
+	for mediaObjectID, messages := range warnings {
+		for _, message := range messages {
+			logger.Warn("import commit: naming warning",
+				slog.Int64("unit_id", unitID), slog.Int64("media_object_id", mediaObjectID), slog.String("warning", message))
+		}
 	}
 }
 

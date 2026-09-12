@@ -43,6 +43,12 @@ type RenameTarget struct {
 	SizeBytes       int64
 	CurrentRelPath  string
 	ProposedRelPath string
+	// Warnings are naming.RenderPath's own non-fatal notices about the
+	// proposed path (today: only the total-length recommendation) -- the
+	// rename preview is a genuine diff-before-apply step (Invariant 73), so
+	// this is the one caller where a warning can actually reach the user
+	// before anything moves.
+	Warnings []naming.Warning
 }
 
 // Changed reports whether the proposed path differs from the current one --
@@ -94,13 +100,13 @@ func RenameTargetFor(
 	}
 
 	extension := path.Ext(currentRelPath)
-	proposed, _, err := naming.RenderPath(compiledDefaultFolder, compiledDefaultFile, ctx, naming.DefaultSeparator, extension)
+	proposed, warnings, err := naming.RenderPath(compiledDefaultFolder, compiledDefaultFile, ctx, naming.DefaultSeparator, extension)
 	if err != nil {
 		return RenameTarget{}, fmt.Errorf("music: render path for media_object %d: %w", mediaObjectID, err)
 	}
 
 	return RenameTarget{
 		MediaObjectID: mediaObjectID, WorkID: identity.WorkID, SizeBytes: sizeBytes,
-		CurrentRelPath: currentRelPath, ProposedRelPath: proposed,
+		CurrentRelPath: currentRelPath, ProposedRelPath: proposed, Warnings: warnings,
 	}, nil
 }

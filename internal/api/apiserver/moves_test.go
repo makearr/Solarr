@@ -262,3 +262,55 @@ func TestRenameRootFolder_ReturnsTheComputedPlan(t *testing.T) {
 		t.Errorf("body = %s, want accepted:true and move_job_id:9", body)
 	}
 }
+
+// TestRenameRootFolder_CarriesPerFileWarnings is the naming total-path-
+// length recommendation's own HTTP-level proof: DrainMoveRow.Warnings
+// reaches the JSON response as warnings, the field a rename preview needs
+// to actually show the notice (Invariant 73: preview as a diff).
+func TestRenameRootFolder_CarriesPerFileWarnings(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.renameStarter.result = apiserver.DrainPlanResult{
+		Accepted: true, FilesTotal: 1, BytesTotal: 100,
+		Moves: []apiserver.DrainMoveRow{
+			{
+				MediaObjectID: 1, DestRootFolderID: 1, DestRelPath: "Artist/Album (2000)/Artist - 01 - Track.flac",
+				SizeBytes: 100, AffinityKey: "work:1",
+				Warnings: []string{"rendered path is 300 bytes, over the 240-byte recommended limit"},
+			},
+		},
+	}
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/rootfolders/1/rename", `{"preview":true}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, `"warnings":["rendered path is 300 bytes, over the 240-byte recommended limit"]`) {
+		t.Errorf("body = %s, want the move's own warnings array", body)
+	}
+}
+
+// TestRenameRootFolder_OmitsWarningsWhenThereAreNone confirms a move with no
+// warnings does not carry a spurious empty warnings array -- the field is
+// optional (omitempty), only populated when there is something to say.
+func TestRenameRootFolder_OmitsWarningsWhenThereAreNone(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.renameStarter.result = apiserver.DrainPlanResult{
+		Accepted: true, FilesTotal: 1, BytesTotal: 100,
+		Moves: []apiserver.DrainMoveRow{
+			{MediaObjectID: 1, DestRootFolderID: 1, DestRelPath: "Artist/Album (2000)/Artist - 01 - Track.flac", SizeBytes: 100, AffinityKey: "work:1"},
+		},
+	}
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/rootfolders/1/rename", `{"preview":true}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	}
+	if strings.Contains(recorder.Body.String(), `"warnings"`) {
+		t.Errorf("body = %s, want no warnings key when there is nothing to warn about", recorder.Body)
+	}
+}

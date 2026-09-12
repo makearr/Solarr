@@ -807,6 +807,9 @@ type DrainMove struct {
 
 	// SourceRelPath The file's current path -- present so a caller can render the full "current vs proposed" diff section 11.8 asks for, not just the proposed side.
 	SourceRelPath *string `json:"source_rel_path,omitempty"`
+
+	// Warnings Non-fatal notices about dest_rel_path -- today, only naming's own total-path-length recommendation. Always present but only ever populated for a rename plan; a drain never renames a file, so this is always empty there.
+	Warnings *[]string `json:"warnings,omitempty"`
 }
 
 // DrainPlan What one drainRootFolder call computed -- a preview, a refusal, or an accepted and enqueued plan (ADR-51).
