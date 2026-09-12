@@ -10,10 +10,13 @@ import (
 	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
 )
 
-// ErrPartNotFound reports a track request naming a media_ref with no matching
-// work_part -- section 19.6 requires resolving against a real part, never a
-// guessed index.
-var ErrPartNotFound = errors.New("library: work part not found")
+// ErrPartNotFound reports a track request naming a media_ref (or, from
+// EnsureTrackItemByPart, a part id) with no matching work_part -- section
+// 19.6 requires resolving against a real part, never a guessed index.
+// Wraps sql.ErrNoRows so apiserver, which cannot import this package, can
+// still map it to 404 the same way SetPartMonitored's own cross-work id
+// check already does.
+var ErrPartNotFound = fmt.Errorf("library: work part not found: %w", sql.ErrNoRows)
 
 // Desired creates and maintains desired_item / desired_item_file rows --
 // section 19.6's "wanted, at three levels": SET for an album, SINGLE for a
@@ -139,6 +142,30 @@ func (d Desired) EnsureTrackItem(ctx context.Context, request TrackRequest) (lib
 		return librarydb.DesiredItem{}, fmt.Errorf("library: ensure track item: %w", err)
 	}
 	return item, nil
+}
+
+// EnsureTrackItemByPart resolves partID to its own media_ref -- checking it
+// belongs to workID, the same existence/ownership guard SetPartMonitored
+// uses -- and finds or creates that track's own SINGLE item. The API-facing
+// entry point: a caller has the part id from the tracklist, not the raw
+// media_ref EnsureTrackItem itself requires.
+func (d Desired) EnsureTrackItemByPart(
+	ctx context.Context, workID, partID, categoryID, profileID int64, addedBy *int64,
+) (librarydb.DesiredItem, error) {
+	part, err := librarydb.New(d.store.Read()).GetWorkPart(ctx, partID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return librarydb.DesiredItem{}, ErrPartNotFound
+		}
+		return librarydb.DesiredItem{}, fmt.Errorf("library: ensure track item by part: get part: %w", err)
+	}
+	if part.WorkID != workID {
+		return librarydb.DesiredItem{}, ErrPartNotFound
+	}
+	return d.EnsureTrackItem(ctx, TrackRequest{
+		WorkID: workID, MediaRef: part.MediaRef,
+		CategoryID: categoryID, ProfileID: profileID, AddedBy: addedBy,
+	})
 }
 
 // SetItemMonitored toggles an item's own monitored flag -- album or track

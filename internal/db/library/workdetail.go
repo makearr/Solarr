@@ -17,6 +17,11 @@ type EditionDetail struct {
 type PartDetail struct {
 	Part        librarydb.WorkPart
 	ExternalIDs []librarydb.WorkPartExternalID
+	// Wanted is the track's own SINGLE desired_item, when one exists -- nil
+	// until someone explicitly wants this one track on its own (todo 4.4),
+	// independent of Part.Monitored (which only shrinks or grows the
+	// album's own required_count).
+	Wanted *DesiredItemStatus
 }
 
 // Credit is one work-level credit, with the person's own name -- the work
@@ -27,10 +32,10 @@ type Credit struct {
 	Role       string
 }
 
-// WantedAlbum is the work's own album-level SET desired_item, when one
-// exists (section 19.6) -- what makes "9 of 12 tracks" a fact rather than
-// OnDisk's coarse badge.
-type WantedAlbum struct {
+// DesiredItemStatus is one desired_item's own status -- the work's
+// album-level SET (section 19.6) or one track's own SINGLE (todo 4.4) --
+// what makes "9 of 12 tracks" a fact rather than OnDisk's coarse badge.
+type DesiredItemStatus struct {
 	ID            int64
 	Monitored     bool
 	RequiredCount *int64
@@ -54,7 +59,7 @@ type WorkDetail struct {
 	CategoryIDs   []int64
 	// Wanted is nil when nothing has ever wanted this album -- no scan, no
 	// subscription, no user request.
-	Wanted *WantedAlbum
+	Wanted *DesiredItemStatus
 }
 
 // OnDisk reports whether this work is linked to any root folder at all
@@ -137,7 +142,8 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 	if err != nil {
 		return WorkDetail{}, fmt.Errorf("library: work detail: desired items: %w", err)
 	}
-	var wanted *WantedAlbum
+	var wanted *DesiredItemStatus
+	trackWanted := make(map[string]*DesiredItemStatus, len(items))
 	categoryIDs := make([]int64, 0, len(items))
 	seenCategory := make(map[int64]bool, len(items))
 	for _, item := range items {
@@ -145,14 +151,21 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 			seenCategory[item.CategoryID] = true
 			categoryIDs = append(categoryIDs, item.CategoryID)
 		}
-		if wanted == nil && item.SatisfactionKind == "SET" && !item.EditionID.Valid && item.MediaRef == "" {
-			wanted = &WantedAlbum{
-				ID: item.ID, Monitored: item.Monitored == 1, PresentCount: item.PresentCount, State: item.State,
-			}
-			if item.RequiredCount.Valid {
-				wanted.RequiredCount = &item.RequiredCount.Int64
-			}
+		status := DesiredItemStatus{
+			ID: item.ID, Monitored: item.Monitored == 1, PresentCount: item.PresentCount, State: item.State,
 		}
+		if item.RequiredCount.Valid {
+			status.RequiredCount = &item.RequiredCount.Int64
+		}
+		switch {
+		case wanted == nil && item.SatisfactionKind == "SET" && !item.EditionID.Valid && item.MediaRef == "":
+			wanted = &status
+		case item.SatisfactionKind == "SINGLE" && item.MediaRef != "":
+			trackWanted[item.MediaRef] = &status
+		}
+	}
+	for index := range partDetails {
+		partDetails[index].Wanted = trackWanted[partDetails[index].Part.MediaRef]
 	}
 
 	return WorkDetail{

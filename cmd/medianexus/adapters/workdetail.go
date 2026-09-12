@@ -114,6 +114,13 @@ func partRows(from []library.PartDetail) []apiserver.PartRow {
 			Monitored:   detail.Part.Monitored != 0,
 			ExternalIDs: externalIDs,
 		}
+		if detail.Wanted != nil {
+			row.Wanted = &apiserver.WantedRow{
+				ID: detail.Wanted.ID, Monitored: detail.Wanted.Monitored,
+				RequiredCount: detail.Wanted.RequiredCount, PresentCount: detail.Wanted.PresentCount,
+				State: detail.Wanted.State,
+			}
+		}
 		if detail.Part.Title.Valid {
 			row.Title = &detail.Part.Title.String
 		}

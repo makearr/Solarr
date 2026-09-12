@@ -1086,6 +1086,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/parts/{partId}/wanted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                partId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
+         * @description Always ensures the track's own SINGLE desired_item exists (creating it on first use, wanted or not) and sets its monitored flag either way -- the same "record the decision either way, never delete" shape SetWorkMonitored already uses one level up (Invariant 71). Distinct from monitor: monitoring a part only changes the *album's* own required_count; this creates a standalone acquisition target for the track by itself, for someone who wants one song rather than the whole release.
+         */
+        post: operations["setTrackWanted"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/bulk/monitor": {
         parameters: {
             query?: never;
@@ -2632,6 +2655,8 @@ export interface components {
             runtime_ms?: number;
             date?: string;
             monitored: boolean;
+            /** @description This track's own SINGLE desired_item, when one exists -- distinct from monitored, which only affects the album's own required_count. */
+            wanted?: components["schemas"]["Wanted"] | null;
             external_ids: components["schemas"]["ExternalID"][];
         };
         /** @description One work-level credit (ADR-32) -- the person's own name, so a client never needs a second round-trip just to display it. */
@@ -5037,6 +5062,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setTrackWanted: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                partId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    wanted: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The track's own wanted state after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Wanted"];
+                };
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
