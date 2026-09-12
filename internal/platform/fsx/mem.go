@@ -26,6 +26,7 @@ type Mem struct {
 	reflinkSupported  bool
 	hardlinkSupported bool
 	renameSupported   bool
+	writeDenied       map[string]bool
 
 	diskTotalBytes int64
 	diskFreeBytes  int64
@@ -119,6 +120,18 @@ func (m *Mem) SetRenameSupported(supported bool) {
 	m.renameSupported = supported
 }
 
+// SetWriteDenied stands in for a directory this process cannot write to --
+// wrong PUID/PGID against the volume's real owner, the ordinary case
+// Invariant 62 exists for. Mem otherwise never enforces permission bits.
+func (m *Mem) SetWriteDenied(directory string, denied bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.writeDenied == nil {
+		m.writeDenied = make(map[string]bool)
+	}
+	m.writeDenied[filepath.Clean(directory)] = denied
+}
+
 func (m *Mem) now() time.Time { return m.clock.Now() }
 
 func (m *Mem) Stat(path string) (FileInfo, error) {
@@ -184,6 +197,9 @@ func (m *Mem) Create(path string) (io.WriteCloser, error) {
 	}
 	if err := m.requireDir(filepath.Dir(resolved)); err != nil {
 		return nil, pathError("create", path, err)
+	}
+	if m.writeDenied[filepath.Dir(resolved)] {
+		return nil, pathError("create", path, syscall.EACCES)
 	}
 	if existing, ok := m.nodes[resolved]; ok {
 		if existing.isDir {

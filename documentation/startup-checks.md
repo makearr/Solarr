@@ -38,8 +38,7 @@ squarely the operator's to make.
 
 ### The directory's own ownership
 
-The error from a failed write names the uid and gid the process runs as, which
-is nearly always the answer, but not what the directory expects. **Invariant 62
-is therefore only half met**, and a PUID/PGID mismatch still costs one manual
-`ls -l`. Closing it would mean `Uid` and `Gid` on `fsx.FileInfo`, from
-`syscall.Stat_t`.
+The error from a failed write names the uid and gid the process runs as, and
+— since `fsx.FileInfo` carries `UID`/`GID` from `syscall.Stat_t` — also the
+directory's own owner and mode, when the filesystem can report them. Invariant
+62 is fully met: a PUID/PGID mismatch no longer costs a manual `ls -l`.
