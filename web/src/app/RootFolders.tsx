@@ -103,6 +103,10 @@ export function RootFolders() {
         </p>
       </header>
 
+      {roots.data && roots.data.length > 0 && (
+        <CapacityByCategory roots={roots.data} categories={categories.data ?? []} />
+      )}
+
       {roots.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {roots.error !== null && <p className="text-sm text-danger">Root folders could not be read.</p>}
 
@@ -146,6 +150,60 @@ export function RootFolders() {
           void queryClient.invalidateQueries({ queryKey: ["categories"] });
         }}
       />
+    </div>
+  );
+}
+
+/** Section 11.7/10.4: an offline root's own stale bytes are not free space,
+ *  so a category's total is summed only across its own online, measured
+ *  roots -- a root sharing two categories counts fully in each, since each
+ *  category's own placement really can use all of it. Nothing before this
+ *  summed anything across roots at all. */
+function CapacityByCategory({
+  roots,
+  categories,
+}: {
+  roots: RootFolder[];
+  categories: LibraryCategory[];
+}) {
+  const rows = categories
+    .map((category) => {
+      const attached = roots.filter((root) => (root.categories ?? []).some((c) => c.id === category.id));
+      const online = attached.filter((root) => root.online && (root.total_bytes ?? 0) > 0);
+      return {
+        category,
+        rootCount: attached.length,
+        offlineCount: attached.filter((root) => !root.online).length,
+        totalBytes: online.reduce((sum, root) => sum + (root.total_bytes ?? 0), 0),
+        freeBytes: online.reduce((sum, root) => sum + (root.free_bytes ?? 0), 0),
+      };
+    })
+    .filter((row) => row.rootCount > 0);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
+      <h2 className="text-sm font-medium">Capacity by category</h2>
+      <ul className="flex flex-col gap-1.5">
+        {rows.map(({ category, freeBytes, totalBytes, offlineCount }) => (
+          <li key={category.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+            <span className="font-medium">{category.name}</span>
+            <span className="text-ink-muted">
+              {totalBytes > 0
+                ? `${formatBytes(freeBytes)} free of ${formatBytes(totalBytes)}`
+                : "not measured yet"}
+            </span>
+            {offlineCount > 0 && (
+              <Badge tone="warn">
+                {offlineCount} root{offlineCount > 1 ? "s" : ""} offline, excluded
+              </Badge>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
