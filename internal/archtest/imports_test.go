@@ -134,6 +134,13 @@ var allowedInternalImports = map[string][]string{
 	// the one dependency, the same "just a client" shape musicbrainz/
 	// wikidata keep. No database of its own, no write back to the source.
 	"internal/importing/arrimport": {"internal/platform/httpx"},
+	// Stage 5's own Newznab/Torznab protocol client (ADR-37/43/47): one
+	// client per indexer connection, over its documented API and an
+	// optional API key -- the same "just a client" shape arrimport/
+	// musicbrainz/wikidata all keep. httpx is the one dependency; no
+	// database of its own, no title parsing or scoring (ADR-18/40 stay
+	// the candidate pipeline's own job).
+	"internal/acquiring/indexer": {"internal/platform/httpx"},
 	// ADR-36's composite acquisition priority: pure arithmetic over
 	// caller-supplied facts, no I/O and no database of its own -- the same
 	// separation internal/identify/score and internal/moving/placement keep from their own
