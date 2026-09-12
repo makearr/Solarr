@@ -99,9 +99,13 @@ func (a People) GetPersonDetail(ctx context.Context, id int64) (apiserver.Person
 	if detail.Biography != "" {
 		view.Biography = &detail.Biography
 	}
-	if len(detail.Aliases) > 0 {
-		view.Aliases = detail.Aliases
-	}
+	// Unconditional, unlike the optional fields above: aliases is a required
+	// array in the OpenAPI schema, so it must serialize as [] rather than
+	// null for a person with none -- a guarded assignment here left the Go
+	// zero value (a nil slice) in place, which encodes as JSON null and
+	// crashed the web UI's own person.aliases.length (live-verified
+	// 2026-09-12: "The 1987" has none, PersonDetail.tsx threw a TypeError).
+	view.Aliases = detail.Aliases
 	return view, nil
 }
 
