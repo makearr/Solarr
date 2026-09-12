@@ -425,6 +425,59 @@ func recomputeAlbumTx(ctx context.Context, queries *librarydb.Queries, itemID, w
 	})
 }
 
+// IncompleteItem is one monitored desired_item still short of its own
+// required_count -- library health's own "missing tracks" list (todo 4.8).
+type IncompleteItem struct {
+	ID                          int64
+	WorkID                      int64
+	Title                       string
+	CategoryID                  int64
+	State                       string
+	RequiredCount, PresentCount int64
+}
+
+// CountIncomplete answers how many monitored items are MISSING or PARTIAL --
+// library health's own "missing tracks" figure (todo 4.8), a live query
+// (desired_by_category's own index) rather than a cached counter: unlike
+// categorycounts.go's own per-category "missing"/"partial" counters, nothing
+// today reconciles a library-wide sum of those into the "library" counter
+// scope dashboard.go's own libraryCounts already reads a "missing" key from
+// -- a pre-existing gap (that dashboard figure has always read zero),
+// noted rather than fixed here since fixing it is categorycounts.go's own
+// job, not this one's. categoryID zero means every category.
+func (d Desired) CountIncomplete(ctx context.Context, categoryID int64) (int64, error) {
+	rows, err := librarydb.New(d.store.Read()).CountDesiredItemsByState(ctx, categoryID)
+	if err != nil {
+		return 0, fmt.Errorf("library: count desired items by state: %w", err)
+	}
+	var total int64
+	for _, row := range rows {
+		if row.State == "MISSING" || row.State == "PARTIAL" {
+			total += row.Total
+		}
+	}
+	return total, nil
+}
+
+// IncompleteItems pages through every monitored MISSING/PARTIAL item,
+// oldest id first. categoryID zero means every category.
+func (d Desired) IncompleteItems(ctx context.Context, categoryID, afterID int64, pageSize int64) ([]IncompleteItem, error) {
+	rows, err := librarydb.New(d.store.Read()).ListIncompleteDesiredItems(ctx, librarydb.ListIncompleteDesiredItemsParams{
+		CategoryID: categoryID, AfterID: afterID, PageSize: pageSize,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: list incomplete desired items: %w", err)
+	}
+	items := make([]IncompleteItem, len(rows))
+	for index, row := range rows {
+		items[index] = IncompleteItem{
+			ID: row.ID, WorkID: row.WorkID, Title: row.CanonicalTitle, CategoryID: row.CategoryID,
+			State: row.State, RequiredCount: row.RequiredCount.Int64, PresentCount: row.PresentCount,
+		}
+	}
+	return items, nil
+}
+
 // albumState derives MISSING/PARTIAL/COMPLETE from present against required.
 // UPGRADABLE is acquisition's own state to set (stage 5); nothing here ever
 // produces it.

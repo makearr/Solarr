@@ -119,6 +119,26 @@ paths:
               schema: { $ref: "#/components/schemas/DashboardSummary" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /library/health:
+    get:
+      operationId: getLibraryHealth
+      tags: [system]
+      summary: Probe coverage, unmatched files, incomplete works, roots near reserve and blocked hashes still in the library (todo 4.8).
+      description: >-
+        Every list here is a compact sample (the first 20), not a second
+        paginated browser -- "every figure a link" (todo 4.8) means the count
+        is the headline and the sample names concrete instances, not that
+        this endpoint replaces the identification queue or the blocklist
+        screens. Blocked hashes found in the library are Invariant 83's own
+        "reported, never touched": nothing here removes anything.
+      responses:
+        "200":
+          description: The current report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryHealth" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /auth/login:
     post:
       operationId: login
@@ -3253,6 +3273,70 @@ components:
           items: { $ref: "#/components/schemas/RootFolder" }
         jobs: { $ref: "#/components/schemas/JobCounts" }
         library: { $ref: "#/components/schemas/LibraryCounts" }
+
+    LibraryHealth:
+      type: object
+      description: >-
+        Todo 4.8's own aggregate report. Every *_count is exact; every list
+        alongside one is a bounded sample (the first 20), not the full set.
+      required: [unprobed_count, unprobed_files, unmatched_count, incomplete_count,
+                 incomplete_works, roots_near_reserve, blocked_present]
+      properties:
+        unprobed_count: { type: integer, description: Files with no measured attributes yet (ADR-39). }
+        unprobed_files:
+          type: array
+          items: { $ref: "#/components/schemas/UnprobedFile" }
+        unmatched_count: { type: integer, description: Files waiting in the manual identification queue (F29). }
+        incomplete_count: { type: integer, description: Monitored works still short of their own required track count. }
+        incomplete_works:
+          type: array
+          items: { $ref: "#/components/schemas/IncompleteWork" }
+        roots_near_reserve:
+          type: array
+          description: Every online root whose free space has fallen within 10% of its own configured reserve.
+          items: { $ref: "#/components/schemas/RootNearReserve" }
+        blocked_present:
+          type: array
+          description: Blocked hashes (ADR-53 part 2) a scan found still sitting in the library (Invariant 83).
+          items: { $ref: "#/components/schemas/BlockedPresent" }
+
+    UnprobedFile:
+      type: object
+      required: [root_folder_id, rel_path]
+      properties:
+        root_folder_id: { type: integer, format: int64 }
+        rel_path: { type: string }
+
+    IncompleteWork:
+      type: object
+      required: [work_id, title, category_id, state, required_count, present_count]
+      properties:
+        work_id: { type: integer, format: int64 }
+        title: { type: string }
+        category_id: { type: integer, format: int64 }
+        state: { type: string, enum: [MISSING, PARTIAL] }
+        required_count: { type: integer, format: int64 }
+        present_count: { type: integer, format: int64 }
+
+    RootNearReserve:
+      type: object
+      required: [root_folder_id, path, free_bytes, min_free_bytes]
+      properties:
+        root_folder_id: { type: integer, format: int64 }
+        path: { type: string }
+        free_bytes: { type: integer, format: int64 }
+        min_free_bytes: { type: integer, format: int64 }
+
+    BlockedPresent:
+      type: object
+      required: [blocked_content_id, reason, title, media_object_id, root_folder_id, rel_path]
+      properties:
+        blocked_content_id: { type: integer, format: int64 }
+        reason: { type: string }
+        title: { type: string }
+        media_object_id: { type: integer, format: int64 }
+        root_folder_id: { type: integer, format: int64 }
+        rel_path: { type: string }
 
     JobCounts:
       type: object

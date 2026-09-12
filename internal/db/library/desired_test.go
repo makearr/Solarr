@@ -217,6 +217,59 @@ func TestCountersCanBeCheckedAgainstTheRealCount(t *testing.T) {
 	}
 }
 
+// Library health's own "missing tracks" figure (todo 4.8): only monitored
+// MISSING/PARTIAL items count, COMPLETE and unmonitored ones do not.
+func TestDesired_CountIncompleteAndIncompleteItems(t *testing.T) {
+	opened, _ := newLibrary(t)
+	work := createWork(t, opened, "music", "Zor A")
+
+	missing := createDesired(t, opened, work.ID, "SET", 10)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{ID: missing.ID, State: "MISSING", PresentCount: 0})
+	})
+	partial := createDesired(t, opened, work.ID, "SINGLE", 1)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{ID: partial.ID, State: "PARTIAL", PresentCount: 1})
+	})
+	complete := createDesired(t, opened, work.ID, "SINGLE", 1)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{ID: complete.ID, State: "COMPLETE", PresentCount: 1})
+	})
+	unmonitored := createDesired(t, opened, work.ID, "SINGLE", 1)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		if err := q.SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{ID: unmonitored.ID, State: "MISSING", PresentCount: 0}); err != nil {
+			return err
+		}
+		return q.SetDesiredItemMonitored(ctx, librarydb.SetDesiredItemMonitoredParams{ID: unmonitored.ID, Monitored: 0})
+	})
+
+	desired := library.NewDesired(opened)
+	count, err := desired.CountIncomplete(t.Context(), 0)
+	if err != nil {
+		t.Fatalf("CountIncomplete: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("CountIncomplete = %d, want 2 (missing + partial, not complete or unmonitored)", count)
+	}
+
+	items, err := desired.IncompleteItems(t.Context(), 0, 0, 10)
+	if err != nil {
+		t.Fatalf("IncompleteItems: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("IncompleteItems = %+v, want 2", items)
+	}
+	states := map[int64]string{items[0].ID: items[0].State, items[1].ID: items[1].State}
+	if states[missing.ID] != "MISSING" || states[partial.ID] != "PARTIAL" {
+		t.Errorf("states = %+v, want MISSING for %d and PARTIAL for %d", states, missing.ID, partial.ID)
+	}
+	for _, item := range items {
+		if item.Title != "Zor A" {
+			t.Errorf("item %+v has the wrong title, want %q", item, "Zor A")
+		}
+	}
+}
+
 // The planner reads a dirty set, not the library (ADR-6), and the generation
 // guard stops a stale plan overwriting a newer one.
 func TestPlanningClearsOnlyTheGenerationItRead(t *testing.T) {

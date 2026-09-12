@@ -75,20 +75,22 @@ export function Dashboard() {
 
         {library.probed + library.unprobed > 0 && (
           <Section title="Probe coverage">
-            <div className="flex items-center gap-3 rounded-lg border border-border-subtle
-                           bg-surface px-3 py-2.5 text-sm">
+            <Link
+              to="/library/health"
+              className="flex items-center gap-3 rounded-lg border border-border-subtle
+                         bg-surface px-3 py-2.5 text-sm hover:border-accent
+                         focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
               <span className="font-mono tabular-nums">
                 {library.probed.toLocaleString()} of{" "}
                 {(library.probed + library.unprobed).toLocaleString()} files probed
               </span>
               {library.unprobed > 0 && (
                 <span className="ml-auto shrink-0 text-xs text-ink-muted">
-                  {library.unprobed.toLocaleString()} still unmeasured
+                  {library.unprobed.toLocaleString()} still unmeasured — view library health →
                 </span>
               )}
-            </div>
-            {/* No dedicated "unprobed files" list exists yet (section 21.14) --
-                this stays a plain figure rather than a link to nowhere useful. */}
+            </Link>
           </Section>
         )}
 

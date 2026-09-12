@@ -45,3 +45,25 @@ DELETE FROM blocked_content WHERE expires_at IS NOT NULL AND expires_at <= ?;
 
 -- name: RemoveBlockedContent :exec
 DELETE FROM blocked_content WHERE id = ?;
+
+-- Invariant 83 (todo 4.15/4.8): "a blocked hash found later by a scan is
+-- reported, never touched" -- driven from blocked_content (small, user-sized)
+-- rather than media_object (library-sized), using the same two indexed exact
+-- hashes FindBlockedContentByExactHash checks at import time, just in the
+-- opposite direction. Every library_path, not only the primary one: ADR-11
+-- cross-entry hardlinking means a blocked hash can occupy more than one path,
+-- and a health report exists to be acted on, not to under-count. Known,
+-- narrow gap: the cursor is bc.id, so a page boundary landing mid-way
+-- through one block's own several paths skips the remainder on the next
+-- page -- acceptable today since a block rarely has more than a handful of
+-- present copies, revisit if that stops being true.
+-- name: ListBlockedContentPresentInLibrary :many
+SELECT bc.id AS blocked_content_id, bc.reason, bc.title, mo.id AS media_object_id,
+       lp.root_folder_id, lp.rel_path
+FROM blocked_content bc
+JOIN media_object mo ON (bc.oshash IS NOT NULL AND mo.oshash = bc.oshash)
+                     OR (bc.quick_hash IS NOT NULL AND mo.quick_hash = bc.quick_hash)
+JOIN library_path lp ON lp.media_object_id = mo.id
+WHERE bc.id > sqlc.arg(after_id)
+ORDER BY bc.id, lp.id
+LIMIT sqlc.arg(page_size);

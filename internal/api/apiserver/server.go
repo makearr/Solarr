@@ -146,6 +146,10 @@ type Config struct {
 	// endpoints answer 503.
 	Discover Discover
 	ArrSync  ArrSync
+	// LibraryHealth answers todo 4.8's own aggregate report (unprobed files,
+	// unmatched files, incomplete works, roots near reserve, blocked hashes
+	// found in the library). Optional: without it, the endpoint answers 503.
+	LibraryHealth LibraryHealth
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -194,6 +198,7 @@ type Server struct {
 	cacheManager         CacheManager
 	discover             Discover
 	arrSync              ArrSync
+	libraryHealth        LibraryHealth
 	// effectivePort is the port this process actually bound to, resolved at
 	// startup (ADR-58). The Network screen reports it beside whatever
 	// settings.db now holds, since a port change written from the screen
@@ -264,6 +269,7 @@ func New(config Config) (*Server, error) {
 		cacheManager:         config.CacheManager,
 		discover:             config.Discover,
 		arrSync:              config.ArrSync,
+		libraryHealth:        config.LibraryHealth,
 		effectivePort:        config.Port,
 		healthPath:           base + APIPrefix + "/health",
 		address:              net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
@@ -299,6 +305,7 @@ func New(config Config) (*Server, error) {
 			secured.Use(server.authenticate)
 			secured.Get("/me", server.GetMe)
 			secured.Get("/dashboard", server.GetDashboard)
+			secured.Get("/library/health", server.GetLibraryHealth)
 			secured.Get("/system/egress", server.GetEgress)
 			secured.Get("/jobs", server.routeListJobs)
 			secured.Get("/works", server.routeListWorks)

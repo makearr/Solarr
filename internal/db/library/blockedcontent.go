@@ -146,6 +146,38 @@ func (b BlockedContentStore) FindByHash(ctx context.Context, oshash, quickHash s
 	return blocks, nil
 }
 
+// PresentInLibrary is one blocked hash a scan or import found (or left)
+// already sitting in the library -- Invariant 83's own "reported, never
+// touched" (todo 4.8/4.15).
+type PresentInLibrary struct {
+	BlockedContentID int64
+	Reason           BlockReason
+	Title            string
+	MediaObjectID    int64
+	RootFolderID     int64
+	RelPath          string
+}
+
+// ListPresentInLibrary pages through every (blocked_content, library_path)
+// pair currently matching by exact hash -- the read side of Invariant 83,
+// library health's own "blocked hashes found in the library" figure.
+func (b BlockedContentStore) ListPresentInLibrary(ctx context.Context, afterID, pageSize int64) ([]PresentInLibrary, error) {
+	rows, err := librarydb.New(b.store.Read()).ListBlockedContentPresentInLibrary(ctx, librarydb.ListBlockedContentPresentInLibraryParams{
+		AfterID: afterID, PageSize: pageSize,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("blocked_content: list present in library: %w", err)
+	}
+	present := make([]PresentInLibrary, len(rows))
+	for index, row := range rows {
+		present[index] = PresentInLibrary{
+			BlockedContentID: row.BlockedContentID, Reason: BlockReason(row.Reason), Title: row.Title,
+			MediaObjectID: row.MediaObjectID, RootFolderID: row.RootFolderID, RelPath: row.RelPath,
+		}
+	}
+	return present, nil
+}
+
 // List pages through every block, oldest first.
 func (b BlockedContentStore) List(ctx context.Context, afterID int64, pageSize int64) ([]BlockedContent, error) {
 	rows, err := librarydb.New(b.store.Read()).ListBlockedContent(ctx, librarydb.ListBlockedContentParams{

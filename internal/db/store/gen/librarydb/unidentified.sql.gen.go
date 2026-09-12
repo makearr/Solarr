@@ -9,6 +9,27 @@ import (
 	"context"
 )
 
+const countUnidentified = `-- name: CountUnidentified :one
+SELECT CAST(count(*) AS INTEGER) AS total
+FROM identification_queue
+WHERE ?1 = 0
+   OR root_folder_id IN (SELECT value FROM json_each(?2))
+`
+
+type CountUnidentifiedParams struct {
+	FilterRootFolders interface{}
+	RootFolderIds     interface{}
+}
+
+// Library health's own "unmatched files" figure (todo 4.8) -- same filter
+// shape as ListUnidentified below, a count rather than a page.
+func (q *Queries) CountUnidentified(ctx context.Context, arg CountUnidentifiedParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUnidentified, arg.FilterRootFolders, arg.RootFolderIds)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const deleteUnidentified = `-- name: DeleteUnidentified :exec
 DELETE FROM identification_queue WHERE media_object_id = ?
 `

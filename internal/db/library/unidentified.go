@@ -134,6 +134,14 @@ func (u Unidentified) Clear(ctx context.Context, mediaObjectIDs []int64) error {
 	})
 }
 
+// Count answers how many files are queued for manual identification --
+// library health's own "unmatched files" figure (todo 4.8), unfiltered.
+func (u Unidentified) Count(ctx context.Context) (int64, error) {
+	return librarydb.New(u.store.Read()).CountUnidentified(ctx, librarydb.CountUnidentifiedParams{
+		FilterRootFolders: boolToInt(false), RootFolderIds: "[]",
+	})
+}
+
 // List returns one page, oldest-queued first. rootFolderIDs follows WorkFilter's
 // own convention (search.go, works.go): nil is unfiltered, a non-nil empty slice
 // matches nothing (ADR-27 -- the caller translates "no root folder visible" into

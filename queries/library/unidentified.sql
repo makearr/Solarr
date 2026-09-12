@@ -22,6 +22,14 @@ DELETE FROM identification_queue WHERE media_object_id = ?;
 SELECT media_object_id, root_folder_id, rel_path, candidates_json, first_seen_at, last_seen_at
 FROM identification_queue WHERE media_object_id = ?;
 
+-- Library health's own "unmatched files" figure (todo 4.8) -- same filter
+-- shape as ListUnidentified below, a count rather than a page.
+-- name: CountUnidentified :one
+SELECT CAST(count(*) AS INTEGER) AS total
+FROM identification_queue
+WHERE sqlc.arg(filter_root_folders) = 0
+   OR root_folder_id IN (SELECT value FROM json_each(sqlc.arg(root_folder_ids)));
+
 -- filter_root_folders=0 means unfiltered; =1 filters to root_folder_ids, which is
 -- empty when the caller can see nothing -- same ADR-27 shape as search.sql's
 -- SearchWorks, json_each passing a Go slice as a JSON array.

@@ -609,6 +609,70 @@ func (q *Queries) ListFilesForDesiredItem(ctx context.Context, desiredItemID int
 	return items, nil
 }
 
+const listIncompleteDesiredItems = `-- name: ListIncompleteDesiredItems :many
+SELECT d.id, d.work_id, w.canonical_title, d.category_id, d.state,
+       d.required_count, d.present_count
+FROM desired_item d
+JOIN work w ON w.id = d.work_id
+WHERE d.monitored = 1 AND d.state IN ('MISSING', 'PARTIAL')
+  AND (CAST(?1 AS INTEGER) = 0 OR d.category_id = ?1)
+  AND d.id > ?2
+ORDER BY d.id
+LIMIT ?3
+`
+
+type ListIncompleteDesiredItemsParams struct {
+	CategoryID int64
+	AfterID    int64
+	PageSize   int64
+}
+
+type ListIncompleteDesiredItemsRow struct {
+	ID             int64
+	WorkID         int64
+	CanonicalTitle string
+	CategoryID     int64
+	State          string
+	RequiredCount  sql.NullInt64
+	PresentCount   int64
+}
+
+// Library health's own "missing tracks" list (todo 4.8): every monitored
+// item still short of its own required_count, using desired_by_category's
+// own (category_id, state) index. UPGRADABLE is deliberately excluded --
+// that item already has everything it needs, just not at the quality
+// wanted, a different report from "missing" entirely.
+func (q *Queries) ListIncompleteDesiredItems(ctx context.Context, arg ListIncompleteDesiredItemsParams) ([]ListIncompleteDesiredItemsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listIncompleteDesiredItems, arg.CategoryID, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListIncompleteDesiredItemsRow{}
+	for rows.Next() {
+		var i ListIncompleteDesiredItemsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkID,
+			&i.CanonicalTitle,
+			&i.CategoryID,
+			&i.State,
+			&i.RequiredCount,
+			&i.PresentCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markDesiredItemDirty = `-- name: MarkDesiredItemDirty :exec
 UPDATE desired_item SET dirty = 1 WHERE id = ?
 `

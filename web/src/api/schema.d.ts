@@ -104,6 +104,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/library/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Probe coverage, unmatched files, incomplete works, roots near reserve and blocked hashes still in the library (todo 4.8).
+         * @description Every list here is a compact sample (the first 20), not a second paginated browser -- "every figure a link" (todo 4.8) means the count is the headline and the sample names concrete instances, not that this endpoint replaces the identification queue or the blocklist screens. Blocked hashes found in the library are Invariant 83's own "reported, never touched": nothing here removes anything.
+         */
+        get: operations["getLibraryHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/login": {
         parameters: {
             query?: never;
@@ -2105,6 +2125,59 @@ export interface components {
             jobs: components["schemas"]["JobCounts"];
             library: components["schemas"]["LibraryCounts"];
         };
+        /** @description Todo 4.8's own aggregate report. Every *_count is exact; every list alongside one is a bounded sample (the first 20), not the full set. */
+        LibraryHealth: {
+            /** @description Files with no measured attributes yet (ADR-39). */
+            unprobed_count: number;
+            unprobed_files: components["schemas"]["UnprobedFile"][];
+            /** @description Files waiting in the manual identification queue (F29). */
+            unmatched_count: number;
+            /** @description Monitored works still short of their own required track count. */
+            incomplete_count: number;
+            incomplete_works: components["schemas"]["IncompleteWork"][];
+            /** @description Every online root whose free space has fallen within 10% of its own configured reserve. */
+            roots_near_reserve: components["schemas"]["RootNearReserve"][];
+            /** @description Blocked hashes (ADR-53 part 2) a scan found still sitting in the library (Invariant 83). */
+            blocked_present: components["schemas"]["BlockedPresent"][];
+        };
+        UnprobedFile: {
+            /** Format: int64 */
+            root_folder_id: number;
+            rel_path: string;
+        };
+        IncompleteWork: {
+            /** Format: int64 */
+            work_id: number;
+            title: string;
+            /** Format: int64 */
+            category_id: number;
+            /** @enum {string} */
+            state: "MISSING" | "PARTIAL";
+            /** Format: int64 */
+            required_count: number;
+            /** Format: int64 */
+            present_count: number;
+        };
+        RootNearReserve: {
+            /** Format: int64 */
+            root_folder_id: number;
+            path: string;
+            /** Format: int64 */
+            free_bytes: number;
+            /** Format: int64 */
+            min_free_bytes: number;
+        };
+        BlockedPresent: {
+            /** Format: int64 */
+            blocked_content_id: number;
+            reason: string;
+            title: string;
+            /** Format: int64 */
+            media_object_id: number;
+            /** Format: int64 */
+            root_folder_id: number;
+            rel_path: string;
+        };
         /** @description Live counts over jobs.db, which retention keeps bounded. */
         JobCounts: {
             total: number;
@@ -3099,6 +3172,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DashboardSummary"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    getLibraryHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryHealth"];
                 };
             };
             401: components["responses"]["Problem"];

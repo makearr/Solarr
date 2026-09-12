@@ -1,10 +1,12 @@
 package library_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
 )
 
 func TestBlockedContent_CreateRequiresAtLeastOneHash(t *testing.T) {
@@ -89,6 +91,45 @@ func TestBlockedContent_FindByHashMatchesEitherHash(t *testing.T) {
 	}
 	if len(found) != 0 {
 		t.Errorf("FindByHash(no match) = %+v, want empty", found)
+	}
+}
+
+// Invariant 83 / library health's own "blocked hashes found in the library"
+// figure (todo 4.8): a block matches a media_object already registered
+// through an ordinary path, not only one an import gate refused.
+func TestBlockedContent_ListPresentInLibrary(t *testing.T) {
+	opened, _ := newLibrary(t)
+	blocks := library.NewBlockedContentStore(opened)
+
+	present := createObject(t, opened, "present-quickhash", 100)
+	write(t, opened, func(ctx context.Context, queries *librarydb.Queries) error {
+		_, err := queries.AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+			MediaObjectID: present.ID, RootFolderID: 7, RelPath: "Fake Artist/Fake Album/01.flac",
+			LinkKind: "primary", IsPrimary: 1, CreatedAt: 1,
+		})
+		return err
+	})
+	_ = createObject(t, opened, "absent-quickhash", 100) // never blocked, must not appear
+
+	blockedRow, err := blocks.Create(t.Context(), library.NewBlock{
+		QuickHash: "present-quickhash", SizeBytes: 100, Reason: library.BlockReasonFake,
+		Title: "Fake Album", Source: library.BlockSourceUser, CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	found, err := blocks.ListPresentInLibrary(t.Context(), 0, 100)
+	if err != nil {
+		t.Fatalf("ListPresentInLibrary: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("ListPresentInLibrary = %+v, want exactly 1", found)
+	}
+	if found[0].BlockedContentID != blockedRow.ID || found[0].MediaObjectID != present.ID ||
+		found[0].RootFolderID != 7 || found[0].RelPath != "Fake Artist/Fake Album/01.flac" ||
+		found[0].Reason != library.BlockReasonFake {
+		t.Errorf("found = %+v, want it naming block %d and object %d", found, blockedRow.ID, present.ID)
 	}
 }
 

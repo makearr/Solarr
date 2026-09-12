@@ -198,3 +198,19 @@ WHERE id IN (SELECT d.id FROM desired_item d WHERE d.dirty = 0 LIMIT sqlc.arg(ba
 -- name: CountDesiredItemsByCategory :many
 SELECT category_id, CAST(count(*) AS INTEGER) AS total
 FROM desired_item GROUP BY category_id ORDER BY category_id;
+
+-- Library health's own "missing tracks" list (todo 4.8): every monitored
+-- item still short of its own required_count, using desired_by_category's
+-- own (category_id, state) index. UPGRADABLE is deliberately excluded --
+-- that item already has everything it needs, just not at the quality
+-- wanted, a different report from "missing" entirely.
+-- name: ListIncompleteDesiredItems :many
+SELECT d.id, d.work_id, w.canonical_title, d.category_id, d.state,
+       d.required_count, d.present_count
+FROM desired_item d
+JOIN work w ON w.id = d.work_id
+WHERE d.monitored = 1 AND d.state IN ('MISSING', 'PARTIAL')
+  AND (CAST(sqlc.arg(category_id) AS INTEGER) = 0 OR d.category_id = sqlc.arg(category_id))
+  AND d.id > sqlc.arg(after_id)
+ORDER BY d.id
+LIMIT sqlc.arg(page_size);

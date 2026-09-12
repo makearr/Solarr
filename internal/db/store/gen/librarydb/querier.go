@@ -75,6 +75,9 @@ type Querier interface {
 	// Only 'primary' counts: a trailer belongs to the work without satisfying it.
 	CountPrimaryFiles(ctx context.Context, desiredItemID int64) (int64, error)
 	CountRollupOutcomes(ctx context.Context, since int64) ([]CountRollupOutcomesRow, error)
+	// Library health's own "unmatched files" figure (todo 4.8) -- same filter
+	// shape as ListUnidentified below, a count rather than a page.
+	CountUnidentified(ctx context.Context, arg CountUnidentifiedParams) (int64, error)
 	// The "parts" count for one category (ADR-54's work_part-entity navigation levels,
 	// e.g. music's Tracks): every work_part belonging to a work visible to the
 	// category, by the same on-disk-or-desired union CountWorksVisibleToCategory uses.
@@ -265,6 +268,18 @@ type Querier interface {
 	ListArrImportsForInstance(ctx context.Context, instanceID int64) ([]ArrImport, error)
 	ListArtworkForSubject(ctx context.Context, arg ListArtworkForSubjectParams) ([]Artwork, error)
 	ListBlockedContent(ctx context.Context, arg ListBlockedContentParams) ([]BlockedContent, error)
+	// Invariant 83 (todo 4.15/4.8): "a blocked hash found later by a scan is
+	// reported, never touched" -- driven from blocked_content (small, user-sized)
+	// rather than media_object (library-sized), using the same two indexed exact
+	// hashes FindBlockedContentByExactHash checks at import time, just in the
+	// opposite direction. Every library_path, not only the primary one: ADR-11
+	// cross-entry hardlinking means a blocked hash can occupy more than one path,
+	// and a health report exists to be acted on, not to under-count. Known,
+	// narrow gap: the cursor is bc.id, so a page boundary landing mid-way
+	// through one block's own several paths skips the remainder on the next
+	// page -- acceptable today since a block rarely has more than a handful of
+	// present copies, revisit if that stops being true.
+	ListBlockedContentPresentInLibrary(ctx context.Context, arg ListBlockedContentPresentInLibraryParams) ([]ListBlockedContentPresentInLibraryRow, error)
 	ListBlocklist(ctx context.Context, arg ListBlocklistParams) ([]BlocklistedRelease, error)
 	ListCollectionMembers(ctx context.Context, collectionID int64) ([]CollectionMember, error)
 	ListCollectionsForWork(ctx context.Context, workID int64) ([]Collection, error)
@@ -311,6 +326,12 @@ type Querier interface {
 	// ListImportUnits itself stays as-is for the job's own small, in-process needs
 	// (resumeOrCreate's "the last unit committed so far" lookup).
 	ListImportUnitsPage(ctx context.Context, arg ListImportUnitsPageParams) ([]ImportUnit, error)
+	// Library health's own "missing tracks" list (todo 4.8): every monitored
+	// item still short of its own required_count, using desired_by_category's
+	// own (category_id, state) index. UPGRADABLE is deliberately excluded --
+	// that item already has everything it needs, just not at the quality
+	// wanted, a different report from "missing" entirely.
+	ListIncompleteDesiredItems(ctx context.Context, arg ListIncompleteDesiredItemsParams) ([]ListIncompleteDesiredItemsRow, error)
 	ListMoveItems(ctx context.Context, moveJobID int64) ([]MoveItem, error)
 	// Small, operator-facing list -- move counts never approach library scale,
 	// the same reasoning ListImportSessions' own comment already gives.

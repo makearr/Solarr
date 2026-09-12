@@ -18,6 +18,7 @@ import { ImportLists } from "./ImportLists";
 import { CacheSettingsPage } from "./CacheSettings";
 import { Library } from "./Library";
 import { LibraryConfigPlaceholder } from "./LibraryConfigPlaceholder";
+import { LibraryHealth } from "./LibraryHealth";
 import { LibraryLevelList } from "./LibraryLevelList";
 import { Moves } from "./Moves";
 import { Overview } from "./Overview";
@@ -99,6 +100,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/people", component: People }),
   createRoute({ getParentRoute: () => rootRoute, path: "/people/$id", component: PersonDetail }),
   createRoute({ getParentRoute: () => rootRoute, path: "/unidentified", component: Unidentified }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/health", component: LibraryHealth }),
   // Storage (todo 4.18): Root folders, Move & drain, Download folders and
   // Import are grouped under one section. /import and /moves redirect
   // rather than 404ing, the same courtesy the old flat /library got.

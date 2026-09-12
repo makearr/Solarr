@@ -141,6 +141,12 @@ const (
 	SINGLE    ImportUnitShape = "SINGLE"
 )
 
+// Defines values for IncompleteWorkState.
+const (
+	IncompleteWorkStateMISSING IncompleteWorkState = "MISSING"
+	IncompleteWorkStatePARTIAL IncompleteWorkState = "PARTIAL"
+)
+
 // Defines values for JobPool.
 const (
 	Acquire     JobPool = "acquire"
@@ -326,10 +332,10 @@ const (
 
 // Defines values for WorkWantedState.
 const (
-	WorkWantedStateCOMPLETE   WorkWantedState = "COMPLETE"
-	WorkWantedStateMISSING    WorkWantedState = "MISSING"
-	WorkWantedStatePARTIAL    WorkWantedState = "PARTIAL"
-	WorkWantedStateUPGRADABLE WorkWantedState = "UPGRADABLE"
+	COMPLETE   WorkWantedState = "COMPLETE"
+	MISSING    WorkWantedState = "MISSING"
+	PARTIAL    WorkWantedState = "PARTIAL"
+	UPGRADABLE WorkWantedState = "UPGRADABLE"
 )
 
 // Defines values for ListImportSessionsParamsState.
@@ -542,6 +548,16 @@ type BlockedContentEntryReason string
 
 // BlockedContentEntrySource defines model for BlockedContentEntry.Source.
 type BlockedContentEntrySource string
+
+// BlockedPresent defines model for BlockedPresent.
+type BlockedPresent struct {
+	BlockedContentId int64  `json:"blocked_content_id"`
+	MediaObjectId    int64  `json:"media_object_id"`
+	Reason           string `json:"reason"`
+	RelPath          string `json:"rel_path"`
+	RootFolderId     int64  `json:"root_folder_id"`
+	Title            string `json:"title"`
+}
 
 // BuildInfo defines model for BuildInfo.
 type BuildInfo struct {
@@ -977,6 +993,19 @@ type ImportUnitDecision string
 // ImportUnitShape defines model for ImportUnit.Shape.
 type ImportUnitShape string
 
+// IncompleteWork defines model for IncompleteWork.
+type IncompleteWork struct {
+	CategoryId    int64               `json:"category_id"`
+	PresentCount  int64               `json:"present_count"`
+	RequiredCount int64               `json:"required_count"`
+	State         IncompleteWorkState `json:"state"`
+	Title         string              `json:"title"`
+	WorkId        int64               `json:"work_id"`
+}
+
+// IncompleteWorkState defines model for IncompleteWork.State.
+type IncompleteWorkState string
+
 // Job The job's payload is deliberately absent. It can carry paths and provider identifiers, and a listing is not the place to hand that out.
 type Job struct {
 	Attempts      int       `json:"attempts"`
@@ -1059,6 +1088,26 @@ type LibraryCounts struct {
 	// Unprobed total_files minus probed, computed here rather than stored twice.
 	Unprobed int `json:"unprobed"`
 	Works    int `json:"works"`
+}
+
+// LibraryHealth Todo 4.8's own aggregate report. Every *_count is exact; every list alongside one is a bounded sample (the first 20), not the full set.
+type LibraryHealth struct {
+	// BlockedPresent Blocked hashes (ADR-53 part 2) a scan found still sitting in the library (Invariant 83).
+	BlockedPresent []BlockedPresent `json:"blocked_present"`
+
+	// IncompleteCount Monitored works still short of their own required track count.
+	IncompleteCount int              `json:"incomplete_count"`
+	IncompleteWorks []IncompleteWork `json:"incomplete_works"`
+
+	// RootsNearReserve Every online root whose free space has fallen within 10% of its own configured reserve.
+	RootsNearReserve []RootNearReserve `json:"roots_near_reserve"`
+
+	// UnmatchedCount Files waiting in the manual identification queue (F29).
+	UnmatchedCount int `json:"unmatched_count"`
+
+	// UnprobedCount Files with no measured attributes yet (ADR-39).
+	UnprobedCount int            `json:"unprobed_count"`
+	UnprobedFiles []UnprobedFile `json:"unprobed_files"`
 }
 
 // LibraryLevel One browsable entity level a media type declares (ADR-23's NavigationLevels extension point). Core never learns what an album or a season is -- key, label and entity are entirely the media type's own vocabulary.
@@ -1424,6 +1473,14 @@ type RootFolderCategory struct {
 	Name string `json:"name"`
 }
 
+// RootNearReserve defines model for RootNearReserve.
+type RootNearReserve struct {
+	FreeBytes    int64  `json:"free_bytes"`
+	MinFreeBytes int64  `json:"min_free_bytes"`
+	Path         string `json:"path"`
+	RootFolderId int64  `json:"root_folder_id"`
+}
+
 // Schedule One registered periodic task (ADR-59), its effective settings and run-state.
 type Schedule struct {
 	// Cadence Effective cadence -- a stored override if one exists, default_cadence otherwise.
@@ -1544,6 +1601,12 @@ type UnidentifiedPage struct {
 
 	// NextCursor Empty on the last page, which is how a client knows to stop without one more request that returns nothing.
 	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
+// UnprobedFile defines model for UnprobedFile.
+type UnprobedFile struct {
+	RelPath      string `json:"rel_path"`
+	RootFolderId int64  `json:"root_folder_id"`
 }
 
 // UpdateArrInstanceRequest defines model for UpdateArrInstanceRequest.
@@ -2248,6 +2311,9 @@ type ServerInterface interface {
 	// One page of one navigation level (ADR-54).
 	// (GET /libraries/{id}/{level})
 	ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int64, level string, params ListLibraryLevelParams)
+	// Probe coverage, unmatched files, incomplete works, roots near reserve and blocked hashes still in the library (todo 4.8).
+	// (GET /library/health)
+	GetLibraryHealth(w http.ResponseWriter, r *http.Request)
 	// Files a scan recorded that the ADR-24 chain could not confidently resolve (F29's manual identification queue).
 	// (GET /library/unidentified)
 	ListUnidentified(w http.ResponseWriter, r *http.Request, params ListUnidentifiedParams)
@@ -2719,6 +2785,12 @@ func (_ Unimplemented) SetLibraryLastLevel(w http.ResponseWriter, r *http.Reques
 // One page of one navigation level (ADR-54).
 // (GET /libraries/{id}/{level})
 func (_ Unimplemented) ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int64, level string, params ListLibraryLevelParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Probe coverage, unmatched files, incomplete works, roots near reserve and blocked hashes still in the library (todo 4.8).
+// (GET /library/health)
+func (_ Unimplemented) GetLibraryHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4726,6 +4798,28 @@ func (siw *ServerInterfaceWrapper) ListLibraryLevel(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// GetLibraryHealth operation middleware
+func (siw *ServerInterfaceWrapper) GetLibraryHealth(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLibraryHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUnidentified operation middleware
 func (siw *ServerInterfaceWrapper) ListUnidentified(w http.ResponseWriter, r *http.Request) {
 
@@ -6428,6 +6522,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/libraries/{id}/{level}", wrapper.ListLibraryLevel)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/library/health", wrapper.GetLibraryHealth)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/library/unidentified", wrapper.ListUnidentified)
