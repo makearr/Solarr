@@ -3,9 +3,11 @@ package apiserver
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
 	"github.com/makearr/MediaNexus/internal/api/authz"
+	"github.com/makearr/MediaNexus/internal/db/settings"
 )
 
 // LibraryHealth answers todo 4.8's own aggregate report over library.db.
@@ -53,11 +55,24 @@ type BlockedPresent struct {
 	RelPath          string
 }
 
+// CategoryOfflineFiles is one category currently carrying files on a root
+// declared offline (todo 4.18's own remaining item: "a category with an
+// offline root reports its full count with an offline note"). TotalFiles is
+// the category's real total regardless of reachability; OfflineFiles is how
+// many of those sit on a root that is not reachable right now.
+type CategoryOfflineFiles struct {
+	CategoryID   int64
+	Name         string
+	TotalFiles   int64
+	OfflineFiles int64
+}
+
 // GetLibraryHealth answers todo 4.8's own aggregate report: probe coverage,
 // unmatched files, incomplete works, roots near their reserve, and blocked
 // hashes found in the library (ADR-53, Invariant 83).
 func (s *Server) GetLibraryHealth(w http.ResponseWriter, r *http.Request) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
@@ -74,14 +89,62 @@ func (s *Server) GetLibraryHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, s.logger, http.StatusOK, gen.LibraryHealth{
-		UnprobedCount:    report.UnprobedCount,
-		UnprobedFiles:    unprobedFilesView(report.UnprobedFiles),
-		UnmatchedCount:   report.UnmatchedCount,
-		IncompleteCount:  report.IncompleteCount,
-		IncompleteWorks:  incompleteWorksView(report.IncompleteWorks),
-		RootsNearReserve: s.rootsNearReserve(),
-		BlockedPresent:   blockedPresentView(report.BlockedPresent),
+		UnprobedCount:          report.UnprobedCount,
+		UnprobedFiles:          unprobedFilesView(report.UnprobedFiles),
+		UnmatchedCount:         report.UnmatchedCount,
+		IncompleteCount:        report.IncompleteCount,
+		IncompleteWorks:        incompleteWorksView(report.IncompleteWorks),
+		RootsNearReserve:       s.rootsNearReserve(),
+		BlockedPresent:         blockedPresentView(report.BlockedPresent),
+		CategoriesOfflineFiles: categoriesOfflineFilesView(s.categoriesWithOfflineFiles(r.Context(), access)),
 	})
+}
+
+// categoriesWithOfflineFiles composes the caller's own visible categories
+// (authz.Access.Categories, ADR-27 -- never the raw settings.Snapshot,
+// Invariant 85/86: a category the caller cannot see must not appear here)
+// with library.db's own per-category counter (internal/db/library.
+// CategoryCounters, "files"/"files_offline") the same way rootsNearReserve
+// already composes settings.db facts at the handler level rather than
+// through the LibraryHealth interface (ADR-25: no cross-database join,
+// composed in Go). Only categories actually carrying an offline file are
+// returned -- the counter is reconciled periodically (ADR-28), never
+// computed live here.
+func (s *Server) categoriesWithOfflineFiles(ctx context.Context, access authz.Access) []CategoryOfflineFiles {
+	if s.librarySize == nil {
+		return nil
+	}
+	var affected []CategoryOfflineFiles
+	for _, category := range access.Categories(settings.PermissionRead) {
+		values, err := s.librarySize.Counters(ctx, "category:"+strconv.FormatInt(category.ID, 10))
+		if err != nil {
+			s.logger.WarnContext(ctx, "library health: category counters unavailable",
+				"category_id", category.ID, "error", err)
+			continue
+		}
+		offline := values["files_offline"]
+		if offline <= 0 {
+			continue
+		}
+		affected = append(affected, CategoryOfflineFiles{
+			CategoryID: category.ID, Name: category.Name,
+			TotalFiles: values["files"], OfflineFiles: offline,
+		})
+	}
+	return affected
+}
+
+func categoriesOfflineFilesView(rows []CategoryOfflineFiles) []gen.CategoryOfflineFiles {
+	// Required (not omitempty): an empty array, not an absent key, matching
+	// rootsNearReserve's own pattern -- a required array field that
+	// serialises as JSON null instead of [] has broken a frontend before.
+	views := make([]gen.CategoryOfflineFiles, 0, len(rows))
+	for _, row := range rows {
+		views = append(views, gen.CategoryOfflineFiles{
+			CategoryId: row.CategoryID, Name: row.Name, TotalFiles: row.TotalFiles, OfflineFiles: row.OfflineFiles,
+		})
+	}
+	return views
 }
 
 func unprobedFilesView(files []UnprobedFile) []gen.UnprobedFile {

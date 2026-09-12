@@ -16,20 +16,30 @@ import (
 type CategoryScope struct {
 	CategoryID    int64
 	RootFolderIDs []int64
+	// OfflineRootFolderIDs is the subset of RootFolderIDs settings.db currently
+	// declares offline (section 10.4) -- also the caller's own policy fact,
+	// composed in Go the same way RootFolderIDs itself is (ADR-25). Backs
+	// "a category with an offline root reports its full count with an
+	// offline note" (todo 4.18): "files" stays the true total regardless of
+	// reachability, "files_offline" is how many of those sit on a root that
+	// is not reachable right now.
+	OfflineRootFolderIDs []int64
 }
 
-// CategoryCounters recomputes "works", "files", "parts" and "artists" per
-// category. "files" is library_path grouped by root folder -- a file only ever
-// exists on disk, under a root folder, so that half needs no desired_item
-// involvement. "works", "parts" and "artists" all read the same on-disk-or-
-// desired union (work_root_folder, migration 0012's bridge, OR
-// desired_item.category_id for a subscription-discovered work with no root
-// folder yet) -- summing the two sides separately would double-count a
-// scanned, monitored work that has rows on both, so each is one distinct-count
-// query per scope rather than a Go-side sum over a bulk grouped query the way
-// "files" is. "parts" and "artists" back ADR-54's navigation-level counts
-// (work_part-entity and person-entity levels respectively, e.g. music's Tracks
-// and Artists).
+// CategoryCounters recomputes "works", "files", "files_offline", "parts" and
+// "artists" per category. "files" is library_path grouped by root folder --
+// a file only ever exists on disk, under a root folder, so that half needs
+// no desired_item involvement; "files_offline" is the same grouping summed
+// over only the scope's own offline roots (todo 4.18). "works", "parts" and
+// "artists" all read the same on-disk-or-desired union (work_root_folder,
+// migration 0012's bridge, OR desired_item.category_id for a subscription-
+// discovered work with no root folder yet) -- summing the two sides
+// separately would double-count a scanned, monitored work that has rows on
+// both, so each is one distinct-count query per scope rather than a Go-side
+// sum over a bulk grouped query the way "files"/"files_offline" are.
+// "parts" and "artists" back ADR-54's navigation-level counts (work_part-
+// entity and person-entity levels respectively, e.g. music's Tracks and
+// Artists).
 type CategoryCounters struct {
 	store *store.Store
 	clock clock.Clock
@@ -94,10 +104,11 @@ func (c CategoryCounters) reconcileScope(
 		return nil, fmt.Errorf("count artists: %w", err)
 	}
 	truth := map[string]int64{
-		"works":   works,
-		"files":   sumFor(filesByRoot, scope.RootFolderIDs),
-		"parts":   parts,
-		"artists": artists,
+		"works":         works,
+		"files":         sumFor(filesByRoot, scope.RootFolderIDs),
+		"files_offline": sumFor(filesByRoot, scope.OfflineRootFolderIDs),
+		"parts":         parts,
+		"artists":       artists,
 	}
 
 	existingRows, err := reader.ListCountersForScope(ctx, scopeKey)

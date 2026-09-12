@@ -2410,6 +2410,17 @@ export interface components {
             roots_near_reserve: components["schemas"]["RootNearReserve"][];
             /** @description Blocked hashes (ADR-53 part 2) a scan found still sitting in the library (Invariant 83). */
             blocked_present: components["schemas"]["BlockedPresent"][];
+            /** @description Every category currently carrying files on a root declared offline (section 10.4) -- total_files is the category's real total regardless of reachability, offline_files is how many of those are not reachable right now. Only categories actually affected are listed. */
+            categories_offline_files: components["schemas"]["CategoryOfflineFiles"][];
+        };
+        CategoryOfflineFiles: {
+            /** Format: int64 */
+            category_id: number;
+            name: string;
+            /** Format: int64 */
+            total_files: number;
+            /** Format: int64 */
+            offline_files: number;
         };
         UnprobedFile: {
             /** Format: int64 */

@@ -44,7 +44,16 @@ func (j categoryCountsJob) Run(ctx context.Context, _ jobs.Job) error {
 	categories := snapshot.Categories()
 	scopes := make([]library.CategoryScope, len(categories))
 	for index, category := range categories {
-		scopes[index] = library.CategoryScope{CategoryID: category.ID, RootFolderIDs: rootsByCategory[category.ID]}
+		roots := rootsByCategory[category.ID]
+		var offline []int64
+		for _, rootFolderID := range roots {
+			if root, found := snapshot.RootFolder(rootFolderID); found && !root.Online {
+				offline = append(offline, rootFolderID)
+			}
+		}
+		scopes[index] = library.CategoryScope{
+			CategoryID: category.ID, RootFolderIDs: roots, OfflineRootFolderIDs: offline,
+		}
 	}
 
 	corrections, err := j.counters.Reconcile(ctx, scopes)

@@ -8,6 +8,7 @@ type UnprobedFile = components["schemas"]["UnprobedFile"];
 type IncompleteWork = components["schemas"]["IncompleteWork"];
 type RootNearReserve = components["schemas"]["RootNearReserve"];
 type BlockedPresent = components["schemas"]["BlockedPresent"];
+type CategoryOfflineFiles = components["schemas"]["CategoryOfflineFiles"];
 
 /** Todo 4.8: probe coverage, unmatched files, incomplete works, roots near
  *  their own reserve, and blocked hashes still sitting in the library
@@ -84,6 +85,14 @@ export function LibraryHealth() {
             <BlockedList entries={report.blocked_present} />
           )}
         </Section>
+
+        <Section title="Categories affected by an offline root" count={report.categories_offline_files.length}>
+          {report.categories_offline_files.length === 0 ? (
+            <Note>No category currently has files on an offline root.</Note>
+          ) : (
+            <CategoryOfflineList categories={report.categories_offline_files} />
+          )}
+        </Section>
       </div>
     </div>
   );
@@ -130,6 +139,22 @@ function RootList({ roots }: { roots: RootNearReserve[] }) {
           <span className="truncate font-mono">{root.path}</span>
           <span className="ml-auto shrink-0 text-warn">
             {formatBytes(root.free_bytes)} free (reserve {formatBytes(root.min_free_bytes)})
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function CategoryOfflineList({ categories }: { categories: CategoryOfflineFiles[] }) {
+  return (
+    <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface text-xs">
+      {categories.map((category) => (
+        <li key={category.category_id} className="flex items-center gap-2 px-3 py-2">
+          <span className="truncate font-medium">{category.name}</span>
+          <span className="ml-auto shrink-0 text-warn">
+            {category.offline_files.toLocaleString()} of {category.total_files.toLocaleString()} files unreachable
+            -- root offline
           </span>
         </li>
       ))}
