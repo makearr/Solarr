@@ -1,18 +1,18 @@
 -- name: ListCategories :many
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
-       monitor_discovered
+       monitor_discovered, naming_profile_id
 FROM category ORDER BY priority_rank, name;
 
 -- name: GetCategory :one
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
-       monitor_discovered
+       monitor_discovered, naming_profile_id
 FROM category WHERE id = ?;
 
 -- name: CreateCategory :one
 INSERT INTO category (media_type, name, priority_rank)
 VALUES (?, ?, ?)
 RETURNING id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
-          monitor_discovered;
+          monitor_discovered, naming_profile_id;
 
 -- name: UpdateCategory :exec
 UPDATE category SET name = ?, priority_rank = ? WHERE id = ?;
