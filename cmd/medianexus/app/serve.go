@@ -44,14 +44,18 @@ type Build struct {
 
 // process is everything the server owns, so shutdown has one place to look.
 type process struct {
-	build      Build
-	config     config.Config
-	fsys       fsx.FS
-	logger     *slog.Logger
-	settings   *store.Store
-	jobs       *store.Store
-	library    *store.Store
-	metadata   *store.Store
+	build    Build
+	config   config.Config
+	fsys     fsx.FS
+	logger   *slog.Logger
+	settings *store.Store
+	jobs     *store.Store
+	library  *store.Store
+	metadata *store.Store
+	// configPath is where config.yml lives, for the write-back ADR-58's
+	// revised precedence needs (2026-09-12): config.yml now outranks
+	// settings.db, so the Network screen has to be able to update it.
+	configPath string
 	queue      *jobs.Queue
 	cache      *settings.Cache
 	bus        *events.Bus
@@ -113,7 +117,9 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 		return err
 	}
 
-	running := &process{build: build, config: loaded, fsys: fsys, logger: logger, timezone: timezone}
+	running := &process{
+		build: build, config: loaded, fsys: fsys, logger: logger, timezone: timezone, configPath: configPath,
+	}
 	defer running.close()
 
 	if err := running.openDatabases(ctx); err != nil {
@@ -390,11 +396,20 @@ func (p *process) startJobs(ctx context.Context) error {
 	return nil
 }
 
-// resolvedServerPort applies ADR-58's order: env, then settings.db, then
-// config.yml's own value (or 5454) -- source is reported for the banner.
+// resolvedServerPort applies ADR-58's revised order (2026-09-12, on the
+// user's own word): env, then config.yml, then settings.db. config.yml's
+// own server.port is never absent (the template always sets one, default
+// 5454), so in practice this makes it the value that wins whenever it
+// disagrees with settings.db -- UpdateNetworkSettings writes both together
+// now, so the two should agree except right after an operator hand-edits
+// config.yml directly. settings.db stays checked, for a setting that
+// someday has a config.yml side that can genuinely be absent.
 func (p *process) resolvedServerPort() (port int, source string) {
 	if _, envSet := os.LookupEnv(config.EnvName("server.port")); envSet {
 		return p.config.Server.Port, "env"
+	}
+	if p.config.Server.Port != 0 {
+		return p.config.Server.Port, "config.yml"
 	}
 	if stored := p.cache.Snapshot().NetworkSettings().Port; stored != 0 {
 		return stored, "settings.db"
@@ -506,10 +521,11 @@ func (p *process) startServer(ctx context.Context) error {
 			Unidentified: library.NewUnidentified(p.library), Identity: library.NewIdentity(p.library),
 			Provider: p.musicBrainzProvider(), Clock: clock.NewSystem(),
 		},
-		Artwork:   adapters.Artwork{Artworks: library.NewArtworks(p.library)},
-		FS:        p.fsys,
-		ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"),
-		People:    adapters.People{People: library.NewPeople(p.library)},
+		Artwork:    adapters.Artwork{Artworks: library.NewArtworks(p.library)},
+		FS:         p.fsys,
+		ImagesDir:  filepath.Join(p.config.Paths.CacheDir, "images"),
+		ConfigPath: p.configPath,
+		People:     adapters.People{People: library.NewPeople(p.library)},
 		PeopleSubscriber: adapters.People{
 			People: library.NewPeople(p.library), Clock: clock.NewSystem(),
 		},
