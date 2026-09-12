@@ -82,6 +82,13 @@ type Querier interface {
 	// e.g. music's Tracks): every work_part belonging to a work visible to the
 	// category, by the same on-disk-or-desired union CountWorksVisibleToCategory uses.
 	CountWorkPartsVisibleToCategory(ctx context.Context, arg CountWorkPartsVisibleToCategoryParams) (int64, error)
+	// Discography rows, plus availability (wanted state, on-disk), are composed
+	// as raw SQL in internal/db/library/people.go instead of here: the scalar
+	// subqueries that carry wanted_state/on_disk are correlated per row, which
+	// sqlc cannot see is nullable the way it can a real table column -- it would
+	// type wanted_state as a plain non-null string and panic the first row with
+	// no monitored desired_item. works.go's workStateColumn already established
+	// the same raw-SQL-with-manual-Scan shape for exactly this reason.
 	// Coverage: what a monitored person has produced against what is held (ADR-32).
 	CountWorksCreditedTo(ctx context.Context, arg CountWorksCreditedToParams) (int64, error)
 	// The "works" count for one category: the union of on-disk presence
@@ -308,6 +315,10 @@ type Querier interface {
 	ListEnabledSubscriptions(ctx context.Context) ([]Subscription, error)
 	ListExpiredQuarantine(ctx context.Context, arg ListExpiredQuarantineParams) ([]Quarantine, error)
 	ListFilesForDesiredItem(ctx context.Context, desiredItemID int64) ([]DesiredItemFile, error)
+	// Genre chips for the artist page (Lidarr-like): the union of every genre
+	// tagged on any work credited to this person -- Person itself carries no
+	// genre of its own (ADR-32's own fields are biographical, not stylistic).
+	ListGenresForPersonDiscography(ctx context.Context, personID int64) ([]string, error)
 	ListGroupObservations(ctx context.Context, arg ListGroupObservationsParams) ([]GroupObservation, error)
 	ListImportDecisionsNeedingReview(ctx context.Context, limit int64) ([]ImportDecision, error)
 	// Small, operator-facing list -- session counts never approach library scale
@@ -416,9 +427,6 @@ type Querier interface {
 	// Ordered by the module's sort key. Core never parses media_ref to order parts.
 	ListWorkParts(ctx context.Context, workID int64) ([]WorkPart, error)
 	ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle, error)
-	// "Htuacmasn as director, not producer" is a role-scoped query, which is why the
-	// role lives on the credit (F13).
-	ListWorksCreditedTo(ctx context.Context, arg ListWorksCreditedToParams) ([]ListWorksCreditedToRow, error)
 	// Cover art attaches to the work (subject_type='work'), but Cover Art Archive is
 	// queried by release (edition) MBID -- any refined (kind != 'unknown') edition
 	// with one is a usable source. is_default is never set to 1 anywhere in this
@@ -595,6 +603,10 @@ type Querier interface {
 	// for.
 	TouchLibraryPath(ctx context.Context, arg TouchLibraryPathParams) error
 	UpdateEdition(ctx context.Context, arg UpdateEditionParams) error
+	// Same "enrichment fills a gap, never overwrites" rule as year: a work
+	// created before this column existed, or from a source with no MusicBrainz
+	// answer, only gets its primary_type backfilled here.
+	UpdateWorkPrimaryTypeIfNull(ctx context.Context, arg UpdateWorkPrimaryTypeIfNullParams) error
 	// The list surface composes its own WHERE in internal/db/library/works.go: a filter
 	// written here as an is-it-empty test is not sargable, so SQLite uses no index for that
 	// column and sorts the whole table for every page (documentation/sql-and-sqlc.md).

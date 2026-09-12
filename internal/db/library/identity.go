@@ -18,6 +18,13 @@ type WorkIdentity struct {
 	MediaType      string
 	CanonicalTitle string
 	SortTitle      string
+	// PrimaryType is MusicBrainz's own release-group vocabulary (Album, EP,
+	// Single, Broadcast, Other, ...), stored as-is when the caller already
+	// knows it. Empty when it doesn't -- findOrCreateWork leaves the column
+	// NULL rather than write "", so a later enrichment pass can still fill
+	// it in (UpdateWorkPrimaryTypeIfNull's own "fills a gap, never
+	// overwrites" rule, work.year's own precedent).
+	PrimaryType string
 }
 
 // WorkLink is one caller's Identifier chain result, ready to record: the external id
@@ -224,6 +231,7 @@ func findOrCreateWork(
 	work, err := queries.CreateWork(ctx, librarydb.CreateWorkParams{
 		MediaType: link.Work.MediaType, CanonicalTitle: link.Work.CanonicalTitle,
 		SortTitle: link.Work.SortTitle, AddedAt: at.Unix(), UpdatedAt: at.Unix(),
+		PrimaryType: nullString(link.Work.PrimaryType),
 	})
 	if err != nil {
 		return 0, false, fmt.Errorf("create work: %w", err)

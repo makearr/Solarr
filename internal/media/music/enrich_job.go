@@ -167,9 +167,9 @@ func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEd
 		return fmt.Errorf("musicbrainz: %w", err)
 	}
 
-	workYear, workReleaseDate, refinement, parts := refinementFor(rg, release)
+	workYear, workReleaseDate, workPrimaryType, refinement, parts := refinementFor(rg, release)
 	if err := j.identity.RefineEdition(ctx, j.clock.Now().Unix(),
-		edition.EditionID, edition.WorkID, workYear, workReleaseDate, refinement, parts); err != nil {
+		edition.EditionID, edition.WorkID, workYear, workReleaseDate, workPrimaryType, refinement, parts); err != nil {
 		return fmt.Errorf("refine: %w", err)
 	}
 

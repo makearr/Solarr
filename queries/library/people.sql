@@ -93,16 +93,13 @@ FROM credit WHERE part_id = ? ORDER BY role, ord, person_id;
 SELECT person_id, work_id, edition_id, part_id, role, character, ord
 FROM credit WHERE work_id = ? ORDER BY part_id, edition_id, role, ord, person_id;
 
--- "Htuacmasn as director, not producer" is a role-scoped query, which is why the
--- role lives on the credit (F13).
--- name: ListWorksCreditedTo :many
-SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
-       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by
-FROM work w
-JOIN credit c ON c.work_id = w.id
-WHERE c.person_id = sqlc.arg(person_id)
-  AND (sqlc.arg(role) = '' OR c.role = sqlc.arg(role))
-ORDER BY w.year, w.sort_title, w.id;
+-- Discography rows, plus availability (wanted state, on-disk), are composed
+-- as raw SQL in internal/db/library/people.go instead of here: the scalar
+-- subqueries that carry wanted_state/on_disk are correlated per row, which
+-- sqlc cannot see is nullable the way it can a real table column -- it would
+-- type wanted_state as a plain non-null string and panic the first row with
+-- no monitored desired_item. works.go's workStateColumn already established
+-- the same raw-SQL-with-manual-Scan shape for exactly this reason.
 
 -- Coverage: what a monitored person has produced against what is held (ADR-32).
 -- name: CountWorksCreditedTo :one
@@ -184,6 +181,17 @@ SELECT t.id AS tag_id, t.name AS tag_name
 FROM tag_assignment a
 JOIN tag t ON t.id = a.tag_id
 WHERE a.subject_type = ? AND a.subject_id = ?
+ORDER BY t.name;
+
+-- Genre chips for the artist page (Lidarr-like): the union of every genre
+-- tagged on any work credited to this person -- Person itself carries no
+-- genre of its own (ADR-32's own fields are biographical, not stylistic).
+-- name: ListGenresForPersonDiscography :many
+SELECT DISTINCT t.name AS tag_name
+FROM tag_assignment a
+JOIN tag t ON t.id = a.tag_id
+JOIN credit c ON c.work_id = a.subject_id
+WHERE a.subject_type = 'work' AND c.person_id = sqlc.arg(person_id)
 ORDER BY t.name;
 
 -- "This tag or any descendant" is one join because the closure is materialised.

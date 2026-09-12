@@ -3,8 +3,10 @@ package library_test
 import (
 	"context"
 	"database/sql"
+	"reflect"
 	"testing"
 
+	"github.com/makearr/MediaNexus/internal/db/library"
 	"github.com/makearr/MediaNexus/internal/db/store"
 	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
 )
@@ -66,7 +68,7 @@ func createTag(t *testing.T, opened *store.Store, slug string, parent int64) lib
 // F13, and no competitor has it: subscribing to Htuacmasn as director and not as
 // producer needs the role on the credit, not on the person.
 func TestCreditsAreQueryableByRole(t *testing.T) {
-	opened, queries := newLibrary(t)
+	opened, _ := newLibrary(t)
 	person := createPerson(t, opened, "Steven Htuacmasn")
 	directed := createWork(t, opened, "movie", "Habf")
 	produced := createWork(t, opened, "movie", "Betfukdiadv")
@@ -85,22 +87,121 @@ func TestCreditsAreQueryableByRole(t *testing.T) {
 		return nil
 	})
 
-	asDirector, err := queries.ListWorksCreditedTo(t.Context(),
-		librarydb.ListWorksCreditedToParams{PersonID: person.ID, Role: "director"})
+	people := library.NewPeople(opened)
+	asDirector, err := people.Discography(t.Context(), person.ID, "director")
 	if err != nil {
-		t.Fatalf("ListWorksCreditedTo: %v", err)
+		t.Fatalf("Discography: %v", err)
 	}
 	if len(asDirector) != 1 || asDirector[0].ID != directed.ID {
 		t.Errorf("as director returned %d works, want only %q", len(asDirector), "Habf")
 	}
 
-	everything, err := queries.ListWorksCreditedTo(t.Context(),
-		librarydb.ListWorksCreditedToParams{PersonID: person.ID, Role: ""})
+	everything, err := people.Discography(t.Context(), person.ID, "")
 	if err != nil {
-		t.Fatalf("ListWorksCreditedTo: %v", err)
+		t.Fatalf("Discography: %v", err)
 	}
 	if len(everything) != 2 {
 		t.Errorf("unscoped returned %d works, want both", len(everything))
+	}
+}
+
+// The regression this guards against: wanted_state is a correlated scalar
+// subquery, which sqlc cannot see is nullable the way it can a real table
+// column -- generating it through sqlc typed the column as a plain non-null
+// string, which panics database/sql's Scan on the first row with no
+// monitored desired_item (Discography's own doc comment). Every work here
+// deliberately starts with nothing wanting it, so a regression back to the
+// sqlc-generated query fails loudly rather than only on a library that
+// happens to have an unmonitored album.
+func TestDiscography_ReportsAvailabilityWithoutPanicking(t *testing.T) {
+	opened, _ := newLibrary(t)
+	person := createPerson(t, opened, "Thom Yorke")
+	unwanted := createWork(t, opened, "music", "Nutin Hizeh")
+	wanted := createWork(t, opened, "music", "The Genoc")
+	onDisk := createWork(t, opened, "music", "KI Pecezinu")
+
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		for _, work := range []librarydb.Work{unwanted, wanted, onDisk} {
+			if err := q.AddCredit(ctx, librarydb.AddCreditParams{
+				PersonID: person.ID, WorkID: work.ID, Role: "artist",
+			}); err != nil {
+				return err
+			}
+		}
+		return q.LinkWorkRootFolder(ctx, librarydb.LinkWorkRootFolderParams{
+			WorkID: onDisk.ID, RootFolderID: 7, FirstSeenAt: firstSeen.Unix(),
+		})
+	})
+
+	desired := library.NewDesired(opened)
+	if _, err := desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{
+		WorkID: wanted.ID, CategoryID: 1, ProfileID: 1, Monitored: true,
+	}); err != nil {
+		t.Fatalf("EnsureAlbumItem: %v", err)
+	}
+
+	people := library.NewPeople(opened)
+	rows, err := people.Discography(t.Context(), person.ID, "")
+	if err != nil {
+		t.Fatalf("Discography: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("Discography returned %d rows, want 3", len(rows))
+	}
+
+	byID := make(map[int64]library.DiscographyRow, len(rows))
+	for _, row := range rows {
+		byID[row.ID] = row
+	}
+
+	if row := byID[unwanted.ID]; row.WantedState.Valid || row.OnDiskCount != 0 {
+		t.Errorf("unwanted, off-disk work = %+v, want no wanted state and zero on-disk count", row)
+	}
+	if row := byID[wanted.ID]; !row.WantedState.Valid || row.WantedState.String != "MISSING" {
+		t.Errorf("wanted work = %+v, want wanted_state MISSING", row)
+	}
+	if row := byID[onDisk.ID]; row.OnDiskCount != 1 {
+		t.Errorf("on-disk work = %+v, want on_disk_count 1", row)
+	}
+}
+
+// Person carries no genre of its own (ADR-32's own fields are biographical) --
+// the artist page's genre chips are the union of whatever is tagged on any
+// work credited to them, deduplicated across releases sharing a genre.
+func TestPersonDetail_GenresAreTheUnionOfDiscographyTags(t *testing.T) {
+	opened, _ := newLibrary(t)
+	person := createPerson(t, opened, "Thom Yorke")
+	first := createWork(t, opened, "music", "Nutin Hizeh")
+	second := createWork(t, opened, "music", "The Genoc")
+
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		for _, work := range []librarydb.Work{first, second} {
+			if err := q.AddCredit(ctx, librarydb.AddCreditParams{
+				PersonID: person.ID, WorkID: work.ID, Role: "artist",
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	people := library.NewPeople(opened)
+	if err := people.AssignGenres(t.Context(), first.ID, []library.GenreLink{{Name: "Alternative Rock"}}); err != nil {
+		t.Fatalf("AssignGenres (first): %v", err)
+	}
+	if err := people.AssignGenres(t.Context(), second.ID, []library.GenreLink{
+		{Name: "Alternative Rock"}, {Name: "Art Rock"},
+	}); err != nil {
+		t.Fatalf("AssignGenres (second): %v", err)
+	}
+
+	detail, err := people.Detail(t.Context(), person.ID)
+	if err != nil {
+		t.Fatalf("Detail: %v", err)
+	}
+	want := []string{"Alternative Rock", "Art Rock"}
+	if !reflect.DeepEqual(detail.Genres, want) {
+		t.Errorf("Genres = %v, want %v", detail.Genres, want)
 	}
 }
 

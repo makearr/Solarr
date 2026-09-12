@@ -169,6 +169,7 @@ func (q *Queries) ClearProviderTagAssignments(ctx context.Context, arg ClearProv
 }
 
 const countWorksCreditedTo = `-- name: CountWorksCreditedTo :one
+
 SELECT CAST(COUNT(DISTINCT c.work_id) AS INTEGER) AS total
 FROM credit c
 WHERE c.person_id = ?1
@@ -180,6 +181,13 @@ type CountWorksCreditedToParams struct {
 	Role     interface{}
 }
 
+// Discography rows, plus availability (wanted state, on-disk), are composed
+// as raw SQL in internal/db/library/people.go instead of here: the scalar
+// subqueries that carry wanted_state/on_disk are correlated per row, which
+// sqlc cannot see is nullable the way it can a real table column -- it would
+// type wanted_state as a plain non-null string and panic the first row with
+// no monitored desired_item. works.go's workStateColumn already established
+// the same raw-SQL-with-manual-Scan shape for exactly this reason.
 // Coverage: what a monitored person has produced against what is held (ADR-32).
 func (q *Queries) CountWorksCreditedTo(ctx context.Context, arg CountWorksCreditedToParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countWorksCreditedTo, arg.PersonID, arg.Role)
@@ -873,6 +881,41 @@ func (q *Queries) ListEnabledSubscriptions(ctx context.Context) ([]Subscription,
 	return items, nil
 }
 
+const listGenresForPersonDiscography = `-- name: ListGenresForPersonDiscography :many
+SELECT DISTINCT t.name AS tag_name
+FROM tag_assignment a
+JOIN tag t ON t.id = a.tag_id
+JOIN credit c ON c.work_id = a.subject_id
+WHERE a.subject_type = 'work' AND c.person_id = ?1
+ORDER BY t.name
+`
+
+// Genre chips for the artist page (Lidarr-like): the union of every genre
+// tagged on any work credited to this person -- Person itself carries no
+// genre of its own (ADR-32's own fields are biographical, not stylistic).
+func (q *Queries) ListGenresForPersonDiscography(ctx context.Context, personID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listGenresForPersonDiscography, personID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var tag_name string
+		if err := rows.Scan(&tag_name); err != nil {
+			return nil, err
+		}
+		items = append(items, tag_name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrganisationSubtree = `-- name: ListOrganisationSubtree :many
 WITH RECURSIVE subtree(org_id) AS (
   SELECT organisation.id FROM organisation WHERE organisation.id = ?
@@ -1128,70 +1171,6 @@ func (q *Queries) ListTagsForSubjectWithName(ctx context.Context, arg ListTagsFo
 	for rows.Next() {
 		var i ListTagsForSubjectWithNameRow
 		if err := rows.Scan(&i.TagID, &i.TagName); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listWorksCreditedTo = `-- name: ListWorksCreditedTo :many
-SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
-       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by
-FROM work w
-JOIN credit c ON c.work_id = w.id
-WHERE c.person_id = ?1
-  AND (?2 = '' OR c.role = ?2)
-ORDER BY w.year, w.sort_title, w.id
-`
-
-type ListWorksCreditedToParams struct {
-	PersonID int64
-	Role     interface{}
-}
-
-type ListWorksCreditedToRow struct {
-	ID               int64
-	MediaType        string
-	CanonicalTitle   string
-	SortTitle        string
-	OriginalLanguage sql.NullString
-	Year             sql.NullInt64
-	RuntimeMs        sql.NullInt64
-	AddedAt          int64
-	UpdatedAt        int64
-	AddedBy          sql.NullInt64
-}
-
-// "Htuacmasn as director, not producer" is a role-scoped query, which is why the
-// role lives on the credit (F13).
-func (q *Queries) ListWorksCreditedTo(ctx context.Context, arg ListWorksCreditedToParams) ([]ListWorksCreditedToRow, error) {
-	rows, err := q.db.QueryContext(ctx, listWorksCreditedTo, arg.PersonID, arg.Role)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListWorksCreditedToRow{}
-	for rows.Next() {
-		var i ListWorksCreditedToRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.MediaType,
-			&i.CanonicalTitle,
-			&i.SortTitle,
-			&i.OriginalLanguage,
-			&i.Year,
-			&i.RuntimeMs,
-			&i.AddedAt,
-			&i.UpdatedAt,
-			&i.AddedBy,
-		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -50,6 +50,7 @@ func ResolveUnidentified(
 		Provider: extProvider, ExternalID: externalID, Confidence: 1.0,
 		Work: library.WorkIdentity{
 			MediaType: "music", CanonicalTitle: releaseGroup.Title, SortTitle: SortTitle(releaseGroup.Title),
+			PrimaryType: releaseGroup.PrimaryType,
 		},
 		RootFolderID: entry.RootFolderID,
 	}})

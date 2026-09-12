@@ -179,7 +179,7 @@ func TestCategoryCounters_CountsPartsAndArtistCredits(t *testing.T) {
 	if err != nil || len(placeholders) != 1 {
 		t.Fatalf("PlaceholderEditions: %v, %+v", err, placeholders)
 	}
-	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), placeholders[0].EditionID, workID, nil, "",
+	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), placeholders[0].EditionID, workID, nil, "", "",
 		library.EditionRefinement{Kind: "album"}, []library.PartIdentity{
 			{MediaRef: "disc1:track1", SortKey: "0001"},
 			{MediaRef: "disc1:track2", SortKey: "0002"},

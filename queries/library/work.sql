@@ -2,23 +2,23 @@
 
 -- name: CreateWork :one
 INSERT INTO work (media_type, canonical_title, sort_title, original_language,
-                  year, runtime_ms, added_at, updated_at, added_by)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  year, runtime_ms, added_at, updated_at, added_by, primary_type)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, media_type, canonical_title, sort_title, original_language,
           year, runtime_ms, added_at, updated_at, added_by, description,
-          primary_artist_id, primary_artist_sort_name;
+          primary_artist_id, primary_artist_sort_name, primary_type;
 
 -- name: GetWork :one
 SELECT id, media_type, canonical_title, sort_title, original_language,
        year, runtime_ms, added_at, updated_at, added_by, description,
-       primary_artist_id, primary_artist_sort_name
+       primary_artist_id, primary_artist_sort_name, primary_type
 FROM work WHERE id = ?;
 
 -- Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
 -- name: GetWorkByExternalID :one
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
        w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description,
-       w.primary_artist_id, w.primary_artist_sort_name
+       w.primary_artist_id, w.primary_artist_sort_name, w.primary_type
 FROM work w
 JOIN work_external_id e ON e.work_id = w.id
 WHERE e.provider = ? AND e.external_id = ?;
@@ -59,6 +59,12 @@ FROM work_external_id WHERE work_id = ? AND provider = ?;
 -- name: UpdateWorkYearIfNull :exec
 UPDATE work SET year = ?, updated_at = ? WHERE id = ? AND year IS NULL;
 
+-- Same "enrichment fills a gap, never overwrites" rule as year: a work
+-- created before this column existed, or from a source with no MusicBrainz
+-- answer, only gets its primary_type backfilled here.
+-- name: UpdateWorkPrimaryTypeIfNull :exec
+UPDATE work SET primary_type = ?, updated_at = ? WHERE id = ? AND primary_type IS NULL;
+
 -- Unlike year, unconditional: nothing else writes a work's description yet,
 -- so there is no earlier value worth protecting.
 -- name: SetWorkDescription :exec
@@ -77,7 +83,7 @@ FROM work_title WHERE work_id = ? ORDER BY kind, title;
 -- name: FindWorksByNormalizedTitle :many
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
        w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description,
-       w.primary_artist_id, w.primary_artist_sort_name
+       w.primary_artist_id, w.primary_artist_sort_name, w.primary_type
 FROM work w
 JOIN work_title t ON t.work_id = w.id
 WHERE t.normalized = sqlc.arg(normalized)
@@ -187,7 +193,7 @@ FROM work_classification WHERE work_id = ? ORDER BY kind, value;
 -- name: FindWorksByClassification :many
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
        w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description,
-       w.primary_artist_id, w.primary_artist_sort_name
+       w.primary_artist_id, w.primary_artist_sort_name, w.primary_type
 FROM work w
 JOIN work_classification c ON c.work_id = w.id
 WHERE c.kind = sqlc.arg(kind) AND c.value = sqlc.arg(value)

@@ -161,6 +161,7 @@ func (j *SubscriptionExpandJob) ensureItemFor(
 		Provider: ProviderReleaseGroup, ExternalID: releaseGroup.MBID, Confidence: 1.0,
 		Work: library.WorkIdentity{
 			MediaType: "music", CanonicalTitle: releaseGroup.Title, SortTitle: SortTitle(releaseGroup.Title),
+			PrimaryType: releaseGroup.PrimaryType,
 		},
 	}})
 	if err != nil {

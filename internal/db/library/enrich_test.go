@@ -48,7 +48,7 @@ func TestPlaceholderEditions_ListsOnlyKindUnknown(t *testing.T) {
 		t.Fatalf("PlaceholderEditions = %+v, want exactly the one placeholder", found)
 	}
 
-	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), found[0].EditionID, found[0].WorkID, nil, "",
+	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), found[0].EditionID, found[0].WorkID, nil, "", "",
 		library.EditionRefinement{Kind: "official"}, nil); err != nil {
 		t.Fatalf("RefineEdition: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestRefineEdition_UpdatesTheEditionRow(t *testing.T) {
 
 	year := int64(1997)
 	runtime := int64(2820000)
-	err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, nil, "", library.EditionRefinement{
+	err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, nil, "", "", library.EditionRefinement{
 		Kind: "official", Year: &year, Format: "CD", CatalogueNumber: "CDNODATA02",
 		Barcode: "724385502125", RuntimeMs: &runtime,
 	}, nil)
@@ -102,7 +102,7 @@ func TestRefineEdition_WorkYearIsSetOnlyWhenStillNull(t *testing.T) {
 	workID, editionID := createPlaceholderEdition(t, queries, identity, "rg-3", "release-3")
 
 	first := int64(1997)
-	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, &first, "1997-05-21",
+	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, &first, "1997-05-21", "",
 		library.EditionRefinement{Kind: "official"}, nil); err != nil {
 		t.Fatalf("RefineEdition (first): %v", err)
 	}
@@ -119,7 +119,7 @@ func TestRefineEdition_WorkYearIsSetOnlyWhenStillNull(t *testing.T) {
 	// is nothing to protect it from (no manual override UI exists), so it
 	// tracks whatever the most recent enrichment said.
 	second := int64(2017)
-	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, &second, "2017-06-01",
+	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, &second, "2017-06-01", "",
 		library.EditionRefinement{Kind: "official"}, nil); err != nil {
 		t.Fatalf("RefineEdition (second): %v", err)
 	}
@@ -137,6 +137,38 @@ func TestRefineEdition_WorkYearIsSetOnlyWhenStillNull(t *testing.T) {
 	}
 	if len(dates) != 1 || dates[0].Kind != library.WorkDateStreet || dates[0].Date != "2017-06-01" {
 		t.Fatalf("work dates = %+v, want one street date overwritten to 2017-06-01", dates)
+	}
+}
+
+// Mirrors TestRefineEdition_WorkYearIsSetOnlyWhenStillNull: primary_type
+// follows the exact same "enrichment fills a gap, never overwrites" rule.
+func TestRefineEdition_WorkPrimaryTypeIsSetOnlyWhenStillNull(t *testing.T) {
+	opened, queries := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	workID, editionID := createPlaceholderEdition(t, queries, identity, "rg-primary-type", "release-primary-type")
+
+	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, nil, "", "Album",
+		library.EditionRefinement{Kind: "official"}, nil); err != nil {
+		t.Fatalf("RefineEdition (first): %v", err)
+	}
+	work, err := queries.GetWork(t.Context(), workID)
+	if err != nil {
+		t.Fatalf("GetWork: %v", err)
+	}
+	if !work.PrimaryType.Valid || work.PrimaryType.String != "Album" {
+		t.Fatalf("PrimaryType after first refine = %+v, want Album", work.PrimaryType)
+	}
+
+	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, nil, "", "EP",
+		library.EditionRefinement{Kind: "official"}, nil); err != nil {
+		t.Fatalf("RefineEdition (second): %v", err)
+	}
+	work, err = queries.GetWork(t.Context(), workID)
+	if err != nil {
+		t.Fatalf("GetWork: %v", err)
+	}
+	if work.PrimaryType.String != "Album" {
+		t.Errorf("PrimaryType after second refine = %q, want the original Album kept", work.PrimaryType.String)
 	}
 }
 
@@ -165,7 +197,7 @@ func TestRefineEdition_CreatesPartsAndLinksTheirExternalID(t *testing.T) {
 	workID, editionID := createPlaceholderEdition(t, queries, identity, "rg-4", "release-4")
 
 	runtime := int64(284400)
-	err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, nil, "",
+	err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, nil, "", "",
 		library.EditionRefinement{Kind: "official"}, []library.PartIdentity{
 			{
 				MediaRef: "disc1:track1", SortKey: "00010001", Title: "Sesoge", RuntimeMs: &runtime,
@@ -207,7 +239,7 @@ func TestRefineEdition_RefiningTheSamePartTwiceDoesNotDuplicateIt(t *testing.T) 
 
 	part := library.PartIdentity{MediaRef: "disc1:track1", SortKey: "0001", Title: "Sesoge"}
 	for range 2 {
-		if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, nil, "",
+		if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, nil, "", "",
 			library.EditionRefinement{Kind: "official"}, []library.PartIdentity{part}); err != nil {
 			t.Fatalf("RefineEdition: %v", err)
 		}

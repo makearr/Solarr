@@ -17,10 +17,11 @@ import (
 // the parsed year, since todo 4.20's freshness window needs day precision a
 // year alone cannot give.
 func refinementFor(rg musicbrainz.ReleaseGroup, release musicbrainz.Release) (
-	workYear *int64, workReleaseDate string, refinement library.EditionRefinement, parts []library.PartIdentity,
+	workYear *int64, workReleaseDate, workPrimaryType string, refinement library.EditionRefinement, parts []library.PartIdentity,
 ) {
 	workYear = parseYear(rg.FirstReleaseDate)
 	workReleaseDate = rg.FirstReleaseDate
+	workPrimaryType = rg.PrimaryType
 
 	refinement = library.EditionRefinement{
 		// Status is the closest thing a Release has to a "kind of edition"
@@ -40,7 +41,7 @@ func refinementFor(rg musicbrainz.ReleaseGroup, release musicbrainz.Release) (
 			parts = append(parts, partFor(medium, track))
 		}
 	}
-	return workYear, workReleaseDate, refinement, parts
+	return workYear, workReleaseDate, workPrimaryType, refinement, parts
 }
 
 // orUnknownStatus never writes an empty kind back -- an edition already refined

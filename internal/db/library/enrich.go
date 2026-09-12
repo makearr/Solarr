@@ -104,14 +104,14 @@ const WorkDateStreet = "street"
 
 // RefineEdition replaces a placeholder edition's guessed fields with real ones and
 // resolves its parts, all in one transaction: an edition a concurrent scan is still
-// resolving must not see half-written enrichment. workYear, if non-nil, is set on
-// the work only when the column is still empty (Invariant-shaped: enrichment fills
-// a gap, it never overwrites a value already there, whoever set it). workReleaseDate,
-// when non-empty, is written to work_date unconditionally (SetWorkDate's own upsert
-// contract) -- there is no manual-override UI for it yet, so "the last provider to
-// enrich this work" is the only source there is to protect against.
+// resolving must not see half-written enrichment. workYear and workPrimaryType, if
+// set, are written to the work only when the column is still empty (Invariant-shaped:
+// enrichment fills a gap, it never overwrites a value already there, whoever set it).
+// workReleaseDate, when non-empty, is written to work_date unconditionally (SetWorkDate's
+// own upsert contract) -- there is no manual-override UI for it yet, so "the last
+// provider to enrich this work" is the only source there is to protect against.
 func (i Identity) RefineEdition(
-	ctx context.Context, at int64, editionID, workID int64, workYear *int64, workReleaseDate string,
+	ctx context.Context, at int64, editionID, workID int64, workYear *int64, workReleaseDate, workPrimaryType string,
 	refinement EditionRefinement, parts []PartIdentity,
 ) error {
 	return i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
@@ -132,6 +132,14 @@ func (i Identity) RefineEdition(
 				ID: workID, Year: nullInt64(workYear), UpdatedAt: at,
 			}); err != nil {
 				return fmt.Errorf("update work year: %w", err)
+			}
+		}
+
+		if workPrimaryType != "" {
+			if err := queries.UpdateWorkPrimaryTypeIfNull(ctx, librarydb.UpdateWorkPrimaryTypeIfNullParams{
+				ID: workID, PrimaryType: nullString(workPrimaryType), UpdatedAt: at,
+			}); err != nil {
+				return fmt.Errorf("update work primary type: %w", err)
 			}
 		}
 

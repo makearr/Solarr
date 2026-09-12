@@ -246,18 +246,68 @@ func slugify(name string) string {
 	return strings.TrimSuffix(b.String(), "-")
 }
 
+// DiscographyRow is one work credited to a person, plus the availability
+// signal the artist page needs (Lidarr-like "available / missing /
+// requested", user request 2026-09-12) -- the same wanted-state and on-disk
+// facts WorkListRow already carries for the library list, composed the same
+// way (raw SQL, DiscographyRow's own doc comment on why).
+type DiscographyRow struct {
+	librarydb.Work
+	WantedState sql.NullString
+	OnDiskCount int64
+}
+
+// Discography pages every work credited to a person, any role when role is
+// empty, oldest release first. Raw SQL, not sqlc, for the same reason
+// works.go's List is: wanted_state is a correlated scalar subquery sqlc
+// cannot see is nullable the way it can a real table column, and would type
+// it as a plain non-null string -- a panic waiting on the first row with no
+// monitored desired_item.
+func (p People) Discography(ctx context.Context, personID int64, role string) ([]DiscographyRow, error) {
+	query := `SELECT ` + workColumns + `, work.primary_type,
+       ` + workStateColumn + `,
+       CAST((SELECT COUNT(*) FROM work_root_folder wrf WHERE wrf.work_id = work.id) AS INTEGER) AS on_disk_count
+FROM work
+JOIN credit c ON c.work_id = work.id
+WHERE c.person_id = ? AND (? = '' OR c.role = ?)
+ORDER BY work.year, work.sort_title, work.id`
+
+	rows, err := p.store.Read().QueryContext(ctx, query, personID, role, role)
+	if err != nil {
+		return nil, fmt.Errorf("library: discography: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var discography []DiscographyRow
+	for rows.Next() {
+		var row DiscographyRow
+		if err := rows.Scan(&row.ID, &row.MediaType, &row.CanonicalTitle, &row.SortTitle,
+			&row.OriginalLanguage, &row.Year, &row.RuntimeMs, &row.AddedAt, &row.UpdatedAt, &row.AddedBy,
+			&row.PrimaryType, &row.WantedState, &row.OnDiskCount); err != nil {
+			return nil, fmt.Errorf("library: scan discography row: %w", err)
+		}
+		discography = append(discography, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("library: discography: %w", err)
+	}
+	return discography, nil
+}
+
 // PersonDetail is a person's own fields, every alias they are known by, their
-// biography (decoded back out of fields_json), and their discography -- every
-// work credited to them, any role (architecture.md's own GET /people/{id}
-// sketch: "incl. coverage per media type"). Coverage itself (held vs missing
-// vs upgradable) reuses Satisfaction over desired_item, populated for music
-// since todo 4.4 -- not wired into this endpoint yet, so this pass answers
-// the discography half only.
+// biography (decoded back out of fields_json), the genres tagged anywhere in
+// their discography (Person carries no genre of its own, ADR-32's own fields
+// are biographical), and their discography -- every work credited to them,
+// any role (architecture.md's own GET /people/{id} sketch: "incl. coverage
+// per media type"). Coverage itself (held vs missing vs upgradable) reuses
+// Satisfaction over desired_item, populated for music since todo 4.4 -- not
+// wired into this endpoint yet, so this pass answers the discography half only.
 type PersonDetail struct {
 	Person      librarydb.Person
 	Aliases     []string
 	Biography   string
-	Discography []librarydb.ListWorksCreditedToRow
+	Genres      []string
+	Discography []DiscographyRow
 }
 
 // Detail composes one person's full detail. A missing id surfaces
@@ -275,16 +325,19 @@ func (p People) Detail(ctx context.Context, id int64) (PersonDetail, error) {
 		return PersonDetail{}, fmt.Errorf("library: person detail: aliases: %w", err)
 	}
 
-	discography, err := queries.ListWorksCreditedTo(ctx, librarydb.ListWorksCreditedToParams{
-		PersonID: id, Role: "",
-	})
+	genres, err := queries.ListGenresForPersonDiscography(ctx, id)
+	if err != nil {
+		return PersonDetail{}, fmt.Errorf("library: person detail: genres: %w", err)
+	}
+
+	discography, err := p.Discography(ctx, id, "")
 	if err != nil {
 		return PersonDetail{}, fmt.Errorf("library: person detail: discography: %w", err)
 	}
 
 	return PersonDetail{
 		Person: person, Aliases: aliases, Biography: biographyFromFields(person.FieldsJson),
-		Discography: discography,
+		Genres: genres, Discography: discography,
 	}, nil
 }
 

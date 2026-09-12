@@ -640,6 +640,7 @@ type Work struct {
 	Description           sql.NullString
 	PrimaryArtistID       sql.NullInt64
 	PrimaryArtistSortName sql.NullString
+	PrimaryType           sql.NullString
 }
 
 type WorkCertification struct {
