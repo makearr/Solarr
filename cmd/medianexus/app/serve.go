@@ -380,6 +380,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerMoverJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerSearchCategoryJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerCacheJob(registry, executor); err != nil {
 		return err
 	}
@@ -518,6 +521,7 @@ func (p *process) startServer(ctx context.Context) error {
 			Cache: p.cache, Indexer: p.indexerClientFactory(), Downloader: p.downloaderClientFactory(),
 			Clock: clock.NewSystem(),
 		},
+		CandidateSearcher: p.candidateSearcher(),
 		LibraryHealth: adapters.LibraryHealth{
 			Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 			Desired: library.NewDesired(p.library), BlockedContent: library.NewBlockedContentStore(p.library),

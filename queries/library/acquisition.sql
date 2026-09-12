@@ -39,6 +39,17 @@ SELECT id, candidate_id, desired_item_id, outcome, score, components_json,
 FROM candidate_decision
 WHERE desired_item_id = ? ORDER BY decided_at DESC, id DESC LIMIT ?;
 
+-- The interactive search view's own listing (F16): a decision means nothing
+-- without the release it was decided about.
+-- name: ListDecisionsForItemWithCandidate :many
+SELECT cd.id, cd.candidate_id, cd.desired_item_id, cd.outcome, cd.score, cd.components_json,
+       cd.rejections_json, cd.deferrals_json, cd.match_confidence, cd.decided_at,
+       c.indexer_id, c.guid, c.title, c.size_bytes, c.seeders, c.leechers, c.published_at,
+       c.protocol, c.download_url, c.parse_confidence, c.source, c.first_seen_at, c.expires_at
+FROM candidate_decision cd
+JOIN candidate c ON c.id = cd.candidate_id
+WHERE cd.desired_item_id = ? ORDER BY cd.decided_at DESC, cd.id DESC LIMIT ?;
+
 -- name: CreateAcquisition :one
 INSERT INTO acquisition (desired_item_id, candidate_id, indexer_id, candidate_guid,
                          candidate_title, search_terms, downloader_id,

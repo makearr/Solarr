@@ -320,3 +320,25 @@ func (w Works) ExplainList(ctx context.Context, filter WorkFilter, after WorkCur
 	}
 	return plan, nil
 }
+
+// AlternateTitles answers a work's own alias/original/translit titles
+// (ADR-41, work_title) -- every kind except "primary", which is already
+// Work.CanonicalTitle. Empty until something populates work_title, which
+// nothing does yet (enrichment writes editions and credits but no alternate
+// titles) -- a search tier built against this simply finds nothing extra
+// until that lands, the same "ready ahead of its data" shape placement.Resolve
+// and priority.Compute already had ahead of their own first caller.
+func (w Works) AlternateTitles(ctx context.Context, workID int64) ([]string, error) {
+	rows, err := librarydb.New(w.store.Read()).ListWorkTitles(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: alternate titles for work %d: %w", workID, err)
+	}
+	titles := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row.Kind == "primary" {
+			continue
+		}
+		titles = append(titles, row.Title)
+	}
+	return titles, nil
+}

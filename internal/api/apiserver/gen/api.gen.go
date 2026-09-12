@@ -72,6 +72,27 @@ const (
 	User BlockedContentEntrySource = "user"
 )
 
+// Defines values for CandidateDecisionOutcome.
+const (
+	CandidateDecisionOutcomeACCEPT CandidateDecisionOutcome = "ACCEPT"
+	CandidateDecisionOutcomeDEFER  CandidateDecisionOutcome = "DEFER"
+	CandidateDecisionOutcomeREJECT CandidateDecisionOutcome = "REJECT"
+)
+
+// Defines values for CandidateDecisionProtocol.
+const (
+	CandidateDecisionProtocolDdl     CandidateDecisionProtocol = "ddl"
+	CandidateDecisionProtocolFeed    CandidateDecisionProtocol = "feed"
+	CandidateDecisionProtocolTorrent CandidateDecisionProtocol = "torrent"
+	CandidateDecisionProtocolUsenet  CandidateDecisionProtocol = "usenet"
+)
+
+// Defines values for CandidateDecisionSource.
+const (
+	CandidateDecisionSourceRss    CandidateDecisionSource = "rss"
+	CandidateDecisionSourceSearch CandidateDecisionSource = "search"
+)
+
 // Defines values for CategorySettingsMonitorDiscovered.
 const (
 	CategorySettingsMonitorDiscoveredMonitored   CategorySettingsMonitorDiscovered = "monitored"
@@ -88,9 +109,9 @@ const (
 
 // Defines values for DecisionOutcome.
 const (
-	ACCEPT DecisionOutcome = "ACCEPT"
-	DEFER  DecisionOutcome = "DEFER"
-	REJECT DecisionOutcome = "REJECT"
+	DecisionOutcomeACCEPT DecisionOutcome = "ACCEPT"
+	DecisionOutcomeDEFER  DecisionOutcome = "DEFER"
+	DecisionOutcomeREJECT DecisionOutcome = "REJECT"
 )
 
 // Defines values for DownloaderProtocol.
@@ -177,11 +198,11 @@ const (
 
 // Defines values for JobPool.
 const (
-	Acquire     JobPool = "acquire"
-	Import      JobPool = "import"
-	Maintenance JobPool = "maintenance"
-	Metadata    JobPool = "metadata"
-	Search      JobPool = "search"
+	JobPoolAcquire     JobPool = "acquire"
+	JobPoolImport      JobPool = "import"
+	JobPoolMaintenance JobPool = "maintenance"
+	JobPoolMetadata    JobPool = "metadata"
+	JobPoolSearch      JobPool = "search"
 )
 
 // Defines values for JobState.
@@ -368,9 +389,9 @@ const (
 
 // Defines values for UpdateDownloaderRequestProtocol.
 const (
-	Ddl     UpdateDownloaderRequestProtocol = "ddl"
-	Torrent UpdateDownloaderRequestProtocol = "torrent"
-	Usenet  UpdateDownloaderRequestProtocol = "usenet"
+	UpdateDownloaderRequestProtocolDdl     UpdateDownloaderRequestProtocol = "ddl"
+	UpdateDownloaderRequestProtocolTorrent UpdateDownloaderRequestProtocol = "torrent"
+	UpdateDownloaderRequestProtocolUsenet  UpdateDownloaderRequestProtocol = "usenet"
 )
 
 // Defines values for WantedState.
@@ -696,6 +717,42 @@ type CacheReport struct {
 	MetadataSharePercent int64  `json:"metadata_share_percent"`
 }
 
+// CandidateDecision One release an indexer answered, decided against a specific desired item (section 10.1/12). components/rejections/deferrals are the same shape Decision itself carries -- quality is omitted here since a candidate is compared against a profile, not against another candidate (no ADR-40 tiered comparison to show).
+type CandidateDecision struct {
+	CandidateId int64            `json:"candidate_id"`
+	Components  []ScoreComponent `json:"components"`
+	DecidedAt   time.Time        `json:"decided_at"`
+	Deferrals   []Deferral       `json:"deferrals"`
+	DownloadUrl string           `json:"download_url"`
+	Guid        string           `json:"guid"`
+	Id          int64            `json:"id"`
+	IndexerId   int64            `json:"indexer_id"`
+	Leechers    *int64           `json:"leechers"`
+
+	// MatchConfidence 1 - the match distance against this item's own identity (section 10.2).
+	MatchConfidence *float32                  `json:"match_confidence"`
+	Outcome         CandidateDecisionOutcome  `json:"outcome"`
+	Protocol        CandidateDecisionProtocol `json:"protocol"`
+	PublishedAt     *time.Time                `json:"published_at"`
+	Rejections      []Rejection               `json:"rejections"`
+	Score           float32                   `json:"score"`
+	Seeders         *int64                    `json:"seeders"`
+	SizeBytes       *int64                    `json:"size_bytes"`
+	Source          CandidateDecisionSource   `json:"source"`
+
+	// Title The release's own raw title
+	Title string `json:"title"`
+}
+
+// CandidateDecisionOutcome defines model for CandidateDecision.Outcome.
+type CandidateDecisionOutcome string
+
+// CandidateDecisionProtocol defines model for CandidateDecision.Protocol.
+type CandidateDecisionProtocol string
+
+// CandidateDecisionSource defines model for CandidateDecision.Source.
+type CandidateDecisionSource string
+
 // Category defines model for Category.
 type Category struct {
 	Id int64 `json:"id"`
@@ -722,6 +779,12 @@ type CategoryOfflineFiles struct {
 	Name         string `json:"name"`
 	OfflineFiles int64  `json:"offline_files"`
 	TotalFiles   int64  `json:"total_files"`
+}
+
+// CategorySearchEnqueued defines model for CategorySearchEnqueued.
+type CategorySearchEnqueued struct {
+	// Duplicate True when a search for this category was already running.
+	Duplicate bool `json:"duplicate"`
 }
 
 // CategorySettings A category's full settings-side detail (ADR-27's policy boundary), administrator only -- richer than LibraryCategory, which stays lean for the many navigation callers (root folder pickers, *Arr import, the sidebar) that never need any of this.
@@ -1203,6 +1266,12 @@ type Indexer struct {
 	Name      string    `json:"name"`
 	Priority  int64     `json:"priority"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// IndexerSearchError defines model for IndexerSearchError.
+type IndexerSearchError struct {
+	Error     string `json:"error"`
+	IndexerId int64  `json:"indexer_id"`
 }
 
 // Job The job's payload is deliberately absent. It can carry paths and provider identifiers, and a listing is not the place to hand that out.
@@ -1811,6 +1880,15 @@ type ScoreSimulation struct {
 
 	// Parsed internal/identify/parse's own reading of the pasted title, shown so a simulation is not a black box.
 	Parsed ParsedTitle `json:"parsed"`
+}
+
+// SearchItemResult One work's own search run (POST /works/{id}/search).
+type SearchItemResult struct {
+	Decisions     []CandidateDecision  `json:"decisions"`
+	IndexerErrors []IndexerSearchError `json:"indexer_errors"`
+
+	// TierUsed Which tier (0 exact, 1 +year, 2 +alias) produced an acceptable match. null means no tier found anything worth persisting -- not a failure, just nothing found yet.
+	TierUsed *int `json:"tier_used"`
 }
 
 // SearchResult defines model for SearchResult.
@@ -2625,6 +2703,9 @@ type ServerInterface interface {
 	// Take a root folder out of a category. Administrator only.
 	// (DELETE /categories/{id}/rootfolders/{rootFolderId})
 	DetachRootFolderFromCategory(w http.ResponseWriter, r *http.Request, id int64, rootFolderId int64)
+	// Search every monitored, incomplete album in one category (todo 5.2's own "manual search, per-item and per-category"). Runs as a background job -- GET /jobs shows its progress; results land per work, visible through GET /works/{id}/candidates.
+	// (POST /categories/{id}/search)
+	SearchCategory(w http.ResponseWriter, r *http.Request, id int64)
 	// Configured libraries and current state, for the landing page.
 	// (GET /dashboard)
 	GetDashboard(w http.ResponseWriter, r *http.Request)
@@ -2934,6 +3015,9 @@ type ServerInterface interface {
 	// A work's cached cover art (section 21.6), if any has been fetched yet.
 	// (GET /works/{id}/artwork)
 	GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64, params GetWorkArtworkParams)
+	// Every release ever decided against this work's own wanted album item (section 12's own "why wasn't this downloaded"), newest first. Empty, never 404, for a work nobody has searched yet.
+	// (GET /works/{id}/candidates)
+	ListWorkCandidates(w http.ResponseWriter, r *http.Request, id int64)
 	// Monitor or unmonitor a work at the album level (section 19.6).
 	// (POST /works/{id}/monitor)
 	SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64)
@@ -2943,6 +3027,9 @@ type ServerInterface interface {
 	// Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
 	// (POST /works/{id}/parts/{partId}/wanted)
 	SetTrackWanted(w http.ResponseWriter, r *http.Request, id int64, partId int64)
+	// Search every configured indexer for this work's own wanted album (stage 5's candidate pipeline, section 10.1/10.2). Synchronous -- one album, a handful of indexer calls, tiers 0-2 (exact, +year, +alias) widening only until one clears the match-distance gate.
+	// (POST /works/{id}/search)
+	SearchWork(w http.ResponseWriter, r *http.Request, id int64)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -3108,6 +3195,12 @@ func (_ Unimplemented) AttachRootFolderToCategory(w http.ResponseWriter, r *http
 // Take a root folder out of a category. Administrator only.
 // (DELETE /categories/{id}/rootfolders/{rootFolderId})
 func (_ Unimplemented) DetachRootFolderFromCategory(w http.ResponseWriter, r *http.Request, id int64, rootFolderId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Search every monitored, incomplete album in one category (todo 5.2's own "manual search, per-item and per-category"). Runs as a background job -- GET /jobs shows its progress; results land per work, visible through GET /works/{id}/candidates.
+// (POST /categories/{id}/search)
+func (_ Unimplemented) SearchCategory(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3729,6 +3822,12 @@ func (_ Unimplemented) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Every release ever decided against this work's own wanted album item (section 12's own "why wasn't this downloaded"), newest first. Empty, never 404, for a work nobody has searched yet.
+// (GET /works/{id}/candidates)
+func (_ Unimplemented) ListWorkCandidates(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Monitor or unmonitor a work at the album level (section 19.6).
 // (POST /works/{id}/monitor)
 func (_ Unimplemented) SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64) {
@@ -3744,6 +3843,12 @@ func (_ Unimplemented) SetPartMonitored(w http.ResponseWriter, r *http.Request, 
 // Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
 // (POST /works/{id}/parts/{partId}/wanted)
 func (_ Unimplemented) SetTrackWanted(w http.ResponseWriter, r *http.Request, id int64, partId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Search every configured indexer for this work's own wanted album (stage 5's candidate pipeline, section 10.1/10.2). Synchronous -- one album, a handful of indexer calls, tiers 0-2 (exact, +year, +alias) widening only until one clears the match-distance gate.
+// (POST /works/{id}/search)
+func (_ Unimplemented) SearchWork(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4494,6 +4599,39 @@ func (siw *ServerInterfaceWrapper) DetachRootFolderFromCategory(w http.ResponseW
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DetachRootFolderFromCategory(w, r, id, rootFolderId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchCategory operation middleware
+func (siw *ServerInterfaceWrapper) SearchCategory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchCategory(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7689,6 +7827,39 @@ func (siw *ServerInterfaceWrapper) GetWorkArtwork(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ListWorkCandidates operation middleware
+func (siw *ServerInterfaceWrapper) ListWorkCandidates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWorkCandidates(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetWorkMonitored operation middleware
 func (siw *ServerInterfaceWrapper) SetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 
@@ -7797,6 +7968,39 @@ func (siw *ServerInterfaceWrapper) SetTrackWanted(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetTrackWanted(w, r, id, partId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchWork operation middleware
+func (siw *ServerInterfaceWrapper) SearchWork(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchWork(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7999,6 +8203,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/categories/{id}/rootfolders/{rootFolderId}", wrapper.DetachRootFolderFromCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/categories/{id}/search", wrapper.SearchCategory)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/dashboard", wrapper.GetDashboard)
@@ -8310,6 +8517,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/works/{id}/artwork", wrapper.GetWorkArtwork)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/{id}/candidates", wrapper.ListWorkCandidates)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/monitor", wrapper.SetWorkMonitored)
 	})
 	r.Group(func(r chi.Router) {
@@ -8317,6 +8527,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/wanted", wrapper.SetTrackWanted)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/search", wrapper.SearchWork)
 	})
 
 	return r
