@@ -83,6 +83,19 @@ type DownloadFolder struct {
 	ReadableReason sql.NullString
 }
 
+type Downloader struct {
+	ID           int64
+	Name         string
+	Impl         string
+	BaseUrl      string
+	Credentials  []byte
+	Enabled      int64
+	Protocol     string
+	SettingsJson sql.NullString
+	CreatedAt    int64
+	UpdatedAt    int64
+}
+
 type ExclusionPattern struct {
 	ID         int64
 	Pattern    string

@@ -288,6 +288,10 @@ func NewDefaultRegistry() *Registry {
 		Key: EntityIndexer, Kind: KindEntity, Tier: TierAdvanced,
 		Name: "Indexers", HelpText: "Stage 5: Newznab/Torznab search providers (ADR-37/43/47).",
 	})
+	registry.MustRegister(SettingDef{
+		Key: EntityDownloader, Kind: KindEntity, Tier: TierAdvanced,
+		Name: "Download clients", HelpText: "Stage 5: SABnzbd and other download clients (ADR-46/57).",
+	})
 
 	return registry
 }
@@ -306,4 +310,5 @@ const (
 	EntityImportList       = "entity.import_list"
 	EntityDownloadFolder   = "entity.download_folder"
 	EntityIndexer          = "entity.indexer"
+	EntityDownloader       = "entity.downloader"
 )
