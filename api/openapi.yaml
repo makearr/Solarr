@@ -1552,6 +1552,210 @@ paths:
           $ref: "#/components/responses/Problem"
           description: This app is not yet wired for a real connection (connect/preview/park only).
 
+  /indexers:
+    get:
+      operationId: listIndexers
+      tags: [settings]
+      summary: Every configured indexer connection (stage 5, ADR-37/43/47).
+      responses:
+        "200":
+          description: Every connection. api_key is always masked.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Indexer" }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: addIndexer
+      tags: [settings]
+      summary: Connect a new indexer. Administrator only.
+      description: >-
+        api_key is sealed at rest (secrets.Cipher) and never returned in
+        plaintext again -- every response shows Masked instead. A public
+        Torznab endpoint may need no key at all (ADR-47).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddIndexerRequest" }
+      responses:
+        "201":
+          description: Connected.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Indexer" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /indexers/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    patch:
+      operationId: updateIndexer
+      tags: [settings]
+      summary: >-
+        Change a connection's own facts. Administrator only. Never touches
+        api_key -- see /indexers/{id}/apikey.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateIndexerRequest" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Indexer" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteIndexer
+      tags: [settings]
+      summary: Remove a connection. Administrator only.
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /indexers/{id}/apikey:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: setIndexerAPIKey
+      tags: [settings]
+      summary: >-
+        Replace or clear a connection's own API key. Administrator only. A
+        separate endpoint from PATCH: resealing on every unrelated edit
+        would be silent, pointless churn. An empty api_key clears it, for a
+        public endpoint that no longer needs one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                api_key: { type: string }
+      responses:
+        "204": { description: Replaced. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /downloaders:
+    get:
+      operationId: listDownloaders
+      tags: [settings]
+      summary: Every configured download client connection (stage 5, ADR-46/57).
+      responses:
+        "200":
+          description: Every connection. credentials is always masked.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Downloader" }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: addDownloader
+      tags: [settings]
+      summary: Connect a new download client. Administrator only.
+      description: >-
+        credentials is sealed at rest (secrets.Cipher) and never returned in
+        plaintext again -- every response shows Masked instead.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddDownloaderRequest" }
+      responses:
+        "201":
+          description: Connected.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Downloader" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /downloaders/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    patch:
+      operationId: updateDownloader
+      tags: [settings]
+      summary: >-
+        Change a connection's own facts. Administrator only. Never touches
+        credentials -- see /downloaders/{id}/credentials.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateDownloaderRequest" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Downloader" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteDownloader
+      tags: [settings]
+      summary: Remove a connection. Administrator only.
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /downloaders/{id}/credentials:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: setDownloaderCredentials
+      tags: [settings]
+      summary: >-
+        Replace or clear a connection's own credentials. Administrator only.
+        A separate endpoint from PATCH, the same reasoning
+        /indexers/{id}/apikey already gives.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                credentials: { type: string }
+      responses:
+        "204": { description: Replaced. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /arr/imports:
     get:
       operationId: listArrImports
@@ -4064,6 +4268,86 @@ components:
         updated_at: { type: string, format: date-time }
         last_synced_at: { type: string, format: date-time }
         last_sync_error: { type: string }
+
+    Indexer:
+      type: object
+      required: [id, name, impl, base_url, enabled, priority, api_key, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        impl:
+          type: string
+          description: '"newznab" or "torznab" (ADR-43).'
+        base_url: { type: string }
+        enabled: { type: boolean }
+        priority: { type: integer, format: int64 }
+        categories_json:
+          type: string
+          description: The indexer's own last t=caps response, opaque (ADR-43). Empty until fetched.
+        caps_fetched_at: { type: string, format: date-time }
+        api_key: { $ref: "#/components/schemas/SecretMask" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AddIndexerRequest:
+      type: object
+      required: [name, impl, base_url]
+      properties:
+        name: { type: string, minLength: 1 }
+        impl: { type: string, minLength: 1 }
+        base_url: { type: string, minLength: 1 }
+        api_key:
+          type: string
+          description: Omitted or empty for a public endpoint that needs none (ADR-47).
+        enabled: { type: boolean, default: true }
+        priority: { type: integer, format: int64, default: 50 }
+
+    UpdateIndexerRequest:
+      type: object
+      required: [name, impl, base_url]
+      properties:
+        name: { type: string, minLength: 1 }
+        impl: { type: string, minLength: 1 }
+        base_url: { type: string, minLength: 1 }
+        enabled: { type: boolean, default: true }
+        priority: { type: integer, format: int64, default: 50 }
+
+    Downloader:
+      type: object
+      required: [id, name, impl, base_url, enabled, protocol, credentials, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        impl:
+          type: string
+          description: '"sabnzbd" today (ADR-46).'
+        base_url: { type: string }
+        enabled: { type: boolean }
+        protocol: { type: string, enum: [usenet, torrent, ddl] }
+        credentials: { $ref: "#/components/schemas/SecretMask" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AddDownloaderRequest:
+      type: object
+      required: [name, impl, base_url, protocol]
+      properties:
+        name: { type: string, minLength: 1 }
+        impl: { type: string, minLength: 1 }
+        base_url: { type: string, minLength: 1 }
+        protocol: { type: string, enum: [usenet, torrent, ddl] }
+        credentials: { type: string }
+        enabled: { type: boolean, default: true }
+
+    UpdateDownloaderRequest:
+      type: object
+      required: [name, impl, base_url, protocol]
+      properties:
+        name: { type: string, minLength: 1 }
+        impl: { type: string, minLength: 1 }
+        base_url: { type: string, minLength: 1 }
+        protocol: { type: string, enum: [usenet, torrent, ddl] }
+        enabled: { type: boolean, default: true }
 
     ArrRootFolder:
       type: object

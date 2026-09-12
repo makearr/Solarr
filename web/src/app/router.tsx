@@ -13,6 +13,8 @@ import { ArrImport } from "./ArrImport";
 import { Dashboard } from "./Dashboard";
 import { Discover } from "./Discover";
 import { DownloadFolders } from "./DownloadFolders";
+import { Downloaders } from "./Downloaders";
+import { Indexers } from "./Indexers";
 import { Import } from "./Import";
 import { ImportLists } from "./ImportLists";
 import { CacheSettingsPage } from "./CacheSettings";
@@ -150,6 +152,12 @@ const routes = [
       throw redirect({ to: "/storage/moves" });
     },
   }),
+  // Connections (stage 5, ADR-54/todo 5.2): indexers and download clients so
+  // far. *Arr apps stay at /settings/arr for now (their own relocation is a
+  // separate, deliberately deferred item) and metadata sources are not
+  // selectable per library yet either.
+  createRoute({ getParentRoute: () => rootRoute, path: "/connections/indexers", component: Indexers }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/connections/downloaders", component: Downloaders }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity", component: Activity }),
   // Settings split into General/User/Scheduler/Cache 2026-09-11 (asked for
   // twice before this) -- /settings itself now just redirects to the first
