@@ -17,12 +17,13 @@ import (
 // Document is configuration a person can read, diff and share (F9). Policy
 // only, matched on natural keys. See documentation/configuration-export.md.
 type Document struct {
-	Version          int                    `yaml:"version"`
-	Settings         *ScalarSettingsEntry   `yaml:"settings,omitempty"`
-	Categories       []CategoryEntry        `yaml:"categories,omitempty"`
-	Roots            []RootEntry            `yaml:"root_folders,omitempty"`
-	QualityProfiles  []QualityProfileEntry  `yaml:"quality_profiles,omitempty"`
-	LanguageProfiles []LanguageProfileEntry `yaml:"language_profiles,omitempty"`
+	Version           int                     `yaml:"version"`
+	Settings          *ScalarSettingsEntry    `yaml:"settings,omitempty"`
+	Categories        []CategoryEntry         `yaml:"categories,omitempty"`
+	Roots             []RootEntry             `yaml:"root_folders,omitempty"`
+	QualityProfiles   []QualityProfileEntry   `yaml:"quality_profiles,omitempty"`
+	LanguageProfiles  []LanguageProfileEntry  `yaml:"language_profiles,omitempty"`
+	ExclusionPatterns []ExclusionPatternEntry `yaml:"exclusion_patterns,omitempty"`
 }
 
 // ScalarSettingsEntry is every todo-4.14-registered scalar setting (ADR-21,
@@ -98,6 +99,22 @@ type AttachedRoot struct {
 type RootEntry struct {
 	Path  string `yaml:"path"`
 	Label string `yaml:"label,omitempty"`
+}
+
+// ExclusionPatternEntry is one ADR-53 part 1 pattern. Category is a natural
+// key ("media_type/name", CategoryEntry's own shape), not an id -- ids are
+// never portable across instances. Builtin patterns (shipped migration
+// defaults) are never exported: every fresh install already gets them from
+// its own migration, and CreateExclusionPattern has no way to mark a
+// created row builtin, so re-importing an exported one would only ever
+// create a second, non-builtin copy of it.
+type ExclusionPatternEntry struct {
+	Pattern   string `yaml:"pattern"`
+	Action    string `yaml:"action"`
+	MediaType string `yaml:"media_type,omitempty"`
+	Category  string `yaml:"category,omitempty"`
+	Note      string `yaml:"note,omitempty"`
+	Enabled   bool   `yaml:"enabled"`
 }
 
 // DocumentVersion is the document's shape, not the product's version.
@@ -203,6 +220,31 @@ func (c *Cache) Export() Document {
 			return left.MediaType < right.MediaType
 		}
 		return left.Name < right.Name
+	})
+
+	categoryKeyByID := make(map[int64]string, len(snapshot.Categories()))
+	for _, category := range snapshot.Categories() {
+		categoryKeyByID[category.ID] = category.MediaType + "/" + category.Name
+	}
+	for _, pattern := range snapshot.ExclusionPatterns() {
+		if pattern.Builtin {
+			continue
+		}
+		entry := ExclusionPatternEntry{
+			Pattern: pattern.Pattern, Action: pattern.Action, MediaType: pattern.MediaType,
+			Note: pattern.Note, Enabled: pattern.Enabled,
+		}
+		if pattern.CategoryID != nil {
+			entry.Category = categoryKeyByID[*pattern.CategoryID]
+		}
+		document.ExclusionPatterns = append(document.ExclusionPatterns, entry)
+	}
+	sort.Slice(document.ExclusionPatterns, func(i, j int) bool {
+		left, right := document.ExclusionPatterns[i], document.ExclusionPatterns[j]
+		if left.Pattern != right.Pattern {
+			return left.Pattern < right.Pattern
+		}
+		return left.Category < right.Category
 	})
 
 	return document
@@ -360,6 +402,29 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 		}
 	}
 
+	for index, pattern := range d.ExclusionPatterns {
+		where := fmt.Sprintf("exclusion_patterns[%d]", index)
+		// categoryExists always true here: category existence is checked
+		// against this same document below, by name, the same self-
+		// consistency rule quality_profile/language_profile already apply
+		// on a category entry -- an id has no meaning until Import resolves
+		// one, and this function never touches the database (Validate is a
+		// pure function of the document, same doc comment as every other
+		// validator here).
+		for _, problem := range validateExclusionPattern(
+			pattern.Pattern, pattern.Action, pattern.MediaType, nil, func(int64) bool { return true },
+		) {
+			problem.Path = where + "." + problem.Path
+			problems = append(problems, problem)
+		}
+		if pattern.Category != "" && !seenCategories[pattern.Category] {
+			problems = append(problems, config.Problem{
+				Path: where + ".category", Value: pattern.Category,
+				Expectation: "a media_type/name also listed under categories",
+			})
+		}
+	}
+
 	return problems
 }
 
@@ -382,8 +447,22 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 		rootIDByPath[root.Path] = root.ID
 	}
 	categoryIDByKey := make(map[string]int64)
+	categoryKeyByID := make(map[int64]string, len(snapshot.Categories()))
 	for _, category := range snapshot.Categories() {
-		categoryIDByKey[category.MediaType+"/"+category.Name] = category.ID
+		key := category.MediaType + "/" + category.Name
+		categoryIDByKey[key] = category.ID
+		categoryKeyByID[category.ID] = key
+	}
+	// The same "create only if this exact combination is not already
+	// present" idempotency every other section here has, keyed on every
+	// field a pattern actually is rather than a single name (it has none).
+	existingPatternKeys := make(map[string]bool, len(snapshot.ExclusionPatterns()))
+	for _, pattern := range snapshot.ExclusionPatterns() {
+		category := ""
+		if pattern.CategoryID != nil {
+			category = categoryKeyByID[*pattern.CategoryID]
+		}
+		existingPatternKeys[exclusionPatternKey(pattern.Pattern, pattern.Action, pattern.MediaType, category)] = true
 	}
 	qualityIDByName := make(map[string]int64)
 	for _, profile := range snapshot.QualityProfiles() {
@@ -523,8 +602,36 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 				}
 			}
 		}
+
+		for _, pattern := range document.ExclusionPatterns {
+			key := exclusionPatternKey(pattern.Pattern, pattern.Action, pattern.MediaType, pattern.Category)
+			if existingPatternKeys[key] {
+				continue
+			}
+			var categoryID sql.NullInt64
+			if pattern.Category != "" {
+				categoryID = sql.NullInt64{Int64: categoryIDByKey[pattern.Category], Valid: true}
+			}
+			if _, err := queries.CreateExclusionPattern(ctx, settingsdb.CreateExclusionPatternParams{
+				Pattern: pattern.Pattern, Action: pattern.Action,
+				MediaType:  sql.NullString{String: pattern.MediaType, Valid: pattern.MediaType != ""},
+				CategoryID: categoryID, Note: pattern.Note,
+				Builtin: 0, Enabled: boolToInt(pattern.Enabled),
+			}); err != nil {
+				return fmt.Errorf("exclusion pattern %q: %w", pattern.Pattern, err)
+			}
+			existingPatternKeys[key] = true
+		}
 		return nil
 	})
+}
+
+// exclusionPatternKey is an exclusion pattern's own identity for Import's
+// idempotency check: it has no single natural-key field the way a profile
+// has Name, so every field that distinguishes one pattern from another goes
+// into the key instead.
+func exclusionPatternKey(pattern, action, mediaType, category string) string {
+	return pattern + "\x00" + action + "\x00" + mediaType + "\x00" + category
 }
 
 // importScalarSettings writes every todo-4.14-registered scalar setting

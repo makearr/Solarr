@@ -103,6 +103,120 @@ func TestDocument_RoundTrips_IncludesProfiles(t *testing.T) {
 	}
 }
 
+// Exclusion patterns round-trip too (the ADR-21 gap root-folder policy had
+// before todo 4.14's fast follow, closed here): a category-scoped one keeps
+// its category by name, a global one keeps media_type empty, and the
+// migration-seeded builtins are never exported (every fresh install already
+// gets them from its own migration -- exporting one would only ever create
+// a second, non-builtin copy on import).
+func TestDocument_RoundTrips_IncludesExclusionPatterns(t *testing.T) {
+	cache, _ := newCache(t)
+	music := mustCategory(t, cache, "music", "Music", 10)
+
+	// Neither pattern collides with a shipped builtin default (migration
+	// 0007) -- a real first attempt at this test used *.exe/*.nfo, both
+	// already builtin, and the false collision (not a product bug) was
+	// exactly why exclusionPatternKey folds category into the identity.
+	scoped, err := cache.CreateExclusionPattern(t.Context(), settings.ExclusionPattern{
+		Pattern: "*.scoped-test-only", Action: settings.ExclusionRefuse, MediaType: "music",
+		CategoryID: &music.ID, Note: "no executables", Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateExclusionPattern (scoped): %v", err)
+	}
+	global, err := cache.CreateExclusionPattern(t.Context(), settings.ExclusionPattern{
+		Pattern: "*.global-test-only", Action: settings.ExclusionIgnore, Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateExclusionPattern (global): %v", err)
+	}
+
+	exported := cache.Export()
+	builtinCount := 0
+	for _, pattern := range exported.ExclusionPatterns {
+		if pattern.Pattern != scoped.Pattern && pattern.Pattern != global.Pattern {
+			builtinCount++
+		}
+	}
+	if builtinCount > 0 {
+		t.Errorf("export carried %d pattern(s) beyond the two created here -- a builtin leaked through", builtinCount)
+	}
+
+	encoded, err := yaml.Marshal(exported)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded settings.Document
+	if err := yaml.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if problems := decoded.Validate(netip.Addr{}); len(problems) > 0 {
+		t.Fatalf("our own export does not validate: %v", problems)
+	}
+
+	fresh, freshClock := newCache(t)
+	if err := fresh.Import(t.Context(), freshClock, netip.Addr{}, decoded); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	imported := fresh.Snapshot().ExclusionPatterns()
+	var foundScoped, foundGlobal bool
+	for _, pattern := range imported {
+		switch pattern.Pattern {
+		case scoped.Pattern:
+			foundScoped = true
+			if pattern.CategoryID == nil {
+				t.Error("imported scoped pattern lost its category")
+			} else if category, ok := fresh.Snapshot().Category(*pattern.CategoryID); !ok || category.Name != "Music" {
+				t.Errorf("imported scoped pattern's category = %+v, want Music", category)
+			}
+			if pattern.Note != "no executables" {
+				t.Errorf("Note = %q, want %q", pattern.Note, "no executables")
+			}
+		case global.Pattern:
+			foundGlobal = true
+			if pattern.CategoryID != nil {
+				t.Error("imported global pattern gained a category it never had")
+			}
+		}
+	}
+	if !foundScoped || !foundGlobal {
+		t.Fatalf("imported patterns = %+v, want both %q and %q", imported, scoped.Pattern, global.Pattern)
+	}
+}
+
+// A second Import of the same document must not duplicate patterns --
+// exclusionPatternKey has no single field to key on the way a profile has
+// Name, so this is the mutation Import's own idempotency check guards
+// against most directly.
+func TestImport_ExclusionPatternsAreIdempotent(t *testing.T) {
+	cache, fakeClock := newCache(t)
+	// A pattern no shipped migration default already uses, or the count
+	// below would not isolate this import's own effect from theirs.
+	document := settings.Document{
+		Version: settings.DocumentVersion,
+		ExclusionPatterns: []settings.ExclusionPatternEntry{
+			{Pattern: "*.this-test-only", Action: settings.ExclusionRefuse, Enabled: true},
+		},
+	}
+
+	before := len(cache.Snapshot().ExclusionPatterns())
+	if err := cache.Import(t.Context(), fakeClock, netip.Addr{}, document); err != nil {
+		t.Fatalf("first import: %v", err)
+	}
+	afterFirst := len(cache.Snapshot().ExclusionPatterns())
+	if afterFirst != before+1 {
+		t.Fatalf("%d patterns after the first import, want %d (one new)", afterFirst, before+1)
+	}
+
+	if err := cache.Import(t.Context(), fakeClock, netip.Addr{}, document); err != nil {
+		t.Fatalf("second import: %v", err)
+	}
+	if got := len(cache.Snapshot().ExclusionPatterns()); got != afterFirst {
+		t.Errorf("%d patterns after importing the same document twice, want %d (no duplicate)", got, afterFirst)
+	}
+}
+
 // The registry's own 15 scalar settings (todo 4.14) now round-trip too --
 // non-default values, or a bug that only zeroed everything back to its
 // shipped default would pass silently.
