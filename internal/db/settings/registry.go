@@ -28,6 +28,18 @@ const (
 	KindFloat      SettingKind = "float"
 	KindBool       SettingKind = "bool"
 	KindStringList SettingKind = "string_list"
+	// KindEntity is the registry's own audit-pass extension (todo 4.14, "none
+	// of these fit this registry's current shape without a design pass"):
+	// a whole settings surface -- quality profiles, categories, and the rest
+	// of what queries/settings/*.sql shapes as real rows, never a single
+	// scalar instance_setting -- registered for its tier alone. Default is
+	// always empty: there is no one serializable value for "a quality
+	// profile" the way there is for a port number, and nothing here reads
+	// it. Declarative only: unlike a scalar key, there is no runtime
+	// "unregistered key" check to add for an entity, since its own write
+	// path (CreateQualityProfile and so on) is a fixed compiled-in method,
+	// never a caller-supplied string that could name something unregistered.
+	KindEntity SettingKind = "entity"
 )
 
 // SettingDef is one setting registered once in Go (ADR-26): its key, shape,
@@ -231,5 +243,62 @@ func NewDefaultRegistry() *Registry {
 		Default:  fmt.Sprintf("%d", DefaultPriorityNewReleaseDays),
 	})
 
+	// The non-scalar audit (todo 4.14, taken deep on the user's own word,
+	// 2026-09-12): every settings surface that is real rows rather than a
+	// single instance_setting value, tiered at the whole-surface level --
+	// the same granularity ADR-26's own table already tiers Network and
+	// Cache at, not a field-by-field pass nothing has asked for. Root
+	// folders and categories are normal: every install needs at least one
+	// of each (Setup's own onboarding flow creates both). The rest are
+	// advanced: a shipped default quality/language profile and no arr
+	// connection is a working library.
+	registry.MustRegister(SettingDef{
+		Key: EntityRootFolder, Kind: KindEntity, Tier: TierNormal,
+		Name: "Root folders", HelpText: "Where the library actually lives (section 11.7).",
+	})
+	registry.MustRegister(SettingDef{
+		Key: EntityCategory, Kind: KindEntity, Tier: TierNormal,
+		Name: "Categories", HelpText: "The policy boundary for naming, profiles and access (ADR-27).",
+	})
+	registry.MustRegister(SettingDef{
+		Key: EntityQualityProfile, Kind: KindEntity, Tier: TierAdvanced,
+		Name: "Quality profiles", HelpText: "ADR-40's hard-gate/tier/score policy, assignable per category.",
+	})
+	registry.MustRegister(SettingDef{
+		Key: EntityLanguageProfile, Kind: KindEntity, Tier: TierAdvanced,
+		Name: "Language profiles", HelpText: "Section 19.8's language axis, assignable per category.",
+	})
+	registry.MustRegister(SettingDef{
+		Key: EntityExclusionPattern, Kind: KindEntity, Tier: TierAdvanced,
+		Name: "Unwanted file patterns", HelpText: "ADR-53 part 1: what a scan ignores or refuses by shape.",
+	})
+	registry.MustRegister(SettingDef{
+		Key: EntityArrInstance, Kind: KindEntity, Tier: TierAdvanced,
+		Name: "*Arr connections", HelpText: "ADR-52: importing intent from a Lidarr/Sonarr/etc instance.",
+	})
+	registry.MustRegister(SettingDef{
+		Key: EntityImportList, Kind: KindEntity, Tier: TierAdvanced,
+		Name: "Import lists", HelpText: "Todo 4.16: a per-library *Arr-shaped list source. Scaffolding only.",
+	})
+	registry.MustRegister(SettingDef{
+		Key: EntityDownloadFolder, Kind: KindEntity, Tier: TierAdvanced,
+		Name: "Download folders", HelpText: "Where a completed download is picked up from before import.",
+	})
+
 	return registry
 }
+
+// Entity keys (todo 4.14's deep audit pass): each names a whole settings
+// surface for KindEntity registration, never an instance_setting row --
+// see KindEntity's own doc comment for why there is no matching Set/Get
+// pair the way a scalar Key constant has.
+const (
+	EntityRootFolder       = "entity.root_folder"
+	EntityCategory         = "entity.category"
+	EntityQualityProfile   = "entity.quality_profile"
+	EntityLanguageProfile  = "entity.language_profile"
+	EntityExclusionPattern = "entity.exclusion_pattern"
+	EntityArrInstance      = "entity.arr_instance"
+	EntityImportList       = "entity.import_list"
+	EntityDownloadFolder   = "entity.download_folder"
+)

@@ -7,10 +7,13 @@ import (
 	"github.com/makearr/MediaNexus/internal/api/authz"
 )
 
-// ListSettingDefinitions answers every registered scalar setting (ADR-26,
-// todo 4.14): key, tier, kind, default and help text. Read-side only for
-// now, the same direct-Cache/Registry shape GetNetworkSettings already
-// uses -- a registered task's own tier (ADR-59) is separate, at GET /schedules.
+// ListSettingDefinitions answers every registered setting (ADR-26, todo
+// 4.14): key, tier, kind, default and help text -- both the 15 scalar
+// instance_setting keys and, since the non-scalar audit's own deep pass,
+// every KindEntity registration (a whole settings surface, empty default).
+// Read-side only for now, the same direct-Cache/Registry shape
+// GetNetworkSettings already uses -- a registered task's own tier (ADR-59)
+// is separate, at GET /schedules.
 func (s *Server) ListSettingDefinitions(w http.ResponseWriter, r *http.Request) {
 	if _, err := authz.FromContext(r.Context()); err != nil {
 		writeError(w, s.logger, err)

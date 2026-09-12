@@ -2047,7 +2047,7 @@ export interface components {
             /** Format: date-time */
             next_run_at?: string;
         };
-        /** @description One scalar setting registered once in Go (ADR-26, todo 4.14) -- the single source for its tier, default and help text. */
+        /** @description One setting registered once in Go (ADR-26, todo 4.14) -- the single source for its tier, default and help text. Either a scalar instance_setting key, or (kind entity, since the non-scalar audit's own deep pass) a whole settings surface such as quality profiles or categories, which has no single value and so an always-empty default. */
         SettingDefinition: {
             key: string;
             name: string;
@@ -2057,8 +2057,8 @@ export interface components {
              */
             tier: "normal" | "advanced" | "expert";
             /** @enum {string} */
-            kind: "string" | "int" | "float" | "bool" | "string_list";
-            /** @description Encoded the same way the value itself is stored (a JSON array for string_list). */
+            kind: "string" | "int" | "float" | "bool" | "string_list" | "entity";
+            /** @description Encoded the same way the value itself is stored (a JSON array for string_list). Always empty for kind entity. */
             default: string;
             help_text?: string;
         };

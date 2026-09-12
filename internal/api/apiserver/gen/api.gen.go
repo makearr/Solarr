@@ -338,6 +338,7 @@ const (
 // Defines values for SettingDefinitionKind.
 const (
 	Bool       SettingDefinitionKind = "bool"
+	Entity     SettingDefinitionKind = "entity"
 	Float      SettingDefinitionKind = "float"
 	Int        SettingDefinitionKind = "int"
 	String     SettingDefinitionKind = "string"
@@ -1672,9 +1673,9 @@ type SecretMask struct {
 	Masked *string `json:"masked,omitempty"`
 }
 
-// SettingDefinition One scalar setting registered once in Go (ADR-26, todo 4.14) -- the single source for its tier, default and help text.
+// SettingDefinition One setting registered once in Go (ADR-26, todo 4.14) -- the single source for its tier, default and help text. Either a scalar instance_setting key, or (kind entity, since the non-scalar audit's own deep pass) a whole settings surface such as quality profiles or categories, which has no single value and so an always-empty default.
 type SettingDefinition struct {
-	// Default Encoded the same way the value itself is stored (a JSON array for string_list).
+	// Default Encoded the same way the value itself is stored (a JSON array for string_list). Always empty for kind entity.
 	Default  string                `json:"default"`
 	HelpText *string               `json:"help_text,omitempty"`
 	Key      string                `json:"key"`

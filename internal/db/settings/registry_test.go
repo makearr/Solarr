@@ -104,6 +104,13 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 		settings.KeyCacheMaxBytes, settings.KeyCacheMaxAgeDays, settings.KeyCacheImagesShare, settings.KeyCacheMetadataShare,
 		settings.KeyPriorityUserRequestWeight, settings.KeyPriorityNewReleaseWeight,
 		settings.KeyPriorityGapWeight, settings.KeyPriorityUpgradeWeight, settings.KeyPriorityNewReleaseDays,
+		// The non-scalar audit's own KindEntity additions (2026-09-12): each
+		// names a whole settings surface, never an instance_setting row, but
+		// belongs in this same "nothing is registered by accident or left
+		// out by accident" guard.
+		settings.EntityRootFolder, settings.EntityCategory, settings.EntityQualityProfile,
+		settings.EntityLanguageProfile, settings.EntityExclusionPattern, settings.EntityArrInstance,
+		settings.EntityImportList, settings.EntityDownloadFolder,
 	}
 	for _, key := range known {
 		if _, found := registry.Lookup(key); !found {
