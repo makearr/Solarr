@@ -14,6 +14,17 @@ export function StatusBar() {
   const clock = useServerClock();
   const [open, setOpen] = useState(false);
 
+  // Shares useServerClock's own ["about"] query cache -- one request either way.
+  const about = useQuery({
+    queryKey: ["about"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/about");
+      if (error) throw error;
+      return data;
+    },
+    staleTime: Infinity,
+  });
+
   // The address the outside world sees this host connect from, which is what
   // says whether traffic is leaving past a VPN. Rechecked on the server's own
   // interval, so this only has to read the cached answer.
@@ -98,6 +109,11 @@ export function StatusBar() {
               {clock.time}
               <span className="ml-1.5 text-ink-muted/70">{clock.timezone}</span>
             </span>
+          )}
+          {about.data?.version && (
+            <a href="/about" className="font-mono hover:text-ink hover:underline" title="About MediaNexus">
+              v{about.data.version}
+            </a>
           )}
         </div>
       </div>

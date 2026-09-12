@@ -40,7 +40,16 @@ Also exposed at `GET /api/v1/about`, so the information is available without the
 
 - [x] `LICENSE` at repository root
 - [x] `ATTRIBUTION.md` current
-- [ ] About view in the UI, unauthenticated
+- [x] About view in the UI, unauthenticated (`/about`, checked before any auth gate in `App.tsx`)
 - [x] `GET /api/v1/about` returning version, commit, licence, source URL (unauthenticated)
 - [x] Source URL overridable at build time (`-X main.sourceURL`), defaulting to upstream
-- [ ] Full licence text viewable in-app
+- [x] Full licence text viewable in-app (`GET /about/license`, embedded from `LICENSE` via
+      `internal/api/apiserver/legal`, `make license-check` guards against drift)
+
+### Known gap, not addressed here
+
+`sourceURL` defaults to `https://github.com/makearr/MediaNexus`, which is **private**
+(`CLAUDE.md` §8). For an unmodified build, the About view's "Corresponding Source" link is
+not actually reachable by a third party today -- the obligation only bites once someone other
+than the operator interacts with a deployed instance, which is not yet the case here. Revisit
+before the repository or any built image is shared or exposed beyond the user's own use.

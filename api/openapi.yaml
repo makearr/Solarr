@@ -82,6 +82,35 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BuildInfo" }
 
+  /about/license:
+    get:
+      operationId: getAboutLicense
+      tags: [system]
+      summary: The full AGPL-3.0-or-later text (section 13).
+      description: >-
+        Served from the binary's own embedded copy rather than a link, so the
+        licence is readable even by a caller that cannot reach GitHub.
+      security: []
+      responses:
+        "200":
+          description: Licence text.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegalText" }
+
+  /about/attribution:
+    get:
+      operationId: getAboutAttribution
+      tags: [system]
+      summary: Third-party attributions (ADR-18, section 13).
+      security: []
+      responses:
+        "200":
+          description: Attribution text.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegalText" }
+
   /system/egress:
     get:
       operationId: getEgress
@@ -3086,6 +3115,14 @@ components:
           type: string
           example: "Europe/Fefobo"
           description: The server's configured zone, from TZ. `UTC` when unset.
+
+    LegalText:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          description: Verbatim file content -- rendered as-is, never reformatted.
 
     CategoryGrant:
       type: object
