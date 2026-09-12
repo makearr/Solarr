@@ -83,7 +83,7 @@ func checkDirectory(fsys fsx.FS, requirement DirectoryRequirement) (Problem, boo
 
 	if err := probeWritable(fsys, requirement.Path); err != nil {
 		return newProblem(requirement.Setting, requirement.Path,
-			fmt.Sprintf("is not writable: %v%s", err, identityHint())), true
+			fmt.Sprintf("is not writable: %v%s", err, ownerHint(fsys, requirement.Path))), true
 	}
 	return Problem{}, false
 }
@@ -108,4 +108,17 @@ func probeWritable(fsys fsx.FS, directory string) error {
 // identityHint names the user the process is running as (§14.3).
 func identityHint() string {
 	return "\n      " + privilege.IdentityHint()
+}
+
+// ownerHint adds the directory's own owner and mode to identityHint when the filesystem can
+// report it, closing the other half of Invariant 62 (documentation/startup-checks.md,
+// architecture §14.3) -- matching the hint FilesystemRoots.Writable already gives a library
+// root that fails the same probe.
+func ownerHint(fsys fsx.FS, path string) string {
+	info, err := fsys.Stat(path)
+	if err != nil || (info.UID < 0 && info.GID < 0) {
+		return identityHint()
+	}
+	return fmt.Sprintf("\n      directory is uid=%d gid=%d mode %04o; %s",
+		info.UID, info.GID, info.Mode.Perm(), privilege.IdentityHint())
 }

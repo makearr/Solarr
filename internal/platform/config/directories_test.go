@@ -136,6 +136,30 @@ func TestCheckDirectories_NamesTheProcessIdentityOnFailure(t *testing.T) {
 	}
 }
 
+func TestCheckDirectories_NamesTheDirectoryOwnerWhenNotWritable(t *testing.T) {
+	// The other half of Invariant 62: naming the process identity is nearly
+	// always enough, but the directory's own owner closes the last manual
+	// `ls -l` (documentation/startup-checks.md).
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	if err := fsys.MkdirAll("/config/data/db", 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := fsys.Chown("/config/data/db", 0, 0); err != nil {
+		t.Fatalf("Chown: %v", err)
+	}
+	fsys.SetWriteDenied("/config/data/db", true)
+
+	problems := config.CheckDirectories(fsys, configRootedAt("/config"))
+	problem, found := findProblem(problems, "paths.db_dir")
+	if !found {
+		t.Fatalf("no problem reported for an unwritable directory; got %v", problems)
+	}
+	if !strings.Contains(problem.Expectation, "uid=0 gid=0") {
+		t.Errorf("Expectation = %q, want it to name the directory's own owner (uid=0 gid=0)",
+			problem.Expectation)
+	}
+}
+
 func TestCheckDirectories_PassesOnARealFilesystem(t *testing.T) {
 	// The Mem filesystem cannot model a read-only mount, so this at least proves
 	// the probe works against the real thing.
