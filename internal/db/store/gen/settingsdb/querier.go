@@ -32,6 +32,8 @@ type Querier interface {
 	// Download folders (migration 0010, todo 4.18, section 5.1). Column lists
 	// follow table order, or sqlc stops reusing models.
 	CreateDownloadFolder(ctx context.Context, arg CreateDownloadFolderParams) (DownloadFolder, error)
+	// Download client connections (stage 5, ADR-46/57). Column lists follow table order.
+	CreateDownloader(ctx context.Context, arg CreateDownloaderParams) (Downloader, error)
 	// ADR-53 part 1 (migration 0007). Column lists follow table order, or sqlc
 	// stops reusing models.
 	CreateExclusionPattern(ctx context.Context, arg CreateExclusionPatternParams) (ExclusionPattern, error)
@@ -49,6 +51,7 @@ type Querier interface {
 	DeleteCategory(ctx context.Context, id int64) error
 	DeleteDiscoveryJob(ctx context.Context, id int64) error
 	DeleteDownloadFolder(ctx context.Context, id int64) error
+	DeleteDownloader(ctx context.Context, id int64) error
 	DeleteExclusionPattern(ctx context.Context, id int64) error
 	DeleteImportList(ctx context.Context, id int64) error
 	DeleteIndexer(ctx context.Context, id int64) error
@@ -63,6 +66,7 @@ type Querier interface {
 	GetCategory(ctx context.Context, id int64) (Category, error)
 	GetDiscoveryJob(ctx context.Context, id int64) (DiscoveryJob, error)
 	GetDownloadFolder(ctx context.Context, id int64) (DownloadFolder, error)
+	GetDownloader(ctx context.Context, id int64) (Downloader, error)
 	GetExclusionPattern(ctx context.Context, id int64) (ExclusionPattern, error)
 	GetImportList(ctx context.Context, id int64) (ImportList, error)
 	GetIndexer(ctx context.Context, id int64) (Indexer, error)
@@ -85,6 +89,7 @@ type Querier interface {
 	ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFolder, error)
 	ListDiscoveryJobs(ctx context.Context) ([]DiscoveryJob, error)
 	ListDownloadFolders(ctx context.Context) ([]DownloadFolder, error)
+	ListDownloaders(ctx context.Context) ([]Downloader, error)
 	// What a scheduler actually runs -- off until previewed (ADR-38).
 	ListEnabledDiscoveryJobs(ctx context.Context) ([]DiscoveryJob, error)
 	ListExclusionPatterns(ctx context.Context) ([]ExclusionPattern, error)
@@ -117,6 +122,10 @@ type Querier interface {
 	// The enable transition on its own: this is the "preview before enabling" gate, a
 	// deliberate act distinct from editing a job's policy.
 	SetDiscoveryJobEnabled(ctx context.Context, arg SetDiscoveryJobEnabledParams) error
+	// A separate statement from UpdateDownloader, the same reasoning indexer's own
+	// SetIndexerAPIKey gives: Seal generates a fresh nonce every call, so writing it back
+	// unconditionally on every unrelated edit would be silent, pointless churn.
+	SetDownloaderCredentials(ctx context.Context, arg SetDownloaderCredentialsParams) error
 	// A separate statement from UpdateIndexer, the same reasoning arr_instance's own
 	// SetArrInstanceAPIKey gives: Seal generates a fresh nonce every call, so writing it back
 	// unconditionally on every unrelated edit would be silent, pointless churn.
@@ -143,6 +152,7 @@ type Querier interface {
 	UpdateArrInstance(ctx context.Context, arg UpdateArrInstanceParams) error
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) error
 	UpdateDiscoveryJob(ctx context.Context, arg UpdateDiscoveryJobParams) error
+	UpdateDownloader(ctx context.Context, arg UpdateDownloaderParams) error
 	UpdateExclusionPattern(ctx context.Context, arg UpdateExclusionPatternParams) error
 	UpdateImportList(ctx context.Context, arg UpdateImportListParams) error
 	UpdateIndexer(ctx context.Context, arg UpdateIndexerParams) error
