@@ -1632,6 +1632,9 @@ type Schedule struct {
 	Name        string               `json:"name"`
 	NextRunAt   *time.Time           `json:"next_run_at,omitempty"`
 
+	// SupportsFull Whether POST /schedules/{key}/run?full=true does something different from an ordinary run for this task -- library scan's full rescan is the only one today (private/questions.md).
+	SupportsFull bool `json:"supports_full"`
+
 	// Tier ADR-26's visibility tier.
 	Tier ScheduleTier `json:"tier"`
 }
@@ -2060,6 +2063,12 @@ type RenameRootFolderJSONBody struct {
 type UpdateScheduleJSONBody struct {
 	Cadence *string `json:"cadence,omitempty"`
 	Enabled *bool   `json:"enabled,omitempty"`
+}
+
+// RunScheduleParams defines parameters for RunSchedule.
+type RunScheduleParams struct {
+	// Full Requests the task's own full-run mode instead of its ordinary one, when it has one (Schedule.supports_full) -- library scan's full rescan is the only one today (private/questions.md), which rereads every directory regardless of mtime rather than the incremental sweep the schedule otherwise always runs. 400 for a task with no full-run mode.
+	Full *bool `form:"full,omitempty" json:"full,omitempty"`
 }
 
 // SimulateScoreJSONBody defines parameters for SimulateScore.
@@ -2580,7 +2589,7 @@ type ServerInterface interface {
 	UpdateSchedule(w http.ResponseWriter, r *http.Request, key string)
 	// Fire a task immediately. Administrator only.
 	// (POST /schedules/{key}/run)
-	RunSchedule(w http.ResponseWriter, r *http.Request, key string)
+	RunSchedule(w http.ResponseWriter, r *http.Request, key string, params RunScheduleParams)
 	// F6: paste a release title, see how it would score against a profile -- no candidate, no acquisition, no side effects.
 	// (POST /score/simulate)
 	SimulateScore(w http.ResponseWriter, r *http.Request)
@@ -3198,7 +3207,7 @@ func (_ Unimplemented) UpdateSchedule(w http.ResponseWriter, r *http.Request, ke
 
 // Fire a task immediately. Administrator only.
 // (POST /schedules/{key}/run)
-func (_ Unimplemented) RunSchedule(w http.ResponseWriter, r *http.Request, key string) {
+func (_ Unimplemented) RunSchedule(w http.ResponseWriter, r *http.Request, key string, params RunScheduleParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6168,8 +6177,19 @@ func (siw *ServerInterfaceWrapper) RunSchedule(w http.ResponseWriter, r *http.Re
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RunScheduleParams
+
+	// ------------- Optional query parameter "full" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "full", r.URL.Query(), &params.Full)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "full", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RunSchedule(w, r, key)
+		siw.Handler.RunSchedule(w, r, key, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {

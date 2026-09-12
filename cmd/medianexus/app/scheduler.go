@@ -35,6 +35,11 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(jobs.Task{
 		Key: "scan", Name: "Library scan", DefaultCadence: scanScheduleCron,
 		Tier: string(settings.TierNormal), Enqueue: p.enqueueLibraryScans,
+		// Full rescan (private/questions.md): manual only, deliberately scan's
+		// alone -- see Task.RunFull's own doc comment for why this stays
+		// narrow rather than a generic options payload every task would grow
+		// a case for.
+		RunFull: p.enqueueFullLibraryScans,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "enrichment", Name: "Music enrichment", DefaultCadence: enrichmentScheduleCron,

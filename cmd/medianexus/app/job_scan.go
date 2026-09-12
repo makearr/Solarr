@@ -74,14 +74,28 @@ func reportToolReadiness(ctx context.Context, tool mediatool.Tool, logger *slog.
 // makes a freshly attached root browsable. Registered as a task with
 // internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
 // schedule, not only once at startup.
-//
-// Fans out to several jobs, one per root, unlike every other task in this
-// file -- the aggregate EnqueueResult reports Duplicate only when every
-// attempted root was already active, and joins every root's own error
-// (each still logged individually below) rather than reporting only the
-// first, so the scheduler's own recorded outcome does not hide a partial
-// failure across several roots.
 func (p *process) enqueueLibraryScans(ctx context.Context) (jobs.EnqueueResult, error) {
+	return p.enqueueScans(ctx, false)
+}
+
+// enqueueFullLibraryScans is scan's own jobs.Task.RunFull: every directory is
+// re-read regardless of mtime, the one way today to backfill todo 4.2's
+// claimed attributes across a library that predates that landing, or more
+// generally to catch up a library the incremental watermark has skipped
+// (private/questions.md). Manual only -- there is no scheduled cadence for
+// it, since re-reading everything on a timer would defeat the point of the
+// incremental sweep the ordinary schedule already runs.
+func (p *process) enqueueFullLibraryScans(ctx context.Context) (jobs.EnqueueResult, error) {
+	return p.enqueueScans(ctx, true)
+}
+
+// enqueueScans fans out to several jobs, one per online music root, unlike
+// every other task in this file -- the aggregate EnqueueResult reports
+// Duplicate only when every attempted root was already active, and joins
+// every root's own error (each still logged individually below) rather than
+// reporting only the first, so the scheduler's own recorded outcome does not
+// hide a partial failure across several roots.
+func (p *process) enqueueScans(ctx context.Context, full bool) (jobs.EnqueueResult, error) {
 	snapshot := p.cache.Snapshot()
 	var errs []error
 	attempted, duplicates := 0, 0
@@ -94,10 +108,10 @@ func (p *process) enqueueLibraryScans(ctx context.Context) (jobs.EnqueueResult, 
 				continue
 			}
 			attempted++
-			result, err := scan.Enqueue(ctx, p.queue, root.ID, category.ID, false)
+			result, err := scan.Enqueue(ctx, p.queue, root.ID, category.ID, full)
 			if err != nil {
 				p.logger.Warn("enqueue library scan",
-					slog.Int64("root_folder_id", root.ID), slog.Any("error", err))
+					slog.Int64("root_folder_id", root.ID), slog.Bool("full", full), slog.Any("error", err))
 				errs = append(errs, err)
 				continue
 			}

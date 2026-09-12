@@ -284,6 +284,72 @@ func TestTaskRunner_RunNowFiresImmediatelyAndRefusesWhileInFlight(t *testing.T) 
 	}
 }
 
+// The full-rescan trigger (private/questions.md): a task with no RunFull refuses rather than
+// silently falling back to its ordinary Enqueue.
+func TestTaskRunner_RunNowFullRefusesForATaskWithNoFullMode(t *testing.T) {
+	states, fake := newScheduleStates(t)
+	source := newFakeScheduleSource()
+	task := jobs.Task{Key: "enrichment", DefaultCadence: "* * * * *", Enqueue: noopEnqueue}
+	runner := jobs.NewTaskRunner(task, source, states, fake, quietLogger())
+
+	if err := runner.RunNowFull(t.Context()); !errors.Is(err, jobs.ErrNoFullMode) {
+		t.Errorf("RunNowFull = %v, want ErrNoFullMode", err)
+	}
+}
+
+// RunNowFull calls the task's own RunFull, not Enqueue, and shares RunNow's own running lock --
+// a full rescan and an ordinary run of the same task must never overlap.
+func TestTaskRunner_RunNowFullFiresRunFullAndSharesTheRunningLock(t *testing.T) {
+	states, fake := newScheduleStates(t)
+	source := newFakeScheduleSource()
+	release := make(chan struct{})
+	entered := make(chan struct{})
+	task := jobs.Task{
+		Key: "scan", DefaultCadence: "* * * * *",
+		Enqueue: func(context.Context) (jobs.EnqueueResult, error) {
+			t.Error("RunNowFull called Enqueue instead of RunFull")
+			return jobs.EnqueueResult{}, nil
+		},
+		RunFull: func(context.Context) (jobs.EnqueueResult, error) {
+			close(entered)
+			<-release
+			return jobs.EnqueueResult{}, nil
+		},
+	}
+	runner := jobs.NewTaskRunner(task, source, states, fake, quietLogger())
+
+	runNowFullDone := make(chan error, 1)
+	go func() { runNowFullDone <- runner.RunNowFull(t.Context()) }()
+
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("RunNowFull never entered RunFull")
+	}
+
+	if err := runner.RunNow(t.Context()); !errors.Is(err, jobs.ErrAlreadyRunning) {
+		t.Errorf("RunNow while RunNowFull is in flight = %v, want ErrAlreadyRunning", err)
+	}
+
+	close(release)
+	select {
+	case err := <-runNowFullDone:
+		if err != nil {
+			t.Errorf("RunNowFull = %v, want nil", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("RunNowFull never returned")
+	}
+
+	run, found, err := states.Get(t.Context(), "scan")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if !found || run.LastOutcome != "enqueued" {
+		t.Errorf("run = %+v, found = %v, want a recorded enqueued outcome", run, found)
+	}
+}
+
 func TestTaskRunner_StopsWhenContextEnds(t *testing.T) {
 	states, fake := newScheduleStates(t)
 	source := newFakeScheduleSource()

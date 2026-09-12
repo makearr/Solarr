@@ -2034,6 +2034,8 @@ export interface components {
             /** @description Effective cadence -- a stored override if one exists, default_cadence otherwise. */
             cadence: string;
             enabled: boolean;
+            /** @description Whether POST /schedules/{key}/run?full=true does something different from an ordinary run for this task -- library scan's full rescan is the only one today (private/questions.md). */
+            supports_full: boolean;
             /** Format: date-time */
             last_run_at?: string;
             /** Format: int64 */
@@ -3980,7 +3982,10 @@ export interface operations {
     };
     runSchedule: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Requests the task's own full-run mode instead of its ordinary one, when it has one (Schedule.supports_full) -- library scan's full rescan is the only one today (private/questions.md), which rereads every directory regardless of mtime rather than the incremental sweep the schedule otherwise always runs. 400 for a task with no full-run mode. */
+                full?: boolean;
+            };
             header?: never;
             path: {
                 key: string;
@@ -3996,6 +4001,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

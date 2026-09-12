@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
@@ -34,10 +35,13 @@ type Scheduler interface {
 	SetCadence(ctx context.Context, key, cadence string) error
 	// SetEnabled enables or disables one task.
 	SetEnabled(ctx context.Context, key string, enabled bool) error
-	// RunNow fires a task immediately. Returns jobs.ErrUnknownTask for an
-	// unregistered key, jobs.ErrAlreadyRunning if a fire -- scheduled or
-	// manual -- is already in flight.
-	RunNow(ctx context.Context, key string) error
+	// RunNow fires a task immediately. full requests the task's own RunFull
+	// trigger instead of its ordinary Enqueue -- library scan's full rescan,
+	// today's only user (private/questions.md). Returns jobs.ErrUnknownTask
+	// for an unregistered key, jobs.ErrAlreadyRunning if a fire -- scheduled
+	// or manual -- is already in flight, jobs.ErrNoFullMode if full is true
+	// for a task that never registered one.
+	RunNow(ctx context.Context, key string, full bool) error
 }
 
 // ListSchedules answers every registered task, its effective settings and
@@ -124,15 +128,29 @@ func (s *Server) UpdateSchedule(w http.ResponseWriter, r *http.Request, key stri
 	writeJSON(w, s.logger, http.StatusOK, view)
 }
 
-// routeRunSchedule parses the key path parameter, mirroring routeGetWork.
+// routeRunSchedule parses the key path parameter and the full query string,
+// mirroring routeListPeople's own manual gen.XParams construction.
 func (s *Server) routeRunSchedule(w http.ResponseWriter, r *http.Request) {
-	s.RunSchedule(w, r, chi.URLParam(r, "key"))
+	var params gen.RunScheduleParams
+	if raw := r.URL.Query().Get("full"); raw != "" {
+		full, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "full must be true or false")
+			return
+		}
+		params.Full = &full
+	}
+	s.RunSchedule(w, r, chi.URLParam(r, "key"), params)
 }
 
 // RunSchedule fires a task immediately (todo 4.8's "trigger a scan, a probe
 // sweep or a metadata refresh from the interface"). Administrator only.
-// 202: the trigger was accepted, not that the underlying job has finished.
-func (s *Server) RunSchedule(w http.ResponseWriter, r *http.Request, key string) {
+// full=true asks for the task's own full-run mode instead of its ordinary
+// one -- library scan's full rescan (private/questions.md), refused with 400
+// for any task that has none. 202: the trigger was accepted, not that the
+// underlying job has finished.
+func (s *Server) RunSchedule(w http.ResponseWriter, r *http.Request, key string, params gen.RunScheduleParams) {
 	if !s.requireAdministrator(w, r) {
 		return
 	}
@@ -142,7 +160,8 @@ func (s *Server) RunSchedule(w http.ResponseWriter, r *http.Request, key string)
 		return
 	}
 
-	if err := s.scheduler.RunNow(r.Context(), key); err != nil {
+	full := params.Full != nil && *params.Full
+	if err := s.scheduler.RunNow(r.Context(), key, full); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
@@ -169,6 +188,7 @@ func (s *Server) scheduleView(ctx context.Context, task jobs.Task) (gen.Schedule
 		DefaultCadence: task.DefaultCadence,
 		Cadence:        s.scheduler.EffectiveCadence(task.Key, task.DefaultCadence),
 		Enabled:        s.scheduler.Enabled(task.Key),
+		SupportsFull:   task.RunFull != nil,
 		LastDurationMs: state.LastDurationMs, LastRunAt: state.LastRunAt, NextRunAt: state.NextRunAt,
 	}
 	if state.LastOutcome != "" {

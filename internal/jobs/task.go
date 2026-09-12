@@ -30,6 +30,15 @@ type Task struct {
 	// TaskRunner can record real outcomes (enqueued / already active /
 	// failed) rather than assuming success.
 	Enqueue func(context.Context) (EnqueueResult, error)
+	// RunFull is an optional second trigger for a task whose ordinary cadence
+	// does not do what a manual invocation sometimes needs -- library scan's
+	// own full rescan (private/questions.md), which rereads every directory
+	// regardless of mtime rather than the incremental sweep Enqueue always
+	// runs. Nil for every task with no such distinction; RunNowFull refuses
+	// with ErrNoFullMode when it is nil. Deliberately not a generic options
+	// payload every task would have to grow a case for -- scan is still the
+	// only task that needs one.
+	RunFull func(context.Context) (EnqueueResult, error)
 }
 
 // TaskRegistry holds every registered periodic action. One instance for the

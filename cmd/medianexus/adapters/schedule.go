@@ -45,10 +45,13 @@ func (a Schedule) SetEnabled(ctx context.Context, key string, enabled bool) erro
 	return a.Cache.SetScheduleEnabled(ctx, a.Clock, key, enabled)
 }
 
-func (a Schedule) RunNow(ctx context.Context, key string) error {
+func (a Schedule) RunNow(ctx context.Context, key string, full bool) error {
 	runner, found := a.Runners[key]
 	if !found {
 		return jobs.ErrUnknownTask
+	}
+	if full {
+		return runner.RunNowFull(ctx)
 	}
 	return runner.RunNow(ctx)
 }

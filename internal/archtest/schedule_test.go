@@ -21,8 +21,11 @@ const schedulerDir = "cmd/medianexus/app"
 // build." A (*process) method matching Task.Enqueue's own exact shape --
 // func(context.Context) (jobs.EnqueueResult, error) -- is a periodic action
 // by construction (that shape has no other caller in this codebase); it
-// must appear as some Task's Enqueue field in buildTaskRegistry, or this
-// fails.
+// must appear as some Task's Enqueue *or* RunFull field in buildTaskRegistry,
+// or this fails. RunFull shares the exact same shape (todo 4.2's full-rescan
+// trigger, library scan's own second entry point) and is just as real a
+// registration as Enqueue -- a method reachable only through it must not
+// read as orphaned.
 func TestScheduledTasks_EveryEnqueueMethodIsRegistered(t *testing.T) {
 	root := repoRoot(t)
 	dir := filepath.Join(root, schedulerDir)
@@ -72,9 +75,10 @@ func declaredEnqueueMethods(t *testing.T, dir string) []string {
 	return names
 }
 
-// registeredTaskEnqueueFuncs finds every `Enqueue: p.enqueueX` field inside
-// a jobs.Task{...} composite literal, anywhere in dir -- deliberately not
-// limited to one file, so the registration can live wherever it is clearest.
+// registeredTaskEnqueueFuncs finds every `Enqueue: p.enqueueX` or
+// `RunFull: p.enqueueX` field inside a jobs.Task{...} composite literal,
+// anywhere in dir -- deliberately not limited to one file, so the
+// registration can live wherever it is clearest.
 func registeredTaskEnqueueFuncs(t *testing.T, dir string) []string {
 	t.Helper()
 	var names []string
@@ -90,7 +94,7 @@ func registeredTaskEnqueueFuncs(t *testing.T, dir string) []string {
 					continue
 				}
 				key, ok := kv.Key.(*ast.Ident)
-				if !ok || key.Name != "Enqueue" {
+				if !ok || (key.Name != "Enqueue" && key.Name != "RunFull") {
 					continue
 				}
 				selector, ok := kv.Value.(*ast.SelectorExpr)

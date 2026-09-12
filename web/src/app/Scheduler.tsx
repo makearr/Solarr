@@ -109,8 +109,10 @@ export function Scheduler() {
   });
 
   const run = useMutation({
-    mutationFn: async (key: string) => {
-      const { error } = await api.POST("/schedules/{key}/run", { params: { path: { key } } });
+    mutationFn: async (args: { key: string; full?: boolean }) => {
+      const { error } = await api.POST("/schedules/{key}/run", {
+        params: { path: { key: args.key }, query: args.full ? { full: true } : undefined },
+      });
       if (error) throw error;
     },
     onSuccess: invalidate,
@@ -134,7 +136,8 @@ export function Scheduler() {
               schedule={schedule}
               onSaveCadence={(cadence) => update.mutate({ key: schedule.key, cadence })}
               onToggleEnabled={() => update.mutate({ key: schedule.key, enabled: !schedule.enabled })}
-              onRunNow={() => run.mutate(schedule.key)}
+              onRunNow={() => run.mutate({ key: schedule.key })}
+              onRunFull={() => run.mutate({ key: schedule.key, full: true })}
               busy={update.isPending || run.isPending}
             />
           ))}
@@ -157,12 +160,14 @@ function ScheduleRow({
   onSaveCadence,
   onToggleEnabled,
   onRunNow,
+  onRunFull,
   busy,
 }: {
   schedule: Schedule;
   onSaveCadence: (cadence: string) => void;
   onToggleEnabled: () => void;
   onRunNow: () => void;
+  onRunFull: () => void;
   busy: boolean;
 }) {
   const [trigger, setTrigger] = useState<Trigger>(() => parseCadence(schedule.cadence));
@@ -188,13 +193,29 @@ function ScheduleRow({
           </span>
         )}
 
+        {schedule.supports_full && (
+          <button
+            type="button"
+            onClick={onRunFull}
+            disabled={busy}
+            title="Re-reads every directory regardless of when it last changed, rather than only
+                   what the incremental sweep would have picked up on its own."
+            className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-border-subtle
+                       px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <Play aria-hidden className="size-3.5" />
+            Full rescan
+          </button>
+        )}
         <button
           type="button"
           onClick={onRunNow}
           disabled={busy}
-          className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-border-subtle
+          className={`flex shrink-0 items-center gap-1 rounded-md border border-border-subtle
                      px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent
+                     ${schedule.supports_full ? "" : "ml-auto"}`}
         >
           <Play aria-hidden className="size-3.5" />
           Run now
