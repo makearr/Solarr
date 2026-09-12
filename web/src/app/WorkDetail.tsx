@@ -56,6 +56,16 @@ export function WorkDetail() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["work", id, "candidates"] }),
   });
 
+  const send = useMutation({
+    mutationFn: async (decisionId: number) => {
+      if (id === undefined) return;
+      const { error } = await api.POST("/works/{id}/candidates/{decisionId}/send", {
+        params: { path: { id, decisionId } },
+      });
+      if (error) throw error;
+    },
+  });
+
   const setMonitored = useMutation({
     mutationFn: async (monitored: boolean) => {
       if (id === undefined) return;
@@ -155,7 +165,13 @@ export function WorkDetail() {
                   That search could not run -- check that an indexer is connected and enabled.
                 </p>
               )}
-              <CandidateList decisions={candidates.data ?? []} loading={candidates.isLoading} />
+              <CandidateList
+                decisions={candidates.data ?? []}
+                loading={candidates.isLoading}
+                onSend={(decisionId) => send.mutate(decisionId)}
+                sendPendingId={send.isPending ? send.variables : undefined}
+                sendError={send.isError ? send.variables : undefined}
+              />
             </div>
           </Section>
         )}
@@ -418,7 +434,19 @@ function formatDuration(ms: number): string {
 // CandidateList is F16's first slice: every release ever decided against
 // this work's own wanted album, newest first, with its score breakdown --
 // no dispatch action yet (stage 5's own next pass).
-function CandidateList({ decisions, loading }: { decisions: CandidateDecision[]; loading: boolean }) {
+function CandidateList({
+  decisions,
+  loading,
+  onSend,
+  sendPendingId,
+  sendError,
+}: {
+  decisions: CandidateDecision[];
+  loading: boolean;
+  onSend: (decisionId: number) => void;
+  sendPendingId: number | undefined;
+  sendError: number | undefined;
+}) {
   if (loading) return <p className="text-xs text-ink-muted">Loading…</p>;
   if (decisions.length === 0) {
     return <p className="text-xs text-ink-muted">Nothing found yet -- try Search now.</p>;
@@ -438,7 +466,23 @@ function CandidateList({ decisions, loading }: { decisions: CandidateDecision[];
             <span className="ml-auto shrink-0 text-xs text-ink-muted">
               score {decision.score.toFixed(1)}
             </span>
+            {decision.outcome === "ACCEPT" && (
+              <button
+                type="button"
+                onClick={() => onSend(decision.id)}
+                disabled={sendPendingId === decision.id}
+                className="shrink-0 rounded-md border border-border-subtle px-2 py-0.5 text-xs
+                           text-ink-muted hover:text-ink disabled:opacity-50"
+              >
+                {sendPendingId === decision.id ? "Sending…" : "Send"}
+              </button>
+            )}
           </div>
+          {sendError === decision.id && (
+            <p className="text-xs text-danger">
+              That could not be sent -- check that a matching download client is connected.
+            </p>
+          )}
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">
             <span>{decision.protocol}</span>
             {decision.size_bytes != null && <span>{formatBytes(decision.size_bytes)}</span>}

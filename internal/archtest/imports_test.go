@@ -176,7 +176,8 @@ var allowedInternalImports = map[string][]string{
 	// The enrichment job adds musicbrainz (ADR-29) and jobs (its own handler,
 	// mirroring scan.Job).
 	"internal/media/music": {
-		"internal/acquiring/indexer", "internal/platform/artwork", "internal/platform/clock", "internal/platform/fsx",
+		"internal/acquiring/indexer", "internal/acquiring/sabnzbd",
+		"internal/platform/artwork", "internal/platform/clock", "internal/platform/fsx",
 		"internal/platform/httpx", "internal/importing/inspect", "internal/jobs", "internal/db/library",
 		"internal/db/store/gen/librarydb", "internal/identify/match", "internal/platform/mediatool",
 		"internal/identify/model", "internal/moving/mover", "internal/moving/moverjob",

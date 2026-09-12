@@ -3,9 +3,11 @@ package library_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"testing"
 
+	"github.com/makearr/MediaNexus/internal/db/library"
 	"github.com/makearr/MediaNexus/internal/db/store"
 	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
 )
@@ -267,6 +269,109 @@ func TestProvenanceSurvivesTheCandidateExpiring(t *testing.T) {
 	if chain[0].SearchTerms.String != "dune 2021" ||
 		chain[0].CandidateTitle.String != "Cige.2021.2160p.REMUX-GROUP" {
 		t.Errorf("provenance lost its detail when the candidate expired: %+v", chain[0])
+	}
+}
+
+// Acquisitions is the ADR-57 acquire.send wrapper's own repository -- the
+// raw-query tests above (createAcquisition and friends) predate it and stay
+// as they are; these exercise the Go-level type stage 5's dispatch actually
+// calls.
+
+func TestAcquisitions_CreateRoundTrips(t *testing.T) {
+	opened, _ := newLibrary(t)
+	work := createWork(t, opened, "music", "Discovery")
+	item := createDesired(t, opened, work.ID, "SET", 12)
+	acquisitions := library.NewAcquisitions(opened)
+	candidate, err := library.NewCandidates(opened).Upsert(t.Context(), library.NewReleaseCandidate{
+		IndexerID: 1, GUID: "guid-a", Title: "Nosi Zada-Discovery-2001-FLAC-GROUP",
+		Protocol: "usenet", DownloadURL: "https://indexer/nzb/1", Source: "search",
+		FirstSeenAt: 1, ExpiresAt: 100,
+	})
+	if err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+
+	itemID, candidateID, indexerID := item.ID, candidate.ID, int64(1)
+	created, err := acquisitions.Create(t.Context(), library.NewAcquisition{
+		DesiredItemID: &itemID, CandidateID: &candidateID, IndexerID: &indexerID,
+		CandidateGUID: "guid-a", CandidateTitle: "Nosi Zada-Discovery-2001-FLAC-GROUP",
+		DownloaderID: 1, DownloadClientRef: "nzo-1", ClientCategory: "music",
+		ClientFingerprint: "1700000000:Nosi Zada-Discovery-2001-FLAC-GROUP:734003200",
+		Protocol:          "usenet", State: "QUEUED", CreatedAt: 1, UpdatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if created.State != "QUEUED" || created.DownloadClientRef != "nzo-1" {
+		t.Errorf("created = %+v, want state=QUEUED download_client_ref=nzo-1", created)
+	}
+
+	found, err := acquisitions.Get(t.Context(), created.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if found.CandidateGUID != "guid-a" || found.ClientCategory != "music" {
+		t.Errorf("found = %+v, want the same facts back", found)
+	}
+}
+
+// Invariant 15, at the Go wrapper's own layer: Create must refuse a second
+// dispatch for an item that already has one non-terminal, with a clean
+// mapped error rather than the acquisition_one_inflight unique index's own
+// raw constraint failure.
+func TestAcquisitions_CreateRefusesASecondInFlightForTheSameItem(t *testing.T) {
+	opened, _ := newLibrary(t)
+	work := createWork(t, opened, "music", "Discovery")
+	item := createDesired(t, opened, work.ID, "SET", 12)
+	acquisitions := library.NewAcquisitions(opened)
+
+	itemID := item.ID
+	if _, err := acquisitions.Create(t.Context(), library.NewAcquisition{
+		DesiredItemID: &itemID, DownloaderID: 1, DownloadClientRef: "nzo-1",
+		Protocol: "usenet", State: "QUEUED", CreatedAt: 1, UpdatedAt: 1,
+	}); err != nil {
+		t.Fatalf("first Create: %v", err)
+	}
+
+	_, err := acquisitions.Create(t.Context(), library.NewAcquisition{
+		DesiredItemID: &itemID, DownloaderID: 1, DownloadClientRef: "nzo-2",
+		Protocol: "usenet", State: "QUEUED", CreatedAt: 2, UpdatedAt: 2,
+	})
+	if !errors.Is(err, library.ErrAcquisitionAlreadyInFlight) {
+		t.Errorf("err = %v, want ErrAcquisitionAlreadyInFlight", err)
+	}
+}
+
+// A terminal acquisition frees the item for a fresh dispatch -- the same
+// fact the raw-query TestATerminalAcquisitionReleasesTheItem above already
+// proves at the SQL layer; this proves the Go wrapper preserves it.
+func TestAcquisitions_CreateSucceedsOnceThePriorOneIsTerminal(t *testing.T) {
+	opened, _ := newLibrary(t)
+	work := createWork(t, opened, "music", "Discovery")
+	item := createDesired(t, opened, work.ID, "SET", 12)
+	acquisitions := library.NewAcquisitions(opened)
+
+	itemID := item.ID
+	first, err := acquisitions.Create(t.Context(), library.NewAcquisition{
+		DesiredItemID: &itemID, DownloaderID: 1, DownloadClientRef: "nzo-1",
+		Protocol: "usenet", State: "QUEUED", CreatedAt: 1, UpdatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("first Create: %v", err)
+	}
+	if err := acquisitions.SetState(t.Context(), first.ID, "IMPORTED", "", 2); err != nil {
+		t.Fatalf("SetState: %v", err)
+	}
+
+	second, err := acquisitions.Create(t.Context(), library.NewAcquisition{
+		DesiredItemID: &itemID, DownloaderID: 1, DownloadClientRef: "nzo-2",
+		Protocol: "usenet", State: "QUEUED", CreatedAt: 3, UpdatedAt: 3,
+	})
+	if err != nil {
+		t.Fatalf("second Create: %v", err)
+	}
+	if second.ID == first.ID {
+		t.Error("second acquisition reused the first one's id")
 	}
 }
 

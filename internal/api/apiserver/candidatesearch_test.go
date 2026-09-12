@@ -19,10 +19,20 @@ type fakeCandidateSearcher struct {
 	candidateErr error
 	duplicate    bool
 	categoryErr  error
+	acquisition  apiserver.Acquisition
+	sendErr      error
 
 	lastSearchWorkID     int64
 	lastListCandidatesID int64
 	lastSearchCategoryID int64
+	lastSendWorkID       int64
+	lastSendDecisionID   int64
+}
+
+func (f *fakeCandidateSearcher) SendCandidate(_ context.Context, workID, decisionID int64) (apiserver.Acquisition, error) {
+	f.lastSendWorkID = workID
+	f.lastSendDecisionID = decisionID
+	return f.acquisition, f.sendErr
 }
 
 func (f *fakeCandidateSearcher) SearchWork(_ context.Context, workID int64) (apiserver.SearchItemResult, error) {
@@ -173,6 +183,91 @@ func TestSearchCategory_EnqueuesAndAnswers202(t *testing.T) {
 	}
 	if body.Duplicate {
 		t.Error("duplicate = true, want false for a first run")
+	}
+}
+
+func TestSendCandidate_ReturnsTheCreatedAcquisition(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.candidateSearcher.acquisition = apiserver.Acquisition{
+		ID: 1, DownloaderID: 5, DownloadClientRef: "nzo-123", Protocol: "usenet", State: "QUEUED",
+	}
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/candidates/7/send", ""))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if fixture.candidateSearcher.lastSendWorkID != 42 || fixture.candidateSearcher.lastSendDecisionID != 7 {
+		t.Errorf("lastSendWorkID/DecisionID = %d/%d, want 42/7",
+			fixture.candidateSearcher.lastSendWorkID, fixture.candidateSearcher.lastSendDecisionID)
+	}
+	var body struct {
+		DownloadClientRef string `json:"download_client_ref"`
+		State             string `json:"state"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.DownloadClientRef != "nzo-123" || body.State != "QUEUED" {
+		t.Errorf("body = %+v, want nzo-123/QUEUED", body)
+	}
+}
+
+func TestSendCandidate_NotAcceptedAnswers409(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.candidateSearcher.sendErr = apiserver.ErrDecisionNotAccepted
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/candidates/7/send", ""))
+	if recorder.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409", recorder.Code)
+	}
+}
+
+func TestSendCandidate_NoDownloaderAnswers409(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.candidateSearcher.sendErr = apiserver.ErrNoDownloaderForProtocol
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/candidates/7/send", ""))
+	if recorder.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409", recorder.Code)
+	}
+}
+
+func TestSendCandidate_AlreadyInFlightAnswers409(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.candidateSearcher.sendErr = apiserver.ErrAcquisitionAlreadyInFlight
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/candidates/7/send", ""))
+	if recorder.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409", recorder.Code)
+	}
+}
+
+func TestSendCandidate_UnknownDecisionAnswers404(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.candidateSearcher.sendErr = apiserver.ErrCandidateDecisionNotFound
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/candidates/999/send", ""))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", recorder.Code)
+	}
+}
+
+func TestSendCandidate_RequiresAuthentication(t *testing.T) {
+	fixture := newWorksFixture(t)
+
+	recorder := fixture.do(authedPost(t, nil, "/api/v1/works/42/candidates/7/send", ""))
+	if recorder.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", recorder.Code)
 	}
 }
 

@@ -346,6 +346,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/parts/{partId}/wanted", server.routeSetTrackWanted)
 			secured.Get("/works/{id}/artwork", server.routeGetWorkArtwork)
 			secured.Get("/works/{id}/candidates", server.routeListWorkCandidates)
+			secured.Post("/works/{id}/candidates/{decisionId}/send", server.routeSendCandidate)
 			secured.Post("/works/{id}/search", server.routeSearchWork)
 			secured.Get("/discover/search", server.routeDiscoverSearch)
 			secured.Post("/discover/add", server.DiscoverAdd)

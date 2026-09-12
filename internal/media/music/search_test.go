@@ -26,12 +26,13 @@ import (
 // the candidate pipeline needs both, unlike most of this package's other
 // tests.
 type searchTestEnv struct {
-	library    *store.Store
-	settings   *settings.Cache
-	clock      *clock.Fake
-	works      library.Works
-	desired    library.Desired
-	candidates library.Candidates
+	library      *store.Store
+	settings     *settings.Cache
+	clock        *clock.Fake
+	works        library.Works
+	desired      library.Desired
+	candidates   library.Candidates
+	acquisitions library.Acquisitions
 }
 
 func newSearchTestEnv(t *testing.T) *searchTestEnv {
@@ -83,7 +84,7 @@ func newSearchTestEnv(t *testing.T) *searchTestEnv {
 	return &searchTestEnv{
 		library: libraryStore, settings: cache, clock: fake,
 		works: library.NewWorks(libraryStore), desired: library.NewDesired(libraryStore),
-		candidates: library.NewCandidates(libraryStore),
+		candidates: library.NewCandidates(libraryStore), acquisitions: library.NewAcquisitions(libraryStore),
 	}
 }
 

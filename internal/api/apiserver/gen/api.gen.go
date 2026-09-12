@@ -18,6 +18,14 @@ const (
 	SessionScopes = "session.Scopes"
 )
 
+// Defines values for AcquisitionProtocol.
+const (
+	AcquisitionProtocolDdl     AcquisitionProtocol = "ddl"
+	AcquisitionProtocolFeed    AcquisitionProtocol = "feed"
+	AcquisitionProtocolTorrent AcquisitionProtocol = "torrent"
+	AcquisitionProtocolUsenet  AcquisitionProtocol = "usenet"
+)
+
 // Defines values for AddDownloaderRequestProtocol.
 const (
 	AddDownloaderRequestProtocolDdl     AddDownloaderRequestProtocol = "ddl"
@@ -157,10 +165,10 @@ const (
 
 // Defines values for ImportSessionOrigin.
 const (
-	Acquisition ImportSessionOrigin = "acquisition"
-	Adoption    ImportSessionOrigin = "adoption"
-	Manual      ImportSessionOrigin = "manual"
-	Watched     ImportSessionOrigin = "watched"
+	ImportSessionOriginAcquisition ImportSessionOrigin = "acquisition"
+	ImportSessionOriginAdoption    ImportSessionOrigin = "adoption"
+	ImportSessionOriginManual      ImportSessionOrigin = "manual"
+	ImportSessionOriginWatched     ImportSessionOrigin = "watched"
 )
 
 // Defines values for ImportSessionState.
@@ -389,9 +397,9 @@ const (
 
 // Defines values for UpdateDownloaderRequestProtocol.
 const (
-	UpdateDownloaderRequestProtocolDdl     UpdateDownloaderRequestProtocol = "ddl"
-	UpdateDownloaderRequestProtocolTorrent UpdateDownloaderRequestProtocol = "torrent"
-	UpdateDownloaderRequestProtocolUsenet  UpdateDownloaderRequestProtocol = "usenet"
+	Ddl     UpdateDownloaderRequestProtocol = "ddl"
+	Torrent UpdateDownloaderRequestProtocol = "torrent"
+	Usenet  UpdateDownloaderRequestProtocol = "usenet"
 )
 
 // Defines values for WantedState.
@@ -489,6 +497,25 @@ type APIKey struct {
 	LastUsedAt *time.Time `json:"last_used_at"`
 	Name       string     `json:"name"`
 }
+
+// Acquisition One dispatch to a download client (ADR-57, section 12) -- denormalised from the candidate it came from, since a candidate can expire while this row must outlive it.
+type Acquisition struct {
+	ClientCategory *string   `json:"client_category,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+
+	// DownloadClientRef The client's own reference for this job (nzo_id for SABnzbd).
+	DownloadClientRef string              `json:"download_client_ref"`
+	DownloaderId      int64               `json:"downloader_id"`
+	Id                int64               `json:"id"`
+	Protocol          AcquisitionProtocol `json:"protocol"`
+
+	// State Section 10.3's own state machine (DISCOVERED, QUEUED, DOWNLOADING, ...). QUEUED right after dispatch -- acquire.send only confirms the client accepted the job, not that it has started (client polling, section 10.9, not built yet).
+	State     string    `json:"state"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// AcquisitionProtocol defines model for Acquisition.Protocol.
+type AcquisitionProtocol string
 
 // AddArrInstanceRequest defines model for AddArrInstanceRequest.
 type AddArrInstanceRequest struct {
@@ -3018,6 +3045,9 @@ type ServerInterface interface {
 	// Every release ever decided against this work's own wanted album item (section 12's own "why wasn't this downloaded"), newest first. Empty, never 404, for a work nobody has searched yet.
 	// (GET /works/{id}/candidates)
 	ListWorkCandidates(w http.ResponseWriter, r *http.Request, id int64)
+	// Dispatch one ACCEPTed decision's own release to a matching downloader (ADR-57's acquire.send). No resource gate yet -- every dispatch here is a user's own explicit action (ADR-12's own "user request: never paused"), since nothing automatic calls this until stage 6's planner exists.
+	// (POST /works/{id}/candidates/{decisionId}/send)
+	SendCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64)
 	// Monitor or unmonitor a work at the album level (section 19.6).
 	// (POST /works/{id}/monitor)
 	SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64)
@@ -3825,6 +3855,12 @@ func (_ Unimplemented) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id
 // Every release ever decided against this work's own wanted album item (section 12's own "why wasn't this downloaded"), newest first. Empty, never 404, for a work nobody has searched yet.
 // (GET /works/{id}/candidates)
 func (_ Unimplemented) ListWorkCandidates(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Dispatch one ACCEPTed decision's own release to a matching downloader (ADR-57's acquire.send). No resource gate yet -- every dispatch here is a user's own explicit action (ADR-12's own "user request: never paused"), since nothing automatic calls this until stage 6's planner exists.
+// (POST /works/{id}/candidates/{decisionId}/send)
+func (_ Unimplemented) SendCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7860,6 +7896,48 @@ func (siw *ServerInterfaceWrapper) ListWorkCandidates(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// SendCandidate operation middleware
+func (siw *ServerInterfaceWrapper) SendCandidate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "decisionId" -------------
+	var decisionId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "decisionId", chi.URLParam(r, "decisionId"), &decisionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "decisionId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SendCandidate(w, r, id, decisionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetWorkMonitored operation middleware
 func (siw *ServerInterfaceWrapper) SetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 
@@ -8518,6 +8596,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/{id}/candidates", wrapper.ListWorkCandidates)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/candidates/{decisionId}/send", wrapper.SendCandidate)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/monitor", wrapper.SetWorkMonitored)

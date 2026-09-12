@@ -246,6 +246,48 @@ func (q *Queries) GetAcquisitionByClientRef(ctx context.Context, arg GetAcquisit
 	return i, err
 }
 
+const getActiveAcquisitionForItem = `-- name: GetActiveAcquisitionForItem :one
+SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
+       candidate_title, search_terms, downloader_id, download_client_ref,
+       download_dir, client_category, client_fingerprint, protocol,
+       ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
+       created_at, updated_at
+FROM acquisition
+WHERE desired_item_id = ? AND state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')
+`
+
+// Checked before CreateAcquisition so a caller gets a clean, mapped refusal
+// rather than the acquisition_one_inflight unique index's own raw
+// constraint error (Invariant 15) -- the same "check first" shape
+// CreateCategory's own category(media_type, name) guard already uses.
+func (q *Queries) GetActiveAcquisitionForItem(ctx context.Context, desiredItemID sql.NullInt64) (Acquisition, error) {
+	row := q.db.QueryRowContext(ctx, getActiveAcquisitionForItem, desiredItemID)
+	var i Acquisition
+	err := row.Scan(
+		&i.ID,
+		&i.DesiredItemID,
+		&i.CandidateID,
+		&i.IndexerID,
+		&i.CandidateGuid,
+		&i.CandidateTitle,
+		&i.SearchTerms,
+		&i.DownloaderID,
+		&i.DownloadClientRef,
+		&i.DownloadDir,
+		&i.ClientCategory,
+		&i.ClientFingerprint,
+		&i.Protocol,
+		&i.DdlResolvedUrl,
+		&i.DdlBytesDone,
+		&i.DdlResumable,
+		&i.State,
+		&i.LastError,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getCandidate = `-- name: GetCandidate :one
 SELECT id, indexer_id, guid, title, attributes_id, size_bytes, seeders, leechers,
        published_at, protocol, download_url, parse_confidence, source,
