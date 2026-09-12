@@ -380,6 +380,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/packs/{id}", server.routeGetPack)
 			secured.Get("/rootfolders", server.ListRootFolders)
 			secured.Patch("/rootfolders/{id}", server.routeUpdateRootFolderPolicy)
+			secured.Delete("/rootfolders/{id}", server.routeDeleteRootFolder)
 			secured.Patch("/rootfolders/{id}/online", server.routeSetRootFolderOnline)
 			secured.Get("/downloadfolders", server.ListDownloadFolders)
 			secured.Post("/downloadfolders", server.AddDownloadFolder)

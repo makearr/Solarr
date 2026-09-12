@@ -519,6 +519,19 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteRootFolder
+      tags: [setup]
+      summary: >-
+        Remove a root folder. Administrator only. Refused, with the
+        categories that still attach it, while any category does
+        (settings.ErrInUse) -- detach it from every category first.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 
   /rootfolders/{id}/online:
     parameters:

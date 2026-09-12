@@ -238,6 +238,30 @@ func (s *Server) UpdateRootFolderPolicy(w http.ResponseWriter, r *http.Request, 
 	writeJSON(w, s.logger, http.StatusOK, s.rootFolderView(folder))
 }
 
+// routeDeleteRootFolder parses the id path parameter, mirroring
+// routeDrainRootFolder.
+func (s *Server) routeDeleteRootFolder(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a root folder id must be a number")
+		return
+	}
+	s.DeleteRootFolder(w, r, id)
+}
+
+// DeleteRootFolder removes a root folder, refused (settings.ErrInUse, via
+// writeError) while any category still attaches it. Administrator only.
+func (s *Server) DeleteRootFolder(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if err := s.auth.Settings.DeleteRootFolder(r.Context(), id); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // routeSetRootFolderOnline parses the id path parameter, mirroring
 // routeDrainRootFolder.
 func (s *Server) routeSetRootFolderOnline(w http.ResponseWriter, r *http.Request) {
