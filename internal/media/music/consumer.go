@@ -149,9 +149,13 @@ func (c Consumer) Observe(
 		}
 	}
 
-	mediaObjectIDs, err := c.physical.RegisterBatch(ctx, root.ID, files)
+	registered, err := c.physical.RegisterBatch(ctx, root.ID, files)
 	if err != nil {
 		return fmt.Errorf("music: %w", err)
+	}
+	mediaObjectIDs := make([]int64, len(registered))
+	for index, file := range registered {
+		mediaObjectIDs[index] = file.MediaObjectID
 	}
 	if err := c.recordClaimedAttributes(ctx, readable, mediaObjectIDs); err != nil {
 		return fmt.Errorf("music: %w", err)

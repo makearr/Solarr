@@ -235,6 +235,8 @@ type Querier interface {
 	GetWorkExternalIDByProvider(ctx context.Context, arg GetWorkExternalIDByProviderParams) (WorkExternalID, error)
 	GetWorkPart(ctx context.Context, id int64) (WorkPart, error)
 	InsertImportUnit(ctx context.Context, arg InsertImportUnitParams) (ImportUnit, error)
+	// library_path_id is nullable: 0029's own migration comment explains why
+	// (which path this unit's own placement created, when it can be known).
 	InsertImportUnitFile(ctx context.Context, arg InsertImportUnitFileParams) error
 	// One row per call, looped inside one transaction by the caller (the same
 	// shape ImportSessions.AddUnits already uses) -- modernc's sqlite driver

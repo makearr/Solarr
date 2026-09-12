@@ -24,7 +24,7 @@ func TestRegisterBatch_TouchesLastSeenAt(t *testing.T) {
 		t.Fatalf("RegisterBatch (first): %v", err)
 	}
 
-	rows, err := queries.ListPathsForObject(t.Context(), ids[0])
+	rows, err := queries.ListPathsForObject(t.Context(), ids[0].MediaObjectID)
 	if err != nil {
 		t.Fatalf("ListPathsForObject: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestRegisterBatch_TouchesLastSeenAt(t *testing.T) {
 		t.Fatalf("RegisterBatch (second): %v", err)
 	}
 
-	rows, err = queries.ListPathsForObject(t.Context(), ids[0])
+	rows, err = queries.ListPathsForObject(t.Context(), ids[0].MediaObjectID)
 	if err != nil {
 		t.Fatalf("ListPathsForObject: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestMarkMissing_MarksOnlyStalePaths(t *testing.T) {
 		t.Errorf("marked %d, want 1", marked)
 	}
 
-	staleRow, err := queries.ListPathsForObject(t.Context(), ids[0])
+	staleRow, err := queries.ListPathsForObject(t.Context(), ids[0].MediaObjectID)
 	if err != nil {
 		t.Fatalf("ListPathsForObject(stale): %v", err)
 	}
@@ -83,7 +83,7 @@ func TestMarkMissing_MarksOnlyStalePaths(t *testing.T) {
 		t.Errorf("stale row = %+v, want missing_since set", staleRow)
 	}
 
-	freshRow, err := queries.ListPathsForObject(t.Context(), ids[1])
+	freshRow, err := queries.ListPathsForObject(t.Context(), ids[1].MediaObjectID)
 	if err != nil {
 		t.Fatalf("ListPathsForObject(fresh): %v", err)
 	}
@@ -149,7 +149,7 @@ func TestRegisterBatch_ReobservingAMissingPathClearsMissingSince(t *testing.T) {
 		t.Fatalf("MarkMissing: %v", err)
 	}
 
-	rows, err := queries.ListPathsForObject(t.Context(), ids[0])
+	rows, err := queries.ListPathsForObject(t.Context(), ids[0].MediaObjectID)
 	if err != nil {
 		t.Fatalf("ListPathsForObject: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestRegisterBatch_ReobservingAMissingPathClearsMissingSince(t *testing.T) {
 		t.Fatalf("RegisterBatch (second): %v", err)
 	}
 
-	rows, err = queries.ListPathsForObject(t.Context(), ids[0])
+	rows, err = queries.ListPathsForObject(t.Context(), ids[0].MediaObjectID)
 	if err != nil {
 		t.Fatalf("ListPathsForObject: %v", err)
 	}

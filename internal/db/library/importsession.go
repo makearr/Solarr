@@ -244,6 +244,10 @@ type Placement struct {
 	EditionID      *int64
 	EditionCreated bool
 	MediaObjectIDs []int64
+	// LibraryPathIDs is parallel to MediaObjectIDs -- see Placed's own doc
+	// comment (internal/media/music). Left nil by a caller that cannot supply
+	// it; ImportRevert then falls back to its own unambiguous-only rule.
+	LibraryPathIDs []int64
 }
 
 // RecordPlacement writes one unit's placement, in one transaction: the
@@ -261,9 +265,13 @@ func (s ImportSessions) RecordPlacement(ctx context.Context, unitID int64, place
 		}); err != nil {
 			return fmt.Errorf("set unit %d placement: %w", unitID, err)
 		}
-		for _, mediaObjectID := range placement.MediaObjectIDs {
+		for index, mediaObjectID := range placement.MediaObjectIDs {
+			var libraryPathID *int64
+			if index < len(placement.LibraryPathIDs) {
+				libraryPathID = &placement.LibraryPathIDs[index]
+			}
 			if err := queries.InsertImportUnitFile(ctx, librarydb.InsertImportUnitFileParams{
-				UnitID: unitID, MediaObjectID: mediaObjectID,
+				UnitID: unitID, MediaObjectID: mediaObjectID, LibraryPathID: nullInt64(libraryPathID),
 			}); err != nil {
 				return fmt.Errorf("insert unit %d file %d: %w", unitID, mediaObjectID, err)
 			}
@@ -287,17 +295,33 @@ func (s ImportSessions) ClearUnitPlacement(ctx context.Context, unitID int64) er
 	return nil
 }
 
+// UnitFile is one media_object row a unit's own CommitUnit produced, with the
+// specific library_path row that placement created for it when known
+// (LibraryPathID is nil for a row written before migration 0029, or one whose
+// media_object already had more than one path at that time -- see the
+// migration's own comment).
+type UnitFile struct {
+	MediaObjectID int64
+	LibraryPathID *int64
+}
+
 // UnitFiles maps every placed unit in a session to the media_object rows its
 // own CommitUnit produced (import_unit_file) -- revert's own map of exactly
 // what to undo, grouped once per session rather than one query per unit.
-func (s ImportSessions) UnitFiles(ctx context.Context, sessionID int64) (map[int64][]int64, error) {
+func (s ImportSessions) UnitFiles(ctx context.Context, sessionID int64) (map[int64][]UnitFile, error) {
 	rows, err := librarydb.New(s.store.Read()).ListImportUnitFilesForSession(ctx, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("library: list unit files for session %d: %w", sessionID, err)
 	}
-	byUnit := make(map[int64][]int64, len(rows))
+	byUnit := make(map[int64][]UnitFile, len(rows))
 	for _, row := range rows {
-		byUnit[row.UnitID] = append(byUnit[row.UnitID], row.MediaObjectID)
+		var libraryPathID *int64
+		if row.LibraryPathID.Valid {
+			libraryPathID = &row.LibraryPathID.Int64
+		}
+		byUnit[row.UnitID] = append(byUnit[row.UnitID], UnitFile{
+			MediaObjectID: row.MediaObjectID, LibraryPathID: libraryPathID,
+		})
 	}
 	return byUnit, nil
 }

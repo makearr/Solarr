@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"path"
 	"time"
+
+	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
 )
 
 // ErrSessionNotRevertible reports that sessionID is not in a state Revert
@@ -21,6 +23,13 @@ type RevertResult struct {
 	UnitsReverted    int
 	WorksDeleted     int
 	EditionsDeleted  int
+	// SkippedSharedObjects are media_object ids revert left untouched: bytes
+	// this unit shares with a path from outside this session (ADR-11's
+	// quick-hash dedupe), recorded before migration 0029 gave revert a way to
+	// tell its own path apart from the other one -- refusing to guess rather
+	// than risk quarantining and deleting a library entry the session never
+	// created (Invariant 92).
+	SkippedSharedObjects []int64
 }
 
 // ImportRevert is ADR-48's own "revert this session": move every file the
@@ -89,8 +98,8 @@ func (r ImportRevert) Revert(ctx context.Context, sessionID int64, retain time.D
 		}
 		placed = append(placed, unit)
 
-		for _, mediaObjectID := range unitFiles[unit.ID] {
-			if err := r.quarantineObject(ctx, mediaObjectID, retain, &result); err != nil {
+		for _, file := range unitFiles[unit.ID] {
+			if err := r.quarantineObject(ctx, file, retain, &result); err != nil {
 				return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
 			}
 		}
@@ -121,36 +130,71 @@ func (r ImportRevert) Revert(ctx context.Context, sessionID int64, retain time.D
 	return result, nil
 }
 
-// quarantineObject quarantines every library_path copy of one media_object
-// (ADR-11 cross-entry hardlinking means there can be more than one) then
-// deletes the object -- RemoveAndBlock.doQuarantine's own shape, without the
-// block/blocklist/reopen steps a revert has no use for.
-func (r ImportRevert) quarantineObject(ctx context.Context, mediaObjectID int64, retain time.Duration, result *RevertResult) error {
-	paths, err := r.physical.PathsForObject(ctx, mediaObjectID)
+// quarantineObject quarantines exactly the one library_path row this unit's own
+// placement created for file.MediaObjectID, then deletes the media_object outright
+// only if that was its last remaining path.
+//
+// ADR-11's quick-hash dedupe means RegisterBatch can point this unit's placement at
+// bytes an unrelated, untouched commit already owns (a duplicate track shipped in two
+// releases, say). The naive shape this replaced -- quarantine every PathsForObject row
+// and delete the object -- destroyed that untouched library entry too whenever it
+// happened. file.LibraryPathID (migration 0029) is what lets this pick out only the
+// session's own row; when it is nil (data from before that migration) or PathsForObject
+// no longer contains it, this refuses to guess among more than one candidate rather
+// than repeat the bug (Invariant 92), and records the skip instead.
+func (r ImportRevert) quarantineObject(ctx context.Context, file UnitFile, retain time.Duration, result *RevertResult) error {
+	paths, err := r.physical.PathsForObject(ctx, file.MediaObjectID)
 	if err != nil {
-		return fmt.Errorf("paths for object %d: %w", mediaObjectID, err)
+		return fmt.Errorf("paths for object %d: %w", file.MediaObjectID, err)
 	}
-	for _, p := range paths {
-		rootPath, ok := r.rootPath(p.RootFolderID)
-		if !ok {
-			return fmt.Errorf("no known path for root folder %d", p.RootFolderID)
+
+	target, ok := selectPathToRevert(paths, file.LibraryPathID)
+	if !ok {
+		result.SkippedSharedObjects = append(result.SkippedSharedObjects, file.MediaObjectID)
+		return nil
+	}
+
+	rootPath, ok := r.rootPath(target.RootFolderID)
+	if !ok {
+		return fmt.Errorf("no known path for root folder %d", target.RootFolderID)
+	}
+	rootFolderID, mediaObjectID := target.RootFolderID, file.MediaObjectID
+	entry, err := r.quarantine.Put(ctx, PutRequest{
+		RootPath: rootPath, OriginalPath: path.Join(rootPath, target.RelPath),
+		RootFolderID: &rootFolderID, MediaObjectID: &mediaObjectID,
+		Reason: ReasonFailedImport, Retain: retain,
+	})
+	if err != nil {
+		if !errors.Is(err, ErrCrossDevice) {
+			return fmt.Errorf("quarantine %q: %w", target.RelPath, err)
 		}
-		rootFolderID := p.RootFolderID
-		entry, err := r.quarantine.Put(ctx, PutRequest{
-			RootPath: rootPath, OriginalPath: path.Join(rootPath, p.RelPath),
-			RootFolderID: &rootFolderID, MediaObjectID: &mediaObjectID,
-			Reason: ReasonFailedImport, Retain: retain,
-		})
-		if err != nil {
-			if errors.Is(err, ErrCrossDevice) {
-				// Already gone (deleted directly, Quarantine's own doc
-				// comment) -- nothing to restore for this copy, but the
-				// rest of the revert still proceeds.
-				continue
-			}
-			return fmt.Errorf("quarantine %q: %w", p.RelPath, err)
-		}
+		// Already gone (deleted directly, Quarantine's own doc comment) -- nothing to
+		// restore for this copy, but the row (and, below, maybe the object) is still
+		// cleaned up.
+	} else {
 		result.QuarantinedPaths = append(result.QuarantinedPaths, entry)
 	}
-	return r.physical.DeleteObject(ctx, mediaObjectID)
+
+	if len(paths) == 1 {
+		return r.physical.DeleteObject(ctx, file.MediaObjectID)
+	}
+	return r.physical.DeleteLibraryPathRow(ctx, target.ID)
+}
+
+// selectPathToRevert picks the one row among paths that belongs to this unit's own
+// placement. A single path is unambiguous regardless of libraryPathID; more than one
+// requires knowing which, and refuses (ok=false) when it cannot.
+func selectPathToRevert(paths []librarydb.LibraryPath, libraryPathID *int64) (librarydb.LibraryPath, bool) {
+	if len(paths) == 1 {
+		return paths[0], true
+	}
+	if libraryPathID == nil {
+		return librarydb.LibraryPath{}, false
+	}
+	for _, p := range paths {
+		if p.ID == *libraryPathID {
+			return p, true
+		}
+	}
+	return librarydb.LibraryPath{}, false
 }

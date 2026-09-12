@@ -234,16 +234,19 @@ func (q *Queries) InsertImportUnit(ctx context.Context, arg InsertImportUnitPara
 }
 
 const insertImportUnitFile = `-- name: InsertImportUnitFile :exec
-INSERT INTO import_unit_file (unit_id, media_object_id) VALUES (?, ?)
+INSERT INTO import_unit_file (unit_id, media_object_id, library_path_id) VALUES (?, ?, ?)
 `
 
 type InsertImportUnitFileParams struct {
 	UnitID        int64
 	MediaObjectID int64
+	LibraryPathID sql.NullInt64
 }
 
+// library_path_id is nullable: 0029's own migration comment explains why
+// (which path this unit's own placement created, when it can be known).
 func (q *Queries) InsertImportUnitFile(ctx context.Context, arg InsertImportUnitFileParams) error {
-	_, err := q.db.ExecContext(ctx, insertImportUnitFile, arg.UnitID, arg.MediaObjectID)
+	_, err := q.db.ExecContext(ctx, insertImportUnitFile, arg.UnitID, arg.MediaObjectID, arg.LibraryPathID)
 	return err
 }
 
@@ -310,7 +313,7 @@ func (q *Queries) ListImportSessions(ctx context.Context, arg ListImportSessions
 }
 
 const listImportUnitFilesForSession = `-- name: ListImportUnitFilesForSession :many
-SELECT iuf.unit_id, iuf.media_object_id
+SELECT iuf.unit_id, iuf.media_object_id, iuf.library_path_id
 FROM import_unit_file iuf
 JOIN import_unit iu ON iu.id = iuf.unit_id
 WHERE iu.session_id = ?
@@ -320,6 +323,7 @@ ORDER BY iuf.id
 type ListImportUnitFilesForSessionRow struct {
 	UnitID        int64
 	MediaObjectID int64
+	LibraryPathID sql.NullInt64
 }
 
 func (q *Queries) ListImportUnitFilesForSession(ctx context.Context, sessionID int64) ([]ListImportUnitFilesForSessionRow, error) {
@@ -331,7 +335,7 @@ func (q *Queries) ListImportUnitFilesForSession(ctx context.Context, sessionID i
 	items := []ListImportUnitFilesForSessionRow{}
 	for rows.Next() {
 		var i ListImportUnitFilesForSessionRow
-		if err := rows.Scan(&i.UnitID, &i.MediaObjectID); err != nil {
+		if err := rows.Scan(&i.UnitID, &i.MediaObjectID, &i.LibraryPathID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -150,11 +150,13 @@ UPDATE import_unit SET work_id = sqlc.arg(work_id), edition_id = sqlc.arg(editio
                         edition_created = sqlc.arg(edition_created)
 WHERE id = sqlc.arg(id);
 
+-- library_path_id is nullable: 0029's own migration comment explains why
+-- (which path this unit's own placement created, when it can be known).
 -- name: InsertImportUnitFile :exec
-INSERT INTO import_unit_file (unit_id, media_object_id) VALUES (?, ?);
+INSERT INTO import_unit_file (unit_id, media_object_id, library_path_id) VALUES (?, ?, ?);
 
 -- name: ListImportUnitFilesForSession :many
-SELECT iuf.unit_id, iuf.media_object_id
+SELECT iuf.unit_id, iuf.media_object_id, iuf.library_path_id
 FROM import_unit_file iuf
 JOIN import_unit iu ON iu.id = iuf.unit_id
 WHERE iu.session_id = ?

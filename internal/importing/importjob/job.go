@@ -545,7 +545,7 @@ func (j *Job) placeCommitted(
 		if err := j.sessions.RecordPlacement(ctx, ids[i], library.Placement{
 			WorkID: placed.WorkID, WorkCreated: placed.WorkCreated,
 			EditionID: placed.EditionID, EditionCreated: placed.EditionCreated,
-			MediaObjectIDs: placed.MediaObjectIDs,
+			MediaObjectIDs: placed.MediaObjectIDs, LibraryPathIDs: placed.LibraryPathIDs,
 		}); err != nil {
 			j.logger.Warn("import commit: could not record placement",
 				slog.Int64("unit_id", ids[i]), slog.Any("error", err))

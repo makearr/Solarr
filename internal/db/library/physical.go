@@ -69,31 +69,41 @@ type Physical struct{ store *store.Store }
 // NewPhysical builds it over an open library store.
 func NewPhysical(opened *store.Store) Physical { return Physical{store: opened} }
 
+// RegisteredFile is one file RegisterBatch recorded: the media_object it belongs to
+// (new or, per ADR-11's quick-hash dedupe, an existing one this call merged into) and
+// the library_path row this specific call touched. A caller that must know which path
+// was its own -- ImportRevert's own 4.22 fix -- needs both, since two callers can share
+// a MediaObjectID while never sharing a LibraryPathID.
+type RegisteredFile struct {
+	MediaObjectID int64
+	LibraryPathID int64
+}
+
 // RegisterBatch finds or creates the media_object and library_path row for each file,
 // in one transaction (Invariant 2) -- the same bound a scan batch already commits at.
 // Results come back in the same order as files.
-func (p Physical) RegisterBatch(ctx context.Context, rootFolderID int64, files []PhysicalFile) ([]int64, error) {
-	ids := make([]int64, len(files))
+func (p Physical) RegisterBatch(ctx context.Context, rootFolderID int64, files []PhysicalFile) ([]RegisteredFile, error) {
+	registered := make([]RegisteredFile, len(files))
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		for index, file := range files {
-			id, err := registerOne(ctx, queries, rootFolderID, file)
+			result, err := registerOne(ctx, queries, rootFolderID, file)
 			if err != nil {
 				return fmt.Errorf("library: register %s: %w", file.RelPath, err)
 			}
-			ids[index] = id
+			registered[index] = result
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return ids, nil
+	return registered, nil
 }
 
 func registerOne(
 	ctx context.Context, queries *librarydb.Queries, rootFolderID int64, file PhysicalFile,
-) (int64, error) {
+) (RegisteredFile, error) {
 	existing, err := queries.GetPathByLocation(ctx, librarydb.GetPathByLocationParams{
 		RootFolderID: rootFolderID, RelPath: file.RelPath,
 	})
@@ -103,27 +113,28 @@ func registerOne(
 		if err := queries.TouchLibraryPath(ctx, librarydb.TouchLibraryPathParams{
 			LastSeenAt: file.FirstSeenAt.Unix(), ID: existing.ID,
 		}); err != nil {
-			return 0, fmt.Errorf("touch path: %w", err)
+			return RegisteredFile{}, fmt.Errorf("touch path: %w", err)
 		}
-		return existing.MediaObjectID, nil
+		return RegisteredFile{MediaObjectID: existing.MediaObjectID, LibraryPathID: existing.ID}, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
-		return 0, fmt.Errorf("look up: %w", err)
+		return RegisteredFile{}, fmt.Errorf("look up: %w", err)
 	}
 
 	mediaObjectID, err := findOrCreateObject(ctx, queries, file)
 	if err != nil {
-		return 0, err
+		return RegisteredFile{}, err
 	}
 
-	if _, err := queries.AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+	libraryPathID, err := queries.AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
 		MediaObjectID: mediaObjectID, RootFolderID: rootFolderID, RelPath: file.RelPath,
 		LinkKind: "primary", IsPrimary: 1, CreatedAt: file.FirstSeenAt.Unix(),
 		LastSeenAt: file.FirstSeenAt.Unix(),
-	}); err != nil {
-		return 0, fmt.Errorf("add path: %w", err)
+	})
+	if err != nil {
+		return RegisteredFile{}, fmt.Errorf("add path: %w", err)
 	}
-	return mediaObjectID, nil
+	return RegisteredFile{MediaObjectID: mediaObjectID, LibraryPathID: libraryPathID}, nil
 }
 
 // findOrCreateObject reuses an existing media_object sharing this quick hash and size
@@ -289,6 +300,20 @@ func (p Physical) DeleteObject(ctx context.Context, mediaObjectID int64) error {
 	})
 	if err != nil {
 		return fmt.Errorf("library: delete object %d: %w", mediaObjectID, err)
+	}
+	return nil
+}
+
+// DeleteLibraryPathRow removes exactly one library_path row, leaving its media_object
+// and every other path referencing it untouched -- the half of ADR-11 case C DeleteObject
+// cannot give a caller that must remove only its own copy of shared bytes (4.22's own
+// linking audit; see ImportRevert.quarantineObject).
+func (p Physical) DeleteLibraryPathRow(ctx context.Context, libraryPathID int64) error {
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).DeleteLibraryPath(ctx, libraryPathID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: delete path %d: %w", libraryPathID, err)
 	}
 	return nil
 }
