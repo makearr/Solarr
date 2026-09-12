@@ -1,4 +1,5 @@
-import { useParams } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
+import type { LinkProps } from "@tanstack/react-router";
 
 import { api } from "@/api/client";
 import { useLibraryList } from "@/list/useLibraryList";
@@ -21,6 +22,16 @@ const FILTER_KEYS: readonly string[] = [];
 function imageSourceFor(level: string | undefined, item: LevelItem): { subject: "works" | "people"; id: number } | null {
   if (level === "artists") return { subject: "people", id: item.id };
   if (item.work_id != null) return { subject: "works", id: item.work_id };
+  return null;
+}
+
+/** Where a row navigates: Artists to the person page, Tracks to their own
+ *  album (there is no track-detail page -- a track is a work_part shown
+ *  inside its work, WorkDetail's own Parts section). null for a level with
+ *  neither a person nor a work to land on. */
+function linkFor(level: string | undefined, item: LevelItem): LinkProps | null {
+  if (level === "artists") return { to: "/people/$id", params: { id: String(item.id) } };
+  if (item.work_id != null) return { to: "/works/$id", params: { id: String(item.work_id) } };
   return null;
 }
 
@@ -72,13 +83,11 @@ export function LibraryLevelList() {
               const item = list.items[virtual.index];
               if (!item) return null;
               const image = imageSourceFor(level, item);
-              return (
-                <div
-                  key={item.id}
-                  className="absolute inset-x-0 flex items-center gap-3 border-b
-                             border-border-subtle px-4 text-sm"
-                  style={{ height: virtual.size, transform: `translateY(${virtual.start}px)` }}
-                >
+              const link = linkFor(level, item);
+              const rowClass =
+                "absolute inset-x-0 flex items-center gap-3 border-b border-border-subtle px-4 text-sm";
+              const row = (
+                <>
                   {image && (
                     <CoverArt
                       subject={image.subject}
@@ -95,6 +104,16 @@ export function LibraryLevelList() {
                     <span className="min-w-0 flex-1 truncate text-ink-muted">{item.subtitle}</span>
                   )}
                   {item.year != null && <span className="shrink-0 text-ink-muted">{item.year}</span>}
+                </>
+              );
+              const style = { height: virtual.size, transform: `translateY(${virtual.start}px)` };
+              return link ? (
+                <Link key={item.id} {...link} className={`${rowClass} hover:bg-surface`} style={style}>
+                  {row}
+                </Link>
+              ) : (
+                <div key={item.id} className={rowClass} style={style}>
+                  {row}
                 </div>
               );
             })}

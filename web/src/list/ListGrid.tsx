@@ -20,14 +20,25 @@ export function ListGrid<T>({
 
           const id = idOf(item);
           const selected = list.isSelected(id);
+          // A div, not a button: renderCard may nest a real <a> (a card's own
+          // title, made clickable) -- interactive content inside a <button> is
+          // invalid HTML and the click gets eaten before the router sees it.
+          // role="button" plus onKeyDown keeps the same keyboard activation.
           return (
-            <button
+            <div
               key={id}
-              type="button"
+              role="button"
+              tabIndex={0}
               aria-pressed={selected}
               onClick={(event) => list.toggle(id, event.shiftKey)}
-              className={`absolute inset-x-0 flex items-center rounded-md border px-3 text-left
-                          text-sm ${
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  list.toggle(id, event.shiftKey);
+                }
+              }}
+              className={`absolute inset-x-0 flex cursor-default items-center rounded-md border
+                          px-3 text-left text-sm ${
                             selected
                               ? "border-accent bg-accent/10"
                               : "border-border-subtle bg-surface"
@@ -38,7 +49,7 @@ export function ListGrid<T>({
               }}
             >
               {renderCard(item)}
-            </button>
+            </div>
           );
         })}
       </div>

@@ -106,7 +106,12 @@ function buildColumns(visible: ReadonlySet<OptionalColumn>): Column<Work>[] {
       header: "Title",
       sortable: true,
       render: (work) => (
-        <Link to="/works/$id" params={{ id: String(work.id) }} className="hover:underline">
+        <Link
+          to="/works/$id"
+          params={{ id: String(work.id) }}
+          onClick={(event) => event.stopPropagation()}
+          className="hover:underline"
+        >
           {work.title}
         </Link>
       ),
@@ -378,7 +383,14 @@ export function Library() {
                     className="h-12 w-12 shrink-0 rounded object-cover"
                   />
                   <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="truncate font-medium">{work.title}</span>
+                    <Link
+                      to="/works/$id"
+                      params={{ id: String(work.id) }}
+                      onClick={(event) => event.stopPropagation()}
+                      className="truncate font-medium hover:underline"
+                    >
+                      {work.title}
+                    </Link>
                     <span className="text-ink-muted">
                       {work.artist ?? work.media_type}
                       {work.year ? ` · ${work.year}` : ""}
