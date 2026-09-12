@@ -10,8 +10,10 @@ import {
   HelpCircle,
   LayoutDashboard,
   Library as LibraryIcon,
+  Radar,
   ScanSearch,
   Settings,
+  Share2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -44,6 +46,14 @@ const STORAGE_SECTIONS: readonly { to: string; label: string; icon: LucideIcon }
   { to: "/storage/moves", label: "Move & drain", icon: ArrowLeftRight },
   { to: "/storage/downloads", label: "Download folders", icon: Download },
   { to: "/storage/import", label: "Import", icon: ScanSearch },
+];
+
+// Stage 5, ADR-54/todo 5.2: indexers and download clients so far. *Arr apps
+// stay at /settings/arr for now -- their own relocation into this section is
+// a separate, deliberately deferred item (router.tsx's own comment).
+const CONNECTIONS_SECTIONS: readonly { to: string; label: string; icon: LucideIcon }[] = [
+  { to: "/connections/indexers", label: "Indexers", icon: Radar },
+  { to: "/connections/downloaders", label: "Download clients", icon: Download },
 ];
 
 // tier is the whole section's own floor (ADR-26, todo 4.14): General mixes
@@ -116,6 +126,7 @@ export function Sidebar() {
 
   const groups = groupByMediaType(libraries.data ?? []);
   const storageOpen = path.startsWith("/storage");
+  const connectionsOpen = path.startsWith("/connections");
   const settingsOpen = path.startsWith("/settings");
 
   return (
@@ -199,6 +210,45 @@ export function Sidebar() {
         {!collapsed && storageOpen && (
           <ul className="ml-5 flex flex-col gap-0.5 border-l border-border-subtle pl-2">
             {STORAGE_SECTIONS.map(({ to, label, icon: Icon }) => {
+              const active = path.startsWith(to);
+              return (
+                <li key={to}>
+                  <Link to={to} className={sectionLinkClass(active, false)}>
+                    <Icon aria-hidden className="size-4 shrink-0" />
+                    {label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </ul>
+
+      {!collapsed && (
+        <div className="px-4 pt-4 pb-1 text-xs font-medium uppercase tracking-wide text-ink-muted">
+          Connections
+        </div>
+      )}
+      <ul className={`flex flex-col gap-0.5 px-2 ${collapsed ? "pt-4" : ""}`}>
+        <li>
+          <Link
+            to="/connections/indexers"
+            title={collapsed ? "Connections" : undefined}
+            className={sectionLinkClass(connectionsOpen, collapsed)}
+          >
+            <Share2 aria-hidden className="size-4 shrink-0" />
+            {!collapsed && "Connections"}
+            {!collapsed &&
+              (connectionsOpen ? (
+                <ChevronDown aria-hidden className="ml-auto size-3.5" />
+              ) : (
+                <ChevronRight aria-hidden className="ml-auto size-3.5" />
+              ))}
+          </Link>
+        </li>
+        {!collapsed && connectionsOpen && (
+          <ul className="ml-5 flex flex-col gap-0.5 border-l border-border-subtle pl-2">
+            {CONNECTIONS_SECTIONS.map(({ to, label, icon: Icon }) => {
               const active = path.startsWith(to);
               return (
                 <li key={to}>

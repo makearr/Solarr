@@ -1001,6 +1001,126 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/indexers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every configured indexer connection (stage 5, ADR-37/43/47). */
+        get: operations["listIndexers"];
+        put?: never;
+        /**
+         * Connect a new indexer. Administrator only.
+         * @description api_key is sealed at rest (secrets.Cipher) and never returned in plaintext again -- every response shows Masked instead. A public Torznab endpoint may need no key at all (ADR-47).
+         */
+        post: operations["addIndexer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/indexers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a connection. Administrator only. */
+        delete: operations["deleteIndexer"];
+        options?: never;
+        head?: never;
+        /** Change a connection's own facts. Administrator only. Never touches api_key -- see /indexers/{id}/apikey. */
+        patch: operations["updateIndexer"];
+        trace?: never;
+    };
+    "/indexers/{id}/apikey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace or clear a connection's own API key. Administrator only. A separate endpoint from PATCH: resealing on every unrelated edit would be silent, pointless churn. An empty api_key clears it, for a public endpoint that no longer needs one. */
+        post: operations["setIndexerAPIKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/downloaders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every configured download client connection (stage 5, ADR-46/57). */
+        get: operations["listDownloaders"];
+        put?: never;
+        /**
+         * Connect a new download client. Administrator only.
+         * @description credentials is sealed at rest (secrets.Cipher) and never returned in plaintext again -- every response shows Masked instead.
+         */
+        post: operations["addDownloader"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/downloaders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a connection. Administrator only. */
+        delete: operations["deleteDownloader"];
+        options?: never;
+        head?: never;
+        /** Change a connection's own facts. Administrator only. Never touches credentials -- see /downloaders/{id}/credentials. */
+        patch: operations["updateDownloader"];
+        trace?: never;
+    };
+    "/downloaders/{id}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace or clear a connection's own credentials. Administrator only. A separate endpoint from PATCH, the same reasoning /indexers/{id}/apikey already gives. */
+        post: operations["setDownloaderCredentials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/arr/imports": {
         parameters: {
             query?: never;
@@ -2600,6 +2720,87 @@ export interface components {
             /** Format: date-time */
             last_synced_at?: string;
             last_sync_error?: string;
+        };
+        Indexer: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** @description "newznab" or "torznab" (ADR-43). */
+            impl: string;
+            base_url: string;
+            enabled: boolean;
+            /** Format: int64 */
+            priority: number;
+            /** @description The indexer's own last t=caps response, opaque (ADR-43). Empty until fetched. */
+            categories_json?: string;
+            /** Format: date-time */
+            caps_fetched_at?: string;
+            api_key: components["schemas"]["SecretMask"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AddIndexerRequest: {
+            name: string;
+            impl: string;
+            base_url: string;
+            /** @description Omitted or empty for a public endpoint that needs none (ADR-47). */
+            api_key?: string;
+            /** @default true */
+            enabled: boolean;
+            /**
+             * Format: int64
+             * @default 50
+             */
+            priority: number;
+        };
+        UpdateIndexerRequest: {
+            name: string;
+            impl: string;
+            base_url: string;
+            /** @default true */
+            enabled: boolean;
+            /**
+             * Format: int64
+             * @default 50
+             */
+            priority: number;
+        };
+        Downloader: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** @description "sabnzbd" today (ADR-46). */
+            impl: string;
+            base_url: string;
+            enabled: boolean;
+            /** @enum {string} */
+            protocol: "usenet" | "torrent" | "ddl";
+            credentials: components["schemas"]["SecretMask"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AddDownloaderRequest: {
+            name: string;
+            impl: string;
+            base_url: string;
+            /** @enum {string} */
+            protocol: "usenet" | "torrent" | "ddl";
+            credentials?: string;
+            /** @default true */
+            enabled: boolean;
+        };
+        UpdateDownloaderRequest: {
+            name: string;
+            impl: string;
+            base_url: string;
+            /** @enum {string} */
+            protocol: "usenet" | "torrent" | "ddl";
+            /** @default true */
+            enabled: boolean;
         };
         ArrRootFolder: {
             /** @description As the *Arr instance's own container sees it. */
@@ -5088,6 +5289,268 @@ export interface operations {
             404: components["responses"]["Problem"];
             /** @description This app is not yet wired for a real connection (connect/preview/park only). */
             409: components["responses"]["Problem"];
+        };
+    };
+    listIndexers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every connection. api_key is always masked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Indexer"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    addIndexer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddIndexerRequest"];
+            };
+        };
+        responses: {
+            /** @description Connected. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Indexer"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    deleteIndexer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateIndexer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateIndexerRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Indexer"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setIndexerAPIKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    api_key?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Replaced. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listDownloaders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every connection. credentials is always masked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Downloader"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    addDownloader: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddDownloaderRequest"];
+            };
+        };
+        responses: {
+            /** @description Connected. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Downloader"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    deleteDownloader: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateDownloader: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDownloaderRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Downloader"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setDownloaderCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    credentials?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Replaced. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     listArrImports: {

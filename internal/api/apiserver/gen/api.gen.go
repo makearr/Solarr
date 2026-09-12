@@ -18,6 +18,13 @@ const (
 	SessionScopes = "session.Scopes"
 )
 
+// Defines values for AddDownloaderRequestProtocol.
+const (
+	AddDownloaderRequestProtocolDdl     AddDownloaderRequestProtocol = "ddl"
+	AddDownloaderRequestProtocolTorrent AddDownloaderRequestProtocol = "torrent"
+	AddDownloaderRequestProtocolUsenet  AddDownloaderRequestProtocol = "usenet"
+)
+
 // Defines values for ArrApp.
 const (
 	Lidarr   ArrApp = "lidarr"
@@ -84,6 +91,13 @@ const (
 	ACCEPT DecisionOutcome = "ACCEPT"
 	DEFER  DecisionOutcome = "DEFER"
 	REJECT DecisionOutcome = "REJECT"
+)
+
+// Defines values for DownloaderProtocol.
+const (
+	DownloaderProtocolDdl     DownloaderProtocol = "ddl"
+	DownloaderProtocolTorrent DownloaderProtocol = "torrent"
+	DownloaderProtocolUsenet  DownloaderProtocol = "usenet"
 )
 
 // Defines values for EventTopic.
@@ -352,6 +366,13 @@ const (
 	SettingDefinitionTierNormal   SettingDefinitionTier = "normal"
 )
 
+// Defines values for UpdateDownloaderRequestProtocol.
+const (
+	Ddl     UpdateDownloaderRequestProtocol = "ddl"
+	Torrent UpdateDownloaderRequestProtocol = "torrent"
+	Usenet  UpdateDownloaderRequestProtocol = "usenet"
+)
+
 // Defines values for WantedState.
 const (
 	WantedStateCOMPLETE   WantedState = "COMPLETE"
@@ -458,6 +479,30 @@ type AddArrInstanceRequest struct {
 	CategoryId *int64 `json:"category_id,omitempty"`
 	Enabled    *bool  `json:"enabled,omitempty"`
 	Name       string `json:"name"`
+}
+
+// AddDownloaderRequest defines model for AddDownloaderRequest.
+type AddDownloaderRequest struct {
+	BaseUrl     string                       `json:"base_url"`
+	Credentials *string                      `json:"credentials,omitempty"`
+	Enabled     *bool                        `json:"enabled,omitempty"`
+	Impl        string                       `json:"impl"`
+	Name        string                       `json:"name"`
+	Protocol    AddDownloaderRequestProtocol `json:"protocol"`
+}
+
+// AddDownloaderRequestProtocol defines model for AddDownloaderRequest.Protocol.
+type AddDownloaderRequestProtocol string
+
+// AddIndexerRequest defines model for AddIndexerRequest.
+type AddIndexerRequest struct {
+	// ApiKey Omitted or empty for a public endpoint that needs none (ADR-47).
+	ApiKey   *string `json:"api_key,omitempty"`
+	BaseUrl  string  `json:"base_url"`
+	Enabled  *bool   `json:"enabled,omitempty"`
+	Impl     string  `json:"impl"`
+	Name     string  `json:"name"`
+	Priority *int64  `json:"priority,omitempty"`
 }
 
 // ArrApp Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships.
@@ -804,6 +849,26 @@ type DownloadFolderEntry struct {
 	Name  string `json:"name"`
 }
 
+// Downloader defines model for Downloader.
+type Downloader struct {
+	BaseUrl   string    `json:"base_url"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// Credentials A credential, shown without ever exposing it (section 13.1). The raw value exists only between the database and the one outbound request that needs it.
+	Credentials SecretMask `json:"credentials"`
+	Enabled     bool       `json:"enabled"`
+	Id          int64      `json:"id"`
+
+	// Impl "sabnzbd" today (ADR-46).
+	Impl      string             `json:"impl"`
+	Name      string             `json:"name"`
+	Protocol  DownloaderProtocol `json:"protocol"`
+	UpdatedAt time.Time          `json:"updated_at"`
+}
+
+// DownloaderProtocol defines model for Downloader.Protocol.
+type DownloaderProtocol string
+
 // DrainMove defines model for DrainMove.
 type DrainMove struct {
 	// AffinityKey The top-level directory this file was grouped and moved with.
@@ -1107,6 +1172,26 @@ type IncompleteWork struct {
 
 // IncompleteWorkState defines model for IncompleteWork.State.
 type IncompleteWorkState string
+
+// Indexer defines model for Indexer.
+type Indexer struct {
+	// ApiKey A credential, shown without ever exposing it (section 13.1). The raw value exists only between the database and the one outbound request that needs it.
+	ApiKey        SecretMask `json:"api_key"`
+	BaseUrl       string     `json:"base_url"`
+	CapsFetchedAt *time.Time `json:"caps_fetched_at,omitempty"`
+
+	// CategoriesJson The indexer's own last t=caps response, opaque (ADR-43). Empty until fetched.
+	CategoriesJson *string   `json:"categories_json,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	Enabled        bool      `json:"enabled"`
+	Id             int64     `json:"id"`
+
+	// Impl "newznab" or "torznab" (ADR-43).
+	Impl      string    `json:"impl"`
+	Name      string    `json:"name"`
+	Priority  int64     `json:"priority"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
 
 // Job The job's payload is deliberately absent. It can carry paths and provider identifiers, and a listing is not the place to hand that out.
 type Job struct {
@@ -1815,6 +1900,27 @@ type UpdateArrInstanceRequest struct {
 	Name       string `json:"name"`
 }
 
+// UpdateDownloaderRequest defines model for UpdateDownloaderRequest.
+type UpdateDownloaderRequest struct {
+	BaseUrl  string                          `json:"base_url"`
+	Enabled  *bool                           `json:"enabled,omitempty"`
+	Impl     string                          `json:"impl"`
+	Name     string                          `json:"name"`
+	Protocol UpdateDownloaderRequestProtocol `json:"protocol"`
+}
+
+// UpdateDownloaderRequestProtocol defines model for UpdateDownloaderRequest.Protocol.
+type UpdateDownloaderRequestProtocol string
+
+// UpdateIndexerRequest defines model for UpdateIndexerRequest.
+type UpdateIndexerRequest struct {
+	BaseUrl  string `json:"base_url"`
+	Enabled  *bool  `json:"enabled,omitempty"`
+	Impl     string `json:"impl"`
+	Name     string `json:"name"`
+	Priority *int64 `json:"priority,omitempty"`
+}
+
 // UserAccount defines model for UserAccount.
 type UserAccount struct {
 	Access    []CategoryGrant `json:"access"`
@@ -1966,6 +2072,11 @@ type DiscoverSearchParams struct {
 	Limit *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// SetDownloaderCredentialsJSONBody defines parameters for SetDownloaderCredentials.
+type SetDownloaderCredentialsJSONBody struct {
+	Credentials *string `json:"credentials,omitempty"`
+}
+
 // AddDownloadFolderJSONBody defines parameters for AddDownloadFolder.
 type AddDownloadFolderJSONBody struct {
 	CategoryId *int64  `json:"category_id,omitempty"`
@@ -2002,6 +2113,11 @@ type ListImportUnitsParams struct {
 
 // ListImportUnitsParamsDecision defines parameters for ListImportUnits.
 type ListImportUnitsParamsDecision string
+
+// SetIndexerAPIKeyJSONBody defines parameters for SetIndexerAPIKey.
+type SetIndexerAPIKeyJSONBody struct {
+	ApiKey *string `json:"api_key,omitempty"`
+}
 
 // ListJobsParams defines parameters for ListJobs.
 type ListJobsParams struct {
@@ -2284,6 +2400,15 @@ type AttachRootFolderToCategoryJSONRequestBody AttachRootFolderToCategoryJSONBod
 // DiscoverAddJSONRequestBody defines body for DiscoverAdd for application/json ContentType.
 type DiscoverAddJSONRequestBody = DiscoverAddRequest
 
+// AddDownloaderJSONRequestBody defines body for AddDownloader for application/json ContentType.
+type AddDownloaderJSONRequestBody = AddDownloaderRequest
+
+// UpdateDownloaderJSONRequestBody defines body for UpdateDownloader for application/json ContentType.
+type UpdateDownloaderJSONRequestBody = UpdateDownloaderRequest
+
+// SetDownloaderCredentialsJSONRequestBody defines body for SetDownloaderCredentials for application/json ContentType.
+type SetDownloaderCredentialsJSONRequestBody SetDownloaderCredentialsJSONBody
+
 // AddDownloadFolderJSONRequestBody defines body for AddDownloadFolder for application/json ContentType.
 type AddDownloadFolderJSONRequestBody AddDownloadFolderJSONBody
 
@@ -2310,6 +2435,15 @@ type RevertImportSessionJSONRequestBody = ImportRevertRequest
 
 // UpdateImportSettingsJSONRequestBody defines body for UpdateImportSettings for application/json ContentType.
 type UpdateImportSettingsJSONRequestBody = ImportSettings
+
+// AddIndexerJSONRequestBody defines body for AddIndexer for application/json ContentType.
+type AddIndexerJSONRequestBody = AddIndexerRequest
+
+// UpdateIndexerJSONRequestBody defines body for UpdateIndexer for application/json ContentType.
+type UpdateIndexerJSONRequestBody = UpdateIndexerRequest
+
+// SetIndexerAPIKeyJSONRequestBody defines body for SetIndexerAPIKey for application/json ContentType.
+type SetIndexerAPIKeyJSONRequestBody SetIndexerAPIKeyJSONBody
 
 // CreateLanguageProfileJSONRequestBody defines body for CreateLanguageProfile for application/json ContentType.
 type CreateLanguageProfileJSONRequestBody = LanguageProfileWrite
@@ -2487,6 +2621,21 @@ type ServerInterface interface {
 	// Search one category's own metadata provider for something not in the library yet (ADR-56's per-library half). The global, cross-media-type half with its destination-suggestion ladder is not built.
 	// (GET /discover/search)
 	DiscoverSearch(w http.ResponseWriter, r *http.Request, params DiscoverSearchParams)
+	// Every configured download client connection (stage 5, ADR-46/57).
+	// (GET /downloaders)
+	ListDownloaders(w http.ResponseWriter, r *http.Request)
+	// Connect a new download client. Administrator only.
+	// (POST /downloaders)
+	AddDownloader(w http.ResponseWriter, r *http.Request)
+	// Remove a connection. Administrator only.
+	// (DELETE /downloaders/{id})
+	DeleteDownloader(w http.ResponseWriter, r *http.Request, id int64)
+	// Change a connection's own facts. Administrator only. Never touches credentials -- see /downloaders/{id}/credentials.
+	// (PATCH /downloaders/{id})
+	UpdateDownloader(w http.ResponseWriter, r *http.Request, id int64)
+	// Replace or clear a connection's own credentials. Administrator only. A separate endpoint from PATCH, the same reasoning /indexers/{id}/apikey already gives.
+	// (POST /downloaders/{id}/credentials)
+	SetDownloaderCredentials(w http.ResponseWriter, r *http.Request, id int64)
 	// The configured download folders (todo 4.18, section 5.1).
 	// (GET /downloadfolders)
 	ListDownloadFolders(w http.ResponseWriter, r *http.Request)
@@ -2556,6 +2705,21 @@ type ServerInterface interface {
 	// Change the commit line. Administrator only.
 	// (PATCH /import/settings)
 	UpdateImportSettings(w http.ResponseWriter, r *http.Request)
+	// Every configured indexer connection (stage 5, ADR-37/43/47).
+	// (GET /indexers)
+	ListIndexers(w http.ResponseWriter, r *http.Request)
+	// Connect a new indexer. Administrator only.
+	// (POST /indexers)
+	AddIndexer(w http.ResponseWriter, r *http.Request)
+	// Remove a connection. Administrator only.
+	// (DELETE /indexers/{id})
+	DeleteIndexer(w http.ResponseWriter, r *http.Request, id int64)
+	// Change a connection's own facts. Administrator only. Never touches api_key -- see /indexers/{id}/apikey.
+	// (PATCH /indexers/{id})
+	UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
+	// Replace or clear a connection's own API key. Administrator only. A separate endpoint from PATCH: resealing on every unrelated edit would be silent, pointless churn. An empty api_key clears it, for a public endpoint that no longer needs one.
+	// (POST /indexers/{id}/apikey)
+	SetIndexerAPIKey(w http.ResponseWriter, r *http.Request, id int64)
 	// A page of jobs the caller may see.
 	// (GET /jobs)
 	ListJobs(w http.ResponseWriter, r *http.Request, params ListJobsParams)
@@ -2946,6 +3110,36 @@ func (_ Unimplemented) DiscoverSearch(w http.ResponseWriter, r *http.Request, pa
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Every configured download client connection (stage 5, ADR-46/57).
+// (GET /downloaders)
+func (_ Unimplemented) ListDownloaders(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Connect a new download client. Administrator only.
+// (POST /downloaders)
+func (_ Unimplemented) AddDownloader(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a connection. Administrator only.
+// (DELETE /downloaders/{id})
+func (_ Unimplemented) DeleteDownloader(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change a connection's own facts. Administrator only. Never touches credentials -- see /downloaders/{id}/credentials.
+// (PATCH /downloaders/{id})
+func (_ Unimplemented) UpdateDownloader(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace or clear a connection's own credentials. Administrator only. A separate endpoint from PATCH, the same reasoning /indexers/{id}/apikey already gives.
+// (POST /downloaders/{id}/credentials)
+func (_ Unimplemented) SetDownloaderCredentials(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // The configured download folders (todo 4.18, section 5.1).
 // (GET /downloadfolders)
 func (_ Unimplemented) ListDownloadFolders(w http.ResponseWriter, r *http.Request) {
@@ -3081,6 +3275,36 @@ func (_ Unimplemented) GetImportSettings(w http.ResponseWriter, r *http.Request)
 // Change the commit line. Administrator only.
 // (PATCH /import/settings)
 func (_ Unimplemented) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every configured indexer connection (stage 5, ADR-37/43/47).
+// (GET /indexers)
+func (_ Unimplemented) ListIndexers(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Connect a new indexer. Administrator only.
+// (POST /indexers)
+func (_ Unimplemented) AddIndexer(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a connection. Administrator only.
+// (DELETE /indexers/{id})
+func (_ Unimplemented) DeleteIndexer(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change a connection's own facts. Administrator only. Never touches api_key -- see /indexers/{id}/apikey.
+// (PATCH /indexers/{id})
+func (_ Unimplemented) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace or clear a connection's own API key. Administrator only. A separate endpoint from PATCH: resealing on every unrelated edit would be silent, pointless churn. An empty api_key clears it, for a public endpoint that no longer needs one.
+// (POST /indexers/{id}/apikey)
+func (_ Unimplemented) SetIndexerAPIKey(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4357,6 +4581,149 @@ func (siw *ServerInterfaceWrapper) DiscoverSearch(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ListDownloaders operation middleware
+func (siw *ServerInterfaceWrapper) ListDownloaders(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDownloaders(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddDownloader operation middleware
+func (siw *ServerInterfaceWrapper) AddDownloader(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddDownloader(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteDownloader operation middleware
+func (siw *ServerInterfaceWrapper) DeleteDownloader(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteDownloader(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateDownloader operation middleware
+func (siw *ServerInterfaceWrapper) UpdateDownloader(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateDownloader(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetDownloaderCredentials operation middleware
+func (siw *ServerInterfaceWrapper) SetDownloaderCredentials(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetDownloaderCredentials(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListDownloadFolders operation middleware
 func (siw *ServerInterfaceWrapper) ListDownloadFolders(w http.ResponseWriter, r *http.Request) {
 
@@ -5072,6 +5439,149 @@ func (siw *ServerInterfaceWrapper) UpdateImportSettings(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateImportSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListIndexers operation middleware
+func (siw *ServerInterfaceWrapper) ListIndexers(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListIndexers(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddIndexer operation middleware
+func (siw *ServerInterfaceWrapper) AddIndexer(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddIndexer(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteIndexer operation middleware
+func (siw *ServerInterfaceWrapper) DeleteIndexer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteIndexer(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateIndexer operation middleware
+func (siw *ServerInterfaceWrapper) UpdateIndexer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateIndexer(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetIndexerAPIKey operation middleware
+func (siw *ServerInterfaceWrapper) SetIndexerAPIKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetIndexerAPIKey(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7403,6 +7913,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/discover/search", wrapper.DiscoverSearch)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/downloaders", wrapper.ListDownloaders)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/downloaders", wrapper.AddDownloader)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/downloaders/{id}", wrapper.DeleteDownloader)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/downloaders/{id}", wrapper.UpdateDownloader)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/downloaders/{id}/credentials", wrapper.SetDownloaderCredentials)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/downloadfolders", wrapper.ListDownloadFolders)
 	})
 	r.Group(func(r chi.Router) {
@@ -7470,6 +7995,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/import/settings", wrapper.UpdateImportSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/indexers", wrapper.ListIndexers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/indexers", wrapper.AddIndexer)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/indexers/{id}", wrapper.DeleteIndexer)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/indexers/{id}", wrapper.UpdateIndexer)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/indexers/{id}/apikey", wrapper.SetIndexerAPIKey)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/jobs", wrapper.ListJobs)
