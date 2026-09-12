@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
+import { Copy, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import { useAuthPolicy, useSetAuthRequired } from "@/lib/useAuthPolicy";
@@ -10,6 +10,7 @@ import type { components } from "@/api/schema";
 type UserAccount = components["schemas"]["UserAccount"];
 type Role = components["schemas"]["Role"];
 type Tier = components["schemas"]["Me"]["tier"];
+type APIKey = components["schemas"]["APIKey"];
 
 const TIERS: readonly { id: Tier; label: string; blurb: string }[] = [
   { id: "normal", label: "Normal", blurb: "Just what a working library needs." },
@@ -38,6 +39,7 @@ export function UserSettings() {
         </header>
 
         {me.data && <MyTierSection tier={me.data.tier} />}
+        <APIKeysSection />
         <AccessSection />
 
         {me.data && <Users currentUserId={me.data.user_id} />}
@@ -84,6 +86,178 @@ function MyTierSection({ tier }: { tier: Tier }) {
         {setTier.isError && <p className="text-xs text-danger">That could not be saved.</p>}
       </div>
     </section>
+  );
+}
+
+/** Self-service, non-interactive credentials for an upstream app (Prowlarr
+ *  and similar) that authenticates as this user rather than a person signing
+ *  in -- the mechanism (X-Api-Key/Bearer, settings.Cache.CreateAPIKey) already
+ *  existed and was checked on every request; this is the first screen that
+ *  can actually reach it. */
+function APIKeysSection() {
+  const queryClient = useQueryClient();
+  const keys = useQuery({
+    queryKey: ["me", "apikeys"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/me/apikeys");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["me", "apikeys"] });
+
+  const [justCreated, setJustCreated] = useState<{ name: string; key: string } | null>(null);
+  const [name, setName] = useState("");
+
+  const create = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/me/apikeys", { body: { name } });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (created) => {
+      if (created) setJustCreated({ name: created.name, key: created.key });
+      setName("");
+      invalidate();
+    },
+  });
+
+  const revoke = useMutation({
+    mutationFn: async (id: number) => {
+      const { error } = await api.DELETE("/me/apikeys/{id}", { params: { path: { id } } });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">API keys</h2>
+      <div className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3">
+        <p className="text-xs text-ink-muted">
+          For an upstream app that authenticates as you (an *Arr-style X-Api-Key or Bearer
+          header) rather than a person signing in. Shown once, at creation -- store it there.
+        </p>
+
+        {justCreated && (
+          <div className="flex flex-col gap-1.5 rounded-md border border-accent bg-accent/10 p-2.5">
+            <span className="text-xs text-ink-muted">
+              "{justCreated.name}" -- copy this now, it will not be shown again:
+            </span>
+            <div className="flex items-center gap-1.5">
+              <code className="min-w-0 flex-1 truncate rounded bg-canvas px-2 py-1 font-mono text-xs">
+                {justCreated.key}
+              </code>
+              <button
+                type="button"
+                aria-label="Copy key"
+                onClick={() => {
+                  navigator.clipboard?.writeText(justCreated.key).catch(() => {});
+                }}
+                className="shrink-0 rounded-md border border-border-subtle p-1.5 text-ink-muted
+                           hover:text-ink"
+              >
+                <Copy aria-hidden className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setJustCreated(null)}
+                className="shrink-0 rounded-md border border-border-subtle px-2 py-1.5 text-xs
+                           text-ink-muted hover:text-ink"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+
+        {(keys.data ?? []).length > 0 && (
+          <ul className="flex flex-col divide-y divide-border-subtle">
+            {(keys.data ?? []).map((key) => (
+              <APIKeyRow
+                key={key.id}
+                apiKey={key}
+                busy={revoke.isPending}
+                onRevoke={() => revoke.mutate(key.id)}
+              />
+            ))}
+          </ul>
+        )}
+
+        {(create.isError || revoke.isError) && (
+          <p className="text-xs text-danger">That could not be saved.</p>
+        )}
+
+        <form
+          className="flex items-end gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (name.trim() !== "") create.mutate();
+          }}
+        >
+          <label className="flex min-w-32 flex-1 flex-col gap-1 text-xs text-ink-muted">
+            Name
+            <input
+              className="rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm
+                         text-ink focus-visible:outline-2 focus-visible:outline-offset-2
+                         focus-visible:outline-accent"
+              value={name}
+              placeholder="Prowlarr"
+              autoComplete="off"
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={name.trim() === "" || create.isPending}
+            className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            {create.isPending ? "Creating…" : "New key"}
+          </button>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+function APIKeyRow({
+  apiKey,
+  busy,
+  onRevoke,
+}: {
+  apiKey: APIKey;
+  busy: boolean;
+  onRevoke: () => void;
+}) {
+  return (
+    <li className="flex items-center gap-2 py-2 text-sm">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate font-medium">{apiKey.name}</span>
+        <span className="text-xs text-ink-muted">
+          Created {new Date(apiKey.created_at).toLocaleDateString()}
+          {apiKey.last_used_at
+            ? ` · last used ${new Date(apiKey.last_used_at).toLocaleDateString()}`
+            : " · never used"}
+        </span>
+      </div>
+      <button
+        type="button"
+        aria-label={`Revoke ${apiKey.name}`}
+        onClick={() => {
+          if (window.confirm(`Revoke "${apiKey.name}"? Anything using it will stop working immediately.`)) {
+            onRevoke();
+          }
+        }}
+        disabled={busy}
+        className="shrink-0 rounded-md border border-border-subtle p-1 text-ink-muted
+                   hover:text-danger disabled:opacity-50 focus-visible:outline-2
+                   focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        <Trash2 aria-hidden className="size-3.5" />
+      </button>
+    </li>
   );
 }
 

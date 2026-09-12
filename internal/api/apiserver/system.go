@@ -5,10 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
 	"github.com/makearr/MediaNexus/internal/api/apiserver/legal"
+	"github.com/makearr/MediaNexus/internal/api/auth"
 	"github.com/makearr/MediaNexus/internal/api/authz"
 	"github.com/makearr/MediaNexus/internal/db/settings"
 	"github.com/makearr/MediaNexus/internal/platform/config"
@@ -189,6 +194,107 @@ type meView struct {
 	Role       string         `json:"role"`
 	Tier       string         `json:"tier"`
 	Categories []categoryView `json:"categories"`
+}
+
+// ListMyAPIKeys lists the caller's own non-interactive credentials --
+// self-service, same shape as SetMyTier. Never the key or its hash.
+func (s *Server) ListMyAPIKeys(w http.ResponseWriter, r *http.Request) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	keys, err := s.auth.Settings.ListAPIKeys(r.Context(), access.UserID())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, buildAPIKeyViews(keys))
+}
+
+// CreateMyAPIKey mints a key for the caller and returns its plaintext --
+// the only time it is ever shown (ADR-14).
+func (s *Server) CreateMyAPIKey(w http.ResponseWriter, r *http.Request) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "expected a JSON object with name")
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a name is required")
+		return
+	}
+
+	plaintext, hash, err := auth.GenerateAPIKey()
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	created, err := s.auth.Settings.CreateAPIKey(r.Context(), s.wall, access.UserID(), name, hash)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+
+	view := buildAPIKeyView(created)
+	writeJSON(w, s.logger, http.StatusCreated, gen.CreatedAPIKey{
+		Id: view.Id, Name: view.Name, CreatedAt: view.CreatedAt, LastUsedAt: view.LastUsedAt,
+		Key: string(plaintext),
+	})
+}
+
+// routeDeleteMyAPIKey parses the id path parameter, mirroring routeGetWork.
+func (s *Server) routeDeleteMyAPIKey(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "an api key id must be a number")
+		return
+	}
+	s.DeleteMyAPIKey(w, r, id)
+}
+
+// DeleteMyAPIKey revokes one of the caller's own keys. Refused (404, via
+// writeError's settings.ErrNotFound mapping) for a key belonging to someone
+// else -- settings.Cache.DeleteAPIKey checks ownership.
+func (s *Server) DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, id int64) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if err := s.auth.Settings.DeleteAPIKey(r.Context(), access.UserID(), id); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func buildAPIKeyViews(keys []settings.APIKey) []gen.APIKey {
+	views := make([]gen.APIKey, len(keys))
+	for index, key := range keys {
+		views[index] = buildAPIKeyView(key)
+	}
+	return views
+}
+
+func buildAPIKeyView(key settings.APIKey) gen.APIKey {
+	view := gen.APIKey{Id: key.ID, Name: key.Name, CreatedAt: key.CreatedAt}
+	if !key.LastUsedAt.IsZero() {
+		lastUsed := key.LastUsedAt
+		view.LastUsedAt = &lastUsed
+	}
+	return view
 }
 
 type categoryView struct {
