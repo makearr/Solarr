@@ -3,6 +3,7 @@ package apiserver
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/netip"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/db/settings"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
 	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/MediaNexus/internal/platform/fsx"
 )
 
 // ipAllowlist refuses an excluded address before authentication -- it can
@@ -76,6 +78,20 @@ func (s *Server) UpdateNetworkSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ADR-58's revised precedence (2026-09-12): config.yml now outranks
+	// settings.db, so a deliberate port choice (0 means "no override," left
+	// untouched) has to reach the file too, or the change would be silently
+	// undone by config.yml's own stale value on the next restart. Written
+	// first and required to succeed -- a settings.db write with no matching
+	// config.yml write is the exact inconsistency this exists to prevent.
+	if wanted.Port != 0 && s.configPath != "" {
+		if err := s.writeConfigServerPort(wanted.Port); err != nil {
+			writeProblem(w, s.logger, http.StatusInternalServerError, TypeInternal,
+				"The port could not be saved", "config.yml could not be updated: "+err.Error())
+			return
+		}
+	}
+
 	caller := s.resolvedClientAddress(r)
 	if err := s.auth.Settings.SetNetworkSettings(r.Context(), clock.NewSystem(), wanted, caller); err != nil {
 		var problems config.Problems
@@ -88,6 +104,35 @@ func (s *Server) UpdateNetworkSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, s.networkSettingsView())
+}
+
+// writeConfigServerPort surgically patches server.port into config.yml on
+// disk, preserving the rest of the file (config.SetServerPort's own doc
+// comment explains why a full remarshal is not acceptable here).
+func (s *Server) writeConfigServerPort(port int) error {
+	file, err := s.fsys.Open(s.configPath)
+	if err != nil {
+		return err
+	}
+	data, err := io.ReadAll(file)
+	closeErr := file.Close()
+	if err != nil {
+		return err
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+
+	patched, err := config.SetServerPort(data, port)
+	if err != nil {
+		return err
+	}
+
+	// Secret, not plain: config.yml carries the encryption key (Invariant 68).
+	return fsx.WriteAtomicSecret(s.fsys, s.configPath, func(w io.Writer) error {
+		_, writeErr := w.Write(patched)
+		return writeErr
+	})
 }
 
 func (s *Server) networkSettingsView() gen.NetworkSettings {

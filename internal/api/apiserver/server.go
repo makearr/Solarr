@@ -88,6 +88,10 @@ type Config struct {
 	// Required together with Artwork -- meaningless alone.
 	FS        fsx.FS
 	ImagesDir string
+	// ConfigPath locates config.yml on disk. Optional: without it,
+	// UpdateNetworkSettings writes only settings.db and never touches the
+	// file, same as before ADR-58's precedence was revised (2026-09-12).
+	ConfigPath string
 	// People lists and reads people (ADR-32). Optional: without it, the people
 	// endpoints answer 503.
 	People PeopleReader
@@ -184,6 +188,7 @@ type Server struct {
 	artwork               ArtworkReader
 	fsys                  fsx.FS
 	imagesDir             string
+	configPath            string
 	people                PeopleReader
 	peopleSubscriber      PeopleSubscriber
 	subscriptionPreviewer SubscriptionPreviewer
@@ -256,6 +261,7 @@ func New(config Config) (*Server, error) {
 		artwork:               config.Artwork,
 		fsys:                  config.FS,
 		imagesDir:             config.ImagesDir,
+		configPath:            config.ConfigPath,
 		people:                config.People,
 		peopleSubscriber:      config.PeopleSubscriber,
 		subscriptionPreviewer: config.SubscriptionPreviewer,

@@ -2,14 +2,17 @@ package apiserver_test
 
 import (
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"strings"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/api/apiserver"
 	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/MediaNexus/internal/platform/fsx"
 )
 
 type networkSettingsBody struct {
@@ -86,6 +89,119 @@ func TestUpdateNetworkSettings_RoundTripsAndReportsRestartRequired(t *testing.T)
 	if len(body.ProxyBypass) != 1 || len(body.AllowCIDRs) != 1 {
 		t.Errorf("body = %+v", body)
 	}
+}
+
+// ADR-58's revised precedence (2026-09-12): config.yml now outranks
+// settings.db, so a deliberate port change has to reach the file too.
+func TestUpdateNetworkSettings_PatchesConfigYAMLWhenPortIsSet(t *testing.T) {
+	fixture := newWorksFixtureWithConfigPath(t, "/config/config.yml")
+	writeFakeConfigYAML(t, fixture.fsys, "/config/config.yml")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	request := authedPatch(t, cookies, "/api/v1/network", `{"port":6000,"proxy_bypass":[],"allow_cidrs":[]}`)
+	recorder := fixture.do(request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+
+	text := readFile(t, fixture.fsys, "/config/config.yml")
+	if !strings.Contains(text, "port: 6000") {
+		t.Errorf("config.yml was not patched:\n%s", text)
+	}
+	if !strings.Contains(text, "# a marker comment") {
+		t.Errorf("config.yml lost its own comment:\n%s", text)
+	}
+}
+
+// Port 0 means "no override" (network.go's own NetworkSettings doc comment)
+// -- writing it into config.yml would overwrite a real configured port with
+// a value the schema does not even treat as meaningful.
+func TestUpdateNetworkSettings_LeavesConfigYAMLUntouchedWhenPortIsZero(t *testing.T) {
+	fixture := newWorksFixtureWithConfigPath(t, "/config/config.yml")
+	writeFakeConfigYAML(t, fixture.fsys, "/config/config.yml")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	before := readFile(t, fixture.fsys, "/config/config.yml")
+	request := authedPatch(t, cookies, "/api/v1/network", `{"port":0,"proxy_bypass":[".lan"],"allow_cidrs":[]}`)
+	recorder := fixture.do(request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+
+	after := readFile(t, fixture.fsys, "/config/config.yml")
+	if before != after {
+		t.Errorf("config.yml changed despite port=0:\nbefore: %s\nafter: %s", before, after)
+	}
+	// The rest of the request still applied.
+	if got := fixture.cache.Snapshot().NetworkSettings().ProxyBypass; len(got) != 1 || got[0] != ".lan" {
+		t.Errorf("ProxyBypass = %v, want [.lan]", got)
+	}
+}
+
+// The whole point of writing config.yml first: a failure there must refuse
+// the entire change, not leave settings.db holding a value config.yml will
+// silently overrule on the next restart.
+func TestUpdateNetworkSettings_RefusesWhenConfigYAMLCannotBeWritten(t *testing.T) {
+	fixture := newWorksFixtureWithConfigPath(t, "/config/config.yml")
+	// Deliberately never written -- Open fails, so the patch cannot even start.
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	request := authedPatch(t, cookies, "/api/v1/network", `{"port":6000,"proxy_bypass":[],"allow_cidrs":[]}`)
+	recorder := fixture.do(request)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, body = %s, want 500", recorder.Code, recorder.Body)
+	}
+	if got := fixture.cache.Snapshot().NetworkSettings().Port; got != 0 {
+		t.Errorf("Port = %d, want unchanged -- settings.db must not diverge from a config.yml write that failed", got)
+	}
+}
+
+// Without a configured ConfigPath (the default fixture), the write-back is
+// simply unavailable and the old settings.db-only behaviour still applies --
+// same as before ADR-58's precedence was revised.
+func TestUpdateNetworkSettings_NoConfigPathSkipsTheFileEntirely(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	request := authedPatch(t, cookies, "/api/v1/network", `{"port":6000,"proxy_bypass":[],"allow_cidrs":[]}`)
+	if got := fixture.do(request).Code; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200", got)
+	}
+}
+
+func writeFakeConfigYAML(t *testing.T, fsys *fsx.Mem, path string) {
+	t.Helper()
+	if err := fsys.MkdirAll("/config", 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	file, err := fsys.Create(path)
+	if err != nil {
+		t.Fatalf("Create(%s): %v", path, err)
+	}
+	if _, err := file.Write([]byte("# a marker comment\nversion: 1\n\nserver:\n  bind: 0.0.0.0\n  port: 5454\n  base_url: /\n")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+}
+
+func readFile(t *testing.T, fsys *fsx.Mem, path string) string {
+	t.Helper()
+	file, err := fsys.Open(path)
+	if err != nil {
+		t.Fatalf("Open(%s): %v", path, err)
+	}
+	defer func() { _ = file.Close() }()
+	data, err := io.ReadAll(file)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	return string(data)
 }
 
 // Invariant 89 at the HTTP layer: a write that would exclude the caller's

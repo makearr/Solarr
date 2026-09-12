@@ -161,6 +161,24 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 	t *testing.T, librarySize apiserver.LibrarySize, navigation apiserver.NavigationProvider,
 	libraryArtists apiserver.LibraryArtistsReader, registry *settings.Registry,
 ) worksFixture {
+	return newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
+		t, librarySize, navigation, libraryArtists, registry, "")
+}
+
+// newWorksFixtureWithConfigPath is newWorksFixture plus an injectable
+// config.yml path (todo: ADR-58's revised precedence, 2026-09-12), for
+// network_test.go's own proof that UpdateNetworkSettings patches the real
+// file. Empty everywhere else (the default) means "config.yml write-back
+// unavailable," matching the ConfigPath field's own optional shape.
+func newWorksFixtureWithConfigPath(t *testing.T, configPath string) worksFixture {
+	t.Helper()
+	return newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(t, nil, nil, nil, nil, configPath)
+}
+
+func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
+	t *testing.T, librarySize apiserver.LibrarySize, navigation apiserver.NavigationProvider,
+	libraryArtists apiserver.LibraryArtistsReader, registry *settings.Registry, configPath string,
+) worksFixture {
 	t.Helper()
 	if registry == nil {
 		registry = settings.NewDefaultRegistry()
@@ -239,6 +257,7 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 		MoveJobs:              moveJobs,
 		RenameStarter:         renameStarter,
 		FS:                    fsys,
+		ConfigPath:            configPath,
 		DownloadRoots:         apiserver.FilesystemRoots{FS: fsys},
 		Scheduler:             scheduler,
 		CacheManager:          cacheManager,
