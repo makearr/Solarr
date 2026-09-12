@@ -1059,6 +1059,29 @@ type JobPool string
 // JobState defines model for JobState.
 type JobState string
 
+// LanguageProfile Section 19.8's policy: language is its own axis, belonging to a category rather than a media type. Required lists use any_of semantics -- at least one listed language must be present, evaluated from the probe, never the release name. An empty preferred/required list is valid (some categories, e.g. music, have no language policy at all).
+type LanguageProfile struct {
+	AudioPreferred      []string `json:"audio_preferred"`
+	AudioRequired       []string `json:"audio_required"`
+	Id                  int64    `json:"id"`
+	Name                string   `json:"name"`
+	PreferOriginalAudio bool     `json:"prefer_original_audio"`
+	RejectDubbed        bool     `json:"reject_dubbed"`
+	SubtitlePreferred   []string `json:"subtitle_preferred"`
+	SubtitleRequired    []string `json:"subtitle_required"`
+}
+
+// LanguageProfileWrite defines model for LanguageProfileWrite.
+type LanguageProfileWrite struct {
+	AudioPreferred      *[]string `json:"audio_preferred,omitempty"`
+	AudioRequired       *[]string `json:"audio_required,omitempty"`
+	Name                string    `json:"name"`
+	PreferOriginalAudio *bool     `json:"prefer_original_audio,omitempty"`
+	RejectDubbed        *bool     `json:"reject_dubbed,omitempty"`
+	SubtitlePreferred   *[]string `json:"subtitle_preferred,omitempty"`
+	SubtitleRequired    *[]string `json:"subtitle_required,omitempty"`
+}
+
 // Library A category as a navigation root (ADR-54): its declared entity levels replace the old flat works/files pair -- see LibraryLevel.
 type Library struct {
 	Id int64 `json:"id"`
@@ -1381,6 +1404,25 @@ type Problem struct {
 
 // ProblemType defines model for ProblemType.
 type ProblemType string
+
+// QualityProfile ADR-40's policy: hard gates, then lexicographic tiers, then an additive score. `rules` and `upgrade` are kept as opaque JSON here -- internal/identify/score owns that shape (Parse/ParseUpgrade); this layer only checks a name and that they decode (settings. validateQualityProfile).
+type QualityProfile struct {
+	Id   int64  `json:"id"`
+	Name string `json:"name"`
+
+	// Rules ADR-40's rule JSON -- internal/identify/score.Parse's own shape.
+	Rules string `json:"rules"`
+
+	// Upgrade ADR-40's upgrade JSON -- internal/identify/score.ParseUpgrade's own shape.
+	Upgrade string `json:"upgrade"`
+}
+
+// QualityProfileWrite defines model for QualityProfileWrite.
+type QualityProfileWrite struct {
+	Name    string `json:"name"`
+	Rules   string `json:"rules"`
+	Upgrade string `json:"upgrade"`
+}
 
 // ReadyStatus defines model for ReadyStatus.
 type ReadyStatus struct {
@@ -2104,6 +2146,12 @@ type RevertImportSessionJSONRequestBody = ImportRevertRequest
 // UpdateImportSettingsJSONRequestBody defines body for UpdateImportSettings for application/json ContentType.
 type UpdateImportSettingsJSONRequestBody = ImportSettings
 
+// CreateLanguageProfileJSONRequestBody defines body for CreateLanguageProfile for application/json ContentType.
+type CreateLanguageProfileJSONRequestBody = LanguageProfileWrite
+
+// UpdateLanguageProfileJSONRequestBody defines body for UpdateLanguageProfile for application/json ContentType.
+type UpdateLanguageProfileJSONRequestBody = LanguageProfileWrite
+
 // CreateImportListJSONRequestBody defines body for CreateImportList for application/json ContentType.
 type CreateImportListJSONRequestBody = ImportListWrite
 
@@ -2121,6 +2169,12 @@ type SubscribePersonJSONRequestBody SubscribePersonJSONBody
 
 // UpdatePrioritySettingsJSONRequestBody defines body for UpdatePrioritySettings for application/json ContentType.
 type UpdatePrioritySettingsJSONRequestBody = PrioritySettings
+
+// CreateQualityProfileJSONRequestBody defines body for CreateQualityProfile for application/json ContentType.
+type CreateQualityProfileJSONRequestBody = QualityProfileWrite
+
+// UpdateQualityProfileJSONRequestBody defines body for UpdateQualityProfile for application/json ContentType.
+type UpdateQualityProfileJSONRequestBody = QualityProfileWrite
 
 // AddRootFolderJSONRequestBody defines body for AddRootFolder for application/json ContentType.
 type AddRootFolderJSONRequestBody AddRootFolderJSONBody
@@ -2319,6 +2373,18 @@ type ServerInterface interface {
 	// A page of jobs the caller may see.
 	// (GET /jobs)
 	ListJobs(w http.ResponseWriter, r *http.Request, params ListJobsParams)
+	// Every language profile (section 19.8).
+	// (GET /languageprofiles)
+	ListLanguageProfiles(w http.ResponseWriter, r *http.Request)
+	// Add a language profile. Administrator only.
+	// (POST /languageprofiles)
+	CreateLanguageProfile(w http.ResponseWriter, r *http.Request)
+	// Remove a language profile. Administrator only. Refused, with the categories that still default to it, while any category does (settings.ErrInUse).
+	// (DELETE /languageprofiles/{id})
+	DeleteLanguageProfile(w http.ResponseWriter, r *http.Request, id int64)
+	// Replace a language profile's policy. Administrator only.
+	// (PATCH /languageprofiles/{id})
+	UpdateLanguageProfile(w http.ResponseWriter, r *http.Request, id int64)
 	// The navigation tree -- libraries the caller may see, with their levels (ADR-54).
 	// (GET /libraries)
 	ListLibraries(w http.ResponseWriter, r *http.Request)
@@ -2379,6 +2445,18 @@ type ServerInterface interface {
 	// Change the weights or the freshness window. Administrator only.
 	// (PATCH /priority)
 	UpdatePrioritySettings(w http.ResponseWriter, r *http.Request)
+	// Every quality profile (ADR-40).
+	// (GET /qualityprofiles)
+	ListQualityProfiles(w http.ResponseWriter, r *http.Request)
+	// Add a quality profile. Administrator only.
+	// (POST /qualityprofiles)
+	CreateQualityProfile(w http.ResponseWriter, r *http.Request)
+	// Remove a quality profile. Administrator only. Refused, with the categories that still default to it, while any category does (settings.ErrInUse).
+	// (DELETE /qualityprofiles/{id})
+	DeleteQualityProfile(w http.ResponseWriter, r *http.Request, id int64)
+	// Replace a quality profile's policy. Administrator only.
+	// (PATCH /qualityprofiles/{id})
+	UpdateQualityProfile(w http.ResponseWriter, r *http.Request, id int64)
 	// Readiness.
 	// (GET /ready)
 	GetReady(w http.ResponseWriter, r *http.Request)
@@ -2781,6 +2859,30 @@ func (_ Unimplemented) ListJobs(w http.ResponseWriter, r *http.Request, params L
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Every language profile (section 19.8).
+// (GET /languageprofiles)
+func (_ Unimplemented) ListLanguageProfiles(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add a language profile. Administrator only.
+// (POST /languageprofiles)
+func (_ Unimplemented) CreateLanguageProfile(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a language profile. Administrator only. Refused, with the categories that still default to it, while any category does (settings.ErrInUse).
+// (DELETE /languageprofiles/{id})
+func (_ Unimplemented) DeleteLanguageProfile(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace a language profile's policy. Administrator only.
+// (PATCH /languageprofiles/{id})
+func (_ Unimplemented) UpdateLanguageProfile(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // The navigation tree -- libraries the caller may see, with their levels (ADR-54).
 // (GET /libraries)
 func (_ Unimplemented) ListLibraries(w http.ResponseWriter, r *http.Request) {
@@ -2898,6 +3000,30 @@ func (_ Unimplemented) GetPrioritySettings(w http.ResponseWriter, r *http.Reques
 // Change the weights or the freshness window. Administrator only.
 // (PATCH /priority)
 func (_ Unimplemented) UpdatePrioritySettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every quality profile (ADR-40).
+// (GET /qualityprofiles)
+func (_ Unimplemented) ListQualityProfiles(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add a quality profile. Administrator only.
+// (POST /qualityprofiles)
+func (_ Unimplemented) CreateQualityProfile(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a quality profile. Administrator only. Refused, with the categories that still default to it, while any category does (settings.ErrInUse).
+// (DELETE /qualityprofiles/{id})
+func (_ Unimplemented) DeleteQualityProfile(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace a quality profile's policy. Administrator only.
+// (PATCH /qualityprofiles/{id})
+func (_ Unimplemented) UpdateQualityProfile(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4639,6 +4765,116 @@ func (siw *ServerInterfaceWrapper) ListJobs(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// ListLanguageProfiles operation middleware
+func (siw *ServerInterfaceWrapper) ListLanguageProfiles(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLanguageProfiles(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateLanguageProfile operation middleware
+func (siw *ServerInterfaceWrapper) CreateLanguageProfile(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateLanguageProfile(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteLanguageProfile operation middleware
+func (siw *ServerInterfaceWrapper) DeleteLanguageProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteLanguageProfile(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateLanguageProfile operation middleware
+func (siw *ServerInterfaceWrapper) UpdateLanguageProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateLanguageProfile(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListLibraries operation middleware
 func (siw *ServerInterfaceWrapper) ListLibraries(w http.ResponseWriter, r *http.Request) {
 
@@ -5316,6 +5552,116 @@ func (siw *ServerInterfaceWrapper) UpdatePrioritySettings(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdatePrioritySettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListQualityProfiles operation middleware
+func (siw *ServerInterfaceWrapper) ListQualityProfiles(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListQualityProfiles(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateQualityProfile operation middleware
+func (siw *ServerInterfaceWrapper) CreateQualityProfile(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateQualityProfile(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteQualityProfile operation middleware
+func (siw *ServerInterfaceWrapper) DeleteQualityProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteQualityProfile(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateQualityProfile operation middleware
+func (siw *ServerInterfaceWrapper) UpdateQualityProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateQualityProfile(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6532,6 +6878,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/jobs", wrapper.ListJobs)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/languageprofiles", wrapper.ListLanguageProfiles)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/languageprofiles", wrapper.CreateLanguageProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/languageprofiles/{id}", wrapper.DeleteLanguageProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/languageprofiles/{id}", wrapper.UpdateLanguageProfile)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/libraries", wrapper.ListLibraries)
 	})
 	r.Group(func(r chi.Router) {
@@ -6590,6 +6948,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/priority", wrapper.UpdatePrioritySettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/qualityprofiles", wrapper.ListQualityProfiles)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/qualityprofiles", wrapper.CreateQualityProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/qualityprofiles/{id}", wrapper.DeleteQualityProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/qualityprofiles/{id}", wrapper.UpdateQualityProfile)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/ready", wrapper.GetReady)

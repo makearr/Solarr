@@ -1886,6 +1886,156 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /qualityprofiles:
+    get:
+      operationId: listQualityProfiles
+      tags: [settings]
+      summary: Every quality profile (ADR-40).
+      description: >-
+        Unfiltered, unpaginated -- profile counts are small, same reasoning
+        as /exclusions.
+      responses:
+        "200":
+          description: The profiles.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/QualityProfile" }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createQualityProfile
+      tags: [settings]
+      summary: Add a quality profile. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QualityProfileWrite" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QualityProfile" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /qualityprofiles/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    patch:
+      operationId: updateQualityProfile
+      tags: [settings]
+      summary: Replace a quality profile's policy. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QualityProfileWrite" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QualityProfile" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteQualityProfile
+      tags: [settings]
+      summary: >-
+        Remove a quality profile. Administrator only. Refused, with the
+        categories that still default to it, while any category does
+        (settings.ErrInUse).
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /languageprofiles:
+    get:
+      operationId: listLanguageProfiles
+      tags: [settings]
+      summary: Every language profile (section 19.8).
+      description: >-
+        Unfiltered, unpaginated -- profile counts are small, same reasoning
+        as /exclusions.
+      responses:
+        "200":
+          description: The profiles.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LanguageProfile" }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createLanguageProfile
+      tags: [settings]
+      summary: Add a language profile. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LanguageProfileWrite" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LanguageProfile" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /languageprofiles/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    patch:
+      operationId: updateLanguageProfile
+      tags: [settings]
+      summary: Replace a language profile's policy. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LanguageProfileWrite" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LanguageProfile" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteLanguageProfile
+      tags: [settings]
+      summary: >-
+        Remove a language profile. Administrator only. Refused, with the
+        categories that still default to it, while any category does
+        (settings.ErrInUse).
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
   /blocked:
     get:
       operationId: listBlockedContent
@@ -3918,6 +4068,67 @@ components:
         category_id: { type: integer, format: int64 }
         note: { type: string }
         enabled: { type: boolean, default: true }
+
+    QualityProfile:
+      type: object
+      description: >-
+        ADR-40's policy: hard gates, then lexicographic tiers, then an
+        additive score. `rules` and `upgrade` are kept as opaque JSON here --
+        internal/identify/score owns that shape (Parse/ParseUpgrade); this
+        layer only checks a name and that they decode (settings.
+        validateQualityProfile).
+      required: [id, name, rules, upgrade]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        rules:
+          type: string
+          description: ADR-40's rule JSON -- internal/identify/score.Parse's own shape.
+        upgrade:
+          type: string
+          description: ADR-40's upgrade JSON -- internal/identify/score.ParseUpgrade's own shape.
+
+    QualityProfileWrite:
+      type: object
+      required: [name, rules, upgrade]
+      properties:
+        name: { type: string, minLength: 1 }
+        rules: { type: string }
+        upgrade: { type: string }
+
+    LanguageProfile:
+      type: object
+      description: >-
+        Section 19.8's policy: language is its own axis, belonging to a
+        category rather than a media type. Required lists use any_of
+        semantics -- at least one listed language must be present, evaluated
+        from the probe, never the release name. An empty preferred/required
+        list is valid (some categories, e.g. music, have no language policy
+        at all).
+      required:
+        [id, name, audio_preferred, audio_required, subtitle_preferred,
+         subtitle_required, prefer_original_audio, reject_dubbed]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        audio_preferred: { type: array, items: { type: string } }
+        audio_required: { type: array, items: { type: string } }
+        subtitle_preferred: { type: array, items: { type: string } }
+        subtitle_required: { type: array, items: { type: string } }
+        prefer_original_audio: { type: boolean }
+        reject_dubbed: { type: boolean }
+
+    LanguageProfileWrite:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        audio_preferred: { type: array, items: { type: string } }
+        audio_required: { type: array, items: { type: string } }
+        subtitle_preferred: { type: array, items: { type: string } }
+        subtitle_required: { type: array, items: { type: string } }
+        prefer_original_audio: { type: boolean, default: false }
+        reject_dubbed: { type: boolean, default: false }
 
     BlockedContentEntry:
       type: object

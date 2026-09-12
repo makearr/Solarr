@@ -1,13 +1,6 @@
 import { useParams } from "@tanstack/react-router";
 
 const SECTIONS: Record<string, { title: string; description: string }> = {
-  quality: {
-    title: "Quality profiles",
-    description:
-      "internal/identify/score already interprets tier-list-or-target rules (ADR-40) and " +
-      "internal/db/settings.Cache already has full CRUD for them, but there is no REST API " +
-      "or builder UI to create one by hand yet -- no named default profile ships either.",
-  },
   naming: {
     title: "Naming",
     description:
@@ -15,21 +8,13 @@ const SECTIONS: Record<string, { title: string; description: string }> = {
       "default reproduces the existing library byte for byte (section 11.8), but there is " +
       "no template editor or a naming_profile table for a second one to live in yet.",
   },
-  language: {
-    title: "Language",
-    description:
-      "internal/db/settings.Cache already has full CRUD for language profiles (required/" +
-      "preferred audio and subtitle languages, ADR-40's language axis), but there is no " +
-      "REST API or builder UI to create one by hand yet.",
-  },
 };
 
-/** A placeholder for the three per-library config sections ADR-54's own
- *  tree sketch lists beside a library's entity levels (Quality profiles,
- *  Naming, Language). Confirmed with the user 2026-09-09: none of the three
- *  has a real screen today (only Settings.Cache-level CRUD, for two of
- *  them) -- this lands the navigation slot honestly, real builder UIs are
- *  their own immediate follow-up rather than pretended finished here. */
+/** A placeholder for the per-library config sections ADR-54's own tree
+ *  sketch lists beside a library's entity levels that still have no real
+ *  screen. Quality and language profiles got theirs 2026-09-12
+ *  (QualityProfiles.tsx, LanguageProfiles.tsx, their own routes registered
+ *  ahead of this catch-all) -- only Naming is left standing in here. */
 export function LibraryConfigPlaceholder() {
   const { section } = useParams({ strict: false }) as { section?: string };
   const info = (section && SECTIONS[section]) || null;

@@ -17,6 +17,7 @@ import { Import } from "./Import";
 import { ImportLists } from "./ImportLists";
 import { CacheSettingsPage } from "./CacheSettings";
 import { Library } from "./Library";
+import { LanguageProfiles } from "./LanguageProfiles";
 import { LibraryConfigPlaceholder } from "./LibraryConfigPlaceholder";
 import { LibraryHealth } from "./LibraryHealth";
 import { LibraryLevelList } from "./LibraryLevelList";
@@ -25,6 +26,7 @@ import { Overview } from "./Overview";
 import { Packs } from "./Packs";
 import { People } from "./People";
 import { PersonDetail } from "./PersonDetail";
+import { QualityProfiles } from "./QualityProfiles";
 import { RootFolders } from "./RootFolders";
 import { GeneralSettings } from "./Settings";
 import { SchedulerPage } from "./Scheduler";
@@ -70,12 +72,25 @@ const routes = [
     },
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/albums", component: Library }),
-  // A real screen (unlike quality/naming/language below), so it gets its own
-  // static route rather than falling through the generic $section catch-all.
+  // Real screens (unlike naming below), so each gets its own static route
+  // rather than falling through the generic $section catch-all. Quality and
+  // language profiles are global, not per-library (todo 4.3, 2026-09-12) --
+  // reached from here the same way Packs is, but the same list regardless
+  // of which category's config page got you here.
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/library/$categoryId/config/import-lists",
     component: ImportLists,
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/library/$categoryId/config/quality",
+    component: QualityProfiles,
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/library/$categoryId/config/language",
+    component: LanguageProfiles,
   }),
   createRoute({
     getParentRoute: () => rootRoute,

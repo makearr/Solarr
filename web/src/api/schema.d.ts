@@ -1196,6 +1196,88 @@ export interface paths {
         patch: operations["updateExclusionPattern"];
         trace?: never;
     };
+    "/qualityprofiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every quality profile (ADR-40).
+         * @description Unfiltered, unpaginated -- profile counts are small, same reasoning as /exclusions.
+         */
+        get: operations["listQualityProfiles"];
+        put?: never;
+        /** Add a quality profile. Administrator only. */
+        post: operations["createQualityProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/qualityprofiles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a quality profile. Administrator only. Refused, with the categories that still default to it, while any category does (settings.ErrInUse). */
+        delete: operations["deleteQualityProfile"];
+        options?: never;
+        head?: never;
+        /** Replace a quality profile's policy. Administrator only. */
+        patch: operations["updateQualityProfile"];
+        trace?: never;
+    };
+    "/languageprofiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every language profile (section 19.8).
+         * @description Unfiltered, unpaginated -- profile counts are small, same reasoning as /exclusions.
+         */
+        get: operations["listLanguageProfiles"];
+        put?: never;
+        /** Add a language profile. Administrator only. */
+        post: operations["createLanguageProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/languageprofiles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a language profile. Administrator only. Refused, with the categories that still default to it, while any category does (settings.ErrInUse). */
+        delete: operations["deleteLanguageProfile"];
+        options?: never;
+        head?: never;
+        /** Replace a language profile's policy. Administrator only. */
+        patch: operations["updateLanguageProfile"];
+        trace?: never;
+    };
     "/blocked": {
         parameters: {
             query?: never;
@@ -2601,6 +2683,44 @@ export interface components {
             note?: string;
             /** @default true */
             enabled: boolean;
+        };
+        /** @description ADR-40's policy: hard gates, then lexicographic tiers, then an additive score. `rules` and `upgrade` are kept as opaque JSON here -- internal/identify/score owns that shape (Parse/ParseUpgrade); this layer only checks a name and that they decode (settings. validateQualityProfile). */
+        QualityProfile: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** @description ADR-40's rule JSON -- internal/identify/score.Parse's own shape. */
+            rules: string;
+            /** @description ADR-40's upgrade JSON -- internal/identify/score.ParseUpgrade's own shape. */
+            upgrade: string;
+        };
+        QualityProfileWrite: {
+            name: string;
+            rules: string;
+            upgrade: string;
+        };
+        /** @description Section 19.8's policy: language is its own axis, belonging to a category rather than a media type. Required lists use any_of semantics -- at least one listed language must be present, evaluated from the probe, never the release name. An empty preferred/required list is valid (some categories, e.g. music, have no language policy at all). */
+        LanguageProfile: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            audio_preferred: string[];
+            audio_required: string[];
+            subtitle_preferred: string[];
+            subtitle_required: string[];
+            prefer_original_audio: boolean;
+            reject_dubbed: boolean;
+        };
+        LanguageProfileWrite: {
+            name: string;
+            audio_preferred?: string[];
+            audio_required?: string[];
+            subtitle_preferred?: string[];
+            subtitle_required?: string[];
+            /** @default false */
+            prefer_original_audio: boolean;
+            /** @default false */
+            reject_dubbed: boolean;
         };
         /** @description Bytes that never enter the library again (ADR-53 part 2), keyed on content hashes, never on a filename (Invariant 82). At least one of `oshash`/`quick_hash`/`chromaprint`/`phash` is always present. */
         BlockedContentEntry: {
@@ -5003,6 +5123,210 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExclusionPattern"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listQualityProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profiles. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualityProfile"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    createQualityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QualityProfileWrite"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualityProfile"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    deleteQualityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    updateQualityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QualityProfileWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualityProfile"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listLanguageProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profiles. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LanguageProfile"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    createLanguageProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LanguageProfileWrite"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LanguageProfile"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    deleteLanguageProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    updateLanguageProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LanguageProfileWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LanguageProfile"];
                 };
             };
             400: components["responses"]["Problem"];
