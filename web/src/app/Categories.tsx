@@ -45,6 +45,20 @@ export function Categories() {
     onSuccess: invalidate,
   });
 
+  const [searchMessages, setSearchMessages] = useState<Record<number, string>>({});
+  const search = useMutation({
+    mutationFn: async (id: number) => {
+      const { data, error } = await api.POST("/categories/{id}/search", { params: { path: { id } } });
+      if (error) throw error;
+      return { id, duplicate: data!.duplicate };
+    },
+    onSuccess: ({ id, duplicate }) =>
+      setSearchMessages((prev) => ({
+        ...prev,
+        [id]: duplicate ? "Already running" : "Search started",
+      })),
+  });
+
   // A non-administrator cannot read this list at all (403); render nothing
   // rather than an error, the same convention Users.tsx uses.
   if (categories.error !== null) return null;
@@ -74,6 +88,9 @@ export function Categories() {
                 onEdit={() => setEditingId(category.id)}
                 onRemove={() => remove.mutate(category.id)}
                 busy={remove.isPending}
+                onSearch={() => search.mutate(category.id)}
+                searchPending={search.isPending && search.variables === category.id}
+                searchMessage={searchMessages[category.id]}
               />
             ),
           )}
@@ -101,11 +118,17 @@ function Row({
   onEdit,
   onRemove,
   busy,
+  onSearch,
+  searchPending,
+  searchMessage,
 }: {
   category: Category;
   onEdit: () => void;
   onRemove: () => void;
   busy: boolean;
+  onSearch: () => void;
+  searchPending: boolean;
+  searchMessage: string | undefined;
 }) {
   return (
     <li className="flex items-center gap-3 px-3 py-2.5">
@@ -116,6 +139,22 @@ function Row({
       </span>
       {category.works != null && (
         <span className="ml-auto shrink-0 text-xs text-ink-muted">{category.works} works</span>
+      )}
+      {category.media_type === "music" && (
+        <>
+          {searchMessage && <span className="text-xs text-ink-muted">{searchMessage}</span>}
+          <button
+            type="button"
+            onClick={onSearch}
+            disabled={searchPending}
+            title="Search every monitored, incomplete album in this category (stage 5)"
+            className="rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted
+                       hover:text-ink disabled:opacity-50 focus-visible:outline-2
+                       focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            {searchPending ? "…" : "Search"}
+          </button>
+        </>
       )}
       <button
         type="button"

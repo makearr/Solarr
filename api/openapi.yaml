@@ -2094,6 +2094,83 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/{id}/candidates:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listWorkCandidates
+      tags: [acquisition]
+      summary: >-
+        Every release ever decided against this work's own wanted album item
+        (section 12's own "why wasn't this downloaded"), newest first.
+        Empty, never 404, for a work nobody has searched yet.
+      responses:
+        "200":
+          description: Every decision recorded, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CandidateDecision" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /works/{id}/search:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: searchWork
+      tags: [acquisition]
+      summary: >-
+        Search every configured indexer for this work's own wanted album
+        (stage 5's candidate pipeline, section 10.1/10.2). Synchronous --
+        one album, a handful of indexer calls, tiers 0-2 (exact, +year,
+        +alias) widening only until one clears the match-distance gate.
+      responses:
+        "200":
+          description: What this run found, decided and persisted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchItemResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          description: >-
+            The work is not currently wanted (no album-level desired item),
+            or no indexer is configured/enabled.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /categories/{id}/search:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: searchCategory
+      tags: [acquisition]
+      summary: >-
+        Search every monitored, incomplete album in one category
+        (todo 5.2's own "manual search, per-item and per-category").
+        Runs as a background job -- GET /jobs shows its progress; results
+        land per work, visible through GET /works/{id}/candidates.
+      responses:
+        "202":
+          description: Enqueued (or already running -- duplicate says which).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategorySearchEnqueued" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /search:
     get:
       operationId: search
@@ -5465,6 +5542,83 @@ components:
         score:
           type: number
           description: Decision.Score() -- the sum of components.
+
+    CandidateDecision:
+      type: object
+      description: >-
+        One release an indexer answered, decided against a specific desired
+        item (section 10.1/12). components/rejections/deferrals are the same
+        shape Decision itself carries -- quality is omitted here since a
+        candidate is compared against a profile, not against another
+        candidate (no ADR-40 tiered comparison to show).
+      required:
+        [
+          id, candidate_id, outcome, score, components, rejections, deferrals,
+          indexer_id, guid, title, protocol, download_url, source, decided_at,
+        ]
+      properties:
+        id: { type: integer, format: int64 }
+        candidate_id: { type: integer, format: int64 }
+        outcome: { type: string, enum: [ACCEPT, REJECT, DEFER] }
+        score: { type: number }
+        components:
+          type: array
+          items: { $ref: "#/components/schemas/ScoreComponent" }
+        rejections:
+          type: array
+          items: { $ref: "#/components/schemas/Rejection" }
+        deferrals:
+          type: array
+          items: { $ref: "#/components/schemas/Deferral" }
+        match_confidence:
+          type: number
+          nullable: true
+          description: 1 - the match distance against this item's own identity (section 10.2).
+        indexer_id: { type: integer, format: int64 }
+        guid: { type: string }
+        title: { type: string, description: The release's own raw title, unparsed. }
+        size_bytes: { type: integer, format: int64, nullable: true }
+        seeders: { type: integer, format: int64, nullable: true }
+        leechers: { type: integer, format: int64, nullable: true }
+        published_at: { type: string, format: date-time, nullable: true }
+        protocol: { type: string, enum: [usenet, torrent, ddl, feed] }
+        download_url: { type: string }
+        source: { type: string, enum: [rss, search] }
+        decided_at: { type: string, format: date-time }
+
+    IndexerSearchError:
+      type: object
+      required: [indexer_id, error]
+      properties:
+        indexer_id: { type: integer, format: int64 }
+        error: { type: string }
+
+    SearchItemResult:
+      type: object
+      description: One work's own search run (POST /works/{id}/search).
+      required: [tier_used, decisions, indexer_errors]
+      properties:
+        tier_used:
+          type: integer
+          nullable: true
+          description: >-
+            Which tier (0 exact, 1 +year, 2 +alias) produced an acceptable
+            match. null means no tier found anything worth persisting --
+            not a failure, just nothing found yet.
+        decisions:
+          type: array
+          items: { $ref: "#/components/schemas/CandidateDecision" }
+        indexer_errors:
+          type: array
+          items: { $ref: "#/components/schemas/IndexerSearchError" }
+
+    CategorySearchEnqueued:
+      type: object
+      required: [duplicate]
+      properties:
+        duplicate:
+          type: boolean
+          description: True when a search for this category was already running.
 
     ParsedTitle:
       type: object

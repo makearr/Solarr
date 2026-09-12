@@ -162,6 +162,8 @@ type Config struct {
 	// tested before it is accepted" against the real indexer/download client.
 	IndexerTester    IndexerTester
 	DownloaderTester DownloaderTester
+	// CandidateSearcher is stage 5's own candidate pipeline (section 10.1/10.2).
+	CandidateSearcher CandidateSearcher
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -215,6 +217,7 @@ type Server struct {
 	libraryHealth         LibraryHealth
 	indexerTester         IndexerTester
 	downloaderTester      DownloaderTester
+	candidateSearcher     CandidateSearcher
 	// effectivePort is the port this process actually bound to, resolved at
 	// startup (ADR-58). The Network screen reports it beside whatever
 	// settings.db now holds, since a port change written from the screen
@@ -290,6 +293,7 @@ func New(config Config) (*Server, error) {
 		libraryHealth:         config.LibraryHealth,
 		indexerTester:         config.IndexerTester,
 		downloaderTester:      config.DownloaderTester,
+		candidateSearcher:     config.CandidateSearcher,
 		effectivePort:         config.Port,
 		healthPath:            base + APIPrefix + "/health",
 		address:               net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
@@ -341,6 +345,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/parts/{partId}/monitor", server.routeSetPartMonitored)
 			secured.Post("/works/{id}/parts/{partId}/wanted", server.routeSetTrackWanted)
 			secured.Get("/works/{id}/artwork", server.routeGetWorkArtwork)
+			secured.Get("/works/{id}/candidates", server.routeListWorkCandidates)
+			secured.Post("/works/{id}/search", server.routeSearchWork)
 			secured.Get("/discover/search", server.routeDiscoverSearch)
 			secured.Post("/discover/add", server.DiscoverAdd)
 			secured.Get("/arr/instances", server.ListArrInstances)
@@ -378,6 +384,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/libraries/{id}/{level}", server.routeListLibraryLevel)
 			secured.Get("/categories", server.ListCategories)
 			secured.Post("/categories", server.CreateCategory)
+			secured.Post("/categories/{id}/search", server.routeSearchCategory)
 			secured.Get("/categories/{id}", server.routeGetCategory)
 			secured.Patch("/categories/{id}", server.routeUpdateCategory)
 			secured.Delete("/categories/{id}", server.routeDeleteCategory)

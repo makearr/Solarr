@@ -1349,6 +1349,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** Every release ever decided against this work's own wanted album item (section 12's own "why wasn't this downloaded"), newest first. Empty, never 404, for a work nobody has searched yet. */
+        get: operations["listWorkCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/works/{id}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search every configured indexer for this work's own wanted album (stage 5's candidate pipeline, section 10.1/10.2). Synchronous -- one album, a handful of indexer calls, tiers 0-2 (exact, +year, +alias) widening only until one clears the match-distance gate. */
+        post: operations["searchWork"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{id}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search every monitored, incomplete album in one category (todo 5.2's own "manual search, per-item and per-category"). Runs as a background job -- GET /jobs shows its progress; results land per work, visible through GET /works/{id}/candidates. */
+        post: operations["searchCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/search": {
         parameters: {
             query?: never;
@@ -3662,6 +3719,57 @@ export interface components {
             /** @description Decision.Score() -- the sum of components. */
             score: number;
         };
+        /** @description One release an indexer answered, decided against a specific desired item (section 10.1/12). components/rejections/deferrals are the same shape Decision itself carries -- quality is omitted here since a candidate is compared against a profile, not against another candidate (no ADR-40 tiered comparison to show). */
+        CandidateDecision: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            candidate_id: number;
+            /** @enum {string} */
+            outcome: "ACCEPT" | "REJECT" | "DEFER";
+            score: number;
+            components: components["schemas"]["ScoreComponent"][];
+            rejections: components["schemas"]["Rejection"][];
+            deferrals: components["schemas"]["Deferral"][];
+            /** @description 1 - the match distance against this item's own identity (section 10.2). */
+            match_confidence?: number | null;
+            /** Format: int64 */
+            indexer_id: number;
+            guid: string;
+            /** @description The release's own raw title */
+            title: string;
+            /** Format: int64 */
+            size_bytes?: number | null;
+            /** Format: int64 */
+            seeders?: number | null;
+            /** Format: int64 */
+            leechers?: number | null;
+            /** Format: date-time */
+            published_at?: string | null;
+            /** @enum {string} */
+            protocol: "usenet" | "torrent" | "ddl" | "feed";
+            download_url: string;
+            /** @enum {string} */
+            source: "rss" | "search";
+            /** Format: date-time */
+            decided_at: string;
+        };
+        IndexerSearchError: {
+            /** Format: int64 */
+            indexer_id: number;
+            error: string;
+        };
+        /** @description One work's own search run (POST /works/{id}/search). */
+        SearchItemResult: {
+            /** @description Which tier (0 exact, 1 +year, 2 +alias) produced an acceptable match. null means no tier found anything worth persisting -- not a failure, just nothing found yet. */
+            tier_used: number | null;
+            decisions: components["schemas"]["CandidateDecision"][];
+            indexer_errors: components["schemas"]["IndexerSearchError"][];
+        };
+        CategorySearchEnqueued: {
+            /** @description True when a search for this category was already running. */
+            duplicate: boolean;
+        };
         /** @description internal/identify/parse's own reading of the pasted title, shown so a simulation is not a black box. */
         ParsedTitle: {
             artist?: string;
@@ -5903,6 +6011,87 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listWorkCandidates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every decision recorded, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateDecision"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    searchWork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What this run found, decided and persisted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchItemResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The work is not currently wanted (no album-level desired item), or no indexer is configured/enabled. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    searchCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Enqueued (or already running -- duplicate says which). */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategorySearchEnqueued"];
+                };
+            };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };

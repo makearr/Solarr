@@ -11,6 +11,7 @@ type WorkPart = components["schemas"]["WorkPart"];
 type ExternalID = components["schemas"]["ExternalID"];
 type Credit = components["schemas"]["Credit"];
 type Wanted = components["schemas"]["Wanted"];
+type CandidateDecision = components["schemas"]["CandidateDecision"];
 
 // Title, release date, credits, genres, description, editions, parts read
 // straight from the work; monitoring (album and per-part) is the one write
@@ -33,6 +34,27 @@ export function WorkDetail() {
   });
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["work", id] });
+
+  const candidates = useQuery({
+    queryKey: ["work", id, "candidates"],
+    enabled: id !== undefined,
+    queryFn: async () => {
+      const { data, error } = await api.GET("/works/{id}/candidates", {
+        params: { path: { id: id as number } },
+      });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const search = useMutation({
+    mutationFn: async () => {
+      if (id === undefined) return;
+      const { error } = await api.POST("/works/{id}/search", { params: { path: { id } } });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["work", id, "candidates"] }),
+  });
 
   const setMonitored = useMutation({
     mutationFn: async (monitored: boolean) => {
@@ -115,6 +137,28 @@ export function WorkDetail() {
             </button>
           </div>
         </header>
+
+        {work.wanted && (
+          <Section title="Search">
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={search.isPending}
+                onClick={() => search.mutate()}
+                className="w-fit rounded-md border border-border-subtle px-3 py-1.5 text-sm
+                           enabled:hover:bg-surface disabled:cursor-default disabled:opacity-50"
+              >
+                {search.isPending ? "Searching…" : "Search now"}
+              </button>
+              {search.isError && (
+                <p className="text-xs text-danger">
+                  That search could not run -- check that an indexer is connected and enabled.
+                </p>
+              )}
+              <CandidateList decisions={candidates.data ?? []} loading={candidates.isLoading} />
+            </div>
+          </Section>
+        )}
 
         {work.description && (
           <Section title="Description">
@@ -369,6 +413,81 @@ function formatDuration(ms: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+// CandidateList is F16's first slice: every release ever decided against
+// this work's own wanted album, newest first, with its score breakdown --
+// no dispatch action yet (stage 5's own next pass).
+function CandidateList({ decisions, loading }: { decisions: CandidateDecision[]; loading: boolean }) {
+  if (loading) return <p className="text-xs text-ink-muted">Loading…</p>;
+  if (decisions.length === 0) {
+    return <p className="text-xs text-ink-muted">Nothing found yet -- try Search now.</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-2">
+      {decisions.map((decision) => (
+        <li
+          key={decision.id}
+          className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3 text-sm"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <OutcomeBadge outcome={decision.outcome} />
+            <span className="truncate font-mono text-xs" title={decision.title}>
+              {decision.title}
+            </span>
+            <span className="ml-auto shrink-0 text-xs text-ink-muted">
+              score {decision.score.toFixed(1)}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">
+            <span>{decision.protocol}</span>
+            {decision.size_bytes != null && <span>{formatBytes(decision.size_bytes)}</span>}
+            {decision.seeders != null && <span>{decision.seeders} seeders</span>}
+            {decision.match_confidence != null && (
+              <span>{Math.round(decision.match_confidence * 100)}% match</span>
+            )}
+            <span>{new Date(decision.decided_at).toLocaleString()}</span>
+          </div>
+          {decision.rejections.length > 0 && (
+            <ul className="text-xs text-danger">
+              {decision.rejections.map((rejection, index) => (
+                <li key={index}>
+                  {rejection.field}: wanted {rejection.wanted}, got {rejection.got}
+                </li>
+              ))}
+            </ul>
+          )}
+          {decision.deferrals.length > 0 && (
+            <ul className="text-xs text-warn">
+              {decision.deferrals.map((deferral, index) => (
+                <li key={index}>{deferral.reason}</li>
+              ))}
+            </ul>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function OutcomeBadge({ outcome }: { outcome: CandidateDecision["outcome"] }) {
+  const tone =
+    outcome === "ACCEPT" ? "text-ok border-border-subtle" : outcome === "DEFER" ? "text-warn border-warn" : "text-danger border-danger";
+  return (
+    <span className={`rounded-full border px-1.5 py-px text-[0.6875rem] ${tone}`}>{outcome}</span>
+  );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

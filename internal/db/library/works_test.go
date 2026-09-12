@@ -399,3 +399,56 @@ func createWorkWithYear(t *testing.T, opened *store.Store, title string, year in
 	})
 	return created
 }
+
+func TestWorks_AlternateTitles_ExcludesPrimaryAndIncludesEverythingElse(t *testing.T) {
+	opened, _ := newLibrary(t)
+	work := createWork(t, opened, "music", "Discovery")
+	works := library.NewWorks(opened)
+
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		for _, title := range []struct{ title, kind string }{
+			{"Discovery", "primary"},
+			{"Découverte", "translit"},
+			{"Discoverie", "alias"},
+		} {
+			if _, err := q.AddWorkTitle(ctx, librarydb.AddWorkTitleParams{
+				WorkID: work.ID, Title: title.title, Normalized: title.title, Kind: title.kind,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	aliases, err := works.AlternateTitles(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("AlternateTitles: %v", err)
+	}
+	if len(aliases) != 2 {
+		t.Fatalf("aliases = %v, want 2 (primary excluded)", aliases)
+	}
+	found := map[string]bool{}
+	for _, alias := range aliases {
+		found[alias] = true
+	}
+	if !found["Découverte"] || !found["Discoverie"] {
+		t.Errorf("aliases = %v, want Découverte and Discoverie", aliases)
+	}
+	if found["Discovery"] {
+		t.Errorf("aliases = %v, want the primary title excluded", aliases)
+	}
+}
+
+func TestWorks_AlternateTitles_EmptyForAWorkWithNoTitlesRecorded(t *testing.T) {
+	opened, _ := newLibrary(t)
+	work := createWork(t, opened, "music", "Discovery")
+	works := library.NewWorks(opened)
+
+	aliases, err := works.AlternateTitles(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("AlternateTitles: %v", err)
+	}
+	if len(aliases) != 0 {
+		t.Errorf("aliases = %v, want none -- nothing populates work_title yet", aliases)
+	}
+}
