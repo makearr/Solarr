@@ -440,3 +440,53 @@ func TestDeletingADesiredItemCascades(t *testing.T) {
 		t.Errorf("%d links survived the work", len(owners))
 	}
 }
+
+// F33 (todo 4.23, migration 0030): desired_item's own key widened from (work, edition, media_ref)
+// to (work, edition, media_ref, profile) so two profile targets can coexist for the same work --
+// keeping FLAC and MP3 of the same album, say, once F33 itself is built. This is schema only: no
+// caller creates a second profile target yet, but the constraint must already admit one.
+func TestDesiredItem_KeyAdmitsTwoProfilesForTheSameWork(t *testing.T) {
+	opened, queries := newLibrary(t)
+	work := createWork(t, opened, "music", "Fake Album")
+
+	// A real, non-NULL edition_id: SQL's own NULL-is-never-equal-to-NULL rule means a
+	// UNIQUE constraint never fires between two rows both leaving a nullable column NULL,
+	// which would make the "still refused" assertion below meaningless for the wrong reason.
+	edition, err := queries.CreateEdition(t.Context(), librarydb.CreateEditionParams{
+		WorkID: work.ID, Kind: "standard", IsDefault: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateEdition: %v", err)
+	}
+	editionID := sql.NullInt64{Int64: edition.ID, Valid: true}
+
+	first, err := queries.CreateDesiredItem(t.Context(), librarydb.CreateDesiredItemParams{
+		WorkID: work.ID, EditionID: editionID, CategoryID: 1, ProfileID: 1, Monitored: 1, Dirty: 1,
+		SatisfactionKind: "SET", State: "MISSING",
+	})
+	if err != nil {
+		t.Fatalf("CreateDesiredItem (profile 1): %v", err)
+	}
+
+	second, err := queries.CreateDesiredItem(t.Context(), librarydb.CreateDesiredItemParams{
+		WorkID: work.ID, EditionID: editionID, CategoryID: 1, ProfileID: 2, Monitored: 1, Dirty: 1,
+		SatisfactionKind: "SET", State: "MISSING",
+	})
+	if err != nil {
+		t.Fatalf("CreateDesiredItem (profile 2): %v -- the same work wanting a second profile "+
+			"must be allowed by the widened key", err)
+	}
+	if first.ID == second.ID {
+		t.Fatal("two distinct CreateDesiredItem calls returned the same row")
+	}
+
+	// The constraint must still be a real UNIQUE, just a wider one: the exact same
+	// (work, edition, media_ref, profile) tuple is still refused.
+	_, err = queries.CreateDesiredItem(t.Context(), librarydb.CreateDesiredItemParams{
+		WorkID: work.ID, EditionID: editionID, CategoryID: 1, ProfileID: 1, Monitored: 1, Dirty: 1,
+		SatisfactionKind: "SET", State: "MISSING",
+	})
+	if err == nil {
+		t.Error("a true duplicate (same work, edition, media_ref and profile) was accepted")
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 )
 
@@ -123,6 +124,72 @@ func runInTransaction(ctx context.Context, db *sql.DB, database string, run func
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("store %s: commit: %w", database, err)
+	}
+	return nil
+}
+
+// runWithForeignKeysDisabled runs fn the same way runInTransaction does, but with foreign key
+// enforcement suspended around it -- SQLite's own documented procedure for a schema change
+// ALTER TABLE cannot express (widening or narrowing a table's own constraints means rebuilding
+// it), since dropping a table that other tables still hold live ON DELETE CASCADE/SET NULL
+// references into cascades those rows away the moment it is dropped, unless enforcement is off
+// for the duration.
+//
+// PRAGMA foreign_keys is a documented no-op inside a transaction, so it must be toggled on db
+// itself before BEGIN and after COMMIT/ROLLBACK, never inside fn. This only works because db here
+// is always s.write, pinned to exactly one physical connection (SetMaxOpenConns(1)) -- the pragma
+// and the transaction that follows are guaranteed to land on the same connection rather than two
+// different ones from a pool, which a general-purpose *sql.DB could not guarantee.
+//
+// foreign_keys is always re-enabled, success or failure: Invariant 4 requires it, and this is the
+// one connection ever allowed to say otherwise, only for the moment this function owns it.
+func runWithForeignKeysDisabled(
+	ctx context.Context, db *sql.DB, database string, fn func(context.Context, *sql.Tx) error,
+) error {
+	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys=OFF"); err != nil {
+		return fmt.Errorf("store %s: disable foreign keys: %w", database, err)
+	}
+
+	opErr := runInTransaction(ctx, db, database, func(ctx context.Context, tx *sql.Tx) error {
+		if err := fn(ctx, tx); err != nil {
+			return err
+		}
+		// The one safety net foreign_keys=OFF gives up for its duration: refuse to
+		// commit a rebuild that left anything referencing a row that no longer exists.
+		return checkForeignKeys(ctx, tx, database)
+	})
+
+	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys=ON"); err != nil {
+		return errors.Join(opErr, fmt.Errorf("store %s: re-enable foreign keys: %w", database, err))
+	}
+	return opErr
+}
+
+// checkForeignKeys runs PRAGMA foreign_key_check and turns any row it reports into an error.
+func checkForeignKeys(ctx context.Context, tx *sql.Tx, database string) error {
+	rows, err := tx.QueryContext(ctx, "PRAGMA foreign_key_check")
+	if err != nil {
+		return fmt.Errorf("store %s: foreign key check: %w", database, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var violations []string
+	for rows.Next() {
+		var table string
+		var rowID sql.NullInt64
+		var referredTable string
+		var foreignKeyIndex int
+		if err := rows.Scan(&table, &rowID, &referredTable, &foreignKeyIndex); err != nil {
+			return fmt.Errorf("store %s: scan foreign key violation: %w", database, err)
+		}
+		violations = append(violations, fmt.Sprintf("%s row %v -> missing %s", table, rowID, referredTable))
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("store %s: foreign key check: %w", database, err)
+	}
+	if len(violations) > 0 {
+		return fmt.Errorf("store %s: migration left dangling foreign keys: %s",
+			database, strings.Join(violations, ", "))
 	}
 	return nil
 }

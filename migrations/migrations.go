@@ -17,6 +17,15 @@ import (
 //go:embed settings/*.sql jobs/*.sql library/*.sql metadata/*.sql
 var files embed.FS
 
+// disableForeignKeysMarker, present anywhere in a migration's own SQL, asks store.Migrate to run
+// it with foreign key enforcement suspended (store.Migration.DisablesForeignKeys) -- needed for a
+// rebuild ALTER TABLE cannot express (widening or narrowing a table's own constraint), since
+// dropping a table other tables still hold live references into cascades those rows away unless
+// enforcement is off for the duration. Part of the file's own text, so it is locked into the
+// migration's checksum like everything else: changing it after the migration has applied is
+// exactly the "changed migration" case store.Migrate already refuses.
+const disableForeignKeysMarker = "-- migrate:disable-foreign-keys"
+
 // Settings returns the migration set for settings.db.
 func Settings() (store.Owner, error) { return owner("settings") }
 
@@ -58,7 +67,10 @@ func load(directory string) ([]store.Migration, error) {
 		if err != nil {
 			return nil, fmt.Errorf("migrations: read %s: %w", entry.Name(), err)
 		}
-		migrations = append(migrations, store.Migration{Version: version, Up: string(content)})
+		migrations = append(migrations, store.Migration{
+			Version: version, Up: string(content),
+			DisablesForeignKeys: strings.Contains(string(content), disableForeignKeysMarker),
+		})
 	}
 
 	sort.Slice(migrations, func(i, j int) bool { return migrations[i].Version < migrations[j].Version })

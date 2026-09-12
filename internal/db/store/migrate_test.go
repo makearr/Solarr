@@ -1,6 +1,8 @@
 package store_test
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"log/slog"
 	"os"
@@ -293,6 +295,122 @@ func TestMigrate_AFailingMigrationLeavesNoPartialSchema(t *testing.T) {
 	}
 	if recorded != 0 {
 		t.Error("a failed migration was recorded as applied")
+	}
+}
+
+// The F33/4.23 key-widening migration needs a table rebuild that ALTER TABLE cannot express
+// (widening a table's own UNIQUE constraint), and rebuilding a table other tables still hold live
+// ON DELETE CASCADE references into is exactly what cascades those rows away the instant it is
+// dropped -- unless foreign key enforcement is off for the duration. Tested here in isolation,
+// with synthetic tables, before the real desired_item migration relies on it.
+func TestMigrate_ForeignKeyDisablingMigrationRebuildsWithoutLosingChildren(t *testing.T) {
+	fixture := newMigrationFixture(t)
+
+	create := store.Migration{Version: 1, Up: `
+CREATE TABLE parent (id INTEGER PRIMARY KEY, x TEXT, UNIQUE(x));
+CREATE TABLE child (id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL REFERENCES parent(id) ON DELETE CASCADE);
+`}
+	if err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, coreOwner(create)); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if err := fixture.store.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO parent (id, x) VALUES (1, 'a'), (2, 'b')"); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, "INSERT INTO child (id, parent_id) VALUES (10, 1), (11, 2)")
+		return err
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Widens parent's own UNIQUE(x) to UNIQUE(x, y) -- the same shape desired_item's own
+	// rebuild needs, reduced to the smallest schema that exercises the same FK hazard.
+	rebuild := store.Migration{Version: 2, DisablesForeignKeys: true, Up: `
+CREATE TABLE parent_new (id INTEGER PRIMARY KEY, x TEXT, y TEXT, UNIQUE(x, y));
+INSERT INTO parent_new (id, x, y) SELECT id, x, NULL FROM parent;
+DROP TABLE parent;
+ALTER TABLE parent_new RENAME TO parent;
+`}
+	if err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, coreOwner(create, rebuild)); err != nil {
+		t.Fatalf("rebuild: %v", err)
+	}
+
+	var childCount int
+	if err := fixture.store.Read().QueryRowContext(t.Context(), "SELECT count(*) FROM child").Scan(&childCount); err != nil {
+		t.Fatalf("count child: %v", err)
+	}
+	if childCount != 2 {
+		t.Errorf("child rows = %d, want 2 -- the rebuild must not cascade-delete rows referencing the old table", childCount)
+	}
+
+	var foreignKeysOn string
+	if err := fixture.store.WriteDB().QueryRowContext(t.Context(), "PRAGMA foreign_keys").Scan(&foreignKeysOn); err != nil {
+		t.Fatalf("read foreign_keys: %v", err)
+	}
+	if foreignKeysOn != "1" {
+		t.Errorf("foreign_keys = %s on the write connection after the migration, want 1 (Invariant 4)", foreignKeysOn)
+	}
+
+	// The whole point: the widened constraint actually admits a second row sharing x now.
+	if err := fixture.store.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "INSERT INTO parent (id, x, y) VALUES (3, 'a', 'other')")
+		return err
+	}); err != nil {
+		t.Errorf("insert exercising the widened constraint: %v", err)
+	}
+}
+
+// A migration that claims DisablesForeignKeys but actually leaves a dangling reference (a real
+// bug in a future such migration, not the FK mechanism itself) must be refused rather than
+// committed silently -- PRAGMA foreign_key_check is the one safety net enforcement being off
+// gives up, and this proves it is actually wired in, not just present in a comment.
+func TestMigrate_ForeignKeyDisablingMigrationRefusesADanglingReference(t *testing.T) {
+	fixture := newMigrationFixture(t)
+
+	create := store.Migration{Version: 1, Up: `
+CREATE TABLE parent (id INTEGER PRIMARY KEY, x TEXT, UNIQUE(x));
+CREATE TABLE child (id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL REFERENCES parent(id) ON DELETE CASCADE);
+`}
+	if err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, coreOwner(create)); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if err := fixture.store.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO parent (id, x) VALUES (1, 'a')"); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, "INSERT INTO child (id, parent_id) VALUES (10, 1)")
+		return err
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Broken on purpose: copies nothing into parent_new, so child ends up pointing at a
+	// row that does not exist in the rebuilt table.
+	broken := store.Migration{Version: 2, DisablesForeignKeys: true, Up: `
+CREATE TABLE parent_new (id INTEGER PRIMARY KEY, x TEXT);
+DROP TABLE parent;
+ALTER TABLE parent_new RENAME TO parent;
+`}
+	err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, coreOwner(create, broken))
+	if err == nil {
+		t.Fatal("a migration leaving a dangling foreign key was accepted")
+	}
+
+	var foreignKeysOn string
+	if scanErr := fixture.store.WriteDB().QueryRowContext(t.Context(), "PRAGMA foreign_keys").Scan(&foreignKeysOn); scanErr != nil {
+		t.Fatalf("read foreign_keys: %v", scanErr)
+	}
+	if foreignKeysOn != "1" {
+		t.Errorf("foreign_keys = %s after a refused migration, want 1 -- must be re-enabled even on failure", foreignKeysOn)
+	}
+
+	var recorded int
+	if err := fixture.store.Read().QueryRowContext(t.Context(),
+		"SELECT count(*) FROM schema_migration WHERE version = 2").Scan(&recorded); err != nil {
+		t.Fatalf("read schema_migration: %v", err)
+	}
+	if recorded != 0 {
+		t.Error("a migration that failed its own foreign key check was recorded as applied")
 	}
 }
 
