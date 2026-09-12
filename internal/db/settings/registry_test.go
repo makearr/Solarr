@@ -111,6 +111,8 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 		settings.EntityRootFolder, settings.EntityCategory, settings.EntityQualityProfile,
 		settings.EntityLanguageProfile, settings.EntityExclusionPattern, settings.EntityArrInstance,
 		settings.EntityImportList, settings.EntityDownloadFolder,
+		// Stage 5's own first entity (2026-09-12): indexer connections.
+		settings.EntityIndexer,
 	}
 	for _, key := range known {
 		if _, found := registry.Lookup(key); !found {

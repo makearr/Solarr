@@ -38,6 +38,8 @@ type Querier interface {
 	// Per-library import lists (migration 0009, todo 4.16, ADR-38). Column
 	// lists follow table order, or sqlc stops reusing models.
 	CreateImportList(ctx context.Context, arg CreateImportListParams) (ImportList, error)
+	// Indexer connections (stage 5, ADR-37/43/47). Column lists follow table order.
+	CreateIndexer(ctx context.Context, arg CreateIndexerParams) (Indexer, error)
 	CreateLanguageProfile(ctx context.Context, arg CreateLanguageProfileParams) (LanguageProfile, error)
 	CreateQualityProfile(ctx context.Context, arg CreateQualityProfileParams) (QualityProfile, error)
 	CreateRootFolder(ctx context.Context, arg CreateRootFolderParams) (RootFolder, error)
@@ -49,6 +51,7 @@ type Querier interface {
 	DeleteDownloadFolder(ctx context.Context, id int64) error
 	DeleteExclusionPattern(ctx context.Context, id int64) error
 	DeleteImportList(ctx context.Context, id int64) error
+	DeleteIndexer(ctx context.Context, id int64) error
 	DeleteLanguageProfile(ctx context.Context, id int64) error
 	DeletePreference(ctx context.Context, arg DeletePreferenceParams) error
 	DeleteQualityProfile(ctx context.Context, id int64) error
@@ -62,6 +65,7 @@ type Querier interface {
 	GetDownloadFolder(ctx context.Context, id int64) (DownloadFolder, error)
 	GetExclusionPattern(ctx context.Context, id int64) (ExclusionPattern, error)
 	GetImportList(ctx context.Context, id int64) (ImportList, error)
+	GetIndexer(ctx context.Context, id int64) (Indexer, error)
 	GetInstanceSetting(ctx context.Context, key string) (InstanceSetting, error)
 	GetLanguageProfile(ctx context.Context, id int64) (LanguageProfile, error)
 	GetPlacementAffinity(ctx context.Context, arg GetPlacementAffinityParams) (int64, error)
@@ -85,6 +89,7 @@ type Querier interface {
 	ListEnabledDiscoveryJobs(ctx context.Context) ([]DiscoveryJob, error)
 	ListExclusionPatterns(ctx context.Context) ([]ExclusionPattern, error)
 	ListImportListsForCategory(ctx context.Context, categoryID int64) ([]ImportList, error)
+	ListIndexers(ctx context.Context) ([]Indexer, error)
 	// Instance-wide policy, seeded from config.yml and changeable afterwards (ADR-21).
 	ListInstanceSettings(ctx context.Context) ([]InstanceSetting, error)
 	ListLanguageProfiles(ctx context.Context) ([]LanguageProfile, error)
@@ -112,6 +117,11 @@ type Querier interface {
 	// The enable transition on its own: this is the "preview before enabling" gate, a
 	// deliberate act distinct from editing a job's policy.
 	SetDiscoveryJobEnabled(ctx context.Context, arg SetDiscoveryJobEnabledParams) error
+	// A separate statement from UpdateIndexer, the same reasoning arr_instance's own
+	// SetArrInstanceAPIKey gives: Seal generates a fresh nonce every call, so writing it back
+	// unconditionally on every unrelated edit would be silent, pointless churn.
+	SetIndexerAPIKey(ctx context.Context, arg SetIndexerAPIKeyParams) error
+	SetIndexerCaps(ctx context.Context, arg SetIndexerCapsParams) error
 	SetInstanceSetting(ctx context.Context, arg SetInstanceSettingParams) error
 	SetPlacementAffinity(ctx context.Context, arg SetPlacementAffinityParams) error
 	SetPreference(ctx context.Context, arg SetPreferenceParams) error
@@ -135,6 +145,7 @@ type Querier interface {
 	UpdateDiscoveryJob(ctx context.Context, arg UpdateDiscoveryJobParams) error
 	UpdateExclusionPattern(ctx context.Context, arg UpdateExclusionPatternParams) error
 	UpdateImportList(ctx context.Context, arg UpdateImportListParams) error
+	UpdateIndexer(ctx context.Context, arg UpdateIndexerParams) error
 	UpdateLanguageProfile(ctx context.Context, arg UpdateLanguageProfileParams) error
 	UpdateQualityProfile(ctx context.Context, arg UpdateQualityProfileParams) error
 }

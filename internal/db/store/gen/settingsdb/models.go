@@ -107,6 +107,21 @@ type ImportList struct {
 	Enabled          int64
 }
 
+type Indexer struct {
+	ID             int64
+	Name           string
+	Impl           string
+	BaseUrl        string
+	ApiKey         []byte
+	Enabled        int64
+	Priority       int64
+	CategoriesJson sql.NullString
+	CapsFetchedAt  sql.NullInt64
+	SettingsJson   sql.NullString
+	CreatedAt      int64
+	UpdatedAt      int64
+}
+
 type InstanceSetting struct {
 	Key       string
 	ValueJson string
