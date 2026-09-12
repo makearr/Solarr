@@ -2,6 +2,7 @@ package settings_test
 
 import (
 	"errors"
+	"net/netip"
 	"strings"
 	"testing"
 
@@ -35,13 +36,13 @@ func TestDocument_RoundTrips(t *testing.T) {
 	if err := yaml.Unmarshal(encoded, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if problems := decoded.Validate(); len(problems) > 0 {
+	if problems := decoded.Validate(netip.Addr{}); len(problems) > 0 {
 		t.Fatalf("our own export does not validate: %v", problems)
 	}
 
 	// A different install: no identifiers, so natural keys must carry it.
-	fresh, _ := newCache(t)
-	if err := fresh.Import(t.Context(), decoded); err != nil {
+	fresh, freshClock := newCache(t)
+	if err := fresh.Import(t.Context(), freshClock, netip.Addr{}, decoded); err != nil {
 		t.Fatalf("import: %v", err)
 	}
 
@@ -83,12 +84,12 @@ func TestDocument_RoundTrips_IncludesProfiles(t *testing.T) {
 	if err := yaml.Unmarshal(encoded, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if problems := decoded.Validate(); len(problems) > 0 {
+	if problems := decoded.Validate(netip.Addr{}); len(problems) > 0 {
 		t.Fatalf("our own export does not validate: %v", problems)
 	}
 
-	fresh, _ := newCache(t)
-	if err := fresh.Import(t.Context(), decoded); err != nil {
+	fresh, freshClock := newCache(t)
+	if err := fresh.Import(t.Context(), freshClock, netip.Addr{}, decoded); err != nil {
 		t.Fatalf("import: %v", err)
 	}
 
@@ -102,6 +103,61 @@ func TestDocument_RoundTrips_IncludesProfiles(t *testing.T) {
 	}
 }
 
+// The registry's own 15 scalar settings (todo 4.14) now round-trip too --
+// non-default values, or a bug that only zeroed everything back to its
+// shipped default would pass silently.
+func TestDocument_RoundTrips_IncludesScalarSettings(t *testing.T) {
+	cache, fake := newCache(t)
+
+	if err := cache.SetAuthRequired(t.Context(), fake, false); err != nil {
+		t.Fatalf("SetAuthRequired: %v", err)
+	}
+	if err := cache.SetImportAutoCommitConfidence(t.Context(), fake, 0.75); err != nil {
+		t.Fatalf("SetImportAutoCommitConfidence: %v", err)
+	}
+	if err := cache.SetNetworkSettings(t.Context(), fake, settings.NetworkSettings{
+		Port: 8443, ProxyURL: "socks5://proxy.internal:1080", ProxyBypass: []string{"10.0.0.0/8"},
+	}, netip.Addr{}); err != nil {
+		t.Fatalf("SetNetworkSettings: %v", err)
+	}
+	if err := cache.SetCacheBudget(t.Context(), fake, settings.CacheBudget{
+		MaxBytes: 5 << 30, MaxAgeDays: 14, ImagesSharePercent: 60, MetadataSharePercent: 40,
+	}); err != nil {
+		t.Fatalf("SetCacheBudget: %v", err)
+	}
+	if err := cache.SetPrioritySettings(t.Context(), fake, settings.PrioritySettings{
+		UserRequestWeight: 50, NewReleaseWeight: 35, GapWeight: 25, UpgradeWeight: 15, NewReleaseDays: 10,
+	}); err != nil {
+		t.Fatalf("SetPrioritySettings: %v", err)
+	}
+
+	exported := cache.Export()
+	if exported.Settings == nil {
+		t.Fatal("Export did not populate Settings at all")
+	}
+	if exported.Settings.AuthRequired || exported.Settings.NetworkPort != 8443 ||
+		exported.Settings.CacheImagesSharePercent != 60 || exported.Settings.PriorityUserRequestWeight != 50 {
+		t.Fatalf("exported settings = %+v, want the values just set", exported.Settings)
+	}
+
+	encoded, err := yaml.Marshal(exported)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded settings.Document
+	if err := yaml.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	fresh, freshClock := newCache(t)
+	if err := fresh.Import(t.Context(), freshClock, netip.Addr{}, decoded); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if got := fresh.Export(); !equalDocuments(got, exported) {
+		t.Errorf("round trip changed the configuration:\n got %+v\nwant %+v", got.Settings, exported.Settings)
+	}
+}
+
 // A category naming a profile the document itself never declares would import
 // with a silently missing policy -- the same rule an undeclared root already gets.
 func TestImport_RefusesACategoryReferencingAnUndeclaredProfile(t *testing.T) {
@@ -112,7 +168,7 @@ func TestImport_RefusesACategoryReferencingAnUndeclaredProfile(t *testing.T) {
 		},
 	}
 
-	problems := document.Validate()
+	problems := document.Validate(netip.Addr{})
 	if len(problems) == 0 {
 		t.Fatal("a category referencing an undeclared quality profile was accepted")
 	}
@@ -187,7 +243,7 @@ func TestImport_ReportsEveryProblemAtOnce(t *testing.T) {
 		},
 	}
 
-	problems := document.Validate()
+	problems := document.Validate(netip.Addr{})
 	// Five mistakes, one upload.
 	if len(problems) < 4 {
 		t.Errorf("reported %d problems, want every one of them: %v", len(problems), problems)
@@ -195,7 +251,7 @@ func TestImport_ReportsEveryProblemAtOnce(t *testing.T) {
 }
 
 func TestImport_AppliesNothingWhenAnythingIsWrong(t *testing.T) {
-	cache, _ := newCache(t)
+	cache, fake := newCache(t)
 
 	document := settings.Document{
 		Version: settings.DocumentVersion,
@@ -206,7 +262,7 @@ func TestImport_AppliesNothingWhenAnythingIsWrong(t *testing.T) {
 		},
 	}
 
-	if err := cache.Import(t.Context(), document); err == nil {
+	if err := cache.Import(t.Context(), fake, netip.Addr{}, document); err == nil {
 		t.Fatal("import succeeded despite an invalid category")
 	}
 
@@ -220,7 +276,7 @@ func TestImport_AppliesNothingWhenAnythingIsWrong(t *testing.T) {
 }
 
 func TestImport_IsIdempotent(t *testing.T) {
-	cache, _ := newCache(t)
+	cache, fake := newCache(t)
 	document := settings.Document{
 		Version: settings.DocumentVersion,
 		Roots:   []settings.RootEntry{{Path: "/media/music"}},
@@ -231,7 +287,7 @@ func TestImport_IsIdempotent(t *testing.T) {
 	}
 
 	for attempt := range 3 {
-		if err := cache.Import(t.Context(), document); err != nil {
+		if err := cache.Import(t.Context(), fake, netip.Addr{}, document); err != nil {
 			t.Fatalf("import %d: %v", attempt, err)
 		}
 	}
@@ -249,7 +305,7 @@ func TestImport_RefusesADocumentFromTheFuture(t *testing.T) {
 	// Ignoring unknown fields would import a subset and report success.
 	document := settings.Document{Version: settings.DocumentVersion + 1}
 
-	problems := document.Validate()
+	problems := document.Validate(netip.Addr{})
 	if len(problems) == 0 {
 		t.Fatal("a newer document version was accepted")
 	}
@@ -360,13 +416,13 @@ func TestCreateRootFolder_RefusesARelativePath(t *testing.T) {
 
 // An import must not be able to introduce what the interface would refuse.
 func TestImport_AppliesTheSameRulesAsTheAPI(t *testing.T) {
-	cache, _ := newCache(t)
+	cache, fake := newCache(t)
 
 	document := settings.Document{
 		Version:    settings.DocumentVersion,
 		Categories: []settings.CategoryEntry{{MediaType: "vhs", Name: "Tapes"}},
 	}
-	if err := cache.Import(t.Context(), document); err == nil {
+	if err := cache.Import(t.Context(), fake, netip.Addr{}, document); err == nil {
 		t.Fatal("an import created a category the interface would refuse")
 	}
 	if categories := cache.Snapshot().Categories(); len(categories) != 0 {

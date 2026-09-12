@@ -13,6 +13,15 @@ Identifiers are absent too. Rows are matched on natural keys — a category by m
 name, a root folder by path — so a document from one install applies to another, where the
 numbers would mean different things.
 
+The `settings` block carries every todo-4.14-registered scalar setting (auth, import,
+network, cache, priority — ADR-21, ADR-26) as one flat, always-populated group on export.
+It is optional on import: a document that omits it changes nothing about those settings, so
+a hand-edited file need not repeat all fifteen just to add a category. When present, a
+non-empty `network_allow_cidrs` is checked against the importing request's own remote
+address the same way `PATCH /network` already is (Invariant 89) — an import with no real
+caller address to check (anything but the HTTP endpoint) refuses conservatively rather than
+risk a lockout it cannot verify.
+
 ## Stable output
 
 Ordering is by natural key, not by id, so exporting twice produces an identical file and a diff

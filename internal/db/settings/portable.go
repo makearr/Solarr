@@ -3,10 +3,14 @@ package settings
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"net/netip"
 	"sort"
+	"strconv"
 
 	"github.com/makearr/MediaNexus/internal/db/store/gen/settingsdb"
+	"github.com/makearr/MediaNexus/internal/platform/clock"
 	"github.com/makearr/MediaNexus/internal/platform/config"
 )
 
@@ -14,10 +18,36 @@ import (
 // only, matched on natural keys. See documentation/configuration-export.md.
 type Document struct {
 	Version          int                    `yaml:"version"`
+	Settings         *ScalarSettingsEntry   `yaml:"settings,omitempty"`
 	Categories       []CategoryEntry        `yaml:"categories,omitempty"`
 	Roots            []RootEntry            `yaml:"root_folders,omitempty"`
 	QualityProfiles  []QualityProfileEntry  `yaml:"quality_profiles,omitempty"`
 	LanguageProfiles []LanguageProfileEntry `yaml:"language_profiles,omitempty"`
+}
+
+// ScalarSettingsEntry is every todo-4.14-registered scalar setting (ADR-21,
+// ADR-26's own registry), flat and named for readability rather than
+// mirroring instance_setting's dotted keys. A pointer on Document: nil on
+// import means the document says nothing about them, so Import leaves every
+// one alone (a hand-edited document need not repeat every setting just to
+// change a category); Export always populates it, since these are
+// always-existing global singletons, never legitimately absent.
+type ScalarSettingsEntry struct {
+	AuthRequired               bool     `yaml:"auth_required"`
+	ImportAutoCommitConfidence float64  `yaml:"import_auto_commit_confidence"`
+	NetworkPort                int      `yaml:"network_port,omitempty"`
+	NetworkProxyURL            string   `yaml:"network_proxy_url,omitempty"`
+	NetworkProxyBypass         []string `yaml:"network_proxy_bypass,omitempty"`
+	NetworkAllowCIDRs          []string `yaml:"network_allow_cidrs,omitempty"`
+	CacheMaxBytes              int64    `yaml:"cache_max_bytes,omitempty"`
+	CacheMaxAgeDays            int64    `yaml:"cache_max_age_days,omitempty"`
+	CacheImagesSharePercent    int64    `yaml:"cache_images_share_percent,omitempty"`
+	CacheMetadataSharePercent  int64    `yaml:"cache_metadata_share_percent,omitempty"`
+	PriorityUserRequestWeight  int64    `yaml:"priority_user_request_weight,omitempty"`
+	PriorityNewReleaseWeight   int64    `yaml:"priority_new_release_weight,omitempty"`
+	PriorityGapWeight          int64    `yaml:"priority_gap_weight,omitempty"`
+	PriorityUpgradeWeight      int64    `yaml:"priority_upgrade_weight,omitempty"`
+	PriorityNewReleaseDays     int64    `yaml:"priority_new_release_days,omitempty"`
 }
 
 // CategoryEntry is one category and the roots attached to it.
@@ -78,9 +108,30 @@ const DocumentVersion = 1
 func (c *Cache) Export() Document {
 	snapshot := c.Snapshot()
 
+	network := snapshot.NetworkSettings()
+	cacheBudget := snapshot.CacheBudget()
+	priority := snapshot.PrioritySettings()
+	settingsEntry := ScalarSettingsEntry{
+		AuthRequired:               snapshot.AuthRequired(),
+		ImportAutoCommitConfidence: snapshot.ImportAutoCommitConfidence(),
+		NetworkPort:                network.Port,
+		NetworkProxyURL:            network.ProxyURL,
+		NetworkProxyBypass:         network.ProxyBypass,
+		NetworkAllowCIDRs:          network.AllowCIDRs,
+		CacheMaxBytes:              cacheBudget.MaxBytes,
+		CacheMaxAgeDays:            cacheBudget.MaxAgeDays,
+		CacheImagesSharePercent:    cacheBudget.ImagesSharePercent,
+		CacheMetadataSharePercent:  cacheBudget.MetadataSharePercent,
+		PriorityUserRequestWeight:  priority.UserRequestWeight,
+		PriorityNewReleaseWeight:   priority.NewReleaseWeight,
+		PriorityGapWeight:          priority.GapWeight,
+		PriorityUpgradeWeight:      priority.UpgradeWeight,
+		PriorityNewReleaseDays:     priority.NewReleaseDays,
+	}
+
 	roots := snapshot.RootFolders()
 	pathOf := make(map[int64]string, len(roots))
-	document := Document{Version: DocumentVersion}
+	document := Document{Version: DocumentVersion, Settings: &settingsEntry}
 	for _, root := range roots {
 		pathOf[root.ID] = root.Path
 		document.Roots = append(document.Roots, RootEntry{Path: root.Path, Label: root.Label})
@@ -157,9 +208,50 @@ func (c *Cache) Export() Document {
 	return document
 }
 
-// Validate reports every problem with a document, not the first (section 14.4).
-func (d Document) Validate() config.Problems {
+// prefixed namespaces a problem's own path under a document section, the
+// same "where + \".\" + problem.Path" rewrite every section below already
+// did individually.
+func prefixed(section string, problem config.Problem) config.Problem {
+	problem.Path = section + "." + problem.Path
+	return problem
+}
+
+// Validate reports every problem with a document, not the first (section
+// 14.4). callerAddress is the same "must not lock itself out" check
+// SetNetworkSettings applies (Invariant 89) -- an invalid address (the zero
+// value, e.g. from a caller with no real one to give) can never satisfy a
+// non-empty allow_cidrs, refusing conservatively rather than risking a
+// lockout it cannot verify against.
+func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 	var problems config.Problems
+
+	if d.Settings != nil {
+		for _, problem := range validateImportAutoCommitConfidence(d.Settings.ImportAutoCommitConfidence) {
+			problems = append(problems, prefixed("settings", problem))
+		}
+		network := NetworkSettings{
+			Port: d.Settings.NetworkPort, ProxyURL: d.Settings.NetworkProxyURL,
+			ProxyBypass: d.Settings.NetworkProxyBypass, AllowCIDRs: d.Settings.NetworkAllowCIDRs,
+		}
+		for _, problem := range validateNetworkSettings(network, callerAddress) {
+			problems = append(problems, prefixed("settings", problem))
+		}
+		cacheBudget := CacheBudget{
+			MaxBytes: d.Settings.CacheMaxBytes, MaxAgeDays: d.Settings.CacheMaxAgeDays,
+			ImagesSharePercent: d.Settings.CacheImagesSharePercent, MetadataSharePercent: d.Settings.CacheMetadataSharePercent,
+		}
+		for _, problem := range validateCacheBudget(cacheBudget) {
+			problems = append(problems, prefixed("settings", problem))
+		}
+		priority := PrioritySettings{
+			UserRequestWeight: d.Settings.PriorityUserRequestWeight, NewReleaseWeight: d.Settings.PriorityNewReleaseWeight,
+			GapWeight: d.Settings.PriorityGapWeight, UpgradeWeight: d.Settings.PriorityUpgradeWeight,
+			NewReleaseDays: d.Settings.PriorityNewReleaseDays,
+		}
+		for _, problem := range validatePrioritySettings(priority) {
+			problems = append(problems, prefixed("settings", problem))
+		}
+	}
 
 	if d.Version == 0 {
 		problems = append(problems, config.Problem{
@@ -272,9 +364,13 @@ func (d Document) Validate() config.Problems {
 }
 
 // Import applies a document in one transaction, or changes nothing. Merges on
-// natural keys. See documentation/configuration-export.md.
-func (c *Cache) Import(ctx context.Context, document Document) error {
-	if problems := document.Validate(); len(problems) > 0 {
+// natural keys. See documentation/configuration-export.md. callerAddress is
+// Document.Validate's own Invariant 89 check -- the real remote address for
+// an HTTP-driven import (ImportSettings), the zero value for anything else,
+// which conservatively refuses a document setting a non-empty allow_cidrs
+// rather than risk a lockout it cannot verify.
+func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.Addr, document Document) error {
+	if problems := document.Validate(callerAddress); len(problems) > 0 {
 		return problems
 	}
 
@@ -299,6 +395,12 @@ func (c *Cache) Import(ctx context.Context, document Document) error {
 	}
 
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		if document.Settings != nil {
+			if err := importScalarSettings(ctx, queries, cl, *document.Settings); err != nil {
+				return err
+			}
+		}
+
 		for _, profile := range document.QualityProfiles {
 			if _, exists := qualityIDByName[profile.Name]; exists {
 				continue
@@ -423,4 +525,49 @@ func (c *Cache) Import(ctx context.Context, document Document) error {
 		}
 		return nil
 	})
+}
+
+// importScalarSettings writes every todo-4.14-registered scalar setting
+// straight through SetInstanceSetting, inside Import's own transaction --
+// not through the typed Cache.Set* wrappers (SetNetworkSettings and
+// friends), each of which is its own c.write (validate, commit, reload,
+// maybe back up): calling five of those from inside one already-open write
+// would nest transactions. Validation already happened in Document.Validate
+// before this runs.
+func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl clock.Clock, entry ScalarSettingsEntry) error {
+	proxyBypass, err := json.Marshal(entry.NetworkProxyBypass)
+	if err != nil {
+		return fmt.Errorf("settings.network_proxy_bypass: %w", err)
+	}
+	allowCIDRs, err := json.Marshal(entry.NetworkAllowCIDRs)
+	if err != nil {
+		return fmt.Errorf("settings.network_allow_cidrs: %w", err)
+	}
+
+	values := map[string]string{
+		KeyAuthRequired:               strconv.FormatBool(entry.AuthRequired),
+		KeyImportAutoCommitConfidence: strconv.FormatFloat(entry.ImportAutoCommitConfidence, 'f', -1, 64),
+		KeyNetworkPort:                strconv.Itoa(entry.NetworkPort),
+		KeyNetworkProxyURL:            entry.NetworkProxyURL,
+		KeyNetworkProxyBypass:         string(proxyBypass),
+		KeyNetworkAllowCIDRs:          string(allowCIDRs),
+		KeyCacheMaxBytes:              strconv.FormatInt(entry.CacheMaxBytes, 10),
+		KeyCacheMaxAgeDays:            strconv.FormatInt(entry.CacheMaxAgeDays, 10),
+		KeyCacheImagesShare:           strconv.FormatInt(entry.CacheImagesSharePercent, 10),
+		KeyCacheMetadataShare:         strconv.FormatInt(entry.CacheMetadataSharePercent, 10),
+		KeyPriorityUserRequestWeight:  strconv.FormatInt(entry.PriorityUserRequestWeight, 10),
+		KeyPriorityNewReleaseWeight:   strconv.FormatInt(entry.PriorityNewReleaseWeight, 10),
+		KeyPriorityGapWeight:          strconv.FormatInt(entry.PriorityGapWeight, 10),
+		KeyPriorityUpgradeWeight:      strconv.FormatInt(entry.PriorityUpgradeWeight, 10),
+		KeyPriorityNewReleaseDays:     strconv.FormatInt(entry.PriorityNewReleaseDays, 10),
+	}
+	at := cl.Now().Unix()
+	for key, value := range values {
+		if err := queries.SetInstanceSetting(ctx, settingsdb.SetInstanceSettingParams{
+			Key: key, ValueJson: value, UpdatedAt: at,
+		}); err != nil {
+			return fmt.Errorf("settings.%s: %w", key, err)
+		}
+	}
+	return nil
 }

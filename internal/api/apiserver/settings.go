@@ -58,7 +58,8 @@ func (s *Server) ImportSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.auth.Settings.Import(r.Context(), document); err != nil {
+	caller := s.resolvedClientAddress(r)
+	if err := s.auth.Settings.Import(r.Context(), s.wall, caller, document); err != nil {
 		// The whole list is what makes the response useful.
 		var problems config.Problems
 		if errors.As(err, &problems) {
