@@ -36,6 +36,12 @@ const CoreOwner = "core"
 type Migration struct {
 	Version int
 	Up      string
+	// DisablesForeignKeys asks applyMigration to run Up with foreign key enforcement
+	// suspended (runWithForeignKeysDisabled), for a rebuild SQLite's own ALTER TABLE
+	// cannot express any other way -- widening or narrowing a table's own constraint.
+	// Set by migrations.load from a marker comment in the .sql file itself, so it is
+	// locked into the migration's own checksum like everything else in the text.
+	DisablesForeignKeys bool
 }
 
 // Owner is a component that owns part of the schema: core, or a plugin.
@@ -217,8 +223,13 @@ func (s *Store) applyMigration(ctx context.Context, step pendingMigration) error
 		return err
 	}
 
+	runner := runInTransaction
+	if step.migration.DisablesForeignKeys {
+		runner = runWithForeignKeysDisabled
+	}
+
 	op := newWriteOp(ctx, PrioInteractive, s.clock.Now(), func(ctx context.Context, db *sql.DB) error {
-		return runInTransaction(ctx, db, s.config.Name, func(ctx context.Context, tx *sql.Tx) error {
+		return runner(ctx, db, s.config.Name, func(ctx context.Context, tx *sql.Tx) error {
 			if _, err := tx.ExecContext(ctx, step.migration.Up); err != nil {
 				return err
 			}

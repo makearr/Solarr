@@ -50,6 +50,30 @@ convention. Write `section 5.5`, not `§5.5`, in SQL.
   by integer id with no constraint; the application enforces integrity (ADR-25). See
   `database-layout.md`.
 
+- **No `ALTER TABLE` for a table's own constraint.** Widening or narrowing a `PRIMARY KEY`,
+  `UNIQUE` or `CHECK` means rebuilding the table: create the new definition under a temporary
+  name, copy every row across with an explicit column list (never `SELECT *`, same rule as
+  above), `DROP` the old table, `ALTER TABLE ... RENAME` the new one into place, then recreate
+  any indexes the drop took with it (they are not part of the table definition and do not
+  survive).
+
+  **The trap:** if any other table holds a live `ON DELETE CASCADE` or `ON DELETE SET NULL`
+  foreign key into the one being rebuilt, `DROP TABLE` cascades those rows away the instant it
+  runs — even though every id is about to be preserved in the replacement table under the same
+  name. This is not a guess; it was confirmed with a throwaway script before writing migration
+  0030 (`private/notes.md` §3, todo 4.23/F33). `PRAGMA foreign_keys=OFF` is the documented fix,
+  but it is **also a no-op inside a transaction**, and `store.applyMigration` always runs a
+  migration's SQL inside one. A migration that needs this puts
+  `-- migrate:disable-foreign-keys` anywhere in its own `.sql` file (`migrations.go`'s own
+  marker constant); `store.Migration.DisablesForeignKeys` then routes it through
+  `runWithForeignKeysDisabled` instead of `runInTransaction` — the pragma toggles on `s.write`
+  itself (safe only because that handle is pinned to exactly one connection,
+  `SetMaxOpenConns(1)`) before `BEGIN` and after `COMMIT`, and `PRAGMA foreign_key_check` runs
+  before the commit, refusing the migration outright rather than leaving a silent dangling
+  reference. The marker lives inside the checksummed SQL text, so turning it on or off after the
+  migration has applied is exactly the "changed migration" case `store.Migrate` already refuses.
+  Migration 0030 (widening `desired_item`'s own key) is the first migration to need this.
+
 ## What sqlc refuses, or gets wrong quietly
 
 - **No `SELECT *` or `RETURNING *`.** sqlc cannot expand them and fails with
