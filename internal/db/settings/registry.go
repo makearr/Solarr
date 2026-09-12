@@ -284,6 +284,10 @@ func NewDefaultRegistry() *Registry {
 		Key: EntityDownloadFolder, Kind: KindEntity, Tier: TierAdvanced,
 		Name: "Download folders", HelpText: "Where a completed download is picked up from before import.",
 	})
+	registry.MustRegister(SettingDef{
+		Key: EntityIndexer, Kind: KindEntity, Tier: TierAdvanced,
+		Name: "Indexers", HelpText: "Stage 5: Newznab/Torznab search providers (ADR-37/43/47).",
+	})
 
 	return registry
 }
@@ -301,4 +305,5 @@ const (
 	EntityArrInstance      = "entity.arr_instance"
 	EntityImportList       = "entity.import_list"
 	EntityDownloadFolder   = "entity.download_folder"
+	EntityIndexer          = "entity.indexer"
 )
