@@ -94,6 +94,10 @@ type Config struct {
 	// PeopleSubscriber subscribes a caller to a person. Optional: without it,
 	// SubscribePerson answers 503.
 	PeopleSubscriber PeopleSubscriber
+	// SubscriptionPreviewer answers an artist's discography, unfiltered, for
+	// the subscribe screen's filter preview (todo 4.4). Optional: without
+	// it, PreviewSubscription answers 503.
+	SubscriptionPreviewer SubscriptionPreviewer
 	// BlockedContent lists and removes ADR-53 part 2's hash blocks. Optional:
 	// without it, ListBlockedContent/RemoveBlockedContent answer 503.
 	BlockedContent BlockedContentLister
@@ -168,37 +172,38 @@ type Server struct {
 	roots   RootChecker
 	address string
 
-	librarySize          LibrarySize
-	timezone             string
-	egress               EgressReporter
-	works                WorksReader
-	workDetail           WorkDetailReader
-	worksMonitor         WorksMonitor
-	search               SearchReader
-	unidentified         UnidentifiedReader
-	unidentifiedResolver UnidentifiedResolver
-	artwork              ArtworkReader
-	fsys                 fsx.FS
-	imagesDir            string
-	people               PeopleReader
-	peopleSubscriber     PeopleSubscriber
-	blockedContent       BlockedContentLister
-	packs                PackLister
-	removeAndBlocker     RemoveAndBlocker
-	importSessions       ImportSessionLister
-	importInspector      ImportInspector
-	drainStarter         DrainStarter
-	moveJobs             MoveJobLister
-	renameStarter        RenameStarter
-	navigation           NavigationProvider
-	libraryTracks        LibraryTracksReader
-	libraryArtists       LibraryArtistsReader
-	downloadRoots        DownloadFolderChecker
-	scheduler            Scheduler
-	cacheManager         CacheManager
-	discover             Discover
-	arrSync              ArrSync
-	libraryHealth        LibraryHealth
+	librarySize           LibrarySize
+	timezone              string
+	egress                EgressReporter
+	works                 WorksReader
+	workDetail            WorkDetailReader
+	worksMonitor          WorksMonitor
+	search                SearchReader
+	unidentified          UnidentifiedReader
+	unidentifiedResolver  UnidentifiedResolver
+	artwork               ArtworkReader
+	fsys                  fsx.FS
+	imagesDir             string
+	people                PeopleReader
+	peopleSubscriber      PeopleSubscriber
+	subscriptionPreviewer SubscriptionPreviewer
+	blockedContent        BlockedContentLister
+	packs                 PackLister
+	removeAndBlocker      RemoveAndBlocker
+	importSessions        ImportSessionLister
+	importInspector       ImportInspector
+	drainStarter          DrainStarter
+	moveJobs              MoveJobLister
+	renameStarter         RenameStarter
+	navigation            NavigationProvider
+	libraryTracks         LibraryTracksReader
+	libraryArtists        LibraryArtistsReader
+	downloadRoots         DownloadFolderChecker
+	scheduler             Scheduler
+	cacheManager          CacheManager
+	discover              Discover
+	arrSync               ArrSync
+	libraryHealth         LibraryHealth
 	// effectivePort is the port this process actually bound to, resolved at
 	// startup (ADR-58). The Network screen reports it beside whatever
 	// settings.db now holds, since a port change written from the screen
@@ -239,40 +244,41 @@ func New(config Config) (*Server, error) {
 		webui:   config.WebUI,
 		roots:   config.Roots,
 
-		librarySize:          config.LibrarySize,
-		timezone:             config.Timezone,
-		egress:               config.Egress,
-		works:                config.Works,
-		workDetail:           config.WorkDetail,
-		worksMonitor:         config.WorksMonitor,
-		search:               config.Search,
-		unidentified:         config.Unidentified,
-		unidentifiedResolver: config.UnidentifiedResolver,
-		artwork:              config.Artwork,
-		fsys:                 config.FS,
-		imagesDir:            config.ImagesDir,
-		people:               config.People,
-		peopleSubscriber:     config.PeopleSubscriber,
-		blockedContent:       config.BlockedContent,
-		packs:                config.Packs,
-		removeAndBlocker:     config.RemoveAndBlocker,
-		importSessions:       config.ImportSessions,
-		importInspector:      config.ImportInspector,
-		drainStarter:         config.DrainStarter,
-		moveJobs:             config.MoveJobs,
-		renameStarter:        config.RenameStarter,
-		navigation:           config.Navigation,
-		libraryTracks:        config.LibraryTracks,
-		libraryArtists:       config.LibraryArtists,
-		downloadRoots:        config.DownloadRoots,
-		scheduler:            config.Scheduler,
-		cacheManager:         config.CacheManager,
-		discover:             config.Discover,
-		arrSync:              config.ArrSync,
-		libraryHealth:        config.LibraryHealth,
-		effectivePort:        config.Port,
-		healthPath:           base + APIPrefix + "/health",
-		address:              net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
+		librarySize:           config.LibrarySize,
+		timezone:              config.Timezone,
+		egress:                config.Egress,
+		works:                 config.Works,
+		workDetail:            config.WorkDetail,
+		worksMonitor:          config.WorksMonitor,
+		search:                config.Search,
+		unidentified:          config.Unidentified,
+		unidentifiedResolver:  config.UnidentifiedResolver,
+		artwork:               config.Artwork,
+		fsys:                  config.FS,
+		imagesDir:             config.ImagesDir,
+		people:                config.People,
+		peopleSubscriber:      config.PeopleSubscriber,
+		subscriptionPreviewer: config.SubscriptionPreviewer,
+		blockedContent:        config.BlockedContent,
+		packs:                 config.Packs,
+		removeAndBlocker:      config.RemoveAndBlocker,
+		importSessions:        config.ImportSessions,
+		importInspector:       config.ImportInspector,
+		drainStarter:          config.DrainStarter,
+		moveJobs:              config.MoveJobs,
+		renameStarter:         config.RenameStarter,
+		navigation:            config.Navigation,
+		libraryTracks:         config.LibraryTracks,
+		libraryArtists:        config.LibraryArtists,
+		downloadRoots:         config.DownloadRoots,
+		scheduler:             config.Scheduler,
+		cacheManager:          config.CacheManager,
+		discover:              config.Discover,
+		arrSync:               config.ArrSync,
+		libraryHealth:         config.LibraryHealth,
+		effectivePort:         config.Port,
+		healthPath:            base + APIPrefix + "/health",
+		address:               net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
 	router := chi.NewRouter()
@@ -352,6 +358,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/people/{id}", server.routeGetPerson)
 			secured.Get("/people/{id}/artwork", server.routeGetPersonArtwork)
 			secured.Post("/people/{id}/subscribe", server.routeSubscribePerson)
+			secured.Get("/people/{id}/subscription-preview", server.routePreviewSubscription)
 			secured.Get("/exclusions", server.ListExclusionPatterns)
 			secured.Post("/exclusions", server.CreateExclusionPattern)
 			secured.Patch("/exclusions/{id}", server.routeUpdateExclusionPattern)

@@ -64,6 +64,7 @@ type worksFixture struct {
 	artwork              *fakeArtworkReader
 	people               *fakePeopleReader
 	subscriber           *fakePeopleSubscriber
+	subscriptionPreview  *fakeSubscriptionPreviewer
 	blockedContent       *fakeBlockedContentLister
 	packs                *fakePackLister
 	removeAndBlocker     *fakeRemoveAndBlocker
@@ -201,6 +202,7 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 	artwork := &fakeArtworkReader{}
 	people := &fakePeopleReader{}
 	subscriber := &fakePeopleSubscriber{}
+	subscriptionPreview := &fakeSubscriptionPreviewer{}
 	blockedContent := &fakeBlockedContentLister{}
 	packs := &fakePackLister{}
 	removeAndBlocker := &fakeRemoveAndBlocker{}
@@ -217,37 +219,38 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 	fsys := fsx.NewMem(fake)
 	server, err := apiserver.New(apiserver.Config{
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
-		Checker:              fakeChecker{},
-		Works:                works,
-		WorkDetail:           workDetail,
-		WorksMonitor:         worksMonitor,
-		Search:               search,
-		Unidentified:         unidentified,
-		UnidentifiedResolver: unidentifiedResolver,
-		Artwork:              artwork,
-		People:               people,
-		PeopleSubscriber:     subscriber,
-		BlockedContent:       blockedContent,
-		Packs:                packs,
-		RemoveAndBlocker:     removeAndBlocker,
-		ImportSessions:       importSessions,
-		ImportInspector:      importInspector,
-		DrainStarter:         drainStarter,
-		MoveJobs:             moveJobs,
-		RenameStarter:        renameStarter,
-		FS:                   fsys,
-		DownloadRoots:        apiserver.FilesystemRoots{FS: fsys},
-		Scheduler:            scheduler,
-		CacheManager:         cacheManager,
-		Discover:             discover,
-		ArrSync:              arrSync,
-		ImagesDir:            testImagesDir,
-		LibrarySize:          librarySize,
-		Navigation:           navigation,
-		LibraryTracks:        libraryTracks,
-		LibraryArtists:       libraryArtists,
-		Clock:                fake,
-		Logger:               slog.New(slog.DiscardHandler),
+		Checker:               fakeChecker{},
+		Works:                 works,
+		WorkDetail:            workDetail,
+		WorksMonitor:          worksMonitor,
+		Search:                search,
+		Unidentified:          unidentified,
+		UnidentifiedResolver:  unidentifiedResolver,
+		Artwork:               artwork,
+		People:                people,
+		PeopleSubscriber:      subscriber,
+		SubscriptionPreviewer: subscriptionPreview,
+		BlockedContent:        blockedContent,
+		Packs:                 packs,
+		RemoveAndBlocker:      removeAndBlocker,
+		ImportSessions:        importSessions,
+		ImportInspector:       importInspector,
+		DrainStarter:          drainStarter,
+		MoveJobs:              moveJobs,
+		RenameStarter:         renameStarter,
+		FS:                    fsys,
+		DownloadRoots:         apiserver.FilesystemRoots{FS: fsys},
+		Scheduler:             scheduler,
+		CacheManager:          cacheManager,
+		Discover:              discover,
+		ArrSync:               arrSync,
+		ImagesDir:             testImagesDir,
+		LibrarySize:           librarySize,
+		Navigation:            navigation,
+		LibraryTracks:         libraryTracks,
+		LibraryArtists:        libraryArtists,
+		Clock:                 fake,
+		Logger:                slog.New(slog.DiscardHandler),
 		Auth: apiserver.AuthConfig{
 			Mode:     apiserver.AuthLocal,
 			Sessions: auth.NewSessions([]byte("0123456789abcdef0123456789abcdef"), fake, time.Hour),
@@ -262,7 +265,7 @@ func newWorksFixtureWithLibrarySizeNavigationAndArtists(
 	return worksFixture{
 		server: server, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor,
 		search: search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,
-		artwork: artwork, people: people, subscriber: subscriber,
+		artwork: artwork, people: people, subscriber: subscriber, subscriptionPreview: subscriptionPreview,
 		blockedContent: blockedContent, packs: packs, removeAndBlocker: removeAndBlocker,
 		importSessions: importSessions, importInspector: importInspector,
 		drainStarter: drainStarter, moveJobs: moveJobs, renameStarter: renameStarter,

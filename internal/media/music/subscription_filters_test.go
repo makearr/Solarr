@@ -46,6 +46,21 @@ func TestSubscriptionFilters_ExplicitExcludeListOverridesTheDefault(t *testing.T
 	}
 }
 
+// An explicit empty list (distinct from the key being absent, which the
+// previous test covers) is a real choice -- "exclude nothing" -- made
+// expressible for todo 4.4's preview, where unchecking every exclusion
+// checkbox should mean exactly that, not silently reapply the default.
+func TestSubscriptionFilters_ExplicitEmptyListAdmitsEverything(t *testing.T) {
+	filters := music.ParseSubscriptionFilters(`{"exclude_secondary_types":[]}`)
+
+	for _, secondary := range []string{"Compilation", "Live", "Remix", "DJ-mix", "Mixtape/Street"} {
+		rg := musicbrainz.ReleaseGroup{Title: secondary + " release", SecondaryTypes: []string{secondary}}
+		if !filters.Admits(rg) {
+			t.Errorf("want %q admitted with an explicit empty exclude list, got excluded", secondary)
+		}
+	}
+}
+
 func TestSubscriptionFilters_SoundtrackIsAdmittedByDefault(t *testing.T) {
 	filters := music.ParseSubscriptionFilters("")
 	rg := musicbrainz.ReleaseGroup{Title: "Movie OST", SecondaryTypes: []string{"Soundtrack"}}

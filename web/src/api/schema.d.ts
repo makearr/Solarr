@@ -1908,6 +1908,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/people/{id}/subscription-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * Every release group in the artist's discography, unfiltered, so the subscribe screen can show what a filter choice would admit or exclude before saving (todo 4.4, ADR-38's preview-before-enable shape).
+         * @description The same MusicBrainz call SubscriptionExpandJob itself makes (provider.ArtistReleaseGroups, cache-first per ADR-29 -- this is not a second network round trip once an artist has been browsed once). Returns every release group unfiltered; the client applies SubscriptionFilters.Admits's own substring-match rule locally against whichever exclusions the user is currently trying, so toggling a checkbox costs no round trip. The real admission decision at expand time still runs server-side against the saved filters -- this is preview-only.
+         */
+        get: operations["previewSubscription"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events": {
         parameters: {
             query?: never;
@@ -1988,6 +2010,21 @@ export interface components {
              * @example Europe/Fefobo
              */
             timezone?: string;
+        };
+        SubscriptionPreview: {
+            release_groups: components["schemas"]["PreviewReleaseGroup"][];
+            /** @description music.DefaultExcludedSecondaryTypes, so the client can pre-check the same boxes a subscription with no filter override would get. */
+            default_excluded_secondary_types: string[];
+        };
+        PreviewReleaseGroup: {
+            mbid: string;
+            title: string;
+            /** @description MusicBrainz's own vocabulary (Album, EP, Single, ...). */
+            primary_type?: string;
+            /** @description A partial date (YYYY, YYYY-MM or YYYY-MM-DD), MusicBrainz's own convention, verbatim. */
+            first_release_date?: string;
+            /** @description MusicBrainz's own vocabulary (Compilation, Live, Remix, ...) -- what a filter matches against. */
+            secondary_types: string[];
         };
         LegalText: {
             /** @description Verbatim file content -- rendered as-is, never reformatted. */
@@ -6430,6 +6467,8 @@ export interface operations {
                     roles?: string[];
                     /** @default false */
                     monitor_back_catalogue?: boolean;
+                    /** @description Overrides music.DefaultExcludedSecondaryTypes (compilation, live, remix, dj-mix, mixtape) when present -- an empty array means "exclude nothing", a real choice, distinct from absent (todo 4.4). Music-specific for now (internal/media/music.SubscriptionFilters); opaque to every other media type, per ADR-23. */
+                    exclude_secondary_types?: string[];
                 };
             };
         };
@@ -6444,6 +6483,31 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    previewSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The artist's discography and the default exclusion list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionPreview"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     streamEvents: {

@@ -2,14 +2,25 @@ package adapters
 
 import (
 	"context"
-	"time"
+	"encoding/json"
+	"fmt"
 
 	"github.com/makearr/MediaNexus/internal/api/apiserver"
 	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/MediaNexus/internal/media/music"
+	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
+	"github.com/makearr/MediaNexus/internal/platform/clock"
 )
 
-// People satisfies apiserver.PeopleReader and apiserver.PeopleSubscriber over library.People.
-type People struct{ People library.People }
+// People satisfies apiserver.PeopleReader, apiserver.PeopleSubscriber and
+// apiserver.SubscriptionPreviewer over library.People. Provider is only
+// needed for Preview (todo 4.4) -- ListPeople/GetPersonDetail/Subscribe
+// never touch MusicBrainz directly.
+type People struct {
+	People   library.People
+	Provider musicbrainz.Provider
+	Clock    clock.Clock
+}
 
 func (a People) ListPeople(
 	ctx context.Context, filter apiserver.PersonFilter, cursor apiserver.PersonCursor, pageSize int,
@@ -110,10 +121,52 @@ func (a People) GetPersonDetail(ctx context.Context, id int64) (apiserver.Person
 }
 
 func (a People) Subscribe(
-	ctx context.Context, personID, userID int64, mediaTypes, roles []string, monitorBackCatalogue bool,
+	ctx context.Context, personID, userID int64, mediaTypes, roles []string,
+	monitorBackCatalogue bool, excludeSecondaryTypes *[]string,
 ) error {
-	_, err := a.People.Subscribe(ctx, time.Now(), personID, userID, library.SubscriptionRequest{
+	var filtersJSON string
+	if excludeSecondaryTypes != nil {
+		encoded, err := json.Marshal(music.SubscriptionFilters{ExcludeSecondaryTypes: excludeSecondaryTypes})
+		if err != nil {
+			return fmt.Errorf("adapters: encode subscription filters: %w", err)
+		}
+		filtersJSON = string(encoded)
+	}
+	_, err := a.People.Subscribe(ctx, a.Clock.Now(), personID, userID, library.SubscriptionRequest{
 		MediaTypes: mediaTypes, Roles: roles, MonitorBackCatalogue: monitorBackCatalogue,
+		FiltersJSON: filtersJSON,
 	})
 	return err
+}
+
+// Preview answers an artist's discography unfiltered (todo 4.4), the same
+// external-id lookup and provider call music.SubscriptionExpandJob's own
+// expandOne makes -- apiserver.ErrNoArtistID mirrors that job's "person has
+// no external id yet" error, mapped to a client-facing 409 here since a
+// background sweep just retries next run, but a screen has to say something
+// now.
+func (a People) Preview(ctx context.Context, personID int64) (apiserver.SubscriptionPreviewRow, error) {
+	artistMBID, ok, err := a.People.ExternalIDFor(ctx, personID, music.ProviderArtist)
+	if err != nil {
+		return apiserver.SubscriptionPreviewRow{}, err
+	}
+	if !ok {
+		return apiserver.SubscriptionPreviewRow{}, apiserver.ErrNoArtistID
+	}
+
+	groups, err := a.Provider.ArtistReleaseGroups(ctx, musicbrainz.PriorityInteractive, artistMBID)
+	if err != nil {
+		return apiserver.SubscriptionPreviewRow{}, fmt.Errorf("musicbrainz: %w", err)
+	}
+
+	rows := make([]apiserver.PreviewReleaseGroupRow, len(groups))
+	for index, group := range groups {
+		rows[index] = apiserver.PreviewReleaseGroupRow{
+			MBID: group.MBID, Title: group.Title, PrimaryType: group.PrimaryType,
+			FirstReleaseDate: group.FirstReleaseDate, SecondaryTypes: group.SecondaryTypes,
+		}
+	}
+	return apiserver.SubscriptionPreviewRow{
+		ReleaseGroups: rows, DefaultExcludedSecondaryTypes: music.DefaultExcludedSecondaryTypes,
+	}, nil
 }

@@ -43,17 +43,19 @@ func (f *fakePeopleReader) GetPersonDetail(_ context.Context, id int64) (apiserv
 
 // fakePeopleSubscriber records the arguments Subscribe was called with.
 type fakePeopleSubscriber struct {
-	err             error
-	called          bool
-	lastPersonID    int64
-	lastUserID      int64
-	lastMediaTypes  []string
-	lastRoles       []string
-	lastMonitorBack bool
+	err                    error
+	called                 bool
+	lastPersonID           int64
+	lastUserID             int64
+	lastMediaTypes         []string
+	lastRoles              []string
+	lastMonitorBack        bool
+	lastExcludeSecondaries *[]string
 }
 
 func (f *fakePeopleSubscriber) Subscribe(
-	_ context.Context, personID, userID int64, mediaTypes, roles []string, monitorBackCatalogue bool,
+	_ context.Context, personID, userID int64, mediaTypes, roles []string,
+	monitorBackCatalogue bool, excludeSecondaryTypes *[]string,
 ) error {
 	f.called = true
 	f.lastPersonID = personID
@@ -61,7 +63,23 @@ func (f *fakePeopleSubscriber) Subscribe(
 	f.lastMediaTypes = mediaTypes
 	f.lastRoles = roles
 	f.lastMonitorBack = monitorBackCatalogue
+	f.lastExcludeSecondaries = excludeSecondaryTypes
 	return f.err
+}
+
+// fakeSubscriptionPreviewer records the id Preview was called with.
+type fakeSubscriptionPreviewer struct {
+	row    apiserver.SubscriptionPreviewRow
+	err    error
+	lastID int64
+}
+
+func (f *fakeSubscriptionPreviewer) Preview(_ context.Context, personID int64) (apiserver.SubscriptionPreviewRow, error) {
+	f.lastID = personID
+	if f.err != nil {
+		return apiserver.SubscriptionPreviewRow{}, f.err
+	}
+	return f.row, nil
 }
 
 func TestListPeople_ResponseShapeAndCursor(t *testing.T) {
@@ -272,5 +290,123 @@ func TestSubscribePerson_MissingPersonAnswers404(t *testing.T) {
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/404/subscribe", `{"media_types":["music"]}`))
 	if recorder.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404 when the subscriber reports the person missing", recorder.Code)
+	}
+}
+
+// Absent exclude_secondary_types must reach the subscriber as a nil pointer
+// (todo 4.4: "use the media type's own default"), not an empty slice --
+// music.SubscriptionFilters treats the two very differently.
+func TestSubscribePerson_AbsentExcludeSecondaryTypesReachesTheSubscriberAsNil(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe", `{"media_types":["music"]}`))
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.subscriber.lastExcludeSecondaries != nil {
+		t.Errorf("lastExcludeSecondaries = %v, want nil for an absent field", *fixture.subscriber.lastExcludeSecondaries)
+	}
+}
+
+// An explicit empty list ("exclude nothing") must reach the subscriber as a
+// non-nil pointer to an empty slice, distinct from the absent case above.
+func TestSubscribePerson_ExplicitEmptyExcludeSecondaryTypesReachesTheSubscriberAsEmptySlice(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe",
+		`{"media_types":["music"],"exclude_secondary_types":[]}`))
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.subscriber.lastExcludeSecondaries == nil {
+		t.Fatal("lastExcludeSecondaries = nil, want a non-nil pointer to an empty slice")
+	}
+	if len(*fixture.subscriber.lastExcludeSecondaries) != 0 {
+		t.Errorf("lastExcludeSecondaries = %v, want empty", *fixture.subscriber.lastExcludeSecondaries)
+	}
+}
+
+func TestSubscribePerson_ExcludeSecondaryTypesWithValuesReachesTheSubscriber(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe",
+		`{"media_types":["music"],"exclude_secondary_types":["live","remix"]}`))
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.subscriber.lastExcludeSecondaries == nil {
+		t.Fatal("lastExcludeSecondaries = nil, want [live remix]")
+	}
+	if got := *fixture.subscriber.lastExcludeSecondaries; len(got) != 2 || got[0] != "live" || got[1] != "remix" {
+		t.Errorf("lastExcludeSecondaries = %v, want [live remix]", got)
+	}
+}
+
+func TestPreviewSubscription_ReturnsTheDiscographyAndDefaults(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	fixture.subscriptionPreview.row = apiserver.SubscriptionPreviewRow{
+		ReleaseGroups: []apiserver.PreviewReleaseGroupRow{
+			{MBID: "rg-1", Title: "KI Pecezinu", PrimaryType: "Album", SecondaryTypes: nil},
+			{MBID: "rg-2", Title: "Live at Glastonbury", PrimaryType: "Album", SecondaryTypes: []string{"Live"}},
+		},
+		DefaultExcludedSecondaryTypes: []string{"compilation", "live", "remix", "dj-mix", "mixtape"},
+	}
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/7/subscription-preview"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.subscriptionPreview.lastID != 7 {
+		t.Errorf("lastID = %d, want 7", fixture.subscriptionPreview.lastID)
+	}
+
+	var body struct {
+		ReleaseGroups []struct {
+			MBID  string `json:"mbid"`
+			Title string `json:"title"`
+		} `json:"release_groups"`
+		DefaultExcludedSecondaryTypes []string `json:"default_excluded_secondary_types"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.ReleaseGroups) != 2 || body.ReleaseGroups[1].Title != "Live at Glastonbury" {
+		t.Errorf("release_groups = %+v, want the fake's canned rows round-tripped", body.ReleaseGroups)
+	}
+	if len(body.DefaultExcludedSecondaryTypes) != 5 {
+		t.Errorf("default_excluded_secondary_types = %v, want 5 entries", body.DefaultExcludedSecondaryTypes)
+	}
+}
+
+func TestPreviewSubscription_NoArtistIDAnswers409(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+	fixture.subscriptionPreview.err = apiserver.ErrNoArtistID
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/7/subscription-preview"))
+	if recorder.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409 when the person has no MusicBrainz artist id yet", recorder.Code)
+	}
+}
+
+func TestPreviewSubscription_MissingPersonAnswers404(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+	fixture.subscriptionPreview.err = sql.ErrNoRows
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/404/subscription-preview"))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", recorder.Code)
 	}
 }

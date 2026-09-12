@@ -1450,6 +1450,20 @@ type PersonWork struct {
 // PersonWorkWantedState Set when this work has a monitored desired_item, same as Work's own.
 type PersonWorkWantedState string
 
+// PreviewReleaseGroup defines model for PreviewReleaseGroup.
+type PreviewReleaseGroup struct {
+	// FirstReleaseDate A partial date (YYYY, YYYY-MM or YYYY-MM-DD), MusicBrainz's own convention, verbatim.
+	FirstReleaseDate *string `json:"first_release_date,omitempty"`
+	Mbid             string  `json:"mbid"`
+
+	// PrimaryType MusicBrainz's own vocabulary (Album, EP, Single, ...).
+	PrimaryType *string `json:"primary_type,omitempty"`
+
+	// SecondaryTypes MusicBrainz's own vocabulary (Compilation, Live, Remix, ...) -- what a filter matches against.
+	SecondaryTypes []string `json:"secondary_types"`
+	Title          string   `json:"title"`
+}
+
 // PrioritySettings ADR-36's trigger weights and ADR-55's release-date freshness window.
 type PrioritySettings struct {
 	// GapWeight Bigger is more urgent. Default 20.
@@ -1707,6 +1721,13 @@ type SetupStatus struct {
 
 	// NeedsAdministrator True while no account exists, which is the only time setup can be claimed.
 	NeedsAdministrator bool `json:"needs_administrator"`
+}
+
+// SubscriptionPreview defines model for SubscriptionPreview.
+type SubscriptionPreview struct {
+	// DefaultExcludedSecondaryTypes music.DefaultExcludedSecondaryTypes, so the client can pre-check the same boxes a subscription with no filter override would get.
+	DefaultExcludedSecondaryTypes []string              `json:"default_excluded_secondary_types"`
+	ReleaseGroups                 []PreviewReleaseGroup `json:"release_groups"`
 }
 
 // TierValue One compare-list dimension's position (ADR-40 stage 2). Equal rank between two candidates means this dimension did not decide.
@@ -2033,8 +2054,10 @@ type GetPersonArtworkParamsSize string
 
 // SubscribePersonJSONBody defines parameters for SubscribePerson.
 type SubscribePersonJSONBody struct {
-	MediaTypes           []string `json:"media_types"`
-	MonitorBackCatalogue *bool    `json:"monitor_back_catalogue,omitempty"`
+	// ExcludeSecondaryTypes Overrides music.DefaultExcludedSecondaryTypes (compilation, live, remix, dj-mix, mixtape) when present -- an empty array means "exclude nothing", a real choice, distinct from absent (todo 4.4). Music-specific for now (internal/media/music.SubscriptionFilters); opaque to every other media type, per ADR-23.
+	ExcludeSecondaryTypes *[]string `json:"exclude_secondary_types,omitempty"`
+	MediaTypes            []string  `json:"media_types"`
+	MonitorBackCatalogue  *bool     `json:"monitor_back_catalogue,omitempty"`
 
 	// Roles Empty or absent means any role.
 	Roles *[]string `json:"roles,omitempty"`
@@ -2562,6 +2585,9 @@ type ServerInterface interface {
 	// Subscribe to a person (ADR-32) -- media types x roles x filters.
 	// (POST /people/{id}/subscribe)
 	SubscribePerson(w http.ResponseWriter, r *http.Request, id int64)
+	// Every release group in the artist's discography, unfiltered, so the subscribe screen can show what a filter choice would admit or exclude before saving (todo 4.4, ADR-38's preview-before-enable shape).
+	// (GET /people/{id}/subscription-preview)
+	PreviewSubscription(w http.ResponseWriter, r *http.Request, id int64)
 	// ADR-36's trigger weights and ADR-55's freshness window.
 	// (GET /priority)
 	GetPrioritySettings(w http.ResponseWriter, r *http.Request)
@@ -3147,6 +3173,12 @@ func (_ Unimplemented) GetPersonArtwork(w http.ResponseWriter, r *http.Request, 
 // Subscribe to a person (ADR-32) -- media types x roles x filters.
 // (POST /people/{id}/subscribe)
 func (_ Unimplemented) SubscribePerson(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every release group in the artist's discography, unfiltered, so the subscribe screen can show what a filter choice would admit or exclude before saving (todo 4.4, ADR-38's preview-before-enable shape).
+// (GET /people/{id}/subscription-preview)
+func (_ Unimplemented) PreviewSubscription(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5804,6 +5836,39 @@ func (siw *ServerInterfaceWrapper) SubscribePerson(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// PreviewSubscription operation middleware
+func (siw *ServerInterfaceWrapper) PreviewSubscription(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewSubscription(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetPrioritySettings operation middleware
 func (siw *ServerInterfaceWrapper) GetPrioritySettings(w http.ResponseWriter, r *http.Request) {
 
@@ -7330,6 +7395,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/people/{id}/subscribe", wrapper.SubscribePerson)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/people/{id}/subscription-preview", wrapper.PreviewSubscription)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/priority", wrapper.GetPrioritySettings)

@@ -21,10 +21,13 @@ var DefaultExcludedSecondaryTypes = []string{"compilation", "live", "remix", "dj
 // (ADR-23), library.Subscription's FiltersJSON stays opaque.
 type SubscriptionFilters struct {
 	// ExcludeSecondaryTypes overrides DefaultExcludedSecondaryTypes when
-	// non-empty. A subscription stored with no filters at all (empty JSON)
-	// gets the default -- never "exclude nothing", which is exactly the
-	// behaviour that makes people turn discography monitoring off.
-	ExcludeSecondaryTypes []string `json:"exclude_secondary_types,omitempty"`
+	// present, a pointer so an explicit empty list ("exclude nothing" --
+	// todo 4.4's preview lets a user choose exactly that) is distinguished
+	// from absent. A subscription stored with no filters at all (nil, or
+	// the key simply missing from stored JSON) gets the default -- never a
+	// silent "exclude nothing", which is exactly the behaviour that makes
+	// people turn discography monitoring off.
+	ExcludeSecondaryTypes *[]string `json:"exclude_secondary_types,omitempty"`
 }
 
 // ParseSubscriptionFilters decodes a stored subscription's opaque
@@ -38,11 +41,12 @@ func ParseSubscriptionFilters(raw string) SubscriptionFilters {
 	return filters
 }
 
-// exclusions is the effective exclude list: the subscription's own, or the
-// package default when it named none.
+// exclusions is the effective exclude list: the subscription's own explicit
+// choice (however short, including empty -- "exclude nothing" is a real
+// choice), or the package default when it named none at all.
 func (f SubscriptionFilters) exclusions() []string {
-	if len(f.ExcludeSecondaryTypes) > 0 {
-		return f.ExcludeSecondaryTypes
+	if f.ExcludeSecondaryTypes != nil {
+		return *f.ExcludeSecondaryTypes
 	}
 	return DefaultExcludedSecondaryTypes
 }
