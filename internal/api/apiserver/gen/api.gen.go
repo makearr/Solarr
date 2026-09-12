@@ -670,6 +670,14 @@ type CategoryGrant struct {
 	Permission Permission `json:"permission"`
 }
 
+// CategoryOfflineFiles defines model for CategoryOfflineFiles.
+type CategoryOfflineFiles struct {
+	CategoryId   int64  `json:"category_id"`
+	Name         string `json:"name"`
+	OfflineFiles int64  `json:"offline_files"`
+	TotalFiles   int64  `json:"total_files"`
+}
+
 // CategorySettings A category's full settings-side detail (ADR-27's policy boundary), administrator only -- richer than LibraryCategory, which stays lean for the many navigation callers (root folder pickers, *Arr import, the sidebar) that never need any of this.
 type CategorySettings struct {
 	Id                int64  `json:"id"`
@@ -1217,6 +1225,9 @@ type LibraryCounts struct {
 type LibraryHealth struct {
 	// BlockedPresent Blocked hashes (ADR-53 part 2) a scan found still sitting in the library (Invariant 83).
 	BlockedPresent []BlockedPresent `json:"blocked_present"`
+
+	// CategoriesOfflineFiles Every category currently carrying files on a root declared offline (section 10.4) -- total_files is the category's real total regardless of reachability, offline_files is how many of those are not reachable right now. Only categories actually affected are listed.
+	CategoriesOfflineFiles []CategoryOfflineFiles `json:"categories_offline_files"`
 
 	// IncompleteCount Monitored works still short of their own required track count.
 	IncompleteCount int              `json:"incomplete_count"`

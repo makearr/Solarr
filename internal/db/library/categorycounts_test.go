@@ -49,12 +49,48 @@ func TestCategoryCounters_CountsWorksAndFilesForTheScopedRoots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
-	if len(corrections) != 8 {
-		t.Fatalf("corrections = %+v, want 8 (works+files+parts+artists for each of 2 categories)", corrections)
+	if len(corrections) != 10 {
+		t.Fatalf("corrections = %+v, want 10 (works+files+files_offline+parts+artists for each of 2 categories)", corrections)
 	}
 
 	if v, ok := correctionFor(corrections, "works"); !ok || v.Now != 2 || v.Scope != "category:1" {
 		t.Errorf("category:1 works = %+v, ok=%v, want Now=2", v, ok)
+	}
+}
+
+// TestCategoryCounters_FilesOfflineSumsOnlyTheOfflineSubset is todo 4.18's own
+// remaining item: "files" stays the category's true total regardless of
+// reachability, "files_offline" is how many of those sit on a root the
+// caller named as offline -- a category spanning one online and one offline
+// root must report both figures separately, not conflate them.
+func TestCategoryCounters_FilesOfflineSumsOnlyTheOfflineSubset(t *testing.T) {
+	opened, _ := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	counters := library.NewCategoryCounters(opened, clock.NewFakeAtEpoch())
+
+	if _, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "a/1.flac", SizeBytes: 1, QuickHash: "h1", FirstSeenAt: firstSeen},
+		{RelPath: "a/2.flac", SizeBytes: 1, QuickHash: "h2", FirstSeenAt: firstSeen},
+	}); err != nil {
+		t.Fatalf("RegisterBatch root 1 (online): %v", err)
+	}
+	if _, err := physical.RegisterBatch(t.Context(), 2, []library.PhysicalFile{
+		{RelPath: "b/1.flac", SizeBytes: 1, QuickHash: "h3", FirstSeenAt: firstSeen},
+	}); err != nil {
+		t.Fatalf("RegisterBatch root 2 (offline): %v", err)
+	}
+
+	corrections, err := counters.Reconcile(t.Context(), []library.CategoryScope{
+		{CategoryID: 1, RootFolderIDs: []int64{1, 2}, OfflineRootFolderIDs: []int64{2}},
+	})
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if v, ok := correctionFor(corrections, "files"); !ok || v.Now != 3 {
+		t.Errorf("files = %+v, ok=%v, want Now=3 (both roots, online and offline)", v, ok)
+	}
+	if v, ok := correctionFor(corrections, "files_offline"); !ok || v.Now != 1 {
+		t.Errorf("files_offline = %+v, ok=%v, want Now=1 (only root 2's own file)", v, ok)
 	}
 }
 
