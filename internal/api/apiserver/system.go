@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
+	"github.com/makearr/MediaNexus/internal/api/apiserver/legal"
 	"github.com/makearr/MediaNexus/internal/api/authz"
 	"github.com/makearr/MediaNexus/internal/db/settings"
 	"github.com/makearr/MediaNexus/internal/platform/config"
@@ -88,6 +90,17 @@ func (s *Server) GetAbout(w http.ResponseWriter, _ *http.Request) {
 		about.Timezone = now.Location().String()
 	}
 	writeJSON(w, s.logger, http.StatusOK, about)
+}
+
+// GetAboutLicense serves the full AGPL-3.0-or-later text (section 13).
+// Unauthenticated for the same reason as GetAbout.
+func (s *Server) GetAboutLicense(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, s.logger, http.StatusOK, gen.LegalText{Text: legal.License})
+}
+
+// GetAboutAttribution serves third-party attributions (ADR-18, section 13).
+func (s *Server) GetAboutAttribution(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, s.logger, http.StatusOK, gen.LegalText{Text: legal.Attribution})
 }
 
 // GetMe reports who the caller is and what they can see.

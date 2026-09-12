@@ -40,7 +40,8 @@ RUN_NODE_ROOT := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) \
                  -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
 
 .PHONY: help verify build test race bench bench-drivers lint vet fmt fmt-check sqlc sqlc-check \
-        api web web-test web-dev image image-local builder binfmt milestone version cache-init clean-cache deps tidy
+        api web web-test web-dev image image-local builder binfmt milestone version cache-init clean-cache deps tidy \
+        license-check
 
 # Version is year.month.release.build (documentation/versioning.md). Never parse a
 # component as a decimal integer for display -- the month is zero-padded and must stay so.
@@ -95,7 +96,13 @@ cache-init:
 	   done'
 
 ## ---- the gate: everything that must pass before a subsystem is "done" ----
-verify: fmt-check vet lint test sqlc-check  ## Full check, as CI runs it
+verify: fmt-check vet lint test sqlc-check license-check  ## Full check, as CI runs it
+
+license-check: ## Fail if the About page's embedded LICENSE/ATTRIBUTION copies drifted from the root
+	@diff -q LICENSE internal/api/apiserver/legal/LICENSE >/dev/null || \
+	  { echo "license-check: internal/api/apiserver/legal/LICENSE is stale -- copy LICENSE over it"; exit 1; }
+	@diff -q ATTRIBUTION.md internal/api/apiserver/legal/ATTRIBUTION.md >/dev/null || \
+	  { echo "license-check: internal/api/apiserver/legal/ATTRIBUTION.md is stale -- copy ATTRIBUTION.md over it"; exit 1; }
 
 build: cache-init  ## Build the binary (CGO_ENABLED=0, per ADR-30)
 	$(RUN_GO) go build -trimpath -ldflags "$(LDFLAGS)" -o /src/medianexus ./cmd/medianexus

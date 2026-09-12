@@ -64,6 +64,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/about/license": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The full AGPL-3.0-or-later text (section 13).
+         * @description Served from the binary's own embedded copy rather than a link, so the licence is readable even by a caller that cannot reach GitHub.
+         */
+        get: operations["getAboutLicense"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/about/attribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Third-party attributions (ADR-18, section 13). */
+        get: operations["getAboutAttribution"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/egress": {
         parameters: {
             query?: never;
@@ -1928,6 +1965,10 @@ export interface components {
              */
             timezone?: string;
         };
+        LegalText: {
+            /** @description Verbatim file content -- rendered as-is, never reformatted. */
+            text: string;
+        };
         CategoryGrant: {
             /** Format: int64 */
             category_id: number;
@@ -3333,6 +3374,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BuildInfo"];
+                };
+            };
+        };
+    };
+    getAboutLicense: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Licence text. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegalText"];
+                };
+            };
+        };
+    };
+    getAboutAttribution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attribution text. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegalText"];
                 };
             };
         };

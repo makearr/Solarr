@@ -3,6 +3,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
+import { About } from "./About";
 import { Login } from "./Login";
 import { router } from "./router";
 import { Setup } from "./Setup";
@@ -34,7 +35,12 @@ export function App() {
     retry: false,
   });
 
-  // After every hook, or React renders fewer hooks on some passes than others.
+  // Reachable before setup, before login, or fully logged in -- AGPL section
+  // 13's "all users interacting with it remotely" is not limited to those who
+  // can authenticate (documentation/licence-compliance.md). Checked after
+  // every hook above, or React renders fewer hooks on some passes than others.
+  if (window.location.pathname === "/about") return <About />;
+
   if (setup.isLoading) return <Splash>Starting…</Splash>;
 
   // Said out loud rather than fallen through. Treating an unreadable setup

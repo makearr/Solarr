@@ -1144,6 +1144,12 @@ type LanguageProfileWrite struct {
 	SubtitleRequired    *[]string `json:"subtitle_required,omitempty"`
 }
 
+// LegalText defines model for LegalText.
+type LegalText struct {
+	// Text Verbatim file content -- rendered as-is, never reformatted.
+	Text string `json:"text"`
+}
+
 // Library A category as a navigation root (ADR-54): its declared entity levels replace the old flat works/files pair -- see LibraryLevel.
 type Library struct {
 	Id int64 `json:"id"`
@@ -2317,6 +2323,12 @@ type ServerInterface interface {
 	// Build identity and the source offer.
 	// (GET /about)
 	GetAbout(w http.ResponseWriter, r *http.Request)
+	// Third-party attributions (ADR-18, section 13).
+	// (GET /about/attribution)
+	GetAboutAttribution(w http.ResponseWriter, r *http.Request)
+	// The full AGPL-3.0-or-later text (section 13).
+	// (GET /about/license)
+	GetAboutLicense(w http.ResponseWriter, r *http.Request)
 	// Every import run for one instance, newest first.
 	// (GET /arr/imports)
 	ListArrImports(w http.ResponseWriter, r *http.Request, params ListArrImportsParams)
@@ -2662,6 +2674,18 @@ type Unimplemented struct{}
 // Build identity and the source offer.
 // (GET /about)
 func (_ Unimplemented) GetAbout(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Third-party attributions (ADR-18, section 13).
+// (GET /about/attribution)
+func (_ Unimplemented) GetAboutAttribution(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The full AGPL-3.0-or-later text (section 13).
+// (GET /about/license)
+func (_ Unimplemented) GetAboutLicense(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3351,6 +3375,34 @@ func (siw *ServerInterfaceWrapper) GetAbout(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAbout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAboutAttribution operation middleware
+func (siw *ServerInterfaceWrapper) GetAboutAttribution(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAboutAttribution(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAboutLicense operation middleware
+func (siw *ServerInterfaceWrapper) GetAboutLicense(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAboutLicense(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6946,6 +6998,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/about", wrapper.GetAbout)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/about/attribution", wrapper.GetAboutAttribution)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/about/license", wrapper.GetAboutLicense)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/arr/imports", wrapper.ListArrImports)

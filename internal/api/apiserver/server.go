@@ -287,6 +287,8 @@ func New(config Config) (*Server, error) {
 		api.Get("/health", server.GetHealth)
 		api.Get("/ready", server.GetReady)
 		api.Get("/about", server.GetAbout)
+		api.Get("/about/license", server.GetAboutLicense)
+		api.Get("/about/attribution", server.GetAboutAttribution)
 		api.Post("/auth/login", server.Login)
 		api.Post("/auth/logout", server.Logout)
 
