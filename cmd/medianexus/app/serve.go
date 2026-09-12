@@ -510,6 +510,14 @@ func (p *process) startServer(ctx context.Context) error {
 			DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Lidarr: p.arrClientFactory(),
 			Logger: p.logger,
 		},
+		IndexerTester: adapters.ConnectionTester{
+			Cache: p.cache, Indexer: p.indexerClientFactory(), Downloader: p.downloaderClientFactory(),
+			Clock: clock.NewSystem(),
+		},
+		DownloaderTester: adapters.ConnectionTester{
+			Cache: p.cache, Indexer: p.indexerClientFactory(), Downloader: p.downloaderClientFactory(),
+			Clock: clock.NewSystem(),
+		},
 		LibraryHealth: adapters.LibraryHealth{
 			Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 			Desired: library.NewDesired(p.library), BlockedContent: library.NewBlockedContentStore(p.library),

@@ -1042,6 +1042,25 @@ export interface paths {
         patch: operations["updateIndexer"];
         trace?: never;
     };
+    "/indexers/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fetch t=caps against the real indexer (todo 5.2's own "every connection tested before it is accepted"). Records the response via the same path a periodic caps refresh would (ADR-43); never a t=search, so this never counts as an acquisition search. */
+        post: operations["testIndexer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/indexers/{id}/apikey": {
         parameters: {
             query?: never;
@@ -1100,6 +1119,25 @@ export interface paths {
         head?: never;
         /** Change a connection's own facts. Administrator only. Never touches credentials -- see /downloaders/{id}/credentials. */
         patch: operations["updateDownloader"];
+        trace?: never;
+    };
+    "/downloaders/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fetch the client's own version (todo 5.2's own "every connection tested before it is accepted") -- the same read-only connection check as SABnzbd's own Version() call, never a queue or dispatch action. */
+        post: operations["testDownloader"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/downloaders/{id}/credentials": {
@@ -2736,6 +2774,8 @@ export interface components {
             /** Format: date-time */
             caps_fetched_at?: string;
             api_key: components["schemas"]["SecretMask"];
+            /** @description ADR-47, expert tier: an HTTP/SOCKS5 proxy for this indexer's own requests only. Empty means "use the global egress proxy, if any" -- not "no proxy". FlareSolverr is not yet built. */
+            egress_proxy_url?: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -2754,6 +2794,7 @@ export interface components {
              * @default 50
              */
             priority: number;
+            egress_proxy_url?: string;
         };
         UpdateIndexerRequest: {
             name: string;
@@ -2766,6 +2807,14 @@ export interface components {
              * @default 50
              */
             priority: number;
+            egress_proxy_url?: string;
+        };
+        ConnectionTestResult: {
+            ok: boolean;
+            /** @description What was found -- the indexer/client's own reported version or capability summary when ok, or why the call failed otherwise. */
+            message: string;
+            /** Format: date-time */
+            tested_at: string;
         };
         Downloader: {
             /** Format: int64 */
@@ -5392,6 +5441,31 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
+    testIndexer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The connection was reachable. ok is false, with message explaining why, when the indexer answered but not usefully (a malformed caps response, for instance) -- a connection problem is a 200 with ok=false, not an HTTP error, the same "the call succeeded; the answer is what it is" shape as everything else that tests an external system. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionTestResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
     setIndexerAPIKey: {
         parameters: {
             query?: never;
@@ -5518,6 +5592,31 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    testDownloader: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The connection was reachable. ok is false, with message explaining why, when it answered but not usefully. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionTestResult"];
+                };
+            };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

@@ -78,6 +78,8 @@ type worksFixture struct {
 	cacheManager         *fakeCacheManager
 	discover             *fakeDiscover
 	arrSync              *fakeArrSync
+	indexerTester        *fakeConnectionTester
+	downloaderTester     *fakeConnectionTester
 	fsys                 *fsx.Mem
 	clock                *clock.Fake
 }
@@ -234,6 +236,8 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	cacheManager := &fakeCacheManager{}
 	discover := &fakeDiscover{}
 	arrSync := &fakeArrSync{}
+	indexerTester := &fakeConnectionTester{}
+	downloaderTester := &fakeConnectionTester{}
 	fsys := fsx.NewMem(fake)
 	server, err := apiserver.New(apiserver.Config{
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
@@ -263,6 +267,8 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		CacheManager:          cacheManager,
 		Discover:              discover,
 		ArrSync:               arrSync,
+		IndexerTester:         indexerTester,
+		DownloaderTester:      downloaderTester,
 		ImagesDir:             testImagesDir,
 		LibrarySize:           librarySize,
 		Navigation:            navigation,
@@ -289,7 +295,8 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		importSessions: importSessions, importInspector: importInspector,
 		drainStarter: drainStarter, moveJobs: moveJobs, renameStarter: renameStarter,
 		libraryTracks: libraryTracks, scheduler: scheduler, cacheManager: cacheManager, discover: discover,
-		arrSync: arrSync, fsys: fsys, clock: fake,
+		arrSync: arrSync, indexerTester: indexerTester, downloaderTester: downloaderTester,
+		fsys: fsys, clock: fake,
 	}
 }
 

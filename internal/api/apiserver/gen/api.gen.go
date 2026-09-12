@@ -497,12 +497,13 @@ type AddDownloaderRequestProtocol string
 // AddIndexerRequest defines model for AddIndexerRequest.
 type AddIndexerRequest struct {
 	// ApiKey Omitted or empty for a public endpoint that needs none (ADR-47).
-	ApiKey   *string `json:"api_key,omitempty"`
-	BaseUrl  string  `json:"base_url"`
-	Enabled  *bool   `json:"enabled,omitempty"`
-	Impl     string  `json:"impl"`
-	Name     string  `json:"name"`
-	Priority *int64  `json:"priority,omitempty"`
+	ApiKey         *string `json:"api_key,omitempty"`
+	BaseUrl        string  `json:"base_url"`
+	EgressProxyUrl *string `json:"egress_proxy_url,omitempty"`
+	Enabled        *bool   `json:"enabled,omitempty"`
+	Impl           string  `json:"impl"`
+	Name           string  `json:"name"`
+	Priority       *int64  `json:"priority,omitempty"`
 }
 
 // ArrApp Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships.
@@ -755,6 +756,14 @@ type CategoryWrite struct {
 
 // CategoryWriteMonitorDiscovered defines model for CategoryWrite.MonitorDiscovered.
 type CategoryWriteMonitorDiscovered string
+
+// ConnectionTestResult defines model for ConnectionTestResult.
+type ConnectionTestResult struct {
+	// Message What was found -- the indexer/client's own reported version or capability summary when ok, or why the call failed otherwise.
+	Message  string    `json:"message"`
+	Ok       bool      `json:"ok"`
+	TestedAt time.Time `json:"tested_at"`
+}
 
 // CreatedAPIKey defines model for CreatedAPIKey.
 type CreatedAPIKey struct {
@@ -1183,8 +1192,11 @@ type Indexer struct {
 	// CategoriesJson The indexer's own last t=caps response, opaque (ADR-43). Empty until fetched.
 	CategoriesJson *string   `json:"categories_json,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
-	Enabled        bool      `json:"enabled"`
-	Id             int64     `json:"id"`
+
+	// EgressProxyUrl ADR-47, expert tier: an HTTP/SOCKS5 proxy for this indexer's own requests only. Empty means "use the global egress proxy, if any" -- not "no proxy". FlareSolverr is not yet built.
+	EgressProxyUrl *string `json:"egress_proxy_url,omitempty"`
+	Enabled        bool    `json:"enabled"`
+	Id             int64   `json:"id"`
 
 	// Impl "newznab" or "torznab" (ADR-43).
 	Impl      string    `json:"impl"`
@@ -1914,11 +1926,12 @@ type UpdateDownloaderRequestProtocol string
 
 // UpdateIndexerRequest defines model for UpdateIndexerRequest.
 type UpdateIndexerRequest struct {
-	BaseUrl  string `json:"base_url"`
-	Enabled  *bool  `json:"enabled,omitempty"`
-	Impl     string `json:"impl"`
-	Name     string `json:"name"`
-	Priority *int64 `json:"priority,omitempty"`
+	BaseUrl        string  `json:"base_url"`
+	EgressProxyUrl *string `json:"egress_proxy_url,omitempty"`
+	Enabled        *bool   `json:"enabled,omitempty"`
+	Impl           string  `json:"impl"`
+	Name           string  `json:"name"`
+	Priority       *int64  `json:"priority,omitempty"`
 }
 
 // UserAccount defines model for UserAccount.
@@ -2636,6 +2649,9 @@ type ServerInterface interface {
 	// Replace or clear a connection's own credentials. Administrator only. A separate endpoint from PATCH, the same reasoning /indexers/{id}/apikey already gives.
 	// (POST /downloaders/{id}/credentials)
 	SetDownloaderCredentials(w http.ResponseWriter, r *http.Request, id int64)
+	// Fetch the client's own version (todo 5.2's own "every connection tested before it is accepted") -- the same read-only connection check as SABnzbd's own Version() call, never a queue or dispatch action.
+	// (POST /downloaders/{id}/test)
+	TestDownloader(w http.ResponseWriter, r *http.Request, id int64)
 	// The configured download folders (todo 4.18, section 5.1).
 	// (GET /downloadfolders)
 	ListDownloadFolders(w http.ResponseWriter, r *http.Request)
@@ -2720,6 +2736,9 @@ type ServerInterface interface {
 	// Replace or clear a connection's own API key. Administrator only. A separate endpoint from PATCH: resealing on every unrelated edit would be silent, pointless churn. An empty api_key clears it, for a public endpoint that no longer needs one.
 	// (POST /indexers/{id}/apikey)
 	SetIndexerAPIKey(w http.ResponseWriter, r *http.Request, id int64)
+	// Fetch t=caps against the real indexer (todo 5.2's own "every connection tested before it is accepted"). Records the response via the same path a periodic caps refresh would (ADR-43); never a t=search, so this never counts as an acquisition search.
+	// (POST /indexers/{id}/test)
+	TestIndexer(w http.ResponseWriter, r *http.Request, id int64)
 	// A page of jobs the caller may see.
 	// (GET /jobs)
 	ListJobs(w http.ResponseWriter, r *http.Request, params ListJobsParams)
@@ -3140,6 +3159,12 @@ func (_ Unimplemented) SetDownloaderCredentials(w http.ResponseWriter, r *http.R
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Fetch the client's own version (todo 5.2's own "every connection tested before it is accepted") -- the same read-only connection check as SABnzbd's own Version() call, never a queue or dispatch action.
+// (POST /downloaders/{id}/test)
+func (_ Unimplemented) TestDownloader(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // The configured download folders (todo 4.18, section 5.1).
 // (GET /downloadfolders)
 func (_ Unimplemented) ListDownloadFolders(w http.ResponseWriter, r *http.Request) {
@@ -3305,6 +3330,12 @@ func (_ Unimplemented) UpdateIndexer(w http.ResponseWriter, r *http.Request, id 
 // Replace or clear a connection's own API key. Administrator only. A separate endpoint from PATCH: resealing on every unrelated edit would be silent, pointless churn. An empty api_key clears it, for a public endpoint that no longer needs one.
 // (POST /indexers/{id}/apikey)
 func (_ Unimplemented) SetIndexerAPIKey(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Fetch t=caps against the real indexer (todo 5.2's own "every connection tested before it is accepted"). Records the response via the same path a periodic caps refresh would (ADR-43); never a t=search, so this never counts as an acquisition search.
+// (POST /indexers/{id}/test)
+func (_ Unimplemented) TestIndexer(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4724,6 +4755,39 @@ func (siw *ServerInterfaceWrapper) SetDownloaderCredentials(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// TestDownloader operation middleware
+func (siw *ServerInterfaceWrapper) TestDownloader(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestDownloader(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListDownloadFolders operation middleware
 func (siw *ServerInterfaceWrapper) ListDownloadFolders(w http.ResponseWriter, r *http.Request) {
 
@@ -5582,6 +5646,39 @@ func (siw *ServerInterfaceWrapper) SetIndexerAPIKey(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetIndexerAPIKey(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestIndexer operation middleware
+func (siw *ServerInterfaceWrapper) TestIndexer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestIndexer(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7928,6 +8025,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/downloaders/{id}/credentials", wrapper.SetDownloaderCredentials)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/downloaders/{id}/test", wrapper.TestDownloader)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/downloadfolders", wrapper.ListDownloadFolders)
 	})
 	r.Group(func(r chi.Router) {
@@ -8010,6 +8110,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/indexers/{id}/apikey", wrapper.SetIndexerAPIKey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/indexers/{id}/test", wrapper.TestIndexer)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/jobs", wrapper.ListJobs)

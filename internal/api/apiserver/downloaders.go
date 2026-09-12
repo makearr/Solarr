@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -149,6 +150,39 @@ func (s *Server) SetDownloaderCredentials(w http.ResponseWriter, r *http.Request
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// routeTestDownloader parses the id path parameter, mirroring routeTestIndexer.
+func (s *Server) routeTestDownloader(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a downloader id must be a number")
+		return
+	}
+	s.TestDownloader(w, r, id)
+}
+
+// DownloaderTester runs todo 5.2's own "every connection tested before it is
+// accepted" against the real download client -- SABnzbd's own Version()
+// call, never a queue or dispatch action.
+type DownloaderTester interface {
+	TestDownloader(ctx context.Context, id int64) (ConnectionTestResult, error)
+}
+
+// TestDownloader runs a connection test against the real download client.
+func (s *Server) TestDownloader(w http.ResponseWriter, r *http.Request, id int64) {
+	if _, err := authz.FromContext(r.Context()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	result, err := s.downloaderTester.TestDownloader(r.Context(), id)
+	if err != nil {
+		writeDownloaderError(w, s, err, "The connection has problems", "Nothing was tested.")
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.ConnectionTestResult{
+		Ok: result.OK, Message: result.Message, TestedAt: result.TestedAt,
+	})
 }
 
 // writeDownloaderError translates settings.Downloader's own error

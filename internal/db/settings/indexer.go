@@ -3,6 +3,7 @@ package settings
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -31,11 +32,56 @@ type Indexer struct {
 	CategoriesJSON string
 	CapsFetchedAt  *int64
 	// SettingsJSON is ADR-47's own egress block ({proxy_url, flaresolverr_url}),
-	// expert tier -- unwired until that pass, carried here so it needs no
-	// further migration when it lands.
+	// expert tier. FlareSolverr is not wired yet (needs its own cached-cookie
+	// state, not just a client-construction change) -- Egress only ever reads
+	// ProxyURL from it today.
 	SettingsJSON string
 	CreatedAt    int64
 	UpdatedAt    int64
+}
+
+// IndexerEgress is ADR-47's own egress block, encoded into Indexer.
+// SettingsJSON under the "egress" key. FlareSolverr's own cached-cookie
+// state deliberately has no field here yet -- it needs more than a URL to
+// represent (todo, private/questions.md).
+type IndexerEgress struct {
+	ProxyURL string `json:"proxy_url,omitempty"`
+}
+
+// indexerSettingsJSON is SettingsJSON's own top-level shape -- a wrapper
+// object so a future sibling (metadata source selection, say) can share the
+// same column without colliding with "egress".
+type indexerSettingsJSON struct {
+	Egress IndexerEgress `json:"egress,omitempty"`
+}
+
+// Egress parses SettingsJSON's own egress block. An empty or unparseable
+// blob answers the zero value -- an indexer with no egress configured (or
+// predating this field) behaves exactly as before ADR-47.
+func (i Indexer) Egress() IndexerEgress {
+	if i.SettingsJSON == "" {
+		return IndexerEgress{}
+	}
+	var parsed indexerSettingsJSON
+	if err := json.Unmarshal([]byte(i.SettingsJSON), &parsed); err != nil {
+		return IndexerEgress{}
+	}
+	return parsed.Egress
+}
+
+// buildIndexerSettingsJSON encodes egressProxyURL into SettingsJSON's own
+// shape, or "" for no egress configured -- kept out of the stored value
+// entirely rather than an empty egress object, so an indexer nobody has
+// ever configured egress for still reads back with SettingsJSON == "".
+func buildIndexerSettingsJSON(egressProxyURL string) string {
+	if egressProxyURL == "" {
+		return ""
+	}
+	encoded, err := json.Marshal(indexerSettingsJSON{Egress: IndexerEgress{ProxyURL: egressProxyURL}})
+	if err != nil {
+		return ""
+	}
+	return string(encoded)
 }
 
 // IndexerRequest is what CreateIndexer/UpdateIndexer accept for a
@@ -43,12 +89,12 @@ type Indexer struct {
 // path (Create's own apiKey argument, SetIndexerAPIKey), the same split
 // ArrInstanceRequest already uses.
 type IndexerRequest struct {
-	Name         string
-	Impl         string
-	BaseURL      string
-	Enabled      bool
-	Priority     int64
-	SettingsJSON string
+	Name           string
+	Impl           string
+	BaseURL        string
+	Enabled        bool
+	Priority       int64
+	EgressProxyURL string
 }
 
 func validateIndexer(request IndexerRequest) config.Problems {
@@ -103,13 +149,15 @@ func (c *Cache) CreateIndexer(ctx context.Context, request IndexerRequest, apiKe
 		return Indexer{}, fmt.Errorf("settings: seal indexer api key: %w", err)
 	}
 
+	settingsJSON := buildIndexerSettingsJSON(request.EgressProxyURL)
 	var created settingsdb.Indexer
 	err = c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		var err error
 		created, err = c.queries.WithTx(tx).CreateIndexer(ctx, settingsdb.CreateIndexerParams{
 			Name: request.Name, Impl: request.Impl, BaseUrl: request.BaseURL, ApiKey: sealed,
 			Enabled: boolToInt(request.Enabled), Priority: request.Priority,
-			CreatedAt: at, UpdatedAt: at,
+			SettingsJson: sql.NullString{String: settingsJSON, Valid: settingsJSON != ""},
+			CreatedAt:    at, UpdatedAt: at,
 		})
 		return err
 	})
@@ -129,11 +177,12 @@ func (c *Cache) UpdateIndexer(ctx context.Context, id int64, request IndexerRequ
 		return Indexer{}, problems
 	}
 
+	settingsJSON := buildIndexerSettingsJSON(request.EgressProxyURL)
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		return c.queries.WithTx(tx).UpdateIndexer(ctx, settingsdb.UpdateIndexerParams{
 			Name: request.Name, Impl: request.Impl, BaseUrl: request.BaseURL,
 			Enabled: boolToInt(request.Enabled), Priority: request.Priority,
-			SettingsJson: sql.NullString{String: request.SettingsJSON, Valid: request.SettingsJSON != ""},
+			SettingsJson: sql.NullString{String: settingsJSON, Valid: settingsJSON != ""},
 			UpdatedAt:    at, ID: id,
 		})
 	})

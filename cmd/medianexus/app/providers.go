@@ -2,9 +2,13 @@ package app
 
 import (
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/makearr/MediaNexus/cmd/medianexus/adapters"
+	"github.com/makearr/MediaNexus/internal/acquiring/indexer"
+	"github.com/makearr/MediaNexus/internal/acquiring/sabnzbd"
+	"github.com/makearr/MediaNexus/internal/db/settings"
 	"github.com/makearr/MediaNexus/internal/importing/arrimport"
 	"github.com/makearr/MediaNexus/internal/media/music"
 	"github.com/makearr/MediaNexus/internal/metadata/metacache"
@@ -132,6 +136,71 @@ func (p *process) arrClientFactory() adapters.LidarrClientFactory {
 			Provider: "arr", UserAgent: agent, Proxy: p.liveProxyPolicy(), Timeout: 60 * time.Second,
 		})
 		return arrimport.NewLidarrClient(client, baseURL, apiKey)
+	}
+}
+
+// indexerLiveProxyPolicy resolves ADR-47's own per-indexer egress proxy when
+// the connection has one configured, falling back to ADR-58's global egress
+// proxy otherwise -- an indexer with no egress block behaves exactly as
+// before. The SSRF guard is unaffected either way: Proxy only ever selects
+// which URL a request is tunnelled through, never which host the guard
+// resolves and checks (httpx.ProxyDial's own job, unchanged here).
+func (p *process) indexerLiveProxyPolicy(egress settings.IndexerEgress) httpx.LiveProxyPolicy {
+	if egress.ProxyURL == "" {
+		return p.liveProxyPolicy()
+	}
+	parsed, err := url.Parse(egress.ProxyURL)
+	if err != nil {
+		p.logger.Warn("configured indexer egress proxy does not parse", "error", err)
+		return p.liveProxyPolicy()
+	}
+	return func() httpx.ProxyPolicy { return httpx.ProxyPolicy{URL: parsed} }
+}
+
+// indexerClientFactory builds adapters.IndexerClientFactory. Each indexer
+// connection gets its own rate-limit/breaker bucket, keyed by id -- ADR-37's
+// own "each indexer draws on its own bucket, so parallelism never turns into
+// a burst against one provider", needed the moment a search fans out to more
+// than one indexer concurrently (stage 5's own candidate pipeline). A bucket
+// is created lazily by the limiter/breaker registries the first time an id
+// is used, so a newly added indexer needs no code change here.
+func (p *process) indexerClientFactory() adapters.IndexerClientFactory {
+	wall := clock.NewSystem()
+	limiter := httpx.NewLimiter(wall, httpx.Config{
+		Defaults: httpx.Limits{MinInterval: 500 * time.Millisecond},
+	}, nil)
+	breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
+	agent := httpx.UserAgent(p.build.Version)
+	guard := httpx.NewGuard(nil, nil, nil)
+
+	return func(indexerID int64, baseURL, apiKey string, egress settings.IndexerEgress) indexer.Client {
+		client := httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
+			Provider: "indexer:" + strconv.FormatInt(indexerID, 10), UserAgent: agent,
+			Proxy: p.indexerLiveProxyPolicy(egress),
+		})
+		return indexer.NewClient(client, baseURL, apiKey)
+	}
+}
+
+// downloaderClientFactory builds adapters.DownloaderClientFactory, one
+// rate-limit/breaker bucket per connection id -- gentle by default (a
+// downloader is polled, not fanned out to), the global egress proxy applies
+// like any other outbound client (ADR-47 is indexer-specific, not this).
+func (p *process) downloaderClientFactory() adapters.DownloaderClientFactory {
+	wall := clock.NewSystem()
+	limiter := httpx.NewLimiter(wall, httpx.Config{
+		Defaults: httpx.Limits{MinInterval: 200 * time.Millisecond},
+	}, nil)
+	breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
+	agent := httpx.UserAgent(p.build.Version)
+	guard := httpx.NewGuard(nil, nil, nil)
+
+	return func(downloaderID int64, baseURL, credentials string) sabnzbd.Client {
+		client := httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
+			Provider: "downloader:" + strconv.FormatInt(downloaderID, 10), UserAgent: agent,
+			Proxy: p.liveProxyPolicy(),
+		})
+		return sabnzbd.NewClient(client, baseURL, credentials)
 	}
 }
 

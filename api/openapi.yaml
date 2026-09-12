@@ -1626,6 +1626,36 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /indexers/{id}/test:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: testIndexer
+      tags: [settings]
+      summary: >-
+        Fetch t=caps against the real indexer (todo 5.2's own "every
+        connection tested before it is accepted"). Records the response via
+        the same path a periodic caps refresh would (ADR-43); never a
+        t=search, so this never counts as an acquisition search.
+      responses:
+        "200":
+          description: >-
+            The connection was reachable. ok is false, with message
+            explaining why, when the indexer answered but not usefully
+            (a malformed caps response, for instance) -- a connection
+            problem is a 200 with ok=false, not an HTTP error, the same
+            "the call succeeded; the answer is what it is" shape as
+            everything else that tests an external system.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectionTestResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /indexers/{id}/apikey:
     parameters:
       - name: id
@@ -1724,6 +1754,32 @@ paths:
       summary: Remove a connection. Administrator only.
       responses:
         "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /downloaders/{id}/test:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: testDownloader
+      tags: [settings]
+      summary: >-
+        Fetch the client's own version (todo 5.2's own "every connection
+        tested before it is accepted") -- the same read-only connection
+        check as SABnzbd's own Version() call, never a queue or dispatch
+        action.
+      responses:
+        "200":
+          description: >-
+            The connection was reachable. ok is false, with message
+            explaining why, when it answered but not usefully.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectionTestResult" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -4286,6 +4342,12 @@ components:
           description: The indexer's own last t=caps response, opaque (ADR-43). Empty until fetched.
         caps_fetched_at: { type: string, format: date-time }
         api_key: { $ref: "#/components/schemas/SecretMask" }
+        egress_proxy_url:
+          type: string
+          description: >-
+            ADR-47, expert tier: an HTTP/SOCKS5 proxy for this indexer's own
+            requests only. Empty means "use the global egress proxy, if any"
+            -- not "no proxy". FlareSolverr is not yet built.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -4301,6 +4363,7 @@ components:
           description: Omitted or empty for a public endpoint that needs none (ADR-47).
         enabled: { type: boolean, default: true }
         priority: { type: integer, format: int64, default: 50 }
+        egress_proxy_url: { type: string }
 
     UpdateIndexerRequest:
       type: object
@@ -4311,6 +4374,19 @@ components:
         base_url: { type: string, minLength: 1 }
         enabled: { type: boolean, default: true }
         priority: { type: integer, format: int64, default: 50 }
+        egress_proxy_url: { type: string }
+
+    ConnectionTestResult:
+      type: object
+      required: [ok, message, tested_at]
+      properties:
+        ok: { type: boolean }
+        message:
+          type: string
+          description: >-
+            What was found -- the indexer/client's own reported version or
+            capability summary when ok, or why the call failed otherwise.
+        tested_at: { type: string, format: date-time }
 
     Downloader:
       type: object

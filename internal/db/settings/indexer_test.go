@@ -175,6 +175,81 @@ func TestUpdateIndexer_ChangesFactsNeverTheKey(t *testing.T) {
 	}
 }
 
+func TestCreateIndexer_StoresEgressProxyURL(t *testing.T) {
+	cache, fake := newCache(t)
+
+	created, err := cache.CreateIndexer(t.Context(), settings.IndexerRequest{
+		Name: "NZBgeek", Impl: "newznab", BaseURL: "https://api.nzbgeek.info", Enabled: true,
+		EgressProxyURL: "socks5://proxy.example:1080",
+	}, secrets.Secret(""), fake.Now().Unix())
+	if err != nil {
+		t.Fatalf("CreateIndexer: %v", err)
+	}
+	if created.Egress().ProxyURL != "socks5://proxy.example:1080" {
+		t.Errorf("Egress().ProxyURL = %q, want the proxy url set at creation -- CreateIndexer's own "+
+			"INSERT silently dropped settings_json before this fix", created.Egress().ProxyURL)
+	}
+
+	found, err := cache.GetIndexer(t.Context(), created.ID)
+	if err != nil {
+		t.Fatalf("GetIndexer: %v", err)
+	}
+	if found.Egress().ProxyURL != "socks5://proxy.example:1080" {
+		t.Errorf("GetIndexer(...).Egress().ProxyURL = %q, want it to persist across a fresh read",
+			found.Egress().ProxyURL)
+	}
+}
+
+func TestCreateIndexer_NoEgressLeavesSettingsJSONEmpty(t *testing.T) {
+	cache, fake := newCache(t)
+
+	created, err := cache.CreateIndexer(t.Context(), settings.IndexerRequest{
+		Name: "NZBgeek", Impl: "newznab", BaseURL: "https://api.nzbgeek.info", Enabled: true,
+	}, secrets.Secret(""), fake.Now().Unix())
+	if err != nil {
+		t.Fatalf("CreateIndexer: %v", err)
+	}
+	if created.SettingsJSON != "" {
+		t.Errorf("SettingsJSON = %q, want empty for a connection with no egress configured", created.SettingsJSON)
+	}
+	if created.Egress() != (settings.IndexerEgress{}) {
+		t.Errorf("Egress() = %+v, want the zero value", created.Egress())
+	}
+}
+
+func TestUpdateIndexer_ChangesEgressProxyURL(t *testing.T) {
+	cache, fake := newCache(t)
+
+	created, err := cache.CreateIndexer(t.Context(), settings.IndexerRequest{
+		Name: "NZBgeek", Impl: "newznab", BaseURL: "https://api.nzbgeek.info", Enabled: true,
+		EgressProxyURL: "http://old-proxy.example:8080",
+	}, secrets.Secret(""), fake.Now().Unix())
+	if err != nil {
+		t.Fatalf("CreateIndexer: %v", err)
+	}
+
+	updated, err := cache.UpdateIndexer(t.Context(), created.ID, settings.IndexerRequest{
+		Name: "NZBgeek", Impl: "newznab", BaseURL: "https://api.nzbgeek.info", Enabled: true,
+		EgressProxyURL: "http://new-proxy.example:8080",
+	}, fake.Now().Unix())
+	if err != nil {
+		t.Fatalf("UpdateIndexer: %v", err)
+	}
+	if updated.Egress().ProxyURL != "http://new-proxy.example:8080" {
+		t.Errorf("Egress().ProxyURL = %q, want the updated proxy url", updated.Egress().ProxyURL)
+	}
+
+	cleared, err := cache.UpdateIndexer(t.Context(), created.ID, settings.IndexerRequest{
+		Name: "NZBgeek", Impl: "newznab", BaseURL: "https://api.nzbgeek.info", Enabled: true,
+	}, fake.Now().Unix())
+	if err != nil {
+		t.Fatalf("UpdateIndexer (clear): %v", err)
+	}
+	if cleared.Egress().ProxyURL != "" {
+		t.Errorf("Egress().ProxyURL = %q, want empty once cleared", cleared.Egress().ProxyURL)
+	}
+}
+
 func TestDeleteIndexer_RemovesIt(t *testing.T) {
 	cache, fake := newCache(t)
 
