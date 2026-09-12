@@ -1,8 +1,8 @@
 -- Indexer connections (stage 5, ADR-37/43/47). Column lists follow table order.
 
 -- name: CreateIndexer :one
-INSERT INTO indexer (name, impl, base_url, api_key, enabled, priority, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO indexer (name, impl, base_url, api_key, enabled, priority, settings_json, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, name, impl, base_url, api_key, enabled, priority, categories_json,
           caps_fetched_at, settings_json, created_at, updated_at;
 

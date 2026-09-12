@@ -1,10 +1,12 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -52,6 +54,7 @@ func (s *Server) AddIndexer(w http.ResponseWriter, r *http.Request) {
 	created, err := s.auth.Settings.CreateIndexer(r.Context(), settings.IndexerRequest{
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
 		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 50),
+		EgressProxyURL: derefOr(body.EgressProxyUrl, ""),
 	}, secrets.Secret(derefOr(body.ApiKey, "")), s.wall.Now().Unix())
 	if err != nil {
 		writeIndexerError(w, s, err, "The connection has problems", "Nothing was created.")
@@ -87,6 +90,7 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 	updated, err := s.auth.Settings.UpdateIndexer(r.Context(), id, settings.IndexerRequest{
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
 		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 50),
+		EgressProxyURL: derefOr(body.EgressProxyUrl, ""),
 	}, s.wall.Now().Unix())
 	if err != nil {
 		writeIndexerError(w, s, err, "The connection has problems", "Nothing was changed.")
@@ -151,6 +155,50 @@ func (s *Server) SetIndexerAPIKey(w http.ResponseWriter, r *http.Request, id int
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// routeTestIndexer parses the id path parameter, mirroring routeUpdateIndexer.
+func (s *Server) routeTestIndexer(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an indexer id must be a number")
+		return
+	}
+	s.TestIndexer(w, r, id)
+}
+
+// IndexerTester runs todo 5.2's own "every connection tested before it is
+// accepted" against the real indexer -- a t=caps fetch, never a search, so
+// this never counts as an acquisition search of its own.
+type IndexerTester interface {
+	TestIndexer(ctx context.Context, id int64) (ConnectionTestResult, error)
+}
+
+// ConnectionTestResult is one indexer or downloader connection test's own
+// answer -- shared shape, since "reachable, here is what it said" is the
+// same question for both.
+type ConnectionTestResult struct {
+	OK       bool
+	Message  string
+	TestedAt time.Time
+}
+
+// TestIndexer runs a connection test against the real indexer. Any signed-in
+// user may run it -- read-only, no credential exposure, the same access
+// ArrInstance's own sync intentionally does not require either.
+func (s *Server) TestIndexer(w http.ResponseWriter, r *http.Request, id int64) {
+	if _, err := authz.FromContext(r.Context()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	result, err := s.indexerTester.TestIndexer(r.Context(), id)
+	if err != nil {
+		writeIndexerError(w, s, err, "The connection has problems", "Nothing was tested.")
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.ConnectionTestResult{
+		Ok: result.OK, Message: result.Message, TestedAt: result.TestedAt,
+	})
+}
+
 // writeIndexerError translates settings.Indexer's own error vocabulary the
 // same way writeArrInstanceError already does for ArrInstance's identical
 // shape.
@@ -183,6 +231,10 @@ func indexerView(indexer settings.Indexer) gen.Indexer {
 	if indexer.CapsFetchedAt != nil {
 		at := unixTime(*indexer.CapsFetchedAt)
 		view.CapsFetchedAt = &at
+	}
+	if egress := indexer.Egress(); egress.ProxyURL != "" {
+		proxyURL := egress.ProxyURL
+		view.EgressProxyUrl = &proxyURL
 	}
 	return view
 }

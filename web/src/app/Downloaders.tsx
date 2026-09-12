@@ -7,13 +7,14 @@ import type { components } from "@/api/schema";
 
 type Downloader = components["schemas"]["Downloader"];
 type Protocol = components["schemas"]["Downloader"]["protocol"];
+type ConnectionTestResult = components["schemas"]["ConnectionTestResult"];
 
 const PROTOCOLS: readonly Protocol[] = ["usenet", "torrent", "ddl"];
 
 /** Stage 5, ADR-46/57: download clients. SABnzbd is the only implementation
  *  wired up today; more protocols/clients arrive with their own stage.
- *  Connection testing and actually dispatching a download both wait on the
- *  candidate pipeline -- this screen only manages the connection record. */
+ *  Actually dispatching a download waits on the candidate pipeline -- this
+ *  screen manages the connection record and can test it, nothing more. */
 export function Downloaders() {
   const queryClient = useQueryClient();
 
@@ -48,6 +49,16 @@ export function Downloaders() {
       if (error) throw error;
     },
     onSuccess: invalidate,
+  });
+
+  const [testResults, setTestResults] = useState<Record<number, ConnectionTestResult>>({});
+  const test = useMutation({
+    mutationFn: async (id: number) => {
+      const { data, error } = await api.POST("/downloaders/{id}/test", { params: { path: { id } } });
+      if (error) throw error;
+      return { id, result: data! };
+    },
+    onSuccess: ({ id, result }) => setTestResults((prev) => ({ ...prev, [id]: result })),
   });
 
   return (
@@ -98,6 +109,14 @@ export function Downloaders() {
                   </label>
                   <button
                     type="button"
+                    onClick={() => test.mutate(downloader.id)}
+                    disabled={test.isPending}
+                    className="rounded-md border border-border-subtle px-2 py-0.5 text-ink-muted hover:text-ink disabled:opacity-50"
+                  >
+                    {test.isPending && test.variables === downloader.id ? "Testing…" : "Test"}
+                  </button>
+                  <button
+                    type="button"
                     aria-label={`Remove ${downloader.name}`}
                     onClick={() => remove.mutate(downloader.id)}
                     disabled={remove.isPending}
@@ -107,6 +126,12 @@ export function Downloaders() {
                   </button>
                 </span>
               </div>
+              {(() => {
+                const result = testResults[downloader.id];
+                return result && (
+                  <span className={`text-xs ${result.ok ? "text-ok" : "text-danger"}`}>{result.message}</span>
+                );
+              })()}
             </li>
           ))}
         </ul>

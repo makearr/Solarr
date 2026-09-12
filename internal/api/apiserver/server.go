@@ -158,6 +158,10 @@ type Config struct {
 	// unmatched files, incomplete works, roots near reserve, blocked hashes
 	// found in the library). Optional: without it, the endpoint answers 503.
 	LibraryHealth LibraryHealth
+	// IndexerTester and DownloaderTester run todo 5.2's own "every connection
+	// tested before it is accepted" against the real indexer/download client.
+	IndexerTester    IndexerTester
+	DownloaderTester DownloaderTester
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -209,6 +213,8 @@ type Server struct {
 	discover              Discover
 	arrSync               ArrSync
 	libraryHealth         LibraryHealth
+	indexerTester         IndexerTester
+	downloaderTester      DownloaderTester
 	// effectivePort is the port this process actually bound to, resolved at
 	// startup (ADR-58). The Network screen reports it beside whatever
 	// settings.db now holds, since a port change written from the screen
@@ -282,6 +288,8 @@ func New(config Config) (*Server, error) {
 		discover:              config.Discover,
 		arrSync:               config.ArrSync,
 		libraryHealth:         config.LibraryHealth,
+		indexerTester:         config.IndexerTester,
+		downloaderTester:      config.DownloaderTester,
 		effectivePort:         config.Port,
 		healthPath:            base + APIPrefix + "/health",
 		address:               net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
@@ -350,11 +358,13 @@ func New(config Config) (*Server, error) {
 			secured.Patch("/indexers/{id}", server.routeUpdateIndexer)
 			secured.Delete("/indexers/{id}", server.routeDeleteIndexer)
 			secured.Post("/indexers/{id}/apikey", server.routeSetIndexerAPIKey)
+			secured.Post("/indexers/{id}/test", server.routeTestIndexer)
 			secured.Get("/downloaders", server.ListDownloaders)
 			secured.Post("/downloaders", server.AddDownloader)
 			secured.Patch("/downloaders/{id}", server.routeUpdateDownloader)
 			secured.Delete("/downloaders/{id}", server.routeDeleteDownloader)
 			secured.Post("/downloaders/{id}/credentials", server.routeSetDownloaderCredentials)
+			secured.Post("/downloaders/{id}/test", server.routeTestDownloader)
 			secured.Get("/library/unidentified", server.routeListUnidentified)
 			secured.Post("/library/unidentified/{mediaObjectId}/resolve", server.routeResolveUnidentified)
 			secured.Get("/search", server.routeSearch)

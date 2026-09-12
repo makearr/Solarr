@@ -6,14 +6,11 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
 type Indexer = components["schemas"]["Indexer"];
+type ConnectionTestResult = components["schemas"]["ConnectionTestResult"];
 
 /** Stage 5, ADR-37/43/47: Newznab/Torznab search providers. A public
  *  Torznab endpoint may need no API key at all -- left blank, the
- *  connection is created with none rather than refused. Connection
- *  testing (todo 5.2's own "every connection tested before it is
- *  accepted") is not built yet; a bad URL or key surfaces only once a
- *  real search runs against it (stage 5's own candidate pipeline, not
- *  built yet either). */
+ *  connection is created with none rather than refused. */
 export function Indexers() {
   const queryClient = useQueryClient();
 
@@ -30,16 +27,31 @@ export function Indexers() {
 
   const setEnabled = useMutation({
     mutationFn: async (args: { indexer: Indexer; enabled: boolean }) => {
+      // PATCH replaces every field this form can change -- egress_proxy_url
+      // has to be resent from the current row or toggling "enabled" would
+      // silently wipe it (the same staleness shape todo 4.6's category edit
+      // already found once, avoided here by construction).
       const { error } = await api.PATCH("/indexers/{id}", {
         params: { path: { id: args.indexer.id } },
         body: {
           name: args.indexer.name, impl: args.indexer.impl, base_url: args.indexer.base_url,
           priority: args.indexer.priority, enabled: args.enabled,
+          egress_proxy_url: args.indexer.egress_proxy_url,
         },
       });
       if (error) throw error;
     },
     onSuccess: invalidate,
+  });
+
+  const [testResults, setTestResults] = useState<Record<number, ConnectionTestResult>>({});
+  const test = useMutation({
+    mutationFn: async (id: number) => {
+      const { data, error } = await api.POST("/indexers/{id}/test", { params: { path: { id } } });
+      if (error) throw error;
+      return { id, result: data! };
+    },
+    onSuccess: ({ id, result }) => setTestResults((prev) => ({ ...prev, [id]: result })),
   });
 
   const remove = useMutation({
@@ -91,6 +103,14 @@ export function Indexers() {
                   </label>
                   <button
                     type="button"
+                    onClick={() => test.mutate(indexer.id)}
+                    disabled={test.isPending}
+                    className="rounded-md border border-border-subtle px-2 py-0.5 text-ink-muted hover:text-ink disabled:opacity-50"
+                  >
+                    {test.isPending && test.variables === indexer.id ? "Testing…" : "Test"}
+                  </button>
+                  <button
+                    type="button"
                     aria-label={`Remove ${indexer.name}`}
                     onClick={() => remove.mutate(indexer.id)}
                     disabled={remove.isPending}
@@ -103,7 +123,14 @@ export function Indexers() {
               <span className="text-xs text-ink-muted">
                 priority {indexer.priority}
                 {indexer.caps_fetched_at ? ` · capabilities last read ${new Date(indexer.caps_fetched_at).toLocaleString()}` : " · capabilities never read"}
+                {indexer.egress_proxy_url ? ` · via ${indexer.egress_proxy_url}` : ""}
               </span>
+              {(() => {
+                const result = testResults[indexer.id];
+                return result && (
+                  <span className={`text-xs ${result.ok ? "text-ok" : "text-danger"}`}>{result.message}</span>
+                );
+              })()}
             </li>
           ))}
         </ul>
@@ -130,11 +157,15 @@ function AddIndexer({ onAdded }: { onAdded: () => void }) {
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [priority, setPriority] = useState(50);
+  const [egressProxyUrl, setEgressProxyUrl] = useState("");
 
   const create = useMutation({
     mutationFn: async () => {
       const { error } = await api.POST("/indexers", {
-        body: { name, impl, base_url: baseUrl, api_key: apiKey || undefined, priority, enabled: true },
+        body: {
+          name, impl, base_url: baseUrl, api_key: apiKey || undefined, priority, enabled: true,
+          egress_proxy_url: egressProxyUrl || undefined,
+        },
       });
       if (error) throw error;
     },
@@ -143,6 +174,7 @@ function AddIndexer({ onAdded }: { onAdded: () => void }) {
       setBaseUrl("");
       setApiKey("");
       setPriority(50);
+      setEgressProxyUrl("");
       onAdded();
     },
   });
@@ -199,6 +231,16 @@ function AddIndexer({ onAdded }: { onAdded: () => void }) {
           type="number"
           value={priority}
           onChange={(event) => setPriority(Number(event.target.value))}
+        />
+      </label>
+      <label className="flex min-w-48 flex-col gap-1 text-xs text-ink-muted">
+        Egress proxy (optional, expert)
+        <input
+          className={inputStyle}
+          value={egressProxyUrl}
+          placeholder="socks5://proxy.example:1080"
+          autoComplete="off"
+          onChange={(event) => setEgressProxyUrl(event.target.value)}
         />
       </label>
       <button

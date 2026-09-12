@@ -12,21 +12,22 @@ import (
 
 const createIndexer = `-- name: CreateIndexer :one
 
-INSERT INTO indexer (name, impl, base_url, api_key, enabled, priority, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO indexer (name, impl, base_url, api_key, enabled, priority, settings_json, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, name, impl, base_url, api_key, enabled, priority, categories_json,
           caps_fetched_at, settings_json, created_at, updated_at
 `
 
 type CreateIndexerParams struct {
-	Name      string
-	Impl      string
-	BaseUrl   string
-	ApiKey    []byte
-	Enabled   int64
-	Priority  int64
-	CreatedAt int64
-	UpdatedAt int64
+	Name         string
+	Impl         string
+	BaseUrl      string
+	ApiKey       []byte
+	Enabled      int64
+	Priority     int64
+	SettingsJson sql.NullString
+	CreatedAt    int64
+	UpdatedAt    int64
 }
 
 // Indexer connections (stage 5, ADR-37/43/47). Column lists follow table order.
@@ -38,6 +39,7 @@ func (q *Queries) CreateIndexer(ctx context.Context, arg CreateIndexerParams) (I
 		arg.ApiKey,
 		arg.Enabled,
 		arg.Priority,
+		arg.SettingsJson,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)

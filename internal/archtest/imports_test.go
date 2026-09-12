@@ -24,7 +24,8 @@ var allowedInternalImports = map[string][]string{
 		"migrations",
 	},
 	"cmd/medianexus/app": {
-		"cmd/medianexus/adapters", "internal/api/apiserver", "internal/api/auth", "internal/api/health",
+		"cmd/medianexus/adapters", "internal/acquiring/indexer", "internal/acquiring/sabnzbd",
+		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
 		"internal/api/webui", "internal/db/library", "internal/db/recovery", "internal/db/settings",
 		"internal/db/store", "internal/importing/arrimport", "internal/importing/importjob", "internal/jobs",
 		"internal/jobs/cachebudget", "internal/jobs/capacity", "internal/media/music", "internal/metadata/metacache",
@@ -35,6 +36,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
 	"cmd/medianexus/adapters": {
+		"internal/acquiring/indexer", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/db/library", "internal/db/settings",
 		"internal/identify/model", "internal/identify/priority", "internal/importing/arrimport",
 		"internal/importing/importjob", "internal/importing/inspect", "internal/jobs",
