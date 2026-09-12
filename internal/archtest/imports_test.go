@@ -141,6 +141,10 @@ var allowedInternalImports = map[string][]string{
 	// database of its own, no title parsing or scoring (ADR-18/40 stay
 	// the candidate pipeline's own job).
 	"internal/acquiring/indexer": {"internal/platform/httpx"},
+	// Stage 5's own SABnzbd downloader client (ADR-46/57): the same "just a
+	// client" shape as internal/acquiring/indexer, one dependency, no
+	// Downloader interface yet since only one implementation exists.
+	"internal/acquiring/sabnzbd": {"internal/platform/httpx"},
 	// ADR-36's composite acquisition priority: pure arithmetic over
 	// caller-supplied facts, no I/O and no database of its own -- the same
 	// separation internal/identify/score and internal/moving/placement keep from their own
