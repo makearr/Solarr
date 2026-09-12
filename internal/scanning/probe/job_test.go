@@ -105,7 +105,7 @@ func TestJob_RunProbesEveryUnmeasuredFile(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	object, err := librarydb.New(opened.Read()).GetMediaObject(t.Context(), ids[0])
+	object, err := librarydb.New(opened.Read()).GetMediaObject(t.Context(), ids[0].MediaObjectID)
 	if err != nil {
 		t.Fatalf("GetMediaObject: %v", err)
 	}

@@ -109,11 +109,11 @@ func TestRegisterBatch_NewFileCreatesObjectAndPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegisterBatch: %v", err)
 	}
-	if len(ids) != 1 || ids[0] == 0 {
-		t.Fatalf("ids = %v, want one non-zero id", ids)
+	if len(ids) != 1 || ids[0].MediaObjectID == 0 || ids[0].LibraryPathID == 0 {
+		t.Fatalf("ids = %+v, want one non-zero media object and library path id", ids)
 	}
 
-	object, err := queries.GetMediaObject(t.Context(), ids[0])
+	object, err := queries.GetMediaObject(t.Context(), ids[0].MediaObjectID)
 	if err != nil {
 		t.Fatalf("GetMediaObject: %v", err)
 	}
@@ -121,12 +121,16 @@ func TestRegisterBatch_NewFileCreatesObjectAndPath(t *testing.T) {
 		t.Errorf("object = %+v, want size 1024 and quick hash %q", object, "hash-a")
 	}
 
-	paths, err := queries.ListPathsForObject(t.Context(), ids[0])
+	paths, err := queries.ListPathsForObject(t.Context(), ids[0].MediaObjectID)
 	if err != nil {
 		t.Fatalf("ListPathsForObject: %v", err)
 	}
 	if len(paths) != 1 || paths[0].RelPath != "Artist/Album/01.flac" || paths[0].RootFolderID != 1 {
 		t.Errorf("paths = %+v, want one row for root 1 at Artist/Album/01.flac", paths)
+	}
+	if paths[0].ID != ids[0].LibraryPathID {
+		t.Errorf("LibraryPathID = %d, want the row RegisterBatch actually created (%d)",
+			ids[0].LibraryPathID, paths[0].ID)
 	}
 }
 
@@ -147,8 +151,13 @@ func TestRegisterBatch_KnownPathReusesTheSameObject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegisterBatch (second): %v", err)
 	}
-	if first[0] != second[0] {
-		t.Errorf("re-registering the same path returned object %d, then %d", first[0], second[0])
+	if first[0].MediaObjectID != second[0].MediaObjectID {
+		t.Errorf("re-registering the same path returned object %d, then %d",
+			first[0].MediaObjectID, second[0].MediaObjectID)
+	}
+	if first[0].LibraryPathID != second[0].LibraryPathID {
+		t.Errorf("re-registering the same path returned library path %d, then %d",
+			first[0].LibraryPathID, second[0].LibraryPathID)
 	}
 }
 
@@ -165,8 +174,13 @@ func TestRegisterBatch_SameQuickHashAndSizeDedupesAcrossPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegisterBatch: %v", err)
 	}
-	if ids[0] != ids[1] {
-		t.Errorf("two paths sharing quick hash and size got objects %d and %d", ids[0], ids[1])
+	if ids[0].MediaObjectID != ids[1].MediaObjectID {
+		t.Errorf("two paths sharing quick hash and size got objects %d and %d",
+			ids[0].MediaObjectID, ids[1].MediaObjectID)
+	}
+	if ids[0].LibraryPathID == ids[1].LibraryPathID {
+		t.Errorf("two distinct paths shared one library_path id (%d) -- a caller that must know "+
+			"which path is its own (ImportRevert) needs them to stay distinct", ids[0].LibraryPathID)
 	}
 }
 
@@ -183,7 +197,7 @@ func TestRegisterBatch_SameQuickHashDifferentSizeStaysDistinct(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegisterBatch: %v", err)
 	}
-	if ids[0] == ids[1] {
+	if ids[0].MediaObjectID == ids[1].MediaObjectID {
 		t.Error("files of different sizes sharing a quick hash were merged into one object")
 	}
 }

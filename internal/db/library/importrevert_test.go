@@ -112,6 +112,175 @@ func TestImportRevert_UndoesAPlacedUnitAndDeletesTheWorkItCreated(t *testing.T) 
 // the second unit's own now-stale import_unit.work_id, which is exactly
 // why ClearImportUnitPlacement runs for every unit before any work/edition
 // is deleted rather than one unit at a time.
+// The 4.22 linking-audit bug, reproduced: a second, unrelated import reuses an
+// existing media_object via ADR-11's quick-hash dedupe (a duplicate track shipped in
+// two releases, say -- library_path_id is what RegisterBatch always creates fresh, the
+// object it points at is what may be shared). Reverting the second session must leave
+// the first, untouched library entry -- and the shared media_object itself -- alone.
+func TestImportRevert_SharedObjectFromAnUnrelatedCommitSurvives(t *testing.T) {
+	opened, _ := newLibrary(t)
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	putTestFile(t, fsys, "/media/root/Existing/Album/track.flac", []byte("shared bytes"))
+	putTestFile(t, fsys, "/media/root/New/Compilation/track.flac", []byte("shared bytes"))
+
+	object := createObject(t, opened, "quick-shared", int64(len("shared bytes")))
+	existingPathID := addPath(t, opened, object.ID, 1, "Existing/Album/track.flac")
+	newPathID := addPath(t, opened, object.ID, 1, "New/Compilation/track.flac")
+
+	work := createWork(t, opened, "music", "Fake Compilation")
+
+	sessions := library.NewImportSessions(opened)
+	ctx := t.Context()
+	categoryID := int64(7)
+	sessionID, err := sessions.Create(ctx, library.NewSession{
+		SourcePath: "/downloads/x", Origin: library.ImportOriginManual, CategoryID: &categoryID,
+		Threshold: 0.9, StartedAt: 100,
+	})
+	if err != nil {
+		t.Fatalf("Create session: %v", err)
+	}
+	unitIDs, err := sessions.AddUnits(ctx, sessionID, []library.NewUnit{
+		{RelPath: "New/Compilation", Shape: library.UnitSet, FileCount: 1, Bytes: int64(len("shared bytes")), EvidenceJSON: "{}"},
+	})
+	if err != nil {
+		t.Fatalf("AddUnits: %v", err)
+	}
+	if err := sessions.SetUnitDecisions(ctx, sessionID, []library.UnitDecision{
+		{UnitID: unitIDs[0], Decision: library.UnitCommit, Confidence: 0.95},
+	}); err != nil {
+		t.Fatalf("SetUnitDecisions: %v", err)
+	}
+	// Exactly what CommitUnit's own RegisterBatch produces when it dedupes onto an
+	// object another commit already owns: a MediaObjectID it does not own alone,
+	// paired with the LibraryPathID that is genuinely this unit's own new row.
+	if err := sessions.RecordPlacement(ctx, unitIDs[0], library.Placement{
+		WorkID: work.ID, WorkCreated: true,
+		MediaObjectIDs: []int64{object.ID}, LibraryPathIDs: []int64{newPathID},
+	}); err != nil {
+		t.Fatalf("RecordPlacement: %v", err)
+	}
+	if err := sessions.Finish(ctx, sessionID, library.ImportDone, 150, ""); err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+
+	revert := library.NewImportRevert(
+		sessions, library.NewPhysical(opened), library.NewIdentity(opened),
+		library.NewQuarantine(opened, fsys, fake), rootPathLookup(map[int64]string{1: "/media/root"}),
+	)
+	result, err := revert.Revert(ctx, sessionID, 168*time.Hour, 200)
+	if err != nil {
+		t.Fatalf("Revert: %v", err)
+	}
+	if len(result.SkippedSharedObjects) != 0 {
+		t.Errorf("SkippedSharedObjects = %v, want none -- LibraryPathID makes this unambiguous", result.SkippedSharedObjects)
+	}
+	if len(result.QuarantinedPaths) != 1 {
+		t.Fatalf("QuarantinedPaths = %d, want exactly 1 (only the session's own copy)", len(result.QuarantinedPaths))
+	}
+
+	// The session's own file: gone from disk and quarantined.
+	if _, err := fsys.Stat("/media/root/New/Compilation/track.flac"); err == nil {
+		t.Error("the session's own placed file still exists after Revert")
+	}
+	if _, err := librarydb.New(opened.Read()).GetPathByLocation(ctx, librarydb.GetPathByLocationParams{
+		RootFolderID: 1, RelPath: "New/Compilation/track.flac",
+	}); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("the session's own library_path row (%d) still exists after Revert", newPathID)
+	}
+
+	// The unrelated, pre-existing file: untouched on disk, in the database, and by name.
+	if _, err := fsys.Stat("/media/root/Existing/Album/track.flac"); err != nil {
+		t.Errorf("an unrelated library entry sharing these bytes was deleted by an unrelated revert: %v", err)
+	}
+	existingPath, err := librarydb.New(opened.Read()).GetPathByLocation(ctx, librarydb.GetPathByLocationParams{
+		RootFolderID: 1, RelPath: "Existing/Album/track.flac",
+	})
+	if err != nil {
+		t.Fatalf("the unrelated library_path row (%d) was deleted by an unrelated revert: %v", existingPathID, err)
+	}
+	if existingPath.ID != existingPathID || existingPath.MediaObjectID != object.ID {
+		t.Errorf("existing path = %+v, want id=%d media_object_id=%d unchanged", existingPath, existingPathID, object.ID)
+	}
+
+	// The shared media_object must survive: the unrelated path still references it.
+	if _, err := librarydb.New(opened.Read()).GetMediaObject(ctx, object.ID); err != nil {
+		t.Errorf("shared media_object %d was deleted while another path still referenced it: %v", object.ID, err)
+	}
+}
+
+// Data written before migration 0029 has no LibraryPathID to disambiguate with. When the
+// object still has more than one path at revert time, ImportRevert must refuse to guess
+// which one is its own rather than risk repeating the bug -- neither path is touched.
+func TestImportRevert_AmbiguousSharedObjectWithoutALibraryPathIDIsSkipped(t *testing.T) {
+	opened, _ := newLibrary(t)
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	putTestFile(t, fsys, "/media/root/Existing/Album/track.flac", []byte("shared bytes"))
+	putTestFile(t, fsys, "/media/root/New/Compilation/track.flac", []byte("shared bytes"))
+
+	object := createObject(t, opened, "quick-shared", int64(len("shared bytes")))
+	addPath(t, opened, object.ID, 1, "Existing/Album/track.flac")
+	addPath(t, opened, object.ID, 1, "New/Compilation/track.flac")
+
+	work := createWork(t, opened, "music", "Fake Compilation")
+
+	sessions := library.NewImportSessions(opened)
+	ctx := t.Context()
+	categoryID := int64(7)
+	sessionID, err := sessions.Create(ctx, library.NewSession{
+		SourcePath: "/downloads/x", Origin: library.ImportOriginManual, CategoryID: &categoryID,
+		Threshold: 0.9, StartedAt: 100,
+	})
+	if err != nil {
+		t.Fatalf("Create session: %v", err)
+	}
+	unitIDs, err := sessions.AddUnits(ctx, sessionID, []library.NewUnit{
+		{RelPath: "New/Compilation", Shape: library.UnitSet, FileCount: 1, Bytes: int64(len("shared bytes")), EvidenceJSON: "{}"},
+	})
+	if err != nil {
+		t.Fatalf("AddUnits: %v", err)
+	}
+	if err := sessions.SetUnitDecisions(ctx, sessionID, []library.UnitDecision{
+		{UnitID: unitIDs[0], Decision: library.UnitCommit, Confidence: 0.95},
+	}); err != nil {
+		t.Fatalf("SetUnitDecisions: %v", err)
+	}
+	// No LibraryPathIDs: the pre-migration shape.
+	if err := sessions.RecordPlacement(ctx, unitIDs[0], library.Placement{
+		WorkID: work.ID, WorkCreated: true, MediaObjectIDs: []int64{object.ID},
+	}); err != nil {
+		t.Fatalf("RecordPlacement: %v", err)
+	}
+	if err := sessions.Finish(ctx, sessionID, library.ImportDone, 150, ""); err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+
+	revert := library.NewImportRevert(
+		sessions, library.NewPhysical(opened), library.NewIdentity(opened),
+		library.NewQuarantine(opened, fsys, fake), rootPathLookup(map[int64]string{1: "/media/root"}),
+	)
+	result, err := revert.Revert(ctx, sessionID, 168*time.Hour, 200)
+	if err != nil {
+		t.Fatalf("Revert: %v", err)
+	}
+	if len(result.SkippedSharedObjects) != 1 || result.SkippedSharedObjects[0] != object.ID {
+		t.Errorf("SkippedSharedObjects = %v, want [%d]", result.SkippedSharedObjects, object.ID)
+	}
+	if len(result.QuarantinedPaths) != 0 {
+		t.Errorf("QuarantinedPaths = %d, want 0 -- an ambiguous shared object must not be guessed at", len(result.QuarantinedPaths))
+	}
+	if _, err := fsys.Stat("/media/root/Existing/Album/track.flac"); err != nil {
+		t.Errorf("the unrelated file was removed despite the ambiguous skip: %v", err)
+	}
+	if _, err := fsys.Stat("/media/root/New/Compilation/track.flac"); err != nil {
+		t.Errorf("the session's own file was removed despite the ambiguous skip: %v", err)
+	}
+	if _, err := librarydb.New(opened.Read()).GetMediaObject(ctx, object.ID); err != nil {
+		t.Errorf("the shared media_object was deleted despite the ambiguous skip: %v", err)
+	}
+}
+
 func TestImportRevert_TwoUnitsSharingAWorkDeletesItExactlyOnce(t *testing.T) {
 	opened, _ := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()

@@ -109,7 +109,7 @@ func (f *fixture) registerObject(t *testing.T, rootFolderID int64, relPath, cont
 	if err != nil {
 		t.Fatalf("RegisterBatch: %v", err)
 	}
-	return ids[0]
+	return ids[0].MediaObjectID
 }
 
 func (f *fixture) job(roots moverjob.RootFolders) *moverjob.Job {

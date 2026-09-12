@@ -76,7 +76,7 @@ func queueEntry(t *testing.T, opened *store.Store, unidentified library.Unidenti
 	if err != nil {
 		t.Fatalf("RegisterBatch: %v", err)
 	}
-	mediaObjectID := ids[0]
+	mediaObjectID := ids[0].MediaObjectID
 
 	err = unidentified.Record(t.Context(), []library.QueueEntry{{
 		MediaObjectID: mediaObjectID, RootFolderID: rootFolderID, RelPath: relPath,

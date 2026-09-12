@@ -110,6 +110,12 @@ type Placed struct {
 	EditionID      *int64
 	EditionCreated bool
 	MediaObjectIDs []int64
+	// LibraryPathIDs is parallel to MediaObjectIDs: which library_path row this
+	// unit's own placement created for each file, since RegisterBatch's ADR-11
+	// quick-hash dedupe can point a MediaObjectID at bytes another, unrelated
+	// commit already owns -- a revert must undo only its own path, never a path
+	// it merely shares an object with (4.22's own linking audit).
+	LibraryPathIDs []int64
 }
 
 // ErrNoPlacement means placement.Resolve deferred: no root folder in
@@ -249,12 +255,16 @@ func (c Committer) CommitUnit(
 		trackFiles[index] = track
 	}
 
-	mediaObjectIDs, err := c.physical.RegisterBatch(ctx, destRoot.ID, files)
+	registered, err := c.physical.RegisterBatch(ctx, destRoot.ID, files)
 	if err != nil {
 		return Placed{}, fmt.Errorf("music: register placed files for unit %q: %w", unit.Directory, err)
 	}
-	for index := range trackFiles {
-		trackFiles[index].MediaObjectID = mediaObjectIDs[index]
+	mediaObjectIDs := make([]int64, len(registered))
+	libraryPathIDs := make([]int64, len(registered))
+	for index, file := range registered {
+		mediaObjectIDs[index] = file.MediaObjectID
+		libraryPathIDs[index] = file.LibraryPathID
+		trackFiles[index].MediaObjectID = file.MediaObjectID
 	}
 
 	link := library.WorkLink{
@@ -277,7 +287,7 @@ func (c Committer) CommitUnit(
 	return Placed{
 		WorkID: resolution.WorkID, WorkCreated: resolution.WorkCreated,
 		EditionID: resolution.EditionID, EditionCreated: resolution.EditionCreated,
-		MediaObjectIDs: mediaObjectIDs,
+		MediaObjectIDs: mediaObjectIDs, LibraryPathIDs: libraryPathIDs,
 	}, nil
 }
 
