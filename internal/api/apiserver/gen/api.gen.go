@@ -242,6 +242,14 @@ const (
 	PermissionRequest Permission = "request"
 )
 
+// Defines values for PersonWorkWantedState.
+const (
+	PersonWorkWantedStateCOMPLETE   PersonWorkWantedState = "COMPLETE"
+	PersonWorkWantedStateMISSING    PersonWorkWantedState = "MISSING"
+	PersonWorkWantedStatePARTIAL    PersonWorkWantedState = "PARTIAL"
+	PersonWorkWantedStateUPGRADABLE PersonWorkWantedState = "UPGRADABLE"
+)
+
 // Defines values for ProblemType.
 const (
 	BadRequest       ProblemType = "bad-request"
@@ -332,10 +340,10 @@ const (
 
 // Defines values for WorkWantedState.
 const (
-	COMPLETE   WorkWantedState = "COMPLETE"
-	MISSING    WorkWantedState = "MISSING"
-	PARTIAL    WorkWantedState = "PARTIAL"
-	UPGRADABLE WorkWantedState = "UPGRADABLE"
+	WorkWantedStateCOMPLETE   WorkWantedState = "COMPLETE"
+	WorkWantedStateMISSING    WorkWantedState = "MISSING"
+	WorkWantedStatePARTIAL    WorkWantedState = "PARTIAL"
+	WorkWantedStateUPGRADABLE WorkWantedState = "UPGRADABLE"
 )
 
 // Defines values for ListImportSessionsParamsState.
@@ -1306,11 +1314,14 @@ type PersonDetail struct {
 	Disambiguation *string      `json:"disambiguation,omitempty"`
 	Discography    []PersonWork `json:"discography"`
 	Gender         *string      `json:"gender,omitempty"`
-	Id             int64        `json:"id"`
-	Kind           *string      `json:"kind,omitempty"`
-	Monitored      bool         `json:"monitored"`
-	Name           string       `json:"name"`
-	SortName       string       `json:"sort_name"`
+
+	// Genres The union of every genre tagged on any work in discography -- a person carries no genre of their own (ADR-32's own fields are biographical).
+	Genres    []string `json:"genres"`
+	Id        int64    `json:"id"`
+	Kind      *string  `json:"kind,omitempty"`
+	Monitored bool     `json:"monitored"`
+	Name      string   `json:"name"`
+	SortName  string   `json:"sort_name"`
 }
 
 // PersonPage defines model for PersonPage.
@@ -1321,14 +1332,26 @@ type PersonPage struct {
 	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
-// PersonWork One work in a person's discography.
+// PersonWork One work in a person's discography, plus the artist page's own "available / missing / requested" signal (Lidarr-like discography).
 type PersonWork struct {
 	Id        int64  `json:"id"`
 	MediaType string `json:"media_type"`
-	SortTitle string `json:"sort_title"`
-	Title     string `json:"title"`
-	Year      *int   `json:"year,omitempty"`
+
+	// OnDisk Whether this work is linked to any root folder at all (WorkDetail's own OnDisk).
+	OnDisk bool `json:"on_disk"`
+
+	// PrimaryType MusicBrainz's own release-group vocabulary (Album, EP, Single, Broadcast, Other, ...), when known -- absent for a work created before this existed, or from a source with no MusicBrainz answer.
+	PrimaryType *string `json:"primary_type,omitempty"`
+	SortTitle   string  `json:"sort_title"`
+	Title       string  `json:"title"`
+
+	// WantedState Set when this work has a monitored desired_item, same as Work's own.
+	WantedState *PersonWorkWantedState `json:"wanted_state,omitempty"`
+	Year        *int                   `json:"year,omitempty"`
 }
+
+// PersonWorkWantedState Set when this work has a monitored desired_item, same as Work's own.
+type PersonWorkWantedState string
 
 // PrioritySettings ADR-36's trigger weights and ADR-55's release-date freshness window.
 type PrioritySettings struct {

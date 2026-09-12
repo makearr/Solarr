@@ -57,9 +57,16 @@ func (a People) GetPersonDetail(ctx context.Context, id int64) (apiserver.Person
 	for index, work := range detail.Discography {
 		row := apiserver.PersonWorkRow{
 			ID: work.ID, MediaType: work.MediaType, Title: work.CanonicalTitle, SortTitle: work.SortTitle,
+			OnDisk: work.OnDiskCount > 0,
 		}
 		if work.Year.Valid {
 			row.Year = &work.Year.Int64
+		}
+		if work.PrimaryType.Valid {
+			row.PrimaryType = &work.PrimaryType.String
+		}
+		if work.WantedState.Valid {
+			row.WantedState = &work.WantedState.String
 		}
 		discography[index] = row
 	}
@@ -69,7 +76,7 @@ func (a People) GetPersonDetail(ctx context.Context, id int64) (apiserver.Person
 		PersonRow: apiserver.PersonRow{
 			ID: person.ID, Name: person.Name, SortName: person.SortName, Monitored: person.Monitored != 0,
 		},
-		Discography: discography,
+		Genres: detail.Genres, Discography: discography,
 	}
 	if person.Disambiguation.Valid {
 		view.Disambiguation = &person.Disambiguation.String

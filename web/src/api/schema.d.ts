@@ -2420,7 +2420,7 @@ export interface components {
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
         };
-        /** @description One work in a person's discography. */
+        /** @description One work in a person's discography, plus the artist page's own "available / missing / requested" signal (Lidarr-like discography). */
         PersonWork: {
             /** Format: int64 */
             id: number;
@@ -2429,11 +2429,25 @@ export interface components {
             title: string;
             sort_title: string;
             year?: number;
+            /**
+             * @description MusicBrainz's own release-group vocabulary (Album, EP, Single, Broadcast, Other, ...), when known -- absent for a work created before this existed, or from a source with no MusicBrainz answer.
+             * @example Album
+             */
+            primary_type?: string;
+            /**
+             * @description Set when this work has a monitored desired_item, same as Work's own.
+             * @enum {string}
+             */
+            wanted_state?: "MISSING" | "PARTIAL" | "COMPLETE" | "UPGRADABLE";
+            /** @description Whether this work is linked to any root folder at all (WorkDetail's own OnDisk). */
+            on_disk: boolean;
         };
         PersonDetail: components["schemas"]["Person"] & {
             /** @description A Wikidata-sourced extract, when available (ADR-8). */
             biography?: string;
             aliases: string[];
+            /** @description The union of every genre tagged on any work in discography -- a person carries no genre of their own (ADR-32's own fields are biographical). */
+            genres: string[];
             discography: components["schemas"]["PersonWork"][];
         };
         /** @description One provider's id for a work, edition or part. */

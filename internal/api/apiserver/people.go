@@ -41,21 +41,31 @@ type PersonCursor struct {
 	ID       int64
 }
 
-// PersonWorkRow is one work in a person's discography.
+// PersonWorkRow is one work in a person's discography, plus the artist
+// page's own "available / missing / requested" signal (Lidarr-like
+// discography, user request 2026-09-12).
 type PersonWorkRow struct {
-	ID        int64
-	MediaType string
-	Title     string
-	SortTitle string
-	Year      *int64
+	ID          int64
+	MediaType   string
+	Title       string
+	SortTitle   string
+	Year        *int64
+	PrimaryType *string
+	// WantedState is nil when nothing has ever wanted this work -- Work's
+	// own wanted_state doc comment.
+	WantedState *string
+	OnDisk      bool
 }
 
 // PersonDetailRow is a person's full detail. Coverage (held vs missing vs
 // upgradable) is not included -- see the OpenAPI description for why.
 type PersonDetailRow struct {
 	PersonRow
-	Biography   *string
-	Aliases     []string
+	Biography *string
+	Aliases   []string
+	// Genres is the union of every genre tagged on any work in Discography
+	// -- Person carries no genre of its own (ADR-32's fields are biographical).
+	Genres      []string
 	Discography []PersonWorkRow
 }
 
@@ -198,14 +208,18 @@ func buildPersonDetailView(detail PersonDetailRow) gen.PersonDetail {
 	for index, row := range detail.Discography {
 		discography[index] = gen.PersonWork{
 			Id: row.ID, MediaType: row.MediaType, Title: row.Title, SortTitle: row.SortTitle,
-			Year: yearOf(row.Year),
+			Year: yearOf(row.Year), PrimaryType: row.PrimaryType, OnDisk: row.OnDisk,
+		}
+		if row.WantedState != nil {
+			state := gen.PersonWorkWantedState(*row.WantedState)
+			discography[index].WantedState = &state
 		}
 	}
 	return gen.PersonDetail{
 		Id: detail.ID, Name: detail.Name, SortName: detail.SortName,
 		Disambiguation: detail.Disambiguation, Kind: detail.Kind, Gender: detail.Gender,
 		Country: detail.Country, Born: detail.Born, Died: detail.Died, Monitored: detail.Monitored,
-		Biography: detail.Biography, Aliases: detail.Aliases, Discography: discography,
+		Biography: detail.Biography, Aliases: detail.Aliases, Genres: detail.Genres, Discography: discography,
 	}
 }
 

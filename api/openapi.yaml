@@ -3652,20 +3652,36 @@ components:
 
     PersonWork:
       type: object
-      description: One work in a person's discography.
-      required: [id, media_type, title, sort_title]
+      description: >-
+        One work in a person's discography, plus the artist page's own
+        "available / missing / requested" signal (Lidarr-like discography).
+      required: [id, media_type, title, sort_title, on_disk]
       properties:
         id: { type: integer, format: int64 }
         media_type: { type: string, example: "music" }
         title: { type: string }
         sort_title: { type: string }
         year: { type: integer }
+        primary_type:
+          type: string
+          example: "Album"
+          description: >-
+            MusicBrainz's own release-group vocabulary (Album, EP, Single,
+            Broadcast, Other, ...), when known -- absent for a work created
+            before this existed, or from a source with no MusicBrainz answer.
+        wanted_state:
+          type: string
+          enum: [MISSING, PARTIAL, COMPLETE, UPGRADABLE]
+          description: Set when this work has a monitored desired_item, same as Work's own.
+        on_disk:
+          type: boolean
+          description: Whether this work is linked to any root folder at all (WorkDetail's own OnDisk).
 
     PersonDetail:
       allOf:
         - $ref: "#/components/schemas/Person"
         - type: object
-          required: [aliases, discography]
+          required: [aliases, genres, discography]
           properties:
             biography:
               type: string
@@ -3673,6 +3689,13 @@ components:
             aliases:
               type: array
               items: { type: string }
+            genres:
+              type: array
+              items: { type: string }
+              description: >-
+                The union of every genre tagged on any work in discography --
+                a person carries no genre of their own (ADR-32's own fields
+                are biographical).
             discography:
               type: array
               items: { $ref: "#/components/schemas/PersonWork" }

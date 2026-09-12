@@ -130,11 +130,17 @@ func TestGetPerson_ResponseShape(t *testing.T) {
 	cookies := fixture.signIn(t, "admin")
 
 	biography := "English singer-songwriter."
+	primaryType := "Album"
+	wantedState := "PARTIAL"
 	fixture.people.detail = apiserver.PersonDetailRow{
-		PersonRow:   apiserver.PersonRow{ID: 7, Name: "Vutu Doci", SortName: "Bush, Vutu"},
-		Biography:   &biography,
-		Aliases:     []string{"Cathy"},
-		Discography: []apiserver.PersonWorkRow{{ID: 41, MediaType: "music", Title: "Cotevo of Love", SortTitle: "cotevo of love"}},
+		PersonRow: apiserver.PersonRow{ID: 7, Name: "Vutu Doci", SortName: "Bush, Vutu"},
+		Biography: &biography,
+		Aliases:   []string{"Cathy"},
+		Genres:    []string{"Art Pop"},
+		Discography: []apiserver.PersonWorkRow{{
+			ID: 41, MediaType: "music", Title: "Cotevo of Love", SortTitle: "cotevo of love",
+			PrimaryType: &primaryType, WantedState: &wantedState, OnDisk: true,
+		}},
 	}
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/7"))
@@ -149,9 +155,13 @@ func TestGetPerson_ResponseShape(t *testing.T) {
 		Name        string   `json:"name"`
 		Biography   *string  `json:"biography"`
 		Aliases     []string `json:"aliases"`
+		Genres      []string `json:"genres"`
 		Discography []struct {
-			ID    int64  `json:"id"`
-			Title string `json:"title"`
+			ID          int64   `json:"id"`
+			Title       string  `json:"title"`
+			PrimaryType *string `json:"primary_type"`
+			WantedState *string `json:"wanted_state"`
+			OnDisk      bool    `json:"on_disk"`
 		} `json:"discography"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
@@ -166,8 +176,21 @@ func TestGetPerson_ResponseShape(t *testing.T) {
 	if len(body.Aliases) != 1 || body.Aliases[0] != "Cathy" {
 		t.Errorf("Aliases = %+v, want [Cathy]", body.Aliases)
 	}
+	if len(body.Genres) != 1 || body.Genres[0] != "Art Pop" {
+		t.Errorf("Genres = %+v, want [Art Pop]", body.Genres)
+	}
 	if len(body.Discography) != 1 || body.Discography[0].Title != "Cotevo of Love" {
-		t.Errorf("Discography = %+v, want [Cotevo of Love]", body.Discography)
+		t.Fatalf("Discography = %+v, want [Cotevo of Love]", body.Discography)
+	}
+	work := body.Discography[0]
+	if work.PrimaryType == nil || *work.PrimaryType != "Album" {
+		t.Errorf("PrimaryType = %v, want Album", work.PrimaryType)
+	}
+	if work.WantedState == nil || *work.WantedState != "PARTIAL" {
+		t.Errorf("WantedState = %v, want PARTIAL", work.WantedState)
+	}
+	if !work.OnDisk {
+		t.Errorf("OnDisk = false, want true")
 	}
 }
 
