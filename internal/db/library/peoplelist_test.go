@@ -225,6 +225,39 @@ func TestSubscribe_MarksThePersonMonitored(t *testing.T) {
 	}
 }
 
+// FiltersJSON stays opaque here (todo 4.4) -- library only has to store and
+// return it byte for byte, never parse it (a media type's own concern, ADR-23).
+func TestSubscribe_FiltersJSONRoundTripsThroughListEnabled(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	subscriptions := library.NewSubscriptions(opened)
+	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci", "Bush, Vutu")
+
+	if _, err := people.Subscribe(t.Context(), firstSeen, personID, 1, library.SubscriptionRequest{
+		MediaTypes: []string{"music"}, FiltersJSON: `{"exclude_secondary_types":["live"]}`,
+	}); err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	rows, err := subscriptions.ListEnabled(t.Context())
+	if err != nil {
+		t.Fatalf("ListEnabled: %v", err)
+	}
+	found := false
+	for _, row := range rows {
+		if row.SubjectID != personID {
+			continue
+		}
+		found = true
+		if row.FiltersJSON != `{"exclude_secondary_types":["live"]}` {
+			t.Errorf("FiltersJSON = %q, want the exact JSON passed to Subscribe", row.FiltersJSON)
+		}
+	}
+	if !found {
+		t.Fatal("subscription not found in ListEnabled")
+	}
+}
+
 // A second Subscribe for the same person and user must return the existing
 // subscription, not error on the UNIQUE(subject_type, subject_id, user_id)
 // constraint or create a duplicate row (Invariant 80) -- found needed live

@@ -347,6 +347,11 @@ type SubscriptionRequest struct {
 	MediaTypes           []string
 	Roles                []string
 	MonitorBackCatalogue bool
+	// FiltersJSON is opaque here (subscription.FiltersJSON's own doc comment):
+	// which vocabulary it filters on is a media type's own concern (ADR-23).
+	// Empty means "use that media type's own default" -- never written as an
+	// empty JSON object, so a caller that never sets this changes nothing.
+	FiltersJSON string
 }
 
 // Subscribe records a subscription and marks the person monitored, in one
@@ -404,6 +409,7 @@ func (p People) Subscribe(
 		subscription, err := queries.CreateSubscription(ctx, librarydb.CreateSubscriptionParams{
 			SubjectType: "person", SubjectID: personID,
 			MediaTypesJson: string(mediaTypesJSON), RolesJson: rolesJSON,
+			FiltersJson:          sql.NullString{String: request.FiltersJSON, Valid: request.FiltersJSON != ""},
 			MonitorBackCatalogue: monitorBackCatalogue, Enabled: 1,
 			UserID: subscriptionUserID, CreatedAt: at.Unix(),
 		})

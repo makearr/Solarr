@@ -3027,11 +3027,55 @@ paths:
                   items: { type: string }
                   description: Empty or absent means any role.
                 monitor_back_catalogue: { type: boolean, default: false }
+                exclude_secondary_types:
+                  type: array
+                  items: { type: string }
+                  description: >-
+                    Overrides music.DefaultExcludedSecondaryTypes (compilation,
+                    live, remix, dj-mix, mixtape) when present -- an empty
+                    array means "exclude nothing", a real choice, distinct
+                    from absent (todo 4.4). Music-specific for now
+                    (internal/media/music.SubscriptionFilters); opaque to
+                    every other media type, per ADR-23.
       responses:
         "204": { description: Subscribed. }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+
+  /people/{id}/subscription-preview:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: previewSubscription
+      tags: [people]
+      summary: >-
+        Every release group in the artist's discography, unfiltered, so the
+        subscribe screen can show what a filter choice would admit or
+        exclude before saving (todo 4.4, ADR-38's preview-before-enable
+        shape).
+      description: >-
+        The same MusicBrainz call SubscriptionExpandJob itself makes
+        (provider.ArtistReleaseGroups, cache-first per ADR-29 -- this is not
+        a second network round trip once an artist has been browsed once).
+        Returns every release group unfiltered; the client applies
+        SubscriptionFilters.Admits's own substring-match rule locally
+        against whichever exclusions the user is currently trying, so
+        toggling a checkbox costs no round trip. The real admission decision
+        at expand time still runs server-side against the saved filters --
+        this is preview-only.
+      responses:
+        "200":
+          description: The artist's discography and the default exclusion list.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionPreview" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 
   /events:
     get:
@@ -3172,6 +3216,35 @@ components:
           type: string
           example: "Europe/Fefobo"
           description: The server's configured zone, from TZ. `UTC` when unset.
+
+    SubscriptionPreview:
+      type: object
+      required: [release_groups, default_excluded_secondary_types]
+      properties:
+        release_groups:
+          type: array
+          items: { $ref: "#/components/schemas/PreviewReleaseGroup" }
+        default_excluded_secondary_types:
+          type: array
+          items: { type: string }
+          description: >-
+            music.DefaultExcludedSecondaryTypes, so the client can pre-check
+            the same boxes a subscription with no filter override would get.
+
+    PreviewReleaseGroup:
+      type: object
+      required: [mbid, title, secondary_types]
+      properties:
+        mbid: { type: string }
+        title: { type: string }
+        primary_type: { type: string, description: "MusicBrainz's own vocabulary (Album, EP, Single, ...)." }
+        first_release_date:
+          type: string
+          description: A partial date (YYYY, YYYY-MM or YYYY-MM-DD), MusicBrainz's own convention, verbatim.
+        secondary_types:
+          type: array
+          items: { type: string }
+          description: "MusicBrainz's own vocabulary (Compilation, Live, Remix, ...) -- what a filter matches against."
 
     LegalText:
       type: object

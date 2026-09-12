@@ -506,13 +506,18 @@ func (p *process) startServer(ctx context.Context) error {
 			Unidentified: library.NewUnidentified(p.library), Identity: library.NewIdentity(p.library),
 			Provider: p.musicBrainzProvider(), Clock: clock.NewSystem(),
 		},
-		Artwork:          adapters.Artwork{Artworks: library.NewArtworks(p.library)},
-		FS:               p.fsys,
-		ImagesDir:        filepath.Join(p.config.Paths.CacheDir, "images"),
-		People:           adapters.People{People: library.NewPeople(p.library)},
-		PeopleSubscriber: adapters.People{People: library.NewPeople(p.library)},
-		BlockedContent:   adapters.BlockedContent{Blocks: library.NewBlockedContentStore(p.library)},
-		Packs:            adapters.Packs{Packs: library.NewPacks(p.library)},
+		Artwork:   adapters.Artwork{Artworks: library.NewArtworks(p.library)},
+		FS:        p.fsys,
+		ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"),
+		People:    adapters.People{People: library.NewPeople(p.library)},
+		PeopleSubscriber: adapters.People{
+			People: library.NewPeople(p.library), Clock: clock.NewSystem(),
+		},
+		SubscriptionPreviewer: adapters.People{
+			People: library.NewPeople(p.library), Provider: p.musicBrainzProvider(), Clock: clock.NewSystem(),
+		},
+		BlockedContent: adapters.BlockedContent{Blocks: library.NewBlockedContentStore(p.library)},
+		Packs:          adapters.Packs{Packs: library.NewPacks(p.library)},
 		RemoveAndBlocker: adapters.RemoveAndBlock{
 			Action: library.NewRemoveAndBlock(
 				library.NewQuarantine(p.library, p.fsys, clock.NewSystem()),

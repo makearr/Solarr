@@ -79,9 +79,50 @@ type PeopleReader interface {
 
 // PeopleSubscriber subscribes the calling user to a person (ADR-32).
 type PeopleSubscriber interface {
-	// Subscribe answers a missing person id with an error wrapping sql.ErrNoRows.
-	Subscribe(ctx context.Context, personID, userID int64, mediaTypes, roles []string, monitorBackCatalogue bool) error
+	// Subscribe answers a missing person id with an error wrapping
+	// sql.ErrNoRows. excludeSecondaryTypes is nil for "use that media
+	// type's own default", non-nil (however short, including empty) for an
+	// explicit override -- todo 4.4's filter preview needs the distinction.
+	Subscribe(
+		ctx context.Context, personID, userID int64, mediaTypes, roles []string,
+		monitorBackCatalogue bool, excludeSecondaryTypes *[]string,
+	) error
 }
+
+// PreviewReleaseGroupRow is one release group in an artist's discography,
+// unfiltered -- what the subscribe screen lets a user weigh a filter choice
+// against before saving (todo 4.4).
+type PreviewReleaseGroupRow struct {
+	MBID             string
+	Title            string
+	PrimaryType      string
+	FirstReleaseDate string
+	SecondaryTypes   []string
+}
+
+// SubscriptionPreviewRow is an artist's full discography plus the default
+// exclusion list, so the client can pre-check the same boxes a subscription
+// with no filter override would get.
+type SubscriptionPreviewRow struct {
+	ReleaseGroups                 []PreviewReleaseGroupRow
+	DefaultExcludedSecondaryTypes []string
+}
+
+// SubscriptionPreviewer answers what an artist's discography looks like
+// before a subscription filter is saved (ADR-38's preview-before-enable
+// shape, todo 4.4).
+type SubscriptionPreviewer interface {
+	// Preview answers a missing person id with an error wrapping
+	// sql.ErrNoRows, and a person with no MusicBrainz artist id yet with
+	// ErrNoArtistID.
+	Preview(ctx context.Context, personID int64) (SubscriptionPreviewRow, error)
+}
+
+// ErrNoArtistID reports a person with no MusicBrainz artist external id yet
+// -- there is no discography to browse until one exists (the same gap
+// SubscriptionExpandJob's own expandOne already reports, mapped to 409 here
+// since it's a real, recoverable precondition rather than a missing person).
+var ErrNoArtistID = errors.New("apiserver: person has no musicbrainz artist id yet")
 
 // routeListPeople parses the query string, mirroring routeListWorks.
 func (s *Server) routeListPeople(w http.ResponseWriter, r *http.Request) {
@@ -264,7 +305,7 @@ func (s *Server) SubscribePerson(w http.ResponseWriter, r *http.Request, id int6
 
 	roles := derefOr(body.Roles, nil)
 	err = s.peopleSubscriber.Subscribe(r.Context(), id, access.UserID(),
-		body.MediaTypes, roles, derefOr(body.MonitorBackCatalogue, false))
+		body.MediaTypes, roles, derefOr(body.MonitorBackCatalogue, false), body.ExcludeSecondaryTypes)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such person")
 		return
@@ -274,4 +315,66 @@ func (s *Server) SubscribePerson(w http.ResponseWriter, r *http.Request, id int6
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// routePreviewSubscription parses the id path parameter, mirroring routeGetWork.
+func (s *Server) routePreviewSubscription(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a person id must be a number")
+		return
+	}
+	s.PreviewSubscription(w, r, id)
+}
+
+// PreviewSubscription answers an artist's full discography, unfiltered, so
+// the subscribe screen can show what a filter choice would admit or exclude
+// before saving (todo 4.4, ADR-38's preview-before-enable shape).
+func (s *Server) PreviewSubscription(w http.ResponseWriter, r *http.Request, id int64) {
+	if _, err := authz.FromContext(r.Context()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.subscriptionPreviewer == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "subscription preview is not available")
+		return
+	}
+
+	preview, err := s.subscriptionPreviewer.Preview(r.Context(), id)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such person")
+		return
+	}
+	if errors.Is(err, ErrNoArtistID) {
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"No artist id yet", "this person has no MusicBrainz artist id to browse a discography for")
+		return
+	}
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, buildSubscriptionPreviewView(preview))
+}
+
+func buildSubscriptionPreviewView(row SubscriptionPreviewRow) gen.SubscriptionPreview {
+	groups := make([]gen.PreviewReleaseGroup, len(row.ReleaseGroups))
+	for index, group := range row.ReleaseGroups {
+		groups[index] = gen.PreviewReleaseGroup{
+			Mbid: group.MBID, Title: group.Title, SecondaryTypes: group.SecondaryTypes,
+		}
+		if group.PrimaryType != "" {
+			primaryType := group.PrimaryType
+			groups[index].PrimaryType = &primaryType
+		}
+		if group.FirstReleaseDate != "" {
+			date := group.FirstReleaseDate
+			groups[index].FirstReleaseDate = &date
+		}
+	}
+	return gen.SubscriptionPreview{
+		ReleaseGroups: groups, DefaultExcludedSecondaryTypes: row.DefaultExcludedSecondaryTypes,
+	}
 }
