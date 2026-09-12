@@ -358,7 +358,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Remove a root folder. Administrator only. Refused, with the categories that still attach it, while any category does (settings.ErrInUse) -- detach it from every category first. */
+        delete: operations["deleteRootFolder"];
         options?: never;
         head?: never;
         /**
@@ -3837,6 +3838,30 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    deleteRootFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
         };
     };

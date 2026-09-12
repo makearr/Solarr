@@ -82,6 +82,16 @@ export function RootFolders() {
     onSuccess: invalidate,
   });
 
+  // Refused (409) while any category still attaches this root -- detach it
+  // from every category first (settings.ErrInUse, via the general handler).
+  const remove = useMutation({
+    mutationFn: async (id: number) => {
+      const { error } = await api.DELETE("/rootfolders/{id}", { params: { path: { id } } });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col gap-4 overflow-y-auto p-6">
       <header className="flex flex-col gap-1">
@@ -109,8 +119,11 @@ export function RootFolders() {
               onToggleOnline={() => setOnline.mutate({ id: root.id, online: !root.online })}
               onAttachCategory={(categoryId) => attachCategory.mutate({ rootFolderId: root.id, categoryId })}
               onDetachCategory={(categoryId) => detachCategory.mutate({ rootFolderId: root.id, categoryId })}
+              onRemove={() => remove.mutate(root.id)}
               busy={setPolicy.isPending || setOnline.isPending}
               categoryBusy={attachCategory.isPending || detachCategory.isPending}
+              removeBusy={remove.isPending && remove.variables === root.id}
+              removeError={remove.isError && remove.variables === root.id ? remove.error : null}
             />
           ))}
         </ul>
@@ -144,8 +157,11 @@ function RootFolderCard({
   onToggleOnline,
   onAttachCategory,
   onDetachCategory,
+  onRemove,
   busy,
   categoryBusy,
+  removeBusy,
+  removeError,
 }: {
   root: RootFolder;
   categories: LibraryCategory[];
@@ -153,8 +169,11 @@ function RootFolderCard({
   onToggleOnline: () => void;
   onAttachCategory: (categoryId: number) => void;
   onDetachCategory: (categoryId: number) => void;
+  onRemove: () => void;
   busy: boolean;
   categoryBusy: boolean;
+  removeBusy: boolean;
+  removeError: unknown;
 }) {
   const [readOnly, setReadOnly] = useState(root.read_only ?? false);
   const [allowRename, setAllowRename] = useState(root.allow_rename ?? false);
@@ -295,7 +314,33 @@ function RootFolderCard({
         >
           {root.online ? "Declare offline" : "Declare online"}
         </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm(`Remove ${root.label || root.path}? This does not touch anything on disk.`)) {
+              onRemove();
+            }
+          }}
+          disabled={removeBusy}
+          title={
+            root.categories && root.categories.length > 0
+              ? "Detach it from every category first"
+              : "Remove this root folder"
+          }
+          className="rounded-md border border-border-subtle px-2 py-1 text-ink-muted
+                     hover:border-danger hover:text-danger disabled:opacity-50
+                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          Remove
+        </button>
       </div>
+
+      {removeError !== null && (
+        <p className="text-xs text-danger">
+          {(removeError as { detail?: string }).detail ?? "That root folder could not be removed."}
+        </p>
+      )}
     </li>
   );
 }

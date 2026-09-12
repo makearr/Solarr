@@ -376,3 +376,64 @@ func TestSetRootFolderOnline_RefusesAnUnknownRoot(t *testing.T) {
 		t.Errorf("status = %d, want 404 for an unknown root folder", recorder.Code)
 	}
 }
+
+// A root folder attached to no category can simply be removed -- found live:
+// there was no way to undo adding one, root-folder remove (Release checklist).
+func TestDeleteRootFolder_RemovesIt(t *testing.T) {
+	fixture := newSetupFixture(t, stubRoots{})
+	id, cookies := addedRootFolder(t, fixture)
+
+	recorder := fixture.authed(t, http.MethodDelete, "/api/v1/rootfolders/"+itoa(id), "", cookies)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if _, found := fixture.cache.Snapshot().RootFolder(id); found {
+		t.Error("root folder still present in settings.db after delete")
+	}
+}
+
+func TestDeleteRootFolder_RequiresAdministrator(t *testing.T) {
+	fixture := newSetupFixture(t, stubRoots{})
+	id, _ := addedRootFolder(t, fixture)
+
+	recorder := fixture.authed(t, http.MethodDelete, "/api/v1/rootfolders/"+itoa(id), "", nil)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401 for an unauthenticated delete", recorder.Code)
+	}
+}
+
+func TestDeleteRootFolder_MissingRootAnswers404(t *testing.T) {
+	fixture := newSetupFixture(t, stubRoots{})
+	_, cookies := addedRootFolder(t, fixture)
+
+	recorder := fixture.authed(t, http.MethodDelete, "/api/v1/rootfolders/999", "", cookies)
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 for an unknown root folder", recorder.Code)
+	}
+}
+
+// A root folder a category still attaches must be refused, the same as
+// deleting an in-use quality profile or category (settings.ErrInUse).
+func TestDeleteRootFolder_RefusedWhileACategoryAttachesIt(t *testing.T) {
+	fixture := newSetupFixture(t, stubRoots{})
+	id, cookies := addedRootFolder(t, fixture)
+
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 1)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	if err := fixture.cache.AttachRootFolder(t.Context(), settings.CategoryRoot{
+		CategoryID: category.ID, RootFolderID: id, AcceptsNew: true,
+	}); err != nil {
+		t.Fatalf("AttachRootFolder: %v", err)
+	}
+
+	recorder := fixture.authed(t, http.MethodDelete, "/api/v1/rootfolders/"+itoa(id), "", cookies)
+	if recorder.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409 while a category is still attached, body = %s",
+			recorder.Code, recorder.Body)
+	}
+	if _, found := fixture.cache.Snapshot().RootFolder(id); !found {
+		t.Error("root folder removed despite the refusal")
+	}
+}

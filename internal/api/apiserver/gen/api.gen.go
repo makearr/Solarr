@@ -2578,6 +2578,9 @@ type ServerInterface interface {
 	// Add a library root.
 	// (POST /rootfolders)
 	AddRootFolder(w http.ResponseWriter, r *http.Request)
+	// Remove a root folder. Administrator only. Refused, with the categories that still attach it, while any category does (settings.ErrInUse) -- detach it from every category first.
+	// (DELETE /rootfolders/{id})
+	DeleteRootFolder(w http.ResponseWriter, r *http.Request, id int64)
 	// Change a root's own placement policy (Invariant 69). Administrator only.
 	// (PATCH /rootfolders/{id})
 	UpdateRootFolderPolicy(w http.ResponseWriter, r *http.Request, id int64)
@@ -3184,6 +3187,12 @@ func (_ Unimplemented) ListRootFolders(w http.ResponseWriter, r *http.Request) {
 // Add a library root.
 // (POST /rootfolders)
 func (_ Unimplemented) AddRootFolder(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a root folder. Administrator only. Refused, with the categories that still attach it, while any category does (settings.ErrInUse) -- detach it from every category first.
+// (DELETE /rootfolders/{id})
+func (_ Unimplemented) DeleteRootFolder(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5987,6 +5996,39 @@ func (siw *ServerInterfaceWrapper) AddRootFolder(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteRootFolder operation middleware
+func (siw *ServerInterfaceWrapper) DeleteRootFolder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteRootFolder(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // UpdateRootFolderPolicy operation middleware
 func (siw *ServerInterfaceWrapper) UpdateRootFolderPolicy(w http.ResponseWriter, r *http.Request) {
 
@@ -7253,6 +7295,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/rootfolders", wrapper.AddRootFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/rootfolders/{id}", wrapper.DeleteRootFolder)
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/rootfolders/{id}", wrapper.UpdateRootFolderPolicy)
