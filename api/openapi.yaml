@@ -1656,6 +1656,50 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/{id}/parts/{partId}/wanted:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: partId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: setTrackWanted
+      tags: [library]
+      summary: >-
+        Want (or stop wanting) this one track on its own, independent of the
+        album (section 19.6's track-level SINGLE, todo 4.4).
+      description: >-
+        Always ensures the track's own SINGLE desired_item exists (creating
+        it on first use, wanted or not) and sets its monitored flag either
+        way -- the same "record the decision either way, never delete"
+        shape SetWorkMonitored already uses one level up (Invariant 71).
+        Distinct from monitor: monitoring a part only changes the *album's*
+        own required_count; this creates a standalone acquisition target for
+        the track by itself, for someone who wants one song rather than the
+        whole release.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [wanted]
+              properties:
+                wanted: { type: boolean }
+      responses:
+        "200":
+          description: The track's own wanted state after the change.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Wanted" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /works/bulk/monitor:
     post:
       operationId: bulkSetWorkMonitored
@@ -4031,6 +4075,12 @@ components:
         runtime_ms: { type: integer, format: int64 }
         date: { type: string }
         monitored: { type: boolean }
+        wanted:
+          description: >-
+            This track's own SINGLE desired_item, when one exists -- distinct
+            from monitored, which only affects the album's own required_count.
+          allOf: [{ $ref: "#/components/schemas/Wanted" }]
+          nullable: true
         external_ids:
           type: array
           items: { $ref: "#/components/schemas/ExternalID" }

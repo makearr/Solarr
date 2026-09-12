@@ -1850,6 +1850,9 @@ type WorkPart struct {
 	RuntimeMs   *int64       `json:"runtime_ms,omitempty"`
 	SortKey     string       `json:"sort_key"`
 	Title       *string      `json:"title,omitempty"`
+
+	// Wanted This track's own SINGLE desired_item, when one exists -- distinct from monitored, which only affects the album's own required_count.
+	Wanted *Wanted `json:"wanted"`
 }
 
 // ListArrImportsParams defines parameters for ListArrImports.
@@ -2186,6 +2189,11 @@ type SetPartMonitoredJSONBody struct {
 	Monitored bool `json:"monitored"`
 }
 
+// SetTrackWantedJSONBody defines parameters for SetTrackWanted.
+type SetTrackWantedJSONBody struct {
+	Wanted bool `json:"wanted"`
+}
+
 // AddArrInstanceJSONRequestBody defines body for AddArrInstance for application/json ContentType.
 type AddArrInstanceJSONRequestBody = AddArrInstanceRequest
 
@@ -2317,6 +2325,9 @@ type SetWorkMonitoredJSONRequestBody SetWorkMonitoredJSONBody
 
 // SetPartMonitoredJSONRequestBody defines body for SetPartMonitored for application/json ContentType.
 type SetPartMonitoredJSONRequestBody SetPartMonitoredJSONBody
+
+// SetTrackWantedJSONRequestBody defines body for SetTrackWanted for application/json ContentType.
+type SetTrackWantedJSONRequestBody SetTrackWantedJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -2668,6 +2679,9 @@ type ServerInterface interface {
 	// Monitor or unmonitor a single part (track) of a work.
 	// (POST /works/{id}/parts/{partId}/monitor)
 	SetPartMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64)
+	// Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
+	// (POST /works/{id}/parts/{partId}/wanted)
+	SetTrackWanted(w http.ResponseWriter, r *http.Request, id int64, partId int64)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -3367,6 +3381,12 @@ func (_ Unimplemented) SetWorkMonitored(w http.ResponseWriter, r *http.Request, 
 // Monitor or unmonitor a single part (track) of a work.
 // (POST /works/{id}/parts/{partId}/monitor)
 func (_ Unimplemented) SetPartMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
+// (POST /works/{id}/parts/{partId}/wanted)
+func (_ Unimplemented) SetTrackWanted(w http.ResponseWriter, r *http.Request, id int64, partId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6925,6 +6945,48 @@ func (siw *ServerInterfaceWrapper) SetPartMonitored(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// SetTrackWanted operation middleware
+func (siw *ServerInterfaceWrapper) SetTrackWanted(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "partId" -------------
+	var partId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "partId", chi.URLParam(r, "partId"), &partId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "partId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetTrackWanted(w, r, id, partId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -7385,6 +7447,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/monitor", wrapper.SetPartMonitored)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/wanted", wrapper.SetTrackWanted)
 	})
 
 	return r

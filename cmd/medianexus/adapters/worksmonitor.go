@@ -70,6 +70,47 @@ func (a WorksMonitor) SetPartMonitored(ctx context.Context, workID, partID int64
 	return a.Desired.SetPartMonitored(ctx, workID, partID, monitored)
 }
 
+// SetTrackWanted ensures the track's own SINGLE item exists, wanted or not,
+// mirroring SetWorkMonitored's own shape one level down (Invariant 71 --
+// an explicit "not interested" is worth recording the same as wanted).
+// Distinct from SetPartMonitored: that only resizes the album's own
+// required_count, this creates a standalone acquisition target for the
+// track by itself.
+func (a WorksMonitor) SetTrackWanted(
+	ctx context.Context, workID, partID int64, wanted bool,
+) (apiserver.WantedRow, error) {
+	detail, err := a.Works.Detail(ctx, workID)
+	if err != nil {
+		return apiserver.WantedRow{}, err
+	}
+
+	category, ok := a.Categories.CategoryForMediaType(detail.Work.MediaType)
+	if !ok {
+		return apiserver.WantedRow{}, fmt.Errorf("no category configured for %s", detail.Work.MediaType)
+	}
+	profileID := a.DefaultProfileID
+	if category.QualityProfileID != nil {
+		profileID = *category.QualityProfileID
+	}
+
+	item, err := a.Desired.EnsureTrackItemByPart(ctx, workID, partID, category.ID, profileID, nil)
+	if err != nil {
+		return apiserver.WantedRow{}, err
+	}
+	if (item.Monitored == 1) != wanted {
+		if err := a.Desired.SetItemMonitored(ctx, item.ID, wanted); err != nil {
+			return apiserver.WantedRow{}, err
+		}
+		item.Monitored = boolToInt64(wanted)
+	}
+
+	row := apiserver.WantedRow{ID: item.ID, Monitored: wanted, PresentCount: item.PresentCount, State: item.State}
+	if item.RequiredCount.Valid {
+		row.RequiredCount = &item.RequiredCount.Int64
+	}
+	return row, nil
+}
+
 // bulkPageSize bounds one library.Works.List call while enumerating a
 // selection's matching ids -- ADR-3's "bulk work chunks to 200 rows",
 // applied to a read pass here rather than a write transaction.

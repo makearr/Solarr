@@ -1,5 +1,6 @@
 import { useParams, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Download } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -51,6 +52,22 @@ export function WorkDetail() {
       const { error } = await api.POST("/works/{id}/parts/{partId}/monitor", {
         params: { path: { id, partId } },
         body: { monitored },
+      });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  // Distinct from setPartMonitored: that only resizes the album's own
+  // required_count, this stands up a standalone SINGLE desired_item for the
+  // track by itself (todo 4.4) -- for someone who wants one song rather than
+  // the whole release.
+  const setTrackWanted = useMutation({
+    mutationFn: async ({ partId, wanted }: { partId: number; wanted: boolean }) => {
+      if (id === undefined) return;
+      const { error } = await api.POST("/works/{id}/parts/{partId}/wanted", {
+        params: { path: { id, partId } },
+        body: { wanted },
       });
       if (error) throw error;
     },
@@ -150,6 +167,8 @@ export function WorkDetail() {
                   onToggleMonitored={(monitored) =>
                     setPartMonitored.mutate({ partId: part.id, monitored })
                   }
+                  wantedPending={setTrackWanted.isPending}
+                  onToggleWanted={(wanted) => setTrackWanted.mutate({ partId: part.id, wanted })}
                 />
               ))}
             </ul>
@@ -276,11 +295,16 @@ function PartRow({
   part,
   pending,
   onToggleMonitored,
+  wantedPending,
+  onToggleWanted,
 }: {
   part: WorkPart;
   pending: boolean;
   onToggleMonitored: (monitored: boolean) => void;
+  wantedPending: boolean;
+  onToggleWanted: (wanted: boolean) => void;
 }) {
+  const wanted = part.wanted?.monitored ?? false;
   return (
     <li className="flex items-center gap-3 px-3 py-2 text-sm">
       <button
@@ -299,10 +323,31 @@ function PartRow({
       <span className="w-10 shrink-0 font-mono text-xs text-ink-muted">{part.sort_key}</span>
       <span className="truncate">{part.title ?? part.media_ref}</span>
       {part.runtime_ms != null && (
-        <span className="ml-auto shrink-0 font-mono text-xs text-ink-muted">
+        <span className="shrink-0 font-mono text-xs text-ink-muted">
           {formatDuration(part.runtime_ms)}
         </span>
       )}
+      <button
+        type="button"
+        aria-pressed={wanted}
+        aria-label={wanted ? "Stop wanting this track on its own" : "Want this track on its own"}
+        title={
+          wanted
+            ? "Wanted on its own, independent of the album"
+            : "Want just this track, independent of the album"
+        }
+        disabled={wantedPending}
+        onClick={() => onToggleWanted(!wanted)}
+        className={`ml-auto flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5
+                   text-[0.6875rem] disabled:opacity-50 ${
+                     wanted
+                       ? "border-accent text-accent"
+                       : "border-border-subtle text-ink-muted hover:text-ink"
+                   }`}
+      >
+        <Download aria-hidden className="size-3" />
+        {wanted ? "Wanted" : "Want"}
+      </button>
     </li>
   );
 }

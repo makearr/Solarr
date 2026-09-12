@@ -234,6 +234,55 @@ func TestEnsureTrackItem_ResolvesAgainstARealPartNeverAGuessedIndex(t *testing.T
 	}
 }
 
+// The API-facing entry point (todo 4.4): a caller has the part id from the
+// tracklist, not the raw media_ref EnsureTrackItem itself requires.
+func TestEnsureTrackItemByPart_ResolvesThePartIDToItsOwnMediaRef(t *testing.T) {
+	opened, _ := newLibrary(t)
+	desired := library.NewDesired(opened)
+	work := createWork(t, opened, "music", "Tender Prey")
+	part := createPart(t, opened, work.ID, "disc1:track5", "00010005", "Deanna")
+
+	item, err := desired.EnsureTrackItemByPart(t.Context(), work.ID, part.ID, 1, 1, nil)
+	if err != nil {
+		t.Fatalf("EnsureTrackItemByPart: %v", err)
+	}
+	if item.SatisfactionKind != "SINGLE" || item.MediaRef != "disc1:track5" {
+		t.Fatalf("unexpected item shape: %+v", item)
+	}
+
+	// Idempotent, the same as EnsureTrackItem itself: a second call reuses
+	// the item rather than creating a sibling one (Invariant 71).
+	again, err := desired.EnsureTrackItemByPart(t.Context(), work.ID, part.ID, 1, 1, nil)
+	if err != nil {
+		t.Fatalf("second EnsureTrackItemByPart: %v", err)
+	}
+	if again.ID != item.ID {
+		t.Fatalf("want the same item reused, got a second one: %d vs %d", item.ID, again.ID)
+	}
+}
+
+func TestEnsureTrackItemByPart_RejectsAPartFromAnotherWork(t *testing.T) {
+	opened, _ := newLibrary(t)
+	desired := library.NewDesired(opened)
+	workA := createWork(t, opened, "music", "Album A")
+	workB := createWork(t, opened, "music", "Album B")
+	partOfB := createPart(t, opened, workB.ID, "disc1:track1", "00010001", "Track One")
+
+	if _, err := desired.EnsureTrackItemByPart(t.Context(), workA.ID, partOfB.ID, 1, 1, nil); !errors.Is(err, library.ErrPartNotFound) {
+		t.Fatalf("want ErrPartNotFound for a part belonging to a different work, got %v", err)
+	}
+}
+
+func TestEnsureTrackItemByPart_RejectsAMissingPart(t *testing.T) {
+	opened, _ := newLibrary(t)
+	desired := library.NewDesired(opened)
+	work := createWork(t, opened, "music", "Album A")
+
+	if _, err := desired.EnsureTrackItemByPart(t.Context(), work.ID, 99999, 1, 1, nil); !errors.Is(err, library.ErrPartNotFound) {
+		t.Fatalf("want ErrPartNotFound for a nonexistent part, got %v", err)
+	}
+}
+
 func mediaRefFor(track int) string { return fmt.Sprintf("disc1:track%d", track) }
 func sortKeyFor(track int) string  { return fmt.Sprintf("0001%04d", track) }
 func titleFor(track int) string    { return fmt.Sprintf("Track %d", track) }

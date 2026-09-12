@@ -52,6 +52,9 @@ type PartRow struct {
 	Date        *string
 	Monitored   bool
 	ExternalIDs []ExternalIDRow
+	// Wanted is the track's own SINGLE desired_item, nil until someone
+	// explicitly wants this one track on its own (todo 4.4).
+	Wanted *WantedRow
 }
 
 // CreditRow is one work-level credit, the person's own name included so a
@@ -110,6 +113,12 @@ type WorksMonitor interface {
 	// every album item over the work. Answers a missing work or part id
 	// with an error wrapping sql.ErrNoRows.
 	SetPartMonitored(ctx context.Context, workID, partID int64, monitored bool) error
+	// SetTrackWanted always ensures the track's own SINGLE desired_item
+	// exists (creating it on first use, wanted or not) and sets its
+	// monitored flag either way -- distinct from SetPartMonitored, which
+	// only resizes the album's own required_count. Answers a missing work
+	// or part id with an error wrapping sql.ErrNoRows.
+	SetTrackWanted(ctx context.Context, workID, partID int64, wanted bool) (WantedRow, error)
 	// BulkSetMonitored is SetWorkMonitored over a selection (section 21.7):
 	// every work visible under rootFolderIDs or categoryIDs (ADR-27's two
 	// halves) whose id is in ids (when non-empty) or is not in excludedIDs
@@ -267,6 +276,61 @@ func (s *Server) SetPartMonitored(w http.ResponseWriter, r *http.Request, id, pa
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// routeSetTrackWanted parses id and partId, mirroring routeSetPartMonitored.
+func (s *Server) routeSetTrackWanted(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a work id must be a number")
+		return
+	}
+	partID, err := strconv.ParseInt(chi.URLParam(r, "partId"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a part id must be a number")
+		return
+	}
+	s.SetTrackWanted(w, r, id, partID)
+}
+
+// SetTrackWanted wants (or stops wanting) one track on its own, independent
+// of the album -- distinct from SetPartMonitored, which only resizes the
+// album's own required_count (todo 4.4).
+func (s *Server) SetTrackWanted(w http.ResponseWriter, r *http.Request, id, partID int64) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.workDetail == nil || s.worksMonitor == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "monitoring is not available")
+		return
+	}
+
+	var body gen.SetTrackWantedJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "the request body could not be read")
+		return
+	}
+
+	if !s.workVisible(w, r, access, id) {
+		return
+	}
+
+	wanted, err := s.worksMonitor.SetTrackWanted(r.Context(), id, partID, body.Wanted)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such part")
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, buildWantedView(wanted))
+}
+
 // BulkSetWorkMonitored is SetWorkMonitored over a selection (section 21.7):
 // "bulk selection is a query, never a list of ids". Visibility is enforced
 // by resolving rootFolderIDs and categoryIDs from the caller's own access
@@ -417,6 +481,10 @@ func buildPartViews(rows []PartRow) []gen.WorkPart {
 			Id: row.ID, MediaRef: row.MediaRef, SortKey: row.SortKey, Title: row.Title,
 			RuntimeMs: row.RuntimeMs, Date: row.Date, Monitored: row.Monitored,
 			ExternalIds: buildExternalIDViews(row.ExternalIDs),
+		}
+		if row.Wanted != nil {
+			wanted := buildWantedView(*row.Wanted)
+			views[index].Wanted = &wanted
 		}
 	}
 	return views

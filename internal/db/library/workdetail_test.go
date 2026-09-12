@@ -200,6 +200,50 @@ func TestWorkDetail_WantedIsNilUntilSomethingWantsTheAlbum(t *testing.T) {
 	}
 }
 
+// A track's own SINGLE item (todo 4.4) attaches to that part's own Wanted,
+// not the whole work's -- distinct from the album-level SET one level up,
+// and from Part.Monitored, which is a different flag entirely.
+func TestWorkDetail_PartWantedIsNilUntilSomethingWantsThatTrackOnItsOwn(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	desired := library.NewDesired(opened)
+	work := createWork(t, opened, "music", "KI Pecezinu")
+	wantedTrack := createPart(t, opened, work.ID, "disc1:track1", "00010001", "Sesoge")
+	otherTrack := createPart(t, opened, work.ID, "disc1:track2", "00010002", "Zosidedu Bukerez")
+
+	before, err := works.Detail(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("Detail: %v", err)
+	}
+	for _, part := range before.Parts {
+		if part.Wanted != nil {
+			t.Errorf("part %s: Wanted = %+v, want nil before anything wants any track", part.Part.MediaRef, part.Wanted)
+		}
+	}
+
+	item, err := desired.EnsureTrackItemByPart(t.Context(), work.ID, wantedTrack.ID, 1, 1, nil)
+	if err != nil {
+		t.Fatalf("EnsureTrackItemByPart: %v", err)
+	}
+
+	after, err := works.Detail(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("Detail: %v", err)
+	}
+	for _, part := range after.Parts {
+		switch part.Part.ID {
+		case wantedTrack.ID:
+			if part.Wanted == nil || part.Wanted.ID != item.ID {
+				t.Errorf("wanted track: Wanted = %+v, want the item just created", part.Wanted)
+			}
+		case otherTrack.ID:
+			if part.Wanted != nil {
+				t.Errorf("other track: Wanted = %+v, want nil -- only its own track was wanted", part.Wanted)
+			}
+		}
+	}
+}
+
 func TestWorkDetail_MissingWorkReportsNoRows(t *testing.T) {
 	opened, _ := newLibrary(t)
 	works := library.NewWorks(opened)
