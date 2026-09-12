@@ -48,6 +48,7 @@ type Category struct {
 	QualityProfileID  sql.NullInt64
 	LanguageProfileID sql.NullInt64
 	MonitorDiscovered string
+	NamingProfileID   sql.NullInt64
 }
 
 type CategoryRootFolder struct {
@@ -121,6 +122,13 @@ type LanguageProfile struct {
 	SubtitleRequiredJson  sql.NullString
 	PreferOriginalAudio   int64
 	RejectDubbed          int64
+}
+
+type NamingProfile struct {
+	ID             int64
+	Name           string
+	FolderTemplate string
+	FileTemplate   string
 }
 
 type PlacementAffinity struct {

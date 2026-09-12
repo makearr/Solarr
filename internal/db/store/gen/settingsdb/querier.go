@@ -88,6 +88,10 @@ type Querier interface {
 	// Instance-wide policy, seeded from config.yml and changeable afterwards (ADR-21).
 	ListInstanceSettings(ctx context.Context) ([]InstanceSetting, error)
 	ListLanguageProfiles(ctx context.Context) ([]LanguageProfile, error)
+	// Section 11.8, todo 4.5's own remaining schema step (migration 0013). Read-only for now:
+	// nothing writes a second naming_profile row yet, so there is no Create/Update/Delete pass
+	// here -- only enough to prove the shipped default seeded correctly.
+	ListNamingProfiles(ctx context.Context) ([]NamingProfile, error)
 	ListPreferencesForUser(ctx context.Context, userID int64) ([]UserPreference, error)
 	// Quality and language profiles (ADR-40, section 19.8).
 	ListQualityProfiles(ctx context.Context) ([]QualityProfile, error)
