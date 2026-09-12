@@ -1368,6 +1368,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/candidates/{decisionId}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                decisionId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dispatch one ACCEPTed decision's own release to a matching downloader (ADR-57's acquire.send). No resource gate yet -- every dispatch here is a user's own explicit action (ADR-12's own "user request: never paused"), since nothing automatic calls this until stage 6's planner exists. */
+        post: operations["sendCandidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}/search": {
         parameters: {
             query?: never;
@@ -3759,6 +3779,24 @@ export interface components {
             indexer_id: number;
             error: string;
         };
+        /** @description One dispatch to a download client (ADR-57, section 12) -- denormalised from the candidate it came from, since a candidate can expire while this row must outlive it. */
+        Acquisition: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            downloader_id: number;
+            /** @description The client's own reference for this job (nzo_id for SABnzbd). */
+            download_client_ref: string;
+            client_category?: string;
+            /** @enum {string} */
+            protocol: "usenet" | "torrent" | "ddl" | "feed";
+            /** @description Section 10.3's own state machine (DISCOVERED, QUEUED, DOWNLOADING, ...). QUEUED right after dispatch -- acquire.send only confirms the client accepted the job, not that it has started (client polling, section 10.9, not built yet). */
+            state: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
         /** @description One work's own search run (POST /works/{id}/search). */
         SearchItemResult: {
             /** @description Which tier (0 exact, 1 +year, 2 +alias) produced an acceptable match. null means no tier found anything worth persisting -- not a failure, just nothing found yet. */
@@ -6037,6 +6075,40 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    sendCandidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                decisionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The acquisition this dispatch created. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Acquisition"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The decision is not ACCEPT, no downloader matches its own protocol, or the desired item already has an acquisition in flight (Invariant 15). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     searchWork: {

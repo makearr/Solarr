@@ -190,6 +190,11 @@ type Querier interface {
 	GetAcquisition(ctx context.Context, id int64) (Acquisition, error)
 	// Identity is the client reference; the path is re-read on every poll.
 	GetAcquisitionByClientRef(ctx context.Context, arg GetAcquisitionByClientRefParams) (Acquisition, error)
+	// Checked before CreateAcquisition so a caller gets a clean, mapped refusal
+	// rather than the acquisition_one_inflight unique index's own raw
+	// constraint error (Invariant 15) -- the same "check first" shape
+	// CreateCategory's own category(media_type, name) guard already uses.
+	GetActiveAcquisitionForItem(ctx context.Context, desiredItemID sql.NullInt64) (Acquisition, error)
 	GetArrImport(ctx context.Context, id int64) (ArrImport, error)
 	GetArtwork(ctx context.Context, arg GetArtworkParams) (string, error)
 	GetAttributes(ctx context.Context, id int64) (MediaAttribute, error)

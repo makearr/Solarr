@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -14,12 +15,14 @@ import (
 	"github.com/makearr/MediaNexus/internal/platform/clock"
 )
 
-// CandidateSearch bridges stage 5's candidate pipeline (internal/media/music.Search)
-// to the web interface -- todo 5.2's own "manual search, per-item and
-// per-category".
+// CandidateSearch bridges stage 5's candidate pipeline
+// (internal/media/music.Search and .Dispatch) to the web interface -- todo
+// 5.2's own "manual search, per-item and per-category" plus ADR-57's own
+// acquire.send.
 type CandidateSearch struct {
 	Works    library.Works
 	Search   music.Search
+	Dispatch music.Dispatch
 	Queue    *jobs.Queue
 	Indexers music.IndexerSource
 	Clock    clock.Clock
@@ -76,6 +79,52 @@ func (c CandidateSearch) ListWorkCandidates(ctx context.Context, workID int64) (
 // candidateHistoryLimit bounds how much of one item's own search history a
 // single request answers -- generous for a manual, low-frequency action.
 const candidateHistoryLimit = 100
+
+// SendCandidate resolves workID to its own wanted album item and dispatches
+// decisionID to a matching downloader (ADR-57's acquire.send).
+func (c CandidateSearch) SendCandidate(ctx context.Context, workID, decisionID int64) (apiserver.Acquisition, error) {
+	detail, err := c.Works.Detail(ctx, workID)
+	if err != nil {
+		return apiserver.Acquisition{}, err
+	}
+	if detail.Wanted == nil {
+		return apiserver.Acquisition{}, apiserver.ErrCandidateDecisionNotFound
+	}
+
+	acquisition, err := c.Dispatch.Send(ctx, detail.Wanted.ID, decisionID, c.Clock.Now())
+	if err != nil {
+		return apiserver.Acquisition{}, translateDispatchError(err)
+	}
+	return acquisitionView(acquisition), nil
+}
+
+// translateDispatchError maps music/library's own dispatch error vocabulary
+// to apiserver's -- apiserver never imports internal/media/music or
+// internal/db/library directly (it defines narrow interfaces), so its own
+// sentinels are what a handler actually switches on.
+func translateDispatchError(err error) error {
+	switch {
+	case errors.Is(err, music.ErrDecisionNotFound):
+		return apiserver.ErrCandidateDecisionNotFound
+	case errors.Is(err, music.ErrDecisionNotAccepted):
+		return apiserver.ErrDecisionNotAccepted
+	case errors.Is(err, music.ErrNoDownloaderForProtocol):
+		return apiserver.ErrNoDownloaderForProtocol
+	case errors.Is(err, library.ErrAcquisitionAlreadyInFlight):
+		return apiserver.ErrAcquisitionAlreadyInFlight
+	default:
+		return err
+	}
+}
+
+func acquisitionView(acquisition library.Acquisition) apiserver.Acquisition {
+	return apiserver.Acquisition{
+		ID: acquisition.ID, DownloaderID: acquisition.DownloaderID,
+		DownloadClientRef: acquisition.DownloadClientRef, ClientCategory: acquisition.ClientCategory,
+		Protocol: acquisition.Protocol, State: acquisition.State,
+		CreatedAt: time.Unix(acquisition.CreatedAt, 0), UpdatedAt: time.Unix(acquisition.UpdatedAt, 0),
+	}
+}
 
 // SearchCategory enqueues music.SearchCategoryJob for categoryID.
 func (c CandidateSearch) SearchCategory(ctx context.Context, categoryID int64) (bool, error) {

@@ -72,6 +72,19 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        created_at, updated_at
 FROM acquisition WHERE id = ?;
 
+-- Checked before CreateAcquisition so a caller gets a clean, mapped refusal
+-- rather than the acquisition_one_inflight unique index's own raw
+-- constraint error (Invariant 15) -- the same "check first" shape
+-- CreateCategory's own category(media_type, name) guard already uses.
+-- name: GetActiveAcquisitionForItem :one
+SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
+       candidate_title, search_terms, downloader_id, download_client_ref,
+       download_dir, client_category, client_fingerprint, protocol,
+       ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
+       created_at, updated_at
+FROM acquisition
+WHERE desired_item_id = ? AND state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED');
+
 -- Startup reconciliation polls every non-terminal acquisition (section 10.9).
 -- name: ListActiveAcquisitions :many
 SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,

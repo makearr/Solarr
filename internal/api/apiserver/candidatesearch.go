@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
@@ -23,6 +24,22 @@ var ErrWorkNotWanted = errors.New("apiserver: work is not currently wanted")
 // ErrNoIndexersConfigured reports a search with no enabled indexer to run
 // it against.
 var ErrNoIndexersConfigured = errors.New("apiserver: no indexer is configured and enabled")
+
+// ErrDecisionNotAccepted reports a dispatch attempted against a REJECT/DEFER
+// decision -- ADR-57's acquire.send only ever fires on an ACCEPT.
+var ErrDecisionNotAccepted = errors.New("apiserver: decision is not ACCEPT")
+
+// ErrNoDownloaderForProtocol reports no enabled downloader matching a
+// candidate's own protocol.
+var ErrNoDownloaderForProtocol = errors.New("apiserver: no downloader configured for this candidate's protocol")
+
+// ErrAcquisitionAlreadyInFlight reports a desired item that already has a
+// non-terminal acquisition (Invariant 15).
+var ErrAcquisitionAlreadyInFlight = errors.New("apiserver: this item already has an acquisition in flight")
+
+// ErrCandidateDecisionNotFound reports a decision id that does not belong
+// to the work it was asked to dispatch from.
+var ErrCandidateDecisionNotFound = errors.New("apiserver: no such decision for this work")
 
 // CandidateDecision is one release decided against a specific desired item
 // (section 10.1/12). Components/Rejections/Deferrals reuse ADR-10's own
@@ -64,6 +81,18 @@ type SearchItemResult struct {
 	IndexerErrors []IndexerSearchError
 }
 
+// Acquisition is one dispatch to a download client (ADR-57, section 12).
+type Acquisition struct {
+	ID                int64
+	DownloaderID      int64
+	DownloadClientRef string
+	ClientCategory    string
+	Protocol          string
+	State             string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
 // CandidateSearcher is stage 5's own candidate pipeline, exposed to the web
 // interface (todo 5.2's "manual search, per-item and per-category").
 type CandidateSearcher interface {
@@ -72,6 +101,9 @@ type CandidateSearcher interface {
 	// SearchCategory enqueues a search run; duplicate reports whether one
 	// was already running for this category.
 	SearchCategory(ctx context.Context, categoryID int64) (duplicate bool, err error)
+	// SendCandidate is ADR-57's own acquire.send: dispatch decisionID (which
+	// must belong to workID and be ACCEPT) to a matching downloader.
+	SendCandidate(ctx context.Context, workID, decisionID int64) (Acquisition, error)
 }
 
 // routeSearchWork parses the id path parameter.
@@ -128,6 +160,36 @@ func (s *Server) ListWorkCandidates(w http.ResponseWriter, r *http.Request, id i
 	writeJSON(w, s.logger, http.StatusOK, views)
 }
 
+// routeSendCandidate parses both path parameters.
+func (s *Server) routeSendCandidate(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathID(w, s, r, "id", "a work id must be a number")
+	if err != nil {
+		return
+	}
+	decisionID, err := parsePathID(w, s, r, "decisionId", "a decision id must be a number")
+	if err != nil {
+		return
+	}
+	s.SendCandidate(w, r, id, decisionID)
+}
+
+// SendCandidate dispatches one ACCEPTed decision to a matching downloader
+// (ADR-57's acquire.send). Any signed-in user may trigger it -- the same
+// access level SearchWork already keeps; per-user dispatch approval is not
+// a distinction this project draws.
+func (s *Server) SendCandidate(w http.ResponseWriter, r *http.Request, id, decisionID int64) {
+	if _, err := authz.FromContext(r.Context()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	acquisition, err := s.candidateSearcher.SendCandidate(r.Context(), id, decisionID)
+	if err != nil {
+		writeCandidateSearchError(w, s, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, acquisitionView(acquisition))
+}
+
 // routeSearchCategory parses the id path parameter.
 func (s *Server) routeSearchCategory(w http.ResponseWriter, r *http.Request) {
 	id, err := parsePathID(w, s, r, "id", "a category id must be a number")
@@ -171,6 +233,19 @@ func writeCandidateSearchError(w http.ResponseWriter, s *Server, err error) {
 	case errors.Is(err, ErrNoIndexersConfigured):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
 			"No indexers", "no indexer is configured and enabled")
+	case errors.Is(err, ErrDecisionNotAccepted):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Not accepted", "only an ACCEPT decision can be dispatched")
+	case errors.Is(err, ErrNoDownloaderForProtocol):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"No downloader", "no downloader is configured for this candidate's own protocol")
+	case errors.Is(err, ErrAcquisitionAlreadyInFlight):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Already in flight", "this item already has an acquisition in flight")
+	case errors.Is(err, ErrCandidateDecisionNotFound):
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such decision")
+	case errors.Is(err, sql.ErrNoRows):
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
 	default:
 		writeError(w, s.logger, err)
 	}
@@ -186,6 +261,20 @@ func searchItemResultView(result SearchItemResult) gen.SearchItemResult {
 		indexerErrors[index] = gen.IndexerSearchError{IndexerId: indexerError.IndexerID, Error: indexerError.Error}
 	}
 	return gen.SearchItemResult{TierUsed: result.TierUsed, Decisions: decisions, IndexerErrors: indexerErrors}
+}
+
+func acquisitionView(acquisition Acquisition) gen.Acquisition {
+	view := gen.Acquisition{
+		Id: acquisition.ID, DownloaderId: acquisition.DownloaderID,
+		DownloadClientRef: acquisition.DownloadClientRef,
+		Protocol:          gen.AcquisitionProtocol(acquisition.Protocol), State: acquisition.State,
+		CreatedAt: acquisition.CreatedAt, UpdatedAt: acquisition.UpdatedAt,
+	}
+	if acquisition.ClientCategory != "" {
+		category := acquisition.ClientCategory
+		view.ClientCategory = &category
+	}
+	return view
 }
 
 func candidateDecisionView(decision CandidateDecision) gen.CandidateDecision {
