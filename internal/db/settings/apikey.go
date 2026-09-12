@@ -98,9 +98,28 @@ func (c *Cache) ListAPIKeys(ctx context.Context, userID int64) ([]APIKey, error)
 	return keys, nil
 }
 
-// DeleteAPIKey revokes a key.
-func (c *Cache) DeleteAPIKey(ctx context.Context, keyID int64) error {
-	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+// DeleteAPIKey revokes a key, refused (ErrNotFound, indistinguishable from
+// missing -- ADR-27's "hidden = 404") unless it belongs to userID. The
+// underlying query deletes by a bare id with no ownership check of its own,
+// so this is the one place that has to make revoking someone else's key by
+// guessing its id impossible.
+func (c *Cache) DeleteAPIKey(ctx context.Context, userID, keyID int64) error {
+	keys, err := c.ListAPIKeys(ctx, userID)
+	if err != nil {
+		return err
+	}
+	owned := false
+	for _, key := range keys {
+		if key.ID == keyID {
+			owned = true
+			break
+		}
+	}
+	if !owned {
+		return fmt.Errorf("%w: api key %d", ErrNotFound, keyID)
+	}
+
+	err = c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		return c.queries.WithTx(tx).DeleteAPIKey(ctx, keyID)
 	})
 	if err != nil {

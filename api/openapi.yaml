@@ -1154,6 +1154,69 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /me/apikeys:
+    get:
+      operationId: listMyAPIKeys
+      tags: [auth]
+      summary: >-
+        The caller's own non-interactive credentials for programmatic access
+        (X-Api-Key or Bearer), for an upstream app that is not a person
+        signing in. Never the key itself, or its hash -- ADR-14: a secret is
+        shown once, at creation, and never again.
+      responses:
+        "200":
+          description: The caller's own keys.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/APIKey" }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createMyAPIKey
+      tags: [auth]
+      summary: Mint a new key for the caller, self-service.
+      description: >-
+        The response's own `key` field is the only time the plaintext is
+        ever returned -- store it now. Every other read of this key (this
+        list included) only ever shows its name and timestamps.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: "Prowlarr" }
+      responses:
+        "201":
+          description: Created. Store the key now; it is never shown again.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatedAPIKey" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /me/apikeys/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    delete:
+      operationId: deleteMyAPIKey
+      tags: [auth]
+      summary: >-
+        Revoke one of the caller's own keys. Refused (404, indistinguishable
+        from missing, Invariant 37) for a key belonging to someone else --
+        never even reveals that a different user's key by that id exists.
+      responses:
+        "204": { description: Revoked. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /jobs:
     get:
       operationId: listJobs
@@ -3626,6 +3689,34 @@ components:
         categories:
           type: array
           items: { $ref: "#/components/schemas/Category" }
+
+    APIKey:
+      type: object
+      description: >-
+        A non-interactive credential (X-Api-Key or Bearer), never the key
+        itself or its hash -- see CreatedAPIKey for the one response that
+        does carry the plaintext.
+      required: [id, name, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string, example: "Prowlarr" }
+        created_at: { type: string, format: date-time }
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null until the key is presented for the first time.
+
+    CreatedAPIKey:
+      description: >-
+        Answered only once, by POST /me/apikeys -- `key` is the plaintext,
+        shown here and never again.
+      allOf:
+        - $ref: "#/components/schemas/APIKey"
+        - type: object
+          required: [key]
+          properties:
+            key: { type: string, example: "mnx_..." }
 
     Category:
       type: object

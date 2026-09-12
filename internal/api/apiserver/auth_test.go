@@ -448,3 +448,139 @@ func TestJobs_RequiresAuthentication(t *testing.T) {
 		t.Errorf("status = %d, want 401", got)
 	}
 }
+
+// The mechanism (settings.Cache.CreateAPIKey/ListAPIKeys/UserByAPIKeyHash)
+// existed and was tested; these cover the HTTP surface that finally reaches
+// it (todo: expose per-user API keys for upstream apps).
+func TestCreateMyAPIKey_ReturnsThePlaintextOnceAndItAuthenticates(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+	cookies := fixture.login(t, "avs", testPassword).Result().Cookies()
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/me/apikeys",
+		bytes.NewBufferString(`{"name":"Prowlarr"}`))
+	request.AddCookie(cookies[0])
+	recorder := fixture.do(t, request)
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+
+	var body struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
+		Key  string `json:"key"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Name != "Prowlarr" || body.Key == "" {
+		t.Fatalf("body = %+v, want name=Prowlarr and a non-empty key", body)
+	}
+
+	// The plaintext just returned actually works as a credential.
+	authRequest := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	authRequest.Header.Set(apiserver.APIKeyHeader, body.Key)
+	if got := fixture.do(t, authRequest).Code; got != http.StatusOK {
+		t.Errorf("authenticating with the newly created key = %d, want 200", got)
+	}
+}
+
+func TestCreateMyAPIKey_EmptyNameAnswers400(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+	cookies := fixture.login(t, "avs", testPassword).Result().Cookies()
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/me/apikeys", bytes.NewBufferString(`{"name":""}`))
+	request.AddCookie(cookies[0])
+	if got := fixture.do(t, request).Code; got != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 for an empty name", got)
+	}
+}
+
+func TestListMyAPIKeys_NeverIncludesTheKeyOrHash(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+	_, hash, err := auth.GenerateAPIKey()
+	if err != nil {
+		t.Fatalf("GenerateAPIKey: %v", err)
+	}
+	if _, err := fixture.cache.CreateAPIKey(t.Context(), fixture.clock, fixture.admin.ID, "scripts", hash); err != nil {
+		t.Fatalf("CreateAPIKey: %v", err)
+	}
+
+	cookies := fixture.login(t, "avs", testPassword).Result().Cookies()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/me/apikeys", nil)
+	request.AddCookie(cookies[0])
+	recorder := fixture.do(t, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if strings.Contains(recorder.Body.String(), hash) {
+		t.Error("response body carries the key's own hash")
+	}
+
+	var body []map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body) != 1 || body[0]["name"] != "scripts" {
+		t.Fatalf("body = %+v, want one key named scripts", body)
+	}
+	if _, hasKey := body[0]["key"]; hasKey {
+		t.Error("list response carries a key field -- the plaintext must never be re-shown")
+	}
+}
+
+func TestDeleteMyAPIKey_RemovesIt(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+	_, hash, err := auth.GenerateAPIKey()
+	if err != nil {
+		t.Fatalf("GenerateAPIKey: %v", err)
+	}
+	created, err := fixture.cache.CreateAPIKey(t.Context(), fixture.clock, fixture.admin.ID, "scripts", hash)
+	if err != nil {
+		t.Fatalf("CreateAPIKey: %v", err)
+	}
+
+	cookies := fixture.login(t, "avs", testPassword).Result().Cookies()
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/me/apikeys/"+itoa(created.ID), nil)
+	request.AddCookie(cookies[0])
+	if got := fixture.do(t, request).Code; got != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", got)
+	}
+
+	remaining, err := fixture.cache.ListAPIKeys(t.Context(), fixture.admin.ID)
+	if err != nil {
+		t.Fatalf("ListAPIKeys: %v", err)
+	}
+	if len(remaining) != 0 {
+		t.Errorf("keys remaining = %+v, want none", remaining)
+	}
+}
+
+// The real guard: settings.Cache.DeleteAPIKey has to check ownership itself,
+// since the underlying query deletes by a bare id (mutation-tested in
+// TestDeleteAPIKey_RefusesAnotherUsersKey, internal/db/settings).
+func TestDeleteMyAPIKey_RefusesAnotherUsersKey(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+	_, hash, err := auth.GenerateAPIKey()
+	if err != nil {
+		t.Fatalf("GenerateAPIKey: %v", err)
+	}
+	adminsKey, err := fixture.cache.CreateAPIKey(t.Context(), fixture.clock, fixture.admin.ID, "admin-only", hash)
+	if err != nil {
+		t.Fatalf("CreateAPIKey: %v", err)
+	}
+
+	cookies := fixture.login(t, "housemate", testPassword).Result().Cookies()
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/me/apikeys/"+itoa(adminsKey.ID), nil)
+	request.AddCookie(cookies[0])
+	if got := fixture.do(t, request).Code; got != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 for another user's key", got)
+	}
+
+	remaining, err := fixture.cache.ListAPIKeys(t.Context(), fixture.admin.ID)
+	if err != nil {
+		t.Fatalf("ListAPIKeys: %v", err)
+	}
+	if len(remaining) != 1 {
+		t.Error("the admin's key was removed despite the refusal")
+	}
+}

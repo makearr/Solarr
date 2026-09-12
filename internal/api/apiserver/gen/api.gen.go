@@ -438,6 +438,16 @@ const (
 	GetWorkArtworkParamsSizeThumb GetWorkArtworkParamsSize = "thumb"
 )
 
+// APIKey A non-interactive credential (X-Api-Key or Bearer), never the key itself or its hash -- see CreatedAPIKey for the one response that does carry the plaintext.
+type APIKey struct {
+	CreatedAt time.Time `json:"created_at"`
+	Id        int64     `json:"id"`
+
+	// LastUsedAt Null until the key is presented for the first time.
+	LastUsedAt *time.Time `json:"last_used_at"`
+	Name       string     `json:"name"`
+}
+
 // AddArrInstanceRequest defines model for AddArrInstanceRequest.
 type AddArrInstanceRequest struct {
 	ApiKey string `json:"api_key"`
@@ -692,6 +702,17 @@ type CategoryWrite struct {
 
 // CategoryWriteMonitorDiscovered defines model for CategoryWrite.MonitorDiscovered.
 type CategoryWriteMonitorDiscovered string
+
+// CreatedAPIKey defines model for CreatedAPIKey.
+type CreatedAPIKey struct {
+	CreatedAt time.Time `json:"created_at"`
+	Id        int64     `json:"id"`
+	Key       string    `json:"key"`
+
+	// LastUsedAt Null until the key is presented for the first time.
+	LastUsedAt *time.Time `json:"last_used_at"`
+	Name       string     `json:"name"`
+}
 
 // Credit One work-level credit (ADR-32) -- the person's own name, so a client never needs a second round-trip just to display it.
 type Credit struct {
@@ -2007,6 +2028,11 @@ type ResolveUnidentifiedJSONBody struct {
 	Provider string `json:"provider"`
 }
 
+// CreateMyAPIKeyJSONBody defines parameters for CreateMyAPIKey.
+type CreateMyAPIKeyJSONBody struct {
+	Name string `json:"name"`
+}
+
 // SetMyTierJSONBody defines parameters for SetMyTier.
 type SetMyTierJSONBody struct {
 	Tier SetMyTierJSONBodyTier `json:"tier"`
@@ -2286,6 +2312,9 @@ type SetLibraryLastLevelJSONRequestBody SetLibraryLastLevelJSONBody
 // ResolveUnidentifiedJSONRequestBody defines body for ResolveUnidentified for application/json ContentType.
 type ResolveUnidentifiedJSONRequestBody ResolveUnidentifiedJSONBody
 
+// CreateMyAPIKeyJSONRequestBody defines body for CreateMyAPIKey for application/json ContentType.
+type CreateMyAPIKeyJSONRequestBody CreateMyAPIKeyJSONBody
+
 // SetMyTierJSONRequestBody defines body for SetMyTier for application/json ContentType.
 type SetMyTierJSONRequestBody SetMyTierJSONBody
 
@@ -2555,6 +2584,15 @@ type ServerInterface interface {
 	// Who the caller is and what they may see.
 	// (GET /me)
 	GetMe(w http.ResponseWriter, r *http.Request)
+	// The caller's own non-interactive credentials for programmatic access (X-Api-Key or Bearer), for an upstream app that is not a person signing in. Never the key itself, or its hash -- ADR-14: a secret is shown once, at creation, and never again.
+	// (GET /me/apikeys)
+	ListMyAPIKeys(w http.ResponseWriter, r *http.Request)
+	// Mint a new key for the caller, self-service.
+	// (POST /me/apikeys)
+	CreateMyAPIKey(w http.ResponseWriter, r *http.Request)
+	// Revoke one of the caller's own keys. Refused (404, indistinguishable from missing, Invariant 37) for a key belonging to someone else -- never even reveals that a different user's key by that id exists.
+	// (DELETE /me/apikeys/{id})
+	DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, id int64)
 	// Change how much of the settings surface the caller is shown (ADR-26). Self-service: any authenticated user may set their own tier, not just an administrator -- raising or lowering it never changes behaviour, only what is displayed.
 	// (PATCH /me/tier)
 	SetMyTier(w http.ResponseWriter, r *http.Request)
@@ -3113,6 +3151,24 @@ func (_ Unimplemented) ResolveUnidentified(w http.ResponseWriter, r *http.Reques
 // Who the caller is and what they may see.
 // (GET /me)
 func (_ Unimplemented) GetMe(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The caller's own non-interactive credentials for programmatic access (X-Api-Key or Bearer), for an upstream app that is not a person signing in. Never the key itself, or its hash -- ADR-14: a secret is shown once, at creation, and never again.
+// (GET /me/apikeys)
+func (_ Unimplemented) ListMyAPIKeys(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Mint a new key for the caller, self-service.
+// (POST /me/apikeys)
+func (_ Unimplemented) CreateMyAPIKey(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Revoke one of the caller's own keys. Refused (404, indistinguishable from missing, Invariant 37) for a key belonging to someone else -- never even reveals that a different user's key by that id exists.
+// (DELETE /me/apikeys/{id})
+func (_ Unimplemented) DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5482,6 +5538,83 @@ func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request)
 	handler.ServeHTTP(w, r)
 }
 
+// ListMyAPIKeys operation middleware
+func (siw *ServerInterfaceWrapper) ListMyAPIKeys(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMyAPIKeys(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateMyAPIKey operation middleware
+func (siw *ServerInterfaceWrapper) CreateMyAPIKey(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMyAPIKey(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMyAPIKey operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMyAPIKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMyAPIKey(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetMyTier operation middleware
 func (siw *ServerInterfaceWrapper) SetMyTier(w http.ResponseWriter, r *http.Request) {
 
@@ -7365,6 +7498,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/me", wrapper.GetMe)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/apikeys", wrapper.ListMyAPIKeys)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/me/apikeys", wrapper.CreateMyAPIKey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/me/apikeys/{id}", wrapper.DeleteMyAPIKey)
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/me/tier", wrapper.SetMyTier)

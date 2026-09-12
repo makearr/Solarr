@@ -786,6 +786,46 @@ export interface paths {
         patch: operations["setMyTier"];
         trace?: never;
     };
+    "/me/apikeys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own non-interactive credentials for programmatic access (X-Api-Key or Bearer), for an upstream app that is not a person signing in. Never the key itself, or its hash -- ADR-14: a secret is shown once, at creation, and never again. */
+        get: operations["listMyAPIKeys"];
+        put?: never;
+        /**
+         * Mint a new key for the caller, self-service.
+         * @description The response's own `key` field is the only time the plaintext is ever returned -- store it now. Every other read of this key (this list included) only ever shows its name and timestamps.
+         */
+        post: operations["createMyAPIKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/apikeys/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke one of the caller's own keys. Refused (404, indistinguishable from missing, Invariant 37) for a key belonging to someone else -- never even reveals that a different user's key by that id exists. */
+        delete: operations["deleteMyAPIKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs": {
         parameters: {
             query?: never;
@@ -2301,6 +2341,25 @@ export interface components {
              */
             tier: "normal" | "advanced" | "expert";
             categories: components["schemas"]["Category"][];
+        };
+        /** @description A non-interactive credential (X-Api-Key or Bearer), never the key itself or its hash -- see CreatedAPIKey for the one response that does carry the plaintext. */
+        APIKey: {
+            /** Format: int64 */
+            id: number;
+            /** @example Prowlarr */
+            name: string;
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description Null until the key is presented for the first time.
+             */
+            last_used_at?: string | null;
+        };
+        /** @description Answered only once, by POST /me/apikeys -- `key` is the plaintext, shown here and never again. */
+        CreatedAPIKey: components["schemas"]["APIKey"] & {
+            /** @example mnx_... */
+            key: string;
         };
         Category: {
             /** Format: int64 */
@@ -4632,6 +4691,79 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+        };
+    };
+    listMyAPIKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's own keys. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIKey"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    createMyAPIKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @example Prowlarr */
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created. Store the key now; it is never shown again. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedAPIKey"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+        };
+    };
+    deleteMyAPIKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     listJobs: {
