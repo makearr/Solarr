@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
+import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
 type PrioritySettings = components["schemas"]["PrioritySettings"];
@@ -9,10 +10,10 @@ type PrioritySettings = components["schemas"]["PrioritySettings"];
 /** todo 4.7, ADR-36/ADR-55: the four trigger weights and the release-date
  *  freshness window. Settings only -- internal/identify/priority.Compute has
  *  no caller until stage 5/6's planner exists, so there is no waiting item
- *  yet to show a live priority breakdown for, and no category drag-reorder
- *  here either (todo 4.6's own separate gap: categories can only be created
- *  and deleted today, not reordered). */
+ *  yet to show a live priority breakdown for. Advanced tier (the registry's
+ *  own priority.* keys, todo 4.14), same reasoning as Network's own. */
 export function Priority() {
+  const tier = useTier();
   const queryClient = useQueryClient();
   const priority = useQuery({
     queryKey: ["priority"],
@@ -31,6 +32,7 @@ export function Priority() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["priority"] }),
   });
 
+  if (!isTierVisible(tier, "advanced")) return null;
   if (priority.error !== null || !priority.data) return null;
 
   return (

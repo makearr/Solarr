@@ -724,6 +724,28 @@ func (c *Cache) SetRole(ctx context.Context, id int64, role Role) error {
 	})
 }
 
+// SetUserTier changes how much of the settings surface a user is shown
+// (ADR-26). Self-service, unlike SetRole: raising or lowering it never
+// changes behaviour, only what is displayed, so there is nothing here for
+// wouldStrandTheInstance's own reasoning to protect against -- the caller
+// (a user changing their own tier, PATCH /me/tier) is trusted the same way
+// picking a theme would be. queries.SetUserTier itself was scaffolded ahead
+// of this caller (migration 0001's own ui_tier column), the same "ready
+// ahead of the consumer" shape several other todo 4.14 pieces already had.
+func (c *Cache) SetUserTier(ctx context.Context, id int64, tier Tier) error {
+	if _, found := c.Snapshot().User(id); !found {
+		return fmt.Errorf("%w: user %d", ErrNotFound, id)
+	}
+	switch tier {
+	case TierNormal, TierAdvanced, TierExpert:
+	default:
+		return config.Problems{{Path: "tier", Value: string(tier), Expectation: "normal, advanced or expert"}}
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetUserTier(ctx, settingsdb.SetUserTierParams{ID: id, UiTier: string(tier)})
+	})
+}
+
 // RevokeCategoryAccess removes a grant entirely. An absent row denies, so this
 // is not the same as storing "none" -- it returns the user to the default.
 func (c *Cache) RevokeCategoryAccess(ctx context.Context, userID, categoryID int64) error {

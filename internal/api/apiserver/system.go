@@ -2,11 +2,14 @@ package apiserver
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/makearr/MediaNexus/internal/api/authz"
 	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/MediaNexus/internal/platform/config"
 )
 
 // BuildInfo is what the About endpoint reports (section 13).
@@ -109,13 +112,69 @@ func (s *Server) GetMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, meView{
 		UserID:     access.UserID(),
 		Role:       string(access.Role()),
+		Tier:       string(access.Tier()),
 		Categories: categories,
+	})
+}
+
+// SetMyTier changes the caller's own tier (ADR-26) -- self-service, no id to
+// parse, so unlike a PATCH on another resource this needs no routeX wrapper.
+func (s *Server) SetMyTier(w http.ResponseWriter, r *http.Request) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+
+	var body struct {
+		Tier string `json:"tier"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "expected a JSON object with tier")
+		return
+	}
+
+	if err := s.auth.Settings.SetUserTier(r.Context(), access.UserID(), settings.Tier(body.Tier)); err != nil {
+		var problems config.Problems
+		if errors.As(err, &problems) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"The tier has problems", problems.Report("the tier", "Nothing was changed."))
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+
+	// Not s.GetMe: access is frozen for the request's lifetime (ADR-27), so
+	// reading the tier back off the same Access this handler already holds
+	// would show what it was when the request began, not what was just
+	// written -- the exact staleness class the category-editing endpoint
+	// hit live (2026-09-12). User (unlike Categories/Category/
+	// VisibleCategoryIDs/Permission) carries no per-caller filtering, so a
+	// direct fresh Snapshot read is not the archtest-forbidden pattern.
+	visible := access.Categories(settings.PermissionRead)
+	categories := make([]categoryView, 0, len(visible))
+	for _, category := range visible {
+		categories = append(categories, categoryView{
+			ID: category.ID, MediaType: category.MediaType, Name: category.Name,
+			Permission: string(access.Permission(category.ID)),
+		})
+	}
+	user, ok := s.auth.Settings.Snapshot().User(access.UserID())
+	if !ok {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such user")
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, meView{
+		UserID: access.UserID(), Role: string(access.Role()), Tier: string(user.Tier), Categories: categories,
 	})
 }
 
 type meView struct {
 	UserID     int64          `json:"user_id"`
 	Role       string         `json:"role"`
+	Tier       string         `json:"tier"`
 	Categories []categoryView `json:"categories"`
 }
 

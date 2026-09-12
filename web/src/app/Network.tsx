@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 
 import { api } from "@/api/client";
+import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
 type NetworkSettings = components["schemas"]["NetworkSettings"];
@@ -10,8 +11,11 @@ type NetworkSettings = components["schemas"]["NetworkSettings"];
 /** todo 4.19, ADR-58: the listen port, the global egress proxy and the IP
  *  allowlist. The allowlist can only ever deny -- it never authenticates and
  *  never grants (Invariant 89) -- and a change that would lock out the
- *  address making it is refused outright. */
+ *  address making it is refused outright. Advanced tier (the registry's own
+ *  network.* keys, todo 4.14): a working library needs none of this
+ *  touched, so a normal-tier caller does not see the section at all. */
 export function Network() {
+  const tier = useTier();
   const queryClient = useQueryClient();
   const network = useQuery({
     queryKey: ["network"],
@@ -35,6 +39,7 @@ export function Network() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["network"] }),
   });
 
+  if (!isTierVisible(tier, "advanced")) return null;
   if (network.error !== null || !network.data) return null;
 
   return (

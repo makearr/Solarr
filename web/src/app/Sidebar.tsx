@@ -17,6 +17,7 @@ import {
 
 import { api } from "@/api/client";
 import { useSidebarCollapsed } from "@/list/useNarrow";
+import { isTierVisible, useTier, type Tier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
 import { ThemeToggle } from "./ThemeToggle";
@@ -45,11 +46,16 @@ const STORAGE_SECTIONS: readonly { to: string; label: string; icon: LucideIcon }
   { to: "/storage/import", label: "Import", icon: ScanSearch },
 ];
 
-const SETTINGS_SECTIONS: readonly { to: string; label: string }[] = [
+// tier is the whole section's own floor (ADR-26, todo 4.14): General mixes
+// normal and advanced content and always shows (its own sub-sections filter
+// themselves), but Cache's entire content is expert-only, so the nav entry
+// itself disappears below that tier rather than leading to a page that
+// explains why it is empty.
+const SETTINGS_SECTIONS: readonly { to: string; label: string; tier?: Tier }[] = [
   { to: "/settings/general", label: "General" },
   { to: "/settings/user", label: "User" },
   { to: "/settings/scheduler", label: "Scheduler" },
-  { to: "/settings/cache", label: "Cache" },
+  { to: "/settings/cache", label: "Cache", tier: "expert" },
 ];
 
 /** Libraries sharing a media type are grouped once there is more than one of
@@ -84,6 +90,7 @@ export function defaultLevelKey(library: LibraryEntry): string | undefined {
  *  route, so following a deep link always opens the right branch and
  *  nothing else. */
 export function Sidebar() {
+  const tier = useTier();
   const path = useRouterState({ select: (state) => state.location.pathname });
   const routeParams = useParams({ strict: false }) as {
     categoryId?: string;
@@ -236,7 +243,7 @@ export function Sidebar() {
         </li>
         {!collapsed && settingsOpen && (
           <ul className="ml-5 flex flex-col gap-0.5 border-l border-border-subtle pl-2">
-            {SETTINGS_SECTIONS.map(({ to, label }) => (
+            {SETTINGS_SECTIONS.filter((section) => isTierVisible(tier, section.tier ?? "normal")).map(({ to, label }) => (
               <li key={to}>
                 <Link to={to} className={sectionLinkClass(path === to, false)}>
                   <span className="truncate">{label}</span>

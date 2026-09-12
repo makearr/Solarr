@@ -4,13 +4,22 @@ import { ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import { useAuthPolicy, useSetAuthRequired } from "@/lib/useAuthPolicy";
+import { useSetMyTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
 type UserAccount = components["schemas"]["UserAccount"];
 type Role = components["schemas"]["Role"];
+type Tier = components["schemas"]["Me"]["tier"];
 
-/** The User settings page: who can sign in (Access) and the accounts
- *  themselves. Split out of one long Settings scroll 2026-09-11. */
+const TIERS: readonly { id: Tier; label: string; blurb: string }[] = [
+  { id: "normal", label: "Normal", blurb: "Just what a working library needs." },
+  { id: "advanced", label: "Advanced", blurb: "Network, priority weights and similar tuning." },
+  { id: "expert", label: "Expert", blurb: "Cache sizing and other internal knobs." },
+];
+
+/** The User settings page: who can sign in (Access), the accounts
+ *  themselves, and the caller's own tier. Split out of one long Settings
+ *  scroll 2026-09-11. */
 export function UserSettings() {
   const me = useQuery({
     queryKey: ["me"],
@@ -28,11 +37,53 @@ export function UserSettings() {
           <h1 className="text-base font-semibold">User</h1>
         </header>
 
+        {me.data && <MyTierSection tier={me.data.tier} />}
         <AccessSection />
 
         {me.data && <Users currentUserId={me.data.user_id} />}
       </div>
     </div>
+  );
+}
+
+/** ADR-26's own self-service switch: any authenticated user, not just an
+ *  administrator, may change how much of the settings surface they see.
+ *  Raising or lowering it never changes behaviour, only what is displayed. */
+function MyTierSection({ tier }: { tier: Tier }) {
+  const setTier = useSetMyTier();
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+        Settings tier
+      </h2>
+      <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
+        <p className="text-xs text-ink-muted">
+          How much of the settings surface you see. Purely a display preference -- it never
+          changes what MediaNexus does.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {TIERS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              title={option.blurb}
+              disabled={setTier.isPending}
+              aria-pressed={tier === option.id}
+              onClick={() => setTier.mutate(option.id)}
+              className={`rounded-md border px-2.5 py-1 text-xs disabled:opacity-50 ${
+                tier === option.id
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-border-subtle text-ink-muted hover:text-ink"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        {setTier.isError && <p className="text-xs text-danger">That could not be saved.</p>}
+      </div>
+    </section>
   );
 }
 

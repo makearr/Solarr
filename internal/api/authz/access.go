@@ -24,6 +24,7 @@ var (
 type Access struct {
 	userID   int64
 	role     settings.Role
+	tier     settings.Tier
 	snapshot *settings.Snapshot
 
 	// system marks internal work — the planner, the scanner, a scheduled job — which is not a user
@@ -33,7 +34,7 @@ type Access struct {
 
 // ForUser builds the access a request runs under.
 func ForUser(snapshot *settings.Snapshot, user settings.User) Access {
-	return Access{userID: user.ID, role: user.Role, snapshot: snapshot}
+	return Access{userID: user.ID, role: user.Role, tier: user.Tier, snapshot: snapshot}
 }
 
 // System builds the access background work runs under. Jobs act on the whole
@@ -47,6 +48,10 @@ func (a Access) UserID() int64 { return a.userID }
 
 // Role reports the caller's role. It is empty for system access.
 func (a Access) Role() settings.Role { return a.role }
+
+// Tier reports how much of the settings surface the caller is shown
+// (ADR-26). Empty for system access -- background work has no UI to filter.
+func (a Access) Tier() settings.Tier { return a.tier }
 
 // IsSystem reports internal work rather than a user request.
 func (a Access) IsSystem() bool { return a.system }

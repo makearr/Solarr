@@ -731,6 +731,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/tier": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change how much of the settings surface the caller is shown (ADR-26). Self-service: any authenticated user may set their own tier, not just an administrator -- raising or lowering it never changes behaviour, only what is displayed. */
+        patch: operations["setMyTier"];
+        trace?: never;
+    };
     "/jobs": {
         parameters: {
             query?: never;
@@ -2174,6 +2191,11 @@ export interface components {
             /** Format: int64 */
             user_id: number;
             role: components["schemas"]["Role"];
+            /**
+             * @description How much of the settings surface this caller is shown (ADR-26). Self-service via PATCH /me/tier -- raising or lowering it never changes behaviour, only what is displayed.
+             * @enum {string}
+             */
+            tier: "normal" | "advanced" | "expert";
             categories: components["schemas"]["Category"][];
         };
         Category: {
@@ -4406,6 +4428,35 @@ export interface operations {
                     "application/json": components["schemas"]["Me"];
                 };
             };
+            401: components["responses"]["Problem"];
+        };
+    };
+    setMyTier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    tier: "normal" | "advanced" | "expert";
+                };
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
         };
     };

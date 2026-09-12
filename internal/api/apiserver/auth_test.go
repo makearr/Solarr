@@ -10,6 +10,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -321,6 +322,56 @@ func TestMe_AdminSeesEveryCategory(t *testing.T) {
 		if category.Permission != "manage" {
 			t.Errorf("admin permission = %q, want manage", category.Permission)
 		}
+	}
+}
+
+// Self-service (ADR-26): any authenticated user, not just an administrator,
+// may change their own tier -- it only changes what is displayed. The
+// response itself must already carry the new tier, not what Access looked
+// like when the request began (the exact staleness class the category-
+// editing endpoint hit live, 2026-09-12) -- checked directly rather than
+// trusting a follow-up GET /me to prove the PATCH handler itself is right.
+func TestSetMyTier_TheResponseItselfReflectsTheChange(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+	cookies := fixture.login(t, "housemate", testPassword).Result().Cookies()
+
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/me/tier", strings.NewReader(`{"tier":"expert"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.AddCookie(cookies[0])
+
+	var body struct {
+		Tier string `json:"tier"`
+	}
+	if err := json.NewDecoder(fixture.do(t, request).Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Tier != "expert" {
+		t.Fatalf("PATCH /me/tier response tier = %q, want expert", body.Tier)
+	}
+
+	getRequest := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	getRequest.AddCookie(cookies[0])
+	var getBody struct {
+		Tier string `json:"tier"`
+	}
+	if err := json.NewDecoder(fixture.do(t, getRequest).Body).Decode(&getBody); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if getBody.Tier != "expert" {
+		t.Errorf("a follow-up GET /me tier = %q, want expert", getBody.Tier)
+	}
+}
+
+func TestSetMyTier_InvalidTierAnswers400(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+	cookies := fixture.login(t, "housemate", testPassword).Result().Cookies()
+
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/me/tier", strings.NewReader(`{"tier":"godmode"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.AddCookie(cookies[0])
+
+	if response := fixture.do(t, request); response.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 for an invalid tier", response.Code)
 	}
 }
 

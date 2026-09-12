@@ -1073,6 +1073,33 @@ paths:
               schema: { $ref: "#/components/schemas/Me" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /me/tier:
+    patch:
+      operationId: setMyTier
+      tags: [auth]
+      summary: >-
+        Change how much of the settings surface the caller is shown
+        (ADR-26). Self-service: any authenticated user may set their own
+        tier, not just an administrator -- raising or lowering it never
+        changes behaviour, only what is displayed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tier]
+              properties:
+                tier: { type: string, enum: [normal, advanced, expert] }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /jobs:
     get:
       operationId: listJobs
@@ -3395,10 +3422,17 @@ components:
 
     Me:
       type: object
-      required: [user_id, role, categories]
+      required: [user_id, role, tier, categories]
       properties:
         user_id: { type: integer, format: int64 }
         role: { $ref: "#/components/schemas/Role" }
+        tier:
+          type: string
+          enum: [normal, advanced, expert]
+          description: >-
+            How much of the settings surface this caller is shown (ADR-26).
+            Self-service via PATCH /me/tier -- raising or lowering it never
+            changes behaviour, only what is displayed.
         categories:
           type: array
           items: { $ref: "#/components/schemas/Category" }

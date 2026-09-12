@@ -3,20 +3,34 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
+import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
 type CacheReport = components["schemas"]["CacheReport"];
 
 /** The Cache settings page: CacheSettings' own section, given its own page
- *  2026-09-11 (split out of one long Settings scroll). */
+ *  2026-09-11 (split out of one long Settings scroll). Expert tier (the
+ *  registry's own cache.* keys, todo 4.14) -- unlike Network/Priority,
+ *  which sit inside a mixed-tier General page and simply disappear from
+ *  it, this page's entire content is expert-only, so a caller below that
+ *  tier who lands here directly (Sidebar already hides the nav entry) sees
+ *  an explanation rather than a blank page under a lone heading. */
 export function CacheSettingsPage() {
+  const tier = useTier();
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
         <header className="flex flex-col gap-1">
           <h1 className="text-base font-semibold">Cache</h1>
         </header>
-        <CacheSettings />
+        {isTierVisible(tier, "expert") ? (
+          <CacheSettings />
+        ) : (
+          <p className="text-sm text-ink-muted">
+            Cache sizing is an expert-tier setting. Raise your own tier on the User settings page
+            to see it.
+          </p>
+        )}
       </div>
     </div>
   );

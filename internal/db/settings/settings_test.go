@@ -498,3 +498,44 @@ func TestTheLastAdministratorCannotBeRemovedOrDemoted(t *testing.T) {
 			"should be refused: %v", second.Username, err)
 	}
 }
+
+// Self-service (ADR-26): unlike SetRole, changing a tier is never refused
+// for stranding the instance -- there is nothing behavioural to strand,
+// only what is displayed.
+func TestSetUserTier_ChangesWhatIsStored(t *testing.T) {
+	cache, fake := newCache(t)
+	user, err := cache.CreateUser(t.Context(), fake, "avs", "hash", settings.RoleReadonly)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if user.Tier != settings.TierNormal {
+		t.Fatalf("new user tier = %q, want normal", user.Tier)
+	}
+
+	if err := cache.SetUserTier(t.Context(), user.ID, settings.TierExpert); err != nil {
+		t.Fatalf("SetUserTier: %v", err)
+	}
+	if got, _ := cache.Snapshot().User(user.ID); got.Tier != settings.TierExpert {
+		t.Errorf("Tier = %q, want expert", got.Tier)
+	}
+}
+
+func TestSetUserTier_RejectsAnUnknownTier(t *testing.T) {
+	cache, fake := newCache(t)
+	user, err := cache.CreateUser(t.Context(), fake, "avs", "hash", settings.RoleReadonly)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	var problems config.Problems
+	if err := cache.SetUserTier(t.Context(), user.ID, settings.Tier("expert-plus")); !errors.As(err, &problems) {
+		t.Fatalf("SetUserTier with an unknown tier = %v, want config.Problems", err)
+	}
+}
+
+func TestSetUserTier_MissingUserAnswersErrNotFound(t *testing.T) {
+	cache, _ := newCache(t)
+	if err := cache.SetUserTier(t.Context(), 999999, settings.TierAdvanced); !errors.Is(err, settings.ErrNotFound) {
+		t.Errorf("SetUserTier on a missing user = %v, want ErrNotFound", err)
+	}
+}

@@ -304,6 +304,7 @@ func New(config Config) (*Server, error) {
 		api.Group(func(secured chi.Router) {
 			secured.Use(server.authenticate)
 			secured.Get("/me", server.GetMe)
+			secured.Patch("/me/tier", server.SetMyTier)
 			secured.Get("/dashboard", server.GetDashboard)
 			secured.Get("/library/health", server.GetLibraryHealth)
 			secured.Get("/system/egress", server.GetEgress)
