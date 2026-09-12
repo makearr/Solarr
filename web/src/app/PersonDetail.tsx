@@ -223,9 +223,10 @@ export function PersonDetail() {
 // never disagrees with what the real subscription will do once saved. Low
 // duplication risk: a 2-line predicate, not real business logic, and the
 // authoritative decision still runs server-side at expand time regardless.
-function admits(group: PreviewReleaseGroup, excluded: ReadonlySet<string>): boolean {
+// excluded is already lowercased (the checkbox state's own canonical form).
+function admits(group: PreviewReleaseGroup, excludedLower: ReadonlySet<string>): boolean {
   return !group.secondary_types.some((secondary) =>
-    [...excluded].some((exclusion) => secondary.toLowerCase().includes(exclusion.toLowerCase())),
+    [...excludedLower].some((exclusion) => secondary.toLowerCase().includes(exclusion)),
   );
 }
 
@@ -257,15 +258,22 @@ function SubscribePanel({
     },
   });
 
-  const [excluded, setExcluded] = useState<Set<string> | null>(null);
+  // Keyed lowercase throughout (state, matching, and the checkbox map below)
+  // -- real MusicBrainz secondary_types arrive Title Case ("Compilation")
+  // while DefaultExcludedSecondaryTypes ships lowercase ("compilation").
+  // Case-sensitive keys produced two checkboxes for the same real type,
+  // found live verifying against the real library (Lil Wayne's own
+  // discography: "compilation" and "Compilation" both listed, only one of
+  // which the default-checked state actually matched).
+  const [excludedLower, setExcludedLower] = useState<Set<string> | null>(null);
 
   // Seeded once the preview answers: the default exclusions, checked, plus
   // every other secondary type this artist's own discography actually has,
   // unchecked -- there is no point offering a box for a type nothing here
   // carries, except the defaults themselves (a future release could).
-  const seeded = excluded !== null;
+  const seeded = excludedLower !== null;
   if (preview.data && !seeded) {
-    setExcluded(new Set(preview.data.default_excluded_secondary_types));
+    setExcludedLower(new Set(preview.data.default_excluded_secondary_types.map((type) => type.toLowerCase())));
   }
 
   // "conflict" is this endpoint's only 409 cause (no MusicBrainz artist id
@@ -303,14 +311,22 @@ function SubscribePanel({
   }
 
   const groups = preview.data.release_groups;
-  const availableTypes = [
-    ...new Set([
-      ...preview.data.default_excluded_secondary_types,
-      ...groups.flatMap((group) => group.secondary_types),
-    ]),
-  ].sort((a, b) => a.localeCompare(b));
 
-  const activeExcluded = excluded ?? new Set(preview.data.default_excluded_secondary_types);
+  // One entry per distinct type, case-insensitive -- labelled with whichever
+  // casing is more likely to read naturally: the real MusicBrainz value
+  // when this artist actually has one, the shipped default's own casing
+  // otherwise.
+  const labelByLower = new Map<string, string>();
+  for (const type of preview.data.default_excluded_secondary_types) {
+    labelByLower.set(type.toLowerCase(), type);
+  }
+  for (const type of groups.flatMap((group) => group.secondary_types)) {
+    labelByLower.set(type.toLowerCase(), type);
+  }
+  const availableTypes = [...labelByLower.keys()].sort((a, b) => a.localeCompare(b));
+
+  const activeExcluded =
+    excludedLower ?? new Set(preview.data.default_excluded_secondary_types.map((type) => type.toLowerCase()));
   const admittedCount = groups.filter((group) => admits(group, activeExcluded)).length;
 
   return (
@@ -323,20 +339,20 @@ function SubscribePanel({
       {availableTypes.length > 0 && (
         <fieldset className="flex flex-wrap gap-x-4 gap-y-1.5">
           <legend className="mb-1 text-xs text-ink-muted">Exclude by type</legend>
-          {availableTypes.map((type) => (
-            <label key={type} className="flex items-center gap-1.5 text-xs text-ink-muted">
+          {availableTypes.map((typeLower) => (
+            <label key={typeLower} className="flex items-center gap-1.5 text-xs text-ink-muted">
               <input
                 type="checkbox"
-                checked={activeExcluded.has(type)}
+                checked={activeExcluded.has(typeLower)}
                 onChange={(event) => {
                   const next = new Set(activeExcluded);
-                  if (event.target.checked) next.add(type);
-                  else next.delete(type);
-                  setExcluded(next);
+                  if (event.target.checked) next.add(typeLower);
+                  else next.delete(typeLower);
+                  setExcludedLower(next);
                 }}
                 className="size-3.5"
               />
-              {type}
+              {labelByLower.get(typeLower)}
             </label>
           ))}
         </fieldset>
