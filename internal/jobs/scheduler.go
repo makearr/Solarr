@@ -24,6 +24,10 @@ var ErrAlreadyRunning = errors.New("jobs: this task is already running")
 // about a task key TaskRegistry never registered.
 var ErrUnknownTask = errors.New("jobs: unknown task")
 
+// ErrNoFullMode is RunNowFull's refusal for a task that never registered a
+// RunFull function.
+var ErrNoFullMode = errors.New("jobs: this task has no full-run mode")
+
 // ScheduleSource resolves a task's live, current cadence and enabled flag,
 // re-read every tick so a setting change takes effect without a restart.
 // Implemented by a cmd/medianexus adapter over internal/db/settings.Cache --
@@ -82,7 +86,7 @@ func (r *TaskRunner) Run(ctx context.Context) {
 			r.logger.Debug("schedule tick skipped: already running", slog.String("task", r.task.Key))
 			continue
 		}
-		r.fireAndRecord(ctx)
+		r.fireAndRecord(ctx, r.task.Enqueue)
 		r.running.Unlock()
 	}
 }
@@ -96,7 +100,23 @@ func (r *TaskRunner) RunNow(ctx context.Context) error {
 		return ErrAlreadyRunning
 	}
 	defer r.running.Unlock()
-	r.fireAndRecord(ctx)
+	r.fireAndRecord(ctx, r.task.Enqueue)
+	return nil
+}
+
+// RunNowFull is RunNow's counterpart for a task's own RunFull trigger
+// (library scan's full rescan). Shares the same running lock as RunNow and
+// the scheduled loop, so a full rescan and an ordinary one can never
+// overlap for the same task.
+func (r *TaskRunner) RunNowFull(ctx context.Context) error {
+	if r.task.RunFull == nil {
+		return ErrNoFullMode
+	}
+	if !r.running.TryLock() {
+		return ErrAlreadyRunning
+	}
+	defer r.running.Unlock()
+	r.fireAndRecord(ctx, r.task.RunFull)
 	return nil
 }
 
@@ -119,9 +139,9 @@ func (r *TaskRunner) resolveSchedule() cron.Schedule {
 	return fallback
 }
 
-func (r *TaskRunner) fireAndRecord(ctx context.Context) {
+func (r *TaskRunner) fireAndRecord(ctx context.Context, enqueue func(context.Context) (EnqueueResult, error)) {
 	start := r.clock.Now()
-	result, err := r.task.Enqueue(ctx)
+	result, err := enqueue(ctx)
 	duration := r.clock.Since(start)
 
 	outcome, errMsg := "enqueued", ""

@@ -22,6 +22,7 @@ type fakeScheduler struct {
 	setCadenceErr error
 	runNowErr     error
 	lastRunKey    string
+	lastRunFull   bool
 }
 
 func (f *fakeScheduler) Tasks() []jobs.Task { return f.tasks }
@@ -59,11 +60,12 @@ func (f *fakeScheduler) SetEnabled(_ context.Context, key string, enabled bool) 
 	return nil
 }
 
-func (f *fakeScheduler) RunNow(_ context.Context, key string) error {
+func (f *fakeScheduler) RunNow(_ context.Context, key string, full bool) error {
 	if !containsTask(f.tasks, key) {
 		return jobs.ErrUnknownTask
 	}
 	f.lastRunKey = key
+	f.lastRunFull = full
 	return f.runNowErr
 }
 
@@ -83,6 +85,7 @@ type scheduleBody struct {
 	DefaultCadence string `json:"default_cadence"`
 	Cadence        string `json:"cadence"`
 	Enabled        bool   `json:"enabled"`
+	SupportsFull   bool   `json:"supports_full"`
 	LastOutcome    string `json:"last_outcome"`
 }
 
@@ -106,6 +109,41 @@ func TestListSchedules_ReturnsEveryTaskWithItsEffectiveSettings(t *testing.T) {
 	if len(schedules) != 1 || schedules[0].Key != "scan" || schedules[0].Cadence != "*/30 * * * *" ||
 		!schedules[0].Enabled || schedules[0].LastOutcome != "enqueued" {
 		t.Errorf("schedules = %+v", schedules)
+	}
+	if schedules[0].SupportsFull {
+		t.Error("supports_full = true for a task with no RunFull")
+	}
+}
+
+// The screen needs supports_full to know whether to offer a "Full rescan" control at all --
+// today only the task that actually registered RunFull should answer true.
+func TestListSchedules_SupportsFullReflectsRunFull(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.scheduler.tasks = []jobs.Task{
+		{Key: "scan", Name: "Library scan", DefaultCadence: "*/30 * * * *", Tier: "normal",
+			RunFull: func(context.Context) (jobs.EnqueueResult, error) { return jobs.EnqueueResult{}, nil }},
+		{Key: "enrichment", Name: "Music enrichment", DefaultCadence: "*/15 * * * *", Tier: "normal"},
+	}
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/schedules"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	var schedules []scheduleBody
+	if err := json.Unmarshal(recorder.Body.Bytes(), &schedules); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	byKey := map[string]bool{}
+	for _, schedule := range schedules {
+		byKey[schedule.Key] = schedule.SupportsFull
+	}
+	if !byKey["scan"] {
+		t.Error("scan (has RunFull) supports_full = false, want true")
+	}
+	if byKey["enrichment"] {
+		t.Error("enrichment (no RunFull) supports_full = true, want false")
 	}
 }
 
@@ -231,5 +269,53 @@ func TestRunSchedule_UnknownTaskAnswers404(t *testing.T) {
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/schedules/does-not-exist/run", ``))
 	if recorder.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+// The full-rescan trigger (private/questions.md, todo 4.2's own follow-up): ?full=true must
+// reach Scheduler.RunNow's own full argument, not just be accepted and ignored.
+func TestRunSchedule_FullQueryParamIsPassedThrough(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.scheduler.tasks = []jobs.Task{{Key: "scan", DefaultCadence: "*/30 * * * *"}}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/schedules/scan/run?full=true", ``))
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202 (%s)", recorder.Code, recorder.Body)
+	}
+	if !fixture.scheduler.lastRunFull {
+		t.Error("full=true was not passed through to Scheduler.RunNow")
+	}
+}
+
+// Without the query param, an ordinary run must not be mistaken for a full one.
+func TestRunSchedule_OmittingFullRunsTheOrdinaryMode(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.scheduler.tasks = []jobs.Task{{Key: "scan", DefaultCadence: "*/30 * * * *"}}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/schedules/scan/run", ``))
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202 (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.scheduler.lastRunFull {
+		t.Error("an ordinary run (no ?full) was passed through as full")
+	}
+}
+
+// A task with no RunFull (every task except scan) answers 400 for ?full=true, translated
+// from jobs.ErrNoFullMode -- refused rather than silently running the ordinary mode instead.
+func TestRunSchedule_MapsNoFullModeTo400(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.scheduler.tasks = []jobs.Task{{Key: "enrichment", DefaultCadence: "*/15 * * * *"}}
+	fixture.scheduler.runNowErr = jobs.ErrNoFullMode
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/schedules/enrichment/run?full=true", ``))
+	if recorder.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 (%s)", recorder.Code, recorder.Body)
 	}
 }

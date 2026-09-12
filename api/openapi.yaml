@@ -680,8 +680,20 @@ paths:
         when a fire, scheduled or manual, is already in flight for this task
         (ADR-59). Enqueuing is asynchronous: 202 means the trigger was
         accepted, not that the underlying job has finished.
+      parameters:
+        - name: full
+          in: query
+          schema: { type: boolean }
+          description: >-
+            Requests the task's own full-run mode instead of its ordinary
+            one, when it has one (Schedule.supports_full) -- library scan's
+            full rescan is the only one today (private/questions.md), which
+            rereads every directory regardless of mtime rather than the
+            incremental sweep the schedule otherwise always runs. 400 for a
+            task with no full-run mode.
       responses:
         "202": { description: Triggered. }
+        "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -3220,7 +3232,7 @@ components:
     Schedule:
       type: object
       description: One registered periodic task (ADR-59), its effective settings and run-state.
-      required: [key, name, tier, default_cadence, cadence, enabled]
+      required: [key, name, tier, default_cadence, cadence, enabled, supports_full]
       properties:
         key: { type: string }
         name: { type: string }
@@ -3233,6 +3245,12 @@ components:
           type: string
           description: Effective cadence -- a stored override if one exists, default_cadence otherwise.
         enabled: { type: boolean }
+        supports_full:
+          type: boolean
+          description: >-
+            Whether POST /schedules/{key}/run?full=true does something different
+            from an ordinary run for this task -- library scan's full rescan is
+            the only one today (private/questions.md).
         last_run_at: { type: string, format: date-time }
         last_duration_ms: { type: integer, format: int64 }
         last_outcome:
