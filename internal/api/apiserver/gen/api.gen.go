@@ -65,6 +65,20 @@ const (
 	User BlockedContentEntrySource = "user"
 )
 
+// Defines values for CategorySettingsMonitorDiscovered.
+const (
+	CategorySettingsMonitorDiscoveredMonitored   CategorySettingsMonitorDiscovered = "monitored"
+	CategorySettingsMonitorDiscoveredNone        CategorySettingsMonitorDiscovered = "none"
+	CategorySettingsMonitorDiscoveredUnmonitored CategorySettingsMonitorDiscovered = "unmonitored"
+)
+
+// Defines values for CategoryWriteMonitorDiscovered.
+const (
+	CategoryWriteMonitorDiscoveredMonitored   CategoryWriteMonitorDiscovered = "monitored"
+	CategoryWriteMonitorDiscoveredNone        CategoryWriteMonitorDiscovered = "none"
+	CategoryWriteMonitorDiscoveredUnmonitored CategoryWriteMonitorDiscovered = "unmonitored"
+)
+
 // Defines values for DecisionOutcome.
 const (
 	ACCEPT DecisionOutcome = "ACCEPT"
@@ -630,6 +644,39 @@ type CategoryGrant struct {
 	// Permission `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.
 	Permission Permission `json:"permission"`
 }
+
+// CategorySettings A category's full settings-side detail (ADR-27's policy boundary), administrator only -- richer than LibraryCategory, which stays lean for the many navigation callers (root folder pickers, *Arr import, the sidebar) that never need any of this.
+type CategorySettings struct {
+	Id                int64  `json:"id"`
+	LanguageProfileId *int64 `json:"language_profile_id,omitempty"`
+	MediaType         string `json:"media_type"`
+
+	// MonitorDiscovered What a scan does with an album it finds on disk that nobody asked for (section 19.6, todo 4.4).
+	MonitorDiscovered CategorySettingsMonitorDiscovered `json:"monitor_discovered"`
+	Name              string                            `json:"name"`
+
+	// PriorityRank Lower is more important (ADR-36's composite acquisition priority).
+	PriorityRank     int64  `json:"priority_rank"`
+	QualityProfileId *int64 `json:"quality_profile_id,omitempty"`
+}
+
+// CategorySettingsMonitorDiscovered What a scan does with an album it finds on disk that nobody asked for (section 19.6, todo 4.4).
+type CategorySettingsMonitorDiscovered string
+
+// CategoryWrite defines model for CategoryWrite.
+type CategoryWrite struct {
+	// LanguageProfileId Absent or null clears it -- no default profile.
+	LanguageProfileId *int64                          `json:"language_profile_id,omitempty"`
+	MonitorDiscovered *CategoryWriteMonitorDiscovered `json:"monitor_discovered,omitempty"`
+	Name              string                          `json:"name"`
+	PriorityRank      int64                           `json:"priority_rank"`
+
+	// QualityProfileId Absent or null clears it -- no default profile.
+	QualityProfileId *int64 `json:"quality_profile_id,omitempty"`
+}
+
+// CategoryWriteMonitorDiscovered defines model for CategoryWrite.MonitorDiscovered.
+type CategoryWriteMonitorDiscovered string
 
 // Credit One work-level credit (ADR-32) -- the person's own name, so a client never needs a second round-trip just to display it.
 type Credit struct {
@@ -2113,6 +2160,9 @@ type UpdateCacheBudgetJSONRequestBody UpdateCacheBudgetJSONBody
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody CreateCategoryJSONBody
 
+// UpdateCategoryJSONRequestBody defines body for UpdateCategory for application/json ContentType.
+type UpdateCategoryJSONRequestBody = CategoryWrite
+
 // AttachRootFolderToCategoryJSONRequestBody defines body for AttachRootFolderToCategory for application/json ContentType.
 type AttachRootFolderToCategoryJSONRequestBody AttachRootFolderToCategoryJSONBody
 
@@ -2286,6 +2336,12 @@ type ServerInterface interface {
 	// Remove a category. Administrator only.
 	// (DELETE /categories/{id})
 	DeleteCategory(w http.ResponseWriter, r *http.Request, id int64)
+	// A category's full settings-side detail. Administrator only -- richer than LibraryCategory (`GET /categories`), which stays lean for the many navigation callers that never need any of this.
+	// (GET /categories/{id})
+	GetCategory(w http.ResponseWriter, r *http.Request, id int64)
+	// Rename a category, reprioritise it, or change its default quality/ language profile or monitor-discovered policy. Administrator only. `media_type` never changes -- it is identity, not policy.
+	// (PATCH /categories/{id})
+	UpdateCategory(w http.ResponseWriter, r *http.Request, id int64)
 	// Put a root folder into a category. Administrator only.
 	// (POST /categories/{id}/rootfolders)
 	AttachRootFolderToCategory(w http.ResponseWriter, r *http.Request, id int64)
@@ -2682,6 +2738,18 @@ func (_ Unimplemented) CreateCategory(w http.ResponseWriter, r *http.Request) {
 // Remove a category. Administrator only.
 // (DELETE /categories/{id})
 func (_ Unimplemented) DeleteCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A category's full settings-side detail. Administrator only -- richer than LibraryCategory (`GET /categories`), which stays lean for the many navigation callers that never need any of this.
+// (GET /categories/{id})
+func (_ Unimplemented) GetCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Rename a category, reprioritise it, or change its default quality/ language profile or monitor-discovered policy. Administrator only. `media_type` never changes -- it is identity, not policy.
+// (PATCH /categories/{id})
+func (_ Unimplemented) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3797,6 +3865,72 @@ func (siw *ServerInterfaceWrapper) DeleteCategory(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCategory operation middleware
+func (siw *ServerInterfaceWrapper) GetCategory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCategory operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCategory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCategory(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6789,6 +6923,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/categories/{id}", wrapper.DeleteCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}", wrapper.GetCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/categories/{id}", wrapper.UpdateCategory)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/rootfolders", wrapper.AttachRootFolderToCategory)

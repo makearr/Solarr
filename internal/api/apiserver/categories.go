@@ -100,6 +100,100 @@ func nextCategoryPriorityRank(access authz.Access) int64 {
 	return highest + 1
 }
 
+// routeGetCategory parses the id path parameter, mirroring routeDeleteCategory.
+func (s *Server) routeGetCategory(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a category id must be a number")
+		return
+	}
+	s.GetCategory(w, r, id)
+}
+
+// GetCategory answers one category's full settings-side detail --
+// LibraryCategory (ListCategories) stays lean for the many navigation
+// callers that never need any of this. Administrator only. Reads through
+// Access rather than the raw snapshot (archtest's own
+// TestHandlersCannotBypassCategoryFiltering forbids the latter in every
+// apiserver handler, without exception).
+func (s *Server) GetCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	category, err := access.Category(id, settings.PermissionManage)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, categorySettingsView(category))
+}
+
+// routeUpdateCategory parses the id path parameter, mirroring routeDeleteCategory.
+func (s *Server) routeUpdateCategory(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a category id must be a number")
+		return
+	}
+	s.UpdateCategory(w, r, id)
+}
+
+// UpdateCategory renames/reprioritises a category (todo 4.6's own remaining
+// gap: creation and deletion existed, editing did not) and sets its default
+// quality/language profile and monitor-discovered policy, all through one
+// settings.Cache.UpdateCategory call. Administrator only. Deliberately not
+// three separate settings.Cache writes plus a final Access-based read for
+// the response: Access is frozen for a request's lifetime (ADR-27), so a
+// handler that wrote through it and then read the same Access back would
+// see the category as it looked when the request began, not what it had
+// just written -- found live verifying this exact endpoint (2026-09-12).
+// media_type never changes -- it is identity, not policy.
+func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+
+	var body gen.UpdateCategoryJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "the request body could not be read")
+		return
+	}
+
+	monitorDiscovered := settings.MonitorDiscoveredMonitored
+	if body.MonitorDiscovered != nil {
+		monitorDiscovered = string(*body.MonitorDiscovered)
+	}
+	updated, err := s.auth.Settings.UpdateCategory(r.Context(), id, body.Name, body.PriorityRank,
+		body.QualityProfileId, body.LanguageProfileId, monitorDiscovered)
+	if err != nil {
+		var problems config.Problems
+		if errors.As(err, &problems) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"The category has problems", problems.Report("the category", "Nothing was changed."))
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, categorySettingsView(updated))
+}
+
+func categorySettingsView(c settings.Category) gen.CategorySettings {
+	return gen.CategorySettings{
+		Id: c.ID, MediaType: c.MediaType, Name: c.Name, PriorityRank: c.PriorityRank,
+		QualityProfileId: c.QualityProfileID, LanguageProfileId: c.LanguageProfileID,
+		MonitorDiscovered: gen.CategorySettingsMonitorDiscovered(c.MonitorDiscovered),
+	}
+}
+
 // routeDeleteCategory parses the id path parameter, mirroring routeGetWork.
 func (s *Server) routeDeleteCategory(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)

@@ -2673,6 +2673,44 @@ paths:
         in: path
         required: true
         schema: { type: integer, format: int64 }
+    get:
+      operationId: getCategory
+      tags: [settings]
+      summary: >-
+        A category's full settings-side detail. Administrator only --
+        richer than LibraryCategory (`GET /categories`), which stays lean
+        for the many navigation callers that never need any of this.
+      responses:
+        "200":
+          description: The category.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategorySettings" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateCategory
+      tags: [settings]
+      summary: >-
+        Rename a category, reprioritise it, or change its default quality/
+        language profile or monitor-discovered policy. Administrator only.
+        `media_type` never changes -- it is identity, not policy.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CategoryWrite" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategorySettings" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
     delete:
       operationId: deleteCategory
       tags: [settings]
@@ -4482,6 +4520,50 @@ components:
             the reconciliation sweep has run at least once.
         files:
           type: integer
+
+    CategorySettings:
+      type: object
+      description: >-
+        A category's full settings-side detail (ADR-27's policy boundary),
+        administrator only -- richer than LibraryCategory, which stays lean
+        for the many navigation callers (root folder pickers, *Arr import,
+        the sidebar) that never need any of this.
+      required: [id, media_type, name, priority_rank, monitor_discovered]
+      properties:
+        id: { type: integer, format: int64 }
+        media_type: { type: string, example: "music" }
+        name: { type: string }
+        priority_rank:
+          type: integer
+          format: int64
+          description: Lower is more important (ADR-36's composite acquisition priority).
+        quality_profile_id: { type: integer, format: int64 }
+        language_profile_id: { type: integer, format: int64 }
+        monitor_discovered:
+          type: string
+          enum: [monitored, unmonitored, none]
+          description: >-
+            What a scan does with an album it finds on disk that nobody
+            asked for (section 19.6, todo 4.4).
+
+    CategoryWrite:
+      type: object
+      required: [name, priority_rank]
+      properties:
+        name: { type: string, minLength: 1 }
+        priority_rank: { type: integer, format: int64, minimum: 0 }
+        quality_profile_id:
+          type: integer
+          format: int64
+          description: Absent or null clears it -- no default profile.
+        language_profile_id:
+          type: integer
+          format: int64
+          description: Absent or null clears it -- no default profile.
+        monitor_discovered:
+          type: string
+          enum: [monitored, unmonitored, none]
+          default: monitored
 
     Library:
       type: object

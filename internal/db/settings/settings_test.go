@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/db/settings"
 	"github.com/makearr/MediaNexus/internal/db/store"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/MediaNexus/internal/platform/config"
 	"github.com/makearr/MediaNexus/migrations"
 )
 
@@ -233,6 +234,91 @@ func TestDeleteCategory_ReportsEveryReferenceAtOnce(t *testing.T) {
 	// rather than discovering the second after fixing the first.
 	if len(inUse.References) != 2 {
 		t.Errorf("References = %+v, want both roots and access grants", inUse.References)
+	}
+}
+
+// Todo 4.6's own remaining gap: creation and deletion existed, editing did
+// not -- queries.UpdateCategory itself was scaffolded ahead of this caller.
+func TestUpdateCategory_ChangesNameAndPriorityRank(t *testing.T) {
+	cache, _ := newCache(t)
+	category, err := cache.CreateCategory(t.Context(), "music", "Music", 10)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+
+	updated, err := cache.UpdateCategory(t.Context(), category.ID, "Tunes", 20, nil, nil, settings.MonitorDiscoveredMonitored)
+	if err != nil {
+		t.Fatalf("UpdateCategory: %v", err)
+	}
+	if updated.Name != "Tunes" || updated.PriorityRank != 20 {
+		t.Errorf("updated = %+v, want Name=Tunes PriorityRank=20", updated)
+	}
+	if updated.MediaType != "music" {
+		t.Errorf("MediaType = %q, must never change", updated.MediaType)
+	}
+
+	found, ok := cache.Snapshot().Category(category.ID)
+	if !ok || found.Name != "Tunes" {
+		t.Errorf("stored category = %+v, want Name=Tunes", found)
+	}
+}
+
+// The staleness bug found live 2026-09-12: this one write must leave every
+// field -- not just the ones a caller happens to read back through the same
+// call -- fresh in the snapshot afterwards.
+func TestUpdateCategory_SetsProfilesAndMonitorDiscoveredTogether(t *testing.T) {
+	cache, _ := newCache(t)
+	category, err := cache.CreateCategory(t.Context(), "music", "Music", 10)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	quality, err := cache.CreateQualityProfile(t.Context(), "Lossless", "{}", "{}")
+	if err != nil {
+		t.Fatalf("CreateQualityProfile: %v", err)
+	}
+	language, err := cache.CreateLanguageProfile(t.Context(), settings.LanguageProfile{Name: "English"})
+	if err != nil {
+		t.Fatalf("CreateLanguageProfile: %v", err)
+	}
+
+	updated, err := cache.UpdateCategory(t.Context(), category.ID, "Music", 10,
+		&quality.ID, &language.ID, settings.MonitorDiscoveredNone)
+	if err != nil {
+		t.Fatalf("UpdateCategory: %v", err)
+	}
+	if updated.QualityProfileID == nil || *updated.QualityProfileID != quality.ID {
+		t.Errorf("QualityProfileID = %v, want %d", updated.QualityProfileID, quality.ID)
+	}
+	if updated.LanguageProfileID == nil || *updated.LanguageProfileID != language.ID {
+		t.Errorf("LanguageProfileID = %v, want %d", updated.LanguageProfileID, language.ID)
+	}
+	if updated.MonitorDiscovered != settings.MonitorDiscoveredNone {
+		t.Errorf("MonitorDiscovered = %q, want none", updated.MonitorDiscovered)
+	}
+}
+
+func TestUpdateCategory_RefusesADuplicateNameWithinTheSameMediaType(t *testing.T) {
+	cache, _ := newCache(t)
+	if _, err := cache.CreateCategory(t.Context(), "music", "Music", 10); err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	other, err := cache.CreateCategory(t.Context(), "music", "Podcasts", 20)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+
+	_, err = cache.UpdateCategory(t.Context(), other.ID, "Music", 20, nil, nil, settings.MonitorDiscoveredMonitored)
+	var problems config.Problems
+	if !errors.As(err, &problems) {
+		t.Fatalf("UpdateCategory = %v, want config.Problems for the name collision", err)
+	}
+}
+
+func TestUpdateCategory_MissingCategoryAnswersErrNotFound(t *testing.T) {
+	cache, _ := newCache(t)
+	_, err := cache.UpdateCategory(t.Context(), 999999, "Whatever", 1, nil, nil, settings.MonitorDiscoveredMonitored)
+	if !errors.Is(err, settings.ErrNotFound) {
+		t.Errorf("UpdateCategory = %v, want ErrNotFound", err)
 	}
 }
 

@@ -310,6 +310,129 @@ func TestCreateCategory_InvalidInputAnswers400(t *testing.T) {
 	}
 }
 
+// GetCategory answers the richer settings-side detail ListCategories
+// deliberately never carries (priority_rank, the two profile ids,
+// monitor_discovered).
+func TestGetCategory_ReturnsTheFullDetail(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 10)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/categories/"+strconv.FormatInt(category.ID, 10)))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+
+	var body struct {
+		Name              string `json:"name"`
+		PriorityRank      int64  `json:"priority_rank"`
+		MonitorDiscovered string `json:"monitor_discovered"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.Name != "Music" || body.PriorityRank != 10 || body.MonitorDiscovered != "monitored" {
+		t.Errorf("body = %+v, want Name=Music PriorityRank=10 MonitorDiscovered=monitored", body)
+	}
+}
+
+func TestGetCategory_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 10)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/categories/"+strconv.FormatInt(category.ID, 10)))
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 for a non-administrator", recorder.Code)
+	}
+}
+
+// UpdateCategory is todo 4.6's own remaining gap: creation and deletion
+// existed, editing did not.
+func TestUpdateCategory_ChangesNameRankAndProfiles(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 10)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	quality, err := fixture.cache.CreateQualityProfile(t.Context(), "Lossless", "{}", "{}")
+	if err != nil {
+		t.Fatalf("CreateQualityProfile: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	body := `{"name":"Tunes","priority_rank":5,"quality_profile_id":` +
+		strconv.FormatInt(quality.ID, 10) + `,"monitor_discovered":"none"}`
+	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/categories/"+strconv.FormatInt(category.ID, 10), body))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+
+	updated, ok := fixture.cache.Snapshot().Category(category.ID)
+	if !ok {
+		t.Fatalf("category %d not found after update", category.ID)
+	}
+	if updated.Name != "Tunes" || updated.PriorityRank != 5 || updated.MonitorDiscovered != "none" {
+		t.Errorf("updated = %+v, want Name=Tunes PriorityRank=5 MonitorDiscovered=none", updated)
+	}
+	if updated.QualityProfileID == nil || *updated.QualityProfileID != quality.ID {
+		t.Errorf("QualityProfileID = %v, want %d", updated.QualityProfileID, quality.ID)
+	}
+}
+
+func TestUpdateCategory_InvalidInputAnswers400(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 10)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/categories/"+strconv.FormatInt(category.ID, 10),
+		`{"name":"","priority_rank":5}`))
+	if recorder.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 for an empty name, body = %s", recorder.Code, recorder.Body)
+	}
+}
+
+func TestUpdateCategory_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 10)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/categories/"+strconv.FormatInt(category.ID, 10),
+		`{"name":"Tunes","priority_rank":5}`))
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 for a non-administrator", recorder.Code)
+	}
+}
+
+func TestUpdateCategory_MissingCategoryAnswers404(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/categories/999999",
+		`{"name":"Tunes","priority_rank":5}`))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 for a missing category", recorder.Code)
+	}
+}
+
 // DeleteCategory removes an unreferenced category. Every administrator holds
 // an automatic manage grant on every category (settings.CreateUser/
 // CreateCategory keep that in sync both directions), so the admin issuing the

@@ -339,6 +339,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/libraries/{id}/{level}", server.routeListLibraryLevel)
 			secured.Get("/categories", server.ListCategories)
 			secured.Post("/categories", server.CreateCategory)
+			secured.Get("/categories/{id}", server.routeGetCategory)
+			secured.Patch("/categories/{id}", server.routeUpdateCategory)
 			secured.Delete("/categories/{id}", server.routeDeleteCategory)
 			secured.Post("/categories/{id}/rootfolders", server.routeAttachRootFolderToCategory)
 			secured.Delete("/categories/{id}/rootfolders/{rootFolderId}", server.routeDetachRootFolderFromCategory)

@@ -82,6 +82,85 @@ func (c *Cache) CreateCategory(ctx context.Context, mediaType, name string, prio
 		PriorityRank: created.PriorityRank, MonitorDiscovered: created.MonitorDiscovered}, nil
 }
 
+// UpdateCategory renames a category, changes its priority rank, and sets its
+// default quality/language profile and monitor-discovered policy, all as one
+// write. media_type never changes -- it is the category's own identity
+// alongside name (the same UNIQUE(media_type, name) CreateCategory's own
+// duplicate check protects), not a policy field. Todo 4.6's own remaining
+// gap: creation and deletion existed, editing did not (queries.UpdateCategory
+// itself was scaffolded ahead of this caller, the same "ready ahead of the
+// consumer" shape quality/language profiles and placement.Resolve already
+// had, 2026-09-12). One method rather than SetCategoryQualityProfile/
+// SetCategoryLanguageProfile/SetCategoryMonitorDiscovered called separately
+// by the caller (those three still stand alone for a future caller that
+// wants just one of them): an apiserver handler that wrote through each and
+// then read its own (necessarily request-frozen, ADR-27) Access back for the
+// response would see the category as it was when the request began, not
+// what it had just written -- found live verifying this exact endpoint.
+// qualityProfileID/languageProfileID nil clears the default.
+func (c *Cache) UpdateCategory(
+	ctx context.Context, id int64, name string, priorityRank int64,
+	qualityProfileID, languageProfileID *int64, monitorDiscovered string,
+) (Category, error) {
+	snapshot := c.Snapshot()
+	existing, found := snapshot.Category(id)
+	if !found {
+		return Category{}, fmt.Errorf("%w: category %d", ErrNotFound, id)
+	}
+	var problems config.Problems
+	problems = append(problems, validateCategory(existing.MediaType, name, priorityRank)...)
+	problems = append(problems, validateMonitorDiscovered(monitorDiscovered)...)
+	if len(problems) > 0 {
+		return Category{}, problems
+	}
+	if qualityProfileID != nil {
+		if _, found := snapshot.QualityProfile(*qualityProfileID); !found {
+			return Category{}, fmt.Errorf("%w: quality profile %d", ErrNotFound, *qualityProfileID)
+		}
+	}
+	if languageProfileID != nil {
+		if _, found := snapshot.LanguageProfile(*languageProfileID); !found {
+			return Category{}, fmt.Errorf("%w: language profile %d", ErrNotFound, *languageProfileID)
+		}
+	}
+	for _, other := range snapshot.Categories() {
+		if other.ID != id && other.MediaType == existing.MediaType && other.Name == name {
+			return Category{}, config.Problems{{
+				Path: "name", Value: name,
+				Expectation: fmt.Sprintf("a name not already used by another %s category", existing.MediaType),
+			}}
+		}
+	}
+
+	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		if err := queries.UpdateCategory(ctx, settingsdb.UpdateCategoryParams{
+			Name: name, PriorityRank: priorityRank, ID: id,
+		}); err != nil {
+			return err
+		}
+		if err := queries.SetCategoryQualityProfile(ctx, settingsdb.SetCategoryQualityProfileParams{
+			QualityProfileID: int64PtrToNull(qualityProfileID), ID: id,
+		}); err != nil {
+			return err
+		}
+		if err := queries.SetCategoryLanguageProfile(ctx, settingsdb.SetCategoryLanguageProfileParams{
+			LanguageProfileID: int64PtrToNull(languageProfileID), ID: id,
+		}); err != nil {
+			return err
+		}
+		return queries.SetCategoryMonitorDiscovered(ctx,
+			settingsdb.SetCategoryMonitorDiscoveredParams{MonitorDiscovered: monitorDiscovered, ID: id})
+	})
+	if err != nil {
+		return Category{}, fmt.Errorf("settings: update category %d: %w", id, err)
+	}
+	updated, ok := c.Snapshot().Category(id)
+	if !ok {
+		return Category{}, fmt.Errorf("settings: category %d vanished after update", id)
+	}
+	return updated, nil
+}
+
 // SetCategoryMonitorDiscovered sets what a scan does with an album it finds on
 // disk that nobody asked for (section 19.6, todo 4.4) -- chosen per category,
 // not globally, so the live and test libraries can differ.

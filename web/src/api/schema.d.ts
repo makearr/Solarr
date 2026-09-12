@@ -1690,7 +1690,8 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /** A category's full settings-side detail. Administrator only -- richer than LibraryCategory (`GET /categories`), which stays lean for the many navigation callers that never need any of this. */
+        get: operations["getCategory"];
         put?: never;
         post?: never;
         /**
@@ -1700,7 +1701,8 @@ export interface paths {
         delete: operations["deleteCategory"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Rename a category, reprioritise it, or change its default quality/ language profile or monitor-discovered policy. Administrator only. `media_type` never changes -- it is identity, not policy. */
+        patch: operations["updateCategory"];
         trace?: never;
     };
     "/categories/{id}/rootfolders": {
@@ -3039,6 +3041,48 @@ export interface components {
             /** @description From the counter table (section 21.12), never a live COUNT. 0 until the reconciliation sweep has run at least once. */
             works?: number;
             files?: number;
+        };
+        /** @description A category's full settings-side detail (ADR-27's policy boundary), administrator only -- richer than LibraryCategory, which stays lean for the many navigation callers (root folder pickers, *Arr import, the sidebar) that never need any of this. */
+        CategorySettings: {
+            /** Format: int64 */
+            id: number;
+            /** @example music */
+            media_type: string;
+            name: string;
+            /**
+             * Format: int64
+             * @description Lower is more important (ADR-36's composite acquisition priority).
+             */
+            priority_rank: number;
+            /** Format: int64 */
+            quality_profile_id?: number;
+            /** Format: int64 */
+            language_profile_id?: number;
+            /**
+             * @description What a scan does with an album it finds on disk that nobody asked for (section 19.6, todo 4.4).
+             * @enum {string}
+             */
+            monitor_discovered: "monitored" | "unmonitored" | "none";
+        };
+        CategoryWrite: {
+            name: string;
+            /** Format: int64 */
+            priority_rank: number;
+            /**
+             * Format: int64
+             * @description Absent or null clears it -- no default profile.
+             */
+            quality_profile_id?: number;
+            /**
+             * Format: int64
+             * @description Absent or null clears it -- no default profile.
+             */
+            language_profile_id?: number;
+            /**
+             * @default monitored
+             * @enum {string}
+             */
+            monitor_discovered: "monitored" | "unmonitored" | "none";
         };
         /** @description A category as a navigation root (ADR-54): its declared entity levels replace the old flat works/files pair -- see LibraryLevel. */
         Library: {
@@ -5926,6 +5970,31 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
+    getCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The category. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategorySettings"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
     deleteCategory: {
         parameters: {
             query?: never;
@@ -5949,6 +6018,36 @@ export interface operations {
             404: components["responses"]["Problem"];
             /** @description Still referenced; the detail names what by. */
             409: components["responses"]["Problem"];
+        };
+    };
+    updateCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategorySettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     attachRootFolderToCategory: {

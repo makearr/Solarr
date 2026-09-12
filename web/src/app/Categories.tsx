@@ -6,18 +6,26 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
 type Category = components["schemas"]["LibraryCategory"];
+type CategorySettings = components["schemas"]["CategorySettings"];
 type MediaType = components["schemas"]["MediaType"];
+type MonitorDiscovered = components["schemas"]["CategorySettings"]["monitor_discovered"];
 
 export const MEDIA_TYPES: readonly MediaType[] = [
   "music", "tv", "movie", "audiobook", "book", "adult", "comic", "rom",
   "podcast", "news", "youtube",
 ];
 
+const MONITOR_DISCOVERED_OPTIONS: readonly MonitorDiscovered[] = ["monitored", "unmonitored", "none"];
+
 /** The policy boundary for naming, profiles and access (ADR-27). Section 21.14's
  *  "no POST /categories at all" gap: standing one up used to need a hand-written
- *  settings/import YAML document. */
+ *  settings/import YAML document. Editing (todo 4.6's own remaining gap, landed
+ *  2026-09-12) reads/writes CategorySettings, a richer administrator-only shape
+ *  than the LibraryCategory this list itself renders from -- see GetCategory's
+ *  own doc comment for why the two stay separate. */
 export function Categories() {
   const queryClient = useQueryClient();
+  const [editingId, setEditingId] = useState<number | null>(null);
   const categories = useQuery({
     queryKey: ["categories"],
     queryFn: async () => {
@@ -46,15 +54,29 @@ export function Categories() {
       <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Categories</h2>
 
       {categories.data && categories.data.length > 0 ? (
-        <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
-          {categories.data.map((category) => (
-            <Row
-              key={category.id}
-              category={category}
-              onRemove={() => remove.mutate(category.id)}
-              busy={remove.isPending}
-            />
-          ))}
+        <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
+          {categories.data.map((category) =>
+            editingId === category.id ? (
+              <li key={category.id} className="p-3">
+                <EditCategoryForm
+                  categoryId={category.id}
+                  onDone={() => {
+                    setEditingId(null);
+                    invalidate();
+                  }}
+                  onCancel={() => setEditingId(null)}
+                />
+              </li>
+            ) : (
+              <Row
+                key={category.id}
+                category={category}
+                onEdit={() => setEditingId(category.id)}
+                onRemove={() => remove.mutate(category.id)}
+                busy={remove.isPending}
+              />
+            ),
+          )}
         </ul>
       ) : (
         <p className="rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">
@@ -76,10 +98,12 @@ export function Categories() {
 
 function Row({
   category,
+  onEdit,
   onRemove,
   busy,
 }: {
   category: Category;
+  onEdit: () => void;
   onRemove: () => void;
   busy: boolean;
 }) {
@@ -95,6 +119,15 @@ function Row({
       )}
       <button
         type="button"
+        onClick={onEdit}
+        className="rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted
+                   hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2
+                   focus-visible:outline-accent"
+      >
+        Edit
+      </button>
+      <button
+        type="button"
         aria-label={`Remove ${category.name}`}
         onClick={onRemove}
         disabled={busy}
@@ -105,6 +138,199 @@ function Row({
         <Trash2 aria-hidden className="size-3.5" />
       </button>
     </li>
+  );
+}
+
+// Lazy-loaded on "Edit": the list itself renders from the lean LibraryCategory,
+// which carries none of priority_rank/the two profile ids/monitor_discovered.
+function EditCategoryForm({
+  categoryId,
+  onDone,
+  onCancel,
+}: {
+  categoryId: number;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const detail = useQuery({
+    queryKey: ["category", categoryId],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/categories/{id}", { params: { path: { id: categoryId } } });
+      if (error) throw error;
+      return data;
+    },
+  });
+  const qualityProfiles = useQuery({
+    queryKey: ["qualityProfiles"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/qualityprofiles");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const languageProfiles = useQuery({
+    queryKey: ["languageProfiles"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/languageprofiles");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  if (detail.isLoading) return <p className="text-xs text-ink-muted">Loading…</p>;
+  if (detail.error !== null || !detail.data) {
+    return <p className="text-xs text-danger">This category could not be read.</p>;
+  }
+
+  return (
+    <EditCategoryFields
+      categoryId={categoryId}
+      initial={detail.data}
+      qualityProfiles={qualityProfiles.data ?? []}
+      languageProfiles={languageProfiles.data ?? []}
+      onDone={onDone}
+      onCancel={onCancel}
+    />
+  );
+}
+
+function EditCategoryFields({
+  categoryId,
+  initial,
+  qualityProfiles,
+  languageProfiles,
+  onDone,
+  onCancel,
+}: {
+  categoryId: number;
+  initial: CategorySettings;
+  qualityProfiles: components["schemas"]["QualityProfile"][];
+  languageProfiles: components["schemas"]["LanguageProfile"][];
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(initial.name);
+  const [priorityRank, setPriorityRank] = useState(initial.priority_rank);
+  const [qualityProfileId, setQualityProfileId] = useState(initial.quality_profile_id ?? 0);
+  const [languageProfileId, setLanguageProfileId] = useState(initial.language_profile_id ?? 0);
+  const [monitorDiscovered, setMonitorDiscovered] = useState<MonitorDiscovered>(initial.monitor_discovered);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.PATCH("/categories/{id}", {
+        params: { path: { id: categoryId } },
+        body: {
+          name,
+          priority_rank: priorityRank,
+          quality_profile_id: qualityProfileId || undefined,
+          language_profile_id: languageProfileId || undefined,
+          monitor_discovered: monitorDiscovered,
+        },
+      });
+      if (error) throw error;
+    },
+    onSuccess: onDone,
+  });
+
+  return (
+    <form
+      className="flex flex-col gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        save.mutate();
+      }}
+    >
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          Name
+          <input
+            className={inputStyle}
+            value={name}
+            autoComplete="off"
+            autoFocus
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          Priority rank
+          <input
+            className={inputStyle}
+            type="number"
+            min={0}
+            value={priorityRank}
+            onChange={(event) => setPriorityRank(Number(event.target.value))}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          Quality profile
+          <select
+            className={inputStyle}
+            value={qualityProfileId}
+            onChange={(event) => setQualityProfileId(Number(event.target.value))}
+          >
+            <option value={0}>None</option>
+            {qualityProfiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          Language profile
+          <select
+            className={inputStyle}
+            value={languageProfileId}
+            onChange={(event) => setLanguageProfileId(Number(event.target.value))}
+          >
+            <option value={0}>None</option>
+            {languageProfiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          Monitor discovered
+          <select
+            className={inputStyle}
+            value={monitorDiscovered}
+            onChange={(event) => setMonitorDiscovered(event.target.value as MonitorDiscovered)}
+          >
+            {MONITOR_DISCOVERED_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {save.isError && (
+        <p className="text-xs text-danger">
+          {(save.error as { detail?: string }).detail ?? "That category could not be saved."}
+        </p>
+      )}
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={!name.trim() || save.isPending}
+          className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
+                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          {save.isPending ? "Saving…" : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted
+                     hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2
+                     focus-visible:outline-accent"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 
