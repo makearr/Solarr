@@ -3619,6 +3619,14 @@ components:
         affinity_key:
           type: string
           description: The top-level directory this file was grouped and moved with.
+        warnings:
+          type: array
+          items: { type: string }
+          description: >-
+            Non-fatal notices about dest_rel_path -- today, only naming's
+            own total-path-length recommendation. Always present but only
+            ever populated for a rename plan; a drain never renames a file,
+            so this is always empty there.
 
     DrainRefusal:
       type: object

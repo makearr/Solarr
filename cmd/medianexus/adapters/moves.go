@@ -84,11 +84,15 @@ type Rename struct {
 }
 
 func (a Rename) StartRename(ctx context.Context, rootFolderID int64, preview bool) (apiserver.DrainPlanResult, error) {
-	plan, jobID, err := music.RenameStart(ctx, a.Config, rootFolderID, preview)
+	plan, jobID, warnings, err := music.RenameStart(ctx, a.Config, rootFolderID, preview)
 	if err != nil {
 		return apiserver.DrainPlanResult{}, err
 	}
-	return movePlanResult(plan, jobID != 0, jobID), nil
+	result := movePlanResult(plan, jobID != 0, jobID)
+	for i, move := range result.Moves {
+		result.Moves[i].Warnings = warnings[move.MediaObjectID]
+	}
+	return result, nil
 }
 
 // MoveJobs satisfies apiserver.MoveJobLister over library.MoveJobs.

@@ -236,14 +236,21 @@ function DrainPreview({
             </span>
             <ul className="flex flex-col gap-0.5 pl-2 text-[0.6875rem] text-ink-muted">
               {group.moves.map((move) => (
-                <li key={move.media_object_id} className="flex items-center gap-1.5 truncate">
-                  {move.source_rel_path && (
-                    <>
-                      <span className="truncate line-through opacity-60">{move.source_rel_path}</span>
-                      <span>→</span>
-                    </>
-                  )}
-                  <span className="truncate text-ink">{move.dest_rel_path}</span>
+                <li key={move.media_object_id} className="flex flex-col gap-0.5">
+                  <span className="flex items-center gap-1.5 truncate">
+                    {move.source_rel_path && (
+                      <>
+                        <span className="truncate line-through opacity-60">{move.source_rel_path}</span>
+                        <span>→</span>
+                      </>
+                    )}
+                    <span className="truncate text-ink">{move.dest_rel_path}</span>
+                  </span>
+                  {(move.warnings ?? []).map((warning) => (
+                    <span key={warning} className="pl-2 text-warn">
+                      ⚠ {warning}
+                    </span>
+                  ))}
                 </li>
               ))}
             </ul>

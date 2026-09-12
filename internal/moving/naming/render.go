@@ -131,6 +131,16 @@ func substituteSeparator(value string, separator rune) string {
 	}, value)
 }
 
+// MaxRecommendedRelPathBytes is the per-component limit's own total-path
+// counterpart (section 11.8's checklist: "the per-component limit is
+// enforced" already, the combined length was not). RenderPath sees only the
+// relative path, never the root folder it will be joined under, so this
+// leaves headroom for a root's own path length within Windows' conventional
+// 260-byte MAX_PATH rather than checking the true final absolute path --
+// the part the naming interpreter actually controls, not a guarantee about
+// the placed file's own final path.
+const MaxRecommendedRelPathBytes = 240
+
 // RenderPath renders a folder line and a file line into one sanitised,
 // slash-joined relative path -- the folder line's own literal "/"
 // characters become real path components, each passed through
@@ -154,7 +164,16 @@ func RenderPath(folder, file []Segment, ctx Context, separator rune, extension s
 	if len(components) == 0 {
 		return "", warnings, fmt.Errorf("naming: template rendered to an empty path for %v", ctx)
 	}
-	return strings.Join(components, "/"), warnings, nil
+	rendered := strings.Join(components, "/")
+	if len(rendered) > MaxRecommendedRelPathBytes {
+		warnings = append(warnings, Warning{
+			Message: fmt.Sprintf(
+				"rendered path is %d bytes, over the %d-byte recommended limit -- combined with a root "+
+					"folder path, this may exceed common filesystem/SMB limits on some platforms",
+				len(rendered), MaxRecommendedRelPathBytes),
+		})
+	}
+	return rendered, warnings, nil
 }
 
 func splitAndSanitise(rendered string) []string {

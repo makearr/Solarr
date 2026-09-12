@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
@@ -318,6 +319,47 @@ func TestCommitUnit_PlacesFilesRegistersAndDiscoversWithoutTouchingTheSource(t *
 	}
 	if len(items) != 1 || items[0].SatisfactionKind != "SET" || items[0].CategoryID != commitCategoryID {
 		t.Errorf("desired items = %+v, want one SET item in category %d", items, commitCategoryID)
+	}
+}
+
+// TestCommitUnit_RecordsPathWarningsForALongRenderedPath is the total-path-
+// limit warning threaded all the way from naming.RenderPath through
+// importRelPath to Placed.PathWarnings, keyed by the MediaObjectID
+// RegisterBatch assigns -- the one CommitUnit test that exercises this,
+// since every other fixture here uses ordinarily-sized names.
+func TestCommitUnit_RecordsPathWarningsForALongRenderedPath(t *testing.T) {
+	committer, _, fsys := newCommitter(t, true)
+
+	track := []byte("bytes")
+	longAlbum := strings.Repeat("A Very Long Album Title Indeed ", 10)
+	writeCommitSourceFile(t, fsys, "Katupoken/"+longAlbum+"/01 Sesoge.flac", track)
+
+	unit := testUnit("Katupoken/"+longAlbum, []inspect.File{
+		{RelPath: "Katupoken/" + longAlbum + "/01 Sesoge.flac", SizeBytes: int64(len(track))},
+	})
+	probes := []mediatool.Probe{{
+		Path: path.Join(commitSourceRoot, "Katupoken/"+longAlbum+"/01 Sesoge.flac"),
+		Tags: mediatool.Tags{
+			"album": longAlbum, "albumartist": "Katupoken", "date": "1997-06-16",
+			"tracknumber": "1", "title": "Sesoge",
+		},
+	}}
+	tags := music.UnitTagSourceFor(commitSourceRoot, probes)
+	best := model.Identification{
+		Strategy: "embedded-tag", Confidence: 0.95,
+		ExternalID: &model.ExternalID{Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 0.95},
+	}
+
+	placed, err := committer.CommitUnit(t.Context(), commitSourceRoot, unit, best, tags, commitCategoryID)
+	if err != nil {
+		t.Fatalf("CommitUnit: %v", err)
+	}
+	if len(placed.MediaObjectIDs) != 1 {
+		t.Fatalf("len(MediaObjectIDs) = %d, want 1", len(placed.MediaObjectIDs))
+	}
+	warnings := placed.PathWarnings[placed.MediaObjectIDs[0]]
+	if len(warnings) != 1 {
+		t.Fatalf("PathWarnings[%d] = %v, want exactly one path-length warning", placed.MediaObjectIDs[0], warnings)
 	}
 }
 

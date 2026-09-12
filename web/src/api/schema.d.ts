@@ -2277,6 +2277,8 @@ export interface components {
             size_bytes: number;
             /** @description The top-level directory this file was grouped and moved with. */
             affinity_key: string;
+            /** @description Non-fatal notices about dest_rel_path -- today, only naming's own total-path-length recommendation. Always present but only ever populated for a rename plan; a drain never renames a file, so this is always empty there. */
+            warnings?: string[];
         };
         DrainRefusal: {
             /** Format: int64 */

@@ -116,6 +116,12 @@ type Placed struct {
 	// commit already owns -- a revert must undo only its own path, never a path
 	// it merely shares an object with (4.22's own linking audit).
 	LibraryPathIDs []int64
+	// PathWarnings is naming.RenderPath's own non-fatal notices (today: only
+	// the total-length recommendation), keyed by MediaObjectID -- COMMIT runs
+	// inline with no separate preview step to block on, so the caller's own
+	// choice is what to do with these (todo 4.9: logged, not surfaced in the
+	// UI, since nothing about import_unit persists a per-file warning today).
+	PathWarnings map[int64][]string
 }
 
 // ErrNoPlacement means placement.Resolve deferred: no root folder in
@@ -233,16 +239,18 @@ func (c Committer) CommitUnit(
 
 	files := make([]library.PhysicalFile, len(unit.Media))
 	trackFiles := make([]TrackFile, len(unit.Media))
+	pathWarnings := make([][]string, len(unit.Media))
 	for index, media := range unit.Media {
 		fileTags, err := tags.TagsFor(ctx, model.FileRef{RelPath: media.RelPath})
 		if err != nil {
 			return Placed{}, fmt.Errorf("music: commit unit %q: %w", unit.Directory, err)
 		}
 		track := ReadTrackFile(0, fileTags)
-		destRelPath, err := importRelPath(work, artist, year, track, path.Ext(media.RelPath))
+		destRelPath, warnings, err := importRelPath(work, artist, year, track, path.Ext(media.RelPath))
 		if err != nil {
 			return Placed{}, fmt.Errorf("music: commit unit %q: %w", unit.Directory, err)
 		}
+		pathWarnings[index] = warnings
 
 		sourceAbs := path.Join(sourceRoot, media.RelPath)
 		destAbs := path.Join(destRoot.Path, destRelPath)
@@ -261,10 +269,17 @@ func (c Committer) CommitUnit(
 	}
 	mediaObjectIDs := make([]int64, len(registered))
 	libraryPathIDs := make([]int64, len(registered))
+	var pathWarningsByObject map[int64][]string
 	for index, file := range registered {
 		mediaObjectIDs[index] = file.MediaObjectID
 		libraryPathIDs[index] = file.LibraryPathID
 		trackFiles[index].MediaObjectID = file.MediaObjectID
+		if len(pathWarnings[index]) > 0 {
+			if pathWarningsByObject == nil {
+				pathWarningsByObject = make(map[int64][]string)
+			}
+			pathWarningsByObject[file.MediaObjectID] = pathWarnings[index]
+		}
 	}
 
 	link := library.WorkLink{
@@ -288,6 +303,7 @@ func (c Committer) CommitUnit(
 		WorkID: resolution.WorkID, WorkCreated: resolution.WorkCreated,
 		EditionID: resolution.EditionID, EditionCreated: resolution.EditionCreated,
 		MediaObjectIDs: mediaObjectIDs, LibraryPathIDs: libraryPathIDs,
+		PathWarnings: pathWarningsByObject,
 	}, nil
 }
 
@@ -387,7 +403,7 @@ func unitEditionLink(tags mediatool.Tags) *library.EditionLink {
 // show a diff -- expected, not a bug, the same way any scan-discovered
 // work's does today. No edition/Format token: a freshly resolved edition is
 // the "unknown" placeholder (unitEditionLink), which carries no format.
-func importRelPath(work library.WorkIdentity, artist string, year *int64, track TrackFile, extension string) (string, error) {
+func importRelPath(work library.WorkIdentity, artist string, year *int64, track TrackFile, extension string) (string, []string, error) {
 	ctx := naming.Context{TokenAlbumTitle: work.CanonicalTitle}
 	if artist != "" {
 		ctx[TokenArtistName] = artist
@@ -401,9 +417,13 @@ func importRelPath(work library.WorkIdentity, artist string, year *int64, track 
 	ctx[TokenDisc] = strconv.Itoa(track.Disc)
 	ctx[TokenTrack] = strconv.Itoa(track.Track)
 
-	rendered, _, err := naming.RenderPath(compiledDefaultFolder, compiledDefaultFile, ctx, naming.DefaultSeparator, extension)
+	rendered, warnings, err := naming.RenderPath(compiledDefaultFolder, compiledDefaultFile, ctx, naming.DefaultSeparator, extension)
 	if err != nil {
-		return "", fmt.Errorf("render path: %w", err)
+		return "", nil, fmt.Errorf("render path: %w", err)
 	}
-	return rendered, nil
+	var messages []string
+	for _, w := range warnings {
+		messages = append(messages, w.Message)
+	}
+	return rendered, messages, nil
 }

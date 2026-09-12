@@ -65,6 +65,11 @@ type DrainMoveRow struct {
 	DestRelPath      string
 	SizeBytes        int64
 	AffinityKey      string
+	// Warnings are non-fatal notices about DestRelPath -- today, only
+	// naming's own total-path-length recommendation. Only ever populated
+	// for a rename plan; a drain never renames a file, so this stays empty
+	// there.
+	Warnings []string
 }
 
 // DrainRefusalRow is one file (or every file, for a whole-batch refusal) a
@@ -278,6 +283,13 @@ func drainPlanView(result DrainPlanResult) gen.DrainPlan {
 		}
 		if m.SourceRelPath != "" {
 			view.Moves[i].SourceRelPath = &m.SourceRelPath
+		}
+		// warnings is optional (omitempty): omitted entirely when there are
+		// none, rather than an empty array -- unlike GET /network's own
+		// proxy_bypass/allow_cidrs, which are required and so must never
+		// serialise as null.
+		if len(m.Warnings) > 0 {
+			view.Moves[i].Warnings = &m.Warnings
 		}
 	}
 	for i, refusal := range result.Refused {
