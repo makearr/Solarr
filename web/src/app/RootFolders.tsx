@@ -306,9 +306,15 @@ function RootFolderCard({
               />
             )}
           </div>
-          <span className="text-xs text-ink-muted">
-            {formatBytes(used)} used of {formatBytes(total)} ({formatBytes(free)} free)
-            {root.capacity_checked_at && ` · measured ${new Date(root.capacity_checked_at).toLocaleString()}`}
+          <span
+            className="text-xs text-ink-muted"
+            title={
+              root.capacity_checked_at
+                ? `${formatBytes(free)} free · measured ${new Date(root.capacity_checked_at).toLocaleString()}`
+                : `${formatBytes(free)} free`
+            }
+          >
+            {formatBytes(used)} used of {formatBytes(total)}
           </span>
         </div>
       ) : (

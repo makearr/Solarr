@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { discCountOf, formatTrackNumber } from "@/lib/trackNumber";
+
 import { CoverArt } from "./CoverArt";
 
 type PersonWork = components["schemas"]["PersonWork"];
@@ -454,7 +456,9 @@ function AlbumRow({ work }: { work: PersonWork }) {
             <ul className="flex flex-col gap-1">
               {tracks.data.parts.map((part) => (
                 <li key={part.id} className="flex items-center gap-3 text-xs">
-                  <span className="w-10 shrink-0 font-mono text-ink-muted">{part.sort_key}</span>
+                  <span className="w-10 shrink-0 text-right font-mono tabular-nums text-ink-muted">
+                    {formatTrackNumber(part.media_ref, part.sort_key, discCountOf(tracks.data.parts))}
+                  </span>
                   <span className="min-w-0 flex-1 truncate">{part.title ?? part.media_ref}</span>
                   {part.runtime_ms != null && (
                     <span className="shrink-0 font-mono text-ink-muted">{formatDuration(part.runtime_ms)}</span>

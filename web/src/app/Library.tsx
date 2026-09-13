@@ -1,18 +1,21 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 
 import { api } from "@/api/client";
-import { ListGrid } from "@/list/ListGrid";
+import { PosterGrid } from "@/list/PosterGrid";
 import { ListTable, type Column } from "@/list/ListTable";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView, type ViewState } from "@/list/useRouteView";
+import { useGridMetrics } from "@/list/useGridMetrics";
 import { useNarrow } from "@/list/useNarrow";
 import { useRecordLastLevel } from "@/list/useRecordLastLevel";
 import type { SelectionRequest } from "@/list/selection";
 import type { components } from "@/api/schema";
 import { CoverArt } from "./CoverArt";
+import { Poster } from "./Poster";
 
 type Work = components["schemas"]["Work"];
 
@@ -48,8 +51,22 @@ type WorkSort = "title" | "year" | "added";
 const CARD_HEIGHT = 68;
 // A 32px thumbnail plus padding, for a table row.
 const TABLE_ROW_HEIGHT = 44;
-// A 48px thumbnail beside two text lines, for a grid card.
-const GRID_CARD_HEIGHT = 64;
+// The poster wall's own geometry, matching LibraryLevelList's.
+const POSTER_MIN_WIDTH = 168;
+const POSTER_GAP = 16;
+const POSTER_PADDING = 16;
+const POSTER_LABEL_HEIGHT = 46;
+const VIEW_STORAGE_KEY = "medianexus.library.view";
+
+/** Albums open as a poster wall (Lidarr's own album view, 2026-09-13); the
+ *  table is a click away and remembered once chosen. */
+function loadView(): "table" | "poster" {
+  try {
+    return localStorage.getItem(VIEW_STORAGE_KEY) === "table" ? "table" : "poster";
+  } catch {
+    return "poster";
+  }
+}
 
 // Cover and title are always shown -- they are how a row is identified at
 // all. The rest is what section 21's "configurable columns" picks among.
@@ -157,17 +174,25 @@ export function Library() {
     }),
     [baseView, categoryId],
   );
-  const [view, setView] = useState<"table" | "grid">("table");
+  const [view, setView] = useState<"table" | "poster">(loadView);
+  const frameRef = useRef<HTMLDivElement>(null);
   const [visibleColumns, setVisibleColumns] = useState<OptionalColumn[]>(loadVisibleColumns);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [confirm, setConfirm] = useState<{ monitored: boolean; count: number } | null>(null);
   const queryClient = useQueryClient();
 
   const narrow = useNarrow();
+  const metrics = useGridMetrics(frameRef, POSTER_MIN_WIDTH, POSTER_GAP, POSTER_PADDING);
+  const isPoster = view === "poster";
   const list = useLibraryList<Work>(
     {
       name: "works",
-      rowHeight: narrow ? CARD_HEIGHT : view === "grid" ? GRID_CARD_HEIGHT : TABLE_ROW_HEIGHT,
+      rowHeight: isPoster
+        ? metrics.cellWidth + POSTER_LABEL_HEIGHT + POSTER_GAP
+        : narrow
+          ? CARD_HEIGHT
+          : TABLE_ROW_HEIGHT,
+      itemsPerRow: isPoster ? metrics.columns : 1,
       idOf: (work) => work.id,
       fetchPage: async ({ cursor, query, signal }) => {
         const sort = query.sort !== null ? SORT_KEYS[query.sort as OptionalColumn | "title"] : undefined;
@@ -239,9 +264,9 @@ export function Library() {
   });
 
   return (
-    <div className="flex h-full flex-col">
+    <div ref={frameRef} className="flex h-full flex-col">
       <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
-        <h2 className="text-sm font-medium">Library</h2>
+        <h2 className="text-sm font-medium">Albums</h2>
 
         <div className="ml-auto flex items-center gap-2 text-xs">
           <button
@@ -326,11 +351,30 @@ export function Library() {
           </div>
           <button
             type="button"
-            onClick={() => setView(view === "table" ? "grid" : "table")}
+            onClick={() => {
+              const next = view === "table" ? "poster" : "table";
+              setView(next);
+              try {
+                localStorage.setItem(VIEW_STORAGE_KEY, next);
+              } catch {
+                // A per-browser convenience; losing it costs nothing worth failing over.
+              }
+            }}
             className={quietButton}
           >
-            {view === "table" ? "Grid" : "Table"}
+            {view === "table" ? "Posters" : "Table"}
           </button>
+          {categoryId && (
+            <Link
+              to="/library/$categoryId/discover"
+              params={{ categoryId }}
+              className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-accent-ink
+                         focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              <Plus aria-hidden className="size-3.5" />
+              Add new
+            </Link>
+          )}
         </div>
       </div>
 
@@ -371,32 +415,17 @@ export function Library() {
           (view === "table" ? (
             <ListTable list={list} columns={columns} idOf={(work) => work.id} />
           ) : (
-            <ListGrid
+            <PosterGrid
               list={list}
               idOf={(work) => work.id}
-              renderCard={(work) => (
-                <span className="flex w-full items-center gap-3">
-                  <CoverArt
-                    workId={work.id}
-                    title={work.title}
-                    size="thumb"
-                    className="h-12 w-12 shrink-0 rounded object-cover"
-                  />
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <Link
-                      to="/works/$id"
-                      params={{ id: String(work.id) }}
-                      onClick={(event) => event.stopPropagation()}
-                      className="truncate font-medium hover:underline"
-                    >
-                      {work.title}
-                    </Link>
-                    <span className="text-ink-muted">
-                      {work.artist ?? work.media_type}
-                      {work.year ? ` · ${work.year}` : ""}
-                    </span>
-                  </span>
-                </span>
+              renderPoster={(work) => (
+                <Poster
+                  subject="works"
+                  imageId={work.id}
+                  title={work.title}
+                  subtitle={[work.artist ?? work.media_type, work.year].filter(Boolean).join(" · ")}
+                  link={{ to: "/works/$id", params: { id: String(work.id) } }}
+                />
               )}
             />
           ))}

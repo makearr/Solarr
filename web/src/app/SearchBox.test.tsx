@@ -7,6 +7,33 @@ import { SearchBox } from "./SearchBox";
 const get = vi.fn();
 vi.mock("@/api/client", () => ({
   api: { GET: (...args: unknown[]) => get(...args) },
+  API_PREFIX: "/api/v1",
+}));
+
+// A result row is a real router Link now; the box is mounted here without a
+// RouterProvider, so the link renders as a plain anchor with the path the
+// router would have built.
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    to,
+    params,
+    children,
+    ...rest
+  }: {
+    to: string;
+    params?: Record<string, string>;
+    children: React.ReactNode;
+  }) => {
+    const href = Object.entries(params ?? {}).reduce(
+      (path, [key, value]) => path.replace(`$${key}`, value),
+      to,
+    );
+    return (
+      <a href={href} {...rest}>
+        {children}
+      </a>
+    );
+  },
 }));
 
 function mount() {
@@ -110,8 +137,34 @@ test("blur closes the dropdown", async () => {
   fireEvent.change(input, { target: { value: "ok" } });
   await screen.findByText("KI Pecezinu");
 
+  // The close is deferred so a click on a result lands before the list
+  // unmounts -- still open on the tick after blur, gone shortly after.
   fireEvent.blur(input);
-  expect(screen.queryByText("KI Pecezinu")).toBeNull();
+  expect(screen.queryByText("KI Pecezinu")).not.toBeNull();
+  await waitFor(() => expect(screen.queryByText("KI Pecezinu")).toBeNull());
+});
+
+test("a result links to its own work", async () => {
+  get.mockResolvedValue({
+    data: [
+      {
+        work: {
+          id: 42, media_type: "music", title: "KI Pecezinu", sort_title: "ki pecezinu",
+          year: 1997, added_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+        },
+        score: 0.1,
+      },
+    ],
+    error: undefined,
+  });
+  mount();
+  const input = screen.getByPlaceholderText("Search the library\u2026");
+
+  fireEvent.focus(input);
+  fireEvent.change(input, { target: { value: "ok" } });
+  await screen.findByText("KI Pecezinu");
+
+  expect(screen.getByRole("link").getAttribute("href")).toBe("/works/42");
 });
 
 describe("no matches", () => {

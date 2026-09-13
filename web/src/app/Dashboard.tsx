@@ -1,20 +1,26 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Library as LibraryIcon } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { api } from "@/api/client";
+import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
 import type { components } from "@/api/schema";
+
+import { Poster } from "./Poster";
+import { SearchBox } from "./SearchBox";
 import { defaultLevelKey } from "./Sidebar";
 
 type RootFolder = components["schemas"]["RootFolder"];
 type LibraryEntry = components["schemas"]["Library"];
 
-/** The landing page -- the *Arr apps' own default view, asked for
- *  2026-09-11: libraries first, not a cross-library stats screen. Configured
- *  storage and work in flight stay below, because "is this thing set up and
- *  is it doing anything" still matters -- just second to "what's in it".
- *  One request each: section 21.12 wants these figures precomputed, not
- *  aggregated live. */
+// Seerr's own landing shape, asked for 2026-09-13: find something or add
+// something, then what has just arrived. Ten is what fits one poster row on a
+// wide screen without a second query.
+const RECENT_LIMIT = 10;
+
+/** The landing page. Search and Add lead, because those are the two things
+ *  anyone opens this for; recently added follows with real cover art; the
+ *  "is it set up and is it doing anything" panels stay below. */
 export function Dashboard() {
   const summary = useQuery({
     queryKey: ["dashboard"],
@@ -32,19 +38,70 @@ export function Dashboard() {
       return data;
     },
   });
+  const recent = useQuery({
+    queryKey: ["works", "recent"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/works", {
+        params: { query: { sort: "added", dir: "desc", limit: RECENT_LIMIT } },
+      });
+      if (error) throw error;
+      return data;
+    },
+  });
 
-  if (summary.isLoading) return <Placeholder>Loading…</Placeholder>;
-  if (summary.error !== null || !summary.data) {
-    return <Placeholder>The dashboard could not be read.</Placeholder>;
-  }
-
-  const { root_folders: roots, jobs, library } = summary.data;
-  const offline = roots.filter((root) => !root.online);
-  const unwritable = roots.filter((root) => root.writable === false);
+  const firstLibrary = libraries.data?.[0];
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
+      <div className="mx-auto flex max-w-5xl flex-col gap-8 p-6">
+        <section className="flex flex-col gap-3">
+          <SearchBox variant="hero" />
+          <div className="flex flex-wrap gap-2">
+            {firstLibrary && (
+              <Link
+                to="/library/$categoryId/discover"
+                params={{ categoryId: String(firstLibrary.id) }}
+                className="flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 text-sm text-accent-ink
+                           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                <Plus aria-hidden className="size-4" />
+                Add to library
+              </Link>
+            )}
+            <Link
+              to="/libraries"
+              className="rounded-md border border-border-subtle px-4 py-2 text-sm text-ink-muted
+                         hover:border-accent hover:text-ink focus-visible:outline-2
+                         focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              Browse libraries
+            </Link>
+          </div>
+        </section>
+
+        <Section title="Recently added">
+          {recent.isLoading && <Note>Loading…</Note>}
+          {recent.error != null && <Note>Recently added could not be read.</Note>}
+          {recent.data && recent.data.items.length === 0 && (
+            <Note>Nothing yet. Imported releases show up here as they land.</Note>
+          )}
+          {recent.data && recent.data.items.length > 0 && (
+            <ul className="grid grid-cols-3 gap-4 sm:grid-cols-5">
+              {recent.data.items.map((work) => (
+                <li key={work.id}>
+                  <Poster
+                    subject="works"
+                    imageId={work.id}
+                    title={work.title}
+                    subtitle={[work.artist ?? work.media_type, work.year].filter(Boolean).join(" · ")}
+                    link={{ to: "/works/$id", params: { id: String(work.id) } }}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+
         <Section title="Libraries">
           {libraries.data && libraries.data.length > 0 ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -55,91 +112,118 @@ export function Dashboard() {
           ) : (
             <Note>
               No library yet.{" "}
-              <Link to="/storage/roots" className="text-accent underline underline-offset-2">
-                Add a root folder
+              <Link to="/libraries" className="text-accent underline underline-offset-2">
+                Add one
               </Link>{" "}
-              and a category to create one.
+              to get started.
             </Note>
           )}
         </Section>
 
-        <Section title="Activity">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            <Tile label="Queued" value={jobs.pending} to="/activity" />
-            <Tile label="Running" value={jobs.running} to="/activity" tone="accent" />
-            <Tile label="Failed" value={jobs.failed} to="/activity" tone="danger" />
-            <Tile label="Done" value={jobs.succeeded} to="/activity" />
-            <Tile label="Cancelled" value={jobs.cancelled} to="/activity" />
-          </div>
-        </Section>
-
-        {library.probed + library.unprobed > 0 && (
-          <Section title="Probe coverage">
-            <Link
-              to="/library/health"
-              className="flex items-center gap-3 rounded-lg border border-border-subtle
-                         bg-surface px-3 py-2.5 text-sm hover:border-accent
-                         focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
-              <span className="font-mono tabular-nums">
-                {library.probed.toLocaleString()} of{" "}
-                {(library.probed + library.unprobed).toLocaleString()} files probed
-              </span>
-              {library.unprobed > 0 && (
-                <span className="ml-auto shrink-0 text-xs text-ink-muted">
-                  {library.unprobed.toLocaleString()} still unmeasured — view library health →
-                </span>
-              )}
-            </Link>
-          </Section>
+        {summary.isLoading && <Note>Loading…</Note>}
+        {(summary.error !== null || !summary.data) && !summary.isLoading && (
+          <Note>The status panels could not be read.</Note>
         )}
-
-        <Section title={`Storage (${roots.length})`}>
-          {roots.length === 0 ? (
-            <Note>
-              No library root is configured. <Link to="/settings" className="text-accent underline
-                underline-offset-2">Add one in settings</Link> before importing anything.
-            </Note>
-          ) : (
-            <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle
-                           bg-surface">
-              {roots.map((root) => (
-                <Root key={root.id} root={root} />
-              ))}
-            </ul>
-          )}
-          {(offline.length > 0 || unwritable.length > 0) && (
-            <Note tone="warn">
-              {offline.length > 0 && `${offline.length} root offline. `}
-              {unwritable.length > 0 &&
-                `${unwritable.length} root not writable by this process — reported, never corrected.`}
-            </Note>
-          )}
-        </Section>
+        {summary.data && <StatusPanels summary={summary.data} />}
       </div>
     </div>
+  );
+}
+
+function StatusPanels({ summary }: { summary: components["schemas"]["DashboardSummary"] }) {
+  const { root_folders: roots, jobs, library } = summary;
+  const offline = roots.filter((root) => !root.online);
+  const unwritable = roots.filter((root) => root.writable === false);
+
+  return (
+    <>
+      <Section title="Activity">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <Tile label="Queued" value={jobs.pending} to="/activity" />
+          <Tile label="Running" value={jobs.running} to="/activity" tone="accent" />
+          <Tile label="Failed" value={jobs.failed} to="/activity" tone="danger" />
+          <Tile label="Done" value={jobs.succeeded} to="/activity" />
+          <Tile label="Cancelled" value={jobs.cancelled} to="/activity" />
+        </div>
+      </Section>
+
+      {library.probed + library.unprobed > 0 && (
+        <Section title="Probe coverage">
+          <Link
+            to="/library/health"
+            className="flex items-center gap-3 rounded-lg border border-border-subtle
+                       bg-surface px-3 py-2.5 text-sm hover:border-accent
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <span className="font-mono tabular-nums">
+              {library.probed.toLocaleString()} of {(library.probed + library.unprobed).toLocaleString()} files probed
+            </span>
+            {library.unprobed > 0 && (
+              <span className="ml-auto shrink-0 text-xs text-ink-muted">
+                {library.unprobed.toLocaleString()} still unmeasured — view library health →
+              </span>
+            )}
+          </Link>
+        </Section>
+      )}
+
+      <Section title={`Storage (${roots.length})`}>
+        {roots.length === 0 ? (
+          <Note>
+            No library root is configured.{" "}
+            <Link to="/storage/roots" className="text-accent underline underline-offset-2">
+              Add one
+            </Link>{" "}
+            before importing anything.
+          </Note>
+        ) : (
+          <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
+            {roots.map((root) => (
+              <Root key={root.id} root={root} />
+            ))}
+          </ul>
+        )}
+        {(offline.length > 0 || unwritable.length > 0) && (
+          <Note tone="warn">
+            {offline.length > 0 && `${offline.length} root offline. `}
+            {unwritable.length > 0 &&
+              `${unwritable.length} root not writable by this process — reported, never corrected.`}
+          </Note>
+        )}
+      </Section>
+    </>
   );
 }
 
 function LibraryCard({ library }: { library: LibraryEntry }) {
   const target = defaultLevelKey(library);
   const primaryLevel = library.levels[0];
-  return (
-    <Link
-      to={target ? "/library/$categoryId/$level" : "/library/$categoryId/overview"}
-      params={{ categoryId: String(library.id), level: target ?? "" }}
-      className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3
-                 hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2
-                 focus-visible:outline-accent"
-    >
+  const Icon = mediaTypeIcon(library.media_type);
+
+  const body = (
+    <>
       <span className="flex items-center gap-2">
-        <LibraryIcon aria-hidden className="size-4 shrink-0 text-ink-muted" />
+        <Icon aria-hidden className="size-4 shrink-0 text-accent" />
         <span className="truncate font-medium">{library.name}</span>
       </span>
       <span className="text-xs text-ink-muted">
         {library.media_type}
         {primaryLevel?.count != null && ` · ${primaryLevel.count.toLocaleString()} ${primaryLevel.label.toLowerCase()}`}
       </span>
+    </>
+  );
+  const className =
+    "flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3 hover:border-accent " +
+    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+
+  if (!target) return <div className={className}>{body}</div>;
+  return (
+    <Link
+      to="/library/$categoryId/$level"
+      params={{ categoryId: String(library.id), level: target }}
+      className={className}
+    >
+      {body}
     </Link>
   );
 }
@@ -148,9 +232,7 @@ function Root({ root }: { root: RootFolder }) {
   return (
     <li className="flex items-center gap-3 px-3 py-2 text-sm">
       <span className="truncate font-medium">{root.label ?? root.path}</span>
-      {root.label && (
-        <span className="truncate font-mono text-xs text-ink-muted">{root.path}</span>
-      )}
+      {root.label && <span className="truncate font-mono text-xs text-ink-muted">{root.path}</span>}
       <span className="ml-auto flex shrink-0 items-center gap-2 text-xs">
         {root.writable === false && <Pill tone="warn">read-only</Pill>}
         <Pill tone={root.online ? "ok" : "danger"}>{root.online ? "online" : "offline"}</Pill>
@@ -202,27 +284,16 @@ function Tile({
                  focus-visible:outline-accent"
     >
       <span className="text-xs text-ink-muted">{label}</span>
-      <span className={`font-mono text-xl tabular-nums ${emphasis}`}>
-        {value.toLocaleString()}
-      </span>
+      <span className={`font-mono text-xl tabular-nums ${emphasis}`}>{value.toLocaleString()}</span>
     </Link>
   );
 }
 
 function Pill({ children, tone }: { children: React.ReactNode; tone: "ok" | "warn" | "danger" }) {
-  const colour =
-    tone === "ok" ? "text-ok" : tone === "warn" ? "text-warn" : "text-danger";
-  return (
-    <span className={`rounded-full border border-current px-1.5 py-px ${colour}`}>{children}</span>
-  );
+  const colour = tone === "ok" ? "text-ok" : tone === "warn" ? "text-warn" : "text-danger";
+  return <span className={`rounded-full border border-current px-1.5 py-px ${colour}`}>{children}</span>;
 }
 
 function Note({ children, tone }: { children: React.ReactNode; tone?: "warn" }) {
-  return (
-    <p className={`text-xs ${tone === "warn" ? "text-warn" : "text-ink-muted"}`}>{children}</p>
-  );
-}
-
-function Placeholder({ children }: { children: React.ReactNode }) {
-  return <p className="p-6 text-sm text-ink-muted">{children}</p>;
+  return <p className={`text-xs ${tone === "warn" ? "text-warn" : "text-ink-muted"}`}>{children}</p>;
 }

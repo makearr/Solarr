@@ -24,6 +24,9 @@ export interface ListSource<T> {
   /** Event topics whose arrival should invalidate this list (ADR-9). */
   readonly topics?: readonly string[];
   readonly rowHeight?: number;
+  /** How many items share one virtualised row -- 1 for a table, the measured
+   *  column count for the poster grid, so both views keep one core (section 21.2). */
+  readonly itemsPerRow?: number;
 }
 
 const DEFAULT_ROW_HEIGHT = 36;
@@ -70,9 +73,13 @@ export function useLibraryList<T>(source: ListSource<T>, view: ViewState) {
   );
   const loadedIds = useMemo(() => items.map(source.idOf), [items, source]);
 
+  // A table row holds one item, a poster row holds however many fit across.
+  const perRow = Math.max(1, Math.floor(source.itemsPerRow ?? 1));
+  const rowCount = Math.ceil(items.length / perRow);
+
   const virtualizer = useVirtualizer({
     // One extra row: the sentinel that triggers the next fetch.
-    count: items.length + (pages.hasNextPage ? 1 : 0),
+    count: rowCount + (pages.hasNextPage ? 1 : 0),
     getScrollElement: () => scrollRef.current,
     estimateSize: () => source.rowHeight ?? DEFAULT_ROW_HEIGHT,
     overscan: 8,
@@ -83,10 +90,10 @@ export function useLibraryList<T>(source: ListSource<T>, view: ViewState) {
   const virtualItems = virtualizer.getVirtualItems();
   const lastVisible = virtualItems[virtualItems.length - 1]?.index ?? 0;
   useEffect(() => {
-    if (pages.hasNextPage && !pages.isFetchingNextPage && lastVisible >= items.length - 1) {
+    if (pages.hasNextPage && !pages.isFetchingNextPage && lastVisible >= rowCount - 1) {
       void pages.fetchNextPage();
     }
-  }, [lastVisible, items.length, pages]);
+  }, [lastVisible, rowCount, pages]);
 
   // A string, not the array: a caller writing its source inline hands over a new
   // array every render, and depending on that identity reopens the stream every
@@ -153,6 +160,7 @@ export function useLibraryList<T>(source: ListSource<T>, view: ViewState) {
     ),
 
     scrollRef,
+    perRow,
     virtualizer,
     virtualItems,
     totalSize: virtualizer.getTotalSize(),
