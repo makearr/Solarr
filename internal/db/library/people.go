@@ -75,6 +75,26 @@ func (p People) ResolvePerson(ctx context.Context, at time.Time, link PersonLink
 	return personID, nil
 }
 
+// BackfillDetails fills in only the biographical columns this person still
+// has empty, from a provider that has since learned them. Nothing already
+// set is touched, so it can run repeatedly and never undoes an edit. Needed
+// because findOrCreatePerson returns an existing person untouched, which
+// left everyone resolved before a field had a source without it forever.
+func (p People) BackfillDetails(ctx context.Context, personID int64, identity PersonIdentity) error {
+	return p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).BackfillPersonDetails(ctx, librarydb.BackfillPersonDetailsParams{
+			ID:             personID,
+			Disambiguation: nullString(identity.Disambiguation),
+			Kind:           nullString(identity.Kind),
+			Gender:         nullString(identity.Gender),
+			Country:        nullString(identity.Country),
+			Born:           nullString(identity.Born),
+			Died:           nullString(identity.Died),
+			FieldsJson:     nullString(personFieldsJSON(identity)),
+		})
+	})
+}
+
 // FindByExternalID answers the person behind an external id, without
 // creating one -- the "did this call create it or only match it" question
 // ResolvePerson's own return value cannot answer, needed by a caller that

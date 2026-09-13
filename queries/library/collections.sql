@@ -152,3 +152,20 @@ ON CONFLICT (release_group) DO UPDATE SET
 SELECT release_group, samples, raw_success, bounded_success, corruption_rate,
        mislabel_rate, last_observed_at, updated_at
 FROM group_reputation WHERE release_group = ?;
+
+-- Every person credited on something, carrying a MusicBrainz artist id and
+-- still missing their own image (subject_type='person'). Works have had
+-- ListWorksNeedingArtwork driving a dedicated sweep since section 21.6;
+-- people never had an equivalent, so an artist resolved before the image code
+-- existed stayed without one forever -- the reason no artist picture had ever
+-- appeared (found 2026-09-13). 'musicbrainz:artist' must match
+-- internal/media/music.ProviderArtist.
+-- name: ListPeopleNeedingArtwork :many
+SELECT p.id AS person_id, x.external_id AS artist_mbid
+FROM person p
+JOIN person_external_id x ON x.person_id = p.id AND x.provider = 'musicbrainz:artist'
+WHERE NOT EXISTS (
+    SELECT 1 FROM artwork a WHERE a.subject_type = 'person' AND a.subject_id = p.id AND a.kind = 'cover'
+  )
+ORDER BY p.id
+LIMIT sqlc.arg(page_size);

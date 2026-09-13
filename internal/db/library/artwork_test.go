@@ -138,3 +138,104 @@ func TestRecord_RemovesTheWorkFromNeedingArtwork(t *testing.T) {
 		t.Errorf("NeedingArtwork after Record = %+v, want none left, the same no-cursor shape PlaceholderEditions uses", found)
 	}
 }
+
+func TestPeopleNeedingArtwork_ListsACreditedArtistWithNoImageYet(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	artworks := library.NewArtworks(opened)
+
+	personID := resolvePersonNamed(t, people, "artist-mbid-1", "Heka", "Heka")
+
+	found, err := artworks.PeopleNeedingArtwork(t.Context(), 10)
+	if err != nil {
+		t.Fatalf("PeopleNeedingArtwork: %v", err)
+	}
+	if len(found) != 1 || found[0].PersonID != personID || found[0].ArtistMBID != "artist-mbid-1" {
+		t.Fatalf("PeopleNeedingArtwork = %+v, want exactly {personID=%d, artist-mbid-1}", found, personID)
+	}
+}
+
+func TestPeopleNeedingArtwork_ExcludesAPersonWhoseImageWasFetched(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	artworks := library.NewArtworks(opened)
+
+	personID := resolvePersonNamed(t, people, "artist-mbid-2", "Heka", "Heka")
+	if err := artworks.RecordForPerson(
+		t.Context(), personID, "https://example.invalid/heka.jpg", "person-1-cover", 500, 500, 1,
+	); err != nil {
+		t.Fatalf("RecordForPerson: %v", err)
+	}
+
+	found, err := artworks.PeopleNeedingArtwork(t.Context(), 10)
+	if err != nil {
+		t.Fatalf("PeopleNeedingArtwork: %v", err)
+	}
+	if len(found) != 0 {
+		t.Fatalf("PeopleNeedingArtwork = %+v, want none once an image is recorded", found)
+	}
+}
+
+// The starvation guard: an artist with no Wikidata image must drop out of the
+// sweep, or the same lowest-id people come back every run and the rest are
+// never reached.
+func TestPeopleNeedingArtwork_ExcludesAPersonRecordedAsHavingNoImage(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	artworks := library.NewArtworks(opened)
+
+	personID := resolvePersonNamed(t, people, "artist-mbid-3", "Obscure Act", "Obscure Act")
+	if err := artworks.RecordPersonArtworkAbsent(t.Context(), personID, 1); err != nil {
+		t.Fatalf("RecordPersonArtworkAbsent: %v", err)
+	}
+
+	found, err := artworks.PeopleNeedingArtwork(t.Context(), 10)
+	if err != nil {
+		t.Fatalf("PeopleNeedingArtwork: %v", err)
+	}
+	if len(found) != 0 {
+		t.Fatalf("PeopleNeedingArtwork = %+v, want none once absence is recorded", found)
+	}
+}
+
+// The absence marker must not become a servable image: an empty cache_key
+// names no file, so GetForPerson has to answer "nothing here", not a row.
+func TestGetForPerson_TreatsARecordedAbsenceAsNoImage(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	artworks := library.NewArtworks(opened)
+
+	personID := resolvePersonNamed(t, people, "artist-mbid-4", "Obscure Act", "Obscure Act")
+	if err := artworks.RecordPersonArtworkAbsent(t.Context(), personID, 1); err != nil {
+		t.Fatalf("RecordPersonArtworkAbsent: %v", err)
+	}
+
+	got, err := artworks.GetForPerson(t.Context(), personID)
+	if err != nil {
+		t.Fatalf("GetForPerson: %v", err)
+	}
+	if got != (library.PersonArtwork{}) {
+		t.Fatalf("GetForPerson = %+v, want the zero value for a recorded absence", got)
+	}
+}
+
+func TestGetForPerson_AnswersTheRecordedCacheKey(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	artworks := library.NewArtworks(opened)
+
+	personID := resolvePersonNamed(t, people, "artist-mbid-5", "Heka", "Heka")
+	if err := artworks.RecordForPerson(
+		t.Context(), personID, "https://example.invalid/heka.jpg", "person-9-cover", 500, 500, 1,
+	); err != nil {
+		t.Fatalf("RecordForPerson: %v", err)
+	}
+
+	got, err := artworks.GetForPerson(t.Context(), personID)
+	if err != nil {
+		t.Fatalf("GetForPerson: %v", err)
+	}
+	if got != (library.PersonArtwork{CacheKey: "person-9-cover", Found: true}) {
+		t.Fatalf("GetForPerson = %+v, want the recorded key", got)
+	}
+}

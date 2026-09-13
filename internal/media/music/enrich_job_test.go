@@ -609,3 +609,100 @@ func TestEnrichJob_ASourceFailureIsolatesToOneEdition(t *testing.T) {
 		t.Errorf("PlaceholderEditions = %+v, want the failed edition still waiting", remaining)
 	}
 }
+
+// resolveBareArtist stands in for a person resolved before images or
+// biographies had a source -- name and id only, exactly what the library was
+// full of when no artist picture had ever appeared (2026-09-13).
+func resolveBareArtist(t *testing.T, opened *store.Store, mbid, name string) int64 {
+	t.Helper()
+	personID, err := library.NewPeople(opened).ResolvePerson(t.Context(), firstSeen, library.PersonLink{
+		Provider: music.ProviderArtist, ExternalID: mbid,
+		Person: library.PersonIdentity{Name: name, SortName: name},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePerson: %v", err)
+	}
+	return personID
+}
+
+func TestEnrichJob_BackfillsAnAlreadyResolvedArtistsImageAndBiography(t *testing.T) {
+	server := testImageServer(t)
+	source := &fakeArtistSource{artists: map[string]musicbrainz.Artist{
+		"artist-9": {
+			MBID: "artist-9", Name: "Vutu Doci", SortName: "Bush, Vutu",
+			Country: "GB", WikidataQID: "Q636",
+		},
+	}}
+	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{
+		"Q636": {Description: "English singer", ImageURL: server.URL + "/cover.png"},
+	}}
+	job, opened, queries, memFS := newEnrichJobWithImageFetch(t, source, biographer, server.URL)
+
+	personID := resolveBareArtist(t, opened, "artist-9", "Vutu Doci")
+
+	// No placeholder editions at all: the backfill pass is the only thing
+	// with anything to do.
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	recorded, err := library.NewArtworks(opened).GetForPerson(t.Context(), personID)
+	if err != nil {
+		t.Fatalf("GetForPerson: %v", err)
+	}
+	if !recorded.Found {
+		t.Fatal("the already-resolved artist gained no image")
+	}
+	for _, size := range []string{"thumb", "small", "full"} {
+		path := "/cache/images/" + recorded.CacheKey + "-" + size + ".webp"
+		if _, err := memFS.Stat(path); err != nil {
+			t.Errorf("%s was not written: %v", path, err)
+		}
+	}
+
+	person, err := queries.GetPerson(t.Context(), personID)
+	if err != nil {
+		t.Fatalf("GetPerson: %v", err)
+	}
+	if !strings.Contains(person.FieldsJson.String, "English singer") {
+		t.Errorf("fields_json = %q, want the backfilled biography", person.FieldsJson.String)
+	}
+	if person.Country.String != "GB" {
+		t.Errorf("country = %q, want GB backfilled", person.Country.String)
+	}
+}
+
+// An artist Wikidata has no photo for must be remembered as such, or the
+// sweep asks about the same lowest-id people every run and never reaches
+// the rest -- at one MusicBrainz lookup each, against a shared 1 req/s budget.
+func TestEnrichJob_RecordsThatAnArtistHasNoImageSoTheSweepMovesOn(t *testing.T) {
+	server := testImageServer(t)
+	source := &fakeArtistSource{artists: map[string]musicbrainz.Artist{
+		"artist-8": {MBID: "artist-8", Name: "Obscure Act", SortName: "Obscure Act"},
+	}}
+	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{}}
+	job, opened, _, _ := newEnrichJobWithImageFetch(t, source, biographer, server.URL)
+
+	personID := resolveBareArtist(t, opened, "artist-8", "Obscure Act")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	artworks := library.NewArtworks(opened)
+	recorded, err := artworks.GetForPerson(t.Context(), personID)
+	if err != nil {
+		t.Fatalf("GetForPerson: %v", err)
+	}
+	if recorded.Found {
+		t.Fatalf("GetForPerson = %+v, want no servable image for an artist without one", recorded)
+	}
+
+	remaining, err := artworks.PeopleNeedingArtwork(t.Context(), 10)
+	if err != nil {
+		t.Fatalf("PeopleNeedingArtwork: %v", err)
+	}
+	if len(remaining) != 0 {
+		t.Fatalf("PeopleNeedingArtwork = %+v, want the artist dropped from the sweep", remaining)
+	}
+}

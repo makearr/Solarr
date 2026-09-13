@@ -4,6 +4,8 @@ import { Download } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { discCountOf, formatTrackNumber } from "@/lib/trackNumber";
+
 import { CoverArt } from "./CoverArt";
 
 type Edition = components["schemas"]["Edition"];
@@ -223,6 +225,7 @@ export function WorkDetail() {
                 <PartRow
                   key={part.id}
                   part={part}
+                  discCount={discCountOf(work.parts)}
                   pending={setPartMonitored.isPending}
                   onToggleMonitored={(monitored) =>
                     setPartMonitored.mutate({ partId: part.id, monitored })
@@ -353,12 +356,14 @@ function EditionCard({ edition }: { edition: Edition }) {
 
 function PartRow({
   part,
+  discCount,
   pending,
   onToggleMonitored,
   wantedPending,
   onToggleWanted,
 }: {
   part: WorkPart;
+  discCount: number;
   pending: boolean;
   onToggleMonitored: (monitored: boolean) => void;
   wantedPending: boolean;
@@ -380,7 +385,9 @@ function PartRow({
             : "border-border-subtle bg-transparent"
         }`}
       />
-      <span className="w-10 shrink-0 font-mono text-xs text-ink-muted">{part.sort_key}</span>
+      <span className="w-10 shrink-0 text-right font-mono text-xs tabular-nums text-ink-muted">
+        {formatTrackNumber(part.media_ref, part.sort_key, discCount)}
+      </span>
       <span className="truncate">{part.title ?? part.media_ref}</span>
       {part.runtime_ms != null && (
         <span className="shrink-0 font-mono text-xs text-ink-muted">

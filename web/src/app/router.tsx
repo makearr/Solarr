@@ -24,7 +24,7 @@ import { LibraryConfigPlaceholder } from "./LibraryConfigPlaceholder";
 import { LibraryHealth } from "./LibraryHealth";
 import { LibraryLevelList } from "./LibraryLevelList";
 import { Moves } from "./Moves";
-import { Overview } from "./Overview";
+import { Libraries } from "./Libraries";
 import { Packs } from "./Packs";
 import { People } from "./People";
 import { PersonDetail } from "./PersonDetail";
@@ -73,6 +73,7 @@ const routes = [
       );
     },
   }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/libraries", component: Libraries }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/albums", component: Library }),
   // Real screens (unlike naming below), so each gets its own static route
   // rather than falling through the generic $section catch-all. Quality and
@@ -102,7 +103,19 @@ const routes = [
   // Registered ahead of the $level catch-all below, or these would each
   // resolve as an (invalid) level key instead of their own screen.
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/discover", component: Discover }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/overview", component: Overview }),
+  // Overview removed 2026-09-13 (the user's own word: it showed nothing the
+  // level views do not). Redirected rather than 404ing, the same courtesy the
+  // old flat /library got.
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/library/$categoryId/overview",
+    beforeLoad: ({ params }) => {
+      throw redirect({
+        to: "/library/$categoryId/$level",
+        params: { categoryId: (params as { categoryId: string }).categoryId, level: "artists" },
+      });
+    },
+  }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/wanted", component: Wanted }),
   // Packs moved here from Storage 2026-09-11 (a pack is one library's own
   // provenance fact, ADR-50, not a storage concern) -- still the same

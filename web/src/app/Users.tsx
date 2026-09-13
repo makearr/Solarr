@@ -13,9 +13,9 @@ type Tier = components["schemas"]["Me"]["tier"];
 type APIKey = components["schemas"]["APIKey"];
 
 const TIERS: readonly { id: Tier; label: string; blurb: string }[] = [
-  { id: "normal", label: "Normal", blurb: "Just what a working library needs." },
-  { id: "advanced", label: "Advanced", blurb: "Network, priority weights and similar tuning." },
-  { id: "expert", label: "Expert", blurb: "Cache sizing and other internal knobs." },
+  { id: "normal", label: "Normal", blurb: "Browsing, wanting and adding. Everything a working library needs." },
+  { id: "advanced", label: "Advanced", blurb: "Adds Import, Activity, Unidentified, Packs, Naming and new libraries." },
+  { id: "expert", label: "Expert", blurb: "Adds quality and language profiles, cache sizing and internal knobs." },
 ];
 
 /** The User settings page: who can sign in (Access), the accounts
@@ -57,12 +57,12 @@ function MyTierSection({ tier }: { tier: Tier }) {
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-        Settings tier
+        Interface level
       </h2>
       <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
         <p className="text-xs text-ink-muted">
-          How much of the settings surface you see. Purely a display preference -- it never
-          changes what MediaNexus does.
+          How much of the interface you see -- each level includes the ones below it. Purely a
+          display preference: it never changes what MediaNexus does.
         </p>
         <div className="flex flex-wrap gap-2">
           {TIERS.map((option) => (

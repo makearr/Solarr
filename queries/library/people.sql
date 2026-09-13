@@ -15,6 +15,20 @@ FROM person WHERE id = ?;
 -- name: SetPersonMonitored :exec
 UPDATE person SET monitored = ? WHERE id = ?;
 
+-- Fills in only the person columns still empty, never overwriting one that
+-- already holds something -- a backfill for people resolved before a field
+-- had a source, not a refresh (a manual override must always win, ADR-8).
+-- name: BackfillPersonDetails :exec
+UPDATE person SET
+  disambiguation = CASE WHEN COALESCE(disambiguation, '') = '' THEN sqlc.arg(disambiguation) ELSE disambiguation END,
+  kind           = CASE WHEN COALESCE(kind, '') = ''           THEN sqlc.arg(kind)           ELSE kind END,
+  gender         = CASE WHEN COALESCE(gender, '') = ''         THEN sqlc.arg(gender)         ELSE gender END,
+  country        = CASE WHEN COALESCE(country, '') = ''        THEN sqlc.arg(country)        ELSE country END,
+  born           = CASE WHEN COALESCE(born, '') = ''           THEN sqlc.arg(born)           ELSE born END,
+  died           = CASE WHEN COALESCE(died, '') = ''           THEN sqlc.arg(died)           ELSE died END,
+  fields_json    = CASE WHEN COALESCE(fields_json, '') = ''    THEN sqlc.arg(fields_json)    ELSE fields_json END
+WHERE id = sqlc.arg(id);
+
 -- name: AddPersonAlias :exec
 INSERT INTO person_alias (person_id, alias, normalized, source)
 VALUES (?, ?, ?, ?)
