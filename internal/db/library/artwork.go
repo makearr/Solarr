@@ -45,6 +45,30 @@ func (a Artworks) NeedingArtwork(ctx context.Context, pageSize int64) ([]Artwork
 	return candidates, nil
 }
 
+// PersonArtworkCandidate is a person with a MusicBrainz artist id to look an
+// image up by, and no recorded image yet.
+type PersonArtworkCandidate struct {
+	PersonID   int64
+	ArtistMBID string
+}
+
+// PeopleNeedingArtwork returns up to pageSize credited people carrying a
+// MusicBrainz artist id and no recorded image, lowest person id first --
+// NeedingArtwork's own shape one subject over. Works have had that sweep since
+// section 21.6; people never did, so an artist first resolved before the image
+// code existed never got one (found 2026-09-13).
+func (a Artworks) PeopleNeedingArtwork(ctx context.Context, pageSize int64) ([]PersonArtworkCandidate, error) {
+	rows, err := librarydb.New(a.store.Read()).ListPeopleNeedingArtwork(ctx, pageSize)
+	if err != nil {
+		return nil, fmt.Errorf("library: people needing artwork: %w", err)
+	}
+	candidates := make([]PersonArtworkCandidate, len(rows))
+	for i, row := range rows {
+		candidates[i] = PersonArtworkCandidate{PersonID: row.PersonID, ArtistMBID: row.ArtistMbid}
+	}
+	return candidates, nil
+}
+
 // WorkArtwork is what a caller needs to serve a work's cover art file itself:
 // the cache key ArtworkJob wrote it under, the root folders it must check
 // the caller can see (the same ADR-27 visibility GetWorkDetail already applies,
@@ -118,19 +142,30 @@ type PersonArtwork struct {
 }
 
 // GetForPerson answers a person's recorded image, if any. Found is false
-// (not an error) when nobody has fetched one yet -- most people never will,
-// since a Wikidata P18 claim is the exception, not the rule.
+// (not an error) both when nobody has looked yet and when a look found
+// nothing -- an empty cache_key is RecordPersonArtworkAbsent's own marker,
+// and either way there is no file to serve.
 func (a Artworks) GetForPerson(ctx context.Context, personID int64) (PersonArtwork, error) {
 	cacheKey, err := librarydb.New(a.store.Read()).GetArtwork(ctx, librarydb.GetArtworkParams{
 		SubjectType: "person", SubjectID: personID, Kind: artworkKindCover,
 	})
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) || cacheKey == "" {
 		return PersonArtwork{}, nil
 	}
 	if err != nil {
 		return PersonArtwork{}, fmt.Errorf("library: artwork for person %d: %w", personID, err)
 	}
 	return PersonArtwork{CacheKey: cacheKey, Found: true}, nil
+}
+
+// RecordPersonArtworkAbsent remembers that this person was looked up and has
+// no image to fetch, as a row with an empty cache_key. Without it the
+// backfill sweep re-asks about the same lowest-id people every run and never
+// reaches the rest, since PeopleNeedingArtwork excludes only people who
+// already have a row -- and unlike a cover art miss, each retry costs a
+// MusicBrainz lookup against a 1 req/s budget shared with everything else.
+func (a Artworks) RecordPersonArtworkAbsent(ctx context.Context, personID, checkedAt int64) error {
+	return a.RecordForPerson(ctx, personID, "", "", 0, 0, checkedAt)
 }
 
 // RecordForPerson upserts the cover art row for a person -- Record's own

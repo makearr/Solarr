@@ -58,6 +58,15 @@ var EnrichDefinition = jobs.Definition{
 // own transaction (library.RefineEdition), so nothing partial survives either way.
 const enrichBatchSize = 20
 
+// personBackfillBatchSize and personBackfillBudget bound the artist image and
+// biography sweep. Each person costs a MusicBrainz lookup plus a Wikidata one,
+// and MusicBrainz is 1 req/s shared with everything else (ADR-13), so the
+// sweep takes a slice per run rather than the whole backlog at once.
+const (
+	personBackfillBatchSize = 20
+	personBackfillBudget    = 60
+)
+
 // EnrichJob refines every placeholder edition (kind='unknown') it can find into
 // real metadata, and populates the parts (tracks) under it. Direct-wired the way
 // the rest of internal/media/music is until stage 9.
@@ -146,7 +155,103 @@ func (j *EnrichJob) Run(ctx context.Context, _ jobs.Job) error {
 		}
 	}
 	j.logger.Info("music enrichment finished", slog.Int("processed", total), slog.Int("failed", failed))
+
+	j.backfillPeople(ctx)
 	return nil
+}
+
+// backfillPeople fills in the image and biography of people resolved before
+// those had a source. resolveArtist only ever fetches them the first time a
+// person is created, and findOrCreatePerson returns an existing person
+// untouched, so without this pass an artist already in the library never
+// gained either -- which is why no artist picture had ever appeared
+// (found 2026-09-13). Bounded per run by personBackfillBudget.
+func (j *EnrichJob) backfillPeople(ctx context.Context) {
+	if j.artworks == (library.Artworks{}) {
+		return
+	}
+
+	filled, absent, failed := 0, 0, 0
+	for filled+absent+failed < personBackfillBudget {
+		if ctx.Err() != nil {
+			return
+		}
+
+		batch, err := j.artworks.PeopleNeedingArtwork(ctx, personBackfillBatchSize)
+		if err != nil {
+			j.logger.WarnContext(ctx, "people needing artwork failed", slog.Any("error", err))
+			return
+		}
+		if len(batch) == 0 {
+			break
+		}
+
+		for _, candidate := range batch {
+			if filled+absent+failed >= personBackfillBudget {
+				break
+			}
+			switch outcome := j.backfillOne(ctx, candidate); outcome {
+			case backfillFilled:
+				filled++
+			case backfillAbsent:
+				absent++
+			default:
+				failed++
+			}
+		}
+		if len(batch) < personBackfillBatchSize {
+			break
+		}
+	}
+
+	if filled+absent+failed > 0 {
+		j.logger.Info("artist backfill finished",
+			slog.Int("filled", filled), slog.Int("no_image", absent), slog.Int("failed", failed))
+	}
+}
+
+type backfillOutcome int
+
+const (
+	backfillFailed backfillOutcome = iota
+	backfillFilled
+	backfillAbsent
+)
+
+// backfillOne resolves one person's provider detail. A definitive "this
+// artist has no Wikidata image" is recorded so the sweep stops asking --
+// without it the same lowest-id people come back every run and the rest are
+// never reached. A transient failure records nothing and is retried.
+func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArtworkCandidate) backfillOutcome {
+	artist, err := j.provider.Artist(ctx, musicbrainz.PriorityEnrich, candidate.ArtistMBID)
+	if err != nil {
+		j.logger.WarnContext(ctx, "artist backfill lookup failed",
+			slog.Int64("person_id", candidate.PersonID), slog.String("mbid", candidate.ArtistMBID),
+			slog.Any("error", err))
+		return backfillFailed
+	}
+
+	bio := j.wikidataBiographyFor(ctx, artist)
+	if err := j.people.BackfillDetails(ctx, candidate.PersonID, library.PersonIdentity{
+		Name: artist.Name, SortName: artist.SortName, Disambiguation: artist.Disambiguation,
+		Kind: artist.Type, Gender: artist.Gender, Country: artist.Country,
+		Born: artist.Born, Died: artist.Died, Biography: biographyText(bio),
+	}); err != nil {
+		j.logger.WarnContext(ctx, "artist backfill details failed",
+			slog.Int64("person_id", candidate.PersonID), slog.Any("error", err))
+	}
+
+	if bio.ImageURL == "" {
+		if err := j.artworks.RecordPersonArtworkAbsent(ctx, candidate.PersonID, j.clock.Now().Unix()); err != nil {
+			j.logger.WarnContext(ctx, "record person artwork absent failed",
+				slog.Int64("person_id", candidate.PersonID), slog.Any("error", err))
+			return backfillFailed
+		}
+		return backfillAbsent
+	}
+
+	j.fetchPersonImage(ctx, candidate.PersonID, bio.ImageURL)
+	return backfillFilled
 }
 
 func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEdition) error {

@@ -150,6 +150,46 @@ func (q *Queries) AssignTag(ctx context.Context, arg AssignTagParams) error {
 	return err
 }
 
+const backfillPersonDetails = `-- name: BackfillPersonDetails :exec
+UPDATE person SET
+  disambiguation = CASE WHEN COALESCE(disambiguation, '') = '' THEN ?1 ELSE disambiguation END,
+  kind           = CASE WHEN COALESCE(kind, '') = ''           THEN ?2           ELSE kind END,
+  gender         = CASE WHEN COALESCE(gender, '') = ''         THEN ?3         ELSE gender END,
+  country        = CASE WHEN COALESCE(country, '') = ''        THEN ?4        ELSE country END,
+  born           = CASE WHEN COALESCE(born, '') = ''           THEN ?5           ELSE born END,
+  died           = CASE WHEN COALESCE(died, '') = ''           THEN ?6           ELSE died END,
+  fields_json    = CASE WHEN COALESCE(fields_json, '') = ''    THEN ?7    ELSE fields_json END
+WHERE id = ?8
+`
+
+type BackfillPersonDetailsParams struct {
+	Disambiguation sql.NullString
+	Kind           sql.NullString
+	Gender         sql.NullString
+	Country        sql.NullString
+	Born           sql.NullString
+	Died           sql.NullString
+	FieldsJson     sql.NullString
+	ID             int64
+}
+
+// Fills in only the person columns still empty, never overwriting one that
+// already holds something -- a backfill for people resolved before a field
+// had a source, not a refresh (a manual override must always win, ADR-8).
+func (q *Queries) BackfillPersonDetails(ctx context.Context, arg BackfillPersonDetailsParams) error {
+	_, err := q.db.ExecContext(ctx, backfillPersonDetails,
+		arg.Disambiguation,
+		arg.Kind,
+		arg.Gender,
+		arg.Country,
+		arg.Born,
+		arg.Died,
+		arg.FieldsJson,
+		arg.ID,
+	)
+	return err
+}
+
 const clearProviderTagAssignments = `-- name: ClearProviderTagAssignments :exec
 DELETE FROM tag_assignment
 WHERE subject_type = ? AND subject_id = ? AND source = ?

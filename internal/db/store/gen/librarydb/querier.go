@@ -29,6 +29,10 @@ type Querier interface {
 	AdjustCounter(ctx context.Context, arg AdjustCounterParams) error
 	AssignTag(ctx context.Context, arg AssignTagParams) error
 	AttachFile(ctx context.Context, arg AttachFileParams) error
+	// Fills in only the person columns still empty, never overwriting one that
+	// already holds something -- a backfill for people resolved before a field
+	// had a source, not a refresh (a manual override must always win, ADR-8).
+	BackfillPersonDetails(ctx context.Context, arg BackfillPersonDetailsParams) error
 	BlocklistRelease(ctx context.Context, arg BlocklistReleaseParams) (BlocklistedRelease, error)
 	// Import revert's own first step for one unit (todo 4.9): work_id/edition_id
 	// going back to NULL is what makes it safe to then delete the work/edition
@@ -382,6 +386,14 @@ type Querier interface {
 	// Oldest first: an approval queue works through its backlog in order. Cursor on id,
 	// never OFFSET (Invariant 32); created_at is not unique, so id is the tie-break.
 	ListPendingRequests(ctx context.Context, arg ListPendingRequestsParams) ([]Request, error)
+	// Every person credited on something, carrying a MusicBrainz artist id and
+	// still missing their own image (subject_type='person'). Works have had
+	// ListWorksNeedingArtwork driving a dedicated sweep since section 21.6;
+	// people never had an equivalent, so an artist resolved before the image code
+	// existed stayed without one forever -- the reason no artist picture had ever
+	// appeared (found 2026-09-13). 'musicbrainz:artist' must match
+	// internal/media/music.ProviderArtist.
+	ListPeopleNeedingArtwork(ctx context.Context, pageSize int64) ([]ListPeopleNeedingArtworkRow, error)
 	// The whole phash set is 4 MB at 500k files: Hamming distance is brute-forced in
 	// Go, so this hands over every candidate rather than filtering in SQL (ADR-35).
 	ListPerceptualHashes(ctx context.Context) ([]ListPerceptualHashesRow, error)
