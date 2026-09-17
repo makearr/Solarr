@@ -67,6 +67,14 @@ const (
 	personBackfillBudget    = 60
 )
 
+// editionlessBatchSize and editionlessBudget bound the pass over works the
+// text search identified: one release-group lookup each, on the same shared
+// MusicBrainz budget.
+const (
+	editionlessBatchSize = 20
+	editionlessBudget    = 60
+)
+
 // EnrichJob refines every placeholder edition (kind='unknown') it can find into
 // real metadata, and populates the parts (tracks) under it. Direct-wired the way
 // the rest of internal/media/music is until stage 9.
@@ -171,6 +179,8 @@ func (j *EnrichJob) Run(ctx context.Context, _ jobs.Job) error {
 	}
 	j.logger.Info("music enrichment finished", slog.Int("processed", total), slog.Int("failed", failed))
 
+	j.enrichEditionless(ctx)
+
 	if j.realigner != nil && len(refinedWorkIDs) > 0 {
 		if err := j.realigner.RealignWorks(ctx, refinedWorkIDs); err != nil {
 			j.logger.WarnContext(ctx, "realign refined works failed",
@@ -180,6 +190,60 @@ func (j *EnrichJob) Run(ctx context.Context, _ jobs.Job) error {
 
 	j.backfillPeople(ctx)
 	return nil
+}
+
+// enrichEditionless gives works identified at release-group level -- the text
+// search's output, which has no edition -- their artist, genres, description,
+// year and type. The placeholder-edition pass above never reached them, so
+// they sat under "Unknown artist" (found 2026-09-17). No tracklist: that needs
+// an edition, which choosing is not this pass's call. Walked by work id within
+// a run and bounded by editionlessBudget.
+func (j *EnrichJob) enrichEditionless(ctx context.Context) {
+	enriched, failed := 0, 0
+	var afterWorkID int64
+	for enriched+failed < editionlessBudget {
+		if ctx.Err() != nil {
+			return
+		}
+		batch, err := j.identity.EditionlessWorks(ctx, afterWorkID, editionlessBatchSize)
+		if err != nil {
+			j.logger.WarnContext(ctx, "editionless works failed", slog.Any("error", err))
+			return
+		}
+		if len(batch) == 0 {
+			break
+		}
+		for _, work := range batch {
+			if enriched+failed >= editionlessBudget {
+				break
+			}
+			afterWorkID = work.WorkID
+			rg, _, err := j.provider.Album(ctx, musicbrainz.PriorityEnrich, work.ReleaseGroupMBID, "")
+			if err != nil {
+				failed++
+				j.logger.WarnContext(ctx, "editionless work enrichment failed",
+					slog.Int64("work_id", work.WorkID), slog.Any("error", err))
+				continue
+			}
+			workYear, workReleaseDate, workPrimaryType, _, _ := refinementFor(rg, musicbrainz.Release{})
+			if err := j.identity.RefineWork(ctx, j.clock.Now().Unix(), work.WorkID,
+				workYear, workReleaseDate, workPrimaryType); err != nil {
+				failed++
+				j.logger.WarnContext(ctx, "editionless work refine failed",
+					slog.Int64("work_id", work.WorkID), slog.Any("error", err))
+				continue
+			}
+			j.enrichCreditsAndGenres(ctx, work.WorkID, rg)
+			j.enrichDescription(ctx, work.WorkID, rg)
+			enriched++
+		}
+		if len(batch) < editionlessBatchSize {
+			break
+		}
+	}
+	if enriched+failed > 0 {
+		j.logger.Info("editionless enrichment finished", slog.Int("enriched", enriched), slog.Int("failed", failed))
+	}
 }
 
 // backfillPeople fills in the image and biography of people resolved before
@@ -397,6 +461,7 @@ func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.Artist
 	}
 
 	artist, err := j.provider.Artist(ctx, musicbrainz.PriorityEnrich, credit.MBID)
+	lookedUp := err == nil
 	if err != nil {
 		j.logger.WarnContext(ctx, "artist detail lookup failed",
 			slog.String("mbid", credit.MBID), slog.Any("error", err))
@@ -408,16 +473,25 @@ func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.Artist
 		sortName = artist.Name
 	}
 	bio := j.wikidataBiographyFor(ctx, artist)
+	identity := library.PersonIdentity{
+		Name: artist.Name, SortName: sortName, Disambiguation: artist.Disambiguation,
+		Kind: artist.Type, Gender: artist.Gender, Country: artist.Country,
+		Born: artist.Born, Died: artist.Died, Biography: biographyText(bio),
+	}
 	personID, err := j.people.ResolvePerson(ctx, j.clock.Now(), library.PersonLink{
-		Provider: ProviderArtist, ExternalID: artist.MBID,
-		Person: library.PersonIdentity{
-			Name: artist.Name, SortName: sortName, Disambiguation: artist.Disambiguation,
-			Kind: artist.Type, Gender: artist.Gender, Country: artist.Country,
-			Born: artist.Born, Died: artist.Died, Biography: biographyText(bio),
-		},
+		Provider: ProviderArtist, ExternalID: artist.MBID, Person: identity,
 	})
 	if err != nil {
 		return 0, err
+	}
+	// An existing person is returned untouched, so one created from a failed
+	// lookup kept no biography even after a later lookup succeeded -- and once
+	// that later lookup recorded a photo, the backfill never came back for it.
+	if lookedUp {
+		if err := j.people.BackfillDetails(ctx, personID, identity); err != nil {
+			j.logger.WarnContext(ctx, "artist details backfill failed",
+				slog.Int64("person_id", personID), slog.Any("error", err))
+		}
 	}
 	// Best-effort, same as the biography text above: a person is still worth
 	// having with no image at all. Album covers falling back to this image

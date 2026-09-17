@@ -73,7 +73,7 @@ type EmbeddedArtworkCandidate struct {
 }
 
 // NeedingEmbeddedArtwork returns up to pageSize works after afterWorkID still
-// without a cover that have a file recorded by work_file_hint.
+// without a cover that have a file recorded by work_file.
 func (a Artworks) NeedingEmbeddedArtwork(ctx context.Context, afterWorkID, pageSize int64) ([]EmbeddedArtworkCandidate, error) {
 	rows, err := librarydb.New(a.store.Read()).ListWorksNeedingEmbeddedArtwork(ctx,
 		librarydb.ListWorksNeedingEmbeddedArtworkParams{AfterID: afterWorkID, PageSize: pageSize})

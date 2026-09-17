@@ -191,17 +191,19 @@ ORDER BY x.work_id
 LIMIT sqlc.arg(page_size);
 
 -- Every work still without a cover that has a known file to read embedded art
--- from, with that file's lowest library_path. Root folder paths live in
--- settings.db, so the caller resolves root_folder_id itself (section 4.3).
+-- from: its lowest-id file, at that file's lowest library_path. Root folder
+-- paths live in settings.db, so the caller resolves root_folder_id itself
+-- (section 4.3).
 -- name: ListWorksNeedingEmbeddedArtwork :many
-SELECT h.work_id AS work_id, lp.root_folder_id AS root_folder_id, lp.rel_path AS rel_path
-FROM work_file_hint h
+SELECT f.work_id AS work_id, lp.root_folder_id AS root_folder_id, lp.rel_path AS rel_path
+FROM work_file f
 JOIN library_path lp ON lp.id = (
-    SELECT MIN(lp2.id) FROM library_path lp2 WHERE lp2.media_object_id = h.media_object_id
+    SELECT MIN(lp2.id) FROM library_path lp2 WHERE lp2.media_object_id = f.media_object_id
   )
-WHERE h.work_id > sqlc.arg(after_id)
+WHERE f.work_id > sqlc.arg(after_id)
+  AND f.media_object_id = (SELECT MIN(f2.media_object_id) FROM work_file f2 WHERE f2.work_id = f.work_id)
   AND NOT EXISTS (
-    SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = h.work_id AND a.kind = 'cover'
+    SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = f.work_id AND a.kind = 'cover'
   )
-ORDER BY h.work_id
+ORDER BY f.work_id
 LIMIT sqlc.arg(page_size);

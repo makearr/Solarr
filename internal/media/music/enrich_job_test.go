@@ -890,3 +890,98 @@ func TestEnrichJob_RealignsNothingWhenNothingWasRefined(t *testing.T) {
 		t.Errorf("realigned %v, want nothing", realigner.batches)
 	}
 }
+
+// failingOnceArtistSource fails the first artist lookup, as MusicBrainz does
+// with a 503 under load, and answers normally after that.
+type failingOnceArtistSource struct {
+	fakeArtistSource
+	failed bool
+}
+
+func (f *failingOnceArtistSource) Artist(ctx context.Context, mbid string) (musicbrainz.Artist, error) {
+	if !f.failed {
+		f.failed = true
+		return musicbrainz.Artist{}, errors.New("musicbrainz returned 503")
+	}
+	return f.fakeArtistSource.Artist(ctx, mbid)
+}
+
+// A person first created from a failed lookup must still gain the biography a
+// later successful lookup finds, even though that same lookup also records
+// their photo -- after which nothing else would ever come back for them.
+func TestEnrichJob_ALaterSuccessfulLookupFillsAPersonAFailedOneLeftBare(t *testing.T) {
+	server := testImageServer(t)
+	source := &failingOnceArtistSource{fakeArtistSource: fakeArtistSource{
+		fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{
+				MBID: "rg-1", Title: "Detisisu Binip", PrimaryType: "Album",
+				ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "heka", Name: "Heka"}},
+			},
+			release: musicbrainz.Release{MBID: "rel-1", Title: "Detisisu Binip", Status: "official"},
+		},
+		artists: map[string]musicbrainz.Artist{
+			"heka": {MBID: "heka", Name: "Heka", SortName: "Heka", Country: "IE", WikidataQID: "Q193744"},
+		},
+	}}
+	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{
+		"Q193744": {Extract: "Heka is an Irish singer, songwriter and musician.", ImageURL: server.URL + "/cover.png"},
+	}}
+	job, opened, queries, _ := newEnrichJobWithImageFetch(t, source, biographer, server.URL)
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+	createPlaceholder(t, opened, "rg-2", "rel-2")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	person, err := queries.GetPersonByExternalID(t.Context(), librarydb.GetPersonByExternalIDParams{
+		Provider: music.ProviderArtist, ExternalID: "heka",
+	})
+	if err != nil {
+		t.Fatalf("GetPersonByExternalID: %v", err)
+	}
+	if !strings.Contains(person.FieldsJson.String, "Irish singer") || person.Country.String != "IE" {
+		t.Errorf("person = %+v, want the later lookup's biography and country filled in", person)
+	}
+}
+
+// The text search identifies an album at release-group level, with no edition.
+// Enrichment walked placeholder editions only, so such an album never gained an
+// artist and sat under "Unknown artist" -- Heka's Detisisu Binip among them.
+func TestEnrichJob_EnrichesAWorkIdentifiedWithoutAnEdition(t *testing.T) {
+	source := &fakeArtistSource{
+		fakeSource: fakeSource{rg: musicbrainz.ReleaseGroup{
+			MBID: "rg-shepherd", Title: "Detisisu Binip", PrimaryType: "Album", FirstReleaseDate: "1991-11-04",
+			ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "heka", Name: "Heka"}},
+			Genres:       []musicbrainz.Genre{{Name: "New Age"}},
+		}},
+		artists: map[string]musicbrainz.Artist{"heka": {MBID: "heka", Name: "Heka", SortName: "Heka"}},
+	}
+	job, opened, queries := newEnrichJob(t, source)
+	resolved, err := library.NewIdentity(opened).ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-shepherd", Confidence: 0.65,
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Detisisu Binip", SortTitle: "detisisu binip"},
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	work, err := queries.GetWork(t.Context(), resolved[0])
+	if err != nil {
+		t.Fatalf("GetWork: %v", err)
+	}
+	if !work.PrimaryArtistID.Valid || work.Year.Int64 != 1991 || work.PrimaryType.String != "Album" {
+		t.Errorf("work = %+v, want primary artist set, year 1991, type Album", work)
+	}
+	remaining, err := library.NewIdentity(opened).EditionlessWorks(t.Context(), 0, 10)
+	if err != nil {
+		t.Fatalf("EditionlessWorks: %v", err)
+	}
+	if len(remaining) != 0 {
+		t.Errorf("EditionlessWorks = %+v, want the enriched work gone from the pass", remaining)
+	}
+}
