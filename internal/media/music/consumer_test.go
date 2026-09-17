@@ -530,3 +530,74 @@ func TestObserve_ResolvingOnASecondSweepClearsTheQueueEntry(t *testing.T) {
 		t.Errorf("queue = %+v, want empty -- the second sweep resolved it", rows)
 	}
 }
+
+// An untagged track beside tracks that identified to one album is that album's:
+// the test library had 127 such files in the unidentified queue.
+func TestObserve_AnUnidentifiedFileJoinsTheAlbumItsFolderSiblingsAgreeOn(t *testing.T) {
+	consumer, opened, fsys := newConsumer(t)
+	tagged := []byte("kebilegev bibihi 01, tagged")
+	untagged := []byte("kebilegev bibihi 07, untagged")
+	writeMusicFile(t, fsys, "P!po/Kebilegev Bibihi/01.m4a", tagged)
+	writeMusicFile(t, fsys, "P!po/Kebilegev Bibihi/07.m4a", untagged)
+
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+	batch := []scan.Observed{
+		observedFile("P!po/Kebilegev Bibihi/01.m4a", int64(len(tagged)), mediatool.Tags{
+			"album": "Kebilegev Bibihi", "musicbrainz_releasegroupid": releaseGroupMBID,
+		}),
+		observedFile("P!po/Kebilegev Bibihi/07.m4a", int64(len(untagged)), mediatool.Tags{"album": "Kebilegev Bibihi"}),
+	}
+
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queue, err := library.NewUnidentified(opened).List(t.Context(), nil, paginate.Cursor{}, 50)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(queue) != 0 {
+		t.Errorf("queue = %+v, want the untagged sibling identified, not queued", queue)
+	}
+	work, err := librarydb.New(opened.Read()).GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID,
+	})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v", err)
+	}
+	locations, err := library.NewIdentity(opened).WorkFileLocations(t.Context(), []int64{work.ID})
+	if err != nil {
+		t.Fatalf("WorkFileLocations: %v", err)
+	}
+	if len(locations) != 2 {
+		t.Errorf("work files = %+v, want both tracks under the one album", locations)
+	}
+}
+
+// Siblings that disagree prove nothing about a file between them.
+func TestObserve_SiblingsThatDisagreeLeaveAnUnidentifiedFileQueued(t *testing.T) {
+	consumer, opened, fsys := newConsumer(t)
+	first, second, untagged := []byte("album a track"), []byte("album b track"), []byte("untagged track")
+	writeMusicFile(t, fsys, "Mixed/a.m4a", first)
+	writeMusicFile(t, fsys, "Mixed/b.m4a", second)
+	writeMusicFile(t, fsys, "Mixed/c.m4a", untagged)
+
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+	batch := []scan.Observed{
+		observedFile("Mixed/a.m4a", int64(len(first)), mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}),
+		observedFile("Mixed/b.m4a", int64(len(second)), mediatool.Tags{"musicbrainz_releasegroupid": "11111111-2222-3333-4444-555555555555"}),
+		observedFile("Mixed/c.m4a", int64(len(untagged)), mediatool.Tags{}),
+	}
+
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queue, err := library.NewUnidentified(opened).List(t.Context(), nil, paginate.Cursor{}, 50)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(queue) != 1 || queue[0].RelPath != "Mixed/c.m4a" {
+		t.Errorf("queue = %+v, want only the untagged file, left for manual review", queue)
+	}
+}
