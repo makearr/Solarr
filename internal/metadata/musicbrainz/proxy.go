@@ -32,11 +32,26 @@ func (proxy) Name() string { return ProxyName }
 // exactly as the service returns it -- lowercase at the top level, PascalCase
 // inside Releases -- confirmed against a live response, not a typo here.
 type proxyAlbum struct {
-	ID          string         `json:"id"`
-	Title       string         `json:"title"`
-	Type        string         `json:"type"`
-	ReleaseDate string         `json:"releasedate"`
-	Releases    []proxyRelease `json:"Releases"`
+	ID             string             `json:"id"`
+	Title          string             `json:"title"`
+	Type           string             `json:"type"`
+	SecondaryTypes []string           `json:"secondarytypes"`
+	ReleaseDate    string             `json:"releasedate"`
+	ArtistID       string             `json:"artistid"`
+	Artists        []proxyAlbumArtist `json:"artists"`
+	Genres         []string           `json:"genres"`
+	Links          []proxyLink        `json:"links"`
+	Releases       []proxyRelease     `json:"Releases"`
+}
+
+type proxyAlbumArtist struct {
+	ID   string `json:"id"`
+	Name string `json:"artistname"`
+}
+
+type proxyLink struct {
+	Target string `json:"target"`
+	Type   string `json:"type"`
 }
 
 type proxyRelease struct {
@@ -76,7 +91,10 @@ func (p proxy) Album(ctx context.Context, releaseGroupMBID, releaseMBID string) 
 
 	rg := ReleaseGroup{
 		MBID: parsed.ID, Title: parsed.Title,
-		PrimaryType: parsed.Type, FirstReleaseDate: parsed.ReleaseDate,
+		PrimaryType: parsed.Type, SecondaryTypes: parsed.SecondaryTypes, FirstReleaseDate: parsed.ReleaseDate,
+		ArtistCredit: proxyArtistCredit(parsed),
+		Genres:       proxyGenres(parsed.Genres),
+		WikidataQID:  proxyWikidataQID(parsed.Links),
 	}
 	if releaseMBID == "" {
 		return rg, Release{}, nil
@@ -89,6 +107,43 @@ func (p proxy) Album(ctx context.Context, releaseGroupMBID, releaseMBID string) 
 	}
 	return ReleaseGroup{}, Release{}, fmt.Errorf(
 		"musicbrainz-proxy: release %s is not under release group %s", releaseMBID, releaseGroupMBID)
+}
+
+// proxyArtistCredit is the album's artists, its own primary artist (artistid)
+// first, since credit order decides a work's primary artist. These were never
+// read, so an album enriched through the proxy -- the default first provider --
+// got no artist, and a fresh library had no artists at all (found 2026-09-17).
+func proxyArtistCredit(album proxyAlbum) []ArtistCredit {
+	credits := make([]ArtistCredit, 0, len(album.Artists))
+	for _, artist := range album.Artists {
+		if artist.ID == album.ArtistID {
+			credits = append(credits, ArtistCredit{MBID: artist.ID, Name: artist.Name})
+		}
+	}
+	for _, artist := range album.Artists {
+		if artist.ID != album.ArtistID {
+			credits = append(credits, ArtistCredit{MBID: artist.ID, Name: artist.Name})
+		}
+	}
+	return credits
+}
+
+// proxyGenres keeps the proxy's order, best first; it reports no vote counts.
+func proxyGenres(names []string) []Genre {
+	genres := make([]Genre, len(names))
+	for index, name := range names {
+		genres[index] = Genre{Name: name}
+	}
+	return genres
+}
+
+func proxyWikidataQID(links []proxyLink) string {
+	for _, link := range links {
+		if link.Type == "wikidata" {
+			return wikidataQID(link.Target)
+		}
+	}
+	return ""
 }
 
 func toRelease(r proxyRelease) Release {

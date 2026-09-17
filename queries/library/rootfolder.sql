@@ -58,3 +58,12 @@ WHERE role = 'artist' AND work_id IN (
 INSERT INTO work_file_hint (work_id, media_object_id, first_seen_at)
 VALUES (?, ?, ?)
 ON CONFLICT (work_id) DO NOTHING;
+
+-- Where each named work's recorded file lives, every path of it. An album's
+-- directory is the unit a scoped rescan reads once its tracklist exists.
+-- name: ListWorkFileLocations :many
+SELECT h.work_id AS work_id, lp.root_folder_id AS root_folder_id, lp.rel_path AS rel_path
+FROM work_file_hint h
+JOIN library_path lp ON lp.media_object_id = h.media_object_id
+WHERE h.work_id IN (SELECT value FROM json_each(sqlc.arg(work_ids)))
+ORDER BY h.work_id, lp.id;

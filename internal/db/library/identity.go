@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -219,6 +220,34 @@ func resolveWork(
 		return 0, false, err
 	}
 	return workID, created, nil
+}
+
+// WorkFileLocation is one path of the file recorded for a work.
+type WorkFileLocation struct {
+	WorkID       int64
+	RootFolderID int64
+	RelPath      string
+}
+
+// WorkFileLocations answers every path of the file recorded for each of these
+// works (work_file_hint); a work with none is simply absent.
+func (i Identity) WorkFileLocations(ctx context.Context, workIDs []int64) ([]WorkFileLocation, error) {
+	if len(workIDs) == 0 {
+		return nil, nil
+	}
+	encoded, err := json.Marshal(workIDs)
+	if err != nil {
+		return nil, fmt.Errorf("library: encode work ids: %w", err)
+	}
+	rows, err := librarydb.New(i.store.Read()).ListWorkFileLocations(ctx, string(encoded))
+	if err != nil {
+		return nil, fmt.Errorf("library: work file locations: %w", err)
+	}
+	locations := make([]WorkFileLocation, len(rows))
+	for index, row := range rows {
+		locations[index] = WorkFileLocation{WorkID: row.WorkID, RootFolderID: row.RootFolderID, RelPath: row.RelPath}
+	}
+	return locations, nil
 }
 
 // linkWorkFileHint remembers the file a work was resolved from, when the link

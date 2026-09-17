@@ -156,3 +156,42 @@ func (q *Queries) ListRootFoldersForWork(ctx context.Context, workID int64) ([]i
 	}
 	return items, nil
 }
+
+const listWorkFileLocations = `-- name: ListWorkFileLocations :many
+SELECT h.work_id AS work_id, lp.root_folder_id AS root_folder_id, lp.rel_path AS rel_path
+FROM work_file_hint h
+JOIN library_path lp ON lp.media_object_id = h.media_object_id
+WHERE h.work_id IN (SELECT value FROM json_each(?1))
+ORDER BY h.work_id, lp.id
+`
+
+type ListWorkFileLocationsRow struct {
+	WorkID       int64
+	RootFolderID int64
+	RelPath      string
+}
+
+// Where each named work's recorded file lives, every path of it. An album's
+// directory is the unit a scoped rescan reads once its tracklist exists.
+func (q *Queries) ListWorkFileLocations(ctx context.Context, workIds interface{}) ([]ListWorkFileLocationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkFileLocations, workIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkFileLocationsRow{}
+	for rows.Next() {
+		var i ListWorkFileLocationsRow
+		if err := rows.Scan(&i.WorkID, &i.RootFolderID, &i.RelPath); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

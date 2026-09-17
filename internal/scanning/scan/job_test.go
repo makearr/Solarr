@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -519,5 +520,39 @@ func TestActionKeyFor_IsPerRoot(t *testing.T) {
 	}
 	if !strings.Contains(scan.ActionKeyFor(7), "7") {
 		t.Errorf("ActionKeyFor(7) = %q, want it to name the root", scan.ActionKeyFor(7))
+	}
+}
+
+// A scoped rescan reads only the albums it names, nothing beneath them, and
+// records no progress: it did not walk the root, so it is no watermark.
+func TestJob_RescansOnlyTheNamedDirectoriesAndRecordsNoProgress(t *testing.T) {
+	fixture := newJobFixture(t,
+		"Heka/Detisisu Binip (1991)/01.m4a",
+		"Heka/Detisisu Binip (1991)/02.m4a",
+		"Heka/Detisisu Binip (1991)/scans/cover.m4a",
+		"Heka/Watermark (1988)/01.m4a",
+		"P!po/Trustfall (2023)/01.m4a",
+	)
+	handler := fixture.job(t, scan.IsAudio)
+
+	if err := fixture.run(t, handler, scan.Payload{
+		RootFolderID: 1, CategoryID: 3,
+		Directories: []string{"Heka/Detisisu Binip (1991)", "P!po/Trustfall (2023)", "Gone/Deleted (2000)"},
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	got := fixture.recorder.paths()
+	slices.Sort(got)
+	want := []string{
+		"Heka/Detisisu Binip (1991)/01.m4a",
+		"Heka/Detisisu Binip (1991)/02.m4a",
+		"P!po/Trustfall (2023)/01.m4a",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("observed %v, want only the named directories' own files %v", got, want)
+	}
+	if progress := fixture.progress(t); progress != (library.ScanProgress{RootFolderID: 1}) {
+		t.Errorf("progress = %+v, want none recorded by a scoped rescan", progress)
 	}
 }

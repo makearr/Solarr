@@ -2,6 +2,7 @@ package library_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
@@ -379,5 +380,36 @@ func TestNeedingEmbeddedArtwork_ExcludesAWorkWithACover(t *testing.T) {
 	}
 	if len(found) != 0 {
 		t.Fatalf("NeedingEmbeddedArtwork = %+v, want none once a cover exists", found)
+	}
+}
+
+func TestWorkFileLocations_AnswersTheRecordedFilesPathsForTheNamedWorks(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	physical := library.NewPhysical(opened)
+
+	resolve := func(releaseGroup, relPath, quickHash string) int64 {
+		t.Helper()
+		mediaObjectID := registerFileForArtwork(t, physical, 1, relPath, quickHash)
+		workIDs, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+			Provider: "musicbrainz:release-group", ExternalID: releaseGroup, Confidence: 1.0,
+			Work:         library.WorkIdentity{MediaType: "music", CanonicalTitle: releaseGroup, SortTitle: releaseGroup},
+			RootFolderID: 1, MediaObjectID: mediaObjectID,
+		}})
+		if err != nil {
+			t.Fatalf("ResolveWorks: %v", err)
+		}
+		return workIDs[0]
+	}
+	heka := resolve("rg-heka", "Heka/Detisisu Binip (1991)/01.m4a", "q-heka")
+	resolve("rg-pink", "P!po/Trustfall (2023)/01.m4a", "q-pink")
+
+	got, err := identity.WorkFileLocations(t.Context(), []int64{heka, 9999})
+	if err != nil {
+		t.Fatalf("WorkFileLocations: %v", err)
+	}
+	want := []library.WorkFileLocation{{WorkID: heka, RootFolderID: 1, RelPath: "Heka/Detisisu Binip (1991)/01.m4a"}}
+	if !slices.Equal(got, want) {
+		t.Errorf("WorkFileLocations = %+v, want %+v", got, want)
 	}
 }

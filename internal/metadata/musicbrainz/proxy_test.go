@@ -2,6 +2,7 @@ package musicbrainz_test
 
 import (
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
@@ -104,6 +105,88 @@ func TestProxy_AlbumErrorsWhenTheReleaseIsNotUnderTheGroup(t *testing.T) {
 // An empty releaseMBID answers the release group alone -- section 21.3's
 // manual-resolve action only ever has a release group id, never a specific
 // pressing, to confirm a queued file against.
+// Trimmed from the real api.lidarr.audio/api/v0.4/album response for Heka's
+// Detisisu Binip, captured 2026-09-17: only the artist, genre and link fields,
+// which proxyAlbumBody above leaves out -- why no test noticed they were never read.
+const proxyAlbumWithArtistsBody = `{
+  "id": "fee9cdd9-fa88-4fda-8fc0-0fc37765bfb5",
+  "title": "Detisisu Binip",
+  "type": "Album",
+  "secondarytypes": [],
+  "releasedate": "1991-11-04",
+  "artistid": "9546cacb-d515-4327-878c-de2125eb70af",
+  "artists": [
+    {
+      "id": "9546cacb-d515-4327-878c-de2125eb70af",
+      "artistname": "Heka",
+      "sortname": "Heka"
+    }
+  ],
+  "genres": [
+    "New Age",
+    "Zahudu New Age",
+    "Ambient"
+  ],
+  "links": [
+    {
+      "target": "https://www.discogs.com/master/27537",
+      "type": "discogs"
+    },
+    {
+      "target": "https://www.wikidata.org/wiki/Q1049433",
+      "type": "wikidata"
+    }
+  ],
+  "Releases": []
+}`
+
+// An album enriched through the proxy must carry its artist, or a fresh library
+// ends up with no artists at all; genres and the Wikidata bridge ride along.
+func TestProxy_AlbumReadsArtistsGenresAndWikidata(t *testing.T) {
+	const shepherdMoons = "fee9cdd9-fa88-4fda-8fc0-0fc37765bfb5"
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://lidarr.invalid/album/" + shepherdMoons: {status: http.StatusOK, body: proxyAlbumWithArtistsBody},
+	}}
+	source := musicbrainz.NewProxy(newTestClient(t, transport, musicbrainz.ProxyName), "https://lidarr.invalid")
+
+	rg, _, err := source.Album(t.Context(), shepherdMoons, "")
+	if err != nil {
+		t.Fatalf("Album: %v", err)
+	}
+	wantCredit := []musicbrainz.ArtistCredit{{MBID: "9546cacb-d515-4327-878c-de2125eb70af", Name: "Heka"}}
+	if !slices.Equal(rg.ArtistCredit, wantCredit) {
+		t.Errorf("ArtistCredit = %+v, want %+v", rg.ArtistCredit, wantCredit)
+	}
+	wantGenres := []musicbrainz.Genre{{Name: "New Age"}, {Name: "Zahudu New Age"}, {Name: "Ambient"}}
+	if !slices.Equal(rg.Genres, wantGenres) {
+		t.Errorf("Genres = %+v, want %+v", rg.Genres, wantGenres)
+	}
+	if rg.WikidataQID != "Q1049433" {
+		t.Errorf("WikidataQID = %q, want Q1049433", rg.WikidataQID)
+	}
+}
+
+// Credit order decides a work's primary artist, so the album's own artistid
+// leads even when the proxy lists a featured artist first.
+func TestProxy_AlbumPutsItsPrimaryArtistFirst(t *testing.T) {
+	const body = `{"id": "rg-1", "title": "Duet", "type": "Album", "artistid": "primary",
+		"artists": [{"id": "guest", "artistname": "Guest"}, {"id": "primary", "artistname": "Primary"}],
+		"Releases": []}`
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://lidarr.invalid/album/rg-1": {status: http.StatusOK, body: body},
+	}}
+	source := musicbrainz.NewProxy(newTestClient(t, transport, musicbrainz.ProxyName), "https://lidarr.invalid")
+
+	rg, _, err := source.Album(t.Context(), "rg-1", "")
+	if err != nil {
+		t.Fatalf("Album: %v", err)
+	}
+	want := []musicbrainz.ArtistCredit{{MBID: "primary", Name: "Primary"}, {MBID: "guest", Name: "Guest"}}
+	if !slices.Equal(rg.ArtistCredit, want) {
+		t.Errorf("ArtistCredit = %+v, want %+v", rg.ArtistCredit, want)
+	}
+}
+
 func TestProxy_AlbumWithNoReleaseMBIDAnswersTheReleaseGroupAlone(t *testing.T) {
 	transport := &fakeTransport{responses: map[string]fakeResponse{
 		"https://lidarr.invalid/album/" + okComputerRG: {status: http.StatusOK, body: proxyAlbumBody},
