@@ -5,11 +5,13 @@ import (
 	"log/slog"
 	"path/filepath"
 
+	"github.com/makearr/MediaNexus/cmd/medianexus/adapters"
 	"github.com/makearr/MediaNexus/internal/db/library"
 	"github.com/makearr/MediaNexus/internal/jobs"
 	"github.com/makearr/MediaNexus/internal/media/music"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
 	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/MediaNexus/internal/platform/mediatool"
 )
 
 // registerEnrichJob wires the background metadata sweep into the registry and the
@@ -39,6 +41,8 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 		Biography: p.wikidataFetcher(),
 		Artworks:  library.NewArtworks(p.library),
 		Realigner: realigner{p: p},
+		Tags:      mediatool.New(nil, 0),
+		Roots:     adapters.Roots{Cache: p.cache},
 		HTTP:      imageClient,
 		FS:        p.fsys,
 		ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"),

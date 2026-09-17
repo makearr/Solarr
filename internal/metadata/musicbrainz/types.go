@@ -163,6 +163,13 @@ type ArtistLookup interface {
 	Artist(ctx context.Context, mbid string) (Artist, error)
 }
 
+// ReleaseLister is an optional Source capability: every release of a release
+// group, each with its tracklist -- what choosing an edition for an album
+// identified only at release-group level compares the files against.
+type ReleaseLister interface {
+	Releases(ctx context.Context, releaseGroupMBID string) ([]Release, error)
+}
+
 // Discography is an optional Source capability: every release group credited
 // to an artist, browsed rather than looked up one release group at a time --
 // what subscription.expand (section 19.6, todo 4.4) needs to decide, per

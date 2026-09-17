@@ -58,7 +58,7 @@ type ArtworkJob struct {
 	artworks  library.Artworks
 	coverArt  CoverArtFetcher
 	pictures  EmbeddedPictureReader
-	roots     ArtworkRoots
+	roots     RootFolders
 	http      *httpx.Client
 	fs        fsx.FS
 	imagesDir string
@@ -73,9 +73,9 @@ type EmbeddedPictureReader interface {
 	EmbeddedPicture(ctx context.Context, path string) ([]byte, error)
 }
 
-// ArtworkRoots resolves a root folder by id; root folders are settings.db
-// policy (ADR-25), so the job asks rather than reading the table.
-type ArtworkRoots interface {
+// RootFolders resolves a root folder by id; root folders are settings.db
+// policy (ADR-25), so a job asks rather than reading the table.
+type RootFolders interface {
 	RootFolder(id int64) (settings.RootFolder, bool)
 }
 
@@ -85,7 +85,7 @@ type ArtworkJobConfig struct {
 	Artworks  library.Artworks
 	CoverArt  CoverArtFetcher
 	Pictures  EmbeddedPictureReader
-	Roots     ArtworkRoots
+	Roots     RootFolders
 	HTTP      *httpx.Client
 	FS        fsx.FS
 	ImagesDir string

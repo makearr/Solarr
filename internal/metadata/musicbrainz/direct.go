@@ -334,7 +334,32 @@ func (d direct) release(ctx context.Context, mbid string) (Release, error) {
 	if err := getJSON(ctx, d.client, url, &parsed); err != nil {
 		return Release{}, fmt.Errorf("musicbrainz: release %s: %w", mbid, err)
 	}
+	return parsed.toRelease(), nil
+}
 
+// directReleaseBrowseLimit is MusicBrainz's own maximum page size for a browse.
+const directReleaseBrowseLimit = 100
+
+// Releases implements ReleaseLister with one browse request: every release of
+// the group, tracklists included. A group with more than one page of releases
+// is judged on its first page.
+func (d direct) Releases(ctx context.Context, releaseGroupMBID string) ([]Release, error) {
+	var parsed struct {
+		Releases []directRelease `json:"releases"`
+	}
+	url := fmt.Sprintf("%s/release?release-group=%s&fmt=json&inc=recordings+labels+media&limit=%d",
+		d.baseURL, releaseGroupMBID, directReleaseBrowseLimit)
+	if err := getJSON(ctx, d.client, url, &parsed); err != nil {
+		return nil, fmt.Errorf("musicbrainz: releases of %s: %w", releaseGroupMBID, err)
+	}
+	releases := make([]Release, len(parsed.Releases))
+	for index, one := range parsed.Releases {
+		releases[index] = one.toRelease()
+	}
+	return releases, nil
+}
+
+func (parsed directRelease) toRelease() Release {
 	release := Release{
 		MBID: parsed.ID, Title: parsed.Title, Status: strings.ToLower(parsed.Status),
 		Date: parsed.Date, Country: parsed.Country, Barcode: parsed.Barcode,
@@ -358,7 +383,7 @@ func (d direct) release(ctx context.Context, mbid string) (Release, error) {
 		}
 		release.Media = append(release.Media, out)
 	}
-	return release, nil
+	return release
 }
 
 // getJSON is the common request shape both sources use: GET, bounded read,

@@ -212,3 +212,34 @@ func TestProxy_NameIsTheBreakerBucketKey(t *testing.T) {
 		t.Errorf("Name() = %q, want %q", source.Name(), musicbrainz.ProxyName)
 	}
 }
+
+// Choosing an edition compares files against every release's tracklist; the
+// proxy's album response already carries them all.
+func TestProxy_ReleasesListsEveryReleaseWithItsTracks(t *testing.T) {
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://lidarr.invalid/album/" + okComputerRG: {status: http.StatusOK, body: proxyAlbumBody},
+	}}
+	source := musicbrainz.NewProxy(newTestClient(t, transport, musicbrainz.ProxyName), "https://lidarr.invalid")
+	lister, ok := source.(musicbrainz.ReleaseLister)
+	if !ok {
+		t.Fatal("the proxy does not implement ReleaseLister")
+	}
+
+	releases, err := lister.Releases(t.Context(), okComputerRG)
+	if err != nil {
+		t.Fatalf("Releases: %v", err)
+	}
+	if len(releases) != 2 {
+		t.Fatalf("Releases = %d, want both of the album's releases", len(releases))
+	}
+	tracks := func(release musicbrainz.Release) int {
+		count := 0
+		for _, medium := range release.Media {
+			count += len(medium.Tracks)
+		}
+		return count
+	}
+	if releases[0].Title != "KI Pecezinu" || tracks(releases[0]) != 2 || tracks(releases[1]) != 1 {
+		t.Errorf("Releases = %+v, want the CD with 2 tracks and the cassette with 1", releases)
+	}
+}

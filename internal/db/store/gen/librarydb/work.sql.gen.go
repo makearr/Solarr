@@ -836,7 +836,10 @@ FROM work_external_id x
 WHERE x.provider = 'musicbrainz:release-group'
   AND x.work_id > ?1
   AND NOT EXISTS (SELECT 1 FROM edition e WHERE e.work_id = x.work_id)
-  AND NOT EXISTS (SELECT 1 FROM credit c WHERE c.work_id = x.work_id)
+  AND (
+    NOT EXISTS (SELECT 1 FROM credit c WHERE c.work_id = x.work_id)
+    OR EXISTS (SELECT 1 FROM work_file f WHERE f.work_id = x.work_id)
+  )
 GROUP BY x.work_id
 ORDER BY x.work_id
 LIMIT ?2
@@ -853,7 +856,8 @@ type ListEditionlessWorksRow struct {
 }
 
 // Works identified at release-group level only (the text search never picks an
-// edition) and not yet enriched: no edition, no credit. 'musicbrainz:release-group'
+// edition): no edition, and either not enriched yet (no credit) or with files on
+// disk still waiting for an edition to be chosen. 'musicbrainz:release-group'
 // must match internal/media/music.ProviderReleaseGroup.
 func (q *Queries) ListEditionlessWorks(ctx context.Context, arg ListEditionlessWorksParams) ([]ListEditionlessWorksRow, error) {
 	rows, err := q.db.QueryContext(ctx, listEditionlessWorks, arg.AfterID, arg.PageSize)
