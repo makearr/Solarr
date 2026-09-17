@@ -137,7 +137,7 @@ func TestArtworkJob_FetchesResizesAndRecordsEndToEnd(t *testing.T) {
 	}
 
 	artworks := library.NewArtworks(opened)
-	remaining, err := artworks.NeedingArtwork(t.Context(), 10)
+	remaining, err := artworks.NeedingArtwork(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingArtwork: %v", err)
 	}
@@ -205,4 +205,37 @@ func refineWithReleaseMBIDForArtworkJob(t *testing.T, identity library.Identity,
 	}
 	t.Fatalf("no placeholder edition found for %s", releaseMBID)
 	return 0
+}
+
+// The sweep re-read the lowest twenty works still without a cover. Twenty
+// releases the archive has no art for therefore came back forever, and nothing
+// after them was ever reached -- why only 516 of a library's albums ever got
+// covers. Bounded by a deadline so the old behaviour fails rather than hangs.
+func TestArtworkJob_ReachesPastAFullPageOfReleasesWithNoArt(t *testing.T) {
+	server := testImageServer(t)
+	coverArt := &fakeCoverArt{urlByMBID: map[string]string{"release-with-art": server.URL + "/cover.png"}}
+	job, opened, _ := newArtworkJob(t, coverArt, server.URL)
+
+	identity := library.NewIdentity(opened)
+	for index := range 20 {
+		refineWithReleaseMBIDForArtworkJob(t, identity, fmt.Sprintf("rg-bare-%d", index), fmt.Sprintf("release-bare-%d", index))
+	}
+	lastWorkID := refineWithReleaseMBIDForArtworkJob(t, identity, "rg-with-art", "release-with-art")
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	if err := job.Run(ctx, jobs.Job{Type: music.ArtworkJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if coverArt.calls != 21 {
+		t.Errorf("CoverArt fetched %d times, want each of the 21 releases asked exactly once", coverArt.calls)
+	}
+	recorded, err := library.NewArtworks(opened).GetForWork(t.Context(), lastWorkID)
+	if err != nil {
+		t.Fatalf("GetForWork: %v", err)
+	}
+	if !recorded.Found {
+		t.Fatal("the work after a full page of art-less releases never got its cover")
+	}
 }

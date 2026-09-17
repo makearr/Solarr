@@ -49,7 +49,7 @@ func TestNeedingArtwork_ListsARefinedEditionsReleaseMBID(t *testing.T) {
 
 	workID := refineWithReleaseMBID(t, identity, "rg-artwork-1", "release-artwork-1")
 
-	found, err := artworks.NeedingArtwork(t.Context(), 10)
+	found, err := artworks.NeedingArtwork(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingArtwork: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestNeedingArtwork_ExcludesAPlaceholderEdition(t *testing.T) {
 	}
 
 	// Still kind='unknown' -- never refined -- so it must not be a candidate yet.
-	found, err := artworks.NeedingArtwork(t.Context(), 10)
+	found, err := artworks.NeedingArtwork(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingArtwork: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestRecord_RemovesTheWorkFromNeedingArtwork(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 
-	found, err := artworks.NeedingArtwork(t.Context(), 10)
+	found, err := artworks.NeedingArtwork(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingArtwork: %v", err)
 	}

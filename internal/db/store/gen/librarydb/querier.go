@@ -457,7 +457,7 @@ type Querier interface {
 	// 'musicbrainz:release' must match internal/media/music.ProviderRelease -- the
 	// release-group id (internal/media/music.ProviderReleaseGroup) identifies the work,
 	// not the edition, and is the wrong id for this API (section 19.6's tag table).
-	ListWorksNeedingArtwork(ctx context.Context, pageSize int64) ([]ListWorksNeedingArtworkRow, error)
+	ListWorksNeedingArtwork(ctx context.Context, arg ListWorksNeedingArtworkParams) ([]ListWorksNeedingArtworkRow, error)
 	MarkDesiredItemDirty(ctx context.Context, id int64) error
 	MarkDesiredItemPlanned(ctx context.Context, arg MarkDesiredItemPlannedParams) error
 	// After a restore the planner has to re-evaluate everything (ADR-15). Batched so no

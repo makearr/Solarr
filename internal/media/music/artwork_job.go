@@ -93,12 +93,15 @@ func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
 	}
 
 	total, failed, skipped := 0, 0, 0
+	// Walked by work id: a release with no archive art records nothing, so
+	// re-reading from the top would return the same page indefinitely.
+	var afterWorkID int64
 	for {
 		if err := ctx.Err(); err != nil {
 			return jobs.Retryablef("artwork.context", string(ArtworkJobType), err)
 		}
 
-		batch, err := j.artworks.NeedingArtwork(ctx, artworkBatchSize)
+		batch, err := j.artworks.NeedingArtwork(ctx, afterWorkID, artworkBatchSize)
 		if err != nil {
 			return fmt.Errorf("music: artwork: %w", err)
 		}
@@ -108,6 +111,7 @@ func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
 
 		for _, candidate := range batch {
 			total++
+			afterWorkID = candidate.WorkID
 			switch err := j.processOne(ctx, candidate); {
 			case errors.Is(err, musicbrainz.ErrNoCoverArt):
 				// Not a failure: this release genuinely has no art. Recorded

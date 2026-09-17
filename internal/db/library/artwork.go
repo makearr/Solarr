@@ -33,8 +33,10 @@ const artworkKindCover = "cover"
 // NeedingArtwork returns up to pageSize works with a usable release MBID and no
 // recorded cover, lowest work id first. The result set shrinks as Record
 // succeeds, the same no-cursor-needed shape library.PlaceholderEditions uses.
-func (a Artworks) NeedingArtwork(ctx context.Context, pageSize int64) ([]ArtworkCandidate, error) {
-	rows, err := librarydb.New(a.store.Read()).ListWorksNeedingArtwork(ctx, pageSize)
+func (a Artworks) NeedingArtwork(ctx context.Context, afterWorkID, pageSize int64) ([]ArtworkCandidate, error) {
+	rows, err := librarydb.New(a.store.Read()).ListWorksNeedingArtwork(ctx, librarydb.ListWorksNeedingArtworkParams{
+		AfterID: afterWorkID, PageSize: pageSize,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("library: works needing artwork: %w", err)
 	}

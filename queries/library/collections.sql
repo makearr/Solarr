@@ -86,6 +86,7 @@ SELECT e.work_id AS work_id, x.external_id AS release_mbid
 FROM edition e
 JOIN edition_external_id x ON x.edition_id = e.id AND x.provider = 'musicbrainz:release'
 WHERE e.kind != 'unknown'
+  AND e.work_id > sqlc.arg(after_id)
   AND e.id = (
     SELECT MIN(e2.id) FROM edition e2
     JOIN edition_external_id x2 ON x2.edition_id = e2.id AND x2.provider = 'musicbrainz:release'

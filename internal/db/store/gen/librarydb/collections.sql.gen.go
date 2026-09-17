@@ -480,6 +480,7 @@ SELECT e.work_id AS work_id, x.external_id AS release_mbid
 FROM edition e
 JOIN edition_external_id x ON x.edition_id = e.id AND x.provider = 'musicbrainz:release'
 WHERE e.kind != 'unknown'
+  AND e.work_id > ?1
   AND e.id = (
     SELECT MIN(e2.id) FROM edition e2
     JOIN edition_external_id x2 ON x2.edition_id = e2.id AND x2.provider = 'musicbrainz:release'
@@ -489,8 +490,13 @@ WHERE e.kind != 'unknown'
     SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = e.work_id AND a.kind = 'cover'
   )
 ORDER BY e.work_id
-LIMIT ?1
+LIMIT ?2
 `
+
+type ListWorksNeedingArtworkParams struct {
+	AfterID  int64
+	PageSize int64
+}
 
 type ListWorksNeedingArtworkRow struct {
 	WorkID      int64
@@ -505,8 +511,8 @@ type ListWorksNeedingArtworkRow struct {
 // 'musicbrainz:release' must match internal/media/music.ProviderRelease -- the
 // release-group id (internal/media/music.ProviderReleaseGroup) identifies the work,
 // not the edition, and is the wrong id for this API (section 19.6's tag table).
-func (q *Queries) ListWorksNeedingArtwork(ctx context.Context, pageSize int64) ([]ListWorksNeedingArtworkRow, error) {
-	rows, err := q.db.QueryContext(ctx, listWorksNeedingArtwork, pageSize)
+func (q *Queries) ListWorksNeedingArtwork(ctx context.Context, arg ListWorksNeedingArtworkParams) ([]ListWorksNeedingArtworkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorksNeedingArtwork, arg.AfterID, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}
