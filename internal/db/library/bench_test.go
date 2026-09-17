@@ -475,6 +475,11 @@ var planCases = []struct {
 	// IN, for the same reason -- it must not make SQLite abandon the outer
 	// sort index the way an IN-based filter does (notes.md).
 	{"fresh", library.WorkFilter{FreshSince: "2026-01-01"}, library.WorkCursor{}, "work_sort"},
+	// The Albums view's grouped order: migration 0022's expression index.
+	{"artist", library.WorkFilter{Sort: library.WorkSortArtist}, library.WorkCursor{}, "work_primary_artist_sort"},
+	{"artist, category visibility and cursor",
+		library.WorkFilter{Sort: library.WorkSortArtist, CategoryIDs: []int64{1}},
+		library.WorkCursor{SortArtist: "artist 50", SortTitle: "silver signals 50", ID: 100}, "work_primary_artist_sort"},
 }
 
 // A list that sorts its whole result cannot meet the ADR-28 page target at 500k, whatever

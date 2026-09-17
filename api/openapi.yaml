@@ -1278,9 +1278,10 @@ paths:
         - name: sort
           in: query
           description: >-
-            Which column orders the list. artist is not a valid value here
-            (Work.artist's own description explains why); title is the default.
-          schema: { type: string, enum: [title, year, added] }
+            Which column orders the list; title is the default. artist orders by
+            the primary artist's sort name, then title -- the Albums view's
+            grouping -- with a work that has no artist first.
+          schema: { type: string, enum: [title, year, added, artist] }
         - name: dir
           in: query
           schema: { type: string, enum: [asc, desc], default: asc }
@@ -4338,8 +4339,8 @@ components:
         artist:
           type: string
           description: >-
-            The work's own "artist"-role credit, when it has one. Not a
-            sort option on this endpoint yet -- nothing has asked for it.
+            The work's own primary artist credit, when it has one. Ordered on
+            by sort=artist.
         added_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         wanted_state:

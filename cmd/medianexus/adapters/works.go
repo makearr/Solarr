@@ -35,7 +35,8 @@ func (a Works) ListWorks(
 			WantedOnly:    filter.Wanted,
 		},
 		library.WorkCursor{
-			SortTitle: cursor.SortTitle, SortYear: cursor.SortYear, SortAdded: cursor.SortAdded, ID: cursor.ID,
+			SortTitle: cursor.SortTitle, SortYear: cursor.SortYear, SortAdded: cursor.SortAdded,
+			SortArtist: cursor.SortArtist, ID: cursor.ID,
 		},
 		pageSize)
 	if err != nil {
@@ -46,7 +47,8 @@ func (a Works) ListWorks(
 	for index, row := range rows {
 		view := apiserver.WorkRow{
 			ID: row.ID, MediaType: row.MediaType, Title: row.CanonicalTitle, SortTitle: row.SortTitle,
-			AddedAt: time.Unix(row.AddedAt, 0), UpdatedAt: time.Unix(row.UpdatedAt, 0),
+			ArtistSortName: row.ArtistSortName,
+			AddedAt:        time.Unix(row.AddedAt, 0), UpdatedAt: time.Unix(row.UpdatedAt, 0),
 		}
 		if row.Year.Valid {
 			view.Year = &row.Year.Int64

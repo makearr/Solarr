@@ -3,6 +3,7 @@ package library_test
 import (
 	"context"
 	"database/sql"
+	"slices"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
@@ -290,6 +291,58 @@ func TestListWorks_SortByYearOrdersAndPaginatesWithTies(t *testing.T) {
 	orderedBackward := seen[1] == tiedB.ID && seen[2] == tiedA.ID
 	if !orderedForward && !orderedBackward {
 		t.Errorf("order = %v, want the two tied-year works in the middle, each exactly once", seen)
+	}
+}
+
+// The Albums view groups by artist, so every album of one artist must arrive
+// together, titles in order within, and a page boundary inside a group must
+// not drop or repeat a row -- walked one row per page to force every boundary.
+func TestListWorks_SortByArtistGroupsThenOrdersByTitleAcrossPages(t *testing.T) {
+	opened, queries := newLibrary(t)
+	works := library.NewWorks(opened)
+
+	people := library.NewPeople(opened)
+	setArtist := func(workID int64, sortName string) {
+		t.Helper()
+		personID := resolvePersonNamed(t, people, "artist-"+sortName, sortName, sortName)
+		if err := queries.SetWorkPrimaryArtist(t.Context(), librarydb.SetWorkPrimaryArtistParams{
+			PrimaryArtistID:       sql.NullInt64{Int64: personID, Valid: true},
+			PrimaryArtistSortName: sql.NullString{String: sortName, Valid: true},
+			ID:                    workID,
+		}); err != nil {
+			t.Fatalf("SetWorkPrimaryArtist: %v", err)
+		}
+	}
+	pinkB := createWork(t, opened, "music", "Kebilegev Bibihi")
+	enyaW := createWork(t, opened, "music", "Watermark")
+	pinkA := createWork(t, opened, "music", "Attention")
+	enyaA := createWork(t, opened, "music", "Dumucamoko")
+	unknown := createWork(t, opened, "music", "Zebra")
+	setArtist(pinkB.ID, "P!po")
+	setArtist(enyaW.ID, "Heka")
+	setArtist(pinkA.ID, "P!po")
+	setArtist(enyaA.ID, "Heka")
+
+	filter := library.WorkFilter{Sort: library.WorkSortArtist}
+	var seen []int64
+	cursor := library.WorkCursor{}
+	for range 10 {
+		page, err := works.List(t.Context(), filter, cursor, 1)
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(page) == 0 {
+			break
+		}
+		last := page[0]
+		seen = append(seen, last.ID)
+		cursor = library.WorkCursor{SortArtist: last.ArtistSortName, SortTitle: last.SortTitle, ID: last.ID}
+	}
+
+	// A work with no artist sorts first, as the Tracks view already orders it.
+	want := []int64{unknown.ID, enyaA.ID, enyaW.ID, pinkA.ID, pinkB.ID}
+	if !slices.Equal(seen, want) {
+		t.Errorf("order = %v, want %v", seen, want)
 	}
 }
 

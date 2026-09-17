@@ -597,9 +597,9 @@ func TestListWorks_UnknownSortAnswers400(t *testing.T) {
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
 
-	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works?sort=artist"))
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works?sort=runtime"))
 	if recorder.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want 400: artist is not a valid sort column", recorder.Code)
+		t.Errorf("status = %d, want 400: runtime is not a valid sort column", recorder.Code)
 	}
 }
 
@@ -640,6 +640,50 @@ func TestListWorks_YearSortedCursorRoundTrips(t *testing.T) {
 	}
 	if fixture.works.lastCursor.SortYear != 1990 || fixture.works.lastCursor.ID != 1 {
 		t.Errorf("decoded cursor = %+v, want SortYear 1990, ID 1", fixture.works.lastCursor)
+	}
+}
+
+// The artist order carries two text values in one cursor; a title or artist
+// containing the characters a naive separator would use must survive intact.
+func TestListWorks_ArtistSortedCursorRoundTrips(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	artist := "XT/QK + Friends: Live"
+	fixture.works.rows = []apiserver.WorkRow{
+		{ID: 7, MediaType: "music", Title: "Kata in Mifed", SortTitle: "kata in mifed: remaster | 2020",
+			Artist: &artist, ArtistSortName: "XT/QK + Friends: Live",
+			AddedAt: fixture.clock.Now(), UpdatedAt: fixture.clock.Now()},
+		{ID: 8, MediaType: "music", Title: "Bopacem to Nedu", SortTitle: "bopacem to nedu",
+			AddedAt: fixture.clock.Now(), UpdatedAt: fixture.clock.Now()},
+	}
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works?sort=artist&limit=1"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	var body struct {
+		NextCursor string `json:"next_cursor"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.NextCursor == "" {
+		t.Fatal("NextCursor is empty, want a cursor")
+	}
+
+	recorder = fixture.do(authedGet(t, cookies, "/api/v1/works?sort=artist&cursor="+body.NextCursor))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("second page status %d (%s)", recorder.Code, recorder.Body)
+	}
+	want := apiserver.WorksCursor{SortArtist: "XT/QK + Friends: Live", SortTitle: "kata in mifed: remaster | 2020", ID: 7}
+	if fixture.works.lastCursor != want {
+		t.Errorf("decoded cursor = %+v, want %+v", fixture.works.lastCursor, want)
+	}
+	if fixture.works.lastFilter.Sort != apiserver.WorkSortArtist {
+		t.Errorf("filter sort = %q, want artist", fixture.works.lastFilter.Sort)
 	}
 }
 

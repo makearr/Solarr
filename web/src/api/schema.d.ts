@@ -2758,7 +2758,7 @@ export interface components {
             title: string;
             sort_title: string;
             year?: number;
-            /** @description The work's own "artist"-role credit, when it has one. Not a sort option on this endpoint yet -- nothing has asked for it. */
+            /** @description The work's own primary artist credit, when it has one. Ordered on by sort=artist. */
             artist?: string;
             /** Format: date-time */
             added_at: string;
@@ -5213,8 +5213,8 @@ export interface operations {
                 limit?: number;
                 /** @description Narrows to one category. Naming a category the caller cannot read answers 404, matching a single-item lookup (Invariant 37) rather than a filter that silently returns nothing. */
                 category_id?: number;
-                /** @description Which column orders the list. artist is not a valid value here (Work.artist's own description explains why); title is the default. */
-                sort?: "title" | "year" | "added";
+                /** @description Which column orders the list; title is the default. artist orders by the primary artist's sort name, then title -- the Albums view's grouping -- with a work that has no artist first. */
+                sort?: "title" | "year" | "added" | "artist";
                 dir?: "asc" | "desc";
                 /** @description Only works released within priority.new_release_days (ADR-55's release-date window; the 48h indexer/RSS window is not built -- it needs candidate.first_seen_at, stage 5). A work with no known release date, or one known only to the year or month, never matches: day precision is required. */
                 fresh?: boolean;
