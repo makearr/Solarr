@@ -279,7 +279,8 @@ WHERE p.work_id = sqlc.arg(work_id)
   AND a.alt_ref = sqlc.arg(alt_ref);
 
 -- Works identified at release-group level only (the text search never picks an
--- edition) and not yet enriched: no edition, no credit. 'musicbrainz:release-group'
+-- edition): no edition, and either not enriched yet (no credit) or with files on
+-- disk still waiting for an edition to be chosen. 'musicbrainz:release-group'
 -- must match internal/media/music.ProviderReleaseGroup.
 -- name: ListEditionlessWorks :many
 SELECT x.work_id AS work_id, CAST(MIN(x.external_id) AS TEXT) AS release_group_mbid
@@ -287,7 +288,10 @@ FROM work_external_id x
 WHERE x.provider = 'musicbrainz:release-group'
   AND x.work_id > sqlc.arg(after_id)
   AND NOT EXISTS (SELECT 1 FROM edition e WHERE e.work_id = x.work_id)
-  AND NOT EXISTS (SELECT 1 FROM credit c WHERE c.work_id = x.work_id)
+  AND (
+    NOT EXISTS (SELECT 1 FROM credit c WHERE c.work_id = x.work_id)
+    OR EXISTS (SELECT 1 FROM work_file f WHERE f.work_id = x.work_id)
+  )
 GROUP BY x.work_id
 ORDER BY x.work_id
 LIMIT sqlc.arg(page_size);

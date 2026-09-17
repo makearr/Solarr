@@ -26,6 +26,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/platform/clock"
 	"github.com/makearr/MediaNexus/internal/platform/fsx"
 	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/MediaNexus/internal/platform/mediatool"
 	"github.com/makearr/MediaNexus/migrations"
 )
 
@@ -87,7 +88,7 @@ func newEnrichJobWithBiographer(
 	t *testing.T, source musicbrainz.Source, biographer music.Biographer,
 ) (*music.EnrichJob, *store.Store, *librarydb.Queries) {
 	t.Helper()
-	return newEnrichJobRealigning(t, source, biographer, nil)
+	return newEnrichJobRealigning(t, source, biographer, nil, nil)
 }
 
 // fakeRealigner records every batch of works it is asked to realign.
@@ -101,7 +102,7 @@ func (f *fakeRealigner) RealignWorks(_ context.Context, workIDs []int64) error {
 }
 
 func newEnrichJobRealigning(
-	t *testing.T, source musicbrainz.Source, biographer music.Biographer, realigner *fakeRealigner,
+	t *testing.T, source musicbrainz.Source, biographer music.Biographer, realigner *fakeRealigner, tags music.TagReader,
 ) (*music.EnrichJob, *store.Store, *librarydb.Queries) {
 	t.Helper()
 	directory := t.TempDir()
@@ -154,6 +155,9 @@ func newEnrichJobRealigning(
 	}
 	if realigner != nil {
 		config.Realigner = realigner
+	}
+	if tags != nil {
+		config.Tags, config.Roots = tags, fakeArtworkRoots{}
 	}
 	return music.NewEnrichJob(config), libraryStore, librarydb.New(libraryStore.Read())
 }
@@ -860,7 +864,7 @@ func TestEnrichJob_HandsRefinedWorksBackToBeRealigned(t *testing.T) {
 		},
 	}
 	realigner := &fakeRealigner{}
-	job, opened, queries := newEnrichJobRealigning(t, source, nil, realigner)
+	job, opened, queries := newEnrichJobRealigning(t, source, nil, realigner, nil)
 	createPlaceholder(t, opened, "rg-1", "rel-1")
 
 	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
@@ -881,7 +885,7 @@ func TestEnrichJob_HandsRefinedWorksBackToBeRealigned(t *testing.T) {
 // Nothing refined, nothing to realign: an idle sweep must not queue rescans.
 func TestEnrichJob_RealignsNothingWhenNothingWasRefined(t *testing.T) {
 	realigner := &fakeRealigner{}
-	job, _, _ := newEnrichJobRealigning(t, &fakeSource{}, nil, realigner)
+	job, _, _ := newEnrichJobRealigning(t, &fakeSource{}, nil, realigner, nil)
 
 	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -983,5 +987,108 @@ func TestEnrichJob_EnrichesAWorkIdentifiedWithoutAnEdition(t *testing.T) {
 	}
 	if len(remaining) != 0 {
 		t.Errorf("EditionlessWorks = %+v, want the enriched work gone from the pass", remaining)
+	}
+}
+
+// releaseListingSource answers Album for whichever of its releases is asked
+// for, and lists them all.
+type releaseListingSource struct {
+	fakeArtistSource
+	releases []musicbrainz.Release
+}
+
+func (f *releaseListingSource) Album(_ context.Context, _, releaseMBID string) (musicbrainz.ReleaseGroup, musicbrainz.Release, error) {
+	for _, candidate := range f.releases {
+		if candidate.MBID == releaseMBID {
+			return f.rg, candidate, nil
+		}
+	}
+	return f.rg, musicbrainz.Release{}, nil
+}
+
+func (f *releaseListingSource) Releases(context.Context, string) ([]musicbrainz.Release, error) {
+	return f.releases, nil
+}
+
+// fakeTags answers each path with the tags recorded for its base name.
+type fakeTags map[string]mediatool.Tags
+
+func (f fakeTags) ReadTags(_ context.Context, paths []string) ([]mediatool.Probe, error) {
+	probes := make([]mediatool.Probe, len(paths))
+	for index, one := range paths {
+		probes[index] = mediatool.Probe{Path: one, Tags: f[filepath.Base(one)]}
+	}
+	return probes, nil
+}
+
+// An album the text search identified has no edition and so no tracklist:
+// Detisisu Binip showed "Missing" with its files on disk. Enrichment now picks
+// the release its files fit, refines it, and hands the album on to be realigned.
+func TestEnrichJob_ChoosesTheBestFittingEditionForAnAlbumWithoutOne(t *testing.T) {
+	track := func(position int, title string) musicbrainz.Track {
+		return musicbrainz.Track{Position: position, Title: title}
+	}
+	source := &releaseListingSource{
+		fakeArtistSource: fakeArtistSource{fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{MBID: "rg-shepherd", Title: "Detisisu Binip", PrimaryType: "Album"},
+		}},
+		releases: []musicbrainz.Release{
+			{MBID: "rel-deluxe", Title: "Detisisu Binip", Status: "official", Date: "2009", Media: []musicbrainz.Medium{{
+				Position: 1, Tracks: []musicbrainz.Track{track(1, "Detisisu Binip"), track(2, "Covabapoz Fofu"), track(3, "Bonus")},
+			}}},
+			{MBID: "rel-original", Title: "Detisisu Binip", Status: "official", Date: "1991-11-04", Media: []musicbrainz.Medium{{
+				Position: 1, Tracks: []musicbrainz.Track{track(1, "Detisisu Binip"), track(2, "Covabapoz Fofu")},
+			}}},
+		},
+	}
+	tags := fakeTags{
+		"01.m4a": {"title": "Detisisu Binip", "track": "1", "disc": "1"},
+		"02.m4a": {"title": "Covabapoz Fofu", "track": "2", "disc": "1"},
+	}
+	realigner := &fakeRealigner{}
+	job, opened, queries := newEnrichJobRealigning(t, source, nil, realigner, tags)
+
+	registered, err := library.NewPhysical(opened).RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "Heka/Detisisu Binip (1991)/01.m4a", SizeBytes: 1, QuickHash: "h1", FirstSeenAt: firstSeen},
+		{RelPath: "Heka/Detisisu Binip (1991)/02.m4a", SizeBytes: 1, QuickHash: "h2", FirstSeenAt: firstSeen},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	links := make([]library.WorkLink, len(registered))
+	for index, file := range registered {
+		links[index] = library.WorkLink{
+			Provider: music.ProviderReleaseGroup, ExternalID: "rg-shepherd", Confidence: 0.65, RootFolderID: 1,
+			Work:          library.WorkIdentity{MediaType: "music", CanonicalTitle: "Detisisu Binip", SortTitle: "detisisu binip"},
+			MediaObjectID: file.MediaObjectID,
+		}
+	}
+	workIDs, err := library.NewIdentity(opened).ResolveWorks(t.Context(), firstSeen, links)
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	edition, err := queries.GetEditionByExternalID(t.Context(), librarydb.GetEditionByExternalIDParams{
+		Provider: music.ProviderRelease, ExternalID: "rel-original",
+	})
+	if err != nil {
+		t.Fatalf("GetEditionByExternalID(rel-original): %v -- want the release the files fit exactly", err)
+	}
+	if edition.WorkID != workIDs[0] || edition.Kind != "official" {
+		t.Errorf("edition = %+v, want refined (official) under work %d", edition, workIDs[0])
+	}
+	parts, err := queries.ListWorkParts(t.Context(), workIDs[0])
+	if err != nil {
+		t.Fatalf("ListWorkParts: %v", err)
+	}
+	if len(parts) != 2 {
+		t.Errorf("parts = %d, want the chosen release's two tracks", len(parts))
+	}
+	if len(realigner.batches) != 1 || !slices.Contains(realigner.batches[0], workIDs[0]) {
+		t.Errorf("realigned %v, want work %d handed on to have its files matched", realigner.batches, workIDs[0])
 	}
 }

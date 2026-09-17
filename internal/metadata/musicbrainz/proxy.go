@@ -146,6 +146,21 @@ func proxyWikidataQID(links []proxyLink) string {
 	return ""
 }
 
+// Releases implements ReleaseLister from the same album response Album reads,
+// which carries every release with its tracks.
+func (p proxy) Releases(ctx context.Context, releaseGroupMBID string) ([]Release, error) {
+	var parsed proxyAlbum
+	url := fmt.Sprintf("%s/album/%s", p.baseURL, releaseGroupMBID)
+	if err := getJSON(ctx, p.client, url, &parsed); err != nil {
+		return nil, fmt.Errorf("musicbrainz-proxy: album %s: %w", releaseGroupMBID, err)
+	}
+	releases := make([]Release, len(parsed.Releases))
+	for index, candidate := range parsed.Releases {
+		releases[index] = toRelease(candidate)
+	}
+	return releases, nil
+}
+
 func toRelease(r proxyRelease) Release {
 	release := Release{
 		MBID: r.ID, Title: r.Title, Status: strings.ToLower(r.Status), Date: r.ReleaseDate,

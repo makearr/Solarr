@@ -186,6 +186,31 @@ func (p Provider) SearchByQuery(ctx context.Context, _ Priority, query string, l
 // Artist answers one artist's own detail, cache-first, permanent like Album.
 // Only sources implementing ArtistLookup are tried -- same reasoning as
 // Search, the proxy's artist shape is unverified live.
+// Releases answers every release of a release group with its tracklist, from
+// the first source able to list them. Not cached: it is asked once per album
+// that needs an edition chosen.
+func (p Provider) Releases(ctx context.Context, _ Priority, releaseGroupMBID string) ([]Release, error) {
+	var errs []error
+	for _, source := range p.sources {
+		lister, ok := source.(ReleaseLister)
+		if !ok {
+			continue
+		}
+		releases, err := lister.Releases(ctx, releaseGroupMBID)
+		if err != nil {
+			p.logger.WarnContext(ctx, "musicbrainz source release listing failed",
+				slog.String("source", source.Name()), slog.Any("error", err))
+			errs = append(errs, err)
+			continue
+		}
+		return releases, nil
+	}
+	if len(errs) == 0 {
+		return nil, fmt.Errorf("musicbrainz: no source can list releases (release group %s)", releaseGroupMBID)
+	}
+	return nil, fmt.Errorf("musicbrainz: no source listed releases of %s: %w", releaseGroupMBID, errors.Join(errs...))
+}
+
 func (p Provider) Artist(ctx context.Context, _ Priority, mbid string) (Artist, error) {
 	if artist, ok := p.cachedArtist(ctx, mbid); ok {
 		return artist, nil

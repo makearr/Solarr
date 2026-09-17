@@ -204,6 +204,11 @@ func (c Consumer) identifyBatch(
 	identifiers []model.Identifier,
 ) (links []library.WorkLink, trackFiles []TrackFile, queued []library.QueueEntry, resolved []int64) {
 	now := c.clock.Now().Unix()
+	type unresolvedFile struct {
+		index int
+		entry library.QueueEntry
+	}
+	var unresolved []unresolvedFile
 	for index, one := range observed {
 		mediaObjectID := mediaObjectIDs[index]
 		fileRef := model.FileRef{
@@ -222,10 +227,10 @@ func (c Consumer) identifyBatch(
 		// local WorkID (ADR-24); none does yet, so there is nothing to link there --
 		// treated the same as an unresolved chain below.
 		if result.Best == nil || result.Best.ExternalID == nil {
-			queued = append(queued, library.QueueEntry{
+			unresolved = append(unresolved, unresolvedFile{index: index, entry: library.QueueEntry{
 				MediaObjectID: mediaObjectID, RootFolderID: rootFolderID, RelPath: one.File.RelPath,
 				Candidates: result.Candidates, At: now,
-			})
+			}})
 			continue
 		}
 		resolved = append(resolved, mediaObjectID)
@@ -236,7 +241,43 @@ func (c Consumer) identifyBatch(
 		})
 		trackFiles = append(trackFiles, ReadTrackFile(mediaObjectID, one.Probe.Tags))
 	}
+
+	// A file nothing could identify joins its folder's album when every
+	// identified file in the folder agreed on one (approved 2026-09-17: 127 of
+	// 140 unidentified test files sat beside siblings like that).
+	sibling, agreed := soleSiblingIdentity(links)
+	for _, file := range unresolved {
+		if !agreed {
+			queued = append(queued, file.entry)
+			continue
+		}
+		one, mediaObjectID := observed[file.index], mediaObjectIDs[file.index]
+		resolved = append(resolved, mediaObjectID)
+		links = append(links, library.WorkLink{
+			Provider: sibling.Provider, ExternalID: sibling.ExternalID, Confidence: siblingConfidence,
+			Work: newWorkIdentity(one), RootFolderID: rootFolderID, MediaObjectID: mediaObjectID,
+		})
+		trackFiles = append(trackFiles, ReadTrackFile(mediaObjectID, one.Probe.Tags))
+	}
 	return links, trackFiles, queued, resolved
+}
+
+// siblingConfidence is below anything a strategy reports for the file itself:
+// the evidence is where the file sits, not what it says.
+const siblingConfidence = 0.5
+
+// soleSiblingIdentity is the one album every identified file in a folder
+// resolved to, or false when there were none or they disagreed.
+func soleSiblingIdentity(links []library.WorkLink) (library.WorkLink, bool) {
+	if len(links) == 0 {
+		return library.WorkLink{}, false
+	}
+	for _, link := range links[1:] {
+		if link.Provider != links[0].Provider || link.ExternalID != links[0].ExternalID {
+			return library.WorkLink{}, false
+		}
+	}
+	return links[0], true
 }
 
 // discoverWanted is section 19.6's "a scan creates desired items too": for each

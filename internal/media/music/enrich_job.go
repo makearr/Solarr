@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"path"
 	"path/filepath"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
@@ -16,6 +17,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/platform/clock"
 	"github.com/makearr/MediaNexus/internal/platform/fsx"
 	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/MediaNexus/internal/platform/mediatool"
 )
 
 // maxPersonImageBytes mirrors ArtworkJob's own maxImageBytes -- a person's
@@ -85,12 +87,24 @@ type EnrichJob struct {
 	biography Biographer
 	artworks  library.Artworks
 	realigner Realigner
+	tags      TagReader
+	roots     RootFolders
 	http      *httpx.Client
 	fs        fsx.FS
 	imagesDir string
 	clock     clock.Clock
 	logger    *slog.Logger
 }
+
+// TagReader reads the tags a set of files carry -- mediatool.Tool's own
+// method, named here so enrichment asks for nothing more.
+type TagReader interface {
+	ReadTags(ctx context.Context, paths []string) ([]mediatool.Probe, error)
+}
+
+// maxEditionChoiceFiles bounds how many of an album's files are read to choose
+// its edition; a larger set is judged on this many.
+const maxEditionChoiceFiles = 200
 
 // Realigner matches a work's files to its tracks again, once enrichment has
 // given it a tracklist. A scan matches files only against tracks that exist,
@@ -113,6 +127,10 @@ type EnrichJobConfig struct {
 	// Realigner is optional: without one, refined albums wait for the next
 	// scan that happens to revisit their directory.
 	Realigner Realigner
+	// Tags and Roots are optional: without both, an album identified only at
+	// release-group level gets no edition chosen and so no tracklist.
+	Tags      TagReader
+	Roots     RootFolders
 	HTTP      *httpx.Client
 	FS        fsx.FS
 	ImagesDir string
@@ -128,7 +146,8 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 	}
 	return &EnrichJob{
 		identity: config.Identity, people: config.People, provider: config.Provider,
-		biography: config.Biography, artworks: config.Artworks, realigner: config.Realigner, http: config.HTTP,
+		biography: config.Biography, artworks: config.Artworks, realigner: config.Realigner,
+		tags: config.Tags, roots: config.Roots, http: config.HTTP,
 		fs: config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
 	}
 }
@@ -179,7 +198,7 @@ func (j *EnrichJob) Run(ctx context.Context, _ jobs.Job) error {
 	}
 	j.logger.Info("music enrichment finished", slog.Int("processed", total), slog.Int("failed", failed))
 
-	j.enrichEditionless(ctx)
+	refinedWorkIDs = append(refinedWorkIDs, j.enrichEditionless(ctx)...)
 
 	if j.realigner != nil && len(refinedWorkIDs) > 0 {
 		if err := j.realigner.RealignWorks(ctx, refinedWorkIDs); err != nil {
@@ -198,17 +217,17 @@ func (j *EnrichJob) Run(ctx context.Context, _ jobs.Job) error {
 // they sat under "Unknown artist" (found 2026-09-17). No tracklist: that needs
 // an edition, which choosing is not this pass's call. Walked by work id within
 // a run and bounded by editionlessBudget.
-func (j *EnrichJob) enrichEditionless(ctx context.Context) {
+func (j *EnrichJob) enrichEditionless(ctx context.Context) (withEdition []int64) {
 	enriched, failed := 0, 0
 	var afterWorkID int64
 	for enriched+failed < editionlessBudget {
 		if ctx.Err() != nil {
-			return
+			return withEdition
 		}
 		batch, err := j.identity.EditionlessWorks(ctx, afterWorkID, editionlessBatchSize)
 		if err != nil {
 			j.logger.WarnContext(ctx, "editionless works failed", slog.Any("error", err))
-			return
+			return withEdition
 		}
 		if len(batch) == 0 {
 			break
@@ -236,14 +255,80 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context) {
 			j.enrichCreditsAndGenres(ctx, work.WorkID, rg)
 			j.enrichDescription(ctx, work.WorkID, rg)
 			enriched++
+			if j.chooseEdition(ctx, work) {
+				withEdition = append(withEdition, work.WorkID)
+			}
 		}
 		if len(batch) < editionlessBatchSize {
 			break
 		}
 	}
 	if enriched+failed > 0 {
-		j.logger.Info("editionless enrichment finished", slog.Int("enriched", enriched), slog.Int("failed", failed))
+		j.logger.Info("editionless enrichment finished", slog.Int("enriched", enriched), slog.Int("failed", failed),
+			slog.Int("editions_chosen", len(withEdition)))
 	}
+	return withEdition
+}
+
+// chooseEdition gives a work identified only at release-group level the
+// edition its files fit best (chooseRelease, approved 2026-09-17), then refines
+// it like any placeholder edition, which builds the tracklist. True when an
+// edition was chosen and refined, so the work's files can be matched to it.
+func (j *EnrichJob) chooseEdition(ctx context.Context, work library.EditionlessWork) bool {
+	if j.tags == nil || j.roots == nil {
+		return false
+	}
+	locations, err := j.identity.WorkFileLocations(ctx, []int64{work.WorkID})
+	if err != nil || len(locations) == 0 {
+		return false
+	}
+	paths := make([]string, 0, min(len(locations), maxEditionChoiceFiles))
+	for _, location := range locations[:min(len(locations), maxEditionChoiceFiles)] {
+		if root, found := j.roots.RootFolder(location.RootFolderID); found {
+			paths = append(paths, path.Join(root.Path, location.RelPath))
+		}
+	}
+	probes, err := j.tags.ReadTags(ctx, paths)
+	if err != nil {
+		j.logger.WarnContext(ctx, "edition choice tag read failed", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
+		return false
+	}
+	files := make([]TrackFile, 0, len(probes))
+	for index, probe := range probes {
+		if probe.Err == nil {
+			files = append(files, ReadTrackFile(int64(index+1), probe.Tags))
+		}
+	}
+
+	releases, err := j.provider.Releases(ctx, musicbrainz.PriorityEnrich, work.ReleaseGroupMBID)
+	if err != nil {
+		j.logger.WarnContext(ctx, "edition choice release listing failed", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
+		return false
+	}
+	release, ok := chooseRelease(releases, files)
+	if !ok {
+		return false
+	}
+
+	resolutions, err := j.identity.ResolveWorksDetailed(ctx, j.clock.Now(), []library.WorkLink{{
+		Provider: ProviderReleaseGroup, ExternalID: work.ReleaseGroupMBID, Confidence: siblingConfidence,
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: release.Title, SortTitle: SortTitle(release.Title)},
+		Edition: &library.EditionLink{
+			Provider: ProviderRelease, ExternalID: release.MBID, Confidence: siblingConfidence,
+			Edition: library.EditionIdentity{Kind: "unknown", Label: release.MBID},
+		},
+	}})
+	if err != nil || len(resolutions) != 1 || resolutions[0].EditionID == nil {
+		j.logger.WarnContext(ctx, "edition choice resolve failed", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
+		return false
+	}
+	if err := j.enrichOne(ctx, library.PlaceholderEdition{
+		EditionID: *resolutions[0].EditionID, WorkID: work.WorkID, ExternalID: release.MBID,
+	}); err != nil {
+		j.logger.WarnContext(ctx, "chosen edition refine failed", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
+		return false
+	}
+	return true
 }
 
 // backfillPeople fills in the image and biography of people resolved before

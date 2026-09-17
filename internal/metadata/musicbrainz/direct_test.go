@@ -438,3 +438,35 @@ func discographyFor(t *testing.T, source musicbrainz.Source) musicbrainz.Discogr
 	}
 	return discography
 }
+
+// One browse request lists every release of the group with its tracklist.
+func TestDirect_ReleasesBrowsesTheGroupsReleasesWithTracks(t *testing.T) {
+	const body = `{"releases": [
+	  {"id": "rel-standard", "title": "Detisisu Binip", "status": "Official", "date": "1991-11-04",
+	   "media": [{"position": 1, "format": "CD", "tracks": [
+	     {"position": 1, "number": "1", "title": "Detisisu Binip", "recording": {"id": "rec-1"}},
+	     {"position": 2, "number": "2", "title": "Covabapoz Fofu", "recording": {"id": "rec-2"}}]}]},
+	  {"id": "rel-promo", "title": "Detisisu Binip", "status": "Promotion", "date": "1991",
+	   "media": [{"position": 1, "format": "CD", "tracks": [
+	     {"position": 1, "number": "1", "title": "Covabapoz Fofu", "recording": {"id": "rec-2"}}]}]}]}`
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://mb.invalid/release?release-group=rg-shepherd&fmt=json&inc=recordings+labels+media&limit=100": {
+			status: http.StatusOK, body: body,
+		},
+	}}
+	source := musicbrainz.NewDirect(newTestClient(t, transport, musicbrainz.DirectName), "https://mb.invalid")
+	lister, ok := source.(musicbrainz.ReleaseLister)
+	if !ok {
+		t.Fatal("direct does not implement ReleaseLister")
+	}
+
+	releases, err := lister.Releases(t.Context(), "rg-shepherd")
+	if err != nil {
+		t.Fatalf("Releases: %v", err)
+	}
+	if len(releases) != 2 || releases[0].MBID != "rel-standard" || releases[0].Status != "official" ||
+		len(releases[0].Media) != 1 || len(releases[0].Media[0].Tracks) != 2 ||
+		releases[0].Media[0].Tracks[1].RecordingMBID != "rec-2" {
+		t.Errorf("Releases = %+v, want both releases, statuses lowercased, tracks and recordings read", releases)
+	}
+}

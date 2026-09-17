@@ -329,7 +329,8 @@ type Querier interface {
 	ListDirtyDesiredItems(ctx context.Context, arg ListDirtyDesiredItemsParams) ([]DesiredItem, error)
 	ListEditionExternalIDs(ctx context.Context, editionID int64) ([]EditionExternalID, error)
 	// Works identified at release-group level only (the text search never picks an
-	// edition) and not yet enriched: no edition, no credit. 'musicbrainz:release-group'
+	// edition): no edition, and either not enriched yet (no credit) or with files on
+	// disk still waiting for an edition to be chosen. 'musicbrainz:release-group'
 	// must match internal/media/music.ProviderReleaseGroup.
 	ListEditionlessWorks(ctx context.Context, arg ListEditionlessWorksParams) ([]ListEditionlessWorksRow, error)
 	ListEditions(ctx context.Context, workID int64) ([]Edition, error)
