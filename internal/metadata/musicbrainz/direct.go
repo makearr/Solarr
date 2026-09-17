@@ -15,20 +15,30 @@ import (
 // fallback ADR-29 says the proxy must be able to fail over to, never optional.
 const DirectName = "musicbrainz"
 
+// BrainzMashName is the ADR-13 provider bucket for the BrainzMash community pool.
+const BrainzMashName = "brainzmash"
+
 // direct talks to musicbrainz.org/ws/2 (ADR-29): one request per second, meant
 // literally, enforced by the shared httpx.Limiter the caller configures the
 // client with, not by anything in this package.
 type direct struct {
 	client  *httpx.Client
 	baseURL string
+	name    string
 }
 
 // NewDirect builds the direct source. client's Provider must be DirectName.
 func NewDirect(client *httpx.Client, baseURL string) Source {
-	return direct{client: client, baseURL: baseURL}
+	return direct{client: client, baseURL: baseURL, name: DirectName}
 }
 
-func (direct) Name() string { return DirectName }
+// NewBrainzMash builds the BrainzMash source: a read-only ws/2 mirror pool, so it is
+// the direct client under its own bucket. client's Provider must be BrainzMashName.
+func NewBrainzMash(client *httpx.Client, baseURL string) Source {
+	return direct{client: client, baseURL: baseURL, name: BrainzMashName}
+}
+
+func (d direct) Name() string { return d.name }
 
 // An empty releaseMBID answers the release group alone (a zero Release, no
 // error), the same as proxy.Album -- see its own doc comment for why.
