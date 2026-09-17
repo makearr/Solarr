@@ -3,6 +3,7 @@ package musicbrainz_test
 import (
 	"net/http"
 	"net/url"
+	"reflect"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
@@ -489,5 +490,51 @@ func TestDirect_ReleasesBrowsesTheGroupsReleasesWithTracks(t *testing.T) {
 		len(releases[0].Media) != 1 || len(releases[0].Media[0].Tracks) != 2 ||
 		releases[0].Media[0].Tracks[1].RecordingMBID != "rec-2" {
 		t.Errorf("Releases = %+v, want both releases, statuses lowercased, tracks and recordings read", releases)
+	}
+}
+
+// Trimmed from a live BrainzMash ws/2 recording search (2026-09-17), release groups kept as sent.
+const directRecordingSearchBody = `{
+  "created": "2026-09-17T12:00:00.000Z", "count": 29, "offset": 0,
+  "recordings": [
+    {
+      "id": "rec-tusa-behif-us", "title": "Tusa Behif Us", "length": 270000,
+      "artist-credit": [{"name": "P!po", "joinphrase": ""}],
+      "releases": [
+        {"id": "rel-1", "release-group": {"id": "rg-now", "title": "Now That's What I Call Summer Party 2018",
+          "primary-type": "Album", "secondary-types": ["Compilation"]}},
+        {"id": "rel-2", "release-group": {"id": "rg-trauma", "title": "Kebilegev Bibihi", "primary-type": "Album"}},
+        {"id": "rel-3", "release-group": {"id": "rg-trauma", "title": "Kebilegev Bibihi", "primary-type": "Album"}}
+      ]
+    }
+  ]
+}`
+
+func TestDirect_SearchRecordingReleaseGroupsParsesTheRealShape(t *testing.T) {
+	query := url.QueryEscape(`recording:"Tusa Behif Us" AND artist:"P!po"`)
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://musicbrainz.invalid/recording/?query=" + query + "&fmt=json&limit=5": {
+			status: http.StatusOK, body: directRecordingSearchBody,
+		},
+	}}
+	source := musicbrainz.NewDirect(newTestClient(t, transport, musicbrainz.DirectName), "https://musicbrainz.invalid")
+	searcher, ok := source.(musicbrainz.RecordingSearcher)
+	if !ok {
+		t.Fatal("direct does not implement RecordingSearcher")
+	}
+
+	got, err := searcher.SearchRecordingReleaseGroups(t.Context(), "P!po", "Tusa Behif Us", 5)
+	if err != nil {
+		t.Fatalf("SearchRecordingReleaseGroups: %v", err)
+	}
+	want := []musicbrainz.RecordingMatch{{
+		RecordingMBID: "rec-tusa-behif-us", Title: "Tusa Behif Us", ArtistCredit: "P!po", DurationMs: 270000,
+		ReleaseGroups: []musicbrainz.ReleaseGroup{
+			{MBID: "rg-now", Title: "Now That's What I Call Summer Party 2018", PrimaryType: "Album", SecondaryTypes: []string{"Compilation"}},
+			{MBID: "rg-trauma", Title: "Kebilegev Bibihi", PrimaryType: "Album"},
+		},
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("matches = %+v\nwant %+v", got, want)
 	}
 }

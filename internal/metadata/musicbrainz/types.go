@@ -144,6 +144,21 @@ type Searcher interface {
 	SearchReleaseGroups(ctx context.Context, artist, title string, limit int) ([]ReleaseGroupMatch, error)
 }
 
+// RecordingSearcher is an optional Source capability: the release groups carrying a
+// recording that matches a track title, for folders whose album tags are missing.
+type RecordingSearcher interface {
+	SearchRecordingReleaseGroups(ctx context.Context, artist, title string, limit int) ([]RecordingMatch, error)
+}
+
+// RecordingMatch is one recording search result and every release group it appears on.
+type RecordingMatch struct {
+	RecordingMBID string
+	Title         string
+	ArtistCredit  string
+	DurationMs    int64
+	ReleaseGroups []ReleaseGroup
+}
+
 // QuerySearcher is Searcher's own free-text counterpart (todo 4.17, ADR-56):
 // a user typing into a Discover search box has not split their query into
 // artist and title fields the way a file's own claimed tags let

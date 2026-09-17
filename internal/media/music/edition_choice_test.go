@@ -14,13 +14,15 @@ func release(mbid, status, date string, titles ...string) musicbrainz.Release {
 	return musicbrainz.Release{MBID: mbid, Status: status, Date: date, Media: []musicbrainz.Medium{{Position: 1, Tracks: tracks}}}
 }
 
-func files(titles ...string) []TrackFile {
-	found := make([]TrackFile, len(titles))
+func files(titles ...string) []LocalTrack {
+	found := make([]LocalTrack, len(titles))
 	for index, title := range titles {
-		found[index] = TrackFile{MediaObjectID: int64(index + 1), Disc: 1, Track: index + 1, Title: title}
+		found[index] = LocalTrack{Title: Claim{Value: title, Provenance: ProvenanceTag}, Disc: 1, Track: index + 1}
 	}
 	return found
 }
+
+var trauma = musicbrainz.ReleaseGroup{MBID: "rg", Title: "Kebilegev Bibihi", PrimaryType: "Album"}
 
 // Three tracks on disk fit the three-track album exactly, not its deluxe
 // edition that merely contains them too.
@@ -30,22 +32,22 @@ func TestChooseRelease_PrefersTheTracklistClosestToTheFilesPresent(t *testing.T)
 		release("standard", "official", "2017-10-13", "Kebilegev Bibihi", "Semidos", "Kuselobi You Pato"),
 	}
 
-	chosen, ok := chooseRelease(releases, files("Kebilegev Bibihi", "Semidos", "Kuselobi You Pato"))
+	chosen, ok := chooseRelease(trauma, releases, files("Kebilegev Bibihi", "Semidos", "Kuselobi You Pato"))
 	if !ok || chosen.MBID != "standard" {
 		t.Errorf("chose %q (ok=%v), want the standard edition", chosen.MBID, ok)
 	}
 }
 
-// More files aligned beats a closer track count.
+// A release more files fit beats one with a closer track count.
 func TestChooseRelease_MostFilesAlignedWins(t *testing.T) {
 	releases := []musicbrainz.Release{
 		release("wrong", "official", "1991", "Detisisu Binip", "Something Else"),
 		release("right", "official", "1991", "Detisisu Binip", "Covabapoz Fofu", "Pugabup", "Lafi of Moze", "Kusupus"),
 	}
 
-	chosen, ok := chooseRelease(releases, files("Detisisu Binip", "Covabapoz Fofu", "Pugabup"))
+	chosen, ok := chooseRelease(trauma, releases, files("Detisisu Binip", "Covabapoz Fofu", "Pugabup"))
 	if !ok || chosen.MBID != "right" {
-		t.Errorf("chose %q (ok=%v), want the release three files align to", chosen.MBID, ok)
+		t.Errorf("chose %q (ok=%v), want the release all three files fit", chosen.MBID, ok)
 	}
 }
 
@@ -56,16 +58,16 @@ func TestChooseRelease_PrefersAnOfficialReleaseAndThenTheEarliest(t *testing.T) 
 		release("original", "official", "1988", "Pihudoc Zaze"),
 	}
 
-	chosen, ok := chooseRelease(releases, files("Pihudoc Zaze"))
+	chosen, ok := chooseRelease(trauma, releases, files("Pihudoc Zaze"))
 	if !ok || chosen.MBID != "original" {
 		t.Errorf("chose %q (ok=%v), want the earliest official release", chosen.MBID, ok)
 	}
 }
 
-func TestChooseRelease_NothingWhenNoFileAligns(t *testing.T) {
+func TestChooseRelease_NothingWhenNoFileFits(t *testing.T) {
 	releases := []musicbrainz.Release{release("unrelated", "official", "2000", "Completely Different")}
 
-	if chosen, ok := chooseRelease(releases, files("Detisisu Binip")); ok {
-		t.Errorf("chose %q, want no choice when nothing aligns", chosen.MBID)
+	if chosen, ok := chooseRelease(trauma, releases, files("Detisisu Binip")); ok {
+		t.Errorf("chose %q, want no choice when no file fits", chosen.MBID)
 	}
 }
