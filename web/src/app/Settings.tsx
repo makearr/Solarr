@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 
 import { Categories } from "./Categories";
+import { MetadataSettings } from "./MetadataSettings";
 import { Network } from "./Network";
 import { Priority } from "./Priority";
 import { UnwantedFiles } from "./UnwantedFiles";
@@ -15,7 +16,6 @@ const SECTIONS = [
   { id: "profiles", title: "Quality profiles", blurb: "Hard gates, tier order and scoring.", stage: 4 },
   { id: "indexers", title: "Indexers", blurb: "Newznab and Torznab sources, and their egress.", stage: 5 },
   { id: "downloaders", title: "Download clients", blurb: "Usenet, torrent and direct downloads.", stage: 5 },
-  { id: "metadata", title: "Metadata", blurb: "Providers, field priority and refresh cadence.", stage: 3 },
 ] as const;
 
 export function GeneralSettings() {
@@ -37,6 +37,8 @@ export function GeneralSettings() {
         <Network />
 
         <Priority />
+
+        <MetadataSettings />
 
         <section className="flex flex-col gap-2">
           <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Import</h2>

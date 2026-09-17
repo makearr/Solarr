@@ -110,22 +110,24 @@ func (p *process) musicBrainzSources(sources config.MusicBrainzConfig) []musicbr
 	wall := clock.NewSystem()
 	guard := httpx.NewGuard(nil, nil, nil)
 	budget := p.musicBrainzBudget()
-	newClient := func(provider, userAgent string) *httpx.Client {
+	agent := httpx.UserAgent(p.build.Version)
+	newClient := func(provider string) *httpx.Client {
 		return httpx.NewClient(wall, guard, budget.limiter, budget.breaker, httpx.ClientConfig{
-			Provider: provider, UserAgent: userAgent, Proxy: p.liveProxyPolicy(),
+			Provider: provider, UserAgent: agent, Proxy: p.liveProxyPolicy(),
 		})
 	}
-
-	agent := httpx.UserAgent(p.build.Version)
 	var ordered []musicbrainz.Source
 	if sources.BrainzMashEnabled {
-		ordered = append(ordered, musicbrainz.NewBrainzMash(
-			newClient(musicbrainz.BrainzMashName, httpx.LidarrCompatibleUserAgent(p.build.Version)), sources.BrainzMashBaseURL))
+		client := httpx.NewClient(wall, guard, budget.limiter, budget.breaker, httpx.ClientConfig{
+			Provider: musicbrainz.BrainzMashName, Proxy: p.liveProxyPolicy(),
+			LiveUserAgent: func() string { return p.cache.Snapshot().MetadataSettings().BrainzMashUserAgent },
+		})
+		ordered = append(ordered, musicbrainz.NewBrainzMash(client, sources.BrainzMashBaseURL))
 	}
 	if sources.ProxyEnabled {
-		ordered = append(ordered, musicbrainz.NewProxy(newClient(musicbrainz.ProxyName, agent), sources.ProxyBaseURL))
+		ordered = append(ordered, musicbrainz.NewProxy(newClient(musicbrainz.ProxyName), sources.ProxyBaseURL))
 	}
-	return append(ordered, musicbrainz.NewDirect(newClient(musicbrainz.DirectName, agent), sources.BaseURL))
+	return append(ordered, musicbrainz.NewDirect(newClient(musicbrainz.DirectName), sources.BaseURL))
 }
 
 // arrClientFactory builds adapters.LidarrClientFactory: one shared rate-

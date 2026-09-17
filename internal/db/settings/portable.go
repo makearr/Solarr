@@ -49,6 +49,7 @@ type ScalarSettingsEntry struct {
 	PriorityGapWeight          int64    `yaml:"priority_gap_weight,omitempty"`
 	PriorityUpgradeWeight      int64    `yaml:"priority_upgrade_weight,omitempty"`
 	PriorityNewReleaseDays     int64    `yaml:"priority_new_release_days,omitempty"`
+	BrainzMashUserAgent        string   `yaml:"brainzmash_user_agent,omitempty"`
 }
 
 // CategoryEntry is one category and the roots attached to it.
@@ -144,6 +145,7 @@ func (c *Cache) Export() Document {
 		PriorityGapWeight:          priority.GapWeight,
 		PriorityUpgradeWeight:      priority.UpgradeWeight,
 		PriorityNewReleaseDays:     priority.NewReleaseDays,
+		BrainzMashUserAgent:        snapshot.MetadataSettings().BrainzMashUserAgent,
 	}
 
 	roots := snapshot.RootFolders()
@@ -292,6 +294,12 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 		}
 		for _, problem := range validatePrioritySettings(priority) {
 			problems = append(problems, prefixed("settings", problem))
+		}
+		// Absent means the document predates the setting, so the stored agent is kept.
+		if d.Settings.BrainzMashUserAgent != "" {
+			for _, problem := range validateMetadataSettings(MetadataSettings{BrainzMashUserAgent: d.Settings.BrainzMashUserAgent}) {
+				problems = append(problems, prefixed("settings", problem))
+			}
 		}
 	}
 
@@ -667,6 +675,9 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 		KeyPriorityGapWeight:          strconv.FormatInt(entry.PriorityGapWeight, 10),
 		KeyPriorityUpgradeWeight:      strconv.FormatInt(entry.PriorityUpgradeWeight, 10),
 		KeyPriorityNewReleaseDays:     strconv.FormatInt(entry.PriorityNewReleaseDays, 10),
+	}
+	if entry.BrainzMashUserAgent != "" {
+		values[KeyBrainzMashUserAgent] = entry.BrainzMashUserAgent
 	}
 	at := cl.Now().Unix()
 	for key, value := range values {

@@ -1499,6 +1499,12 @@ type MeTier string
 // MediaType Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
 type MediaType string
 
+// MetadataSettings The metadata providers' own settings.
+type MetadataSettings struct {
+	// BrainzmashUserAgent Sent to BrainzMash, whose front door refuses agents not starting "Lidarr/". Printable ASCII, 1-256 characters. Default Lidarr/2.9.6.4552.
+	BrainzmashUserAgent string `json:"brainzmash_user_agent"`
+}
+
 // MoveJob defines model for MoveJob.
 type MoveJob struct {
 	BytesDone    int64         `json:"bytes_done"`
@@ -2585,6 +2591,9 @@ type CreateMyAPIKeyJSONRequestBody CreateMyAPIKeyJSONBody
 // SetMyTierJSONRequestBody defines body for SetMyTier for application/json ContentType.
 type SetMyTierJSONRequestBody SetMyTierJSONBody
 
+// UpdateMetadataSettingsJSONRequestBody defines body for UpdateMetadataSettings for application/json ContentType.
+type UpdateMetadataSettingsJSONRequestBody = MetadataSettings
+
 // UpdateNetworkSettingsJSONRequestBody defines body for UpdateNetworkSettings for application/json ContentType.
 type UpdateNetworkSettingsJSONRequestBody = NetworkSettingsUpdate
 
@@ -2902,6 +2911,12 @@ type ServerInterface interface {
 	// Change how much of the settings surface the caller is shown (ADR-26). Self-service: any authenticated user may set their own tier, not just an administrator -- raising or lowering it never changes behaviour, only what is displayed.
 	// (PATCH /me/tier)
 	SetMyTier(w http.ResponseWriter, r *http.Request)
+	// The metadata providers' own settings.
+	// (GET /metadata/settings)
+	GetMetadataSettings(w http.ResponseWriter, r *http.Request)
+	// Change the metadata providers' settings. Administrator only.
+	// (PATCH /metadata/settings)
+	UpdateMetadataSettings(w http.ResponseWriter, r *http.Request)
 	// Every move job (ADR-51), newest first.
 	// (GET /moves)
 	ListMoveJobs(w http.ResponseWriter, r *http.Request, params ListMoveJobsParams)
@@ -3568,6 +3583,18 @@ func (_ Unimplemented) DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, id
 // Change how much of the settings surface the caller is shown (ADR-26). Self-service: any authenticated user may set their own tier, not just an administrator -- raising or lowering it never changes behaviour, only what is displayed.
 // (PATCH /me/tier)
 func (_ Unimplemented) SetMyTier(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The metadata providers' own settings.
+// (GET /metadata/settings)
+func (_ Unimplemented) GetMetadataSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change the metadata providers' settings. Administrator only.
+// (PATCH /metadata/settings)
+func (_ Unimplemented) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6433,6 +6460,50 @@ func (siw *ServerInterfaceWrapper) SetMyTier(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetMetadataSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetMetadataSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMetadataSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMetadataSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMetadataSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMoveJobs operation middleware
 func (siw *ServerInterfaceWrapper) ListMoveJobs(w http.ResponseWriter, r *http.Request) {
 
@@ -8453,6 +8524,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/me/tier", wrapper.SetMyTier)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/metadata/settings", wrapper.GetMetadataSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/metadata/settings", wrapper.UpdateMetadataSettings)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/moves", wrapper.ListMoveJobs)

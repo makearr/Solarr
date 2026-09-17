@@ -27,12 +27,6 @@ func UserAgent(version string) string {
 	return fmt.Sprintf("MediaNexus/%s ( %s )", version, sourceURL)
 }
 
-// LidarrCompatibleUserAgent still names MediaNexus; BrainzMash's front door answers 403
-// to any agent not starting "Lidarr/" (probed 2026-09-17).
-func LidarrCompatibleUserAgent(version string) string {
-	return fmt.Sprintf("Lidarr/2.9.6.4552 (MediaNexus/%s; +%s)", version, sourceURL)
-}
-
 // ClientConfig describes one provider's client.
 type ClientConfig struct {
 	// Provider is the rate-limit and breaker bucket key. Every subsystem talking
@@ -47,19 +41,22 @@ type ClientConfig struct {
 	// Proxy is ADR-58's global egress proxy, read live on every request. Nil
 	// means this client never proxies -- the common case for a test.
 	Proxy LiveProxyPolicy
+	// LiveUserAgent, when set, is read on every request and replaces UserAgent.
+	LiveUserAgent func() string
 }
 
 // Client is the only way out of the process (Invariant 28). One per provider,
 // sharing the limiter and breaker registries.
 type Client struct {
-	provider  string
-	userAgent string
-	timeout   time.Duration
-	inner     *http.Client
-	limiter   *Limiter
-	breaker   *Breaker
-	guard     *Guard
-	clock     clock.Clock
+	provider      string
+	userAgent     string
+	liveUserAgent func() string
+	timeout       time.Duration
+	inner         *http.Client
+	limiter       *Limiter
+	breaker       *Breaker
+	guard         *Guard
+	clock         clock.Clock
 	// proxy nil means this client never proxies (see checkProxiedDestination).
 	proxy LiveProxyPolicy
 }
@@ -81,14 +78,15 @@ func NewClient(c clock.Clock, guard *Guard, limiter *Limiter, breaker *Breaker, 
 	}
 
 	return &Client{
-		provider:  config.Provider,
-		userAgent: config.UserAgent,
-		timeout:   timeout,
-		limiter:   limiter,
-		breaker:   breaker,
-		guard:     guard,
-		clock:     c,
-		proxy:     config.Proxy,
+		provider:      config.Provider,
+		userAgent:     config.UserAgent,
+		liveUserAgent: config.LiveUserAgent,
+		timeout:       timeout,
+		limiter:       limiter,
+		breaker:       breaker,
+		guard:         guard,
+		clock:         c,
+		proxy:         config.Proxy,
 		inner: &http.Client{
 			Transport: transport,
 			CheckRedirect: func(request *http.Request, via []*http.Request) error {
@@ -145,8 +143,12 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 
 	timedOut, cancel := context.WithTimeout(ctx, c.timeout)
 
-	if c.userAgent != "" && request.Header.Get("User-Agent") == "" {
-		request.Header.Set("User-Agent", c.userAgent)
+	userAgent := c.userAgent
+	if c.liveUserAgent != nil {
+		userAgent = c.liveUserAgent()
+	}
+	if userAgent != "" && request.Header.Get("User-Agent") == "" {
+		request.Header.Set("User-Agent", userAgent)
 	}
 
 	response, err := c.inner.Do(request.WithContext(timedOut))
