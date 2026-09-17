@@ -59,7 +59,9 @@ const wikidataEntityBody = `{
       "descriptions": {"en": {"language": "en", "value": "English singer, pianist and songwriter (born 1958)"}},
       "sitelinks": {"enwiki": {"site": "enwiki", "title": "Vutu Doci", "badges": []}},
       "claims": {
-        "P18": [{"mainsnak": {"datavalue": {"value": "Vutu Doci 1981.jpg"}}}]
+        "P18": [{"mainsnak": {"datavalue": {"value": "Vutu Doci 1981.jpg", "type": "string"}}}],
+        "P106": [{"mainsnak": {"datavalue": {"value": {"entity-type": "item", "numeric-id": 177220, "id": "Q177220"}, "type": "wikibase-entityid"}}}],
+        "P569": [{"mainsnak": {"datavalue": {"value": {"time": "+1958-07-30T00:00:00Z", "precision": 11}, "type": "time"}}}]
       }
     }
   }

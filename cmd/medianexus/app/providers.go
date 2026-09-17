@@ -60,23 +60,46 @@ func (p *process) wikidataFetcher() music.Biographer {
 	})
 }
 
-// musicBrainzProvider builds ADR-29's provider: one shared rate-limit and circuit
-// breaker registry (ADR-13) across both sources, so a proxy failure counts against
-// only the proxy's own budget and never steals from direct MusicBrainz's.
+// musicBrainzBudget is the one rate limiter and circuit breaker every
+// MusicBrainz provider in the process draws on (ADR-13).
+type musicBrainzBudget struct {
+	limiter *httpx.Limiter
+	breaker *httpx.Breaker
+}
+
+// musicBrainzBudget answers the process's single budget. Each caller of
+// musicBrainzProvider used to build its own, so scan, enrichment, import and
+// subscriptions each took a full 1 req/s; running together they exceeded it
+// and MusicBrainz answered 503 (found 2026-09-17).
+func (p *process) musicBrainzBudget() musicBrainzBudget {
+	p.musicBrainzOnce.Do(func() {
+		wall := clock.NewSystem()
+		p.musicBrainzShared = musicBrainzBudget{
+			limiter: httpx.NewLimiter(wall, httpx.Config{
+				Providers: map[string]httpx.Limits{
+					// MusicBrainz allows one request per second and means it (ADR-29).
+					musicbrainz.DirectName: {MinInterval: time.Second},
+					// The proxy is Lidarr's own service, not rate-limited by ADR-29's
+					// 1 req/s rule; kept modest anyway since it is shared infrastructure
+					// this project does not operate.
+					musicbrainz.ProxyName: {MinInterval: 250 * time.Millisecond},
+				},
+			}, nil),
+			breaker: httpx.NewBreaker(wall, httpx.BreakerConfig{}),
+		}
+	})
+	return p.musicBrainzShared
+}
+
+// musicBrainzProvider builds ADR-29's provider on the process's one shared
+// rate-limit and circuit breaker registry (ADR-13), across both sources, so a
+// proxy failure counts against only the proxy's own budget and never steals
+// from direct MusicBrainz's.
 func (p *process) musicBrainzProvider() musicbrainz.Provider {
 	wall := clock.NewSystem()
 	guard := httpx.NewGuard(nil, nil, nil)
-	limiter := httpx.NewLimiter(wall, httpx.Config{
-		Providers: map[string]httpx.Limits{
-			// MusicBrainz allows one request per second and means it (ADR-29).
-			musicbrainz.DirectName: {MinInterval: time.Second},
-			// The proxy is Lidarr's own service, not rate-limited by ADR-29's
-			// 1 req/s rule; kept modest anyway since it is shared infrastructure
-			// this project does not operate.
-			musicbrainz.ProxyName: {MinInterval: 250 * time.Millisecond},
-		},
-	}, nil)
-	breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
+	budget := p.musicBrainzBudget()
+	limiter, breaker := budget.limiter, budget.breaker
 
 	agent := httpx.UserAgent(p.build.Version)
 	config := p.config.Metadata.MusicBrainz

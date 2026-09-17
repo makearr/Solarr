@@ -62,15 +62,11 @@ type entitiesResponse struct {
 			Title string `json:"title"`
 		} `json:"sitelinks"`
 		// Claims carries P18 ("image") among many others this package never
-		// reads -- decoded loosely (json.RawMessage per property) rather than
-		// wikibase's own full claim shape, which this package has no other use for.
-		Claims map[string][]struct {
-			Mainsnak struct {
-				Datavalue struct {
-					Value string `json:"value"`
-				} `json:"datavalue"`
-			} `json:"mainsnak"`
-		} `json:"claims"`
+		// reads, kept raw per property: their values are strings, objects or
+		// numbers depending on the property, and decoding them all as strings
+		// failed every real artist, whose occupation (P106) is an object
+		// (found 2026-09-17).
+		Claims map[string]json.RawMessage `json:"claims"`
 	} `json:"entities"`
 }
 
@@ -92,15 +88,19 @@ const commonsImageWidth = "1000"
 // own title normalisation, not just a Wikipedia-summary-path quirk --
 // Special:FilePath/Vutu_Doci_1981.jpg redirects correctly live, verified
 // while adding this).
-func imageURLFor(claims map[string][]struct {
-	Mainsnak struct {
-		Datavalue struct {
-			Value string `json:"value"`
-		} `json:"datavalue"`
-	} `json:"mainsnak"`
-}) string {
-	images := claims[wikidataImageProperty]
-	if len(images) == 0 || images[0].Mainsnak.Datavalue.Value == "" {
+func imageURLFor(claims map[string]json.RawMessage) string {
+	raw, found := claims[wikidataImageProperty]
+	if !found {
+		return ""
+	}
+	var images []struct {
+		Mainsnak struct {
+			Datavalue struct {
+				Value string `json:"value"`
+			} `json:"datavalue"`
+		} `json:"mainsnak"`
+	}
+	if err := json.Unmarshal(raw, &images); err != nil || len(images) == 0 || images[0].Mainsnak.Datavalue.Value == "" {
 		return ""
 	}
 	return commonsFilePathBase + pathEscape(images[0].Mainsnak.Datavalue.Value) + "?width=" + commonsImageWidth
