@@ -681,7 +681,7 @@ type WorkField struct {
 	FetchedAt int64
 }
 
-type WorkFileHint struct {
+type WorkFile struct {
 	WorkID        int64
 	MediaObjectID int64
 	FirstSeenAt   int64

@@ -51,19 +51,18 @@ WHERE role = 'artist' AND work_id IN (
   SELECT work_id FROM desired_item WHERE category_id = sqlc.arg(category_id)
 );
 
--- The first file identification resolved a work from wins; a later one changes
--- nothing. The row goes with its file (ON DELETE CASCADE), and the next scan
--- that resolves the work from another file records that one instead.
--- name: LinkWorkFileHint :exec
-INSERT INTO work_file_hint (work_id, media_object_id, first_seen_at)
+-- Every file a work was resolved from, each once. A row goes with its file
+-- (ON DELETE CASCADE).
+-- name: LinkWorkFile :exec
+INSERT INTO work_file (work_id, media_object_id, first_seen_at)
 VALUES (?, ?, ?)
-ON CONFLICT (work_id) DO NOTHING;
+ON CONFLICT (work_id, media_object_id) DO NOTHING;
 
--- Where each named work's recorded file lives, every path of it. An album's
--- directory is the unit a scoped rescan reads once its tracklist exists.
+-- Where each named work's files live, every path of every one. The directories
+-- they sit in are what a scoped rescan reads once the work's tracklist exists.
 -- name: ListWorkFileLocations :many
-SELECT h.work_id AS work_id, lp.root_folder_id AS root_folder_id, lp.rel_path AS rel_path
-FROM work_file_hint h
-JOIN library_path lp ON lp.media_object_id = h.media_object_id
-WHERE h.work_id IN (SELECT value FROM json_each(sqlc.arg(work_ids)))
-ORDER BY h.work_id, lp.id;
+SELECT f.work_id AS work_id, lp.root_folder_id AS root_folder_id, lp.rel_path AS rel_path
+FROM work_file f
+JOIN library_path lp ON lp.media_object_id = f.media_object_id
+WHERE f.work_id IN (SELECT value FROM json_each(sqlc.arg(work_ids)))
+ORDER BY f.work_id, lp.id;

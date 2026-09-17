@@ -259,10 +259,9 @@ type Querier interface {
 	LinkEditionExternalID(ctx context.Context, arg LinkEditionExternalIDParams) error
 	LinkPersonExternalID(ctx context.Context, arg LinkPersonExternalIDParams) error
 	LinkWorkExternalID(ctx context.Context, arg LinkWorkExternalIDParams) error
-	// The first file identification resolved a work from wins; a later one changes
-	// nothing. The row goes with its file (ON DELETE CASCADE), and the next scan
-	// that resolves the work from another file records that one instead.
-	LinkWorkFileHint(ctx context.Context, arg LinkWorkFileHintParams) error
+	// Every file a work was resolved from, each once. A row goes with its file
+	// (ON DELETE CASCADE).
+	LinkWorkFile(ctx context.Context, arg LinkWorkFileParams) error
 	LinkWorkOrganisation(ctx context.Context, arg LinkWorkOrganisationParams) error
 	LinkWorkPartExternalID(ctx context.Context, arg LinkWorkPartExternalIDParams) error
 	// work_root_folder records on-disk presence: which root folder a scan found a work
@@ -329,6 +328,10 @@ type Querier interface {
 	// The planner reads the dirty set, not the whole library (ADR-6).
 	ListDirtyDesiredItems(ctx context.Context, arg ListDirtyDesiredItemsParams) ([]DesiredItem, error)
 	ListEditionExternalIDs(ctx context.Context, editionID int64) ([]EditionExternalID, error)
+	// Works identified at release-group level only (the text search never picks an
+	// edition) and not yet enriched: no edition, no credit. 'musicbrainz:release-group'
+	// must match internal/media/music.ProviderReleaseGroup.
+	ListEditionlessWorks(ctx context.Context, arg ListEditionlessWorksParams) ([]ListEditionlessWorksRow, error)
 	ListEditions(ctx context.Context, workID int64) ([]Edition, error)
 	ListEnabledSubscriptions(ctx context.Context) ([]Subscription, error)
 	ListExpiredQuarantine(ctx context.Context, arg ListExpiredQuarantineParams) ([]Quarantine, error)
@@ -448,8 +451,8 @@ type Querier interface {
 	ListWorkDates(ctx context.Context, workID int64) ([]WorkDate, error)
 	ListWorkExternalIDs(ctx context.Context, workID int64) ([]WorkExternalID, error)
 	ListWorkFields(ctx context.Context, workID int64) ([]WorkField, error)
-	// Where each named work's recorded file lives, every path of it. An album's
-	// directory is the unit a scoped rescan reads once its tracklist exists.
+	// Where each named work's files live, every path of every one. The directories
+	// they sit in are what a scoped rescan reads once the work's tracklist exists.
 	ListWorkFileLocations(ctx context.Context, workIds interface{}) ([]ListWorkFileLocationsRow, error)
 	ListWorkPartExternalIDs(ctx context.Context, partID int64) ([]WorkPartExternalID, error)
 	ListWorkPartTitles(ctx context.Context, partID int64) ([]WorkPartTitle, error)
@@ -466,8 +469,9 @@ type Querier interface {
 	// not the edition, and is the wrong id for this API (section 19.6's tag table).
 	ListWorksNeedingArtwork(ctx context.Context, arg ListWorksNeedingArtworkParams) ([]ListWorksNeedingArtworkRow, error)
 	// Every work still without a cover that has a known file to read embedded art
-	// from, with that file's lowest library_path. Root folder paths live in
-	// settings.db, so the caller resolves root_folder_id itself (section 4.3).
+	// from: its lowest-id file, at that file's lowest library_path. Root folder
+	// paths live in settings.db, so the caller resolves root_folder_id itself
+	// (section 4.3).
 	ListWorksNeedingEmbeddedArtwork(ctx context.Context, arg ListWorksNeedingEmbeddedArtworkParams) ([]ListWorksNeedingEmbeddedArtworkRow, error)
 	// Every work still without a cover that carries a release-group id, for the
 	// Cover Art Archive's release-group endpoint: a wanted album with no edition

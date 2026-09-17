@@ -413,3 +413,46 @@ func TestWorkFileLocations_AnswersTheRecordedFilesPathsForTheNamedWorks(t *testi
 		t.Errorf("WorkFileLocations = %+v, want %+v", got, want)
 	}
 }
+
+// The test library holds Kebilegev Bibihi in two folders. Every file must be
+// remembered, or a rescan reaches only the first folder and the other folder's
+// tracks never match (found 2026-09-17).
+func TestWorkFileLocations_AnswersEveryFolderAWorkWasResolvedFrom(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	physical := library.NewPhysical(opened)
+
+	first := registerFileForArtwork(t, physical, 1, "P!po/Kebilegev Bibihi (1)/01.m4a", "q-first")
+	second := registerFileForArtwork(t, physical, 1, "P!po/Kebilegev Bibihi (2017)/02.m4a", "q-second")
+	link := func(mediaObjectID int64) library.WorkLink {
+		return library.WorkLink{
+			Provider: "musicbrainz:release-group", ExternalID: "rg-kebilegev-bibihi", Confidence: 1.0,
+			Work:         library.WorkIdentity{MediaType: "music", CanonicalTitle: "Kebilegev Bibihi", SortTitle: "kebilegev bibihi"},
+			RootFolderID: 1, MediaObjectID: mediaObjectID,
+		}
+	}
+	workIDs, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{link(first), link(second)})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+
+	got, err := identity.WorkFileLocations(t.Context(), []int64{workIDs[0]})
+	if err != nil {
+		t.Fatalf("WorkFileLocations: %v", err)
+	}
+	want := []library.WorkFileLocation{
+		{WorkID: workIDs[0], RootFolderID: 1, RelPath: "P!po/Kebilegev Bibihi (1)/01.m4a"},
+		{WorkID: workIDs[0], RootFolderID: 1, RelPath: "P!po/Kebilegev Bibihi (2017)/02.m4a"},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("WorkFileLocations = %+v, want both folders %+v", got, want)
+	}
+
+	candidates, err := library.NewArtworks(opened).NeedingEmbeddedArtwork(t.Context(), 0, 10)
+	if err != nil {
+		t.Fatalf("NeedingEmbeddedArtwork: %v", err)
+	}
+	if len(candidates) != 1 || candidates[0].RelPath != "P!po/Kebilegev Bibihi (1)/01.m4a" {
+		t.Errorf("NeedingEmbeddedArtwork = %+v, want one candidate, the work's first file", candidates)
+	}
+}

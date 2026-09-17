@@ -153,7 +153,7 @@ func (i Identity) ResolveWorksDetailed(ctx context.Context, at time.Time, links 
 					return fmt.Errorf("library: link work %d to root folder %d: %w", workID, link.RootFolderID, err)
 				}
 			}
-			if err := linkWorkFileHint(ctx, queries, at, workID, link); err != nil {
+			if err := linkWorkFile(ctx, queries, at, workID, link); err != nil {
 				return err
 			}
 			resolutions[index] = resolution
@@ -216,7 +216,7 @@ func resolveWork(
 			return 0, false, fmt.Errorf("root folder: %w", err)
 		}
 	}
-	if err := linkWorkFileHint(ctx, queries, at, workID, link); err != nil {
+	if err := linkWorkFile(ctx, queries, at, workID, link); err != nil {
 		return 0, false, err
 	}
 	return workID, created, nil
@@ -230,7 +230,7 @@ type WorkFileLocation struct {
 }
 
 // WorkFileLocations answers every path of the file recorded for each of these
-// works (work_file_hint); a work with none is simply absent.
+// works (work_file); a work with none is simply absent.
 func (i Identity) WorkFileLocations(ctx context.Context, workIDs []int64) ([]WorkFileLocation, error) {
 	if len(workIDs) == 0 {
 		return nil, nil
@@ -250,13 +250,13 @@ func (i Identity) WorkFileLocations(ctx context.Context, workIDs []int64) ([]Wor
 	return locations, nil
 }
 
-// linkWorkFileHint remembers the file a work was resolved from, when the link
-// names one, so the work's embedded cover art can be read later.
-func linkWorkFileHint(ctx context.Context, queries *librarydb.Queries, at time.Time, workID int64, link WorkLink) error {
+// linkWorkFile remembers a file a work was resolved from, when the link names
+// one, so the work's embedded cover art can be read and its files rescanned.
+func linkWorkFile(ctx context.Context, queries *librarydb.Queries, at time.Time, workID int64, link WorkLink) error {
 	if link.MediaObjectID == 0 {
 		return nil
 	}
-	if err := queries.LinkWorkFileHint(ctx, librarydb.LinkWorkFileHintParams{
+	if err := queries.LinkWorkFile(ctx, librarydb.LinkWorkFileParams{
 		WorkID: workID, MediaObjectID: link.MediaObjectID, FirstSeenAt: at.Unix(),
 	}); err != nil {
 		return fmt.Errorf("library: link work %d to file %d: %w", workID, link.MediaObjectID, err)

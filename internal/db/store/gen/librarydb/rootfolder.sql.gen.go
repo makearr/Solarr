@@ -88,23 +88,22 @@ func (q *Queries) CountWorksVisibleToCategory(ctx context.Context, arg CountWork
 	return total, err
 }
 
-const linkWorkFileHint = `-- name: LinkWorkFileHint :exec
-INSERT INTO work_file_hint (work_id, media_object_id, first_seen_at)
+const linkWorkFile = `-- name: LinkWorkFile :exec
+INSERT INTO work_file (work_id, media_object_id, first_seen_at)
 VALUES (?, ?, ?)
-ON CONFLICT (work_id) DO NOTHING
+ON CONFLICT (work_id, media_object_id) DO NOTHING
 `
 
-type LinkWorkFileHintParams struct {
+type LinkWorkFileParams struct {
 	WorkID        int64
 	MediaObjectID int64
 	FirstSeenAt   int64
 }
 
-// The first file identification resolved a work from wins; a later one changes
-// nothing. The row goes with its file (ON DELETE CASCADE), and the next scan
-// that resolves the work from another file records that one instead.
-func (q *Queries) LinkWorkFileHint(ctx context.Context, arg LinkWorkFileHintParams) error {
-	_, err := q.db.ExecContext(ctx, linkWorkFileHint, arg.WorkID, arg.MediaObjectID, arg.FirstSeenAt)
+// Every file a work was resolved from, each once. A row goes with its file
+// (ON DELETE CASCADE).
+func (q *Queries) LinkWorkFile(ctx context.Context, arg LinkWorkFileParams) error {
+	_, err := q.db.ExecContext(ctx, linkWorkFile, arg.WorkID, arg.MediaObjectID, arg.FirstSeenAt)
 	return err
 }
 
@@ -158,11 +157,11 @@ func (q *Queries) ListRootFoldersForWork(ctx context.Context, workID int64) ([]i
 }
 
 const listWorkFileLocations = `-- name: ListWorkFileLocations :many
-SELECT h.work_id AS work_id, lp.root_folder_id AS root_folder_id, lp.rel_path AS rel_path
-FROM work_file_hint h
-JOIN library_path lp ON lp.media_object_id = h.media_object_id
-WHERE h.work_id IN (SELECT value FROM json_each(?1))
-ORDER BY h.work_id, lp.id
+SELECT f.work_id AS work_id, lp.root_folder_id AS root_folder_id, lp.rel_path AS rel_path
+FROM work_file f
+JOIN library_path lp ON lp.media_object_id = f.media_object_id
+WHERE f.work_id IN (SELECT value FROM json_each(?1))
+ORDER BY f.work_id, lp.id
 `
 
 type ListWorkFileLocationsRow struct {
@@ -171,8 +170,8 @@ type ListWorkFileLocationsRow struct {
 	RelPath      string
 }
 
-// Where each named work's recorded file lives, every path of it. An album's
-// directory is the unit a scoped rescan reads once its tracklist exists.
+// Where each named work's files live, every path of every one. The directories
+// they sit in are what a scoped rescan reads once the work's tracklist exists.
 func (q *Queries) ListWorkFileLocations(ctx context.Context, workIds interface{}) ([]ListWorkFileLocationsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listWorkFileLocations, workIds)
 	if err != nil {
