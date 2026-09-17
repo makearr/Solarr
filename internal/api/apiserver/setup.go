@@ -14,6 +14,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/api/auth"
 	"github.com/makearr/MediaNexus/internal/api/authz"
 	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/MediaNexus/internal/platform/clock"
 	"github.com/makearr/MediaNexus/internal/platform/config"
 )
 
@@ -141,6 +142,19 @@ func (s *Server) AddRootFolder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
+	}
+
+	// Capacity is recorded now rather than left to the six-hourly sweep: placement refuses a
+	// root whose free space is unknown, so an import right after adding a root found no root
+	// at all (found 2026-09-17).
+	if total, free, usageErr := s.roots.Usage(path); usageErr != nil {
+		s.logger.Warn("root folder capacity could not be read", "path", path, "error", usageErr)
+	} else if err := s.auth.Settings.SetRootFolderCapacity(r.Context(), created.ID, settings.RootFolderCapacity{
+		Writable: writable, TotalBytes: total, FreeBytes: free, CheckedAt: clock.NewSystem().Now().Unix(),
+	}); err != nil {
+		s.logger.Warn("root folder capacity could not be recorded", "path", path, "error", err)
+	} else if refreshed, found := s.auth.Settings.Snapshot().RootFolder(created.ID); found {
+		created = refreshed
 	}
 
 	view := s.rootFolderView(created)
@@ -312,6 +326,8 @@ type RootChecker interface {
 	// Writable reports whether this process can write there. A failure is
 	// advisory: it is flagged, never enforced.
 	Writable(path string) error
+	// Usage reports the filesystem's total and free bytes.
+	Usage(path string) (totalBytes, freeBytes int64, err error)
 }
 
 // ErrNoRootChecker reports a server built without one.

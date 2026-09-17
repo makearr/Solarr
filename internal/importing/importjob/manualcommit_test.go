@@ -22,7 +22,8 @@ import (
 // (RecordPlacement's own import_unit.work_id carries a real FK), seeded by
 // seedWork.
 type fakeCommitter struct {
-	workID int64
+	lastPlacement *music.AlbumPlacement
+	workID        int64
 	// placed, keyed by sourceRoot, overrides workID for one call's own answer.
 	// errFor, keyed the same way, makes one call fail instead.
 	placed map[string]music.Placed
@@ -46,9 +47,11 @@ type fakeCommitterCall struct {
 	categoryID int64
 }
 
-func (f *fakeCommitter) CommitUnit(
-	_ context.Context, sourceRoot string, unit inspect.Unit, best model.Identification, _ music.Resolved, categoryID int64,
+func (f *fakeCommitter) CommitMatchedUnit(
+	_ context.Context, sourceRoot string, unit inspect.Unit, best model.Identification, _ music.Resolved,
+	categoryID int64, matched *music.AlbumPlacement,
 ) (music.Placed, error) {
+	f.lastPlacement = matched
 	key := sourceRoot
 	mediaPaths := make([]string, len(unit.Media))
 	for i, m := range unit.Media {

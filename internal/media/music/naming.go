@@ -16,14 +16,15 @@ import (
 // compiles today and starts working the moment that lands, rather than
 // needing every shipped profile edited twice.
 const (
-	TokenArtistName   = "Artist Name"
-	TokenAlbumTitle   = "Album Title"
-	TokenReleaseYear  = "Release Year"
-	TokenDisc         = "disc"
-	TokenTrack        = "track"
-	TokenTrackTitle   = "Track Title"
-	TokenFormat       = "Format"
-	TokenReleaseGroup = "Release Group"
+	TokenArtistName    = "Artist Name"
+	TokenAlbumTitle    = "Album Title"
+	TokenReleaseYear   = "Release Year"
+	TokenDisc          = "disc"
+	TokenTrack         = "track"
+	TokenTrackPosition = "Track Position"
+	TokenTrackTitle    = "Track Title"
+	TokenFormat        = "Format"
+	TokenReleaseGroup  = "Release Group"
 )
 
 // NamingTokens is every token name NamingContext can populate, for
@@ -31,7 +32,7 @@ const (
 // 11.8 asks for.
 var NamingTokens = map[string]bool{
 	TokenArtistName: true, TokenAlbumTitle: true, TokenReleaseYear: true,
-	TokenDisc: true, TokenTrack: true, TokenTrackTitle: true,
+	TokenDisc: true, TokenTrack: true, TokenTrackPosition: true, TokenTrackTitle: true,
 	TokenFormat: true, TokenReleaseGroup: true,
 }
 
@@ -40,7 +41,7 @@ var NamingTokens = map[string]bool{
 // so adopting it proposes zero renames.
 const (
 	DefaultFolderTemplate = "{" + TokenArtistName + "}/{" + TokenAlbumTitle + "} ({" + TokenReleaseYear + "})"
-	DefaultFileTemplate   = "{" + TokenArtistName + "} - {" + TokenTrack + ":00} - {" + TokenTrackTitle + "}"
+	DefaultFileTemplate   = "{" + TokenArtistName + "} - {" + TokenTrackPosition + "} - {" + TokenTrackTitle + "}"
 )
 
 // mediaRefPattern extracts music.Consumer's own "disc%d:track%d" convention
@@ -80,8 +81,29 @@ func NamingContext(detail library.WorkDetail, edition library.EditionDetail, par
 	}
 	ctx[TokenDisc] = strconv.Itoa(disc)
 	ctx[TokenTrack] = strconv.Itoa(track)
+	ctx[TokenTrackPosition] = TrackPosition(disc, track, DiscCount(detail.Parts))
 
 	return ctx, nil
+}
+
+// DiscCount is how many discs a release spans, counting only parts whose media_ref parses.
+func DiscCount(parts []library.PartDetail) int {
+	discs := make(map[int]struct{}, 1)
+	for _, part := range parts {
+		if disc, _, err := parseMediaRef(part.Part.MediaRef); err == nil {
+			discs[disc] = struct{}{}
+		}
+	}
+	return len(discs)
+}
+
+// TrackPosition is the track's printed position: "06", or "1-06" once a release has more
+// than one disc, so a multi-disc set does not repeat every number in one folder.
+func TrackPosition(disc, track, discCount int) string {
+	if discCount > 1 && disc > 0 {
+		return fmt.Sprintf("%d-%02d", disc, track)
+	}
+	return fmt.Sprintf("%02d", track)
 }
 
 func firstArtistCredit(credits []library.Credit) (string, bool) {

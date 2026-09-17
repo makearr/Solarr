@@ -194,10 +194,15 @@ func TestGetSetupStatus_IsUnauthenticatedAndMinimal(t *testing.T) {
 type stubRoots struct {
 	invalid     error
 	notWritable error
+	freeBytes   int64
+	usageErr    error
 }
 
 func (r stubRoots) Validate(string) error { return r.invalid }
 func (r stubRoots) Writable(string) error { return r.notWritable }
+func (r stubRoots) Usage(string) (int64, int64, error) {
+	return r.freeBytes * 2, r.freeBytes, r.usageErr
+}
 
 // A path that does not exist is a typo, and is refused.
 func TestAddRootFolder_RefusesAnUnusablePath(t *testing.T) {
@@ -435,5 +440,30 @@ func TestDeleteRootFolder_RefusedWhileACategoryAttachesIt(t *testing.T) {
 	}
 	if _, found := fixture.cache.Snapshot().RootFolder(id); !found {
 		t.Error("root folder removed despite the refusal")
+	}
+}
+
+// Placement refuses a root whose free space is unknown, so adding one records it at once
+// rather than leaving an import to fail until the six-hourly sweep runs.
+func TestAddRootFolder_RecordsCapacityImmediately(t *testing.T) {
+	fixture := newSetupFixture(t, stubRoots{freeBytes: 900 << 30})
+	claim := fixture.post(t, "/api/v1/setup/admin", `{"username":"avs","password":"correct horse battery"}`)
+	if claim.Code != http.StatusCreated {
+		t.Fatalf("claim: %d", claim.Code)
+	}
+
+	created := fixture.authed(t, http.MethodPost, "/api/v1/rootfolders", `{"path":"/library"}`, claim.Result().Cookies())
+	if created.Code != http.StatusCreated {
+		t.Fatalf("add root folder: %d (%s)", created.Code, created.Body)
+	}
+	var body struct {
+		FreeBytes  *int64 `json:"free_bytes"`
+		TotalBytes *int64 `json:"total_bytes"`
+	}
+	if err := json.Unmarshal(created.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body: %v", err)
+	}
+	if body.FreeBytes == nil || *body.FreeBytes != 900<<30 || body.TotalBytes == nil {
+		t.Errorf("free/total = %v/%v, want the capacity probed at creation", body.FreeBytes, body.TotalBytes)
 	}
 }

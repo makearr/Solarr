@@ -144,13 +144,63 @@ var ErrBlockedContent = errors.New(model.ReasonBlockedContent)
 // than creating a work keyed on an empty provider/external id pair.
 var errNoExternalID = errors.New("music: identification has no external id to resolve a work by")
 
-// CommitUnit places unit (found under sourceRoot by inspect.Run) into
-// categoryID's own library. best is the unit's own DECIDE-cleared
-// Identification (model.ChainResult.Best); tags is the same Resolved batch
-// IDENTIFY already probed, reused here rather than a second probe
-// (ADR-48's own speed rule: "probe only what identification will use").
+// AlbumPlacement is what album matching decided for a unit: the release it matched, how many
+// discs that release spans, and which track each file is, keyed by the file's own RelPath.
+type AlbumPlacement struct {
+	ReleaseMBID string
+	DiscCount   int
+	Tracks      map[string]ReleaseTrack
+}
+
+// PlacementOf is the album decision as a unit's placement; nil unless an album was identified.
+func PlacementOf(decision AlbumDecision, relPaths []string) *AlbumPlacement {
+	if decision.Best == nil {
+		return nil
+	}
+	placement := &AlbumPlacement{
+		ReleaseMBID: decision.Best.Candidate.Release.MBID,
+		DiscCount:   len(decision.Best.Candidate.Release.Media),
+		Tracks:      make(map[string]ReleaseTrack, len(relPaths)),
+	}
+	for index, relPath := range relPaths {
+		if index < len(decision.Best.Tracks) && decision.Best.Tracks[index] != nil {
+			placement.Tracks[relPath] = *decision.Best.Tracks[index]
+		}
+	}
+	return placement
+}
+
+// trackOf is the file as album matching placed it, or as its own tags claim when it matched no track.
+func (p *AlbumPlacement) trackOf(relPath string, tags mediatool.Tags) (TrackFile, int) {
+	claimed := ReadTrackFile(0, tags)
+	if p == nil {
+		return claimed, 0
+	}
+	matched, found := p.Tracks[relPath]
+	if !found {
+		return claimed, p.DiscCount
+	}
+	claimed.Disc, claimed.Track, claimed.RecordingMBID = matched.Disc, matched.Position, matched.RecordingMBID
+	if claimed.Title == "" {
+		claimed.Title = matched.Title
+	}
+	return claimed, p.DiscCount
+}
+
+// CommitUnit places unit (found under sourceRoot by inspect.Run) into categoryID's own
+// library, from each file's own tags. best is the unit's DECIDE-cleared Identification;
+// tags is the Resolved batch IDENTIFY already probed (ADR-48's own speed rule).
 func (c Committer) CommitUnit(
 	ctx context.Context, sourceRoot string, unit inspect.Unit, best model.Identification, tags Resolved, categoryID int64,
+) (Placed, error) {
+	return c.CommitMatchedUnit(ctx, sourceRoot, unit, best, tags, categoryID, nil)
+}
+
+// CommitMatchedUnit is CommitUnit knowing what album matching decided: the release to record as
+// the edition, and which track each file is (placement nil falls back to each file's own tags).
+func (c Committer) CommitMatchedUnit(
+	ctx context.Context, sourceRoot string, unit inspect.Unit, best model.Identification, tags Resolved,
+	categoryID int64, matched *AlbumPlacement,
 ) (Placed, error) {
 	if best.ExternalID == nil {
 		return Placed{}, fmt.Errorf("music: commit unit %q: %w", unit.Directory, errNoExternalID)
@@ -202,6 +252,11 @@ func (c Committer) CommitUnit(
 	}
 	work := unitWorkIdentity(unit, representative)
 	edition := unitEditionLink(representative)
+	if matched != nil && matched.ReleaseMBID != "" {
+		// Album matching already chose the release; keeping it saves enrichment choosing a
+		// second time from tags alone, which picked a 15-track edition for 17 matched files.
+		edition = releaseEditionLink(matched.ReleaseMBID, best.Confidence)
+	}
 	artist := representative.First("albumartist", "album_artist", "artist")
 	year := parseYear(representative.First("date", "year"))
 
@@ -245,8 +300,8 @@ func (c Committer) CommitUnit(
 		if err != nil {
 			return Placed{}, fmt.Errorf("music: commit unit %q: %w", unit.Directory, err)
 		}
-		track := ReadTrackFile(0, fileTags)
-		destRelPath, warnings, err := importRelPath(work, artist, year, track, path.Ext(media.RelPath))
+		track, discCount := matched.trackOf(media.RelPath, fileTags)
+		destRelPath, warnings, err := importRelPath(work, artist, year, track, discCount, path.Ext(media.RelPath))
 		if err != nil {
 			return Placed{}, fmt.Errorf("music: commit unit %q: %w", unit.Directory, err)
 		}
@@ -379,6 +434,15 @@ func unitWorkIdentity(unit inspect.Unit, tags mediatool.Tags) library.WorkIdenti
 	return library.WorkIdentity{MediaType: "music", CanonicalTitle: title, SortTitle: SortTitle(title)}
 }
 
+// releaseEditionLink is the placeholder edition for a release album matching chose, the same
+// shape unitEditionLink builds from a tag (enrichment refines it into the real edition).
+func releaseEditionLink(releaseMBID string, confidence float64) *library.EditionLink {
+	return &library.EditionLink{
+		Provider: ProviderRelease, ExternalID: releaseMBID, Confidence: confidence,
+		Edition: library.EditionIdentity{Kind: "unknown", Label: releaseMBID},
+	}
+}
+
 // unitEditionLink is newEditionLink, read from a unit's representative tags
 // instead of one scan.Observed.
 func unitEditionLink(tags mediatool.Tags) *library.EditionLink {
@@ -403,7 +467,9 @@ func unitEditionLink(tags mediatool.Tags) *library.EditionLink {
 // show a diff -- expected, not a bug, the same way any scan-discovered
 // work's does today. No edition/Format token: a freshly resolved edition is
 // the "unknown" placeholder (unitEditionLink), which carries no format.
-func importRelPath(work library.WorkIdentity, artist string, year *int64, track TrackFile, extension string) (string, []string, error) {
+func importRelPath(
+	work library.WorkIdentity, artist string, year *int64, track TrackFile, discCount int, extension string,
+) (string, []string, error) {
 	ctx := naming.Context{TokenAlbumTitle: work.CanonicalTitle}
 	if artist != "" {
 		ctx[TokenArtistName] = artist
@@ -416,6 +482,7 @@ func importRelPath(work library.WorkIdentity, artist string, year *int64, track 
 	}
 	ctx[TokenDisc] = strconv.Itoa(track.Disc)
 	ctx[TokenTrack] = strconv.Itoa(track.Track)
+	ctx[TokenTrackPosition] = TrackPosition(track.Disc, track.Track, discCount)
 
 	rendered, warnings, err := naming.RenderPath(compiledDefaultFolder, compiledDefaultFile, ctx, naming.DefaultSeparator, extension)
 	if err != nil {
