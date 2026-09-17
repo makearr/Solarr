@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -83,6 +84,10 @@ type process struct {
 	// effectivePort is ADR-58's own resolution, computed once here and shown
 	// by the Network screen as "in effect" -- a port change needs a restart.
 	effectivePort int
+	// musicBrainzOnce builds musicBrainzShared once: every job's provider must
+	// draw on the same 1 req/s budget (ADR-13), see musicBrainzBudget.
+	musicBrainzOnce   sync.Once
+	musicBrainzShared musicBrainzBudget
 }
 
 // Serve is the startup sequence of architecture section 15.1, in order.
