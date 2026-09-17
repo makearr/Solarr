@@ -122,6 +122,14 @@ func TestClient_SendsTheIdentifyingUserAgent(t *testing.T) {
 	}
 }
 
+// BrainzMash's front door refuses any agent not starting "Lidarr/"; MediaNexus must still be named.
+func TestLidarrCompatibleUserAgent(t *testing.T) {
+	got := httpx.LidarrCompatibleUserAgent("1.2.3")
+	if want := "Lidarr/2.9.6.4552 (MediaNexus/1.2.3; +https://github.com/makearr/MediaNexus)"; got != want {
+		t.Errorf("LidarrCompatibleUserAgent = %q, want %q", got, want)
+	}
+}
+
 func TestClient_RejectsANonHTTPSchemeBeforeAnythingElse(t *testing.T) {
 	transport := &roundTripper{responses: []*http.Response{respond(http.StatusOK, nil)}}
 	client, _, _, _ := newTestClient(t, transport)

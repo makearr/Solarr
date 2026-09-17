@@ -162,6 +162,27 @@ func TestDirect_NameIsTheBreakerBucketKey(t *testing.T) {
 	}
 }
 
+// BrainzMash is a ws/2 mirror pool: the same requests against its own base URL, under its own bucket.
+func TestBrainzMash_AlbumAsksItsOwnBaseURLUnderItsOwnBucket(t *testing.T) {
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://brainzmash.invalid/ws/2/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres+url-rels": {
+			status: http.StatusOK, body: directReleaseGroupBody,
+		},
+	}}
+	source := musicbrainz.NewBrainzMash(newTestClient(t, transport, musicbrainz.BrainzMashName), "https://brainzmash.invalid/ws/2")
+
+	if source.Name() != musicbrainz.BrainzMashName {
+		t.Errorf("Name() = %q, want %q", source.Name(), musicbrainz.BrainzMashName)
+	}
+	rg, _, err := source.Album(t.Context(), okComputerRG, "")
+	if err != nil {
+		t.Fatalf("Album: %v", err)
+	}
+	if rg.Title != "KI Pecezinu" || rg.WikidataQID != "Q202996" {
+		t.Errorf("ReleaseGroup = %+v, want KI Pecezinu parsed from the pool's ws/2 answer", rg)
+	}
+}
+
 // directSearchBody is trimmed from a real live musicbrainz.org search response
 // (fetched while designing this method), same discipline as the payloads above --
 // two release groups, the second carrying a two-artist credit to prove the join.

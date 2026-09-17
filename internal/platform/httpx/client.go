@@ -27,6 +27,12 @@ func UserAgent(version string) string {
 	return fmt.Sprintf("MediaNexus/%s ( %s )", version, sourceURL)
 }
 
+// LidarrCompatibleUserAgent still names MediaNexus; BrainzMash's front door answers 403
+// to any agent not starting "Lidarr/" (probed 2026-09-17).
+func LidarrCompatibleUserAgent(version string) string {
+	return fmt.Sprintf("Lidarr/2.9.6.4552 (MediaNexus/%s; +%s)", version, sourceURL)
+}
+
 // ClientConfig describes one provider's client.
 type ClientConfig struct {
 	// Provider is the rate-limit and breaker bucket key. Every subsystem talking

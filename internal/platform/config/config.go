@@ -52,17 +52,21 @@ const DefaultMusicBrainzBaseURL = "https://musicbrainz.org/ws/2"
 // first provider -- aggregated, pre-joined, no API key.
 const DefaultLidarrProxyBaseURL = "https://api.lidarr.audio/api/v0.4"
 
+// DefaultBrainzMashBaseURL is the BrainzMash community mirror pool's public ws/2 front door.
+const DefaultBrainzMashBaseURL = "https://api.brainzmash.cc/ws/2"
+
 // Metadata is enrichment provider configuration (ADR-29).
 type Metadata struct {
 	MusicBrainz MusicBrainzConfig `yaml:"musicbrainz"`
 }
 
-// MusicBrainzConfig names the two sources ADR-29 tries in order: the Servarr proxy
-// first (preferred, never required), direct MusicBrainz as the fallback the proxy
-// always needs to be able to fall back to. A local mirror substitutes here behind
-// the same base_url with no change anywhere else.
+// MusicBrainzConfig names the sources tried in order: BrainzMash, the Servarr proxy, then
+// direct MusicBrainz, never optional. A local mirror substitutes behind base_url.
 type MusicBrainzConfig struct {
-	BaseURL string `yaml:"base_url"`
+	// BrainzMashEnabled tries the BrainzMash pool first; it answers ws/2 at ten times direct's rate.
+	BrainzMashEnabled bool   `yaml:"brainzmash_enabled"`
+	BrainzMashBaseURL string `yaml:"brainzmash_base_url"`
+	BaseURL           string `yaml:"base_url"`
 	// ProxyEnabled toggles trying the proxy first at all. Direct MusicBrainz is
 	// used either way -- it is never optional, since it is what the proxy falls
 	// back to (ADR-13's circuit breaker).
@@ -196,10 +200,12 @@ func Default() Config {
 			Interval: Duration(6 * time.Hour),
 		}},
 		Metadata: Metadata{MusicBrainz: MusicBrainzConfig{
-			BaseURL:      DefaultMusicBrainzBaseURL,
-			ProxyEnabled: true,
-			ProxyBaseURL: DefaultLidarrProxyBaseURL,
-			RefreshAfter: Duration(90 * 24 * time.Hour),
+			BrainzMashEnabled: true,
+			BrainzMashBaseURL: DefaultBrainzMashBaseURL,
+			BaseURL:           DefaultMusicBrainzBaseURL,
+			ProxyEnabled:      true,
+			ProxyBaseURL:      DefaultLidarrProxyBaseURL,
+			RefreshAfter:      Duration(90 * 24 * time.Hour),
 		}},
 		Mode: ModeNormal,
 	}

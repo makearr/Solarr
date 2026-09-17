@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
 	"github.com/makearr/MediaNexus/internal/metadata/wikidata"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/MediaNexus/internal/platform/config"
 	"github.com/makearr/MediaNexus/internal/platform/httpx"
 )
 
@@ -79,6 +80,8 @@ func (p *process) musicBrainzBudget() musicBrainzBudget {
 				Providers: map[string]httpx.Limits{
 					// MusicBrainz allows one request per second and means it (ADR-29).
 					musicbrainz.DirectName: {MinInterval: time.Second},
+					// DroppedNeedle's documented 10 req/s for the pool; BrainzMash publishes no quota.
+					musicbrainz.BrainzMashName: {MinInterval: 100 * time.Millisecond},
 					// The proxy is Lidarr's own service, not rate-limited by ADR-29's
 					// 1 req/s rule; kept modest anyway since it is shared infrastructure
 					// this project does not operate.
@@ -91,37 +94,38 @@ func (p *process) musicBrainzBudget() musicBrainzBudget {
 	return p.musicBrainzShared
 }
 
-// musicBrainzProvider builds ADR-29's provider on the process's one shared
-// rate-limit and circuit breaker registry (ADR-13), across both sources, so a
-// proxy failure counts against only the proxy's own budget and never steals
-// from direct MusicBrainz's.
+// musicBrainzProvider builds ADR-29's provider on the process's one ADR-13 registry,
+// where a failing source counts against only its own bucket.
 func (p *process) musicBrainzProvider() musicbrainz.Provider {
+	sources := p.config.Metadata.MusicBrainz
+	return musicbrainz.New(musicbrainz.Config{
+		Sources: p.musicBrainzSources(sources), Cache: metacache.New(p.metadata), Clock: clock.NewSystem(),
+		Logger: p.logger, RefreshAfter: sources.RefreshAfter.AsDuration(),
+	})
+}
+
+// musicBrainzSources answers the sources in the order they are tried: BrainzMash,
+// the Servarr proxy, then direct MusicBrainz, which every failure falls back to.
+func (p *process) musicBrainzSources(sources config.MusicBrainzConfig) []musicbrainz.Source {
 	wall := clock.NewSystem()
 	guard := httpx.NewGuard(nil, nil, nil)
 	budget := p.musicBrainzBudget()
-	limiter, breaker := budget.limiter, budget.breaker
-
-	agent := httpx.UserAgent(p.build.Version)
-	config := p.config.Metadata.MusicBrainz
-	direct := musicbrainz.NewDirect(httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
-		Provider: musicbrainz.DirectName, UserAgent: agent, Proxy: p.liveProxyPolicy(),
-	}), config.BaseURL)
-
-	sources := []musicbrainz.Source{direct}
-	if config.ProxyEnabled {
-		proxy := musicbrainz.NewProxy(httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
-			Provider: musicbrainz.ProxyName, UserAgent: agent, Proxy: p.liveProxyPolicy(),
-		}), config.ProxyBaseURL)
-		// The proxy goes first (ADR-29: "preferred, never required") -- direct
-		// MusicBrainz is what a proxy failure (the breaker opening) falls back
-		// to, so it stays in the list either way.
-		sources = []musicbrainz.Source{proxy, direct}
+	newClient := func(provider, userAgent string) *httpx.Client {
+		return httpx.NewClient(wall, guard, budget.limiter, budget.breaker, httpx.ClientConfig{
+			Provider: provider, UserAgent: userAgent, Proxy: p.liveProxyPolicy(),
+		})
 	}
 
-	return musicbrainz.New(musicbrainz.Config{
-		Sources: sources, Cache: metacache.New(p.metadata), Clock: wall, Logger: p.logger,
-		RefreshAfter: config.RefreshAfter.AsDuration(),
-	})
+	agent := httpx.UserAgent(p.build.Version)
+	var ordered []musicbrainz.Source
+	if sources.BrainzMashEnabled {
+		ordered = append(ordered, musicbrainz.NewBrainzMash(
+			newClient(musicbrainz.BrainzMashName, httpx.LidarrCompatibleUserAgent(p.build.Version)), sources.BrainzMashBaseURL))
+	}
+	if sources.ProxyEnabled {
+		ordered = append(ordered, musicbrainz.NewProxy(newClient(musicbrainz.ProxyName, agent), sources.ProxyBaseURL))
+	}
+	return append(ordered, musicbrainz.NewDirect(newClient(musicbrainz.DirectName, agent), sources.BaseURL))
 }
 
 // arrClientFactory builds adapters.LidarrClientFactory: one shared rate-
