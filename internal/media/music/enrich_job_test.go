@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -86,6 +87,23 @@ func newEnrichJobWithBiographer(
 	t *testing.T, source musicbrainz.Source, biographer music.Biographer,
 ) (*music.EnrichJob, *store.Store, *librarydb.Queries) {
 	t.Helper()
+	return newEnrichJobRealigning(t, source, biographer, nil)
+}
+
+// fakeRealigner records every batch of works it is asked to realign.
+type fakeRealigner struct {
+	batches [][]int64
+}
+
+func (f *fakeRealigner) RealignWorks(_ context.Context, workIDs []int64) error {
+	f.batches = append(f.batches, slices.Clone(workIDs))
+	return nil
+}
+
+func newEnrichJobRealigning(
+	t *testing.T, source musicbrainz.Source, biographer music.Biographer, realigner *fakeRealigner,
+) (*music.EnrichJob, *store.Store, *librarydb.Queries) {
+	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
 	if err := os.MkdirAll(backups, 0o755); err != nil {
@@ -130,11 +148,14 @@ func newEnrichJobWithBiographer(
 		Sources: []musicbrainz.Source{source}, Cache: metacache.New(metadataStore),
 		Clock: fake, Logger: slog.New(slog.DiscardHandler),
 	})
-	job := music.NewEnrichJob(music.EnrichJobConfig{
+	config := music.EnrichJobConfig{
 		Identity: identity, People: library.NewPeople(libraryStore), Provider: provider,
 		Biography: biographer, Clock: fake, Logger: slog.New(slog.DiscardHandler),
-	})
-	return job, libraryStore, librarydb.New(libraryStore.Read())
+	}
+	if realigner != nil {
+		config.Realigner = realigner
+	}
+	return music.NewEnrichJob(config), libraryStore, librarydb.New(libraryStore.Read())
 }
 
 // newEnrichJobWithImageFetch is newEnrichJobWithBiographer plus the artwork
@@ -824,5 +845,48 @@ func TestEnrichJob_BackfillReachesPastAFullPageOfFailures(t *testing.T) {
 	}
 	if !recorded.Found {
 		t.Fatal("the artist after a full page of failures was never reached")
+	}
+}
+
+// A scan matches files only against tracks that already exist, and on a fresh
+// library the tracklist arrives here, afterwards. Every refined album must be
+// handed back for its files to be matched, or it stays wanted with none present.
+func TestEnrichJob_HandsRefinedWorksBackToBeRealigned(t *testing.T) {
+	source := &fakeSource{
+		rg: musicbrainz.ReleaseGroup{MBID: "rg-1", Title: "Detisisu Binip", PrimaryType: "Album"},
+		release: musicbrainz.Release{
+			MBID: "rel-1", Title: "Detisisu Binip", Status: "official",
+			Media: []musicbrainz.Medium{{Position: 1, Tracks: []musicbrainz.Track{{Position: 1, Title: "Detisisu Binip"}}}},
+		},
+	}
+	realigner := &fakeRealigner{}
+	job, opened, queries := newEnrichJobRealigning(t, source, nil, realigner)
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-1",
+	})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v", err)
+	}
+	if len(realigner.batches) != 1 || !slices.Equal(realigner.batches[0], []int64{work.ID}) {
+		t.Errorf("realigned %v, want one batch holding work %d", realigner.batches, work.ID)
+	}
+}
+
+// Nothing refined, nothing to realign: an idle sweep must not queue rescans.
+func TestEnrichJob_RealignsNothingWhenNothingWasRefined(t *testing.T) {
+	realigner := &fakeRealigner{}
+	job, _, _ := newEnrichJobRealigning(t, &fakeSource{}, nil, realigner)
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(realigner.batches) != 0 {
+		t.Errorf("realigned %v, want nothing", realigner.batches)
 	}
 }

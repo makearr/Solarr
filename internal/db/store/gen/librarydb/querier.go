@@ -448,6 +448,9 @@ type Querier interface {
 	ListWorkDates(ctx context.Context, workID int64) ([]WorkDate, error)
 	ListWorkExternalIDs(ctx context.Context, workID int64) ([]WorkExternalID, error)
 	ListWorkFields(ctx context.Context, workID int64) ([]WorkField, error)
+	// Where each named work's recorded file lives, every path of it. An album's
+	// directory is the unit a scoped rescan reads once its tracklist exists.
+	ListWorkFileLocations(ctx context.Context, workIds interface{}) ([]ListWorkFileLocationsRow, error)
 	ListWorkPartExternalIDs(ctx context.Context, partID int64) ([]WorkPartExternalID, error)
 	ListWorkPartTitles(ctx context.Context, partID int64) ([]WorkPartTitle, error)
 	// Ordered by the module's sort key. Core never parses media_ref to order parts.

@@ -76,11 +76,20 @@ type EnrichJob struct {
 	provider  musicbrainz.Provider
 	biography Biographer
 	artworks  library.Artworks
+	realigner Realigner
 	http      *httpx.Client
 	fs        fsx.FS
 	imagesDir string
 	clock     clock.Clock
 	logger    *slog.Logger
+}
+
+// Realigner matches a work's files to its tracks again, once enrichment has
+// given it a tracklist. A scan matches files only against tracks that exist,
+// and on a fresh library the tracklist arrives afterwards, so without this
+// every album on disk stayed wanted with no files present (found 2026-09-17).
+type Realigner interface {
+	RealignWorks(ctx context.Context, workIDs []int64) error
 }
 
 // EnrichJobConfig is what an EnrichJob needs. Every field is required except
@@ -93,6 +102,9 @@ type EnrichJobConfig struct {
 	Provider  musicbrainz.Provider
 	Biography Biographer
 	Artworks  library.Artworks
+	// Realigner is optional: without one, refined albums wait for the next
+	// scan that happens to revisit their directory.
+	Realigner Realigner
 	HTTP      *httpx.Client
 	FS        fsx.FS
 	ImagesDir string
@@ -108,7 +120,7 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 	}
 	return &EnrichJob{
 		identity: config.Identity, people: config.People, provider: config.Provider,
-		biography: config.Biography, artworks: config.Artworks, http: config.HTTP,
+		biography: config.Biography, artworks: config.Artworks, realigner: config.Realigner, http: config.HTTP,
 		fs: config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
 	}
 }
@@ -126,6 +138,7 @@ func (j *EnrichJob) Run(ctx context.Context, _ jobs.Job) error {
 	}
 
 	total, failed := 0, 0
+	var refinedWorkIDs []int64
 	for {
 		if err := ctx.Err(); err != nil {
 			return jobs.Retryablef("enrich.context", string(EnrichJobType), err)
@@ -141,7 +154,9 @@ func (j *EnrichJob) Run(ctx context.Context, _ jobs.Job) error {
 
 		for _, edition := range batch {
 			total++
-			if err := j.enrichOne(ctx, edition); err != nil {
+			if err := j.enrichOne(ctx, edition); err == nil {
+				refinedWorkIDs = append(refinedWorkIDs, edition.WorkID)
+			} else {
 				failed++
 				// One placeholder edition failing (no data at the provider, a
 				// transient network error) is not a reason to stop the sweep --
@@ -155,6 +170,13 @@ func (j *EnrichJob) Run(ctx context.Context, _ jobs.Job) error {
 		}
 	}
 	j.logger.Info("music enrichment finished", slog.Int("processed", total), slog.Int("failed", failed))
+
+	if j.realigner != nil && len(refinedWorkIDs) > 0 {
+		if err := j.realigner.RealignWorks(ctx, refinedWorkIDs); err != nil {
+			j.logger.WarnContext(ctx, "realign refined works failed",
+				slog.Int("works", len(refinedWorkIDs)), slog.Any("error", err))
+		}
+	}
 
 	j.backfillPeople(ctx)
 	return nil

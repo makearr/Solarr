@@ -270,6 +270,40 @@ func (w *sweep) filesIn(
 	return w.commit(ctx, batch)
 }
 
+// ReadDirectory lists the files directly inside one directory under root, the
+// way a sweep would, but alone: no watermark, no cursor, no subdirectories. A
+// directory that no longer exists is an empty batch, not an error.
+func (s Sweeper) ReadDirectory(root, relative string, include func(relPath string) bool) (Batch, error) {
+	absolute := path.Join(root, relative)
+	entries, err := s.fsys.ReadDir(absolute)
+	if errors.Is(err, fs.ErrNotExist) {
+		return Batch{Directory: relative}, nil
+	}
+	if err != nil {
+		return Batch{}, fmt.Errorf("scan: read %q: %w", absolute, err)
+	}
+
+	batch := Batch{Directory: relative}
+	for _, entry := range entries {
+		if entry.IsDir {
+			continue
+		}
+		childRelative := path.Join(relative, entry.Name)
+		if include != nil && !include(childRelative) {
+			continue
+		}
+		child, err := s.fsys.Stat(path.Join(absolute, entry.Name))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return Batch{}, fmt.Errorf("scan: stat %q: %w", path.Join(absolute, entry.Name), err)
+		}
+		batch.Files = append(batch.Files, Found{RelPath: childRelative, SizeBytes: child.Size, ModTime: child.ModTime})
+	}
+	return batch, nil
+}
+
 // comparePaths orders two relative paths the way the walk visits them: segment by
 // segment, so a directory sorts before everything beneath it and before any sibling
 // that follows it. Plain string comparison does not do this -- "a-b" < "a/c" because

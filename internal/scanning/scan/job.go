@@ -2,10 +2,12 @@ package scan
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -38,6 +40,10 @@ type Payload struct {
 	// policy up fresh at run time rather than trusting a value baked in at
 	// enqueue time, the same "ask, don't cache" discipline Roots already uses.
 	CategoryID int64 `json:"category_id"`
+	// Directories, when set, rescans only these directories (relative to the
+	// root) and leaves the root's watermark and cursor alone. Used once an
+	// album's tracklist exists, so files seen before it can be matched to tracks.
+	Directories []string `json:"directories,omitempty"`
 }
 
 // ActionKeyFor deduplicates scans of one root: at most one may be active at a time
@@ -135,6 +141,10 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 			fmt.Errorf("root folder %d (%s) is offline", root.ID, root.Path))
 	}
 
+	if len(payload.Directories) > 0 {
+		return j.rescanDirectories(ctx, root, payload)
+	}
+
 	progress, err := j.scans.Progress(ctx, root.ID)
 	if err != nil {
 		return err
@@ -180,6 +190,33 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	return nil
 }
 
+// rescanDirectories reads and observes only the named directories. It records
+// no scan progress: it did not walk the root, so it is no evidence about the
+// rest of it, and marks nothing missing.
+func (j *Job) rescanDirectories(ctx context.Context, root settings.RootFolder, payload Payload) error {
+	files := 0
+	for _, directory := range payload.Directories {
+		if err := ctx.Err(); err != nil {
+			return jobs.Retryablef("scan.context", string(JobType), err)
+		}
+		batch, err := j.sweeper.ReadDirectory(root.Path, directory, j.include)
+		if err != nil {
+			return err
+		}
+		if len(batch.Files) == 0 {
+			continue
+		}
+		if err := j.observe(ctx, root, payload.CategoryID, batch); err != nil {
+			return err
+		}
+		files += len(batch.Files)
+	}
+	j.logger.Info("library directories rescanned",
+		slog.Int64("root_folder_id", root.ID), slog.Int("directories", len(payload.Directories)),
+		slog.Int("files", files))
+	return nil
+}
+
 // markMissing is best-effort cleanup, not the sweep's core job: a failure here does
 // not undo an otherwise-successful sweep, so it is logged rather than returned.
 func (j *Job) markMissing(ctx context.Context, root settings.RootFolder, sweptThrough time.Time) {
@@ -199,6 +236,14 @@ func (j *Job) markMissing(ctx context.Context, root settings.RootFolder, sweptTh
 // on. The cursor advances only after the consumer has committed, which is what makes
 // a restart resume rather than lose a batch.
 func (j *Job) batch(ctx context.Context, root settings.RootFolder, categoryID int64, batch Batch) error {
+	if err := j.observe(ctx, root, categoryID, batch); err != nil {
+		return err
+	}
+	return j.scans.Advance(ctx, root.ID, batch.Directory)
+}
+
+// observe probes one batch in a single mediatool call and hands it to the consumer.
+func (j *Job) observe(ctx context.Context, root settings.RootFolder, categoryID int64, batch Batch) error {
 	paths := make([]string, len(batch.Files))
 	for index, file := range batch.Files {
 		paths[index] = path.Join(root.Path, file.RelPath)
@@ -230,10 +275,7 @@ func (j *Job) batch(ctx context.Context, root settings.RootFolder, categoryID in
 			slog.Int("unreadable", unreadable), slog.Int("of", len(batch.Files)))
 	}
 
-	if err := j.consumer.Observe(ctx, root, categoryID, observed); err != nil {
-		return err
-	}
-	return j.scans.Advance(ctx, root.ID, batch.Directory)
+	return j.consumer.Observe(ctx, root, categoryID, observed)
 }
 
 // AudioExtensions are the containers stage 3 reads. It is an Include function rather
@@ -250,6 +292,29 @@ func IsAudio(relPath string) bool {
 		}
 	}
 	return false
+}
+
+// EnqueueDirectories submits a rescan of only these directories of one root.
+// Its action key names the directories rather than the root: it never touches
+// the root's cursor, which is what one-scan-per-root protects (Invariant 16), and
+// sharing the root's key would drop it whenever an ordinary scan was active.
+func EnqueueDirectories(
+	ctx context.Context, queue *jobs.Queue, rootFolderID, categoryID int64, directories []string,
+) (jobs.EnqueueResult, error) {
+	sorted := slices.Clone(directories)
+	slices.Sort(sorted)
+	sorted = slices.Compact(sorted)
+	payload, err := json.Marshal(Payload{RootFolderID: rootFolderID, CategoryID: categoryID, Directories: sorted})
+	if err != nil {
+		return jobs.EnqueueResult{}, fmt.Errorf("scan: encode payload: %w", err)
+	}
+	digest := sha256.Sum256([]byte(strings.Join(sorted, "\x00")))
+	return queue.Enqueue(ctx, jobs.Request{
+		Type:      JobType,
+		ActionKey: fmt.Sprintf("%s:directories:%x", ActionKeyFor(rootFolderID), digest[:8]),
+		Priority:  jobs.PriorityLow,
+		Payload:   payload,
+	})
 }
 
 // Enqueue submits a scan of one root, scoped to categoryID, deduplicated by

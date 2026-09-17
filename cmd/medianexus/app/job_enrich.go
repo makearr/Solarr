@@ -38,6 +38,7 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 		Provider:  p.musicBrainzProvider(),
 		Biography: p.wikidataFetcher(),
 		Artworks:  library.NewArtworks(p.library),
+		Realigner: realigner{p: p},
 		HTTP:      imageClient,
 		FS:        p.fsys,
 		ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"),
