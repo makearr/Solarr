@@ -86,9 +86,9 @@ export function defaultLevelKey(library: LibraryEntry): string | undefined {
   return library.levels.find((level) => level.key === "artists")?.key ?? library.levels[0]?.key;
 }
 
-/** The sidebar tree. Submenus are click-to-toggle and several may stand open
- *  at once (useOpenSections); navigating into a branch opens it without
- *  closing the rest. */
+/** The sidebar tree. Every top-level section and every submenu is
+ *  click-to-toggle, several may stand open at once (useOpenSections), and
+ *  navigating into a branch opens it without closing the rest. */
 export function Sidebar() {
   const tier = useTier();
   const path = useRouterState({ select: (state) => state.location.pathname });
@@ -113,13 +113,42 @@ export function Sidebar() {
 
   // Which branches the current route sits inside, so they open themselves.
   const activeKeys: string[] = [];
+  if (path.startsWith("/library") || routeParams.categoryId) activeKeys.push("library");
   if (path.startsWith("/storage")) activeKeys.push("storage");
   if (path.startsWith("/connections")) activeKeys.push("connections");
   if (path.startsWith("/settings")) activeKeys.push("settings");
   if (routeParams.categoryId) activeKeys.push(`library:${routeParams.categoryId}`);
   if (path === "/unidentified" && search.category_id) activeKeys.push(`library:${search.category_id}`);
 
-  const sections = useOpenSections(activeKeys);
+  // Library starts open on a first visit: it is where the collection lives.
+  const sections = useOpenSections(activeKeys, ["library"]);
+
+  const libraryTree = groups.map((group) => (
+    <li key={group.mediaType}>
+      {group.libraries.length > 1 && !collapsed && (
+        <div className="px-2 pt-2 pb-0.5 text-[11px] uppercase tracking-wide text-ink-muted">
+          {group.mediaType}
+        </div>
+      )}
+      <ul className="flex flex-col gap-0.5">
+        {group.libraries.map((library) => (
+          <LibraryNode
+            key={library.id}
+            library={library}
+            collapsed={collapsed}
+            tier={tier}
+            isActive={routeParams.categoryId === String(library.id)}
+            activeLevel={routeParams.level}
+            activeSection={routeParams.section}
+            activePath={path}
+            activeUnidentifiedCategoryId={path === "/unidentified" ? search.category_id : undefined}
+            isOpen={sections.isOpen(`library:${library.id}`)}
+            onToggle={() => sections.toggle(`library:${library.id}`)}
+          />
+        ))}
+      </ul>
+    </li>
+  ));
 
   return (
     <nav
@@ -142,51 +171,18 @@ export function Sidebar() {
         </li>
       </ul>
 
-      {!collapsed && (
-        <Link
-          to="/libraries"
-          className={`mx-2 mt-4 mb-1 flex items-center gap-2 rounded-md px-2 py-1 text-xs font-medium uppercase
-                      tracking-wide focus-visible:outline-2 focus-visible:outline-offset-2
-                      focus-visible:outline-accent ${
-                        path === "/libraries"
-                          ? "bg-accent text-accent-ink"
-                          : "text-ink-muted hover:bg-canvas hover:text-ink"
-                      }`}
-        >
-          <LibraryIcon aria-hidden className="size-3.5 shrink-0" />
-          Library
-        </Link>
-      )}
-      {groups.length > 0 && (
-        <ul className="flex flex-col gap-0.5 px-2">
-          {groups.map((group) => (
-            <li key={group.mediaType}>
-              {group.libraries.length > 1 && !collapsed && (
-                <div className="px-2 pt-2 pb-0.5 text-[11px] uppercase tracking-wide text-ink-muted">
-                  {group.mediaType}
-                </div>
-              )}
-              <ul className="flex flex-col gap-0.5">
-                {group.libraries.map((library) => (
-                  <LibraryNode
-                    key={library.id}
-                    library={library}
-                    collapsed={collapsed}
-                    tier={tier}
-                    isActive={routeParams.categoryId === String(library.id)}
-                    activeLevel={routeParams.level}
-                    activeSection={routeParams.section}
-                    activePath={path}
-                    activeUnidentifiedCategoryId={path === "/unidentified" ? search.category_id : undefined}
-                    isOpen={sections.isOpen(`library:${library.id}`)}
-                    onToggle={() => sections.toggle(`library:${library.id}`)}
-                  />
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ul>
-      )}
+      <CollapsibleSection
+        label="Library"
+        icon={LibraryIcon}
+        to="/libraries"
+        collapsed={collapsed}
+        active={path === "/libraries"}
+        isOpen={sections.isOpen("library")}
+        onToggle={() => sections.toggle("library")}
+        whenCollapsed={libraryTree}
+      >
+        {libraryTree}
+      </CollapsibleSection>
 
       <CollapsibleSection
         label="Storage"
@@ -226,7 +222,7 @@ export function Sidebar() {
         ))}
       </CollapsibleSection>
 
-      <ul className="flex flex-col gap-0.5 px-2 pt-4">
+      <ul className="flex flex-col gap-0.5 px-2 pt-3">
         {SECTIONS.filter((section) => isTierVisible(tier, section.tier)).map(({ to, label, icon: Icon }) => (
           <li key={to}>
             <Link to={to} title={collapsed ? label : undefined} className={sectionLinkClass(path.startsWith(to), collapsed)}>
@@ -268,6 +264,7 @@ function CollapsibleSection({
   active,
   isOpen,
   onToggle,
+  whenCollapsed,
   children,
 }: {
   label: string;
@@ -277,14 +274,13 @@ function CollapsibleSection({
   active: boolean;
   isOpen: boolean;
   onToggle: () => void;
+  /** What stays reachable when the sidebar shrinks to icons, if anything. */
+  whenCollapsed?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <>
-      {!collapsed && (
-        <div className="px-4 pt-4 pb-1 text-xs font-medium uppercase tracking-wide text-ink-muted">{label}</div>
-      )}
-      <ul className={`flex flex-col gap-0.5 px-2 ${collapsed ? "pt-4" : ""}`}>
+      <ul className="flex flex-col gap-0.5 px-2 pt-3">
         <li className="flex items-center">
           <Link to={to} title={collapsed ? label : undefined} className={sectionLinkClass(active, collapsed) + " flex-1"}>
             <Icon aria-hidden className="size-4 shrink-0" />
@@ -297,6 +293,7 @@ function CollapsibleSection({
             <ul className="ml-5 flex flex-col gap-0.5 border-l border-border-subtle pl-2">{children}</ul>
           </li>
         )}
+        {collapsed && whenCollapsed}
       </ul>
     </>
   );
