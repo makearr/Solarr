@@ -78,9 +78,9 @@ type Policy interface {
 // it without building every real dependency (settings roots, every library
 // store) music.Committer itself needs.
 type Committer interface {
-	CommitUnit(
+	CommitMatchedUnit(
 		ctx context.Context, sourceRoot string, unit inspect.Unit, best model.Identification, tags music.Resolved,
-		categoryID int64,
+		categoryID int64, matched *music.AlbumPlacement,
 	) (music.Placed, error)
 }
 
@@ -346,9 +346,10 @@ const identifyParallelism = 8
 func identifyCluster(
 	ctx context.Context, ids []int64, batch []inspect.Unit, identifiers []model.Identifier, cfg model.ChainConfig,
 	refine refineUnit,
-) ([]library.UnitDecision, []model.ChainResult) {
+) ([]library.UnitDecision, []model.ChainResult, []*music.AlbumPlacement) {
 	decisions := make([]library.UnitDecision, len(batch))
 	results := make([]model.ChainResult, len(batch))
+	placements := make([]*music.AlbumPlacement, len(batch))
 	slots := make(chan struct{}, identifyParallelism)
 	var running sync.WaitGroup
 	for i, unit := range batch {
@@ -357,11 +358,11 @@ func identifyCluster(
 		go func(i int, unit inspect.Unit) {
 			defer running.Done()
 			defer func() { <-slots }()
-			decisions[i], results[i] = identifyUnit(ctx, ids[i], unit, identifiers, cfg, refine)
+			decisions[i], results[i], placements[i] = identifyUnit(ctx, ids[i], unit, identifiers, cfg, refine)
 		}(i, unit)
 	}
 	running.Wait()
-	return decisions, results
+	return decisions, results, placements
 }
 
 // identifyUnit runs IDENTIFY for one unit and turns DECIDE's outcome into a
@@ -372,10 +373,11 @@ func identifyCluster(
 func identifyUnit(
 	ctx context.Context, unitID int64, unit inspect.Unit, identifiers []model.Identifier, cfg model.ChainConfig,
 	refine refineUnit,
-) (library.UnitDecision, model.ChainResult) {
+) (library.UnitDecision, model.ChainResult, *music.AlbumPlacement) {
 	result, err := music.IdentifyUnit(ctx, unit, identifiers, cfg)
+	var placement *music.AlbumPlacement
 	if err == nil && refine != nil {
-		result = refine(ctx, unit, result)
+		result, placement = refine(ctx, unit, result)
 	}
 	decision := model.DecisionFailed
 	var confidence float64
@@ -391,11 +393,12 @@ func identifyUnit(
 			}
 		}
 	}
-	return library.UnitDecision{UnitID: unitID, Decision: string(decision), Confidence: confidence, CandidatesJSON: candidatesJSON}, result
+	return library.UnitDecision{UnitID: unitID, Decision: string(decision), Confidence: confidence, CandidatesJSON: candidatesJSON},
+		result, placement
 }
 
 // refineUnit improves one unit's chain result; it must be safe to call concurrently.
-type refineUnit func(ctx context.Context, unit inspect.Unit, result model.ChainResult) model.ChainResult
+type refineUnit func(ctx context.Context, unit inspect.Unit, result model.ChainResult) (model.ChainResult, *music.AlbumPlacement)
 
 // albumRefiner matches units as albums over the cluster's probes, or nil when no lookup is configured.
 func (j *Job) albumRefiner(relPaths []string, probes []mediatool.Probe) refineUnit {
@@ -406,12 +409,12 @@ func (j *Job) albumRefiner(relPaths []string, probes []mediatool.Probe) refineUn
 	for i, probe := range probes {
 		byPath[relPaths[i]] = probe
 	}
-	return func(ctx context.Context, unit inspect.Unit, result model.ChainResult) model.ChainResult {
-		refined, err := music.RefineUnitByAlbum(ctx, j.albums, unit, byPath, result)
+	return func(ctx context.Context, unit inspect.Unit, result model.ChainResult) (model.ChainResult, *music.AlbumPlacement) {
+		refined, placement, err := music.RefineUnitByAlbum(ctx, j.albums, unit, byPath, result)
 		if err != nil {
 			j.logger.Warn("import album identification failed", slog.String("unit", unit.Directory), slog.Any("error", err))
 		}
-		return refined
+		return refined, placement
 	}
 }
 
@@ -510,7 +513,7 @@ func (j *Job) commitCluster(
 
 	poisonReasons := j.poisonedByExclusion(batch, categoryID)
 
-	decisions, results := identifyCluster(ctx, ids, batch, identifiers, cfg, j.albumRefiner(relPaths, probes))
+	decisions, results, placements := identifyCluster(ctx, ids, batch, identifiers, cfg, j.albumRefiner(relPaths, probes))
 	for i, reason := range poisonReasons {
 		if reason != "" {
 			// Overrides whatever IDENTIFY decided -- ADR-53's refuse action
@@ -523,7 +526,7 @@ func (j *Job) commitCluster(
 		return fmt.Errorf("importjob: record decisions: %w", err)
 	}
 	if categoryID != nil && j.committer != nil {
-		j.placeCommitted(ctx, sessionID, *categoryID, sourcePath, tagSource, ids, batch, decisions, results)
+		j.placeCommitted(ctx, sessionID, *categoryID, sourcePath, tagSource, ids, batch, decisions, results, placements)
 	}
 	j.publishProgress(ctx, sessionID, importPhaseWalking, batch[len(batch)-1].Directory)
 	return nil
@@ -545,12 +548,13 @@ func (j *Job) commitCluster(
 func (j *Job) placeCommitted(
 	ctx context.Context, sessionID, categoryID int64, sourcePath string, tagSource music.Resolved,
 	ids []int64, batch []inspect.Unit, decisions []library.UnitDecision, results []model.ChainResult,
+	placements []*music.AlbumPlacement,
 ) {
 	for i, decision := range decisions {
 		if decision.Decision != library.UnitCommit || results[i].Best == nil {
 			continue
 		}
-		placed, err := j.committer.CommitUnit(ctx, sourcePath, batch[i], *results[i].Best, tagSource, categoryID)
+		placed, err := j.committer.CommitMatchedUnit(ctx, sourcePath, batch[i], *results[i].Best, tagSource, categoryID, placements[i])
 		if err != nil {
 			// ADR-53 part 2 (todo 4.15): a blocked hash is loud, not a silent
 			// decided-but-unplaced unit indistinguishable from "no root had

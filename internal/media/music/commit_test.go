@@ -605,3 +605,62 @@ func TestCommitUnit_ReusesArtistPlacementAffinityAcrossUnits(t *testing.T) {
 			secondPaths[0].RootFolderID, firstRoot)
 	}
 }
+
+// A 3-disc set numbered per disc would put three "06" files in one folder, and the release
+// album matching chose must be the edition, not one enrichment picks again from tags alone.
+func TestCommitMatchedUnit_UsesTheMatchedReleaseAndDiscPrefixedNames(t *testing.T) {
+	committer, opened, fsys := newCommitter(t, true)
+	discOne := []byte("hivu zeb bytes")
+	discTwo := []byte("ces the sele bytes")
+	writeCommitSourceFile(t, fsys, "Raferasom/101-hivu_zeb.flac", discOne)
+	writeCommitSourceFile(t, fsys, "Raferasom/306-ces_the_sele.flac", discTwo)
+
+	unit := testUnit("Raferasom", []inspect.File{
+		{RelPath: "Raferasom/101-hivu_zeb.flac", SizeBytes: int64(len(discOne))},
+		{RelPath: "Raferasom/306-ces_the_sele.flac", SizeBytes: int64(len(discTwo))},
+	})
+	// The real rip's own tags: a per-disc track number and no disc tag at all.
+	probes := []mediatool.Probe{
+		{Path: path.Join(commitSourceRoot, "Raferasom/101-hivu_zeb.flac"), Tags: mediatool.Tags{
+			"album": "Greatest Hits", "artist": "Raferasom", "date": "2023", "tracknumber": "1", "title": "Hivu Zeb"}},
+		{Path: path.Join(commitSourceRoot, "Raferasom/306-ces_the_sele.flac"), Tags: mediatool.Tags{
+			"album": "Greatest Hits", "artist": "Raferasom", "date": "2023", "tracknumber": "6", "title": "Ces the Sele"}},
+	}
+	tags := music.UnitTagSourceFor(commitSourceRoot, probes)
+	best := model.Identification{
+		Strategy: "parse", Confidence: 0.68,
+		ExternalID: &model.ExternalID{Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 0.68},
+	}
+	matched := &music.AlbumPlacement{
+		ReleaseMBID: "release-of-greatest-hits", DiscCount: 3,
+		Tracks: map[string]music.ReleaseTrack{
+			"Raferasom/101-hivu_zeb.flac":     {Disc: 1, Position: 1, Title: "Hivu Zeb"},
+			"Raferasom/306-ces_the_sele.flac": {Disc: 3, Position: 6, Title: "Ces the Sele"},
+		},
+	}
+
+	placed, err := committer.CommitMatchedUnit(t.Context(), commitSourceRoot, unit, best, tags, commitCategoryID, matched)
+	if err != nil {
+		t.Fatalf("CommitMatchedUnit: %v", err)
+	}
+	if placed.EditionID == nil {
+		t.Fatal("EditionID = nil, want the matched release recorded as the edition")
+	}
+	edition, err := librarydb.New(opened.Read()).GetEditionByExternalID(t.Context(), librarydb.GetEditionByExternalIDParams{
+		Provider: music.ProviderRelease, ExternalID: "release-of-greatest-hits",
+	})
+	if err != nil {
+		t.Fatalf("GetEditionByExternalID: %v, want the matched release", err)
+	}
+	if edition.ID != *placed.EditionID {
+		t.Errorf("edition = %d, want the placed unit's own %d", edition.ID, *placed.EditionID)
+	}
+	for _, want := range []string{
+		"Raferasom/Greatest Hits (2023)/Raferasom - 1-01 - Hivu Zeb.flac",
+		"Raferasom/Greatest Hits (2023)/Raferasom - 3-06 - Ces the Sele.flac",
+	} {
+		if _, err := fsys.Stat(path.Join(commitDestRoot, want)); err != nil {
+			t.Errorf("%q was not placed: %v", want, err)
+		}
+	}
+}

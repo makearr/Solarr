@@ -58,28 +58,31 @@ func UnitTagSourceFor(root string, probes []mediatool.Probe) Resolved {
 // tracklists, replacing a weaker text-search answer. probes are keyed by the unit's RelPath.
 func RefineUnitByAlbum(
 	ctx context.Context, lookup AlbumLookup, unit inspect.Unit, probes map[string]mediatool.Probe, result model.ChainResult,
-) (model.ChainResult, error) {
+) (model.ChainResult, *AlbumPlacement, error) {
 	if lookup == nil || (result.Best != nil && result.Best.Strategy == StrategyEmbeddedTag) {
-		return result, nil
+		return result, nil, nil
 	}
 	var locals []LocalTrack
+	var relPaths []string
 	for _, media := range unit.Media {
 		if probe, found := probes[media.RelPath]; found && probe.Err == nil {
 			locals = append(locals, ReadLocalTrack(probe.Tags, probe.Measured, media.RelPath))
+			relPaths = append(relPaths, media.RelPath)
 		}
 	}
 	decision, err := IdentifyAlbum(ctx, lookup, musicbrainz.PriorityIdentify, locals, nil)
 	if err != nil {
-		return result, fmt.Errorf("music: identify unit %q as an album: %w", unit.Directory, err)
+		return result, nil, fmt.Errorf("music: identify unit %q as an album: %w", unit.Directory, err)
 	}
 	switch decision.Outcome {
 	case AlbumIdentified:
 		best := AlbumCandidates(AlbumDecision{Outcome: decision.Outcome, Scores: []ReleaseScore{*decision.Best}})[0]
 		best.Confidence = albumConfidence(decision.Best.Distance)
 		best.ExternalID.Confidence = best.Confidence
-		return model.ChainResult{Best: &best, Candidates: append([]model.Identification{best}, result.Candidates...)}, nil
+		return model.ChainResult{Best: &best, Candidates: append([]model.Identification{best}, result.Candidates...)},
+			PlacementOf(decision, relPaths), nil
 	case AlbumAmbiguous:
-		return model.ChainResult{Candidates: append(AlbumCandidates(decision), result.Candidates...)}, nil
+		return model.ChainResult{Candidates: append(AlbumCandidates(decision), result.Candidates...)}, nil, nil
 	}
-	return result, nil
+	return result, nil, nil
 }

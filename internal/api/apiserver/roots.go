@@ -76,3 +76,8 @@ func (r FilesystemRoots) Readable(path string) error {
 	_, err := r.FS.ReadDir(path)
 	return err
 }
+
+// Usage reports the filesystem's total and free bytes, the same numbers the capacity sweep records.
+func (r FilesystemRoots) Usage(path string) (totalBytes, freeBytes int64, err error) {
+	return r.FS.DiskUsage(path)
+}

@@ -76,6 +76,15 @@ A queued file's **Review** page (`/unidentified/<media object>`,
 with its evidence, and lets the user pick any album, not only the top guess. An import unit
 waiting for a decision shows its candidates the same way.
 
+## What import keeps
+
+A unit album matching identified is committed with the release it matched as the edition, and
+each file is named from the track it matched rather than its own tags. Multi-disc releases
+therefore name files `Artist - 1-06 - Title` (`music.TrackPosition`); single-disc releases keep
+`Artist - 06 - Title`, so an existing single-disc library still proposes no renames. Without
+this, enrichment chose the edition again from tags alone and picked a 15-track release for 17
+matched files, and a 3-CD set put three files numbered `06` in one folder (found 2026-09-17).
+
 ## Lookup priority
 
 MusicBrainz, BrainzMash and the Lidarr proxy each have one rate-limit bucket. Inside a bucket
