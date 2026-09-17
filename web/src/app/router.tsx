@@ -39,6 +39,17 @@ import { UserSettings } from "./Users";
 import { Wanted } from "./Wanted";
 import { WorkDetail } from "./WorkDetail";
 
+/** A redirect to one library's own default level. Not every media type
+ *  declares Artists or Albums, so the level is read from the library itself. */
+async function redirectToLibrary(categoryId: string) {
+  const { data } = await api.GET("/libraries");
+  const library = data?.find((entry) => String(entry.id) === categoryId);
+  const level = library && defaultLevelKey(library);
+  return redirect(
+    level ? { to: "/library/$categoryId/$level", params: { categoryId, level } } : { to: "/libraries" },
+  );
+}
+
 const rootRoute = createRootRoute({
   component: () => (
     <Shell>
@@ -61,7 +72,7 @@ const routes = [
     beforeLoad: async ({ search }) => {
       const categoryId = (search as Record<string, unknown>).category_id;
       if (typeof categoryId === "string") {
-        throw redirect({ to: "/library/$categoryId/albums", params: { categoryId } });
+        throw await redirectToLibrary(categoryId);
       }
       const { data } = await api.GET("/libraries");
       const first = data?.[0];
@@ -109,11 +120,8 @@ const routes = [
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/library/$categoryId/overview",
-    beforeLoad: ({ params }) => {
-      throw redirect({
-        to: "/library/$categoryId/$level",
-        params: { categoryId: (params as { categoryId: string }).categoryId, level: "artists" },
-      });
+    beforeLoad: async ({ params }) => {
+      throw await redirectToLibrary((params as { categoryId: string }).categoryId);
     },
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/wanted", component: Wanted }),

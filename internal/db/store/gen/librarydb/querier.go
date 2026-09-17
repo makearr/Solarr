@@ -393,7 +393,7 @@ type Querier interface {
 	// existed stayed without one forever -- the reason no artist picture had ever
 	// appeared (found 2026-09-13). 'musicbrainz:artist' must match
 	// internal/media/music.ProviderArtist.
-	ListPeopleNeedingArtwork(ctx context.Context, pageSize int64) ([]ListPeopleNeedingArtworkRow, error)
+	ListPeopleNeedingArtwork(ctx context.Context, arg ListPeopleNeedingArtworkParams) ([]ListPeopleNeedingArtworkRow, error)
 	// The whole phash set is 4 MB at 500k files: Hamming distance is brute-forced in
 	// Go, so this hands over every candidate rather than filtering in SQL (ADR-35).
 	ListPerceptualHashes(ctx context.Context) ([]ListPerceptualHashesRow, error)

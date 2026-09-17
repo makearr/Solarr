@@ -82,6 +82,11 @@ const wikidataImageProperty = "P18"
 // image to hand an httpx.Client, not Commons page metadata.
 const commonsFilePathBase = "https://commons.wikimedia.org/wiki/Special:FilePath/"
 
+// commonsImageWidth asks Commons for a rendition no wider than the largest
+// artwork size (platform/artwork's Full). The original upload is often tens of
+// megabytes, or a TIFF or SVG the artwork decoder cannot read at all.
+const commonsImageWidth = "1000"
+
 // imageURLFor builds the direct file URL from a P18 claim's own Commons file
 // name, reusing pathEscape's own space-to-underscore convention (MediaWiki's
 // own title normalisation, not just a Wikipedia-summary-path quirk --
@@ -98,7 +103,7 @@ func imageURLFor(claims map[string][]struct {
 	if len(images) == 0 || images[0].Mainsnak.Datavalue.Value == "" {
 		return ""
 	}
-	return commonsFilePathBase + pathEscape(images[0].Mainsnak.Datavalue.Value)
+	return commonsFilePathBase + pathEscape(images[0].Mainsnak.Datavalue.Value) + "?width=" + commonsImageWidth
 }
 
 // summaryResponse is Wikipedia's REST summary endpoint shape.

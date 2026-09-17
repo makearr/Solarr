@@ -115,6 +115,7 @@ export function WorkDetail() {
   }
 
   const work = detail.data;
+  const discCount = discCountOf(work.parts);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -225,7 +226,7 @@ export function WorkDetail() {
                 <PartRow
                   key={part.id}
                   part={part}
-                  discCount={discCountOf(work.parts)}
+                  discCount={discCount}
                   pending={setPartMonitored.isPending}
                   onToggleMonitored={(monitored) =>
                     setPartMonitored.mutate({ partId: part.id, monitored })

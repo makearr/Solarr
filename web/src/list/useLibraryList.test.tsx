@@ -7,6 +7,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { act, render, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { Page } from "./useLibraryList";
@@ -45,15 +46,21 @@ beforeEach(() => {
 /** Renders the hook inside a real router, and hands back both the latest hook
  *  result and the router driving it. */
 function mount(options: { search?: string; topics?: readonly string[] } = {}) {
-  const seen: { list?: ReturnType<typeof useLibraryList<Row>> } = {};
+  const seen: {
+    list?: ReturnType<typeof useLibraryList<Row>>;
+    setRowHeight?: (height: number) => void;
+  } = {};
   const fetchPage = vi.fn(
     async (): Promise<Page<Row>> => ({ items: [{ id: 1 }], next_cursor: undefined }),
   );
 
   function Screen() {
+    const [rowHeight, setRowHeight] = useState(36);
+    seen.setRowHeight = setRowHeight;
     seen.list = useLibraryList<Row>(
       {
         name: "rows",
+        rowHeight,
         idOf: (row) => row.id,
         // Spread on purpose: a caller writing its source inline hands over a new
         // array every render, and that is the case worth holding.
@@ -167,5 +174,20 @@ describe("the event stream", () => {
     await waitFor(() => expect(seen.list).toBeDefined());
 
     expect(opened).toHaveLength(0);
+  });
+});
+
+describe("the virtualised layout", () => {
+  // The virtualiser caches row positions until its row count changes, so a
+  // resized poster wall, or a switch to the list with the same number of rows,
+  // kept the old heights and drew rows on top of each other.
+  test("follows a row height change that leaves the row count alone", async () => {
+    const { seen } = mount();
+    await waitFor(() => expect(seen.list?.items.length).toBe(1));
+    expect(seen.list?.totalSize).toBe(36);
+
+    await act(async () => seen.setRowHeight?.(240));
+
+    await waitFor(() => expect(seen.list?.totalSize).toBe(240));
   });
 });

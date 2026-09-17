@@ -167,17 +167,20 @@ func (j *EnrichJob) Run(ctx context.Context, _ jobs.Job) error {
 // gained either -- which is why no artist picture had ever appeared
 // (found 2026-09-13). Bounded per run by personBackfillBudget.
 func (j *EnrichJob) backfillPeople(ctx context.Context) {
-	if j.artworks == (library.Artworks{}) {
+	// Without a Wikidata source every artist would look imageless and be
+	// recorded so, permanently.
+	if j.artworks == (library.Artworks{}) || j.biography == nil {
 		return
 	}
 
 	filled, absent, failed := 0, 0, 0
+	var afterPersonID int64
 	for filled+absent+failed < personBackfillBudget {
 		if ctx.Err() != nil {
 			return
 		}
 
-		batch, err := j.artworks.PeopleNeedingArtwork(ctx, personBackfillBatchSize)
+		batch, err := j.artworks.PeopleNeedingArtwork(ctx, afterPersonID, personBackfillBatchSize)
 		if err != nil {
 			j.logger.WarnContext(ctx, "people needing artwork failed", slog.Any("error", err))
 			return
@@ -190,6 +193,7 @@ func (j *EnrichJob) backfillPeople(ctx context.Context) {
 			if filled+absent+failed >= personBackfillBudget {
 				break
 			}
+			afterPersonID = candidate.PersonID
 			switch outcome := j.backfillOne(ctx, candidate); outcome {
 			case backfillFilled:
 				filled++
@@ -231,7 +235,14 @@ func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArt
 		return backfillFailed
 	}
 
-	bio := j.wikidataBiographyFor(ctx, artist)
+	bio, err := j.wikidataLookup(ctx, artist)
+	if err != nil {
+		// A failed lookup says nothing about whether the artist has a photo.
+		j.logger.WarnContext(ctx, "artist backfill wikidata lookup failed",
+			slog.Int64("person_id", candidate.PersonID), slog.String("qid", artist.WikidataQID),
+			slog.Any("error", err))
+		return backfillFailed
+	}
 	if err := j.people.BackfillDetails(ctx, candidate.PersonID, library.PersonIdentity{
 		Name: artist.Name, SortName: artist.SortName, Disambiguation: artist.Disambiguation,
 		Kind: artist.Type, Gender: artist.Gender, Country: artist.Country,
@@ -241,17 +252,23 @@ func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArt
 			slog.Int64("person_id", candidate.PersonID), slog.Any("error", err))
 	}
 
-	if bio.ImageURL == "" {
+	outcome := imageUnusable
+	if bio.ImageURL != "" {
+		outcome = j.fetchPersonImage(ctx, candidate.PersonID, bio.ImageURL)
+	}
+	switch outcome {
+	case imageRecorded:
+		return backfillFilled
+	case imageUnusable:
 		if err := j.artworks.RecordPersonArtworkAbsent(ctx, candidate.PersonID, j.clock.Now().Unix()); err != nil {
 			j.logger.WarnContext(ctx, "record person artwork absent failed",
 				slog.Int64("person_id", candidate.PersonID), slog.Any("error", err))
 			return backfillFailed
 		}
 		return backfillAbsent
+	default:
+		return backfillFailed
 	}
-
-	j.fetchPersonImage(ctx, candidate.PersonID, bio.ImageURL)
-	return backfillFilled
 }
 
 func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEdition) error {
@@ -385,7 +402,7 @@ func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.Artist
 	// (todo 4.13's own follow-up, asked for 2026-09-11) is what makes fetching
 	// it here, rather than only when someone opens the Artists screen, worth
 	// doing proactively.
-	j.fetchPersonImage(ctx, personID, bio.ImageURL)
+	_ = j.fetchPersonImage(ctx, personID, bio.ImageURL)
 	return personID, nil
 }
 
@@ -396,16 +413,22 @@ func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.Artist
 // artist has no Wikidata QID, or the lookup itself failed -- never fails
 // resolveArtist over this.
 func (j *EnrichJob) wikidataBiographyFor(ctx context.Context, artist musicbrainz.Artist) wikidata.Biography {
-	if j.biography == nil || artist.WikidataQID == "" {
-		return wikidata.Biography{}
-	}
-	bio, err := j.biography.Biography(ctx, artist.WikidataQID)
+	bio, err := j.wikidataLookup(ctx, artist)
 	if err != nil {
 		j.logger.WarnContext(ctx, "biography lookup failed",
 			slog.String("qid", artist.WikidataQID), slog.Any("error", err))
 		return wikidata.Biography{}
 	}
 	return bio
+}
+
+// wikidataLookup is wikidataBiographyFor without swallowing the error, for a
+// caller that must not mistake a failed lookup for an artist with no image.
+func (j *EnrichJob) wikidataLookup(ctx context.Context, artist musicbrainz.Artist) (wikidata.Biography, error) {
+	if j.biography == nil || artist.WikidataQID == "" {
+		return wikidata.Biography{}, nil
+	}
+	return j.biography.Biography(ctx, artist.WikidataQID)
 }
 
 // biographyText picks the Wikipedia extract when there is one, Wikidata's
@@ -424,44 +447,48 @@ func biographyText(bio wikidata.Biography) string {
 // met yet, and the two differ in subject type and cache key). Never fails
 // the credit it was resolved for: a person is still worth having with no
 // image, the same tolerance every other best-effort step in this job keeps.
-func (j *EnrichJob) fetchPersonImage(ctx context.Context, personID int64, imageURL string) {
+func (j *EnrichJob) fetchPersonImage(ctx context.Context, personID int64, imageURL string) imageOutcome {
 	if imageURL == "" || j.artworks == (library.Artworks{}) || j.http == nil || j.fs == nil {
-		return
+		return imageFailed
 	}
 	existing, err := j.artworks.GetForPerson(ctx, personID)
 	if err != nil {
 		j.logger.WarnContext(ctx, "person artwork lookup failed",
 			slog.Int64("person_id", personID), slog.Any("error", err))
-		return
+		return imageFailed
 	}
 	if existing.Found {
-		return
+		return imageRecorded
 	}
 
 	response, err := j.http.Get(ctx, imageURL)
 	if err != nil {
 		j.logger.WarnContext(ctx, "person image fetch failed",
 			slog.Int64("person_id", personID), slog.Any("error", err))
-		return
+		return imageFailed
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		j.logger.WarnContext(ctx, "person image fetch failed",
 			slog.Int64("person_id", personID), slog.Int("status", response.StatusCode))
-		return
+		if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusGone {
+			return imageUnusable
+		}
+		return imageFailed
 	}
 	source, err := io.ReadAll(io.LimitReader(response.Body, maxPersonImageBytes))
 	if err != nil {
 		j.logger.WarnContext(ctx, "person image read failed",
 			slog.Int64("person_id", personID), slog.Any("error", err))
-		return
+		return imageFailed
 	}
 
+	// The same bytes will fail to decode next run too, so this is final.
 	sizes, err := artwork.Process(source)
 	if err != nil {
 		j.logger.WarnContext(ctx, "person image process failed",
 			slog.Int64("person_id", personID), slog.Any("error", err))
-		return
+		return imageUnusable
 	}
 
 	cacheKey := fmt.Sprintf("person-%d-cover", personID)
@@ -473,7 +500,7 @@ func (j *EnrichJob) fetchPersonImage(ctx context.Context, personID int64, imageU
 		}); err != nil {
 			j.logger.WarnContext(ctx, "person image write failed",
 				slog.Int64("person_id", personID), slog.Any("error", err))
-			return
+			return imageFailed
 		}
 	}
 
@@ -483,8 +510,20 @@ func (j *EnrichJob) fetchPersonImage(ctx context.Context, personID int64, imageU
 	); err != nil {
 		j.logger.WarnContext(ctx, "person artwork record failed",
 			slog.Int64("person_id", personID), slog.Any("error", err))
+		return imageFailed
 	}
+	return imageRecorded
 }
+
+// imageOutcome separates a person image that will never be usable from one
+// that failed for a reason worth retrying.
+type imageOutcome int
+
+const (
+	imageFailed imageOutcome = iota
+	imageRecorded
+	imageUnusable
+)
 
 // EnqueueEnrichment submits one sweep, deduplicated by EnrichActionKey.
 func EnqueueEnrichment(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error) {

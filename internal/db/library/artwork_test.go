@@ -1,6 +1,7 @@
 package library_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
@@ -146,7 +147,7 @@ func TestPeopleNeedingArtwork_ListsACreditedArtistWithNoImageYet(t *testing.T) {
 
 	personID := resolvePersonNamed(t, people, "artist-mbid-1", "Heka", "Heka")
 
-	found, err := artworks.PeopleNeedingArtwork(t.Context(), 10)
+	found, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("PeopleNeedingArtwork: %v", err)
 	}
@@ -167,7 +168,7 @@ func TestPeopleNeedingArtwork_ExcludesAPersonWhoseImageWasFetched(t *testing.T) 
 		t.Fatalf("RecordForPerson: %v", err)
 	}
 
-	found, err := artworks.PeopleNeedingArtwork(t.Context(), 10)
+	found, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("PeopleNeedingArtwork: %v", err)
 	}
@@ -189,7 +190,7 @@ func TestPeopleNeedingArtwork_ExcludesAPersonRecordedAsHavingNoImage(t *testing.
 		t.Fatalf("RecordPersonArtworkAbsent: %v", err)
 	}
 
-	found, err := artworks.PeopleNeedingArtwork(t.Context(), 10)
+	found, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("PeopleNeedingArtwork: %v", err)
 	}
@@ -237,5 +238,37 @@ func TestGetForPerson_AnswersTheRecordedCacheKey(t *testing.T) {
 	}
 	if got != (library.PersonArtwork{CacheKey: "person-9-cover", Found: true}) {
 		t.Fatalf("GetForPerson = %+v, want the recorded key", got)
+	}
+}
+
+// The sweep walks by id within a run, so people it could not finish do not
+// come back at the top of every page and hide everyone after them.
+func TestPeopleNeedingArtwork_StartsAfterTheGivenPerson(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	artworks := library.NewArtworks(opened)
+
+	first := resolvePersonNamed(t, people, "artist-mbid-a", "First", "First")
+	second := resolvePersonNamed(t, people, "artist-mbid-b", "Second", "Second")
+
+	found, err := artworks.PeopleNeedingArtwork(t.Context(), first, 10)
+	if err != nil {
+		t.Fatalf("PeopleNeedingArtwork: %v", err)
+	}
+	if len(found) != 1 || found[0].PersonID != second {
+		t.Fatalf("PeopleNeedingArtwork after %d = %+v, want only person %d", first, found, second)
+	}
+}
+
+// A failed read must surface, not pass for a person with no image -- the
+// absence marker check once ran before the error check and hid it.
+func TestGetForPerson_ReportsAReadFailure(t *testing.T) {
+	opened, _ := newLibrary(t)
+	artworks := library.NewArtworks(opened)
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	if _, err := artworks.GetForPerson(cancelled, 1); err == nil {
+		t.Fatal("GetForPerson with a cancelled context answered no error")
 	}
 }

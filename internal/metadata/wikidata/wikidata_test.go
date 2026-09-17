@@ -93,7 +93,7 @@ func TestBiography_ParsesTheRealFieldShapeAcrossBothHops(t *testing.T) {
 	if !strings.Contains(biography.Extract, "Catherine Bush is an English singer") {
 		t.Errorf("Extract = %q, want the Wikipedia summary text", biography.Extract)
 	}
-	const wantImage = "https://commons.wikimedia.org/wiki/Special:FilePath/Vutu_Doci_1981.jpg"
+	const wantImage = "https://commons.wikimedia.org/wiki/Special:FilePath/Vutu_Doci_1981.jpg?width=1000"
 	if biography.ImageURL != wantImage {
 		t.Errorf("ImageURL = %q, want %q", biography.ImageURL, wantImage)
 	}

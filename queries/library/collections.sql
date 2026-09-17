@@ -164,7 +164,8 @@ FROM group_reputation WHERE release_group = ?;
 SELECT p.id AS person_id, x.external_id AS artist_mbid
 FROM person p
 JOIN person_external_id x ON x.person_id = p.id AND x.provider = 'musicbrainz:artist'
-WHERE NOT EXISTS (
+WHERE p.id > sqlc.arg(after_id)
+  AND NOT EXISTS (
     SELECT 1 FROM artwork a WHERE a.subject_type = 'person' AND a.subject_id = p.id AND a.kind = 'cover'
   )
 ORDER BY p.id
