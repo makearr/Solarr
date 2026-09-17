@@ -127,29 +127,8 @@ func (i Identity) RefineEdition(
 			return fmt.Errorf("update edition: %w", err)
 		}
 
-		if workYear != nil {
-			if err := queries.UpdateWorkYearIfNull(ctx, librarydb.UpdateWorkYearIfNullParams{
-				ID: workID, Year: nullInt64(workYear), UpdatedAt: at,
-			}); err != nil {
-				return fmt.Errorf("update work year: %w", err)
-			}
-		}
-
-		if workPrimaryType != "" {
-			if err := queries.UpdateWorkPrimaryTypeIfNull(ctx, librarydb.UpdateWorkPrimaryTypeIfNullParams{
-				ID: workID, PrimaryType: nullString(workPrimaryType), UpdatedAt: at,
-			}); err != nil {
-				return fmt.Errorf("update work primary type: %w", err)
-			}
-		}
-
-		if workReleaseDate != "" {
-			if err := queries.SetWorkDate(ctx, librarydb.SetWorkDateParams{
-				WorkID: workID, Kind: WorkDateStreet, Region: "",
-				Date: workReleaseDate, Source: "musicbrainz",
-			}); err != nil {
-				return fmt.Errorf("set work date: %w", err)
-			}
+		if err := refineWork(ctx, queries, at, workID, workYear, workReleaseDate, workPrimaryType); err != nil {
+			return err
 		}
 
 		for _, part := range parts {
@@ -159,6 +138,70 @@ func (i Identity) RefineEdition(
 		}
 		return nil
 	})
+}
+
+// RefineWork is RefineEdition's work-level half alone, for a work identified
+// at release-group level with no edition to refine: year and primary type fill
+// only an empty column, the release date is upserted.
+func (i Identity) RefineWork(
+	ctx context.Context, at, workID int64, workYear *int64, workReleaseDate, workPrimaryType string,
+) error {
+	return i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return refineWork(ctx, librarydb.New(tx), at, workID, workYear, workReleaseDate, workPrimaryType)
+	})
+}
+
+func refineWork(
+	ctx context.Context, queries *librarydb.Queries, at, workID int64,
+	workYear *int64, workReleaseDate, workPrimaryType string,
+) error {
+	if workYear != nil {
+		if err := queries.UpdateWorkYearIfNull(ctx, librarydb.UpdateWorkYearIfNullParams{
+			ID: workID, Year: nullInt64(workYear), UpdatedAt: at,
+		}); err != nil {
+			return fmt.Errorf("update work year: %w", err)
+		}
+	}
+	if workPrimaryType != "" {
+		if err := queries.UpdateWorkPrimaryTypeIfNull(ctx, librarydb.UpdateWorkPrimaryTypeIfNullParams{
+			ID: workID, PrimaryType: nullString(workPrimaryType), UpdatedAt: at,
+		}); err != nil {
+			return fmt.Errorf("update work primary type: %w", err)
+		}
+	}
+	if workReleaseDate != "" {
+		if err := queries.SetWorkDate(ctx, librarydb.SetWorkDateParams{
+			WorkID: workID, Kind: WorkDateStreet, Region: "",
+			Date: workReleaseDate, Source: "musicbrainz",
+		}); err != nil {
+			return fmt.Errorf("set work date: %w", err)
+		}
+	}
+	return nil
+}
+
+// EditionlessWork is a work identified at release-group level only -- by the
+// text search, which never picks an edition -- that has not been enriched yet.
+type EditionlessWork struct {
+	WorkID           int64
+	ReleaseGroupMBID string
+}
+
+// EditionlessWorks returns up to pageSize works after afterWorkID with a
+// release-group id, no edition and no credit yet. Enrichment used to walk
+// placeholder editions only, so these never gained an artist, genres or a
+// description (found 2026-09-17).
+func (i Identity) EditionlessWorks(ctx context.Context, afterWorkID, pageSize int64) ([]EditionlessWork, error) {
+	rows, err := librarydb.New(i.store.Read()).ListEditionlessWorks(ctx,
+		librarydb.ListEditionlessWorksParams{AfterID: afterWorkID, PageSize: pageSize})
+	if err != nil {
+		return nil, fmt.Errorf("library: editionless works: %w", err)
+	}
+	works := make([]EditionlessWork, len(rows))
+	for index, row := range rows {
+		works[index] = EditionlessWork{WorkID: row.WorkID, ReleaseGroupMBID: row.ReleaseGroupMbid}
+	}
+	return works, nil
 }
 
 // SetWorkDescription writes a work's free-text description, unconditionally

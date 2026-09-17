@@ -944,3 +944,44 @@ func TestEnrichJob_ALaterSuccessfulLookupFillsAPersonAFailedOneLeftBare(t *testi
 		t.Errorf("person = %+v, want the later lookup's biography and country filled in", person)
 	}
 }
+
+// The text search identifies an album at release-group level, with no edition.
+// Enrichment walked placeholder editions only, so such an album never gained an
+// artist and sat under "Unknown artist" -- Heka's Detisisu Binip among them.
+func TestEnrichJob_EnrichesAWorkIdentifiedWithoutAnEdition(t *testing.T) {
+	source := &fakeArtistSource{
+		fakeSource: fakeSource{rg: musicbrainz.ReleaseGroup{
+			MBID: "rg-shepherd", Title: "Detisisu Binip", PrimaryType: "Album", FirstReleaseDate: "1991-11-04",
+			ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "heka", Name: "Heka"}},
+			Genres:       []musicbrainz.Genre{{Name: "New Age"}},
+		}},
+		artists: map[string]musicbrainz.Artist{"heka": {MBID: "heka", Name: "Heka", SortName: "Heka"}},
+	}
+	job, opened, queries := newEnrichJob(t, source)
+	resolved, err := library.NewIdentity(opened).ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-shepherd", Confidence: 0.65,
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Detisisu Binip", SortTitle: "detisisu binip"},
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	work, err := queries.GetWork(t.Context(), resolved[0])
+	if err != nil {
+		t.Fatalf("GetWork: %v", err)
+	}
+	if !work.PrimaryArtistID.Valid || work.Year.Int64 != 1991 || work.PrimaryType.String != "Album" {
+		t.Errorf("work = %+v, want primary artist set, year 1991, type Album", work)
+	}
+	remaining, err := library.NewIdentity(opened).EditionlessWorks(t.Context(), 0, 10)
+	if err != nil {
+		t.Fatalf("EditionlessWorks: %v", err)
+	}
+	if len(remaining) != 0 {
+		t.Errorf("EditionlessWorks = %+v, want the enriched work gone from the pass", remaining)
+	}
+}

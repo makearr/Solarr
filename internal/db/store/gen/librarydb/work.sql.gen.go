@@ -830,6 +830,54 @@ func (q *Queries) ListEditionExternalIDs(ctx context.Context, editionID int64) (
 	return items, nil
 }
 
+const listEditionlessWorks = `-- name: ListEditionlessWorks :many
+SELECT x.work_id AS work_id, CAST(MIN(x.external_id) AS TEXT) AS release_group_mbid
+FROM work_external_id x
+WHERE x.provider = 'musicbrainz:release-group'
+  AND x.work_id > ?1
+  AND NOT EXISTS (SELECT 1 FROM edition e WHERE e.work_id = x.work_id)
+  AND NOT EXISTS (SELECT 1 FROM credit c WHERE c.work_id = x.work_id)
+GROUP BY x.work_id
+ORDER BY x.work_id
+LIMIT ?2
+`
+
+type ListEditionlessWorksParams struct {
+	AfterID  int64
+	PageSize int64
+}
+
+type ListEditionlessWorksRow struct {
+	WorkID           int64
+	ReleaseGroupMbid string
+}
+
+// Works identified at release-group level only (the text search never picks an
+// edition) and not yet enriched: no edition, no credit. 'musicbrainz:release-group'
+// must match internal/media/music.ProviderReleaseGroup.
+func (q *Queries) ListEditionlessWorks(ctx context.Context, arg ListEditionlessWorksParams) ([]ListEditionlessWorksRow, error) {
+	rows, err := q.db.QueryContext(ctx, listEditionlessWorks, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEditionlessWorksRow{}
+	for rows.Next() {
+		var i ListEditionlessWorksRow
+		if err := rows.Scan(&i.WorkID, &i.ReleaseGroupMbid); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEditions = `-- name: ListEditions :many
 SELECT id, work_id, kind, label, year, format, catalogue_number,
        barcode, runtime_ms, is_default

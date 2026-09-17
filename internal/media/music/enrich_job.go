@@ -67,6 +67,14 @@ const (
 	personBackfillBudget    = 60
 )
 
+// editionlessBatchSize and editionlessBudget bound the pass over works the
+// text search identified: one release-group lookup each, on the same shared
+// MusicBrainz budget.
+const (
+	editionlessBatchSize = 20
+	editionlessBudget    = 60
+)
+
 // EnrichJob refines every placeholder edition (kind='unknown') it can find into
 // real metadata, and populates the parts (tracks) under it. Direct-wired the way
 // the rest of internal/media/music is until stage 9.
@@ -171,6 +179,8 @@ func (j *EnrichJob) Run(ctx context.Context, _ jobs.Job) error {
 	}
 	j.logger.Info("music enrichment finished", slog.Int("processed", total), slog.Int("failed", failed))
 
+	j.enrichEditionless(ctx)
+
 	if j.realigner != nil && len(refinedWorkIDs) > 0 {
 		if err := j.realigner.RealignWorks(ctx, refinedWorkIDs); err != nil {
 			j.logger.WarnContext(ctx, "realign refined works failed",
@@ -180,6 +190,60 @@ func (j *EnrichJob) Run(ctx context.Context, _ jobs.Job) error {
 
 	j.backfillPeople(ctx)
 	return nil
+}
+
+// enrichEditionless gives works identified at release-group level -- the text
+// search's output, which has no edition -- their artist, genres, description,
+// year and type. The placeholder-edition pass above never reached them, so
+// they sat under "Unknown artist" (found 2026-09-17). No tracklist: that needs
+// an edition, which choosing is not this pass's call. Walked by work id within
+// a run and bounded by editionlessBudget.
+func (j *EnrichJob) enrichEditionless(ctx context.Context) {
+	enriched, failed := 0, 0
+	var afterWorkID int64
+	for enriched+failed < editionlessBudget {
+		if ctx.Err() != nil {
+			return
+		}
+		batch, err := j.identity.EditionlessWorks(ctx, afterWorkID, editionlessBatchSize)
+		if err != nil {
+			j.logger.WarnContext(ctx, "editionless works failed", slog.Any("error", err))
+			return
+		}
+		if len(batch) == 0 {
+			break
+		}
+		for _, work := range batch {
+			if enriched+failed >= editionlessBudget {
+				break
+			}
+			afterWorkID = work.WorkID
+			rg, _, err := j.provider.Album(ctx, musicbrainz.PriorityEnrich, work.ReleaseGroupMBID, "")
+			if err != nil {
+				failed++
+				j.logger.WarnContext(ctx, "editionless work enrichment failed",
+					slog.Int64("work_id", work.WorkID), slog.Any("error", err))
+				continue
+			}
+			workYear, workReleaseDate, workPrimaryType, _, _ := refinementFor(rg, musicbrainz.Release{})
+			if err := j.identity.RefineWork(ctx, j.clock.Now().Unix(), work.WorkID,
+				workYear, workReleaseDate, workPrimaryType); err != nil {
+				failed++
+				j.logger.WarnContext(ctx, "editionless work refine failed",
+					slog.Int64("work_id", work.WorkID), slog.Any("error", err))
+				continue
+			}
+			j.enrichCreditsAndGenres(ctx, work.WorkID, rg)
+			j.enrichDescription(ctx, work.WorkID, rg)
+			enriched++
+		}
+		if len(batch) < editionlessBatchSize {
+			break
+		}
+	}
+	if enriched+failed > 0 {
+		j.logger.Info("editionless enrichment finished", slog.Int("enriched", enriched), slog.Int("failed", failed))
+	}
 }
 
 // backfillPeople fills in the image and biography of people resolved before
