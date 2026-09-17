@@ -92,6 +92,33 @@ type UnidentifiedResolver interface {
 	// ResolveUnidentified fetches the candidate's real title, resolves or
 	// creates the work, links the root folder and clears the queue entry.
 	ResolveUnidentified(ctx context.Context, mediaObjectID int64, provider, externalID string) (workID int64, err error)
+	// IdentificationAttempts answers a file's recorded identification runs, newest first.
+	IdentificationAttempts(ctx context.Context, mediaObjectID int64) ([]IdentificationAttempt, error)
+}
+
+// IdentificationAttempt is one identification run for a file.
+type IdentificationAttempt struct {
+	At      time.Time
+	Outcome string
+	Passes  []IdentificationPass
+}
+
+// IdentificationPass is one pass of a run and the candidates it weighed.
+type IdentificationPass struct {
+	Pass, Outcome string
+	Candidates    []IdentificationCandidate
+}
+
+// IdentificationCandidate is one candidate a pass weighed.
+type IdentificationCandidate struct {
+	Strategy, Provider, ExternalID string
+	Confidence                     float64
+	Evidence                       []IdentificationEvidence
+}
+
+// IdentificationEvidence is one fact a verdict rests on.
+type IdentificationEvidence struct {
+	Kind, Detail string
 }
 
 // ErrUnsupportedProvider mirrors music.ErrUnsupportedProvider without this
@@ -202,6 +229,93 @@ func toCandidateViews(from []UnidentifiedCandidate) []gen.UnidentifiedCandidate 
 			view.ExternalId = &candidate.ExternalID
 		}
 		views[index] = view
+	}
+	return views
+}
+
+// routeListIdentificationAttempts parses the mediaObjectId path parameter, mirroring routeResolveUnidentified.
+func (s *Server) routeListIdentificationAttempts(w http.ResponseWriter, r *http.Request) {
+	mediaObjectID, err := strconv.ParseInt(chi.URLParam(r, "mediaObjectId"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a media object id must be a number")
+		return
+	}
+	s.ListIdentificationAttempts(w, r, mediaObjectID)
+}
+
+// ListIdentificationAttempts answers how identification of a queued file went. A file under a
+// root folder the caller cannot read answers 404, the same as missing (Invariant 37).
+func (s *Server) ListIdentificationAttempts(w http.ResponseWriter, r *http.Request, mediaObjectID int64) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.unidentifiedResolver == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "identification history is not available")
+		return
+	}
+	entry, err := s.unidentifiedResolver.GetUnidentified(r.Context(), mediaObjectID)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such queued file")
+		return
+	}
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	rootFolderIDs, _, err := s.visibility(access, nil)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if !sharesAnID(rootFolderIDs, []int64{entry.RootFolderID}) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such queued file")
+		return
+	}
+
+	attempts, err := s.unidentifiedResolver.IdentificationAttempts(r.Context(), mediaObjectID)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	views := make([]gen.IdentificationAttempt, len(attempts))
+	for i, attempt := range attempts {
+		passes := make([]gen.IdentificationPass, len(attempt.Passes))
+		for j, pass := range attempt.Passes {
+			candidates := make([]gen.IdentificationCandidate, len(pass.Candidates))
+			for k, candidate := range pass.Candidates {
+				view := gen.IdentificationCandidate{
+					Strategy: candidate.Strategy, Confidence: float32(candidate.Confidence),
+					Evidence: toEvidenceViews(candidate.Evidence),
+				}
+				if candidate.Provider != "" {
+					view.Provider = &candidate.Provider
+				}
+				if candidate.ExternalID != "" {
+					view.ExternalId = &candidate.ExternalID
+				}
+				candidates[k] = view
+			}
+			passes[j] = gen.IdentificationPass{Pass: pass.Pass, Outcome: pass.Outcome, Candidates: candidates}
+		}
+		views[i] = gen.IdentificationAttempt{
+			AttemptedAt: attempt.At, Outcome: gen.IdentificationAttemptOutcome(attempt.Outcome), Passes: passes,
+		}
+	}
+	file := gen.UnidentifiedFile{
+		MediaObjectId: entry.MediaObjectID, RootFolderId: entry.RootFolderID, RelPath: entry.RelPath,
+		Candidates: toCandidateViews(entry.Candidates), FirstSeenAt: entry.FirstSeenAt, LastSeenAt: entry.LastSeenAt,
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.IdentificationAttemptList{File: file, Items: views})
+}
+
+func toEvidenceViews(from []IdentificationEvidence) []gen.IdentificationEvidence {
+	views := make([]gen.IdentificationEvidence, len(from))
+	for i, evidence := range from {
+		views[i] = gen.IdentificationEvidence{Kind: evidence.Kind, Detail: evidence.Detail}
 	}
 	return views
 }

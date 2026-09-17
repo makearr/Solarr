@@ -58,6 +58,7 @@ type Consumer struct {
 	physical     library.Physical
 	identity     library.Identity
 	unidentified library.Unidentified
+	attempts     *library.Attempts
 	search       Searcher
 	albums       AlbumLookup
 	clock        clock.Clock
@@ -82,6 +83,8 @@ type ConsumerConfig struct {
 	Physical     library.Physical
 	Identity     library.Identity
 	Unidentified library.Unidentified
+	// Attempts records each file's identification run beyond its embedded MBIDs; nil records none.
+	Attempts *library.Attempts
 	// Search adds the ADR-24 "parse" strategy (SearchIdentifier) to the chain,
 	// for a file MBIDIdentifier cannot answer at all. Nil leaves the chain at the
 	// one strategy stage 3 shipped with -- a media type or test with no metadata
@@ -117,7 +120,7 @@ func NewConsumer(config ConsumerConfig) Consumer {
 	}
 	return Consumer{
 		fsys: config.FS, physical: config.Physical, identity: config.Identity,
-		unidentified: config.Unidentified, search: config.Search, albums: config.Albums,
+		unidentified: config.Unidentified, attempts: config.Attempts, search: config.Search, albums: config.Albums,
 		clock: config.Clock, chain: chain, logger: logger,
 		desired: config.Desired, categories: config.Categories, defaultProfileID: config.DefaultProfileID,
 	}
@@ -173,7 +176,13 @@ func (c Consumer) Observe(
 	if c.search != nil {
 		search = []model.Identifier{NewSearchIdentifier(SearchIdentifierConfig{Tags: tags, Search: c.search})}
 	}
-	links, trackFiles, queued, resolved := c.identifyBatch(ctx, root.ID, readable, mediaObjectIDs, embedded, search)
+	out := c.identifyBatch(ctx, root.ID, readable, mediaObjectIDs, embedded, search)
+	links, trackFiles, queued, resolved := out.links, out.trackFiles, out.queued, out.resolved
+	if c.attempts != nil {
+		if err := c.attempts.Record(ctx, out.attempts()); err != nil {
+			return fmt.Errorf("music: %w", err)
+		}
+	}
 	workIDs, err := c.identity.ResolveWorks(ctx, now, links)
 	if err != nil {
 		return fmt.Errorf("music: %w", err)
@@ -202,19 +211,22 @@ func (c Consumer) Observe(
 func (c Consumer) identifyBatch(
 	ctx context.Context, rootFolderID int64, observed []scan.Observed, mediaObjectIDs []int64,
 	embedded, search []model.Identifier,
-) (links []library.WorkLink, trackFiles []TrackFile, queued []library.QueueEntry, resolved []int64) {
-	out := batchResult{rootFolderID: rootFolderID, observed: observed, mediaObjectIDs: mediaObjectIDs, at: c.clock.Now().Unix()}
+) *batchResult {
+	out := &batchResult{
+		rootFolderID: rootFolderID, observed: observed, mediaObjectIDs: mediaObjectIDs, at: c.clock.Now().Unix(),
+		passes: make(map[int][]library.AttemptPass), outcomes: make(map[int]string),
+	}
 	all := make([]pendingFile, len(observed))
 	for index := range observed {
 		all[index] = pendingFile{index: index}
 	}
 
-	pending := c.runChain(ctx, &out, embedded, all)
+	pending := c.runChain(ctx, out, PassEmbeddedTags, embedded, all)
 	if c.albums != nil && len(pending) > 0 {
-		pending = c.identifyAlbums(ctx, &out, pending)
+		pending = c.identifyAlbums(ctx, out, pending)
 	}
 	if len(search) > 0 && len(pending) > 0 {
-		pending = c.runChain(ctx, &out, search, pending)
+		pending = c.runChain(ctx, out, PassTextSearch, search, pending)
 	}
 
 	// A file nothing could identify joins its folder's album when every
@@ -223,16 +235,22 @@ func (c Consumer) identifyBatch(
 	sibling, agreed := soleSiblingIdentity(out.links)
 	for _, file := range pending {
 		if !agreed {
+			outcome := PassOutcomeNoIdentifiedSibling
+			if len(out.links) > 0 {
+				outcome = PassOutcomeSiblingsDisagree
+			}
+			out.note(file.index, library.AttemptPass{Pass: PassFolderSiblings, Outcome: outcome})
 			out.queue(file.index, file.candidates)
 			continue
 		}
 		one := observed[file.index]
+		out.note(file.index, library.AttemptPass{Pass: PassFolderSiblings, Outcome: PassOutcomeJoined})
 		out.identify(file.index, library.WorkLink{
 			Provider: sibling.Provider, ExternalID: sibling.ExternalID, Confidence: siblingConfidence,
 			Work: newWorkIdentity(one), RootFolderID: rootFolderID, MediaObjectID: mediaObjectIDs[file.index],
 		}, ReadTrackFile(mediaObjectIDs[file.index], one.Probe.Tags))
 	}
-	return out.links, out.trackFiles, out.queued, out.resolved
+	return out
 }
 
 // batchResult accumulates what identifyBatch's passes decide for one batch.
@@ -246,12 +264,17 @@ type batchResult struct {
 	trackFiles []TrackFile
 	queued     []library.QueueEntry
 	resolved   []int64
+
+	// passes and outcomes are the attempt record, per batch index, for files past their embedded tags.
+	passes   map[int][]library.AttemptPass
+	outcomes map[int]string
 }
 
 func (r *batchResult) identify(index int, link library.WorkLink, file TrackFile) {
 	r.resolved = append(r.resolved, r.mediaObjectIDs[index])
 	r.links = append(r.links, link)
 	r.trackFiles = append(r.trackFiles, file)
+	r.outcomes[index] = AttemptIdentified
 }
 
 func (r *batchResult) queue(index int, candidates []model.Identification) {
@@ -259,6 +282,30 @@ func (r *batchResult) queue(index int, candidates []model.Identification) {
 		MediaObjectID: r.mediaObjectIDs[index], RootFolderID: r.rootFolderID,
 		RelPath: r.observed[index].File.RelPath, Candidates: candidates, At: r.at,
 	})
+	r.outcomes[index] = AttemptQueued
+}
+
+func (r *batchResult) note(index int, pass library.AttemptPass) {
+	r.passes[index] = append(r.passes[index], pass)
+}
+
+// attempts is the record of every file that needed more than its embedded tags, in batch order.
+func (r *batchResult) attempts() []library.Attempt {
+	var attempts []library.Attempt
+	for index := range r.observed {
+		passes, found := r.passes[index]
+		if !found {
+			continue
+		}
+		outcome, decided := r.outcomes[index]
+		if !decided {
+			outcome = AttemptRetry
+		}
+		attempts = append(attempts, library.Attempt{
+			MediaObjectID: r.mediaObjectIDs[index], At: r.at, Outcome: outcome, Passes: passes,
+		})
+	}
+	return attempts
 }
 
 // pendingFile is a batch file no pass has identified yet, with the best candidates seen so far.
@@ -269,7 +316,9 @@ type pendingFile struct {
 
 // runChain runs the ADR-24 chain per pending file, answering what is still unresolved; a file
 // whose strategy failed to run is dropped unqueued, so a transient failure never reads as "no candidates".
-func (c Consumer) runChain(ctx context.Context, out *batchResult, identifiers []model.Identifier, files []pendingFile) []pendingFile {
+func (c Consumer) runChain(
+	ctx context.Context, out *batchResult, pass string, identifiers []model.Identifier, files []pendingFile,
+) []pendingFile {
 	var pending []pendingFile
 	for _, file := range files {
 		one := out.observed[file.index]
@@ -278,14 +327,23 @@ func (c Consumer) runChain(ctx context.Context, out *batchResult, identifiers []
 		result, err := model.RunChain(ctx, identifiers, fileRef, c.chain)
 		if err != nil {
 			c.logger.Warn("identify failed", slog.String("path", one.File.RelPath), slog.Any("error", err))
+			out.note(file.index, library.AttemptPass{Pass: pass, Outcome: PassOutcomeFailed})
 			continue
 		}
 		if result.Best == nil || result.Best.ExternalID == nil {
 			if len(result.Candidates) > 0 {
 				file.candidates = result.Candidates
 			}
+			out.note(file.index, library.AttemptPass{
+				Pass: pass, Outcome: PassOutcomeNone, Candidates: library.AttemptCandidatesFrom(result.Candidates),
+			})
 			pending = append(pending, file)
 			continue
+		}
+		if pass != PassEmbeddedTags {
+			out.note(file.index, library.AttemptPass{
+				Pass: pass, Outcome: PassOutcomeIdentified, Candidates: library.AttemptCandidatesFrom(result.Candidates),
+			})
 		}
 		out.identify(file.index, library.WorkLink{
 			Provider: result.Best.ExternalID.Provider, ExternalID: result.Best.ExternalID.ExternalID,
@@ -315,8 +373,17 @@ func (c Consumer) identifyAlbums(ctx context.Context, out *batchResult, files []
 		if err != nil {
 			c.logger.Warn("album identification failed",
 				slog.String("path", out.observed[group[0].index].File.RelPath), slog.Any("error", err))
+			for _, file := range group {
+				out.note(file.index, library.AttemptPass{Pass: PassAlbumMatch, Outcome: PassOutcomeFailed})
+			}
 			pending = append(pending, group...)
 			continue
+		}
+		candidates := AlbumCandidates(decision)
+		for _, file := range group {
+			out.note(file.index, library.AttemptPass{
+				Pass: PassAlbumMatch, Outcome: string(decision.Outcome), Candidates: library.AttemptCandidatesFrom(candidates),
+			})
 		}
 		switch decision.Outcome {
 		case AlbumIdentified:
@@ -325,7 +392,6 @@ func (c Consumer) identifyAlbums(ctx context.Context, out *batchResult, files []
 					albumTrackFile(out, file.index, decision.Best.Tracks[i]))
 			}
 		case AlbumAmbiguous:
-			candidates := AlbumCandidates(decision)
 			for _, file := range group {
 				out.queue(file.index, candidates)
 			}

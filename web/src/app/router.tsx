@@ -37,6 +37,7 @@ import { defaultLevelKey } from "./Sidebar";
 import { Unidentified } from "./Unidentified";
 import { UserSettings } from "./Users";
 import { Wanted } from "./Wanted";
+import { UnidentifiedReview } from "./UnidentifiedReview";
 import { WorkDetail } from "./WorkDetail";
 
 /** A redirect to one library's own default level. Not every media type
@@ -138,6 +139,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/people", component: People }),
   createRoute({ getParentRoute: () => rootRoute, path: "/people/$id", component: PersonDetail }),
   createRoute({ getParentRoute: () => rootRoute, path: "/unidentified", component: Unidentified }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/unidentified/$mediaObjectId", component: UnidentifiedReview }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/health", component: LibraryHealth }),
   // Storage (todo 4.18): Root folders, Move & drain, Download folders and
   // Import are grouped under one section. /import and /moves redirect

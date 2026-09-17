@@ -286,6 +286,14 @@ type HuntQueue struct {
 	SearchCount    int64
 }
 
+type IdentificationAttempt struct {
+	ID            int64
+	MediaObjectID int64
+	AttemptedAt   int64
+	Outcome       string
+	PassesJson    string
+}
+
 type IdentificationQueue struct {
 	MediaObjectID  int64
 	RootFolderID   int64

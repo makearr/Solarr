@@ -535,8 +535,8 @@ func (p *process) startServer(ctx context.Context) error {
 		Search:       adapters.Search{Search: library.NewSearch(p.library)},
 		Unidentified: adapters.Unidentified{Unidentified: library.NewUnidentified(p.library)},
 		UnidentifiedResolver: adapters.UnidentifiedResolver{
-			Unidentified: library.NewUnidentified(p.library), Identity: library.NewIdentity(p.library),
-			Provider: p.musicBrainzProvider(), Clock: clock.NewSystem(),
+			Unidentified: library.NewUnidentified(p.library), Attempts: library.NewAttempts(p.library),
+			Identity: library.NewIdentity(p.library), Provider: p.musicBrainzProvider(), Clock: clock.NewSystem(),
 		},
 		Artwork:    adapters.Artwork{Artworks: library.NewArtworks(p.library)},
 		FS:         p.fsys,

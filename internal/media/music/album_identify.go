@@ -225,8 +225,8 @@ func albumConfidence(distance float64) float64 {
 // maxQueuedAlbumCandidates bounds what the manual queue is shown for one folder.
 const maxQueuedAlbumCandidates = 5
 
-// AlbumCandidates is the manual queue's view of an undecided album: its best release groups,
-// each with why it was not chosen, at a confidence that can never win a chain.
+// AlbumCandidates is a decision's best release groups, each with the facts its verdict rests on,
+// at a confidence that can never win a chain; the chosen one comes first when there is one.
 func AlbumCandidates(decision AlbumDecision) []model.Identification {
 	var candidates []model.Identification
 	seen := make(map[string]bool)
@@ -241,16 +241,54 @@ func AlbumCandidates(decision AlbumDecision) []model.Identification {
 			Strategy:   StrategyParse,
 			ExternalID: &model.ExternalID{Provider: ProviderReleaseGroup, ExternalID: group, Confidence: confidence},
 			Confidence: confidence,
-			Evidence: []model.MatchEvidence{
-				{Kind: "album_outcome", Detail: string(decision.Outcome)},
-				{Kind: "album_release", Detail: score.Candidate.Release.MBID},
-				{Kind: "album_recall", Detail: score.Candidate.Recall},
-				{Kind: "album_distance", Detail: strconv.FormatFloat(score.Distance, 'f', 3, 64)},
-				{Kind: "album_mapped", Detail: strconv.Itoa(score.Mapped) + "/" + strconv.Itoa(len(score.Tracks))},
-				{Kind: "album_accepted", Detail: strconv.FormatBool(score.Accepted)},
-				{Kind: "album_contradicted", Detail: strconv.FormatBool(score.Contradicted)},
-			},
+			Evidence:   albumEvidence(decision.Outcome, score),
 		})
 	}
 	return candidates
+}
+
+// Evidence kinds a candidate carries, shared by every pass so a manual decision reads them alike.
+const (
+	EvidenceTitle          = "title"
+	EvidenceArtist         = "artist"
+	EvidenceReleaseType    = "release_type"
+	EvidenceEdition        = "edition"
+	EvidenceEditionTitle   = "edition_title"
+	EvidenceEditionDate    = "edition_date"
+	EvidenceEditionCountry = "edition_country"
+	EvidenceEditionStatus  = "edition_status"
+	EvidenceEditionTracks  = "edition_tracks"
+	EvidenceFilesMatched   = "files_matched"
+	EvidenceFilesSupported = "files_supported"
+	EvidenceDistance       = "distance"
+	EvidenceAccepted       = "accepted"
+	EvidenceContradicted   = "contradicted"
+	EvidenceRecall         = "recall"
+	EvidenceOutcome        = "outcome"
+)
+
+func albumEvidence(outcome AlbumOutcome, score ReleaseScore) []model.MatchEvidence {
+	group, release := score.Candidate.ReleaseGroup, score.Candidate.Release
+	releaseType := group.PrimaryType
+	for _, secondary := range group.SecondaryTypes {
+		releaseType += " + " + secondary
+	}
+	return []model.MatchEvidence{
+		{Kind: EvidenceOutcome, Detail: string(outcome)},
+		{Kind: EvidenceTitle, Detail: group.Title},
+		{Kind: EvidenceArtist, Detail: score.Candidate.ArtistCredit},
+		{Kind: EvidenceReleaseType, Detail: releaseType},
+		{Kind: EvidenceEdition, Detail: release.MBID},
+		{Kind: EvidenceEditionTitle, Detail: release.Title},
+		{Kind: EvidenceEditionDate, Detail: release.Date},
+		{Kind: EvidenceEditionCountry, Detail: release.Country},
+		{Kind: EvidenceEditionStatus, Detail: release.Status},
+		{Kind: EvidenceEditionTracks, Detail: strconv.Itoa(trackCount(release))},
+		{Kind: EvidenceFilesMatched, Detail: strconv.Itoa(score.Mapped) + "/" + strconv.Itoa(len(score.Tracks))},
+		{Kind: EvidenceFilesSupported, Detail: strconv.Itoa(score.Supported)},
+		{Kind: EvidenceDistance, Detail: strconv.FormatFloat(score.Distance, 'f', 3, 64)},
+		{Kind: EvidenceAccepted, Detail: strconv.FormatBool(score.Accepted)},
+		{Kind: EvidenceContradicted, Detail: strconv.FormatBool(score.Contradicted)},
+		{Kind: EvidenceRecall, Detail: score.Candidate.Recall},
+	}
 }

@@ -1529,6 +1529,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/library/unidentified/{mediaObjectId}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * How identification of a queued file went, newest run first.
+         * @description Every recent run past the file's embedded MBIDs: each pass, what it concluded, and the candidates it weighed with the evidence for each verdict -- what a person needs to make the decision the queue is asking for. The newest five runs are kept.
+         */
+        get: operations["listIdentificationAttempts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/exclusions": {
         parameters: {
             query?: never;
@@ -3197,6 +3219,36 @@ export interface components {
             /** Format: date-time */
             last_seen_at: string;
         };
+        /** @description One fact a verdict rests on. Kinds include title, artist, release_type, edition, edition_title, edition_date, edition_country, edition_status, edition_tracks, files_matched ("7/12"), files_supported, distance, accepted, contradicted, recall and outcome. */
+        IdentificationEvidence: {
+            kind: string;
+            detail: string;
+        };
+        IdentificationCandidate: {
+            strategy: string;
+            provider?: string;
+            external_id?: string;
+            /** Format: float */
+            confidence: number;
+            evidence: components["schemas"]["IdentificationEvidence"][];
+        };
+        /** @description One pass of a run. pass is embedded_tags, album_match, text_search or folder_siblings. outcome is identified, none or failed; album_match answers no_candidate, insufficient_evidence, ambiguous or contradictory instead; folder_siblings answers joined, siblings_disagree or no_identified_sibling. */
+        IdentificationPass: {
+            pass: string;
+            outcome: string;
+            candidates: components["schemas"]["IdentificationCandidate"][];
+        };
+        IdentificationAttempt: {
+            /** Format: date-time */
+            attempted_at: string;
+            /** @enum {string} */
+            outcome: "identified" | "queued" | "retry";
+            passes: components["schemas"]["IdentificationPass"][];
+        };
+        IdentificationAttemptList: {
+            file: components["schemas"]["UnidentifiedFile"];
+            items: components["schemas"]["IdentificationAttempt"][];
+        };
         UnidentifiedPage: {
             items: components["schemas"]["UnidentifiedFile"][];
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
@@ -3505,6 +3557,8 @@ export interface components {
             external_id?: string;
             /** Format: float */
             confidence: number;
+            /** @description The facts the candidate's verdict rests on, as IdentificationCandidate's. */
+            evidence?: components["schemas"]["IdentificationEvidence"][];
         };
         /** @description One unit ADR-48's pipeline found and decided. */
         ImportUnit: {
@@ -6368,6 +6422,31 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            /** @description No such queued file, or the caller cannot read its root folder. */
+            404: components["responses"]["Problem"];
+        };
+    };
+    listIdentificationAttempts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The runs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentificationAttemptList"];
+                };
+            };
             401: components["responses"]["Problem"];
             /** @description No such queued file, or the caller cannot read its root folder. */
             404: components["responses"]["Problem"];

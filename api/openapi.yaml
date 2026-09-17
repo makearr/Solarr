@@ -2404,6 +2404,32 @@ paths:
           $ref: "#/components/responses/Problem"
           description: No such queued file, or the caller cannot read its root folder.
 
+  /library/unidentified/{mediaObjectId}/attempts:
+    parameters:
+      - name: mediaObjectId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listIdentificationAttempts
+      tags: [library]
+      summary: How identification of a queued file went, newest run first.
+      description: >-
+        Every recent run past the file's embedded MBIDs: each pass, what it
+        concluded, and the candidates it weighed with the evidence for each
+        verdict -- what a person needs to make the decision the queue is
+        asking for. The newest five runs are kept.
+      responses:
+        "200":
+          description: The runs.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdentificationAttemptList" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: No such queued file, or the caller cannot read its root folder.
+
   /exclusions:
     get:
       operationId: listExclusionPatterns
@@ -4911,6 +4937,67 @@ components:
         first_seen_at: { type: string, format: date-time }
         last_seen_at: { type: string, format: date-time }
 
+    IdentificationEvidence:
+      type: object
+      description: >-
+        One fact a verdict rests on. Kinds include title, artist, release_type,
+        edition, edition_title, edition_date, edition_country, edition_status,
+        edition_tracks, files_matched ("7/12"), files_supported, distance,
+        accepted, contradicted, recall and outcome.
+      required: [kind, detail]
+      properties:
+        kind: { type: string }
+        detail: { type: string }
+
+    IdentificationCandidate:
+      type: object
+      required: [strategy, confidence, evidence]
+      properties:
+        strategy: { type: string }
+        provider: { type: string }
+        external_id: { type: string }
+        confidence: { type: number, format: float }
+        evidence:
+          type: array
+          items: { $ref: "#/components/schemas/IdentificationEvidence" }
+
+    IdentificationPass:
+      type: object
+      description: >-
+        One pass of a run. pass is embedded_tags, album_match, text_search or
+        folder_siblings. outcome is identified, none or failed; album_match
+        answers no_candidate, insufficient_evidence, ambiguous or
+        contradictory instead; folder_siblings answers joined,
+        siblings_disagree or no_identified_sibling.
+      required: [pass, outcome, candidates]
+      properties:
+        pass: { type: string }
+        outcome: { type: string }
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/IdentificationCandidate" }
+
+    IdentificationAttempt:
+      type: object
+      required: [attempted_at, outcome, passes]
+      properties:
+        attempted_at: { type: string, format: date-time }
+        outcome:
+          type: string
+          enum: [identified, queued, retry]
+        passes:
+          type: array
+          items: { $ref: "#/components/schemas/IdentificationPass" }
+
+    IdentificationAttemptList:
+      type: object
+      required: [file, items]
+      properties:
+        file: { $ref: "#/components/schemas/UnidentifiedFile" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/IdentificationAttempt" }
+
     UnidentifiedPage:
       type: object
       required: [items]
@@ -5289,6 +5376,10 @@ components:
         provider: { type: string }
         external_id: { type: string }
         confidence: { type: number, format: float }
+        evidence:
+          type: array
+          description: The facts the candidate's verdict rests on, as IdentificationCandidate's.
+          items: { $ref: "#/components/schemas/IdentificationEvidence" }
 
     ImportUnit:
       type: object

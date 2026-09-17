@@ -62,6 +62,27 @@ DroppedNeedle also refuses a win when the runner-up leaves some file without a s
 counterpart; its code does the opposite of its own docstring there, so that clause was not
 taken.
 
+## The record, and the manual decision
+
+Every run for a file its embedded MBIDs did not settle is stored (`identification_attempt`,
+the newest five per file): the outcome — `identified`, `queued`, or `retry` after a lookup
+failure — and each pass in order with its outcome and the candidates it weighed. A candidate's
+evidence is structured: `title`, `artist`, `release_type`, `edition` and its `edition_title`,
+`edition_date`, `edition_country`, `edition_status`, `edition_tracks`, `files_matched`,
+`files_supported`, `distance`, `accepted`, `contradicted`, `recall`, `outcome`.
+
+A queued file's **Review** page (`/unidentified/<media object>`,
+`GET /library/unidentified/{id}/attempts`) shows the latest run pass by pass, every candidate
+with its evidence, and lets the user pick any album, not only the top guess. An import unit
+waiting for a decision shows its candidates the same way.
+
+## Lookup priority
+
+MusicBrainz, BrainzMash and the Lidarr proxy each have one rate-limit bucket. Inside a bucket
+a due request goes to the most urgent waiter (`httpx.WithPriority`, set by
+`musicbrainz.Provider` from the caller's `Priority`): interactive, then identification, then
+enrichment, backfill and refresh. A user's lookup therefore never queues behind a scan.
+
 ## Measured, 2026-09-17
 
 `/storage/media/music`, ~170 folders, ~1,100 files. In the 122 folders whose files agree on an

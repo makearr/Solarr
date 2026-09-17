@@ -375,3 +375,13 @@ func TestLimiter_UnratedProviderReportsZeroRatherThanASentinel(t *testing.T) {
 		t.Error("Throttled = true for an unrated, unpaused provider")
 	}
 }
+
+// Nobody more urgent waiting: a background request is served as before.
+func TestLimiter_ALoneLowPriorityWaiterIsNotHeldBack(t *testing.T) {
+	limiter, _ := newLimiter(httpx.Config{Defaults: httpx.Limits{MinInterval: time.Second}})
+	release, err := limiter.Acquire(httpx.WithPriority(t.Context(), 4), "musicbrainz")
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	release()
+}

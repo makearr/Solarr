@@ -155,7 +155,7 @@ func (g *Guard) CheckURL(target *url.URL) error {
 }
 
 // DialContext resolves address, refuses every result that is not publicly
-// routable, and connects to the first that survives.
+// routable, and connects to the first survivor that answers.
 func (g *Guard) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
@@ -169,14 +169,57 @@ func (g *Guard) DialContext(ctx context.Context, network, address string) (net.C
 	if err != nil {
 		return nil, err
 	}
-
-	allowed, err := firstAllowed(host, candidates)
+	allowed, err := allAllowed(host, candidates)
 	if err != nil {
 		return nil, err
 	}
-	// Dial the literal address that was just validated, never the hostname:
-	// re-resolving here is exactly the rebinding window being closed.
-	return g.dial(ctx, network, net.JoinHostPort(allowed.String(), port))
+
+	// Dial only the literal addresses just validated, never the hostname: re-resolving is the
+	// rebinding window. Every one is tried, so a host whose IPv6 is broken still reaches IPv4.
+	var failures []error
+	for index, address := range interleaveFamilies(allowed) {
+		attempt, cancel := ctx, context.CancelFunc(func() {})
+		if index < len(allowed)-1 {
+			attempt, cancel = context.WithTimeout(ctx, perAddressDialTimeout)
+		}
+		conn, err := g.dial(attempt, network, net.JoinHostPort(address.String(), port))
+		cancel()
+		if err == nil {
+			return conn, nil
+		}
+		failures = append(failures, err)
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return nil, fmt.Errorf("httpx: dial %s: %w", host, errors.Join(failures...))
+}
+
+// perAddressDialTimeout bounds every attempt but the last, so a black-holed address cannot
+// spend the whole request's timeout before the next address is tried.
+const perAddressDialTimeout = 3 * time.Second
+
+// interleaveFamilies alternates address families starting with the resolver's first choice,
+// so one unreachable family costs a single attempt rather than all of its addresses.
+func interleaveFamilies(addresses []netip.Addr) []netip.Addr {
+	var first, second []netip.Addr
+	for _, address := range addresses {
+		if address.Is4() == addresses[0].Is4() {
+			first = append(first, address)
+		} else {
+			second = append(second, address)
+		}
+	}
+	ordered := make([]netip.Addr, 0, len(addresses))
+	for i := 0; i < len(first) || i < len(second); i++ {
+		if i < len(first) {
+			ordered = append(ordered, first[i])
+		}
+		if i < len(second) {
+			ordered = append(ordered, second[i])
+		}
+	}
+	return ordered
 }
 
 // DialUnchecked connects without classifying address. Its one caller is
@@ -195,24 +238,28 @@ func (g *Guard) CheckDestination(ctx context.Context, host string) error {
 	if err != nil {
 		return err
 	}
-	_, err = firstAllowed(host, candidates)
+	_, err = allAllowed(host, candidates)
 	return err
 }
 
-// firstAllowed returns the first unblocked candidate, or the last reason.
-func firstAllowed(host string, candidates []netip.Addr) (netip.Addr, error) {
+// allAllowed returns every unblocked candidate in resolver order, or the last reason none was.
+func allAllowed(host string, candidates []netip.Addr) ([]netip.Addr, error) {
+	var allowed []netip.Addr
 	var lastBlocked error
 	for _, candidate := range candidates {
 		if reason := ClassifyAddress(candidate); reason != "" {
 			lastBlocked = &BlockedError{Host: host, Address: candidate, Reason: reason}
 			continue
 		}
-		return candidate, nil
+		allowed = append(allowed, candidate)
 	}
-	if lastBlocked != nil {
-		return netip.Addr{}, lastBlocked
+	switch {
+	case len(allowed) > 0:
+		return allowed, nil
+	case lastBlocked != nil:
+		return nil, lastBlocked
 	}
-	return netip.Addr{}, fmt.Errorf("%w: %s", ErrNoAllowedAddress, host)
+	return nil, fmt.Errorf("%w: %s", ErrNoAllowedAddress, host)
 }
 
 func (g *Guard) resolve(ctx context.Context, network, host string) ([]netip.Addr, error) {

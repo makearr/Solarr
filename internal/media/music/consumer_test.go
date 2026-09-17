@@ -614,9 +614,10 @@ func TestObserve_SiblingsThatDisagreeLeaveAnUnidentifiedFileQueued(t *testing.T)
 func newAlbumConsumer(t *testing.T, lookup music.AlbumLookup, searcher music.Searcher) (music.Consumer, *store.Store, *fsx.Mem) {
 	t.Helper()
 	opened, fsys, fake := newTestLibrary(t)
+	attempts := library.NewAttempts(opened)
 	consumer := music.NewConsumer(music.ConsumerConfig{
 		FS: fsys, Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened),
-		Unidentified: library.NewUnidentified(opened), Albums: lookup, Search: searcher,
+		Unidentified: library.NewUnidentified(opened), Attempts: &attempts, Albums: lookup, Search: searcher,
 		Clock: fake, Logger: slog.New(slog.DiscardHandler),
 	})
 	return consumer, opened, fsys
@@ -730,4 +731,77 @@ func TestObserve_NoAlbumCandidateFallsBackToPerFileSearch(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("GetWorkByExternalID: %v, want the per-file search to have resolved it", err)
 	}
+}
+
+// A manual decision must be able to show what every pass concluded and which albums it weighed.
+func TestObserve_AnAmbiguousFolderRecordsEveryPassWithItsCandidates(t *testing.T) {
+	other := "11111111-2222-3333-4444-555555555555"
+	consumer, opened, fsys := newAlbumConsumer(t, traumaLookup(releaseGroupMBID, other), nil)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+
+	if err := consumer.Observe(t.Context(), root, 0, untaggedTraumaBatch(t, fsys)); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queue, err := library.NewUnidentified(opened).List(t.Context(), nil, paginate.Cursor{}, 50)
+	if err != nil || len(queue) == 0 {
+		t.Fatalf("queue = %+v (err %v), want the folder queued", queue, err)
+	}
+	attempts, err := library.NewAttempts(opened).List(t.Context(), queue[0].MediaObjectID)
+	if err != nil {
+		t.Fatalf("List attempts: %v", err)
+	}
+	if len(attempts) != 1 || attempts[0].Outcome != music.AttemptQueued {
+		t.Fatalf("attempts = %+v, want one queued run", attempts)
+	}
+	var passes []string
+	for _, pass := range attempts[0].Passes {
+		passes = append(passes, pass.Pass+":"+pass.Outcome)
+	}
+	if want := []string{"embedded_tags:none", "album_match:ambiguous"}; !slices.Equal(passes, want) {
+		t.Errorf("passes = %v, want %v", passes, want)
+	}
+	album := attempts[0].Passes[1]
+	if len(album.Candidates) != 2 {
+		t.Fatalf("album candidates = %+v, want both rival albums", album.Candidates)
+	}
+	titled := slices.ContainsFunc(album.Candidates[0].Evidence, func(e library.AttemptEvidence) bool {
+		return e.Kind == music.EvidenceTitle && e.Detail == "Kebilegev Bibihi"
+	})
+	if !titled {
+		t.Errorf("evidence = %+v, want the album's title for a human to choose by", album.Candidates[0].Evidence)
+	}
+}
+
+// Files their embedded MBIDs settle cost nothing to record.
+func TestObserve_AFileItsEmbeddedTagsIdentifyRecordsNoAttempt(t *testing.T) {
+	consumer, opened, fsys := newAlbumConsumer(t, &fakeAlbumLookup{}, nil)
+	content := []byte("tagged")
+	writeMusicFile(t, fsys, "P!po/Kebilegev Bibihi/01.m4a", content)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+	batch := []scan.Observed{observedFile("P!po/Kebilegev Bibihi/01.m4a", int64(len(content)),
+		mediatool.Tags{"album": "Kebilegev Bibihi", "musicbrainz_releasegroupid": releaseGroupMBID})}
+
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	registered, err := library.NewPhysical(opened).RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "P!po/Kebilegev Bibihi/01.m4a", SizeBytes: int64(len(content)), QuickHash: mustQuickHash(t, fsys, "P!po/Kebilegev Bibihi/01.m4a", int64(len(content))), FirstSeenAt: observedAt},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	attempts, err := library.NewAttempts(opened).List(t.Context(), registered[0].MediaObjectID)
+	if err != nil || len(attempts) != 0 {
+		t.Errorf("attempts = %+v (err %v), want none", attempts, err)
+	}
+}
+
+func mustQuickHash(t *testing.T, fsys *fsx.Mem, relPath string, size int64) string {
+	t.Helper()
+	hash, err := library.QuickHash(fsys, path.Join(testRoot, relPath), size)
+	if err != nil {
+		t.Fatalf("QuickHash: %v", err)
+	}
+	return hash
 }

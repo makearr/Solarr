@@ -11,14 +11,11 @@ import (
 
 	"github.com/makearr/MediaNexus/internal/metadata/metacache"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/MediaNexus/internal/platform/httpx"
 )
 
-// Priority is ADR-29's request-priority ladder. Every level is accepted today, but
-// only ordering by source (ADR-13's breaker/limiter, per source) actually happens
-// yet -- there is exactly one caller (the stage 3 enrichment job, priority 3 or 4)
-// and building real cross-priority scheduling ahead of a second caller needing it
-// would be anticipation, not generalising from evidence. The type exists so a
-// second caller does not have to change every signature to add it.
+// Priority is ADR-29's request-priority ladder: within one source's rate-limit bucket a
+// lower level takes the next token first (httpx.WithPriority), so a user never waits behind a scan.
 type Priority int
 
 const (
@@ -92,11 +89,11 @@ func New(config Config) Provider {
 	}
 }
 
-// Album answers a release group and one of its releases, cache first. priority is
-// accepted but does not yet change behaviour -- see Priority's doc comment.
+// Album answers a release group and one of its releases, cache first, at priority (see Priority).
 func (p Provider) Album(
-	ctx context.Context, _ Priority, releaseGroupMBID, releaseMBID string,
+	ctx context.Context, priority Priority, releaseGroupMBID, releaseMBID string,
 ) (ReleaseGroup, Release, error) {
+	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
 	if rg, release, ok := p.cached(ctx, releaseGroupMBID, releaseMBID); ok {
 		return rg, release, nil
 	}
@@ -120,11 +117,11 @@ func (p Provider) Album(
 // Search answers a text search for release groups matching artist and title,
 // cache first. Only sources that implement Searcher are tried -- ADR-29's proxy
 // does not (Searcher's own doc comment), so this silently has fewer sources than
-// Album does, never an error for that reason alone. priority is accepted for the
-// same not-yet-scheduled reason as Album's.
+// Album does, never an error for that reason alone.
 func (p Provider) Search(
-	ctx context.Context, _ Priority, artist, title string, limit int,
+	ctx context.Context, priority Priority, artist, title string, limit int,
 ) ([]ReleaseGroupMatch, error) {
+	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
 	key := searchCacheKey(artist, title, limit)
 	if matches, ok := p.cachedSearch(ctx, key); ok {
 		return matches, nil
@@ -157,7 +154,8 @@ func (p Provider) Search(
 // SearchByQuery is Search's own free-text counterpart (todo 4.17, ADR-56):
 // only sources implementing QuerySearcher are tried, same reasoning as Search
 // itself -- the proxy does not implement it either.
-func (p Provider) SearchByQuery(ctx context.Context, _ Priority, query string, limit int) ([]ReleaseGroupMatch, error) {
+func (p Provider) SearchByQuery(ctx context.Context, priority Priority, query string, limit int) ([]ReleaseGroupMatch, error) {
+	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
 	key := queryCacheKey(query, limit)
 	if matches, ok := p.cachedSearch(ctx, key); ok {
 		return matches, nil
@@ -192,7 +190,8 @@ func (p Provider) SearchByQuery(ctx context.Context, _ Priority, query string, l
 // Search, the proxy's artist shape is unverified live.
 // Releases answers every release of a release group with its tracklist, cache first, from
 // the first source able to list them. Album identification asks it for every candidate.
-func (p Provider) Releases(ctx context.Context, _ Priority, releaseGroupMBID string) ([]Release, error) {
+func (p Provider) Releases(ctx context.Context, priority Priority, releaseGroupMBID string) ([]Release, error) {
+	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
 	if releases, ok := cachedJSON[[]Release](ctx, p, cacheKindReleases, releaseGroupMBID); ok {
 		return releases, nil
 	}
@@ -220,7 +219,8 @@ func (p Provider) Releases(ctx context.Context, _ Priority, releaseGroupMBID str
 
 // SearchRecordings answers recordings matching a track title (and artist, when known),
 // each with the release groups it appears on, cache first. Only RecordingSearcher sources are tried.
-func (p Provider) SearchRecordings(ctx context.Context, _ Priority, artist, title string, limit int) ([]RecordingMatch, error) {
+func (p Provider) SearchRecordings(ctx context.Context, priority Priority, artist, title string, limit int) ([]RecordingMatch, error) {
+	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
 	key := searchCacheKey(artist, title, limit)
 	if matches, ok := cachedJSON[[]RecordingMatch](ctx, p, cacheKindRecordingSearch, key); ok {
 		return matches, nil
@@ -248,7 +248,8 @@ func (p Provider) SearchRecordings(ctx context.Context, _ Priority, artist, titl
 	return nil, fmt.Errorf("musicbrainz: no source answered recording search %q/%q: %w", artist, title, errors.Join(errs...))
 }
 
-func (p Provider) Artist(ctx context.Context, _ Priority, mbid string) (Artist, error) {
+func (p Provider) Artist(ctx context.Context, priority Priority, mbid string) (Artist, error) {
+	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
 	if artist, ok := p.cachedArtist(ctx, mbid); ok {
 		return artist, nil
 	}
@@ -278,7 +279,8 @@ func (p Provider) Artist(ctx context.Context, _ Priority, mbid string) (Artist, 
 // ArtistReleaseGroups answers an artist's full discography, cache-first. Only
 // sources that implement Discography are tried, same reasoning as Search and
 // Artist.
-func (p Provider) ArtistReleaseGroups(ctx context.Context, _ Priority, artistMBID string) ([]ReleaseGroup, error) {
+func (p Provider) ArtistReleaseGroups(ctx context.Context, priority Priority, artistMBID string) ([]ReleaseGroup, error) {
+	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
 	if groups, ok := p.cachedDiscography(ctx, artistMBID); ok {
 		return groups, nil
 	}

@@ -43,6 +43,9 @@ type providerBudget struct {
 
 	slots    chan struct{}
 	inFlight int
+
+	// waiting counts callers blocked in Acquire per priority, so a token goes to the most urgent.
+	waiting map[Priority]int
 }
 
 // NewLimiter builds the registry. jitter randomises computed backoff; pass nil
@@ -65,10 +68,13 @@ func NewLimiter(c clock.Clock, config Config, jitter func(time.Duration) time.Du
 }
 
 // Acquire blocks until the provider may be called, then returns a release function the caller
-// must invoke when the request finishes.
+// must invoke when the request finishes. A due token goes to the most urgent waiter (PriorityFrom).
 func (l *Limiter) Acquire(ctx context.Context, provider string) (release func(), err error) {
+	priority := PriorityFrom(ctx)
+	l.wait(provider, priority, 1)
+	defer l.wait(provider, priority, -1)
 	for {
-		wait, err := l.tryTake(provider)
+		wait, err := l.tryTake(provider, priority)
 		if err != nil {
 			return nil, err
 		}
@@ -107,9 +113,22 @@ func (l *Limiter) Acquire(ctx context.Context, provider string) (release func(),
 	}, nil
 }
 
-// tryTake consumes a token if one is due. It returns how long to wait otherwise,
-// so the caller sleeps outside the lock.
-func (l *Limiter) tryTake(provider string) (time.Duration, error) {
+// laneRecheck is how soon a waiter passed over for a more urgent one looks again.
+const laneRecheck = 25 * time.Millisecond
+
+func (l *Limiter) wait(provider string, priority Priority, delta int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	budget := l.budgetForLocked(provider)
+	budget.waiting[priority] += delta
+	if budget.waiting[priority] <= 0 {
+		delete(budget.waiting, priority)
+	}
+}
+
+// tryTake consumes a token if one is due and no more urgent caller is waiting for it. It returns
+// how long to wait otherwise, so the caller sleeps outside the lock.
+func (l *Limiter) tryTake(provider string, priority Priority) (time.Duration, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -136,6 +155,12 @@ func (l *Limiter) tryTake(provider string) (time.Duration, error) {
 		}
 		missing := 1 - budget.tokens
 		return time.Duration(missing / budget.effectivePerSecond * float64(time.Second)), nil
+	}
+
+	for waiting := range budget.waiting {
+		if waiting < priority {
+			return laneRecheck, nil
+		}
 	}
 
 	budget.tokens--
@@ -237,6 +262,7 @@ func (l *Limiter) budgetForLocked(provider string) *providerBudget {
 		lastRefill:   now,
 		dailyResetAt: nextUTCMidnight(now),
 		slots:        make(chan struct{}, concurrent),
+		waiting:      make(map[Priority]int),
 	}
 	budget.effectivePerSecond = budget.configuredPerSecond()
 	// Start full, so the first request of a session is not made to wait.

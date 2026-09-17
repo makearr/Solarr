@@ -243,6 +243,8 @@ type Querier interface {
 	GetWorkByExternalID(ctx context.Context, arg GetWorkByExternalIDParams) (Work, error)
 	GetWorkExternalIDByProvider(ctx context.Context, arg GetWorkExternalIDByProviderParams) (WorkExternalID, error)
 	GetWorkPart(ctx context.Context, id int64) (WorkPart, error)
+	// Identification attempts (migration 0033). Column lists follow table order.
+	InsertIdentificationAttempt(ctx context.Context, arg InsertIdentificationAttemptParams) error
 	InsertImportUnit(ctx context.Context, arg InsertImportUnitParams) (ImportUnit, error)
 	// library_path_id is nullable: 0029's own migration comment explains why
 	// (which path this unit's own placement created, when it can be known).
@@ -342,6 +344,7 @@ type Querier interface {
 	// genre of its own (ADR-32's own fields are biographical, not stylistic).
 	ListGenresForPersonDiscography(ctx context.Context, personID int64) ([]string, error)
 	ListGroupObservations(ctx context.Context, arg ListGroupObservationsParams) ([]GroupObservation, error)
+	ListIdentificationAttempts(ctx context.Context, mediaObjectID int64) ([]IdentificationAttempt, error)
 	ListImportDecisionsNeedingReview(ctx context.Context, limit int64) ([]ImportDecision, error)
 	// Small, operator-facing list -- session counts never approach library scale
 	// (Invariant 22 is about files, not import runs), so this is a plain list
@@ -507,6 +510,8 @@ type Querier interface {
 	NextReady(ctx context.Context, arg NextReadyParams) ([]ReadyQueue, error)
 	// Which search caused this file, and which download produced it (F4, section 12).
 	ProvenanceForObject(ctx context.Context, mediaObjectID sql.NullInt64) ([]ProvenanceForObjectRow, error)
+	// Keeps only the newest keep attempts for one file.
+	PruneIdentificationAttempts(ctx context.Context, arg PruneIdentificationAttemptsParams) error
 	// Manual blocks never expire (section 10.8); auto entries may, matching
 	// section 10.11's existing blocklisted_release rule.
 	PurgeExpiredBlockedContent(ctx context.Context, expiresAt sql.NullInt64) error

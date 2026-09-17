@@ -27,11 +27,13 @@ func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, 
 	physical := library.NewPhysical(p.library)
 	provider := p.musicBrainzProvider()
 	desired := library.NewDesired(p.library)
+	attempts := library.NewAttempts(p.library)
 	consumer := music.NewConsumer(music.ConsumerConfig{
 		FS:           p.fsys,
 		Physical:     physical,
 		Identity:     library.NewIdentity(p.library),
 		Unidentified: library.NewUnidentified(p.library),
+		Attempts:     &attempts,
 		Search:       provider,
 		Albums:       provider,
 		Clock:        clock.NewSystem(),
