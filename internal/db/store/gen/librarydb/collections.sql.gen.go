@@ -382,12 +382,18 @@ const listPeopleNeedingArtwork = `-- name: ListPeopleNeedingArtwork :many
 SELECT p.id AS person_id, x.external_id AS artist_mbid
 FROM person p
 JOIN person_external_id x ON x.person_id = p.id AND x.provider = 'musicbrainz:artist'
-WHERE NOT EXISTS (
+WHERE p.id > ?1
+  AND NOT EXISTS (
     SELECT 1 FROM artwork a WHERE a.subject_type = 'person' AND a.subject_id = p.id AND a.kind = 'cover'
   )
 ORDER BY p.id
-LIMIT ?1
+LIMIT ?2
 `
+
+type ListPeopleNeedingArtworkParams struct {
+	AfterID  int64
+	PageSize int64
+}
 
 type ListPeopleNeedingArtworkRow struct {
 	PersonID   int64
@@ -401,8 +407,8 @@ type ListPeopleNeedingArtworkRow struct {
 // existed stayed without one forever -- the reason no artist picture had ever
 // appeared (found 2026-09-13). 'musicbrainz:artist' must match
 // internal/media/music.ProviderArtist.
-func (q *Queries) ListPeopleNeedingArtwork(ctx context.Context, pageSize int64) ([]ListPeopleNeedingArtworkRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPeopleNeedingArtwork, pageSize)
+func (q *Queries) ListPeopleNeedingArtwork(ctx context.Context, arg ListPeopleNeedingArtworkParams) ([]ListPeopleNeedingArtworkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPeopleNeedingArtwork, arg.AfterID, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}

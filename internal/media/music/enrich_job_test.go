@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -698,11 +701,128 @@ func TestEnrichJob_RecordsThatAnArtistHasNoImageSoTheSweepMovesOn(t *testing.T) 
 		t.Fatalf("GetForPerson = %+v, want no servable image for an artist without one", recorded)
 	}
 
-	remaining, err := artworks.PeopleNeedingArtwork(t.Context(), 10)
+	remaining, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("PeopleNeedingArtwork: %v", err)
 	}
 	if len(remaining) != 0 {
 		t.Fatalf("PeopleNeedingArtwork = %+v, want the artist dropped from the sweep", remaining)
+	}
+}
+
+// A Wikidata lookup that errors says nothing about whether the artist has a
+// photo, so it must stay in the sweep rather than be written off for good.
+func TestEnrichJob_BackfillRetriesAnArtistWhoseWikidataLookupFailed(t *testing.T) {
+	server := testImageServer(t)
+	source := &fakeArtistSource{artists: map[string]musicbrainz.Artist{
+		"artist-7": {MBID: "artist-7", Name: "Heka", SortName: "Heka", WikidataQID: "Q-unreachable"},
+	}}
+	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{}}
+	job, opened, _, _ := newEnrichJobWithImageFetch(t, source, biographer, server.URL)
+	personID := resolveBareArtist(t, opened, "artist-7", "Heka")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	remaining, err := library.NewArtworks(opened).PeopleNeedingArtwork(t.Context(), 0, 10)
+	if err != nil {
+		t.Fatalf("PeopleNeedingArtwork: %v", err)
+	}
+	if len(remaining) != 1 || remaining[0].PersonID != personID {
+		t.Fatalf("PeopleNeedingArtwork = %+v, want person %d still waiting for a retry", remaining, personID)
+	}
+}
+
+// Bytes that do not decode now will not decode next run either.
+func TestEnrichJob_BackfillRecordsAnUndecodableImageAsNoImage(t *testing.T) {
+	garbage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "image/tiff")
+		_, _ = w.Write([]byte("II*\x00 not an image this decoder understands"))
+	}))
+	t.Cleanup(garbage.Close)
+
+	source := &fakeArtistSource{artists: map[string]musicbrainz.Artist{
+		"artist-6": {MBID: "artist-6", Name: "P!po", SortName: "P!po", WikidataQID: "Q2"},
+	}}
+	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{
+		"Q2": {Description: "American singer", ImageURL: garbage.URL + "/photo.tif"},
+	}}
+	job, opened, _, _ := newEnrichJobWithImageFetch(t, source, biographer, garbage.URL)
+	personID := resolveBareArtist(t, opened, "artist-6", "P!po")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	artworks := library.NewArtworks(opened)
+	remaining, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10)
+	if err != nil {
+		t.Fatalf("PeopleNeedingArtwork: %v", err)
+	}
+	if len(remaining) != 0 {
+		t.Fatalf("PeopleNeedingArtwork = %+v, want the undecodable artist dropped from the sweep", remaining)
+	}
+	recorded, err := artworks.GetForPerson(t.Context(), personID)
+	if err != nil {
+		t.Fatalf("GetForPerson: %v", err)
+	}
+	if recorded.Found {
+		t.Fatalf("GetForPerson = %+v, want no servable image", recorded)
+	}
+}
+
+// With no Wikidata source configured every artist looks imageless; recording
+// that would write off the whole library permanently.
+func TestEnrichJob_BackfillRecordsNothingWithoutAWikidataSource(t *testing.T) {
+	server := testImageServer(t)
+	source := &fakeArtistSource{artists: map[string]musicbrainz.Artist{
+		"artist-5": {MBID: "artist-5", Name: "Pevilodon", SortName: "Pevilodon", WikidataQID: "Q5"},
+	}}
+	job, opened, _, _ := newEnrichJobWithImageFetch(t, source, nil, server.URL)
+	resolveBareArtist(t, opened, "artist-5", "Pevilodon")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	remaining, err := library.NewArtworks(opened).PeopleNeedingArtwork(t.Context(), 0, 10)
+	if err != nil {
+		t.Fatalf("PeopleNeedingArtwork: %v", err)
+	}
+	if len(remaining) != 1 {
+		t.Fatalf("PeopleNeedingArtwork = %+v, want the artist untouched", remaining)
+	}
+}
+
+// More failing people than one page must not hide the ones after them: the
+// sweep once re-read the same first page for its whole budget.
+func TestEnrichJob_BackfillReachesPastAFullPageOfFailures(t *testing.T) {
+	server := testImageServer(t)
+	source := &fakeArtistSource{artists: map[string]musicbrainz.Artist{
+		"artist-last": {MBID: "artist-last", Name: "Pióurazo", SortName: "Pióurazo", WikidataQID: "Q9"},
+	}}
+	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{
+		"Q9": {Description: "German singer", ImageURL: server.URL + "/cover.png"},
+	}}
+	job, opened, _, _ := newEnrichJobWithImageFetch(t, source, biographer, server.URL)
+
+	// Twenty artists MusicBrainz has no record of, ahead of the one it does.
+	for index := range 20 {
+		mbid := "artist-missing-" + strconv.Itoa(index)
+		resolveBareArtist(t, opened, mbid, mbid)
+	}
+	lastID := resolveBareArtist(t, opened, "artist-last", "Pióurazo")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	recorded, err := library.NewArtworks(opened).GetForPerson(t.Context(), lastID)
+	if err != nil {
+		t.Fatalf("GetForPerson: %v", err)
+	}
+	if !recorded.Found {
+		t.Fatal("the artist after a full page of failures was never reached")
 	}
 }

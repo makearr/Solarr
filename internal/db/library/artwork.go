@@ -57,8 +57,10 @@ type PersonArtworkCandidate struct {
 // NeedingArtwork's own shape one subject over. Works have had that sweep since
 // section 21.6; people never did, so an artist first resolved before the image
 // code existed never got one (found 2026-09-13).
-func (a Artworks) PeopleNeedingArtwork(ctx context.Context, pageSize int64) ([]PersonArtworkCandidate, error) {
-	rows, err := librarydb.New(a.store.Read()).ListPeopleNeedingArtwork(ctx, pageSize)
+func (a Artworks) PeopleNeedingArtwork(ctx context.Context, afterPersonID, pageSize int64) ([]PersonArtworkCandidate, error) {
+	rows, err := librarydb.New(a.store.Read()).ListPeopleNeedingArtwork(ctx, librarydb.ListPeopleNeedingArtworkParams{
+		AfterID: afterPersonID, PageSize: pageSize,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("library: people needing artwork: %w", err)
 	}
@@ -149,11 +151,14 @@ func (a Artworks) GetForPerson(ctx context.Context, personID int64) (PersonArtwo
 	cacheKey, err := librarydb.New(a.store.Read()).GetArtwork(ctx, librarydb.GetArtworkParams{
 		SubjectType: "person", SubjectID: personID, Kind: artworkKindCover,
 	})
-	if errors.Is(err, sql.ErrNoRows) || cacheKey == "" {
+	if errors.Is(err, sql.ErrNoRows) {
 		return PersonArtwork{}, nil
 	}
 	if err != nil {
 		return PersonArtwork{}, fmt.Errorf("library: artwork for person %d: %w", personID, err)
+	}
+	if cacheKey == "" {
+		return PersonArtwork{}, nil
 	}
 	return PersonArtwork{CacheKey: cacheKey, Found: true}, nil
 }

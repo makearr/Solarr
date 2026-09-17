@@ -76,14 +76,21 @@ export function useLibraryList<T>(source: ListSource<T>, view: ViewState) {
   // A table row holds one item, a poster row holds however many fit across.
   const perRow = Math.max(1, Math.floor(source.itemsPerRow ?? 1));
   const rowCount = Math.ceil(items.length / perRow);
+  const rowHeight = source.rowHeight ?? DEFAULT_ROW_HEIGHT;
 
   const virtualizer = useVirtualizer({
     // One extra row: the sentinel that triggers the next fetch.
     count: rowCount + (pages.hasNextPage ? 1 : 0),
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => source.rowHeight ?? DEFAULT_ROW_HEIGHT,
+    estimateSize: () => rowHeight,
     overscan: 8,
   });
+
+  // Row positions are cached until the row count changes, so a new height with
+  // the same count (a resized poster wall, posters to list) must reset them.
+  useEffect(() => {
+    virtualizer.measure();
+  }, [virtualizer, rowHeight, perRow]);
 
   // From the window, not a scroll handler, which at 500k rows fires far more
   // often than it needs to.
