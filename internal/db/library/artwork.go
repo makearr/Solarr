@@ -64,6 +64,29 @@ func (a Artworks) NeedingReleaseGroupArtwork(ctx context.Context, afterWorkID, p
 	return candidates, nil
 }
 
+// EmbeddedArtworkCandidate is a work still without a cover and one of its
+// files, by root folder and path, to read embedded art from.
+type EmbeddedArtworkCandidate struct {
+	WorkID       int64
+	RootFolderID int64
+	RelPath      string
+}
+
+// NeedingEmbeddedArtwork returns up to pageSize works after afterWorkID still
+// without a cover that have a file recorded by work_file_hint.
+func (a Artworks) NeedingEmbeddedArtwork(ctx context.Context, afterWorkID, pageSize int64) ([]EmbeddedArtworkCandidate, error) {
+	rows, err := librarydb.New(a.store.Read()).ListWorksNeedingEmbeddedArtwork(ctx,
+		librarydb.ListWorksNeedingEmbeddedArtworkParams{AfterID: afterWorkID, PageSize: pageSize})
+	if err != nil {
+		return nil, fmt.Errorf("library: works needing embedded artwork: %w", err)
+	}
+	candidates := make([]EmbeddedArtworkCandidate, len(rows))
+	for i, row := range rows {
+		candidates[i] = EmbeddedArtworkCandidate{WorkID: row.WorkID, RootFolderID: row.RootFolderID, RelPath: row.RelPath}
+	}
+	return candidates, nil
+}
+
 // PersonArtworkCandidate is a person with a MusicBrainz artist id to look an
 // image up by, and no recorded image yet.
 type PersonArtworkCandidate struct {

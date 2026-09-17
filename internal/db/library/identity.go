@@ -152,6 +152,9 @@ func (i Identity) ResolveWorksDetailed(ctx context.Context, at time.Time, links 
 					return fmt.Errorf("library: link work %d to root folder %d: %w", workID, link.RootFolderID, err)
 				}
 			}
+			if err := linkWorkFileHint(ctx, queries, at, workID, link); err != nil {
+				return err
+			}
 			resolutions[index] = resolution
 		}
 		return nil
@@ -212,7 +215,24 @@ func resolveWork(
 			return 0, false, fmt.Errorf("root folder: %w", err)
 		}
 	}
+	if err := linkWorkFileHint(ctx, queries, at, workID, link); err != nil {
+		return 0, false, err
+	}
 	return workID, created, nil
+}
+
+// linkWorkFileHint remembers the file a work was resolved from, when the link
+// names one, so the work's embedded cover art can be read later.
+func linkWorkFileHint(ctx context.Context, queries *librarydb.Queries, at time.Time, workID int64, link WorkLink) error {
+	if link.MediaObjectID == 0 {
+		return nil
+	}
+	if err := queries.LinkWorkFileHint(ctx, librarydb.LinkWorkFileHintParams{
+		WorkID: workID, MediaObjectID: link.MediaObjectID, FirstSeenAt: at.Unix(),
+	}); err != nil {
+		return fmt.Errorf("library: link work %d to file %d: %w", workID, link.MediaObjectID, err)
+	}
+	return nil
 }
 
 func findOrCreateWork(

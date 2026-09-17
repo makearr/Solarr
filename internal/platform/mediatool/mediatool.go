@@ -16,6 +16,9 @@ import (
 // than failing the import (ADR-30), so callers test for this rather than giving up.
 var ErrToolMissing = errors.New("mediatool: not on PATH")
 
+// ErrNoEmbeddedPicture reports a file that carries no cover art of its own.
+var ErrNoEmbeddedPicture = errors.New("mediatool: no embedded picture")
+
 // ErrWriteUnsupported reports the tag write-back path, which is deliberately not
 // implemented: nothing needs it before section 19.5's write-back at stage 5, and the
 // tool to do it with is still undecided (documentation/media-tools.md).

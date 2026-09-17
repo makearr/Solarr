@@ -249,12 +249,12 @@ func TestReadTags_RefusesTheBatchWhenTheToolIsMissing(t *testing.T) {
 // ADR-44's rule, applied to tools: report every problem at once, not the first.
 func TestAvailable_NamesEveryMissingTool(t *testing.T) {
 	runner := &fakeRunner{
-		missing: map[string]bool{"ffprobe": true, "fpcalc": true},
+		missing: map[string]bool{"ffprobe": true, "fpcalc": true, "ffmpeg": true},
 		respond: probeReplying(flacProbe),
 	}
 	err := mediatool.New(runner, 1).Available(t.Context())
 	if err == nil {
-		t.Fatal("Available = nil with both tools missing")
+		t.Fatal("Available = nil with every tool missing")
 	}
 	for _, tool := range mediatool.ToolNames() {
 		if !strings.Contains(err.Error(), tool) {
@@ -344,5 +344,48 @@ func TestTagsFirst_TakesTheFirstNameThatIsPresentAndNotEmpty(t *testing.T) {
 	}
 	if got := tags.First("composer"); got != "" {
 		t.Errorf("First(absent) = %q, want empty", got)
+	}
+}
+
+func TestEmbeddedPicture_ReturnsThePictureBytes(t *testing.T) {
+	jpeg := []byte{0xff, 0xd8, 0xff, 0xe0, 'J', 'F', 'I', 'F'}
+	runner := &fakeRunner{respond: func(name, _ string) ([]byte, error) {
+		if name != "ffmpeg" {
+			return nil, fmt.Errorf("unexpected tool %s", name)
+		}
+		return jpeg, nil
+	}}
+
+	got, err := mediatool.New(runner, 1).EmbeddedPicture(t.Context(), "/music/a.m4a")
+	if err != nil {
+		t.Fatalf("EmbeddedPicture: %v", err)
+	}
+	if string(got) != string(jpeg) {
+		t.Errorf("EmbeddedPicture = %x, want %x", got, jpeg)
+	}
+}
+
+// ffmpeg's real wording for a file with no picture, captured against a
+// generated AAC file with the same arguments this package passes.
+func TestEmbeddedPicture_AFileWithNoPictureIsErrNoEmbeddedPicture(t *testing.T) {
+	runner := &fakeRunner{respond: func(string, string) ([]byte, error) {
+		return nil, errors.New("mediatool: ffmpeg: exit status 234: [out#0/image2pipe @ 0x59fd02ebfb80] " +
+			"Output file does not contain any stream\nError opening output file pipe:1.")
+	}}
+
+	_, err := mediatool.New(runner, 1).EmbeddedPicture(t.Context(), "/music/a.m4a")
+	if !errors.Is(err, mediatool.ErrNoEmbeddedPicture) {
+		t.Errorf("EmbeddedPicture error = %v, want ErrNoEmbeddedPicture", err)
+	}
+}
+
+func TestEmbeddedPicture_AnyOtherFailureIsAnError(t *testing.T) {
+	runner := &fakeRunner{respond: func(string, string) ([]byte, error) {
+		return nil, errors.New("mediatool: ffmpeg: exit status 1: /music/a.m4a: Permission denied")
+	}}
+
+	_, err := mediatool.New(runner, 1).EmbeddedPicture(t.Context(), "/music/a.m4a")
+	if err == nil || errors.Is(err, mediatool.ErrNoEmbeddedPicture) {
+		t.Errorf("EmbeddedPicture error = %v, want a real failure, not ErrNoEmbeddedPicture", err)
 	}
 }

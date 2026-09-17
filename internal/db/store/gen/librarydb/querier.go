@@ -259,6 +259,10 @@ type Querier interface {
 	LinkEditionExternalID(ctx context.Context, arg LinkEditionExternalIDParams) error
 	LinkPersonExternalID(ctx context.Context, arg LinkPersonExternalIDParams) error
 	LinkWorkExternalID(ctx context.Context, arg LinkWorkExternalIDParams) error
+	// The first file identification resolved a work from wins; a later one changes
+	// nothing. The row goes with its file (ON DELETE CASCADE), and the next scan
+	// that resolves the work from another file records that one instead.
+	LinkWorkFileHint(ctx context.Context, arg LinkWorkFileHintParams) error
 	LinkWorkOrganisation(ctx context.Context, arg LinkWorkOrganisationParams) error
 	LinkWorkPartExternalID(ctx context.Context, arg LinkWorkPartExternalIDParams) error
 	// work_root_folder records on-disk presence: which root folder a scan found a work
@@ -458,6 +462,10 @@ type Querier interface {
 	// release-group id (internal/media/music.ProviderReleaseGroup) identifies the work,
 	// not the edition, and is the wrong id for this API (section 19.6's tag table).
 	ListWorksNeedingArtwork(ctx context.Context, arg ListWorksNeedingArtworkParams) ([]ListWorksNeedingArtworkRow, error)
+	// Every work still without a cover that has a known file to read embedded art
+	// from, with that file's lowest library_path. Root folder paths live in
+	// settings.db, so the caller resolves root_folder_id itself (section 4.3).
+	ListWorksNeedingEmbeddedArtwork(ctx context.Context, arg ListWorksNeedingEmbeddedArtworkParams) ([]ListWorksNeedingEmbeddedArtworkRow, error)
 	// Every work still without a cover that carries a release-group id, for the
 	// Cover Art Archive's release-group endpoint: a wanted album with no edition
 	// has nothing else to look up by, and a release with no art of its own may

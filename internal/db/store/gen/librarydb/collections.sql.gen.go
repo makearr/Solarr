@@ -534,6 +534,57 @@ func (q *Queries) ListWorksNeedingArtwork(ctx context.Context, arg ListWorksNeed
 	return items, nil
 }
 
+const listWorksNeedingEmbeddedArtwork = `-- name: ListWorksNeedingEmbeddedArtwork :many
+SELECT h.work_id AS work_id, lp.root_folder_id AS root_folder_id, lp.rel_path AS rel_path
+FROM work_file_hint h
+JOIN library_path lp ON lp.id = (
+    SELECT MIN(lp2.id) FROM library_path lp2 WHERE lp2.media_object_id = h.media_object_id
+  )
+WHERE h.work_id > ?1
+  AND NOT EXISTS (
+    SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = h.work_id AND a.kind = 'cover'
+  )
+ORDER BY h.work_id
+LIMIT ?2
+`
+
+type ListWorksNeedingEmbeddedArtworkParams struct {
+	AfterID  int64
+	PageSize int64
+}
+
+type ListWorksNeedingEmbeddedArtworkRow struct {
+	WorkID       int64
+	RootFolderID int64
+	RelPath      string
+}
+
+// Every work still without a cover that has a known file to read embedded art
+// from, with that file's lowest library_path. Root folder paths live in
+// settings.db, so the caller resolves root_folder_id itself (section 4.3).
+func (q *Queries) ListWorksNeedingEmbeddedArtwork(ctx context.Context, arg ListWorksNeedingEmbeddedArtworkParams) ([]ListWorksNeedingEmbeddedArtworkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorksNeedingEmbeddedArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorksNeedingEmbeddedArtworkRow{}
+	for rows.Next() {
+		var i ListWorksNeedingEmbeddedArtworkRow
+		if err := rows.Scan(&i.WorkID, &i.RootFolderID, &i.RelPath); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorksNeedingReleaseGroupArtwork = `-- name: ListWorksNeedingReleaseGroupArtwork :many
 SELECT x.work_id AS work_id, CAST(MIN(x.external_id) AS TEXT) AS release_group_mbid
 FROM work_external_id x

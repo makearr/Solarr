@@ -681,6 +681,12 @@ type WorkField struct {
 	FetchedAt int64
 }
 
+type WorkFileHint struct {
+	WorkID        int64
+	MediaObjectID int64
+	FirstSeenAt   int64
+}
+
 type WorkOrganisation struct {
 	WorkID         int64
 	OrganisationID int64

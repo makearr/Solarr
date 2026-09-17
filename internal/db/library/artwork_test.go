@@ -293,3 +293,91 @@ func TestGetForWork_ReportsTheCategoriesWantingTheWork(t *testing.T) {
 		t.Fatalf("GetForWork = %+v, want no root folders and category 7", got)
 	}
 }
+
+// registerFileForArtwork puts one file on disk, as far as library.db knows.
+func registerFileForArtwork(t *testing.T, physical library.Physical, rootFolderID int64, relPath, quickHash string) int64 {
+	t.Helper()
+	registered, err := physical.RegisterBatch(t.Context(), rootFolderID, []library.PhysicalFile{
+		{RelPath: relPath, SizeBytes: 1, QuickHash: quickHash, FirstSeenAt: firstSeen},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	return registered[0].MediaObjectID
+}
+
+func TestNeedingEmbeddedArtwork_NamesTheFileTheWorkWasResolvedFrom(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	artworks := library.NewArtworks(opened)
+	mediaObjectID := registerFileForArtwork(t, library.NewPhysical(opened), 3, "Heka/Detisisu Binip (1991)/02.m4a", "q1")
+
+	workIDs, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: "musicbrainz:release-group", ExternalID: "rg-embedded", Confidence: 1.0,
+		Work:         library.WorkIdentity{MediaType: "music", CanonicalTitle: "Detisisu Binip", SortTitle: "detisisu binip"},
+		RootFolderID: 3, MediaObjectID: mediaObjectID,
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+
+	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), 0, 10)
+	if err != nil {
+		t.Fatalf("NeedingEmbeddedArtwork: %v", err)
+	}
+	want := library.EmbeddedArtworkCandidate{WorkID: workIDs[0], RootFolderID: 3, RelPath: "Heka/Detisisu Binip (1991)/02.m4a"}
+	if len(found) != 1 || found[0] != want {
+		t.Fatalf("NeedingEmbeddedArtwork = %+v, want [%+v]", found, want)
+	}
+}
+
+// The detailed resolution is import's path; it must record the file too.
+func TestNeedingEmbeddedArtwork_CoversWorksResolvedByImport(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	artworks := library.NewArtworks(opened)
+	mediaObjectID := registerFileForArtwork(t, library.NewPhysical(opened), 1, "P!po/Kebilegev Bibihi (2017)/02.m4a", "q2")
+
+	if _, err := identity.ResolveWorksDetailed(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: "musicbrainz:release-group", ExternalID: "rg-imported", Confidence: 1.0,
+		Work:         library.WorkIdentity{MediaType: "music", CanonicalTitle: "Kebilegev Bibihi", SortTitle: "kebilegev bibihi"},
+		RootFolderID: 1, MediaObjectID: mediaObjectID,
+	}}); err != nil {
+		t.Fatalf("ResolveWorksDetailed: %v", err)
+	}
+
+	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), 0, 10)
+	if err != nil {
+		t.Fatalf("NeedingEmbeddedArtwork: %v", err)
+	}
+	if len(found) != 1 || found[0].RelPath != "P!po/Kebilegev Bibihi (2017)/02.m4a" {
+		t.Fatalf("NeedingEmbeddedArtwork = %+v, want the imported file", found)
+	}
+}
+
+func TestNeedingEmbeddedArtwork_ExcludesAWorkWithACover(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	artworks := library.NewArtworks(opened)
+	mediaObjectID := registerFileForArtwork(t, library.NewPhysical(opened), 1, "a/1.m4a", "q3")
+
+	workIDs, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: "musicbrainz:release-group", ExternalID: "rg-covered", Confidence: 1.0,
+		Work:         library.WorkIdentity{MediaType: "music", CanonicalTitle: "Covered", SortTitle: "covered"},
+		RootFolderID: 1, MediaObjectID: mediaObjectID,
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+	if err := artworks.Record(t.Context(), workIDs[0], "", "work-1-cover", 500, 500, 1); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), 0, 10)
+	if err != nil {
+		t.Fatalf("NeedingEmbeddedArtwork: %v", err)
+	}
+	if len(found) != 0 {
+		t.Fatalf("NeedingEmbeddedArtwork = %+v, want none once a cover exists", found)
+	}
+}
