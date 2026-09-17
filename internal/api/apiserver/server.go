@@ -634,12 +634,13 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 	}
 	if raw := query.Get("sort"); raw != "" {
 		switch gen.ListWorksParamsSort(raw) {
-		case gen.Title, gen.Year, gen.Added:
+		case gen.ListWorksParamsSortTitle, gen.ListWorksParamsSortYear, gen.ListWorksParamsSortAdded,
+			gen.ListWorksParamsSortArtist:
 			sort := gen.ListWorksParamsSort(raw)
 			params.Sort = &sort
 		default:
 			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-				"Bad request", "sort must be title, year or added")
+				"Bad request", "sort must be title, year, added or artist")
 			return
 		}
 	}

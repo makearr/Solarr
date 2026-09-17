@@ -5,12 +5,14 @@ import (
 	"log/slog"
 	"path/filepath"
 
+	"github.com/makearr/MediaNexus/cmd/medianexus/adapters"
 	"github.com/makearr/MediaNexus/internal/db/library"
 	"github.com/makearr/MediaNexus/internal/jobs"
 	"github.com/makearr/MediaNexus/internal/media/music"
 	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
 	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/MediaNexus/internal/platform/mediatool"
 )
 
 // coverArtBaseURL is fixed, not configurable: unlike MusicBrainz (ADR-29's proxy
@@ -35,6 +37,8 @@ func (p *process) registerArtworkJob(registry *jobs.Registry, executor *jobs.Exe
 	job := music.NewArtworkJob(music.ArtworkJobConfig{
 		Artworks:  library.NewArtworks(p.library),
 		CoverArt:  musicbrainz.NewCoverArt(client, coverArtBaseURL),
+		Pictures:  mediatool.New(nil, 0),
+		Roots:     adapters.Roots{Cache: p.cache},
 		HTTP:      client,
 		FS:        p.fsys,
 		ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"),

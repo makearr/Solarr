@@ -52,7 +52,7 @@ func ResolveUnidentified(
 			MediaType: "music", CanonicalTitle: releaseGroup.Title, SortTitle: SortTitle(releaseGroup.Title),
 			PrimaryType: releaseGroup.PrimaryType,
 		},
-		RootFolderID: entry.RootFolderID,
+		RootFolderID: entry.RootFolderID, MediaObjectID: mediaObjectID,
 	}})
 	if err != nil {
 		return 0, fmt.Errorf("music: resolve unidentified: %w", err)

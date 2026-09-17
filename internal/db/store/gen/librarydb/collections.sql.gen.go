@@ -480,6 +480,7 @@ SELECT e.work_id AS work_id, x.external_id AS release_mbid
 FROM edition e
 JOIN edition_external_id x ON x.edition_id = e.id AND x.provider = 'musicbrainz:release'
 WHERE e.kind != 'unknown'
+  AND e.work_id > ?1
   AND e.id = (
     SELECT MIN(e2.id) FROM edition e2
     JOIN edition_external_id x2 ON x2.edition_id = e2.id AND x2.provider = 'musicbrainz:release'
@@ -489,8 +490,13 @@ WHERE e.kind != 'unknown'
     SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = e.work_id AND a.kind = 'cover'
   )
 ORDER BY e.work_id
-LIMIT ?1
+LIMIT ?2
 `
+
+type ListWorksNeedingArtworkParams struct {
+	AfterID  int64
+	PageSize int64
+}
 
 type ListWorksNeedingArtworkRow struct {
 	WorkID      int64
@@ -505,8 +511,8 @@ type ListWorksNeedingArtworkRow struct {
 // 'musicbrainz:release' must match internal/media/music.ProviderRelease -- the
 // release-group id (internal/media/music.ProviderReleaseGroup) identifies the work,
 // not the edition, and is the wrong id for this API (section 19.6's tag table).
-func (q *Queries) ListWorksNeedingArtwork(ctx context.Context, pageSize int64) ([]ListWorksNeedingArtworkRow, error) {
-	rows, err := q.db.QueryContext(ctx, listWorksNeedingArtwork, pageSize)
+func (q *Queries) ListWorksNeedingArtwork(ctx context.Context, arg ListWorksNeedingArtworkParams) ([]ListWorksNeedingArtworkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorksNeedingArtwork, arg.AfterID, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -515,6 +521,109 @@ func (q *Queries) ListWorksNeedingArtwork(ctx context.Context, pageSize int64) (
 	for rows.Next() {
 		var i ListWorksNeedingArtworkRow
 		if err := rows.Scan(&i.WorkID, &i.ReleaseMbid); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorksNeedingEmbeddedArtwork = `-- name: ListWorksNeedingEmbeddedArtwork :many
+SELECT h.work_id AS work_id, lp.root_folder_id AS root_folder_id, lp.rel_path AS rel_path
+FROM work_file_hint h
+JOIN library_path lp ON lp.id = (
+    SELECT MIN(lp2.id) FROM library_path lp2 WHERE lp2.media_object_id = h.media_object_id
+  )
+WHERE h.work_id > ?1
+  AND NOT EXISTS (
+    SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = h.work_id AND a.kind = 'cover'
+  )
+ORDER BY h.work_id
+LIMIT ?2
+`
+
+type ListWorksNeedingEmbeddedArtworkParams struct {
+	AfterID  int64
+	PageSize int64
+}
+
+type ListWorksNeedingEmbeddedArtworkRow struct {
+	WorkID       int64
+	RootFolderID int64
+	RelPath      string
+}
+
+// Every work still without a cover that has a known file to read embedded art
+// from, with that file's lowest library_path. Root folder paths live in
+// settings.db, so the caller resolves root_folder_id itself (section 4.3).
+func (q *Queries) ListWorksNeedingEmbeddedArtwork(ctx context.Context, arg ListWorksNeedingEmbeddedArtworkParams) ([]ListWorksNeedingEmbeddedArtworkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorksNeedingEmbeddedArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorksNeedingEmbeddedArtworkRow{}
+	for rows.Next() {
+		var i ListWorksNeedingEmbeddedArtworkRow
+		if err := rows.Scan(&i.WorkID, &i.RootFolderID, &i.RelPath); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorksNeedingReleaseGroupArtwork = `-- name: ListWorksNeedingReleaseGroupArtwork :many
+SELECT x.work_id AS work_id, CAST(MIN(x.external_id) AS TEXT) AS release_group_mbid
+FROM work_external_id x
+WHERE x.provider = 'musicbrainz:release-group'
+  AND x.work_id > ?1
+  AND NOT EXISTS (
+    SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = x.work_id AND a.kind = 'cover'
+  )
+GROUP BY x.work_id
+ORDER BY x.work_id
+LIMIT ?2
+`
+
+type ListWorksNeedingReleaseGroupArtworkParams struct {
+	AfterID  int64
+	PageSize int64
+}
+
+type ListWorksNeedingReleaseGroupArtworkRow struct {
+	WorkID           int64
+	ReleaseGroupMbid string
+}
+
+// Every work still without a cover that carries a release-group id, for the
+// Cover Art Archive's release-group endpoint: a wanted album with no edition
+// has nothing else to look up by, and a release with no art of its own may
+// still have a sibling release that does. MIN picks one id for a work
+// carrying several after a merge. 'musicbrainz:release-group' must match
+// internal/media/music.ProviderReleaseGroup.
+func (q *Queries) ListWorksNeedingReleaseGroupArtwork(ctx context.Context, arg ListWorksNeedingReleaseGroupArtworkParams) ([]ListWorksNeedingReleaseGroupArtworkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorksNeedingReleaseGroupArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorksNeedingReleaseGroupArtworkRow{}
+	for rows.Next() {
+		var i ListWorksNeedingReleaseGroupArtworkRow
+		if err := rows.Scan(&i.WorkID, &i.ReleaseGroupMbid); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

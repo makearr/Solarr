@@ -17,7 +17,7 @@ func (a Artwork) GetWorkArtwork(ctx context.Context, workID int64) (apiserver.Wo
 	}
 	return apiserver.WorkArtworkRow{
 		CacheKey: found.CacheKey, Found: found.Found, RootFolderIDs: found.RootFolderIDs,
-		PrimaryArtistID: found.PrimaryArtistID,
+		CategoryIDs: found.CategoryIDs, PrimaryArtistID: found.PrimaryArtistID,
 	}, nil
 }
 

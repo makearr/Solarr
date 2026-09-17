@@ -45,7 +45,7 @@ function bulkBody(request: SelectionRequest, monitored: boolean, preview: boolea
     preview,
   };
 }
-type WorkSort = "title" | "year" | "added";
+type WorkSort = "title" | "year" | "added" | "artist";
 
 // Title plus a year/media-type line, padding included.
 const CARD_HEIGHT = 68;
@@ -99,14 +99,18 @@ function saveVisibleColumns(columns: readonly OptionalColumn[]) {
   }
 }
 
-// Maps a column key to the sort value the /works API understands. Artist has
-// no entry: it comes from a join with no supporting index (WorkRow.Artist's
-// own doc comment), so it is shown but not sortable.
+// Maps a column key to the sort value the /works API understands.
 const SORT_KEYS: Partial<Record<OptionalColumn | "title", WorkSort>> = {
   title: "title",
+  artist: "artist",
   year: "year",
   added_at: "added",
 };
+
+// The poster wall's artist headers: room for one line of heading above a row.
+const POSTER_GROUP_HEADER_HEIGHT = 44;
+
+const artistOf = (work: Work) => work.artist ?? "Unknown artist";
 
 function buildColumns(visible: ReadonlySet<OptionalColumn>): Column<Work>[] {
   const columns: Column<Work>[] = [
@@ -135,7 +139,7 @@ function buildColumns(visible: ReadonlySet<OptionalColumn>): Column<Work>[] {
     },
   ];
   if (visible.has("artist")) {
-    columns.push({ key: "artist", header: "Artist", render: (work) => work.artist ?? "" });
+    columns.push({ key: "artist", header: "Artist", sortable: true, render: (work) => work.artist ?? "" });
   }
   if (visible.has("year")) {
     columns.push({ key: "year", header: "Released", width: "8rem", sortable: true, render: (work) => work.year ?? "" });
@@ -184,9 +188,17 @@ export function Library() {
   const narrow = useNarrow();
   const metrics = useGridMetrics(frameRef, POSTER_MIN_WIDTH, POSTER_GAP, POSTER_PADDING);
   const isPoster = view === "poster";
+  // Albums as posters are grouped by artist (asked for 2026-09-17), which only
+  // works if they arrive ordered by artist, whatever the table was sorted by.
+  const listView = useMemo<ViewState>(
+    () => (isPoster ? { ...routeView, query: { ...routeView.query, sort: "artist", direction: "asc" } } : routeView),
+    [isPoster, routeView],
+  );
   const list = useLibraryList<Work>(
     {
       name: "works",
+      groupOf: isPoster ? artistOf : undefined,
+      groupHeaderHeight: POSTER_GROUP_HEADER_HEIGHT,
       rowHeight: isPoster
         ? metrics.cellWidth + POSTER_LABEL_HEIGHT + POSTER_GAP
         : narrow
@@ -213,7 +225,7 @@ export function Library() {
         return data;
       },
     },
-    routeView,
+    listView,
   );
 
   const visibleSet = useMemo(() => new Set(visibleColumns), [visibleColumns]);

@@ -7,15 +7,18 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"path"
 	"path/filepath"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/MediaNexus/internal/db/settings"
 	"github.com/makearr/MediaNexus/internal/jobs"
 	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
 	"github.com/makearr/MediaNexus/internal/platform/artwork"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
 	"github.com/makearr/MediaNexus/internal/platform/fsx"
 	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/MediaNexus/internal/platform/mediatool"
 )
 
 // ArtworkJobType is the registered type of the background cover art sweep.
@@ -45,6 +48,7 @@ const maxImageBytes = 20 << 20
 // musicbrainz.ErrNoCoverArt when there is none.
 type CoverArtFetcher interface {
 	Fetch(ctx context.Context, releaseMBID string) (string, error)
+	FetchReleaseGroup(ctx context.Context, releaseGroupMBID string) (string, error)
 }
 
 // ArtworkJob fetches, resizes and encodes cover art for every work that has a
@@ -53,6 +57,8 @@ type CoverArtFetcher interface {
 type ArtworkJob struct {
 	artworks  library.Artworks
 	coverArt  CoverArtFetcher
+	pictures  EmbeddedPictureReader
+	roots     ArtworkRoots
 	http      *httpx.Client
 	fs        fsx.FS
 	imagesDir string
@@ -60,10 +66,26 @@ type ArtworkJob struct {
 	logger    *slog.Logger
 }
 
-// ArtworkJobConfig is what an ArtworkJob needs. Every field is required except Logger.
+// EmbeddedPictureReader copies a file's own cover art out, or answers
+// mediatool.ErrNoEmbeddedPicture -- mediatool.Subprocess's own method, named
+// here so no other Tool implementation has to grow it.
+type EmbeddedPictureReader interface {
+	EmbeddedPicture(ctx context.Context, path string) ([]byte, error)
+}
+
+// ArtworkRoots resolves a root folder by id; root folders are settings.db
+// policy (ADR-25), so the job asks rather than reading the table.
+type ArtworkRoots interface {
+	RootFolder(id int64) (settings.RootFolder, bool)
+}
+
+// ArtworkJobConfig is what an ArtworkJob needs. Every field is required except
+// Logger, and Pictures and Roots, without which embedded art is not read.
 type ArtworkJobConfig struct {
 	Artworks  library.Artworks
 	CoverArt  CoverArtFetcher
+	Pictures  EmbeddedPictureReader
+	Roots     ArtworkRoots
 	HTTP      *httpx.Client
 	FS        fsx.FS
 	ImagesDir string
@@ -78,8 +100,9 @@ func NewArtworkJob(config ArtworkJobConfig) *ArtworkJob {
 		logger = slog.Default()
 	}
 	return &ArtworkJob{
-		artworks: config.Artworks, coverArt: config.CoverArt, http: config.HTTP,
-		fs: config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
+		artworks: config.Artworks, coverArt: config.CoverArt, pictures: config.Pictures, roots: config.Roots,
+		http: config.HTTP,
+		fs:   config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
 	}
 }
 
@@ -92,13 +115,33 @@ func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
 		return fmt.Errorf("music: artwork: create %s: %w", j.imagesDir, err)
 	}
 
+	// Releases first, as the more exact image; then release groups, for
+	// wanted albums with no edition and releases the archive had nothing for.
+	if err := j.sweep(ctx, "release", j.artworks.NeedingArtwork, j.coverArt.Fetch); err != nil {
+		return err
+	}
+	if err := j.sweep(ctx, "release-group", j.artworks.NeedingReleaseGroupArtwork, j.coverArt.FetchReleaseGroup); err != nil {
+		return err
+	}
+	// Last, the art the files carry themselves: no network, and it covers
+	// albums the archive has nothing for.
+	return j.sweepEmbedded(ctx)
+}
+
+// sweepEmbedded reads cover art out of one known file per work still without
+// a cover, walked by work id for the same reason sweep is.
+func (j *ArtworkJob) sweepEmbedded(ctx context.Context) error {
+	if j.pictures == nil || j.roots == nil {
+		return nil
+	}
 	total, failed, skipped := 0, 0, 0
+	var afterWorkID int64
 	for {
 		if err := ctx.Err(); err != nil {
 			return jobs.Retryablef("artwork.context", string(ArtworkJobType), err)
 		}
 
-		batch, err := j.artworks.NeedingArtwork(ctx, artworkBatchSize)
+		batch, err := j.artworks.NeedingEmbeddedArtwork(ctx, afterWorkID, artworkBatchSize)
 		if err != nil {
 			return fmt.Errorf("music: artwork: %w", err)
 		}
@@ -108,15 +151,13 @@ func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
 
 		for _, candidate := range batch {
 			total++
-			switch err := j.processOne(ctx, candidate); {
-			case errors.Is(err, musicbrainz.ErrNoCoverArt):
-				// Not a failure: this release genuinely has no art. Recorded
-				// nowhere, so it is asked about again next sweep -- cheap
-				// (one API call) and correct if art is added to the archive later.
+			afterWorkID = candidate.WorkID
+			switch err := j.embeddedOne(ctx, candidate); {
+			case errors.Is(err, mediatool.ErrNoEmbeddedPicture):
 				skipped++
 			case err != nil:
 				failed++
-				j.logger.WarnContext(ctx, "cover art fetch failed",
+				j.logger.WarnContext(ctx, "embedded cover art failed",
 					slog.Int64("work_id", candidate.WorkID), slog.Any("error", err))
 			}
 		}
@@ -124,13 +165,71 @@ func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
 			break
 		}
 	}
-	j.logger.Info("music artwork sweep finished",
+	j.logger.Info("music artwork sweep finished", slog.String("kind", "embedded"),
 		slog.Int("processed", total), slog.Int("failed", failed), slog.Int("skipped", skipped))
 	return nil
 }
 
-func (j *ArtworkJob) processOne(ctx context.Context, candidate library.ArtworkCandidate) error {
-	imageURL, err := j.coverArt.Fetch(ctx, candidate.ReleaseMBID)
+func (j *ArtworkJob) embeddedOne(ctx context.Context, candidate library.EmbeddedArtworkCandidate) error {
+	root, found := j.roots.RootFolder(candidate.RootFolderID)
+	if !found {
+		return fmt.Errorf("root folder %d is not configured", candidate.RootFolderID)
+	}
+	source, err := j.pictures.EmbeddedPicture(ctx, path.Join(root.Path, candidate.RelPath))
+	if err != nil {
+		return err
+	}
+	return j.storeCover(ctx, candidate.WorkID, "", source)
+}
+
+type artworkPage func(ctx context.Context, afterWorkID, pageSize int64) ([]library.ArtworkCandidate, error)
+
+type artworkSource func(ctx context.Context, mbid string) (string, error)
+
+// sweep walks one kind of candidate by work id. A work with no archive art
+// records nothing, so re-reading from the top would return the same page
+// indefinitely.
+func (j *ArtworkJob) sweep(ctx context.Context, kind string, page artworkPage, lookup artworkSource) error {
+	total, failed, skipped := 0, 0, 0
+	var afterWorkID int64
+	for {
+		if err := ctx.Err(); err != nil {
+			return jobs.Retryablef("artwork.context", string(ArtworkJobType), err)
+		}
+
+		batch, err := page(ctx, afterWorkID, artworkBatchSize)
+		if err != nil {
+			return fmt.Errorf("music: artwork: %w", err)
+		}
+		if len(batch) == 0 {
+			break
+		}
+
+		for _, candidate := range batch {
+			total++
+			afterWorkID = candidate.WorkID
+			switch err := j.processOne(ctx, candidate, lookup); {
+			case errors.Is(err, musicbrainz.ErrNoCoverArt):
+				// Not a failure: nothing in the archive. Asked again next sweep,
+				// which is cheap and right if art is added later.
+				skipped++
+			case err != nil:
+				failed++
+				j.logger.WarnContext(ctx, "cover art fetch failed", slog.String("kind", kind),
+					slog.Int64("work_id", candidate.WorkID), slog.Any("error", err))
+			}
+		}
+		if len(batch) < artworkBatchSize {
+			break
+		}
+	}
+	j.logger.Info("music artwork sweep finished", slog.String("kind", kind),
+		slog.Int("processed", total), slog.Int("failed", failed), slog.Int("skipped", skipped))
+	return nil
+}
+
+func (j *ArtworkJob) processOne(ctx context.Context, candidate library.ArtworkCandidate, lookup artworkSource) error {
+	imageURL, err := lookup(ctx, candidate.MBID)
 	if err != nil {
 		return err
 	}
@@ -147,13 +246,18 @@ func (j *ArtworkJob) processOne(ctx context.Context, candidate library.ArtworkCa
 	if err != nil {
 		return fmt.Errorf("read image: %w", err)
 	}
+	return j.storeCover(ctx, candidate.WorkID, imageURL, source)
+}
 
+// storeCover resizes, writes and records one work's cover from its source
+// bytes, however they were obtained. sourceURL is empty for art read from a file.
+func (j *ArtworkJob) storeCover(ctx context.Context, workID int64, sourceURL string, source []byte) error {
 	sizes, err := artwork.Process(source)
 	if err != nil {
 		return fmt.Errorf("process image: %w", err)
 	}
 
-	cacheKey := fmt.Sprintf("work-%d-cover", candidate.WorkID)
+	cacheKey := fmt.Sprintf("work-%d-cover", workID)
 	for size, image := range sizes {
 		destination := filepath.Join(j.imagesDir, fmt.Sprintf("%s-%s.webp", cacheKey, artworkSizeName(size)))
 		if err := fsx.WriteAtomic(j.fs, destination, func(w io.Writer) error {
@@ -165,7 +269,7 @@ func (j *ArtworkJob) processOne(ctx context.Context, candidate library.ArtworkCa
 	}
 
 	full := sizes[artwork.Full]
-	return j.artworks.Record(ctx, candidate.WorkID, imageURL, cacheKey, full.Width, full.Height, j.clock.Now().Unix())
+	return j.artworks.Record(ctx, workID, sourceURL, cacheKey, full.Width, full.Height, j.clock.Now().Unix())
 }
 
 func artworkSizeName(size artwork.Size) string {

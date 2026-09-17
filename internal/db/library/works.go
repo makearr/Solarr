@@ -47,6 +47,9 @@ const (
 	WorkSortTitle WorkSort = ""
 	WorkSortYear  WorkSort = "year"
 	WorkSortAdded WorkSort = "added"
+	// WorkSortArtist orders by primary artist, then title, which is what the
+	// Albums view groups by (asked for 2026-09-17).
+	WorkSortArtist WorkSort = "artist"
 )
 
 // SortDirection is which way WorkSort orders. The zero value is ascending.
@@ -88,8 +91,7 @@ type WorkFilter struct {
 	// the point -- freshness needs day precision, not a guess from less.
 	FreshSince string
 	// Sort and Direction pick the list's order (section 21.2's configurable,
-	// sortable columns). Artist is not a WorkSort option yet -- work_primary_artist_sort
-	// (migration 0021) could support it now, but nothing has asked for it.
+	// sortable columns).
 	Sort      WorkSort
 	Direction SortDirection
 	// WantedOnly restricts to works with a monitored desired_item that is
@@ -106,7 +108,9 @@ type WorkCursor struct {
 	SortTitle string
 	SortYear  int64
 	SortAdded int64
-	ID        int64
+	// SortArtist is read, with SortTitle, only by WorkSortArtist.
+	SortArtist string
+	ID         int64
 }
 
 // WorkListRow is one row of the library list plus its primary artist credit
@@ -115,6 +119,9 @@ type WorkListRow struct {
 	librarydb.Work
 	Artist      sql.NullString
 	WantedState sql.NullString
+	// ArtistSortName is the primary artist's sort name, empty with none: what
+	// WorkSortArtist orders on, and so what its next-page cursor carries.
+	ArtistSortName string
 }
 
 // Works reads the library list surface.
@@ -144,23 +151,37 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	predicates.AddIf(filter.WantedOnly,
 		"EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = work.id AND di.monitored = 1 AND di.state != 'COMPLETE')")
 
-	column, cursorValue := sortColumn(filter.Sort, after)
 	operator := ">"
 	orderDirection := ""
 	if filter.Direction == SortDescending {
 		operator = "<"
 		orderDirection = " DESC"
 	}
-	// The id tie-break always advances ascending: it is a distinct sort key from
-	// column, not affected by column's own direction, and ORDER BY below keeps it
+
+	// The id tie-break always advances ascending: it is a distinct sort key, not
+	// affected by the sort column's own direction, and ORDER BY keeps it
 	// ascending too so the two stay consistent.
-	predicates.AddIf(after.ID != 0,
-		"("+column+" "+operator+" ? OR ("+column+" = ? AND work.id > ?))",
-		cursorValue, cursorValue, after.ID)
+	var orderBy string
+	if filter.Sort == WorkSortArtist {
+		// Exactly the expression migration 0022 indexes, so the order stays indexed.
+		artist := "COALESCE(primary_artist_sort_name, '')"
+		predicates.AddIf(after.ID != 0,
+			"("+artist+" "+operator+" ? OR ("+artist+" = ? AND (work.sort_title "+operator+
+				" ? OR (work.sort_title = ? AND work.id > ?))))",
+			after.SortArtist, after.SortArtist, after.SortTitle, after.SortTitle, after.ID)
+		orderBy = artist + orderDirection + ", work.sort_title" + orderDirection + ", work.id"
+	} else {
+		column, cursorValue := sortColumn(filter.Sort, after)
+		predicates.AddIf(after.ID != 0,
+			"("+column+" "+operator+" ? OR ("+column+" = ? AND work.id > ?))",
+			cursorValue, cursorValue, after.ID)
+		orderBy = column + orderDirection + ", work.id"
+	}
 
 	query := "SELECT " + workColumns + ",\n       " + workArtistColumn + ",\n       " + workStateColumn +
+		",\n       COALESCE(work.primary_artist_sort_name, '') AS artist_sort" +
 		"\nFROM work" + workArtistJoin +
-		predicates.Where() + "\nORDER BY " + column + orderDirection + ", work.id\nLIMIT ?"
+		predicates.Where() + "\nORDER BY " + orderBy + "\nLIMIT ?"
 	return query, predicates.Args(pageSize)
 }
 
@@ -284,7 +305,7 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 		var work WorkListRow
 		if err := rows.Scan(&work.ID, &work.MediaType, &work.CanonicalTitle, &work.SortTitle,
 			&work.OriginalLanguage, &work.Year, &work.RuntimeMs, &work.AddedAt,
-			&work.UpdatedAt, &work.AddedBy, &work.Artist, &work.WantedState); err != nil {
+			&work.UpdatedAt, &work.AddedBy, &work.Artist, &work.WantedState, &work.ArtistSortName); err != nil {
 			return nil, fmt.Errorf("library: scan work: %w", err)
 		}
 		works = append(works, work)

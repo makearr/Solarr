@@ -15,7 +15,12 @@ import (
 const (
 	ffprobeBinary = "ffprobe"
 	fpcalcBinary  = "fpcalc"
+	ffmpegBinary  = "ffmpeg"
 )
+
+// maxEmbeddedPictureBytes bounds one extracted picture, the same ceiling the
+// artwork jobs put on a downloaded image.
+const maxEmbeddedPictureBytes = 20 << 20
 
 // defaultParallelism is how many probes run at once. ffprobe takes one file per
 // invocation, so a batch is only as fast as this: measured at 40 ms per file
@@ -48,7 +53,7 @@ func New(runner Runner, parallelism int) *Subprocess {
 // installs them in one pass (the same rule as ADR-44's config validation).
 func (s *Subprocess) Available(_ context.Context) error {
 	var missing []error
-	for _, binary := range []string{ffprobeBinary, fpcalcBinary} {
+	for _, binary := range ToolNames() {
 		if err := s.runner.Lookup(binary); err != nil {
 			missing = append(missing, err)
 		}
@@ -250,4 +255,30 @@ func mergeTags(into Tags, from map[string]string) {
 }
 
 // ToolNames is what the image must carry and what readiness names when it does not.
-func ToolNames() []string { return []string{ffprobeBinary, fpcalcBinary} }
+func ToolNames() []string { return []string{ffprobeBinary, fpcalcBinary, ffmpegBinary} }
+
+// EmbeddedPicture copies the first picture stream a file carries (its cover art)
+// out unchanged, as the JPEG or PNG it was stored as. ErrNoEmbeddedPicture means
+// the file has none, which is ordinary rather than a failure.
+func (s *Subprocess) EmbeddedPicture(ctx context.Context, path string) ([]byte, error) {
+	bounded, cancel := context.WithTimeout(ctx, perFileTimeout)
+	defer cancel()
+
+	output, err := s.runner.Run(bounded, ffmpegBinary,
+		"-v", "error", "-i", path, "-an", "-map", "0:v:0?", "-c:v", "copy", "-frames:v", "1",
+		"-f", "image2pipe", "pipe:1")
+	if err != nil {
+		// The optional map leaves no output stream at all for a file with no picture.
+		if strings.Contains(err.Error(), "does not contain any stream") {
+			return nil, ErrNoEmbeddedPicture
+		}
+		return nil, fmt.Errorf("mediatool: picture %s: %w", path, err)
+	}
+	if len(output) == 0 {
+		return nil, ErrNoEmbeddedPicture
+	}
+	if len(output) > maxEmbeddedPictureBytes {
+		return nil, fmt.Errorf("mediatool: picture %s: %d bytes exceeds %d", path, len(output), maxEmbeddedPictureBytes)
+	}
+	return output, nil
+}

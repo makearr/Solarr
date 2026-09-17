@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
@@ -27,6 +28,8 @@ const (
 	WorkSortTitle WorkSort = ""
 	WorkSortYear  WorkSort = "year"
 	WorkSortAdded WorkSort = "added"
+	// WorkSortArtist orders by primary artist, then title.
+	WorkSortArtist WorkSort = "artist"
 )
 
 // SortDirection is which way a WorkSort orders. The zero value is ascending.
@@ -60,10 +63,11 @@ type WorksFilter struct {
 // WorksCursor is a position in the list. Only the field matching the active
 // WorkSort is read; the others are ignored (library.WorkCursor's own convention).
 type WorksCursor struct {
-	SortTitle string
-	SortYear  int64
-	SortAdded int64
-	ID        int64
+	SortTitle  string
+	SortYear   int64
+	SortAdded  int64
+	SortArtist string
+	ID         int64
 }
 
 // WorkRow is one work as the library reports it.
@@ -73,11 +77,13 @@ type WorkRow struct {
 	Title     string
 	SortTitle string
 	Year      *int64
-	// Artist is the work's own "artist"-role credit, when it has one. Never
-	// sortable -- gen.ListWorksParamsSort's own description explains why.
-	Artist    *string
-	AddedAt   time.Time
-	UpdatedAt time.Time
+	// Artist is the work's own primary artist credit, when it has one.
+	Artist *string
+	// ArtistSortName is that artist's sort name, empty with none; the artist
+	// order's next-page cursor carries it.
+	ArtistSortName string
+	AddedAt        time.Time
+	UpdatedAt      time.Time
 	// WantedState is the state of the desired_item ListWorks joined against
 	// when the row has a monitored one -- nil when it has none.
 	WantedState *string
@@ -141,6 +147,9 @@ func worksCursorFor(sort WorkSort, cursor paginate.TextCursor) WorksCursor {
 	case WorkSortAdded:
 		value, _ := strconv.ParseInt(cursor.Sort, 10, 64)
 		return WorksCursor{SortAdded: value, ID: cursor.ID}
+	case WorkSortArtist:
+		artist, title, _ := strings.Cut(cursor.Sort, artistCursorSeparator)
+		return WorksCursor{SortArtist: artist, SortTitle: title, ID: cursor.ID}
 	default:
 		return WorksCursor{SortTitle: cursor.Sort, ID: cursor.ID}
 	}
@@ -217,10 +226,16 @@ func cursorValueFor(sort WorkSort, row WorkRow) string {
 		return strconv.FormatInt(derefOr(row.Year, 0), 10)
 	case WorkSortAdded:
 		return strconv.FormatInt(row.AddedAt.Unix(), 10)
+	case WorkSortArtist:
+		return row.ArtistSortName + artistCursorSeparator + row.SortTitle
 	default:
 		return row.SortTitle
 	}
 }
+
+// artistCursorSeparator joins the artist order's two sort values inside the one
+// text a cursor carries: the ASCII unit separator, which no name contains.
+const artistCursorSeparator = "\x1f"
 
 func wantedStateOf(state *string) *gen.WorkWantedState {
 	if state == nil {

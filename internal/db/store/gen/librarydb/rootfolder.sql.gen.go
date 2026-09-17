@@ -88,6 +88,26 @@ func (q *Queries) CountWorksVisibleToCategory(ctx context.Context, arg CountWork
 	return total, err
 }
 
+const linkWorkFileHint = `-- name: LinkWorkFileHint :exec
+INSERT INTO work_file_hint (work_id, media_object_id, first_seen_at)
+VALUES (?, ?, ?)
+ON CONFLICT (work_id) DO NOTHING
+`
+
+type LinkWorkFileHintParams struct {
+	WorkID        int64
+	MediaObjectID int64
+	FirstSeenAt   int64
+}
+
+// The first file identification resolved a work from wins; a later one changes
+// nothing. The row goes with its file (ON DELETE CASCADE), and the next scan
+// that resolves the work from another file records that one instead.
+func (q *Queries) LinkWorkFileHint(ctx context.Context, arg LinkWorkFileHintParams) error {
+	_, err := q.db.ExecContext(ctx, linkWorkFileHint, arg.WorkID, arg.MediaObjectID, arg.FirstSeenAt)
+	return err
+}
+
 const linkWorkRootFolder = `-- name: LinkWorkRootFolder :exec
 
 INSERT INTO work_root_folder (work_id, root_folder_id, first_seen_at)

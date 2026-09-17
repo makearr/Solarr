@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/MediaNexus/internal/db/settings"
 	"github.com/makearr/MediaNexus/internal/db/store"
 	"github.com/makearr/MediaNexus/internal/jobs"
 	"github.com/makearr/MediaNexus/internal/media/music"
@@ -24,14 +25,26 @@ import (
 	"github.com/makearr/MediaNexus/internal/platform/clock"
 	"github.com/makearr/MediaNexus/internal/platform/fsx"
 	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/MediaNexus/internal/platform/mediatool"
 	"github.com/makearr/MediaNexus/migrations"
 )
 
 // fakeCoverArt answers one canned URL (or musicbrainz.ErrNoCoverArt) per release,
 // so a test never depends on the real Cover Art Archive.
 type fakeCoverArt struct {
-	urlByMBID map[string]string
-	calls     int
+	urlByMBID         map[string]string
+	urlByReleaseGroup map[string]string
+	calls             int
+	releaseGroupCalls int
+}
+
+func (f *fakeCoverArt) FetchReleaseGroup(_ context.Context, releaseGroupMBID string) (string, error) {
+	f.releaseGroupCalls++
+	url, ok := f.urlByReleaseGroup[releaseGroupMBID]
+	if !ok {
+		return "", musicbrainz.ErrNoCoverArt
+	}
+	return url, nil
 }
 
 func (f *fakeCoverArt) Fetch(_ context.Context, releaseMBID string) (string, error) {
@@ -47,6 +60,23 @@ func (f *fakeCoverArt) Fetch(_ context.Context, releaseMBID string) (string, err
 // enough (64x64, non-flat) that resizing has something real to do.
 func testImageServer(t *testing.T) *httptest.Server {
 	t.Helper()
+	encoded := testPNG(t)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/cover.png" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(encoded)
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+// testPNG is a small, real, decodable, non-flat PNG.
+func testPNG(t *testing.T) []byte {
+	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, 64, 64))
 	for y := range 64 {
 		for x := range 64 {
@@ -57,20 +87,43 @@ func testImageServer(t *testing.T) *httptest.Server {
 	if err := png.Encode(&encoded, img); err != nil {
 		t.Fatalf("encode test image: %v", err)
 	}
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/cover.png" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		w.Header().Set("Content-Type", "image/png")
-		_, _ = w.Write(encoded.Bytes())
-	}))
-	t.Cleanup(server.Close)
-	return server
+	return encoded.Bytes()
 }
 
 func newArtworkJob(t *testing.T, coverArt *fakeCoverArt, imageServerURL string) (*music.ArtworkJob, *store.Store, *fsx.Mem) {
+	t.Helper()
+	return newArtworkJobReadingPictures(t, coverArt, imageServerURL, nil)
+}
+
+// fakePictures answers a canned embedded picture per absolute path, or
+// mediatool.ErrNoEmbeddedPicture for any other.
+type fakePictures struct {
+	byPath map[string][]byte
+	asked  []string
+}
+
+func (f *fakePictures) EmbeddedPicture(_ context.Context, path string) ([]byte, error) {
+	f.asked = append(f.asked, path)
+	picture, ok := f.byPath[path]
+	if !ok {
+		return nil, mediatool.ErrNoEmbeddedPicture
+	}
+	return picture, nil
+}
+
+// fakeArtworkRoots knows one root folder, id 1, at /music.
+type fakeArtworkRoots struct{}
+
+func (fakeArtworkRoots) RootFolder(id int64) (settings.RootFolder, bool) {
+	if id != 1 {
+		return settings.RootFolder{}, false
+	}
+	return settings.RootFolder{ID: 1, Path: "/music"}, true
+}
+
+func newArtworkJobReadingPictures(
+	t *testing.T, coverArt *fakeCoverArt, imageServerURL string, pictures *fakePictures,
+) (*music.ArtworkJob, *store.Store, *fsx.Mem) {
 	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
@@ -109,7 +162,7 @@ func newArtworkJob(t *testing.T, coverArt *fakeCoverArt, imageServerURL string) 
 	})
 
 	memFS := fsx.NewMem(fake)
-	job := music.NewArtworkJob(music.ArtworkJobConfig{
+	config := music.ArtworkJobConfig{
 		Artworks:  library.NewArtworks(libraryStore),
 		CoverArt:  coverArt,
 		HTTP:      client,
@@ -117,8 +170,11 @@ func newArtworkJob(t *testing.T, coverArt *fakeCoverArt, imageServerURL string) 
 		ImagesDir: "/cache/images",
 		Clock:     fake,
 		Logger:    slog.New(slog.DiscardHandler),
-	})
-	return job, libraryStore, memFS
+	}
+	if pictures != nil {
+		config.Pictures, config.Roots = pictures, fakeArtworkRoots{}
+	}
+	return music.NewArtworkJob(config), libraryStore, memFS
 }
 
 func TestArtworkJob_FetchesResizesAndRecordsEndToEnd(t *testing.T) {
@@ -137,7 +193,7 @@ func TestArtworkJob_FetchesResizesAndRecordsEndToEnd(t *testing.T) {
 	}
 
 	artworks := library.NewArtworks(opened)
-	remaining, err := artworks.NeedingArtwork(t.Context(), 10)
+	remaining, err := artworks.NeedingArtwork(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingArtwork: %v", err)
 	}
@@ -205,4 +261,156 @@ func refineWithReleaseMBIDForArtworkJob(t *testing.T, identity library.Identity,
 	}
 	t.Fatalf("no placeholder edition found for %s", releaseMBID)
 	return 0
+}
+
+// The sweep re-read the lowest twenty works still without a cover. Twenty
+// releases the archive has no art for therefore came back forever, and nothing
+// after them was ever reached -- why only 516 of a library's albums ever got
+// covers. Bounded by a deadline so the old behaviour fails rather than hangs.
+func TestArtworkJob_ReachesPastAFullPageOfReleasesWithNoArt(t *testing.T) {
+	server := testImageServer(t)
+	coverArt := &fakeCoverArt{urlByMBID: map[string]string{"release-with-art": server.URL + "/cover.png"}}
+	job, opened, _ := newArtworkJob(t, coverArt, server.URL)
+
+	identity := library.NewIdentity(opened)
+	for index := range 20 {
+		refineWithReleaseMBIDForArtworkJob(t, identity, fmt.Sprintf("rg-bare-%d", index), fmt.Sprintf("release-bare-%d", index))
+	}
+	lastWorkID := refineWithReleaseMBIDForArtworkJob(t, identity, "rg-with-art", "release-with-art")
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	if err := job.Run(ctx, jobs.Job{Type: music.ArtworkJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if coverArt.calls != 21 {
+		t.Errorf("CoverArt fetched %d times, want each of the 21 releases asked exactly once", coverArt.calls)
+	}
+	recorded, err := library.NewArtworks(opened).GetForWork(t.Context(), lastWorkID)
+	if err != nil {
+		t.Fatalf("GetForWork: %v", err)
+	}
+	if !recorded.Found {
+		t.Fatal("the work after a full page of art-less releases never got its cover")
+	}
+}
+
+// A wanted album discovered from a discography has a release group but no
+// edition, so it has no release id to ask the archive about.
+func TestArtworkJob_CoversAWorkWithOnlyAReleaseGroup(t *testing.T) {
+	server := testImageServer(t)
+	coverArt := &fakeCoverArt{urlByReleaseGroup: map[string]string{"rg-wanted": server.URL + "/cover.png"}}
+	job, opened, _ := newArtworkJob(t, coverArt, server.URL)
+
+	identity := library.NewIdentity(opened)
+	resolved, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-wanted", Confidence: 1.0,
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Dumucamoko", SortTitle: "dumucamoko"},
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+	workID := resolved[0]
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.ArtworkJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	recorded, err := library.NewArtworks(opened).GetForWork(t.Context(), workID)
+	if err != nil {
+		t.Fatalf("GetForWork: %v", err)
+	}
+	if !recorded.Found {
+		t.Fatal("a work with only a release group got no cover")
+	}
+}
+
+// A release the archive has no art for may still belong to a release group
+// that does, taken from one of its other releases.
+func TestArtworkJob_FallsBackToTheReleaseGroupWhenTheReleaseHasNoArt(t *testing.T) {
+	server := testImageServer(t)
+	coverArt := &fakeCoverArt{urlByReleaseGroup: map[string]string{"rg-fallback": server.URL + "/cover.png"}}
+	job, opened, _ := newArtworkJob(t, coverArt, server.URL)
+	workID := refineWithReleaseMBIDForArtworkJob(t, library.NewIdentity(opened), "rg-fallback", "release-no-art")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.ArtworkJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if coverArt.calls != 1 || coverArt.releaseGroupCalls != 1 {
+		t.Errorf("calls = %d release, %d release group; want the release asked first, then its group",
+			coverArt.calls, coverArt.releaseGroupCalls)
+	}
+	recorded, err := library.NewArtworks(opened).GetForWork(t.Context(), workID)
+	if err != nil {
+		t.Fatalf("GetForWork: %v", err)
+	}
+	if !recorded.Found {
+		t.Fatal("the release group's art was never used")
+	}
+}
+
+// resolveWorkFromFile stands in for a scan: one file on disk under root 1, and
+// a work identification resolved from it.
+func resolveWorkFromFile(t *testing.T, opened *store.Store, releaseGroupMBID, relPath string) int64 {
+	t.Helper()
+	registered, err := library.NewPhysical(opened).RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: relPath, SizeBytes: 1, QuickHash: "hash-" + relPath, FirstSeenAt: firstSeen},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	workIDs, err := library.NewIdentity(opened).ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: music.ProviderReleaseGroup, ExternalID: releaseGroupMBID, Confidence: 1.0,
+		Work:         library.WorkIdentity{MediaType: "music", CanonicalTitle: relPath, SortTitle: relPath},
+		RootFolderID: 1, MediaObjectID: registered[0].MediaObjectID,
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+	return workIDs[0]
+}
+
+// The files carry their own cover art, including the ones with no MusicBrainz
+// id at all; when the archive has nothing, that is the picture to show.
+func TestArtworkJob_UsesTheCoverArtEmbeddedInTheFile(t *testing.T) {
+	server := testImageServer(t)
+	pictures := &fakePictures{byPath: map[string][]byte{"/music/Heka/Detisisu Binip/02.m4a": testPNG(t)}}
+	job, opened, memFS := newArtworkJobReadingPictures(t, &fakeCoverArt{}, server.URL, pictures)
+	workID := resolveWorkFromFile(t, opened, "rg-no-archive-art", "Heka/Detisisu Binip/02.m4a")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.ArtworkJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	recorded, err := library.NewArtworks(opened).GetForWork(t.Context(), workID)
+	if err != nil {
+		t.Fatalf("GetForWork: %v", err)
+	}
+	if !recorded.Found {
+		t.Fatal("the embedded picture was never used")
+	}
+	for _, size := range []string{"thumb", "small", "full"} {
+		path := "/cache/images/" + recorded.CacheKey + "-" + size + ".webp"
+		if _, err := memFS.Stat(path); err != nil {
+			t.Errorf("%s was not written: %v", path, err)
+		}
+	}
+}
+
+// Archive art is the more exact image, so a work it covers never has its file read.
+func TestArtworkJob_PrefersTheArchiveOverTheEmbeddedPicture(t *testing.T) {
+	server := testImageServer(t)
+	pictures := &fakePictures{byPath: map[string][]byte{}}
+	coverArt := &fakeCoverArt{urlByReleaseGroup: map[string]string{"rg-archived": server.URL + "/cover.png"}}
+	job, opened, _ := newArtworkJobReadingPictures(t, coverArt, server.URL, pictures)
+	resolveWorkFromFile(t, opened, "rg-archived", "P!po/Trustfall/01.m4a")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.ArtworkJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(pictures.asked) != 0 {
+		t.Errorf("embedded pictures read for %v, want none once the archive covered the work", pictures.asked)
+	}
 }

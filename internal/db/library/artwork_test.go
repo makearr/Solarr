@@ -49,11 +49,11 @@ func TestNeedingArtwork_ListsARefinedEditionsReleaseMBID(t *testing.T) {
 
 	workID := refineWithReleaseMBID(t, identity, "rg-artwork-1", "release-artwork-1")
 
-	found, err := artworks.NeedingArtwork(t.Context(), 10)
+	found, err := artworks.NeedingArtwork(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingArtwork: %v", err)
 	}
-	if len(found) != 1 || found[0].WorkID != workID || found[0].ReleaseMBID != "release-artwork-1" {
+	if len(found) != 1 || found[0].WorkID != workID || found[0].MBID != "release-artwork-1" {
 		t.Fatalf("NeedingArtwork = %+v, want exactly {workID=%d, release-artwork-1}", found, workID)
 	}
 }
@@ -76,7 +76,7 @@ func TestNeedingArtwork_ExcludesAPlaceholderEdition(t *testing.T) {
 	}
 
 	// Still kind='unknown' -- never refined -- so it must not be a candidate yet.
-	found, err := artworks.NeedingArtwork(t.Context(), 10)
+	found, err := artworks.NeedingArtwork(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingArtwork: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestRecord_RemovesTheWorkFromNeedingArtwork(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 
-	found, err := artworks.NeedingArtwork(t.Context(), 10)
+	found, err := artworks.NeedingArtwork(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingArtwork: %v", err)
 	}
@@ -270,5 +270,114 @@ func TestGetForPerson_ReportsAReadFailure(t *testing.T) {
 
 	if _, err := artworks.GetForPerson(cancelled, 1); err == nil {
 		t.Fatal("GetForPerson with a cancelled context answered no error")
+	}
+}
+
+// A wanted album with no files has no root folder, so the category wanting it
+// is the only thing that can make its cover visible.
+func TestGetForWork_ReportsTheCategoriesWantingTheWork(t *testing.T) {
+	opened, _ := newLibrary(t)
+	artworks := library.NewArtworks(opened)
+	work := createWork(t, opened, "music", "Tender Prey")
+	if _, err := library.NewDesired(opened).EnsureAlbumItem(t.Context(), library.AlbumRequest{
+		WorkID: work.ID, CategoryID: 7, ProfileID: 1, Monitored: true,
+	}); err != nil {
+		t.Fatalf("EnsureAlbumItem: %v", err)
+	}
+
+	got, err := artworks.GetForWork(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("GetForWork: %v", err)
+	}
+	if len(got.RootFolderIDs) != 0 || len(got.CategoryIDs) != 1 || got.CategoryIDs[0] != 7 {
+		t.Fatalf("GetForWork = %+v, want no root folders and category 7", got)
+	}
+}
+
+// registerFileForArtwork puts one file on disk, as far as library.db knows.
+func registerFileForArtwork(t *testing.T, physical library.Physical, rootFolderID int64, relPath, quickHash string) int64 {
+	t.Helper()
+	registered, err := physical.RegisterBatch(t.Context(), rootFolderID, []library.PhysicalFile{
+		{RelPath: relPath, SizeBytes: 1, QuickHash: quickHash, FirstSeenAt: firstSeen},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	return registered[0].MediaObjectID
+}
+
+func TestNeedingEmbeddedArtwork_NamesTheFileTheWorkWasResolvedFrom(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	artworks := library.NewArtworks(opened)
+	mediaObjectID := registerFileForArtwork(t, library.NewPhysical(opened), 3, "Heka/Detisisu Binip (1991)/02.m4a", "q1")
+
+	workIDs, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: "musicbrainz:release-group", ExternalID: "rg-embedded", Confidence: 1.0,
+		Work:         library.WorkIdentity{MediaType: "music", CanonicalTitle: "Detisisu Binip", SortTitle: "detisisu binip"},
+		RootFolderID: 3, MediaObjectID: mediaObjectID,
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+
+	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), 0, 10)
+	if err != nil {
+		t.Fatalf("NeedingEmbeddedArtwork: %v", err)
+	}
+	want := library.EmbeddedArtworkCandidate{WorkID: workIDs[0], RootFolderID: 3, RelPath: "Heka/Detisisu Binip (1991)/02.m4a"}
+	if len(found) != 1 || found[0] != want {
+		t.Fatalf("NeedingEmbeddedArtwork = %+v, want [%+v]", found, want)
+	}
+}
+
+// The detailed resolution is import's path; it must record the file too.
+func TestNeedingEmbeddedArtwork_CoversWorksResolvedByImport(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	artworks := library.NewArtworks(opened)
+	mediaObjectID := registerFileForArtwork(t, library.NewPhysical(opened), 1, "P!po/Kebilegev Bibihi (2017)/02.m4a", "q2")
+
+	if _, err := identity.ResolveWorksDetailed(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: "musicbrainz:release-group", ExternalID: "rg-imported", Confidence: 1.0,
+		Work:         library.WorkIdentity{MediaType: "music", CanonicalTitle: "Kebilegev Bibihi", SortTitle: "kebilegev bibihi"},
+		RootFolderID: 1, MediaObjectID: mediaObjectID,
+	}}); err != nil {
+		t.Fatalf("ResolveWorksDetailed: %v", err)
+	}
+
+	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), 0, 10)
+	if err != nil {
+		t.Fatalf("NeedingEmbeddedArtwork: %v", err)
+	}
+	if len(found) != 1 || found[0].RelPath != "P!po/Kebilegev Bibihi (2017)/02.m4a" {
+		t.Fatalf("NeedingEmbeddedArtwork = %+v, want the imported file", found)
+	}
+}
+
+func TestNeedingEmbeddedArtwork_ExcludesAWorkWithACover(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	artworks := library.NewArtworks(opened)
+	mediaObjectID := registerFileForArtwork(t, library.NewPhysical(opened), 1, "a/1.m4a", "q3")
+
+	workIDs, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: "musicbrainz:release-group", ExternalID: "rg-covered", Confidence: 1.0,
+		Work:         library.WorkIdentity{MediaType: "music", CanonicalTitle: "Covered", SortTitle: "covered"},
+		RootFolderID: 1, MediaObjectID: mediaObjectID,
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+	if err := artworks.Record(t.Context(), workIDs[0], "", "work-1-cover", 500, 500, 1); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), 0, 10)
+	if err != nil {
+		t.Fatalf("NeedingEmbeddedArtwork: %v", err)
+	}
+	if len(found) != 0 {
+		t.Fatalf("NeedingEmbeddedArtwork = %+v, want none once a cover exists", found)
 	}
 }

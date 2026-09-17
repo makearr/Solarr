@@ -205,6 +205,45 @@ func TestGetWorkArtwork_UnderARootFolderTheCallerCannotReadAnswers404(t *testing
 	}
 }
 
+// A wanted album with no files has no root folder; it is visible through the
+// category wanting it, as GetWork already treats it, and its cover must be too.
+func TestGetWorkArtwork_AWantedWorkIsVisibleThroughItsCategory(t *testing.T) {
+	fixture := newWorksFixture(t)
+	visible, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	user := fixture.createUser(t, "listener", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, visible.ID, settings.PermissionRead); err != nil {
+		t.Fatalf("SetCategoryAccess: %v", err)
+	}
+	cookies := fixture.signIn(t, "listener")
+
+	fixture.artwork.row = apiserver.WorkArtworkRow{
+		CacheKey: "work-1-cover", Found: true, CategoryIDs: []int64{visible.ID},
+	}
+	fixture.writeFixtureImage(t, "work-1-cover", "small", []byte("wanted cover"))
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/1/artwork"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d (%s), want 200 for a wanted work in a readable category", recorder.Code, recorder.Body)
+	}
+}
+
+func TestGetWorkArtwork_AWantedWorkInAHiddenCategoryAnswers404(t *testing.T) {
+	fixture := newWorksFixture(t)
+	hidden, _ := fixture.createCategoryWithRoot(t, "Private Stash", "/media/private")
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	fixture.artwork.row = apiserver.WorkArtworkRow{
+		CacheKey: "work-1-cover", Found: true, CategoryIDs: []int64{hidden.ID},
+	}
+	fixture.writeFixtureImage(t, "work-1-cover", "small", []byte("secret cover"))
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/1/artwork"))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 for a wanted work in a category this caller cannot read", recorder.Code)
+	}
+}
+
 func TestGetWorkArtwork_MalformedIDAnswers400(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.createUser(t, "admin", settings.RoleAdmin)

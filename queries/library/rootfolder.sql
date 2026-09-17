@@ -50,3 +50,11 @@ WHERE role = 'artist' AND work_id IN (
   UNION
   SELECT work_id FROM desired_item WHERE category_id = sqlc.arg(category_id)
 );
+
+-- The first file identification resolved a work from wins; a later one changes
+-- nothing. The row goes with its file (ON DELETE CASCADE), and the next scan
+-- that resolves the work from another file records that one instead.
+-- name: LinkWorkFileHint :exec
+INSERT INTO work_file_hint (work_id, media_object_id, first_seen_at)
+VALUES (?, ?, ?)
+ON CONFLICT (work_id) DO NOTHING;

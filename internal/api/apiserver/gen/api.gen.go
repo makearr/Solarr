@@ -44,9 +44,9 @@ const (
 
 // Defines values for ArrImportItemKind.
 const (
-	Album  ArrImportItemKind = "album"
-	Artist ArrImportItemKind = "artist"
-	Parked ArrImportItemKind = "parked"
+	ArrImportItemKindAlbum  ArrImportItemKind = "album"
+	ArrImportItemKindArtist ArrImportItemKind = "artist"
+	ArrImportItemKindParked ArrImportItemKind = "parked"
 )
 
 // Defines values for ArrImportRunState.
@@ -470,9 +470,10 @@ const (
 
 // Defines values for ListWorksParamsSort.
 const (
-	Added ListWorksParamsSort = "added"
-	Title ListWorksParamsSort = "title"
-	Year  ListWorksParamsSort = "year"
+	ListWorksParamsSortAdded  ListWorksParamsSort = "added"
+	ListWorksParamsSortArtist ListWorksParamsSort = "artist"
+	ListWorksParamsSortTitle  ListWorksParamsSort = "title"
+	ListWorksParamsSortYear   ListWorksParamsSort = "year"
 )
 
 // Defines values for ListWorksParamsDir.
@@ -2069,7 +2070,7 @@ type WantedState string
 type Work struct {
 	AddedAt time.Time `json:"added_at"`
 
-	// Artist The work's own "artist"-role credit, when it has one. Not a sort option on this endpoint yet -- nothing has asked for it.
+	// Artist The work's own primary artist credit, when it has one. Ordered on by sort=artist.
 	Artist    *string   `json:"artist,omitempty"`
 	Id        int64     `json:"id"`
 	MediaType string    `json:"media_type"`
@@ -2440,7 +2441,7 @@ type ListWorksParams struct {
 	// CategoryId Narrows to one category. Naming a category the caller cannot read answers 404, matching a single-item lookup (Invariant 37) rather than a filter that silently returns nothing.
 	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
 
-	// Sort Which column orders the list. artist is not a valid value here (Work.artist's own description explains why); title is the default.
+	// Sort Which column orders the list; title is the default. artist orders by the primary artist's sort name, then title -- the Albums view's grouping -- with a work that has no artist first.
 	Sort *ListWorksParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 	Dir  *ListWorksParamsDir  `form:"dir,omitempty" json:"dir,omitempty"`
 

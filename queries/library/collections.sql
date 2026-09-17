@@ -86,6 +86,7 @@ SELECT e.work_id AS work_id, x.external_id AS release_mbid
 FROM edition e
 JOIN edition_external_id x ON x.edition_id = e.id AND x.provider = 'musicbrainz:release'
 WHERE e.kind != 'unknown'
+  AND e.work_id > sqlc.arg(after_id)
   AND e.id = (
     SELECT MIN(e2.id) FROM edition e2
     JOIN edition_external_id x2 ON x2.edition_id = e2.id AND x2.provider = 'musicbrainz:release'
@@ -169,4 +170,38 @@ WHERE p.id > sqlc.arg(after_id)
     SELECT 1 FROM artwork a WHERE a.subject_type = 'person' AND a.subject_id = p.id AND a.kind = 'cover'
   )
 ORDER BY p.id
+LIMIT sqlc.arg(page_size);
+
+-- Every work still without a cover that carries a release-group id, for the
+-- Cover Art Archive's release-group endpoint: a wanted album with no edition
+-- has nothing else to look up by, and a release with no art of its own may
+-- still have a sibling release that does. MIN picks one id for a work
+-- carrying several after a merge. 'musicbrainz:release-group' must match
+-- internal/media/music.ProviderReleaseGroup.
+-- name: ListWorksNeedingReleaseGroupArtwork :many
+SELECT x.work_id AS work_id, CAST(MIN(x.external_id) AS TEXT) AS release_group_mbid
+FROM work_external_id x
+WHERE x.provider = 'musicbrainz:release-group'
+  AND x.work_id > sqlc.arg(after_id)
+  AND NOT EXISTS (
+    SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = x.work_id AND a.kind = 'cover'
+  )
+GROUP BY x.work_id
+ORDER BY x.work_id
+LIMIT sqlc.arg(page_size);
+
+-- Every work still without a cover that has a known file to read embedded art
+-- from, with that file's lowest library_path. Root folder paths live in
+-- settings.db, so the caller resolves root_folder_id itself (section 4.3).
+-- name: ListWorksNeedingEmbeddedArtwork :many
+SELECT h.work_id AS work_id, lp.root_folder_id AS root_folder_id, lp.rel_path AS rel_path
+FROM work_file_hint h
+JOIN library_path lp ON lp.id = (
+    SELECT MIN(lp2.id) FROM library_path lp2 WHERE lp2.media_object_id = h.media_object_id
+  )
+WHERE h.work_id > sqlc.arg(after_id)
+  AND NOT EXISTS (
+    SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = h.work_id AND a.kind = 'cover'
+  )
+ORDER BY h.work_id
 LIMIT sqlc.arg(page_size);

@@ -27,6 +27,34 @@ export interface ListSource<T> {
   /** How many items share one virtualised row -- 1 for a table, the measured
    *  column count for the poster grid, so both views keep one core (section 21.2). */
   readonly itemsPerRow?: number;
+  /** Groups consecutive items under a header row, by this label. The items must
+   *  already arrive ordered by it; the Albums wall groups by artist. */
+  readonly groupOf?: (item: T) => string;
+  readonly groupHeaderHeight?: number;
+}
+
+/** One virtualised row of a grouped list: a group's header, or a run of items
+ *  from start (inclusive) to end (exclusive). */
+export type LayoutRow =
+  | { readonly kind: "group"; readonly label: string }
+  | { readonly kind: "items"; readonly start: number; readonly end: number };
+
+/** Lays items out as header rows and item rows of at most perRow, a new header
+ *  wherever the group label changes. */
+export function groupLayout<T>(items: readonly T[], perRow: number, groupOf: (item: T) => string): LayoutRow[] {
+  const rows: LayoutRow[] = [];
+  let index = 0;
+  while (index < items.length) {
+    const label = groupOf(items[index] as T);
+    rows.push({ kind: "group", label });
+    let groupEnd = index;
+    while (groupEnd < items.length && groupOf(items[groupEnd] as T) === label) groupEnd++;
+    for (let start = index; start < groupEnd; start += perRow) {
+      rows.push({ kind: "items", start, end: Math.min(start + perRow, groupEnd) });
+    }
+    index = groupEnd;
+  }
+  return rows;
 }
 
 const DEFAULT_ROW_HEIGHT = 36;
@@ -75,22 +103,29 @@ export function useLibraryList<T>(source: ListSource<T>, view: ViewState) {
 
   // A table row holds one item, a poster row holds however many fit across.
   const perRow = Math.max(1, Math.floor(source.itemsPerRow ?? 1));
-  const rowCount = Math.ceil(items.length / perRow);
   const rowHeight = source.rowHeight ?? DEFAULT_ROW_HEIGHT;
+  const groupHeaderHeight = source.groupHeaderHeight ?? DEFAULT_ROW_HEIGHT;
+  const { groupOf } = source;
+  const layout = useMemo(
+    () => (groupOf ? groupLayout(items, perRow, groupOf) : null),
+    [items, perRow, groupOf],
+  );
+  const rowCount = layout ? layout.length : Math.ceil(items.length / perRow);
 
   const virtualizer = useVirtualizer({
     // One extra row: the sentinel that triggers the next fetch.
     count: rowCount + (pages.hasNextPage ? 1 : 0),
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => rowHeight,
+    estimateSize: (index) => (layout?.[index]?.kind === "group" ? groupHeaderHeight : rowHeight),
     overscan: 8,
   });
 
   // Row positions are cached until the row count changes, so a new height with
-  // the same count (a resized poster wall, posters to list) must reset them.
+  // the same count (a resized poster wall, posters to list, a regrouped page)
+  // must reset them.
   useEffect(() => {
     virtualizer.measure();
-  }, [virtualizer, rowHeight, perRow]);
+  }, [virtualizer, rowHeight, perRow, groupHeaderHeight, layout]);
 
   // From the window, not a scroll handler, which at 500k rows fires far more
   // often than it needs to.
@@ -168,6 +203,7 @@ export function useLibraryList<T>(source: ListSource<T>, view: ViewState) {
 
     scrollRef,
     perRow,
+    layout,
     virtualizer,
     virtualItems,
     totalSize: virtualizer.getTotalSize(),
