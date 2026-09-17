@@ -5,16 +5,18 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/makearr/MediaNexus/internal/db/store"
 	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
 )
 
-// ArtworkCandidate is a work with a release MBID a cover art provider can be
-// queried with, but no recorded cover yet (section 21.6).
+// ArtworkCandidate is a work with no recorded cover yet and an id a cover art
+// provider can be queried with (section 21.6): a release MBID from
+// NeedingArtwork, a release-group MBID from NeedingReleaseGroupArtwork.
 type ArtworkCandidate struct {
-	WorkID      int64
-	ReleaseMBID string
+	WorkID int64
+	MBID   string
 }
 
 // Artworks is section 21.6's persistence half: which works still need cover art,
@@ -42,7 +44,22 @@ func (a Artworks) NeedingArtwork(ctx context.Context, afterWorkID, pageSize int6
 	}
 	candidates := make([]ArtworkCandidate, len(rows))
 	for i, row := range rows {
-		candidates[i] = ArtworkCandidate{WorkID: row.WorkID, ReleaseMBID: row.ReleaseMbid}
+		candidates[i] = ArtworkCandidate{WorkID: row.WorkID, MBID: row.ReleaseMbid}
+	}
+	return candidates, nil
+}
+
+// NeedingReleaseGroupArtwork returns up to pageSize works after afterWorkID
+// still without a cover that carry a release-group id.
+func (a Artworks) NeedingReleaseGroupArtwork(ctx context.Context, afterWorkID, pageSize int64) ([]ArtworkCandidate, error) {
+	rows, err := librarydb.New(a.store.Read()).ListWorksNeedingReleaseGroupArtwork(ctx,
+		librarydb.ListWorksNeedingReleaseGroupArtworkParams{AfterID: afterWorkID, PageSize: pageSize})
+	if err != nil {
+		return nil, fmt.Errorf("library: works needing release group artwork: %w", err)
+	}
+	candidates := make([]ArtworkCandidate, len(rows))
+	for i, row := range rows {
+		candidates[i] = ArtworkCandidate{WorkID: row.WorkID, MBID: row.ReleaseGroupMbid}
 	}
 	return candidates, nil
 }
@@ -81,9 +98,12 @@ func (a Artworks) PeopleNeedingArtwork(ctx context.Context, afterPersonID, pageS
 // chain asked for 2026-09-11, since a work with no cover of its own still
 // answers with its own artist's when that one exists.
 type WorkArtwork struct {
-	CacheKey        string
-	Found           bool
-	RootFolderIDs   []int64
+	CacheKey      string
+	Found         bool
+	RootFolderIDs []int64
+	// CategoryIDs are the categories wanting this work, the other half of
+	// ADR-27 visibility: a wanted album with no files has no root folder.
+	CategoryIDs     []int64
 	PrimaryArtistID *int64
 }
 
@@ -97,23 +117,34 @@ func (a Artworks) GetForWork(ctx context.Context, workID int64) (WorkArtwork, er
 		return WorkArtwork{}, fmt.Errorf("library: root folders for work %d: %w", workID, err)
 	}
 
+	desired, err := queries.ListDesiredItemsForWork(ctx, workID)
+	if err != nil {
+		return WorkArtwork{}, fmt.Errorf("library: desired items for work %d: %w", workID, err)
+	}
+	categoryIDs := make([]int64, 0, len(desired))
+	for _, item := range desired {
+		if !slices.Contains(categoryIDs, item.CategoryID) {
+			categoryIDs = append(categoryIDs, item.CategoryID)
+		}
+	}
+
 	var primaryArtistID *int64
 	if work, err := queries.GetWork(ctx, workID); err == nil && work.PrimaryArtistID.Valid {
 		primaryArtistID = &work.PrimaryArtistID.Int64
 	}
 
+	found := WorkArtwork{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, PrimaryArtistID: primaryArtistID}
 	cacheKey, err := queries.GetArtwork(ctx, librarydb.GetArtworkParams{
 		SubjectType: "work", SubjectID: workID, Kind: artworkKindCover,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
-		return WorkArtwork{RootFolderIDs: rootFolderIDs, PrimaryArtistID: primaryArtistID}, nil
+		return found, nil
 	}
 	if err != nil {
 		return WorkArtwork{}, fmt.Errorf("library: artwork for work %d: %w", workID, err)
 	}
-	return WorkArtwork{
-		CacheKey: cacheKey, Found: true, RootFolderIDs: rootFolderIDs, PrimaryArtistID: primaryArtistID,
-	}, nil
+	found.CacheKey, found.Found = cacheKey, true
+	return found, nil
 }
 
 // Record upserts the cover art row for a work (ADR-2: the row is persistent, the

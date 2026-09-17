@@ -534,6 +534,58 @@ func (q *Queries) ListWorksNeedingArtwork(ctx context.Context, arg ListWorksNeed
 	return items, nil
 }
 
+const listWorksNeedingReleaseGroupArtwork = `-- name: ListWorksNeedingReleaseGroupArtwork :many
+SELECT x.work_id AS work_id, CAST(MIN(x.external_id) AS TEXT) AS release_group_mbid
+FROM work_external_id x
+WHERE x.provider = 'musicbrainz:release-group'
+  AND x.work_id > ?1
+  AND NOT EXISTS (
+    SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = x.work_id AND a.kind = 'cover'
+  )
+GROUP BY x.work_id
+ORDER BY x.work_id
+LIMIT ?2
+`
+
+type ListWorksNeedingReleaseGroupArtworkParams struct {
+	AfterID  int64
+	PageSize int64
+}
+
+type ListWorksNeedingReleaseGroupArtworkRow struct {
+	WorkID           int64
+	ReleaseGroupMbid string
+}
+
+// Every work still without a cover that carries a release-group id, for the
+// Cover Art Archive's release-group endpoint: a wanted album with no edition
+// has nothing else to look up by, and a release with no art of its own may
+// still have a sibling release that does. MIN picks one id for a work
+// carrying several after a merge. 'musicbrainz:release-group' must match
+// internal/media/music.ProviderReleaseGroup.
+func (q *Queries) ListWorksNeedingReleaseGroupArtwork(ctx context.Context, arg ListWorksNeedingReleaseGroupArtworkParams) ([]ListWorksNeedingReleaseGroupArtworkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorksNeedingReleaseGroupArtwork, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorksNeedingReleaseGroupArtworkRow{}
+	for rows.Next() {
+		var i ListWorksNeedingReleaseGroupArtworkRow
+		if err := rows.Scan(&i.WorkID, &i.ReleaseGroupMbid); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const nextReady = `-- name: NextReady :many
 SELECT candidate_id, desired_item_id, priority, queued_at, expires_at, size_bytes
 FROM ready_queue

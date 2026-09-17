@@ -53,7 +53,7 @@ func TestNeedingArtwork_ListsARefinedEditionsReleaseMBID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NeedingArtwork: %v", err)
 	}
-	if len(found) != 1 || found[0].WorkID != workID || found[0].ReleaseMBID != "release-artwork-1" {
+	if len(found) != 1 || found[0].WorkID != workID || found[0].MBID != "release-artwork-1" {
 		t.Fatalf("NeedingArtwork = %+v, want exactly {workID=%d, release-artwork-1}", found, workID)
 	}
 }
@@ -270,5 +270,26 @@ func TestGetForPerson_ReportsAReadFailure(t *testing.T) {
 
 	if _, err := artworks.GetForPerson(cancelled, 1); err == nil {
 		t.Fatal("GetForPerson with a cancelled context answered no error")
+	}
+}
+
+// A wanted album with no files has no root folder, so the category wanting it
+// is the only thing that can make its cover visible.
+func TestGetForWork_ReportsTheCategoriesWantingTheWork(t *testing.T) {
+	opened, _ := newLibrary(t)
+	artworks := library.NewArtworks(opened)
+	work := createWork(t, opened, "music", "Tender Prey")
+	if _, err := library.NewDesired(opened).EnsureAlbumItem(t.Context(), library.AlbumRequest{
+		WorkID: work.ID, CategoryID: 7, ProfileID: 1, Monitored: true,
+	}); err != nil {
+		t.Fatalf("EnsureAlbumItem: %v", err)
+	}
+
+	got, err := artworks.GetForWork(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("GetForWork: %v", err)
+	}
+	if len(got.RootFolderIDs) != 0 || len(got.CategoryIDs) != 1 || got.CategoryIDs[0] != 7 {
+		t.Fatalf("GetForWork = %+v, want no root folders and category 7", got)
 	}
 }

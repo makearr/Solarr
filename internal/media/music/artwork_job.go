@@ -45,6 +45,7 @@ const maxImageBytes = 20 << 20
 // musicbrainz.ErrNoCoverArt when there is none.
 type CoverArtFetcher interface {
 	Fetch(ctx context.Context, releaseMBID string) (string, error)
+	FetchReleaseGroup(ctx context.Context, releaseGroupMBID string) (string, error)
 }
 
 // ArtworkJob fetches, resizes and encodes cover art for every work that has a
@@ -92,16 +93,30 @@ func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
 		return fmt.Errorf("music: artwork: create %s: %w", j.imagesDir, err)
 	}
 
+	// Releases first, as the more exact image; then release groups, for
+	// wanted albums with no edition and releases the archive had nothing for.
+	if err := j.sweep(ctx, "release", j.artworks.NeedingArtwork, j.coverArt.Fetch); err != nil {
+		return err
+	}
+	return j.sweep(ctx, "release-group", j.artworks.NeedingReleaseGroupArtwork, j.coverArt.FetchReleaseGroup)
+}
+
+type artworkPage func(ctx context.Context, afterWorkID, pageSize int64) ([]library.ArtworkCandidate, error)
+
+type artworkSource func(ctx context.Context, mbid string) (string, error)
+
+// sweep walks one kind of candidate by work id. A work with no archive art
+// records nothing, so re-reading from the top would return the same page
+// indefinitely.
+func (j *ArtworkJob) sweep(ctx context.Context, kind string, page artworkPage, lookup artworkSource) error {
 	total, failed, skipped := 0, 0, 0
-	// Walked by work id: a release with no archive art records nothing, so
-	// re-reading from the top would return the same page indefinitely.
 	var afterWorkID int64
 	for {
 		if err := ctx.Err(); err != nil {
 			return jobs.Retryablef("artwork.context", string(ArtworkJobType), err)
 		}
 
-		batch, err := j.artworks.NeedingArtwork(ctx, afterWorkID, artworkBatchSize)
+		batch, err := page(ctx, afterWorkID, artworkBatchSize)
 		if err != nil {
 			return fmt.Errorf("music: artwork: %w", err)
 		}
@@ -112,15 +127,14 @@ func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
 		for _, candidate := range batch {
 			total++
 			afterWorkID = candidate.WorkID
-			switch err := j.processOne(ctx, candidate); {
+			switch err := j.processOne(ctx, candidate, lookup); {
 			case errors.Is(err, musicbrainz.ErrNoCoverArt):
-				// Not a failure: this release genuinely has no art. Recorded
-				// nowhere, so it is asked about again next sweep -- cheap
-				// (one API call) and correct if art is added to the archive later.
+				// Not a failure: nothing in the archive. Asked again next sweep,
+				// which is cheap and right if art is added later.
 				skipped++
 			case err != nil:
 				failed++
-				j.logger.WarnContext(ctx, "cover art fetch failed",
+				j.logger.WarnContext(ctx, "cover art fetch failed", slog.String("kind", kind),
 					slog.Int64("work_id", candidate.WorkID), slog.Any("error", err))
 			}
 		}
@@ -128,13 +142,13 @@ func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
 			break
 		}
 	}
-	j.logger.Info("music artwork sweep finished",
+	j.logger.Info("music artwork sweep finished", slog.String("kind", kind),
 		slog.Int("processed", total), slog.Int("failed", failed), slog.Int("skipped", skipped))
 	return nil
 }
 
-func (j *ArtworkJob) processOne(ctx context.Context, candidate library.ArtworkCandidate) error {
-	imageURL, err := j.coverArt.Fetch(ctx, candidate.ReleaseMBID)
+func (j *ArtworkJob) processOne(ctx context.Context, candidate library.ArtworkCandidate, lookup artworkSource) error {
+	imageURL, err := lookup(ctx, candidate.MBID)
 	if err != nil {
 		return err
 	}

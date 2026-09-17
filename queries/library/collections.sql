@@ -171,3 +171,21 @@ WHERE p.id > sqlc.arg(after_id)
   )
 ORDER BY p.id
 LIMIT sqlc.arg(page_size);
+
+-- Every work still without a cover that carries a release-group id, for the
+-- Cover Art Archive's release-group endpoint: a wanted album with no edition
+-- has nothing else to look up by, and a release with no art of its own may
+-- still have a sibling release that does. MIN picks one id for a work
+-- carrying several after a merge. 'musicbrainz:release-group' must match
+-- internal/media/music.ProviderReleaseGroup.
+-- name: ListWorksNeedingReleaseGroupArtwork :many
+SELECT x.work_id AS work_id, CAST(MIN(x.external_id) AS TEXT) AS release_group_mbid
+FROM work_external_id x
+WHERE x.provider = 'musicbrainz:release-group'
+  AND x.work_id > sqlc.arg(after_id)
+  AND NOT EXISTS (
+    SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = x.work_id AND a.kind = 'cover'
+  )
+GROUP BY x.work_id
+ORDER BY x.work_id
+LIMIT sqlc.arg(page_size);

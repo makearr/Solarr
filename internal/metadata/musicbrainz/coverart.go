@@ -53,24 +53,35 @@ type coverArtImage struct {
 // redirect chain itself, so this is a plain GET. ErrNoCoverArt distinguishes
 // "this release has no art" from a real failure.
 func (c CoverArt) Fetch(ctx context.Context, releaseMBID string) (string, error) {
-	url := fmt.Sprintf("%s/release/%s", c.baseURL, releaseMBID)
+	return c.fetch(ctx, "release", releaseMBID)
+}
+
+// FetchReleaseGroup is Fetch for a release group, whose art the archive
+// takes from one of its releases. A wanted album with no edition yet has only
+// this id, and a release with no art of its own may still have a sibling that does.
+func (c CoverArt) FetchReleaseGroup(ctx context.Context, releaseGroupMBID string) (string, error) {
+	return c.fetch(ctx, "release-group", releaseGroupMBID)
+}
+
+func (c CoverArt) fetch(ctx context.Context, entity, mbid string) (string, error) {
+	url := fmt.Sprintf("%s/%s/%s", c.baseURL, entity, mbid)
 	response, err := c.client.Get(ctx, url)
 	if err != nil {
 		var statusErr *httpx.StatusError
 		if errors.As(err, &statusErr) && statusErr.Status == http.StatusNotFound {
 			return "", ErrNoCoverArt
 		}
-		return "", fmt.Errorf("musicbrainz: cover art %s: %w", releaseMBID, err)
+		return "", fmt.Errorf("musicbrainz: cover art %s %s: %w", entity, mbid, err)
 	}
 	defer func() { _ = response.Body.Close() }()
 
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
 	if err != nil {
-		return "", fmt.Errorf("musicbrainz: cover art %s: read response: %w", releaseMBID, err)
+		return "", fmt.Errorf("musicbrainz: cover art %s %s: read response: %w", entity, mbid, err)
 	}
 	var parsed coverArtResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return "", fmt.Errorf("musicbrainz: cover art %s: decode response: %w", releaseMBID, err)
+		return "", fmt.Errorf("musicbrainz: cover art %s %s: decode response: %w", entity, mbid, err)
 	}
 
 	image, ok := bestCoverArtImage(parsed.Images)

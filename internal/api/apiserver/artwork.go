@@ -29,6 +29,7 @@ type WorkArtworkRow struct {
 	CacheKey        string
 	Found           bool
 	RootFolderIDs   []int64
+	CategoryIDs     []int64
 	PrimaryArtistID *int64
 }
 
@@ -106,17 +107,14 @@ func (s *Server) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64
 		return
 	}
 
-	// Root-folder-only, deliberately: a subscription-discovered work has no
-	// edition yet (full edition resolution for a search/subscription-identified
-	// work is still unattempted, private/next.md), so ListWorksNeedingArtwork
-	// never finds one to fetch a cover for -- the category half of ADR-27
-	// visibility would have nothing to gate here today.
-	rootFolderIDs, _, err := s.visibility(access, nil)
+	// Both halves of ADR-27, as GetWork itself uses: a wanted album with no
+	// files yet is visible through its category, and its cover must be too.
+	rootFolderIDs, categoryIDs, err := s.visibility(access, nil)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	if !sharesAnID(rootFolderIDs, row.RootFolderIDs) {
+	if !sharesAnID(rootFolderIDs, row.RootFolderIDs) && !sharesAnID(categoryIDs, row.CategoryIDs) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no cover art for this work")
 		return
 	}

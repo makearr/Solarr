@@ -95,6 +95,28 @@ func TestCoverArt_FetchFallsBackToAnyImageWhenNoneIsFrontApproved(t *testing.T) 
 	}
 }
 
+func TestCoverArt_FetchReleaseGroupAsksForTheReleaseGroup(t *testing.T) {
+	var requested string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested = r.URL.Path
+		_, _ = w.Write([]byte(okComputerCoverArtBody))
+	}))
+	t.Cleanup(server.Close)
+	coverArt := musicbrainz.NewCoverArt(newCoverArtClient(t, server.URL), server.URL)
+
+	image, err := coverArt.FetchReleaseGroup(t.Context(), "04e9a8bd-175f-44a1-83a0-17d5e9fbd116")
+	if err != nil {
+		t.Fatalf("FetchReleaseGroup: %v", err)
+	}
+	if requested != "/release-group/04e9a8bd-175f-44a1-83a0-17d5e9fbd116" {
+		t.Errorf("requested %q, want the release-group endpoint", requested)
+	}
+	const wantImage = "https://coverartarchive.org/release/d319c059-baaa-4fc8-8ae2-cc3035c5fd19/43287476628.png"
+	if image != wantImage {
+		t.Errorf("image = %q, want %q", image, wantImage)
+	}
+}
+
 func TestCoverArt_FetchReturnsErrNoCoverArtOn404(t *testing.T) {
 	server := newCoverArtServer(t, http.StatusNotFound,
 		"<!doctype html><title>404 Not Found</title><h1>Not Found</h1>")

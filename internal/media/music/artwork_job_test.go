@@ -30,8 +30,19 @@ import (
 // fakeCoverArt answers one canned URL (or musicbrainz.ErrNoCoverArt) per release,
 // so a test never depends on the real Cover Art Archive.
 type fakeCoverArt struct {
-	urlByMBID map[string]string
-	calls     int
+	urlByMBID         map[string]string
+	urlByReleaseGroup map[string]string
+	calls             int
+	releaseGroupCalls int
+}
+
+func (f *fakeCoverArt) FetchReleaseGroup(_ context.Context, releaseGroupMBID string) (string, error) {
+	f.releaseGroupCalls++
+	url, ok := f.urlByReleaseGroup[releaseGroupMBID]
+	if !ok {
+		return "", musicbrainz.ErrNoCoverArt
+	}
+	return url, nil
 }
 
 func (f *fakeCoverArt) Fetch(_ context.Context, releaseMBID string) (string, error) {
@@ -237,5 +248,60 @@ func TestArtworkJob_ReachesPastAFullPageOfReleasesWithNoArt(t *testing.T) {
 	}
 	if !recorded.Found {
 		t.Fatal("the work after a full page of art-less releases never got its cover")
+	}
+}
+
+// A wanted album discovered from a discography has a release group but no
+// edition, so it has no release id to ask the archive about.
+func TestArtworkJob_CoversAWorkWithOnlyAReleaseGroup(t *testing.T) {
+	server := testImageServer(t)
+	coverArt := &fakeCoverArt{urlByReleaseGroup: map[string]string{"rg-wanted": server.URL + "/cover.png"}}
+	job, opened, _ := newArtworkJob(t, coverArt, server.URL)
+
+	identity := library.NewIdentity(opened)
+	resolved, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-wanted", Confidence: 1.0,
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Dumucamoko", SortTitle: "dumucamoko"},
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+	workID := resolved[0]
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.ArtworkJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	recorded, err := library.NewArtworks(opened).GetForWork(t.Context(), workID)
+	if err != nil {
+		t.Fatalf("GetForWork: %v", err)
+	}
+	if !recorded.Found {
+		t.Fatal("a work with only a release group got no cover")
+	}
+}
+
+// A release the archive has no art for may still belong to a release group
+// that does, taken from one of its other releases.
+func TestArtworkJob_FallsBackToTheReleaseGroupWhenTheReleaseHasNoArt(t *testing.T) {
+	server := testImageServer(t)
+	coverArt := &fakeCoverArt{urlByReleaseGroup: map[string]string{"rg-fallback": server.URL + "/cover.png"}}
+	job, opened, _ := newArtworkJob(t, coverArt, server.URL)
+	workID := refineWithReleaseMBIDForArtworkJob(t, library.NewIdentity(opened), "rg-fallback", "release-no-art")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.ArtworkJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if coverArt.calls != 1 || coverArt.releaseGroupCalls != 1 {
+		t.Errorf("calls = %d release, %d release group; want the release asked first, then its group",
+			coverArt.calls, coverArt.releaseGroupCalls)
+	}
+	recorded, err := library.NewArtworks(opened).GetForWork(t.Context(), workID)
+	if err != nil {
+		t.Fatalf("GetForWork: %v", err)
+	}
+	if !recorded.Found {
+		t.Fatal("the release group's art was never used")
 	}
 }
