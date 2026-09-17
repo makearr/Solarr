@@ -38,6 +38,7 @@ func (a Unidentified) ListUnidentified(
 // UnidentifiedResolver satisfies apiserver.UnidentifiedResolver over music.ResolveUnidentified.
 type UnidentifiedResolver struct {
 	Unidentified library.Unidentified
+	Attempts     library.Attempts
 	Identity     library.Identity
 	Provider     musicbrainz.Provider
 	Clock        clock.Clock
@@ -66,6 +67,35 @@ func (a UnidentifiedResolver) ResolveUnidentified(
 		return 0, translateResolveError(err)
 	}
 	return workID, nil
+}
+
+func (a UnidentifiedResolver) IdentificationAttempts(
+	ctx context.Context, mediaObjectID int64,
+) ([]apiserver.IdentificationAttempt, error) {
+	attempts, err := a.Attempts.List(ctx, mediaObjectID)
+	if err != nil {
+		return nil, err
+	}
+	views := make([]apiserver.IdentificationAttempt, len(attempts))
+	for i, attempt := range attempts {
+		passes := make([]apiserver.IdentificationPass, len(attempt.Passes))
+		for j, pass := range attempt.Passes {
+			candidates := make([]apiserver.IdentificationCandidate, len(pass.Candidates))
+			for k, candidate := range pass.Candidates {
+				evidence := make([]apiserver.IdentificationEvidence, len(candidate.Evidence))
+				for n, fact := range candidate.Evidence {
+					evidence[n] = apiserver.IdentificationEvidence{Kind: fact.Kind, Detail: fact.Detail}
+				}
+				candidates[k] = apiserver.IdentificationCandidate{
+					Strategy: candidate.Strategy, Provider: candidate.Provider, ExternalID: candidate.ExternalID,
+					Confidence: candidate.Confidence, Evidence: evidence,
+				}
+			}
+			passes[j] = apiserver.IdentificationPass{Pass: pass.Pass, Outcome: pass.Outcome, Candidates: candidates}
+		}
+		views[i] = apiserver.IdentificationAttempt{At: time.Unix(attempt.At, 0), Outcome: attempt.Outcome, Passes: passes}
+	}
+	return views, nil
 }
 
 func translateResolveError(err error) error {

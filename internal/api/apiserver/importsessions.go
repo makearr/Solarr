@@ -137,6 +137,7 @@ type ImportCandidate struct {
 	WorkID               *int64
 	Provider, ExternalID string
 	Confidence           float64
+	Evidence             []IdentificationEvidence
 }
 
 // ImportUnitRow is one import_unit row.
@@ -599,6 +600,10 @@ func importUnitView(row ImportUnitRow) gen.ImportUnit {
 		}
 		if c.ExternalID != "" {
 			view.ExternalId = &c.ExternalID
+		}
+		if len(c.Evidence) > 0 {
+			evidence := toEvidenceViews(c.Evidence)
+			view.Evidence = &evidence
 		}
 		candidates[i] = view
 	}

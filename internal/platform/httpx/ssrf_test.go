@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -147,6 +148,39 @@ func TestGuard_SkipsABlockedAddressAndUsesTheNextAllowedOne(t *testing.T) {
 	}
 }
 
+// A host with broken IPv6 must still reach a server over IPv4; alternating families means
+// the second attempt is already IPv4 rather than the next unreachable IPv6 address.
+func TestGuard_FallsBackToTheOtherFamilyWhenAnAddressFails(t *testing.T) {
+	resolver := fakeResolver{"metadata.invalid": {
+		netip.MustParseAddr("2606:4700::1"),
+		netip.MustParseAddr("2606:4700::2"),
+		netip.MustParseAddr("104.21.0.1"),
+	}}
+	dial, attempts := failingDial("[2606:4700::1]:443", "[2606:4700::2]:443")
+	guard := httpx.NewGuard(resolver, dial, nil)
+
+	if _, err := guard.DialContext(t.Context(), "tcp", "metadata.invalid:443"); err != nil {
+		t.Fatalf("DialContext: %v", err)
+	}
+	if want := []string{"[2606:4700::1]:443", "104.21.0.1:443"}; !slices.Equal(*attempts, want) {
+		t.Errorf("attempts = %v, want %v", *attempts, want)
+	}
+}
+
+func TestGuard_ReportsEveryFailedAddressWhenNoneAnswers(t *testing.T) {
+	resolver := fakeResolver{"metadata.invalid": {netip.MustParseAddr("2606:4700::1"), netip.MustParseAddr("104.21.0.1")}}
+	dial, attempts := failingDial("[2606:4700::1]:443", "104.21.0.1:443")
+	guard := httpx.NewGuard(resolver, dial, nil)
+
+	_, err := guard.DialContext(t.Context(), "tcp", "metadata.invalid:443")
+	if err == nil || !strings.Contains(err.Error(), "[2606:4700::1]:443") || !strings.Contains(err.Error(), "104.21.0.1:443") {
+		t.Errorf("err = %v, want both failed addresses named", err)
+	}
+	if len(*attempts) != 2 {
+		t.Errorf("attempts = %v, want both addresses tried", *attempts)
+	}
+}
+
 func TestGuard_BlocksAnIPLiteralWithoutResolving(t *testing.T) {
 	guard := httpx.NewGuard(refusingResolver{t}, refusingDial, nil)
 
@@ -278,4 +312,16 @@ func TestNewGuardDefaultsItsResolverAndDialer(t *testing.T) {
 	if strings.Contains(err.Error(), "nil pointer") {
 		t.Errorf("the guard dereferenced a nil resolver: %v", err)
 	}
+}
+
+// failingDial records every address attempted and refuses the listed ones.
+func failingDial(refused ...string) (httpx.DialFunc, *[]string) {
+	var attempts []string
+	return func(_ context.Context, _, address string) (net.Conn, error) {
+		attempts = append(attempts, address)
+		if slices.Contains(refused, address) {
+			return nil, errors.New("connect " + address + ": permission denied")
+		}
+		return nil, nil //nolint:nilnil // the caller only inspects the attempts
+	}, &attempts
 }

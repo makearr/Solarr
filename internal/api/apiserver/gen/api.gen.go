@@ -155,6 +155,13 @@ const (
 	Ok HealthStatusStatus = "ok"
 )
 
+// Defines values for IdentificationAttemptOutcome.
+const (
+	Identified IdentificationAttemptOutcome = "identified"
+	Queued     IdentificationAttemptOutcome = "queued"
+	Retry      IdentificationAttemptOutcome = "retry"
+)
+
 // Defines values for ImportInspectRequestOrigin.
 const (
 	ImportInspectRequestOriginAcquisition ImportInspectRequestOrigin = "acquisition"
@@ -1091,6 +1098,44 @@ type HealthStatus struct {
 // HealthStatusStatus defines model for HealthStatus.Status.
 type HealthStatusStatus string
 
+// IdentificationAttempt defines model for IdentificationAttempt.
+type IdentificationAttempt struct {
+	AttemptedAt time.Time                    `json:"attempted_at"`
+	Outcome     IdentificationAttemptOutcome `json:"outcome"`
+	Passes      []IdentificationPass         `json:"passes"`
+}
+
+// IdentificationAttemptOutcome defines model for IdentificationAttempt.Outcome.
+type IdentificationAttemptOutcome string
+
+// IdentificationAttemptList defines model for IdentificationAttemptList.
+type IdentificationAttemptList struct {
+	File  UnidentifiedFile        `json:"file"`
+	Items []IdentificationAttempt `json:"items"`
+}
+
+// IdentificationCandidate defines model for IdentificationCandidate.
+type IdentificationCandidate struct {
+	Confidence float32                  `json:"confidence"`
+	Evidence   []IdentificationEvidence `json:"evidence"`
+	ExternalId *string                  `json:"external_id,omitempty"`
+	Provider   *string                  `json:"provider,omitempty"`
+	Strategy   string                   `json:"strategy"`
+}
+
+// IdentificationEvidence One fact a verdict rests on. Kinds include title, artist, release_type, edition, edition_title, edition_date, edition_country, edition_status, edition_tracks, files_matched ("7/12"), files_supported, distance, accepted, contradicted, recall and outcome.
+type IdentificationEvidence struct {
+	Detail string `json:"detail"`
+	Kind   string `json:"kind"`
+}
+
+// IdentificationPass One pass of a run. pass is embedded_tags, album_match, text_search or folder_siblings. outcome is identified, none or failed; album_match answers no_candidate, insufficient_evidence, ambiguous or contradictory instead; folder_siblings answers joined, siblings_disagree or no_identified_sibling.
+type IdentificationPass struct {
+	Candidates []IdentificationCandidate `json:"candidates"`
+	Outcome    string                    `json:"outcome"`
+	Pass       string                    `json:"pass"`
+}
+
 // Identity defines model for Identity.
 type Identity struct {
 	Role     Role   `json:"role"`
@@ -1101,10 +1146,13 @@ type Identity struct {
 // ImportCandidate One IDENTIFY strategy's ranked answer for a unit.
 type ImportCandidate struct {
 	Confidence float32 `json:"confidence"`
-	ExternalId *string `json:"external_id,omitempty"`
-	Provider   *string `json:"provider,omitempty"`
-	Strategy   string  `json:"strategy"`
-	WorkId     *int64  `json:"work_id,omitempty"`
+
+	// Evidence The facts the candidate's verdict rests on, as IdentificationCandidate's.
+	Evidence   *[]IdentificationEvidence `json:"evidence,omitempty"`
+	ExternalId *string                   `json:"external_id,omitempty"`
+	Provider   *string                   `json:"provider,omitempty"`
+	Strategy   string                    `json:"strategy"`
+	WorkId     *int64                    `json:"work_id,omitempty"`
 }
 
 // ImportEvidence Every GROUP signal that shaped this unit's boundary (ADR-10 shape).
@@ -2893,6 +2941,9 @@ type ServerInterface interface {
 	// Files a scan recorded that the ADR-24 chain could not confidently resolve (F29's manual identification queue).
 	// (GET /library/unidentified)
 	ListUnidentified(w http.ResponseWriter, r *http.Request, params ListUnidentifiedParams)
+	// How identification of a queued file went, newest run first.
+	// (GET /library/unidentified/{mediaObjectId}/attempts)
+	ListIdentificationAttempts(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
 	// Confirm a candidate for a queued file (section 21.3's manual-resolve action).
 	// (POST /library/unidentified/{mediaObjectId}/resolve)
 	ResolveUnidentified(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
@@ -3547,6 +3598,12 @@ func (_ Unimplemented) GetLibraryHealth(w http.ResponseWriter, r *http.Request) 
 // Files a scan recorded that the ADR-24 chain could not confidently resolve (F29's manual identification queue).
 // (GET /library/unidentified)
 func (_ Unimplemented) ListUnidentified(w http.ResponseWriter, r *http.Request, params ListUnidentifiedParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// How identification of a queued file went, newest run first.
+// (GET /library/unidentified/{mediaObjectId}/attempts)
+func (_ Unimplemented) ListIdentificationAttempts(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6306,6 +6363,39 @@ func (siw *ServerInterfaceWrapper) ListUnidentified(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ListIdentificationAttempts operation middleware
+func (siw *ServerInterfaceWrapper) ListIdentificationAttempts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "mediaObjectId" -------------
+	var mediaObjectId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "mediaObjectId", chi.URLParam(r, "mediaObjectId"), &mediaObjectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mediaObjectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListIdentificationAttempts(w, r, mediaObjectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ResolveUnidentified operation middleware
 func (siw *ServerInterfaceWrapper) ResolveUnidentified(w http.ResponseWriter, r *http.Request) {
 
@@ -8506,6 +8596,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/library/unidentified", wrapper.ListUnidentified)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/library/unidentified/{mediaObjectId}/attempts", wrapper.ListIdentificationAttempts)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/library/unidentified/{mediaObjectId}/resolve", wrapper.ResolveUnidentified)

@@ -374,6 +374,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/downloaders/{id}/test", server.routeTestDownloader)
 			secured.Get("/library/unidentified", server.routeListUnidentified)
 			secured.Post("/library/unidentified/{mediaObjectId}/resolve", server.routeResolveUnidentified)
+			secured.Get("/library/unidentified/{mediaObjectId}/attempts", server.routeListIdentificationAttempts)
 			secured.Get("/search", server.routeSearch)
 			secured.Post("/score/simulate", server.SimulateScore)
 			secured.Get("/libraries", server.ListLibraries)

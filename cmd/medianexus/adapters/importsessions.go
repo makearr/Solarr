@@ -215,6 +215,9 @@ func importCandidatesFrom(candidates []model.Identification) []apiserver.ImportC
 		if c.ExternalID != nil {
 			view.Provider, view.ExternalID = c.ExternalID.Provider, c.ExternalID.ExternalID
 		}
+		for _, evidence := range c.Evidence {
+			view.Evidence = append(view.Evidence, apiserver.IdentificationEvidence{Kind: evidence.Kind, Detail: evidence.Detail})
+		}
 		views[i] = view
 	}
 	return views

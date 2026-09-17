@@ -128,7 +128,19 @@ func (s SearchIdentifier) Identify(ctx context.Context, file model.FileRef) ([]m
 	}
 
 	result := match.Rank(claimed, candidates, nil, s.thresholds)
-	return identificationsFor(result), nil
+	identifications := identificationsFor(result)
+	for i, identification := range identifications {
+		for _, one := range matches {
+			if one.MBID == identification.ExternalID.ExternalID {
+				identifications[i].Evidence = append(identifications[i].Evidence,
+					model.MatchEvidence{Kind: EvidenceTitle, Detail: one.Title},
+					model.MatchEvidence{Kind: EvidenceArtist, Detail: one.ArtistCredit},
+					model.MatchEvidence{Kind: EvidenceReleaseType, Detail: one.PrimaryType})
+				break
+			}
+		}
+	}
+	return identifications, nil
 }
 
 // identificationsFor turns a match.Result into RunChain's input: the confident

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/metadata/metacache"
 	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/MediaNexus/internal/platform/httpx"
 	"github.com/makearr/MediaNexus/migrations"
 )
 
@@ -625,5 +627,29 @@ func TestProvider_SearchRecordingsSkipsSourcesWithoutItAndCaches(t *testing.T) {
 	}
 	if direct.searchCalls != 1 {
 		t.Errorf("searchCalls = %d, want 1 (the second search from cache)", direct.searchCalls)
+	}
+}
+
+// priorityRecordingSource records the request priority each lookup's context carried.
+type priorityRecordingSource struct {
+	fakeSource
+	seen []httpx.Priority
+}
+
+func (f *priorityRecordingSource) Album(ctx context.Context, _, _ string) (musicbrainz.ReleaseGroup, musicbrainz.Release, error) {
+	f.seen = append(f.seen, httpx.PriorityFrom(ctx))
+	return musicbrainz.ReleaseGroup{MBID: "rg-1"}, musicbrainz.Release{MBID: "release-1"}, nil
+}
+
+// The limiter can only put a user ahead of a scan if the caller's priority reaches the request.
+func TestProvider_TheCallersPriorityReachesTheRequest(t *testing.T) {
+	source := &priorityRecordingSource{fakeSource: fakeSource{name: "direct"}}
+	provider := newProvider(t, source)
+
+	if _, _, err := provider.Album(t.Context(), musicbrainz.PriorityInteractive, "rg-1", "release-1"); err != nil {
+		t.Fatalf("Album: %v", err)
+	}
+	if want := []httpx.Priority{httpx.Priority(musicbrainz.PriorityInteractive)}; !slices.Equal(source.seen, want) {
+		t.Errorf("priorities seen = %v, want %v", source.seen, want)
 	}
 }

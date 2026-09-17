@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
@@ -59,7 +60,19 @@ export function Unidentified() {
   });
 
   const columns: readonly Column<UnidentifiedFile>[] = [
-    { key: "rel_path", header: "Path", render: (file) => file.rel_path },
+    {
+      key: "rel_path",
+      header: "Path",
+      render: (file) => (
+        <Link
+          to="/unidentified/$mediaObjectId"
+          params={{ mediaObjectId: String(file.media_object_id) }}
+          className="hover:underline"
+        >
+          {file.rel_path}
+        </Link>
+      ),
+    },
     {
       key: "candidates",
       header: "Best guess",
@@ -69,8 +82,20 @@ export function Unidentified() {
     {
       key: "actions",
       header: "",
-      width: "8rem",
-      render: (file) => <ResolveAction file={file} onConfirm={() => resolve.mutate(file)} />,
+      width: "13rem",
+      render: (file) => (
+        <span className="flex items-center gap-1">
+          <Link
+            to="/unidentified/$mediaObjectId"
+            params={{ mediaObjectId: String(file.media_object_id) }}
+            className="rounded-md border border-border-subtle px-2 py-0.5 text-xs text-ink-muted hover:text-ink
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Review
+          </Link>
+          <ResolveAction file={file} onConfirm={() => resolve.mutate(file)} />
+        </span>
+      ),
     },
   ];
 

@@ -4,9 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/MediaNexus/internal/api/apiserver"
 	"github.com/makearr/MediaNexus/internal/db/settings"
@@ -46,6 +49,14 @@ type fakeUnidentifiedResolver struct {
 	lastProvider      string
 	lastExternalID    string
 	resolveCalls      int
+
+	attempts     []apiserver.IdentificationAttempt
+	attemptCalls int
+}
+
+func (f *fakeUnidentifiedResolver) IdentificationAttempts(context.Context, int64) ([]apiserver.IdentificationAttempt, error) {
+	f.attemptCalls++
+	return f.attempts, nil
 }
 
 func (f *fakeUnidentifiedResolver) GetUnidentified(
@@ -279,5 +290,57 @@ func TestListUnidentified_ResponseShapeAndCursor(t *testing.T) {
 	}
 	if body.NextCursor == "" {
 		t.Error("NextCursor is empty, want a cursor: there is a second row beyond the limit")
+	}
+}
+
+func TestListIdentificationAttempts_AnswersEveryPassWithItsEvidence(t *testing.T) {
+	fixture := newWorksFixture(t)
+	_, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	seen := time.Unix(1_600_000_000, 0).UTC()
+	fixture.unidentifiedResolver.entry = apiserver.UnidentifiedRow{
+		RootFolderID: root.ID, RelPath: "P!po/Kebilegev Bibihi/01.m4a", FirstSeenAt: seen, LastSeenAt: seen,
+	}
+	fixture.unidentifiedResolver.attempts = []apiserver.IdentificationAttempt{{
+		At: time.Unix(1_700_000_000, 0).UTC(), Outcome: "queued",
+		Passes: []apiserver.IdentificationPass{
+			{Pass: "embedded_tags", Outcome: "none"},
+			{Pass: "album_match", Outcome: "ambiguous", Candidates: []apiserver.IdentificationCandidate{{
+				Strategy: "parse", Provider: "musicbrainz:release-group", ExternalID: "rg-1", Confidence: 0.25,
+				Evidence: []apiserver.IdentificationEvidence{{Kind: "title", Detail: "Kebilegev Bibihi"}},
+			}}},
+		},
+	}}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/library/unidentified/1/attempts"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	want := `{"file":{"candidates":[],"first_seen_at":"2020-09-13T12:26:40Z","last_seen_at":"2020-09-13T12:26:40Z",` +
+		fmt.Sprintf(`"media_object_id":1,"rel_path":"P!po/Kebilegev Bibihi/01.m4a","root_folder_id":%d},`, root.ID) +
+		`"items":[{"attempted_at":"2023-11-14T22:13:20Z","outcome":"queued","passes":[` +
+		`{"candidates":[],"outcome":"none","pass":"embedded_tags"},` +
+		`{"candidates":[{"confidence":0.25,"evidence":[{"detail":"Kebilegev Bibihi","kind":"title"}],` +
+		`"external_id":"rg-1","provider":"musicbrainz:release-group","strategy":"parse"}],"outcome":"ambiguous","pass":"album_match"}]}]}`
+	if got := strings.TrimSpace(recorder.Body.String()); got != want {
+		t.Errorf("body = %s\nwant %s", got, want)
+	}
+}
+
+// The same ADR-27 guarantee as resolving: another category's file is not even known to exist.
+func TestListIdentificationAttempts_UnreadableRootFolderAnswers404(t *testing.T) {
+	fixture := newWorksFixture(t)
+	_, hidden := fixture.createCategoryWithRoot(t, "Private Stash", "/media/private")
+	fixture.unidentifiedResolver.entry = apiserver.UnidentifiedRow{RootFolderID: hidden.ID}
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/library/unidentified/1/attempts"))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", recorder.Code)
+	}
+	if fixture.unidentifiedResolver.attemptCalls != 0 {
+		t.Error("the attempts of an unreadable file must not even be read")
 	}
 }

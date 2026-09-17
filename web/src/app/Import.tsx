@@ -6,6 +6,8 @@ import { Ban, Undo2 } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
+import { IdentificationCandidates } from "./IdentificationCandidates";
+
 type ImportSession = components["schemas"]["ImportSession"];
 type ImportUnit = components["schemas"]["ImportUnit"];
 type ImportOrigin = ImportSession["origin"];
@@ -578,15 +580,9 @@ function UnitRow({ sessionId, unit }: { sessionId: number; unit: ImportUnit }) {
             <span>No evidence recorded.</span>
           )}
           {unit.candidates && unit.candidates.length > 0 && (
-            <ul className="flex flex-col gap-0.5 border-t border-border-subtle pt-1">
-              {unit.candidates.map((candidate, index) => (
-                <li key={index}>
-                  {candidate.strategy}
-                  {candidate.provider && ` -- ${candidate.provider}:${candidate.external_id}`}
-                  {` (${Math.round(candidate.confidence * 100)}%)`}
-                </li>
-              ))}
-            </ul>
+            <div className="border-t border-border-subtle pt-1">
+              <IdentificationCandidates candidates={unit.candidates} />
+            </div>
           )}
           {unit.reason && <span>Reason: {unit.reason}</span>}
         </div>
