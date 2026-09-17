@@ -397,6 +397,7 @@ func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.Artist
 	}
 
 	artist, err := j.provider.Artist(ctx, musicbrainz.PriorityEnrich, credit.MBID)
+	lookedUp := err == nil
 	if err != nil {
 		j.logger.WarnContext(ctx, "artist detail lookup failed",
 			slog.String("mbid", credit.MBID), slog.Any("error", err))
@@ -408,16 +409,25 @@ func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.Artist
 		sortName = artist.Name
 	}
 	bio := j.wikidataBiographyFor(ctx, artist)
+	identity := library.PersonIdentity{
+		Name: artist.Name, SortName: sortName, Disambiguation: artist.Disambiguation,
+		Kind: artist.Type, Gender: artist.Gender, Country: artist.Country,
+		Born: artist.Born, Died: artist.Died, Biography: biographyText(bio),
+	}
 	personID, err := j.people.ResolvePerson(ctx, j.clock.Now(), library.PersonLink{
-		Provider: ProviderArtist, ExternalID: artist.MBID,
-		Person: library.PersonIdentity{
-			Name: artist.Name, SortName: sortName, Disambiguation: artist.Disambiguation,
-			Kind: artist.Type, Gender: artist.Gender, Country: artist.Country,
-			Born: artist.Born, Died: artist.Died, Biography: biographyText(bio),
-		},
+		Provider: ProviderArtist, ExternalID: artist.MBID, Person: identity,
 	})
 	if err != nil {
 		return 0, err
+	}
+	// An existing person is returned untouched, so one created from a failed
+	// lookup kept no biography even after a later lookup succeeded -- and once
+	// that later lookup recorded a photo, the backfill never came back for it.
+	if lookedUp {
+		if err := j.people.BackfillDetails(ctx, personID, identity); err != nil {
+			j.logger.WarnContext(ctx, "artist details backfill failed",
+				slog.Int64("person_id", personID), slog.Any("error", err))
+		}
 	}
 	// Best-effort, same as the biography text above: a person is still worth
 	// having with no image at all. Album covers falling back to this image
