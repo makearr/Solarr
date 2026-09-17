@@ -117,6 +117,32 @@ func TestCoverArt_FetchReleaseGroupAsksForTheReleaseGroup(t *testing.T) {
 	}
 }
 
+// Detisisu Binip' real front image, captured 2026-09-17, trimmed to one image.
+const shepherdMoonsCoverArtBody = `{"images": [{"approved": true, "front": true,
+  "image": "http://coverartarchive.org/release/6bd24988-6767-4089-8d3d-f6efdcf7e624/34783123300.jpg",
+  "thumbnails": {
+    "1200": "http://coverartarchive.org/release/6bd24988-6767-4089-8d3d-f6efdcf7e624/34783123300-1200.jpg",
+    "250": "http://coverartarchive.org/release/6bd24988-6767-4089-8d3d-f6efdcf7e624/34783123300-250.jpg",
+    "500": "http://coverartarchive.org/release/6bd24988-6767-4089-8d3d-f6efdcf7e624/34783123300-500.jpg",
+    "large": "http://coverartarchive.org/release/6bd24988-6767-4089-8d3d-f6efdcf7e624/34783123300-500.jpg",
+    "small": "http://coverartarchive.org/release/6bd24988-6767-4089-8d3d-f6efdcf7e624/34783123300-250.jpg"}}]}`
+
+// The original upload is shrunk to 1000px anyway; the 1200 thumbnail is enough
+// and far smaller to fetch.
+func TestCoverArt_FetchPrefersTheLargeThumbnailOverTheOriginal(t *testing.T) {
+	server := newCoverArtServer(t, http.StatusOK, shepherdMoonsCoverArtBody)
+	coverArt := musicbrainz.NewCoverArt(newCoverArtClient(t, server.URL), server.URL)
+
+	image, err := coverArt.Fetch(t.Context(), "6bd24988-6767-4089-8d3d-f6efdcf7e624")
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	const want = "http://coverartarchive.org/release/6bd24988-6767-4089-8d3d-f6efdcf7e624/34783123300-1200.jpg"
+	if image != want {
+		t.Errorf("image = %q, want the 1200 thumbnail %q", image, want)
+	}
+}
+
 func TestCoverArt_FetchReturnsErrNoCoverArtOn404(t *testing.T) {
 	server := newCoverArtServer(t, http.StatusNotFound,
 		"<!doctype html><title>404 Not Found</title><h1>Not Found</h1>")

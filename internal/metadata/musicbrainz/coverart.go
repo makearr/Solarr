@@ -43,9 +43,27 @@ type coverArtResponse struct {
 }
 
 type coverArtImage struct {
-	Approved bool   `json:"approved"`
-	Front    bool   `json:"front"`
-	Image    string `json:"image"`
+	Approved   bool              `json:"approved"`
+	Front      bool              `json:"front"`
+	Image      string            `json:"image"`
+	Thumbnails map[string]string `json:"thumbnails"`
+}
+
+// coverArtThumbnails are the archive's ready-made renditions, largest first.
+// 1200 is the smallest that still covers platform/artwork's largest size
+// (1000); the original upload is often many megabytes behind a slow redirect,
+// only to be shrunk anyway, which is why covers used to arrive at roughly one
+// every nine seconds (2026-09-17).
+var coverArtThumbnails = []string{"1200", "large", "500"}
+
+// url is the rendition worth downloading: a large thumbnail, else the original.
+func (i coverArtImage) url() string {
+	for _, size := range coverArtThumbnails {
+		if thumbnail := i.Thumbnails[size]; thumbnail != "" {
+			return thumbnail
+		}
+	}
+	return i.Image
 }
 
 // Fetch answers the best available source image URL for a release: the
@@ -97,11 +115,11 @@ func (c CoverArt) fetch(ctx context.Context, entity, mbid string) (string, error
 func bestCoverArtImage(images []coverArtImage) (string, bool) {
 	for _, image := range images {
 		if image.Front && image.Approved {
-			return image.Image, true
+			return image.url(), true
 		}
 	}
 	if len(images) > 0 {
-		return images[0].Image, true
+		return images[0].url(), true
 	}
 	return "", false
 }
