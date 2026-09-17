@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/netip"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -122,11 +123,30 @@ func TestClient_SendsTheIdentifyingUserAgent(t *testing.T) {
 	}
 }
 
-// BrainzMash's front door refuses any agent not starting "Lidarr/"; MediaNexus must still be named.
-func TestLidarrCompatibleUserAgent(t *testing.T) {
-	got := httpx.LidarrCompatibleUserAgent("1.2.3")
-	if want := "Lidarr/2.9.6.4552 (MediaNexus/1.2.3; +https://github.com/makearr/MediaNexus)"; got != want {
-		t.Errorf("LidarrCompatibleUserAgent = %q, want %q", got, want)
+// A settings change must reach the next request without rebuilding the client.
+func TestClient_LiveUserAgentIsReadOnEveryRequest(t *testing.T) {
+	transport := &roundTripper{responses: []*http.Response{respond(http.StatusOK, nil), respond(http.StatusOK, nil)}}
+	agent := "Lidarr/2.9.6.4552"
+	fake := clock.NewFakeAtEpoch()
+	client := httpx.NewClient(fake, httpx.NewGuard(fakeResolver{}, refusingDial, nil),
+		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewBreaker(fake, httpx.BreakerConfig{}), httpx.ClientConfig{
+			Provider: "live-agent", UserAgent: "static", Transport: transport,
+			LiveUserAgent: func() string { return agent },
+		})
+
+	var got []string
+	for _, next := range []string{"Lidarr/2.9.6.4552", "Lidarr/3.0.0"} {
+		agent = next
+		response, err := client.Get(t.Context(), "https://metadata.invalid/ws/2/artist")
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		_ = response.Body.Close()
+		got = append(got, transport.requests[len(transport.requests)-1].Header.Get("User-Agent"))
+	}
+	if want := []string{"Lidarr/2.9.6.4552", "Lidarr/3.0.0"}; !slices.Equal(got, want) {
+		t.Errorf("User-Agents sent = %v, want %v", got, want)
 	}
 }
 

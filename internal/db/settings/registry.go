@@ -243,6 +243,14 @@ func NewDefaultRegistry() *Registry {
 		Default:  fmt.Sprintf("%d", DefaultPriorityNewReleaseDays),
 	})
 
+	// Metadata providers: only needed while a provider filters agents, so advanced.
+	registry.MustRegister(SettingDef{
+		Key: KeyBrainzMashUserAgent, Kind: KindString, Tier: TierAdvanced,
+		Name:     "BrainzMash User-Agent",
+		HelpText: "Sent to BrainzMash, whose front door refuses agents not starting \"Lidarr/\".",
+		Default:  DefaultBrainzMashUserAgent,
+	})
+
 	// The non-scalar audit (todo 4.14, taken deep on the user's own word,
 	// 2026-09-12): every settings surface that is real rows rather than a
 	// single instance_setting value, tiered at the whole-surface level --

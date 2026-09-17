@@ -901,6 +901,40 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /metadata/settings:
+    get:
+      operationId: getMetadataSettings
+      tags: [settings]
+      summary: The metadata providers' own settings.
+      responses:
+        "200":
+          description: The current policy.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetadataSettings" }
+        "401": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateMetadataSettings
+      tags: [settings]
+      summary: Change the metadata providers' settings. Administrator only.
+      description: >-
+        Written wholesale and validated on write (ADR-44). The BrainzMash
+        User-Agent applies to the next request, with no restart.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MetadataSettings" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetadataSettings" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /import/settings:
     get:
       operationId: getImportSettings
@@ -5100,6 +5134,17 @@ components:
           type: integer
           format: int64
           description: Days after release an item still counts as new rather than a gap. Default 7.
+
+    MetadataSettings:
+      type: object
+      description: The metadata providers' own settings.
+      required: [brainzmash_user_agent]
+      properties:
+        brainzmash_user_agent:
+          type: string
+          description: >-
+            Sent to BrainzMash, whose front door refuses agents not starting
+            "Lidarr/". Printable ASCII, 1-256 characters. Default Lidarr/2.9.6.4552.
 
     ImportSettings:
       type: object

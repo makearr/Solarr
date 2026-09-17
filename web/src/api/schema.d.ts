@@ -620,6 +620,27 @@ export interface paths {
         patch: operations["updatePrioritySettings"];
         trace?: never;
     };
+    "/metadata/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The metadata providers' own settings. */
+        get: operations["getMetadataSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the metadata providers' settings. Administrator only.
+         * @description Written wholesale and validated on write (ADR-44). The BrainzMash User-Agent applies to the next request, with no restart.
+         */
+        patch: operations["updateMetadataSettings"];
+        trace?: never;
+    };
     "/import/settings": {
         parameters: {
             query?: never;
@@ -3370,6 +3391,11 @@ export interface components {
              */
             new_release_days: number;
         };
+        /** @description The metadata providers' own settings. */
+        MetadataSettings: {
+            /** @description Sent to BrainzMash, whose front door refuses agents not starting "Lidarr/". Printable ASCII, 1-256 characters. Default Lidarr/2.9.6.4552. */
+            brainzmash_user_agent: string;
+        };
         /** @description ADR-48's own single commit-line knob (import.auto_commit_confidence). */
         ImportSettings: {
             /**
@@ -4834,6 +4860,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PrioritySettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getMetadataSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current policy. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataSettings"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    updateMetadataSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetadataSettings"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataSettings"];
                 };
             };
             400: components["responses"]["Problem"];

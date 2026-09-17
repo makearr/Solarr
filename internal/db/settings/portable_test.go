@@ -244,13 +244,17 @@ func TestDocument_RoundTrips_IncludesScalarSettings(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SetPrioritySettings: %v", err)
 	}
+	if err := cache.SetMetadataSettings(t.Context(), fake, settings.MetadataSettings{BrainzMashUserAgent: "Lidarr/3.0.0"}); err != nil {
+		t.Fatalf("SetMetadataSettings: %v", err)
+	}
 
 	exported := cache.Export()
 	if exported.Settings == nil {
 		t.Fatal("Export did not populate Settings at all")
 	}
 	if exported.Settings.AuthRequired || exported.Settings.NetworkPort != 8443 ||
-		exported.Settings.CacheImagesSharePercent != 60 || exported.Settings.PriorityUserRequestWeight != 50 {
+		exported.Settings.CacheImagesSharePercent != 60 || exported.Settings.PriorityUserRequestWeight != 50 ||
+		exported.Settings.BrainzMashUserAgent != "Lidarr/3.0.0" {
 		t.Fatalf("exported settings = %+v, want the values just set", exported.Settings)
 	}
 
@@ -269,6 +273,23 @@ func TestDocument_RoundTrips_IncludesScalarSettings(t *testing.T) {
 	}
 	if got := fresh.Export(); !equalDocuments(got, exported) {
 		t.Errorf("round trip changed the configuration:\n got %+v\nwant %+v", got.Settings, exported.Settings)
+	}
+}
+
+// An export written before the agent setting existed must not reset a stored agent.
+func TestImport_ADocumentWithoutTheBrainzMashAgentKeepsTheStoredOne(t *testing.T) {
+	cache, fake := newCache(t)
+	if err := cache.SetMetadataSettings(t.Context(), fake, settings.MetadataSettings{BrainzMashUserAgent: "Lidarr/3.0.0"}); err != nil {
+		t.Fatalf("SetMetadataSettings: %v", err)
+	}
+	document := cache.Export()
+	document.Settings.BrainzMashUserAgent = ""
+
+	if err := cache.Import(t.Context(), fake, netip.Addr{}, document); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if got := cache.Snapshot().MetadataSettings().BrainzMashUserAgent; got != "Lidarr/3.0.0" {
+		t.Errorf("agent = %q after importing a document without one, want the stored agent kept", got)
 	}
 }
 
