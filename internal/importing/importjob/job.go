@@ -95,6 +95,8 @@ type Job struct {
 	// Searcher is deliberately deferred to whichever caller needs real
 	// auto-resolution against untagged scene content.
 	search music.Searcher
+	// albums is optional: when set, a unit its embedded MBIDs did not identify is matched as an album.
+	albums music.AlbumLookup
 	// committer is optional: nil means a COMMIT decision never places a file,
 	// today's own default for a session with no destination category
 	// (private/questions.md) or a caller (a test) with no real library to
@@ -119,6 +121,7 @@ type Config struct {
 	Policy    Policy
 	Tool      mediatool.Tool
 	Search    music.Searcher
+	Albums    music.AlbumLookup
 	Committer Committer
 	Packs     library.Packs
 	Events    *events.Bus
@@ -134,7 +137,7 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		fsys: config.FS, sessions: config.Sessions, policy: config.Policy,
-		tool: config.Tool, search: config.Search, committer: config.Committer, packs: config.Packs,
+		tool: config.Tool, search: config.Search, albums: config.Albums, committer: config.Committer, packs: config.Packs,
 		events: config.Events, clock: config.Clock, logger: logger,
 	}
 }
@@ -342,6 +345,7 @@ const identifyParallelism = 8
 // use" applies just as much to a second identify call as to a second probe).
 func identifyCluster(
 	ctx context.Context, ids []int64, batch []inspect.Unit, identifiers []model.Identifier, cfg model.ChainConfig,
+	refine refineUnit,
 ) ([]library.UnitDecision, []model.ChainResult) {
 	decisions := make([]library.UnitDecision, len(batch))
 	results := make([]model.ChainResult, len(batch))
@@ -353,7 +357,7 @@ func identifyCluster(
 		go func(i int, unit inspect.Unit) {
 			defer running.Done()
 			defer func() { <-slots }()
-			decisions[i], results[i] = identifyUnit(ctx, ids[i], unit, identifiers, cfg)
+			decisions[i], results[i] = identifyUnit(ctx, ids[i], unit, identifiers, cfg, refine)
 		}(i, unit)
 	}
 	running.Wait()
@@ -367,8 +371,12 @@ func identifyCluster(
 // identifyBatch already applies at scan time.
 func identifyUnit(
 	ctx context.Context, unitID int64, unit inspect.Unit, identifiers []model.Identifier, cfg model.ChainConfig,
+	refine refineUnit,
 ) (library.UnitDecision, model.ChainResult) {
 	result, err := music.IdentifyUnit(ctx, unit, identifiers, cfg)
+	if err == nil && refine != nil {
+		result = refine(ctx, unit, result)
+	}
 	decision := model.DecisionFailed
 	var confidence float64
 	var candidatesJSON string
@@ -384,6 +392,27 @@ func identifyUnit(
 		}
 	}
 	return library.UnitDecision{UnitID: unitID, Decision: string(decision), Confidence: confidence, CandidatesJSON: candidatesJSON}, result
+}
+
+// refineUnit improves one unit's chain result; it must be safe to call concurrently.
+type refineUnit func(ctx context.Context, unit inspect.Unit, result model.ChainResult) model.ChainResult
+
+// albumRefiner matches units as albums over the cluster's probes, or nil when no lookup is configured.
+func (j *Job) albumRefiner(relPaths []string, probes []mediatool.Probe) refineUnit {
+	if j.albums == nil {
+		return nil
+	}
+	byPath := make(map[string]mediatool.Probe, len(probes))
+	for i, probe := range probes {
+		byPath[relPaths[i]] = probe
+	}
+	return func(ctx context.Context, unit inspect.Unit, result model.ChainResult) model.ChainResult {
+		refined, err := music.RefineUnitByAlbum(ctx, j.albums, unit, byPath, result)
+		if err != nil {
+			j.logger.Warn("import album identification failed", slog.String("unit", unit.Directory), slog.Any("error", err))
+		}
+		return refined
+	}
 }
 
 // poisonedByExclusion checks every file a unit carries -- Media and Other
@@ -481,7 +510,7 @@ func (j *Job) commitCluster(
 
 	poisonReasons := j.poisonedByExclusion(batch, categoryID)
 
-	decisions, results := identifyCluster(ctx, ids, batch, identifiers, cfg)
+	decisions, results := identifyCluster(ctx, ids, batch, identifiers, cfg, j.albumRefiner(relPaths, probes))
 	for i, reason := range poisonReasons {
 		if reason != "" {
 			// Overrides whatever IDENTIFY decided -- ADR-53's refuse action

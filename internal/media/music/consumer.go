@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
+	"strings"
 
 	"github.com/makearr/MediaNexus/internal/db/library"
 	"github.com/makearr/MediaNexus/internal/db/settings"
 	"github.com/makearr/MediaNexus/internal/identify/model"
+	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
 	"github.com/makearr/MediaNexus/internal/platform/fsx"
 	"github.com/makearr/MediaNexus/internal/platform/mediatool"
@@ -57,6 +59,7 @@ type Consumer struct {
 	identity     library.Identity
 	unidentified library.Unidentified
 	search       Searcher
+	albums       AlbumLookup
 	clock        clock.Clock
 	chain        model.ChainConfig
 	logger       *slog.Logger
@@ -84,6 +87,9 @@ type ConsumerConfig struct {
 	// one strategy stage 3 shipped with -- a media type or test with no metadata
 	// provider configured is unaffected.
 	Search Searcher
+	// Albums identifies a folder's untagged files together against whole tracklists.
+	// Nil leaves identification per file.
+	Albums AlbumLookup
 	Clock  clock.Clock
 	// Chain tunes RunChain (model.ChainConfig). The zero value takes the package
 	// defaults above.
@@ -111,7 +117,7 @@ func NewConsumer(config ConsumerConfig) Consumer {
 	}
 	return Consumer{
 		fsys: config.FS, physical: config.Physical, identity: config.Identity,
-		unidentified: config.Unidentified, search: config.Search,
+		unidentified: config.Unidentified, search: config.Search, albums: config.Albums,
 		clock: config.Clock, chain: chain, logger: logger,
 		desired: config.Desired, categories: config.Categories, defaultProfileID: config.DefaultProfileID,
 	}
@@ -162,11 +168,12 @@ func (c Consumer) Observe(
 	}
 
 	tags := tagSourceFor(root, readable)
-	identifiers := []model.Identifier{NewMBIDIdentifier(tags)}
+	embedded := []model.Identifier{NewMBIDIdentifier(tags)}
+	var search []model.Identifier
 	if c.search != nil {
-		identifiers = append(identifiers, NewSearchIdentifier(SearchIdentifierConfig{Tags: tags, Search: c.search}))
+		search = []model.Identifier{NewSearchIdentifier(SearchIdentifierConfig{Tags: tags, Search: c.search})}
 	}
-	links, trackFiles, queued, resolved := c.identifyBatch(ctx, root.ID, readable, mediaObjectIDs, identifiers)
+	links, trackFiles, queued, resolved := c.identifyBatch(ctx, root.ID, readable, mediaObjectIDs, embedded, search)
 	workIDs, err := c.identity.ResolveWorks(ctx, now, links)
 	if err != nil {
 		return fmt.Errorf("music: %w", err)
@@ -190,76 +197,208 @@ func (c Consumer) Observe(
 	return nil
 }
 
-// identifyBatch runs the ADR-24 chain per file. links is what resolved and should
-// be written to the library; trackFiles is that same file's own claimed
-// disc/track/title/recording-id (section 19.6), positionally lined up with
-// links for discoverWanted to use once ResolveWorks says which work each one
-// belongs to; queued is every file whose merged result did not clear
-// AmbiguityThreshold, bound for the F29 manual identification queue with
-// whatever candidates RunChain still found; resolved is the media_object ids
-// that did identify, so a previously queued entry for one of them can be
-// cleared.
+// identifyBatch identifies a directory batch in passes: embedded MBIDs, whole-album matching,
+// per-file text search, folder siblings. queued feeds the F29 queue; resolved clears it.
 func (c Consumer) identifyBatch(
 	ctx context.Context, rootFolderID int64, observed []scan.Observed, mediaObjectIDs []int64,
-	identifiers []model.Identifier,
+	embedded, search []model.Identifier,
 ) (links []library.WorkLink, trackFiles []TrackFile, queued []library.QueueEntry, resolved []int64) {
-	now := c.clock.Now().Unix()
-	type unresolvedFile struct {
-		index int
-		entry library.QueueEntry
+	out := batchResult{rootFolderID: rootFolderID, observed: observed, mediaObjectIDs: mediaObjectIDs, at: c.clock.Now().Unix()}
+	all := make([]pendingFile, len(observed))
+	for index := range observed {
+		all[index] = pendingFile{index: index}
 	}
-	var unresolved []unresolvedFile
-	for index, one := range observed {
-		mediaObjectID := mediaObjectIDs[index]
-		fileRef := model.FileRef{
-			MediaObjectID: &mediaObjectID, RootFolderID: &rootFolderID, RelPath: one.File.RelPath,
-		}
-		result, err := model.RunChain(ctx, identifiers, fileRef, c.chain)
-		if err != nil {
-			// A strategy failing to run is not a reason to fail the whole batch --
-			// this file simply stays unidentified for the next sweep to retry, and
-			// is not queued: a transient failure is not evidence there is nothing
-			// to find, so it should not display "no candidates" until it is.
-			c.logger.Warn("identify failed", slog.String("path", one.File.RelPath), slog.Any("error", err))
-			continue
-		}
-		// Best.ExternalID is unset only if a future strategy resolves straight to a
-		// local WorkID (ADR-24); none does yet, so there is nothing to link there --
-		// treated the same as an unresolved chain below.
-		if result.Best == nil || result.Best.ExternalID == nil {
-			unresolved = append(unresolved, unresolvedFile{index: index, entry: library.QueueEntry{
-				MediaObjectID: mediaObjectID, RootFolderID: rootFolderID, RelPath: one.File.RelPath,
-				Candidates: result.Candidates, At: now,
-			}})
-			continue
-		}
-		resolved = append(resolved, mediaObjectID)
-		links = append(links, library.WorkLink{
-			Provider: result.Best.ExternalID.Provider, ExternalID: result.Best.ExternalID.ExternalID,
-			Confidence: result.Best.ExternalID.Confidence, Work: newWorkIdentity(one),
-			Edition: newEditionLink(one), RootFolderID: rootFolderID, MediaObjectID: mediaObjectID,
-		})
-		trackFiles = append(trackFiles, ReadTrackFile(mediaObjectID, one.Probe.Tags))
+
+	pending := c.runChain(ctx, &out, embedded, all)
+	if c.albums != nil && len(pending) > 0 {
+		pending = c.identifyAlbums(ctx, &out, pending)
+	}
+	if len(search) > 0 && len(pending) > 0 {
+		pending = c.runChain(ctx, &out, search, pending)
 	}
 
 	// A file nothing could identify joins its folder's album when every
 	// identified file in the folder agreed on one (approved 2026-09-17: 127 of
 	// 140 unidentified test files sat beside siblings like that).
-	sibling, agreed := soleSiblingIdentity(links)
-	for _, file := range unresolved {
+	sibling, agreed := soleSiblingIdentity(out.links)
+	for _, file := range pending {
 		if !agreed {
-			queued = append(queued, file.entry)
+			out.queue(file.index, file.candidates)
 			continue
 		}
-		one, mediaObjectID := observed[file.index], mediaObjectIDs[file.index]
-		resolved = append(resolved, mediaObjectID)
-		links = append(links, library.WorkLink{
+		one := observed[file.index]
+		out.identify(file.index, library.WorkLink{
 			Provider: sibling.Provider, ExternalID: sibling.ExternalID, Confidence: siblingConfidence,
-			Work: newWorkIdentity(one), RootFolderID: rootFolderID, MediaObjectID: mediaObjectID,
-		})
-		trackFiles = append(trackFiles, ReadTrackFile(mediaObjectID, one.Probe.Tags))
+			Work: newWorkIdentity(one), RootFolderID: rootFolderID, MediaObjectID: mediaObjectIDs[file.index],
+		}, ReadTrackFile(mediaObjectIDs[file.index], one.Probe.Tags))
 	}
-	return links, trackFiles, queued, resolved
+	return out.links, out.trackFiles, out.queued, out.resolved
+}
+
+// batchResult accumulates what identifyBatch's passes decide for one batch.
+type batchResult struct {
+	rootFolderID   int64
+	observed       []scan.Observed
+	mediaObjectIDs []int64
+	at             int64
+
+	links      []library.WorkLink
+	trackFiles []TrackFile
+	queued     []library.QueueEntry
+	resolved   []int64
+}
+
+func (r *batchResult) identify(index int, link library.WorkLink, file TrackFile) {
+	r.resolved = append(r.resolved, r.mediaObjectIDs[index])
+	r.links = append(r.links, link)
+	r.trackFiles = append(r.trackFiles, file)
+}
+
+func (r *batchResult) queue(index int, candidates []model.Identification) {
+	r.queued = append(r.queued, library.QueueEntry{
+		MediaObjectID: r.mediaObjectIDs[index], RootFolderID: r.rootFolderID,
+		RelPath: r.observed[index].File.RelPath, Candidates: candidates, At: r.at,
+	})
+}
+
+// pendingFile is a batch file no pass has identified yet, with the best candidates seen so far.
+type pendingFile struct {
+	index      int
+	candidates []model.Identification
+}
+
+// runChain runs the ADR-24 chain per pending file, answering what is still unresolved; a file
+// whose strategy failed to run is dropped unqueued, so a transient failure never reads as "no candidates".
+func (c Consumer) runChain(ctx context.Context, out *batchResult, identifiers []model.Identifier, files []pendingFile) []pendingFile {
+	var pending []pendingFile
+	for _, file := range files {
+		one := out.observed[file.index]
+		mediaObjectID := out.mediaObjectIDs[file.index]
+		fileRef := model.FileRef{MediaObjectID: &mediaObjectID, RootFolderID: &out.rootFolderID, RelPath: one.File.RelPath}
+		result, err := model.RunChain(ctx, identifiers, fileRef, c.chain)
+		if err != nil {
+			c.logger.Warn("identify failed", slog.String("path", one.File.RelPath), slog.Any("error", err))
+			continue
+		}
+		if result.Best == nil || result.Best.ExternalID == nil {
+			if len(result.Candidates) > 0 {
+				file.candidates = result.Candidates
+			}
+			pending = append(pending, file)
+			continue
+		}
+		out.identify(file.index, library.WorkLink{
+			Provider: result.Best.ExternalID.Provider, ExternalID: result.Best.ExternalID.ExternalID,
+			Confidence: result.Best.ExternalID.Confidence, Work: newWorkIdentity(one),
+			Edition: newEditionLink(one), RootFolderID: out.rootFolderID, MediaObjectID: mediaObjectID,
+		}, ReadTrackFile(mediaObjectID, one.Probe.Tags))
+	}
+	return pending
+}
+
+// identifyAlbums matches pending files album by album: identified links each file to the release,
+// ambiguous is queued rather than guessed per file, anything else stays pending for later passes.
+func (c Consumer) identifyAlbums(ctx context.Context, out *batchResult, files []pendingFile) []pendingFile {
+	var seeds []string
+	if sibling, agreed := soleSiblingIdentity(out.links); agreed && sibling.Provider == ProviderReleaseGroup {
+		seeds = []string{sibling.ExternalID}
+	}
+
+	var pending []pendingFile
+	for _, group := range groupByAlbum(out.observed, files) {
+		locals := make([]LocalTrack, len(group))
+		for i, file := range group {
+			one := out.observed[file.index]
+			locals[i] = ReadLocalTrack(one.Probe.Tags, one.Probe.Measured, one.File.RelPath)
+		}
+		decision, err := IdentifyAlbum(ctx, c.albums, musicbrainz.PriorityIdentify, locals, seeds)
+		if err != nil {
+			c.logger.Warn("album identification failed",
+				slog.String("path", out.observed[group[0].index].File.RelPath), slog.Any("error", err))
+			pending = append(pending, group...)
+			continue
+		}
+		switch decision.Outcome {
+		case AlbumIdentified:
+			for i, file := range group {
+				out.identify(file.index, albumLink(out, file.index, *decision.Best, decision.Best.Tracks[i]),
+					albumTrackFile(out, file.index, decision.Best.Tracks[i]))
+			}
+		case AlbumAmbiguous:
+			candidates := AlbumCandidates(decision)
+			for _, file := range group {
+				out.queue(file.index, candidates)
+			}
+		default:
+			pending = append(pending, group...)
+		}
+	}
+	return pending
+}
+
+// groupByAlbum splits pending files by their album tag; untagged files join the only tagged
+// album when there is one, and form their own group otherwise.
+func groupByAlbum(observed []scan.Observed, files []pendingFile) [][]pendingFile {
+	var keys []string
+	groups := make(map[string][]pendingFile)
+	for _, file := range files {
+		tags := observed[file.index].Probe.Tags
+		key := ""
+		if album := strings.ToLower(strings.TrimSpace(tags.First("album"))); album != "" {
+			key = strings.ToLower(strings.TrimSpace(tags.First("albumartist", "album_artist", "artist"))) + "\x1f" + album
+		}
+		if _, seen := groups[key]; !seen {
+			keys = append(keys, key)
+		}
+		groups[key] = append(groups[key], file)
+	}
+	if untagged, found := groups[""]; found && len(keys) == 2 {
+		tagged := keys[0]
+		if tagged == "" {
+			tagged = keys[1]
+		}
+		groups[tagged] = append(groups[tagged], untagged...)
+		delete(groups, "")
+		keys = []string{tagged}
+	}
+	result := make([][]pendingFile, 0, len(keys))
+	for _, key := range keys {
+		if group, found := groups[key]; found {
+			result = append(result, group)
+		}
+	}
+	return result
+}
+
+// albumLink links one file of an identified album to its release group and release; a file
+// the release has no track for sits at sibling confidence, since only its folder says so.
+func albumLink(out *batchResult, index int, best ReleaseScore, track *ReleaseTrack) library.WorkLink {
+	confidence := albumConfidence(best.Distance)
+	if track == nil {
+		confidence = siblingConfidence
+	}
+	release := best.Candidate.Release.MBID
+	return library.WorkLink{
+		Provider: ProviderReleaseGroup, ExternalID: best.Candidate.ReleaseGroup.MBID, Confidence: confidence,
+		Work: newWorkIdentity(out.observed[index]), RootFolderID: out.rootFolderID, MediaObjectID: out.mediaObjectIDs[index],
+		Edition: &library.EditionLink{
+			Provider: ProviderRelease, ExternalID: release, Confidence: confidence,
+			Edition: library.EditionIdentity{Kind: "unknown", Label: release},
+		},
+	}
+}
+
+// albumTrackFile is the file as its matched track, so wanting and alignment use the
+// release's own position and recording rather than the file's possibly missing tags.
+func albumTrackFile(out *batchResult, index int, track *ReleaseTrack) TrackFile {
+	file := ReadTrackFile(out.mediaObjectIDs[index], out.observed[index].Probe.Tags)
+	if track != nil {
+		file.Disc, file.Track, file.RecordingMBID = track.Disc, track.Position, track.RecordingMBID
+		if file.Title == "" {
+			file.Title = track.Title
+		}
+	}
+	return file
 }
 
 // siblingConfidence is below anything a strategy reports for the file itself:

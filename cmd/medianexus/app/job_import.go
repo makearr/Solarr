@@ -41,6 +41,7 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		Policy:    adapters.ImportPolicy{Cache: p.cache},
 		Tool:      p.mediaTool(),
 		Search:    p.musicBrainzProvider(),
+		Albums:    p.musicBrainzProvider(),
 		Committer: p.importCommitter(),
 		Packs:     library.NewPacks(p.library),
 		Events:    p.bus,

@@ -255,7 +255,7 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context) (withEdition []int64)
 			j.enrichCreditsAndGenres(ctx, work.WorkID, rg)
 			j.enrichDescription(ctx, work.WorkID, rg)
 			enriched++
-			if j.chooseEdition(ctx, work) {
+			if j.chooseEdition(ctx, work, rg) {
 				withEdition = append(withEdition, work.WorkID)
 			}
 		}
@@ -274,7 +274,7 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context) (withEdition []int64)
 // edition its files fit best (chooseRelease, approved 2026-09-17), then refines
 // it like any placeholder edition, which builds the tracklist. True when an
 // edition was chosen and refined, so the work's files can be matched to it.
-func (j *EnrichJob) chooseEdition(ctx context.Context, work library.EditionlessWork) bool {
+func (j *EnrichJob) chooseEdition(ctx context.Context, work library.EditionlessWork, group musicbrainz.ReleaseGroup) bool {
 	if j.tags == nil || j.roots == nil {
 		return false
 	}
@@ -283,9 +283,11 @@ func (j *EnrichJob) chooseEdition(ctx context.Context, work library.EditionlessW
 		return false
 	}
 	paths := make([]string, 0, min(len(locations), maxEditionChoiceFiles))
+	relPaths := make([]string, 0, cap(paths))
 	for _, location := range locations[:min(len(locations), maxEditionChoiceFiles)] {
 		if root, found := j.roots.RootFolder(location.RootFolderID); found {
 			paths = append(paths, path.Join(root.Path, location.RelPath))
+			relPaths = append(relPaths, location.RelPath)
 		}
 	}
 	probes, err := j.tags.ReadTags(ctx, paths)
@@ -293,10 +295,10 @@ func (j *EnrichJob) chooseEdition(ctx context.Context, work library.EditionlessW
 		j.logger.WarnContext(ctx, "edition choice tag read failed", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
 		return false
 	}
-	files := make([]TrackFile, 0, len(probes))
+	locals := make([]LocalTrack, 0, len(probes))
 	for index, probe := range probes {
 		if probe.Err == nil {
-			files = append(files, ReadTrackFile(int64(index+1), probe.Tags))
+			locals = append(locals, ReadLocalTrack(probe.Tags, probe.Measured, relPaths[index]))
 		}
 	}
 
@@ -305,7 +307,7 @@ func (j *EnrichJob) chooseEdition(ctx context.Context, work library.EditionlessW
 		j.logger.WarnContext(ctx, "edition choice release listing failed", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
 		return false
 	}
-	release, ok := chooseRelease(releases, files)
+	release, ok := chooseRelease(group, releases, locals)
 	if !ok {
 		return false
 	}

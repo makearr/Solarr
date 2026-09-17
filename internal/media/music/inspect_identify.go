@@ -7,6 +7,7 @@ import (
 
 	"github.com/makearr/MediaNexus/internal/identify/model"
 	"github.com/makearr/MediaNexus/internal/importing/inspect"
+	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
 	"github.com/makearr/MediaNexus/internal/platform/mediatool"
 )
 
@@ -51,4 +52,34 @@ func UnitTagSourceFor(root string, probes []mediatool.Probe) Resolved {
 		Tags: NewBatchTags(probes),
 		Path: func(file model.FileRef) (string, bool) { return path.Join(root, file.RelPath), true },
 	}
+}
+
+// RefineUnitByAlbum matches a unit its embedded MBIDs did not identify against whole
+// tracklists, replacing a weaker text-search answer. probes are keyed by the unit's RelPath.
+func RefineUnitByAlbum(
+	ctx context.Context, lookup AlbumLookup, unit inspect.Unit, probes map[string]mediatool.Probe, result model.ChainResult,
+) (model.ChainResult, error) {
+	if lookup == nil || (result.Best != nil && result.Best.Strategy == StrategyEmbeddedTag) {
+		return result, nil
+	}
+	var locals []LocalTrack
+	for _, media := range unit.Media {
+		if probe, found := probes[media.RelPath]; found && probe.Err == nil {
+			locals = append(locals, ReadLocalTrack(probe.Tags, probe.Measured, media.RelPath))
+		}
+	}
+	decision, err := IdentifyAlbum(ctx, lookup, musicbrainz.PriorityIdentify, locals, nil)
+	if err != nil {
+		return result, fmt.Errorf("music: identify unit %q as an album: %w", unit.Directory, err)
+	}
+	switch decision.Outcome {
+	case AlbumIdentified:
+		best := AlbumCandidates(AlbumDecision{Outcome: decision.Outcome, Scores: []ReleaseScore{*decision.Best}})[0]
+		best.Confidence = albumConfidence(decision.Best.Distance)
+		best.ExternalID.Confidence = best.Confidence
+		return model.ChainResult{Best: &best, Candidates: append([]model.Identification{best}, result.Candidates...)}, nil
+	case AlbumAmbiguous:
+		return model.ChainResult{Candidates: append(AlbumCandidates(decision), result.Candidates...)}, nil
+	}
+	return result, nil
 }

@@ -1,10 +1,12 @@
 package music_test
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -30,6 +32,18 @@ var observedAt = time.Unix(1_700_000_000, 0).UTC()
 // internal/db/library's own tests do, plus an in-memory filesystem the consumer reads
 // the quick hash from.
 func newConsumer(t *testing.T) (music.Consumer, *store.Store, *fsx.Mem) {
+	t.Helper()
+	opened, fsys, fake := newTestLibrary(t)
+	consumer := music.NewConsumer(music.ConsumerConfig{
+		FS: fsys, Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened),
+		Unidentified: library.NewUnidentified(opened),
+		Clock:        fake, Logger: slog.New(slog.DiscardHandler),
+	})
+	return consumer, opened, fsys
+}
+
+// newTestLibrary is a migrated temp library.db and an in-memory filesystem holding testRoot.
+func newTestLibrary(t *testing.T) (*store.Store, *fsx.Mem, *clock.Fake) {
 	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
@@ -59,13 +73,7 @@ func newConsumer(t *testing.T) (music.Consumer, *store.Store, *fsx.Mem) {
 	if err := fsys.MkdirAll(testRoot, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-
-	consumer := music.NewConsumer(music.ConsumerConfig{
-		FS: fsys, Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened),
-		Unidentified: library.NewUnidentified(opened),
-		Clock:        fake, Logger: slog.New(slog.DiscardHandler),
-	})
-	return consumer, opened, fsys
+	return opened, fsys, fake
 }
 
 func writeMusicFile(t *testing.T, fsys *fsx.Mem, relPath string, content []byte) {
@@ -599,5 +607,127 @@ func TestObserve_SiblingsThatDisagreeLeaveAnUnidentifiedFileQueued(t *testing.T)
 	}
 	if len(queue) != 1 || queue[0].RelPath != "Mixed/c.m4a" {
 		t.Errorf("queue = %+v, want only the untagged file, left for manual review", queue)
+	}
+}
+
+// newAlbumConsumer is a Consumer with album matching over lookup and per-file search over searcher.
+func newAlbumConsumer(t *testing.T, lookup music.AlbumLookup, searcher music.Searcher) (music.Consumer, *store.Store, *fsx.Mem) {
+	t.Helper()
+	opened, fsys, fake := newTestLibrary(t)
+	consumer := music.NewConsumer(music.ConsumerConfig{
+		FS: fsys, Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened),
+		Unidentified: library.NewUnidentified(opened), Albums: lookup, Search: searcher,
+		Clock: fake, Logger: slog.New(slog.DiscardHandler),
+	})
+	return consumer, opened, fsys
+}
+
+// untaggedTraumaBatch is the folder with every MBID stripped, the case album matching exists for.
+func untaggedTraumaBatch(t *testing.T, fsys *fsx.Mem) []scan.Observed {
+	t.Helper()
+	batch := make([]scan.Observed, len(traumaTracks))
+	for i, track := range traumaTracks {
+		relPath := fmt.Sprintf("P!po/Kebilegev Bibihi (2017)/P!po - %02d - %s.m4a", i+1, track.title)
+		content := []byte("untagged " + track.title)
+		writeMusicFile(t, fsys, relPath, content)
+		batch[i] = observedFile(relPath, int64(len(content)), mediatool.Tags{
+			"title": track.title, "album_artist": "P!po", "album": "Kebilegev Bibihi", "track": fmt.Sprint(i + 1),
+		})
+		batch[i].Probe.Measured.Duration = time.Duration(track.seconds) * time.Second
+	}
+	return batch
+}
+
+func traumaLookup(groups ...string) *fakeAlbumLookup {
+	lookup := &fakeAlbumLookup{
+		searches: map[string][]musicbrainz.ReleaseGroupMatch{},
+		releases: map[string][]musicbrainz.Release{},
+	}
+	for _, group := range groups {
+		lookup.searches["P!po/Kebilegev Bibihi"] = append(lookup.searches["P!po/Kebilegev Bibihi"],
+			musicbrainz.ReleaseGroupMatch{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: group, Title: "Kebilegev Bibihi", PrimaryType: "Album"}, ArtistCredit: "P!po"})
+		lookup.releases[group] = []musicbrainz.Release{releaseOf("release-of-"+group, "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks)}
+	}
+	return lookup
+}
+
+func TestObserve_AnUntaggedFolderIsIdentifiedAsAnAlbumWithItsEdition(t *testing.T) {
+	consumer, opened, fsys := newAlbumConsumer(t, traumaLookup(releaseGroupMBID), nil)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+
+	if err := consumer.Observe(t.Context(), root, 0, untaggedTraumaBatch(t, fsys)); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queries := librarydb.New(opened.Read())
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: releaseGroupMBID,
+	})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v, want the folder identified as the album", err)
+	}
+	if _, err := queries.GetEditionByExternalID(t.Context(), librarydb.GetEditionByExternalIDParams{
+		Provider: music.ProviderRelease, ExternalID: "release-of-" + releaseGroupMBID,
+	}); err != nil {
+		t.Errorf("GetEditionByExternalID: %v, want the matched release as the edition", err)
+	}
+	locations, err := library.NewIdentity(opened).WorkFileLocations(t.Context(), []int64{work.ID})
+	if err != nil || len(locations) != len(traumaTracks) {
+		t.Errorf("work files = %d (err %v), want all %d files", len(locations), err, len(traumaTracks))
+	}
+	queue, err := library.NewUnidentified(opened).List(t.Context(), nil, paginate.Cursor{}, 50)
+	if err != nil || len(queue) != 0 {
+		t.Errorf("queue = %+v (err %v), want empty", queue, err)
+	}
+}
+
+// Two albums fitting equally are put to the user, never settled by a weaker per-file guess.
+func TestObserve_AnAmbiguousAlbumIsQueuedNotGuessedPerFile(t *testing.T) {
+	searcher := &fakeSearcher{matches: []musicbrainz.ReleaseGroupMatch{
+		{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: releaseGroupMBID, Title: "Kebilegev Bibihi"}, ArtistCredit: "P!po"},
+	}}
+	other := "11111111-2222-3333-4444-555555555555"
+	consumer, opened, fsys := newAlbumConsumer(t, traumaLookup(releaseGroupMBID, other), searcher)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+
+	if err := consumer.Observe(t.Context(), root, 0, untaggedTraumaBatch(t, fsys)); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queue, err := library.NewUnidentified(opened).List(t.Context(), nil, paginate.Cursor{}, 50)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(queue) != len(traumaTracks) {
+		t.Fatalf("queue holds %d files, want all %d", len(queue), len(traumaTracks))
+	}
+	var offered []string
+	for _, candidate := range queue[0].Candidates {
+		offered = append(offered, candidate.ExternalID)
+	}
+	slices.Sort(offered)
+	want := []string{releaseGroupMBID, other}
+	slices.Sort(want)
+	if !slices.Equal(offered, want) {
+		t.Errorf("candidates = %v, want both albums offered", offered)
+	}
+}
+
+// An album nobody has catalogued still gets today's per-file search.
+func TestObserve_NoAlbumCandidateFallsBackToPerFileSearch(t *testing.T) {
+	searcher := &fakeSearcher{matches: []musicbrainz.ReleaseGroupMatch{
+		{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: releaseGroupMBID, Title: "Kebilegev Bibihi"}, ArtistCredit: "P!po"},
+	}}
+	consumer, opened, fsys := newAlbumConsumer(t, &fakeAlbumLookup{}, searcher)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+
+	if err := consumer.Observe(t.Context(), root, 0, untaggedTraumaBatch(t, fsys)); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	if _, err := librarydb.New(opened.Read()).GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: releaseGroupMBID,
+	}); err != nil {
+		t.Fatalf("GetWorkByExternalID: %v, want the per-file search to have resolved it", err)
 	}
 }

@@ -182,10 +182,11 @@ type directSearchResponse struct {
 }
 
 type directSearchReleaseGroup struct {
-	ID               string `json:"id"`
-	Title            string `json:"title"`
-	PrimaryType      string `json:"primary-type"`
-	FirstReleaseDate string `json:"first-release-date"`
+	ID               string   `json:"id"`
+	Title            string   `json:"title"`
+	PrimaryType      string   `json:"primary-type"`
+	SecondaryTypes   []string `json:"secondary-types"`
+	FirstReleaseDate string   `json:"first-release-date"`
 	ArtistCredit     []struct {
 		Name string `json:"name"`
 	} `json:"artist-credit"`
@@ -236,11 +237,65 @@ func (d direct) searchReleaseGroups(ctx context.Context, luceneQuery string, lim
 		}
 		matches[i] = ReleaseGroupMatch{
 			ReleaseGroup: ReleaseGroup{
-				MBID: rg.ID, Title: rg.Title,
-				PrimaryType: rg.PrimaryType, FirstReleaseDate: rg.FirstReleaseDate,
+				MBID: rg.ID, Title: rg.Title, PrimaryType: rg.PrimaryType,
+				SecondaryTypes: rg.SecondaryTypes, FirstReleaseDate: rg.FirstReleaseDate,
 			},
 			ArtistCredit: strings.Join(creditNames, " & "),
 		}
+	}
+	return matches, nil
+}
+
+// directRecordingSearchResponse is ws/2's recording search JSON, verified live 2026-09-17.
+type directRecordingSearchResponse struct {
+	Recordings []struct {
+		ID           string `json:"id"`
+		Title        string `json:"title"`
+		Length       *int64 `json:"length"`
+		ArtistCredit []struct {
+			Name       string `json:"name"`
+			JoinPhrase string `json:"joinphrase"`
+		} `json:"artist-credit"`
+		Releases []struct {
+			ReleaseGroup directSearchReleaseGroup `json:"release-group"`
+		} `json:"releases"`
+	} `json:"recordings"`
+}
+
+// SearchRecordingReleaseGroups implements RecordingSearcher; an empty artist searches the title alone.
+func (d direct) SearchRecordingReleaseGroups(ctx context.Context, artist, title string, limit int) ([]RecordingMatch, error) {
+	query := "recording:" + luceneQuoted(title)
+	if artist != "" {
+		query += " AND artist:" + luceneQuoted(artist)
+	}
+	requestURL := fmt.Sprintf("%s/recording/?query=%s&fmt=json&limit=%d", d.baseURL, url.QueryEscape(query), limit)
+
+	var parsed directRecordingSearchResponse
+	if err := getJSON(ctx, d.client, requestURL, &parsed); err != nil {
+		return nil, fmt.Errorf("musicbrainz: search recording %q/%q: %w", artist, title, err)
+	}
+	matches := make([]RecordingMatch, len(parsed.Recordings))
+	for i, recording := range parsed.Recordings {
+		var credit strings.Builder
+		for _, name := range recording.ArtistCredit {
+			credit.WriteString(name.Name + name.JoinPhrase)
+		}
+		match := RecordingMatch{
+			RecordingMBID: recording.ID, Title: recording.Title, ArtistCredit: credit.String(),
+			DurationMs: firstNonNil(recording.Length),
+		}
+		seen := make(map[string]bool)
+		for _, release := range recording.Releases {
+			rg := release.ReleaseGroup
+			if rg.ID == "" || seen[rg.ID] {
+				continue
+			}
+			seen[rg.ID] = true
+			match.ReleaseGroups = append(match.ReleaseGroups, ReleaseGroup{
+				MBID: rg.ID, Title: rg.Title, PrimaryType: rg.PrimaryType, SecondaryTypes: rg.SecondaryTypes,
+			})
+		}
+		matches[i] = match
 	}
 	return matches, nil
 }

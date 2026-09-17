@@ -565,3 +565,65 @@ func TestProvider_OneStaleEntryForcesAFullRefetchOfBoth(t *testing.T) {
 			" fresh release entry surviving on its own", rg, release)
 	}
 }
+
+type fakeReleaseListerSource struct {
+	fakeSource
+	releases     []musicbrainz.Release
+	releaseCalls int
+}
+
+func (f *fakeReleaseListerSource) Releases(context.Context, string) ([]musicbrainz.Release, error) {
+	f.releaseCalls++
+	return f.releases, nil
+}
+
+// Album identification lists releases for every candidate, so a repeat must not reach the network.
+func TestProvider_ASecondReleasesListingIsServedFromCache(t *testing.T) {
+	direct := &fakeReleaseListerSource{fakeSource: fakeSource{name: "direct"},
+		releases: []musicbrainz.Release{{MBID: "release-1", Title: "KI Pecezinu"}}}
+	provider := newProvider(t, direct)
+
+	for range 2 {
+		releases, err := provider.Releases(t.Context(), musicbrainz.PriorityIdentify, "rg-1")
+		if err != nil {
+			t.Fatalf("Releases: %v", err)
+		}
+		if len(releases) != 1 || releases[0].MBID != "release-1" {
+			t.Fatalf("releases = %+v, want the source's one release", releases)
+		}
+	}
+	if direct.releaseCalls != 1 {
+		t.Errorf("releaseCalls = %d, want 1 (the second listing from cache)", direct.releaseCalls)
+	}
+}
+
+type fakeRecordingSearchSource struct {
+	fakeSource
+	matches     []musicbrainz.RecordingMatch
+	searchCalls int
+}
+
+func (f *fakeRecordingSearchSource) SearchRecordingReleaseGroups(context.Context, string, string, int) ([]musicbrainz.RecordingMatch, error) {
+	f.searchCalls++
+	return f.matches, nil
+}
+
+func TestProvider_SearchRecordingsSkipsSourcesWithoutItAndCaches(t *testing.T) {
+	proxy := &fakeSource{name: "proxy"}
+	direct := &fakeRecordingSearchSource{fakeSource: fakeSource{name: "direct"},
+		matches: []musicbrainz.RecordingMatch{{RecordingMBID: "recording-1", Title: "Sesoge"}}}
+	provider := newProvider(t, proxy, direct)
+
+	for range 2 {
+		matches, err := provider.SearchRecordings(t.Context(), musicbrainz.PriorityIdentify, "Katupoken", "Sesoge", 5)
+		if err != nil {
+			t.Fatalf("SearchRecordings: %v", err)
+		}
+		if len(matches) != 1 || matches[0].RecordingMBID != "recording-1" {
+			t.Fatalf("matches = %+v, want the one capable source's answer", matches)
+		}
+	}
+	if direct.searchCalls != 1 {
+		t.Errorf("searchCalls = %d, want 1 (the second search from cache)", direct.searchCalls)
+	}
+}

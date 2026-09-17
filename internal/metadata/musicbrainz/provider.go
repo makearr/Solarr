@@ -49,6 +49,10 @@ const (
 	// else, since a discography grows over time unlike a release group's own
 	// fixed facts.
 	cacheKindDiscography = "musicbrainz:discography"
+	// cacheKindReleases is every release of one release group, tracklists included.
+	cacheKindReleases = "musicbrainz:releases"
+	// cacheKindRecordingSearch is a recording search's result set, keyed like cacheKindSearch.
+	cacheKindRecordingSearch = "musicbrainz:recording-search"
 )
 
 // Provider is ADR-29 end to end: try each source in priority order, falling
@@ -186,10 +190,12 @@ func (p Provider) SearchByQuery(ctx context.Context, _ Priority, query string, l
 // Artist answers one artist's own detail, cache-first, permanent like Album.
 // Only sources implementing ArtistLookup are tried -- same reasoning as
 // Search, the proxy's artist shape is unverified live.
-// Releases answers every release of a release group with its tracklist, from
-// the first source able to list them. Not cached: it is asked once per album
-// that needs an edition chosen.
+// Releases answers every release of a release group with its tracklist, cache first, from
+// the first source able to list them. Album identification asks it for every candidate.
 func (p Provider) Releases(ctx context.Context, _ Priority, releaseGroupMBID string) ([]Release, error) {
+	if releases, ok := cachedJSON[[]Release](ctx, p, cacheKindReleases, releaseGroupMBID); ok {
+		return releases, nil
+	}
 	var errs []error
 	for _, source := range p.sources {
 		lister, ok := source.(ReleaseLister)
@@ -203,12 +209,43 @@ func (p Provider) Releases(ctx context.Context, _ Priority, releaseGroupMBID str
 			errs = append(errs, err)
 			continue
 		}
+		rememberJSON(ctx, p, source.Name(), cacheKindReleases, releaseGroupMBID, releases)
 		return releases, nil
 	}
 	if len(errs) == 0 {
 		return nil, fmt.Errorf("musicbrainz: no source can list releases (release group %s)", releaseGroupMBID)
 	}
 	return nil, fmt.Errorf("musicbrainz: no source listed releases of %s: %w", releaseGroupMBID, errors.Join(errs...))
+}
+
+// SearchRecordings answers recordings matching a track title (and artist, when known),
+// each with the release groups it appears on, cache first. Only RecordingSearcher sources are tried.
+func (p Provider) SearchRecordings(ctx context.Context, _ Priority, artist, title string, limit int) ([]RecordingMatch, error) {
+	key := searchCacheKey(artist, title, limit)
+	if matches, ok := cachedJSON[[]RecordingMatch](ctx, p, cacheKindRecordingSearch, key); ok {
+		return matches, nil
+	}
+
+	var errs []error
+	for _, source := range p.sources {
+		searcher, ok := source.(RecordingSearcher)
+		if !ok {
+			continue
+		}
+		matches, err := searcher.SearchRecordingReleaseGroups(ctx, artist, title, limit)
+		if err != nil {
+			p.logger.WarnContext(ctx, "musicbrainz source recording search failed",
+				slog.String("source", source.Name()), slog.Any("error", err))
+			errs = append(errs, err)
+			continue
+		}
+		rememberJSON(ctx, p, source.Name(), cacheKindRecordingSearch, key, matches)
+		return matches, nil
+	}
+	if len(errs) == 0 {
+		return nil, nil
+	}
+	return nil, fmt.Errorf("musicbrainz: no source answered recording search %q/%q: %w", artist, title, errors.Join(errs...))
 }
 
 func (p Provider) Artist(ctx context.Context, _ Priority, mbid string) (Artist, error) {
@@ -394,5 +431,26 @@ func (p Provider) remember(ctx context.Context, source string, rg ReleaseGroup, 
 			metacache.Entry{Source: source, Body: string(releaseBody), FetchedAt: now}); err != nil {
 			p.logger.WarnContext(ctx, "musicbrainz: cache write failed", slog.Any("error", err))
 		}
+	}
+}
+
+// cachedJSON reads one cache entry as T; a miss, a stale entry or an undecodable body is a miss.
+func cachedJSON[T any](ctx context.Context, p Provider, kind, key string) (T, bool) {
+	var value T
+	entry, err := p.cache.Get(ctx, kind, key)
+	if err != nil || p.stale(entry) || json.Unmarshal([]byte(entry.Body), &value) != nil {
+		return value, false
+	}
+	return value, true
+}
+
+// rememberJSON stores value; a failed write only costs a later re-fetch.
+func rememberJSON[T any](ctx context.Context, p Provider, source, kind, key string, value T) {
+	body, err := json.Marshal(value)
+	if err != nil {
+		return
+	}
+	if err := p.cache.Set(ctx, kind, key, metacache.Entry{Source: source, Body: string(body), FetchedAt: p.clock.Now()}); err != nil {
+		p.logger.WarnContext(ctx, "musicbrainz: cache write failed", slog.String("kind", kind), slog.Any("error", err))
 	}
 }
