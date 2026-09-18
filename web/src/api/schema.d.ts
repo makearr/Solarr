@@ -161,6 +161,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Configuration and operational problems with this instance (Lidarr's System health).
+         * @description Distinct from /library/health, which reports on the library's own data. This reports on the instance: things the operator has not configured yet, a root folder that is offline or unwritable, and backups that have stopped running. Each check names itself so the interface can link somewhere useful, and an empty list means everything checked is fine.
+         */
+        get: operations["getSystemHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/login": {
         parameters: {
             query?: never;
@@ -2818,6 +2838,23 @@ export interface components {
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
         };
+        /** @description One thing wrong with this instance right now. */
+        HealthCheck: {
+            /**
+             * @description A stable identifier for the check, so the interface can route it.
+             * @example no_indexer
+             */
+            id: string;
+            /**
+             * @description error means something cannot work at all; warning means it works but will not do what the user probably expects.
+             * @enum {string}
+             */
+            severity: "warning" | "error";
+            /** @description What is wrong, in the operator's terms. */
+            message: string;
+            /** @description Where in the interface to fix it, when there is one place. */
+            link?: string;
+        };
         /**
          * @description What a discover result is. An album is added as a monitored desired item; an artist is added as a monitored person with a subscription, whose albums arrive when the subscription expands.
          * @enum {string}
@@ -4123,6 +4160,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LibraryHealth"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    getSystemHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every check that currently has something to say, worst first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthCheck"][];
                 };
             };
             401: components["responses"]["Problem"];

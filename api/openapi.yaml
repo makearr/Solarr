@@ -168,6 +168,28 @@ paths:
               schema: { $ref: "#/components/schemas/LibraryHealth" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /system/health:
+    get:
+      operationId: getSystemHealth
+      tags: [system]
+      summary: Configuration and operational problems with this instance (Lidarr's System health).
+      description: >-
+        Distinct from /library/health, which reports on the library's own
+        data. This reports on the instance: things the operator has not
+        configured yet, a root folder that is offline or unwritable, and
+        backups that have stopped running. Each check names itself so the
+        interface can link somewhere useful, and an empty list means
+        everything checked is fine.
+      responses:
+        "200":
+          description: Every check that currently has something to say, worst first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/HealthCheck" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /auth/login:
     post:
       operationId: login
@@ -4430,6 +4452,28 @@ components:
           description: >-
             Empty on the last page, which is how a client knows to stop without
             one more request that returns nothing.
+
+    HealthCheck:
+      type: object
+      description: One thing wrong with this instance right now.
+      required: [id, severity, message]
+      properties:
+        id:
+          type: string
+          description: A stable identifier for the check, so the interface can route it.
+          example: no_indexer
+        severity:
+          type: string
+          enum: [warning, error]
+          description: >-
+            error means something cannot work at all; warning means it works
+            but will not do what the user probably expects.
+        message:
+          type: string
+          description: What is wrong, in the operator's terms.
+        link:
+          type: string
+          description: Where in the interface to fix it, when there is one place.
 
     DiscoverKind:
       type: string

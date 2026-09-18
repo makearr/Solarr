@@ -153,7 +153,11 @@ type Config struct {
 	// as intent (todo 4.17, ADR-56). Optional: without it, the discover
 	// endpoints answer 503.
 	Discover Discover
-	ArrSync  ArrSync
+
+	// SystemHealth supplies the health checks that need more than the settings
+	// snapshot. Optional: nil means only the settings-derived checks are run.
+	SystemHealth SystemHealthSource
+	ArrSync      ArrSync
 	// LibraryHealth answers todo 4.8's own aggregate report (unprobed files,
 	// unmatched files, incomplete works, roots near reserve, blocked hashes
 	// found in the library). Optional: without it, the endpoint answers 503.
@@ -215,6 +219,7 @@ type Server struct {
 	discover              Discover
 	arrSync               ArrSync
 	libraryHealth         LibraryHealth
+	systemHealth          SystemHealthSource
 	indexerTester         IndexerTester
 	downloaderTester      DownloaderTester
 	candidateSearcher     CandidateSearcher
@@ -291,6 +296,7 @@ func New(config Config) (*Server, error) {
 		discover:              config.Discover,
 		arrSync:               config.ArrSync,
 		libraryHealth:         config.LibraryHealth,
+		systemHealth:          config.SystemHealth,
 		indexerTester:         config.IndexerTester,
 		downloaderTester:      config.DownloaderTester,
 		candidateSearcher:     config.CandidateSearcher,
@@ -336,6 +342,7 @@ func New(config Config) (*Server, error) {
 			secured.Delete("/me/apikeys/{id}", server.routeDeleteMyAPIKey)
 			secured.Get("/dashboard", server.GetDashboard)
 			secured.Get("/library/health", server.GetLibraryHealth)
+			secured.Get("/system/health", server.GetSystemHealth)
 			secured.Get("/system/egress", server.GetEgress)
 			secured.Get("/jobs", server.routeListJobs)
 			secured.Get("/works", server.routeListWorks)

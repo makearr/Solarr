@@ -502,6 +502,7 @@ func (p *process) startServer(ctx context.Context) error {
 			Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
 			Logger: p.logger,
 		},
+		SystemHealth: adapters.SystemHealth{Cache: p.cache},
 		Discover: adapters.Discover{
 			Provider: p.musicBrainzProvider(), Identity: library.NewIdentity(p.library),
 			Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),

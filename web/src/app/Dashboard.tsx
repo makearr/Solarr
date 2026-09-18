@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { AlertTriangle, Plus, XCircle } from "lucide-react";
 
 import { api } from "@/api/client";
 import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
@@ -49,6 +49,15 @@ export function Dashboard() {
     },
   });
 
+  const health = useQuery({
+    queryKey: ["system-health"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/system/health");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const firstLibrary = libraries.data?.[0];
 
   return (
@@ -78,6 +87,35 @@ export function Dashboard() {
             </Link>
           </div>
         </section>
+
+        {health.data && health.data.length > 0 && (
+          <Section title="Needs attention">
+            <ul className="flex flex-col gap-1">
+              {health.data.map((check) => (
+                <li
+                  key={`${check.id}:${check.message}`}
+                  className="flex items-start gap-2 rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm"
+                >
+                  {check.severity === "error" ? (
+                    <XCircle aria-hidden className="mt-0.5 size-4 shrink-0 text-danger" />
+                  ) : (
+                    <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0 text-ink-muted" />
+                  )}
+                  <span className="flex-1">{check.message}</span>
+                  {check.link != null && (
+                    <Link
+                      to={check.link}
+                      className="shrink-0 text-xs text-ink-muted underline hover:text-ink
+                                 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    >
+                      Fix
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
 
         <Section title="Recently added">
           {recent.isLoading && <Note>Loading…</Note>}

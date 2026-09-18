@@ -156,6 +156,12 @@ const (
 	ExclusionPatternWriteActionRefuse ExclusionPatternWriteAction = "refuse"
 )
 
+// Defines values for HealthCheckSeverity.
+const (
+	HealthCheckSeverityError   HealthCheckSeverity = "error"
+	HealthCheckSeverityWarning HealthCheckSeverity = "warning"
+)
+
 // Defines values for HealthStatusStatus.
 const (
 	HealthStatusStatusOk HealthStatusStatus = "ok"
@@ -1122,6 +1128,24 @@ type GateResult struct {
 	Passed bool   `json:"passed"`
 	Wanted string `json:"wanted"`
 }
+
+// HealthCheck One thing wrong with this instance right now.
+type HealthCheck struct {
+	// Id A stable identifier for the check, so the interface can route it.
+	Id string `json:"id"`
+
+	// Link Where in the interface to fix it, when there is one place.
+	Link *string `json:"link,omitempty"`
+
+	// Message What is wrong, in the operator's terms.
+	Message string `json:"message"`
+
+	// Severity error means something cannot work at all; warning means it works but will not do what the user probably expects.
+	Severity HealthCheckSeverity `json:"severity"`
+}
+
+// HealthCheckSeverity error means something cannot work at all; warning means it works but will not do what the user probably expects.
+type HealthCheckSeverity string
 
 // HealthStatus defines model for HealthStatus.
 type HealthStatus struct {
@@ -3135,6 +3159,9 @@ type ServerInterface interface {
 	// The address this host appears to come from.
 	// (GET /system/egress)
 	GetEgress(w http.ResponseWriter, r *http.Request)
+	// Configuration and operational problems with this instance (Lidarr's System health).
+	// (GET /system/health)
+	GetSystemHealth(w http.ResponseWriter, r *http.Request)
 	// Every account, with its role and category grants.
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -3933,6 +3960,12 @@ func (_ Unimplemented) CreateFirstAdministrator(w http.ResponseWriter, r *http.R
 // The address this host appears to come from.
 // (GET /system/egress)
 func (_ Unimplemented) GetEgress(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Configuration and operational problems with this instance (Lidarr's System health).
+// (GET /system/health)
+func (_ Unimplemented) GetSystemHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7761,6 +7794,28 @@ func (siw *ServerInterfaceWrapper) GetEgress(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetSystemHealth operation middleware
+func (siw *ServerInterfaceWrapper) GetSystemHealth(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSystemHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -8798,6 +8853,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/system/egress", wrapper.GetEgress)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/system/health", wrapper.GetSystemHealth)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/users", wrapper.ListUsers)
