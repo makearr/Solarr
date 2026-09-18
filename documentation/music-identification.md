@@ -85,6 +85,25 @@ therefore name files `Artist - 1-06 - Title` (`music.TrackPosition`); single-dis
 this, enrichment chose the edition again from tags alone and picked a 15-track release for 17
 matched files, and a 3-CD set put three files numbered `06` in one folder (found 2026-09-17).
 
+## Fingerprints (AcoustID)
+
+The last rung, for a file no other pass could name: `fpcalc` fingerprints the audio and
+acoustid.org answers with MusicBrainz recording and release-group ids, which then go back
+through the ordered metadata sources like any other candidate — AcoustID identifies, it never
+supplies data. A match below 0.70 is dropped, and a match naming no ids identifies nothing.
+
+It needs an **application** API key, free from https://acoustid.org/new-application, entered
+under Settings → Metadata. The key an AcoustID account shows on its own page is a different
+one, for submitting fingerprints, and a lookup refuses it. Stored sealed in `settings.db`
+(`metadata.acoustid.api_key`), never returned by the API — `GET /metadata/settings` says only
+whether one exists, `POST /metadata/acoustid/apikey` replaces it and an empty key clears it.
+With no key the rung reports itself disabled and does not fingerprint at all, so identification
+keeps working with one fewer pass.
+
+The `meta` parameter is a **space**-separated list. Sent with a literal `+`, AcoustID answers
+`ok` carrying bare AcoustID ids and no metadata rather than refusing, and every result is then
+discarded as naming nothing.
+
 ## Lookup priority
 
 MusicBrainz, BrainzMash and the Lidarr proxy each have one rate-limit bucket. Inside a bucket

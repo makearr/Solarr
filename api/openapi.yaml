@@ -1061,6 +1061,30 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /metadata/acoustid/apikey:
+    post:
+      operationId: setAcoustIDAPIKey
+      tags: [settings]
+      summary: >-
+        Replace or clear the AcoustID application key. Administrator only. A
+        separate endpoint from PATCH /metadata/settings, the same shape an
+        indexer's own key uses: resealing the credential on every unrelated
+        edit would be silent, pointless churn. An empty api_key clears it,
+        which disables the fingerprint rung rather than failing it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                api_key: { type: string }
+      responses:
+        "204": { description: Replaced. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /import/settings:
     get:
       operationId: getImportSettings
@@ -5609,6 +5633,14 @@ components:
             not consulted at all, except musicbrainz, which always answers as
             a last resort. Omitted on a PATCH leaves the stored order alone.
           items: { $ref: "#/components/schemas/MetadataSource" }
+        acoustid_api_key:
+          allOf: [{ $ref: "#/components/schemas/SecretMask" }]
+          description: >-
+            Whether an AcoustID application key is stored. Read-only here and
+            ignored on a PATCH; it is written through POST
+            /metadata/acoustid/apikey. Never returned, not even masked --
+            saying whether one exists is all a screen asking for one needs,
+            and decrypting it to render would be gratuitous (ADR-14).
 
     ImportSettings:
       type: object

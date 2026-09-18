@@ -70,6 +70,14 @@ export function MetadataSettings() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["metadata-settings"] }),
   });
 
+  const saveAcoustIDKey = useMutation({
+    mutationFn: async (key: string) => {
+      const { error } = await api.POST("/metadata/acoustid/apikey", { body: { api_key: key } });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["metadata-settings"] }),
+  });
+
   if (!isTierVisible(tier, "advanced")) return null;
   if (metadata.error !== null || !metadata.data) return null;
 
@@ -94,8 +102,106 @@ export function MetadataSettings() {
           busy={update.isPending}
         />
         {update.isError && <p className="text-xs text-danger">That change was refused.</p>}
+        <AcoustIDKeyForm
+          key={String(metadata.data.acoustid_api_key?.has_value ?? false)}
+          stored={metadata.data.acoustid_api_key?.has_value ?? false}
+          onSave={(apiKey) => saveAcoustIDKey.mutate(apiKey)}
+          busy={saveAcoustIDKey.isPending}
+        />
+        {saveAcoustIDKey.isError && (
+          <p className="text-xs text-danger">That key could not be stored.</p>
+        )}
       </div>
     </section>
+  );
+}
+
+/** The AcoustID application key. A stored key is never shown, not even masked,
+ *  so the field stands empty and says whether one is set -- typing replaces it,
+ *  Clear removes it. */
+function AcoustIDKeyForm({
+  stored,
+  onSave,
+  busy,
+}: {
+  stored: boolean;
+  onSave: (apiKey: string) => void;
+  busy: boolean;
+}) {
+  const [apiKey, setApiKey] = useState("");
+
+  return (
+    <form
+      className="flex flex-col gap-3 border-t border-border-subtle pt-3 text-xs text-ink-muted"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave(apiKey.trim());
+        setApiKey("");
+      }}
+    >
+      <label className="flex flex-col gap-1">
+        <span className="flex items-center gap-2">
+          AcoustID API key
+          <span className={stored ? "text-ok" : "text-ink-muted"}>
+            {stored ? "stored" : "not set"}
+          </span>
+        </span>
+        <input
+          type="password"
+          value={apiKey}
+          disabled={busy}
+          spellCheck={false}
+          autoComplete="off"
+          maxLength={128}
+          placeholder={stored ? "A key is stored. Type a new one to replace it." : "Paste the key"}
+          onChange={(event) => setApiKey(event.target.value)}
+          className={`${inputStyle} max-w-md font-mono`}
+        />
+        <span className="text-[0.6875rem]">
+          Identifies a file by its sound when nothing else can name it. Without a key that step is
+          skipped and everything else still works. Free, and it takes a minute: register an
+          application at{" "}
+          <a
+            href="https://acoustid.org/new-application"
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent underline underline-offset-2"
+          >
+            acoustid.org/new-application
+          </a>
+          . The key it gives you is the one to paste here -- the key on your own account page is a
+          different one, for submitting fingerprints, and lookups refuse it.
+        </span>
+      </label>
+
+      <div className="flex gap-2">
+        {apiKey.trim() !== "" && (
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-fit rounded-md bg-accent px-2 py-1 text-accent-ink disabled:opacity-50
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Save
+          </button>
+        )}
+        {stored && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setApiKey("");
+              onSave("");
+            }}
+            className="w-fit rounded-md border border-border-subtle px-2 py-1 text-ink-muted
+                       hover:text-ink disabled:opacity-50
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+    </form>
   );
 }
 

@@ -1689,6 +1689,9 @@ type MediaType string
 
 // MetadataSettings The metadata providers' own settings.
 type MetadataSettings struct {
+	// AcoustidApiKey Whether an AcoustID application key is stored. Read-only here and ignored on a PATCH; it is written through POST /metadata/acoustid/apikey. Never returned, not even masked -- saying whether one exists is all a screen asking for one needs, and decrypting it to render would be gratuitous (ADR-14).
+	AcoustidApiKey *SecretMask `json:"acoustid_api_key,omitempty"`
+
 	// BrainzmashUserAgent Sent to BrainzMash, whose front door refuses agents not starting "Lidarr/". Printable ASCII, 1-256 characters. Default Lidarr/2.9.6.4552.
 	BrainzmashUserAgent string `json:"brainzmash_user_agent"`
 
@@ -2529,6 +2532,11 @@ type SetMyTierJSONBody struct {
 // SetMyTierJSONBodyTier defines parameters for SetMyTier.
 type SetMyTierJSONBodyTier string
 
+// SetAcoustIDAPIKeyJSONBody defines parameters for SetAcoustIDAPIKey.
+type SetAcoustIDAPIKeyJSONBody struct {
+	ApiKey *string `json:"api_key,omitempty"`
+}
+
 // ListMoveJobsParams defines parameters for ListMoveJobs.
 type ListMoveJobsParams struct {
 	Reason *ListMoveJobsParamsReason `form:"reason,omitempty" json:"reason,omitempty"`
@@ -2836,6 +2844,9 @@ type CreateMyAPIKeyJSONRequestBody CreateMyAPIKeyJSONBody
 
 // SetMyTierJSONRequestBody defines body for SetMyTier for application/json ContentType.
 type SetMyTierJSONRequestBody SetMyTierJSONBody
+
+// SetAcoustIDAPIKeyJSONRequestBody defines body for SetAcoustIDAPIKey for application/json ContentType.
+type SetAcoustIDAPIKeyJSONRequestBody SetAcoustIDAPIKeyJSONBody
 
 // UpdateMetadataSettingsJSONRequestBody defines body for UpdateMetadataSettings for application/json ContentType.
 type UpdateMetadataSettingsJSONRequestBody = MetadataSettings
@@ -3169,6 +3180,9 @@ type ServerInterface interface {
 	// Change how much of the settings surface the caller is shown (ADR-26). Self-service: any authenticated user may set their own tier, not just an administrator -- raising or lowering it never changes behaviour, only what is displayed.
 	// (PATCH /me/tier)
 	SetMyTier(w http.ResponseWriter, r *http.Request)
+	// Replace or clear the AcoustID application key. Administrator only. A separate endpoint from PATCH /metadata/settings, the same shape an indexer's own key uses: resealing the credential on every unrelated edit would be silent, pointless churn. An empty api_key clears it, which disables the fingerprint rung rather than failing it.
+	// (POST /metadata/acoustid/apikey)
+	SetAcoustIDAPIKey(w http.ResponseWriter, r *http.Request)
 	// The metadata providers' own settings.
 	// (GET /metadata/settings)
 	GetMetadataSettings(w http.ResponseWriter, r *http.Request)
@@ -3883,6 +3897,12 @@ func (_ Unimplemented) DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, id
 // Change how much of the settings surface the caller is shown (ADR-26). Self-service: any authenticated user may set their own tier, not just an administrator -- raising or lowering it never changes behaviour, only what is displayed.
 // (PATCH /me/tier)
 func (_ Unimplemented) SetMyTier(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace or clear the AcoustID application key. Administrator only. A separate endpoint from PATCH /metadata/settings, the same shape an indexer's own key uses: resealing the credential on every unrelated edit would be silent, pointless churn. An empty api_key clears it, which disables the fingerprint rung rather than failing it.
+// (POST /metadata/acoustid/apikey)
+func (_ Unimplemented) SetAcoustIDAPIKey(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6978,6 +6998,28 @@ func (siw *ServerInterfaceWrapper) SetMyTier(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// SetAcoustIDAPIKey operation middleware
+func (siw *ServerInterfaceWrapper) SetAcoustIDAPIKey(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAcoustIDAPIKey(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMetadataSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetMetadataSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -9237,6 +9279,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/me/tier", wrapper.SetMyTier)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/metadata/acoustid/apikey", wrapper.SetAcoustIDAPIKey)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/metadata/settings", wrapper.GetMetadataSettings)

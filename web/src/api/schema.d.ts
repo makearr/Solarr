@@ -725,6 +725,23 @@ export interface paths {
         patch: operations["updateMetadataSettings"];
         trace?: never;
     };
+    "/metadata/acoustid/apikey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace or clear the AcoustID application key. Administrator only. A separate endpoint from PATCH /metadata/settings, the same shape an indexer's own key uses: resealing the credential on every unrelated edit would be silent, pointless churn. An empty api_key clears it, which disables the fingerprint rung rather than failing it. */
+        post: operations["setAcoustIDAPIKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/import/settings": {
         parameters: {
             query?: never;
@@ -3725,6 +3742,8 @@ export interface components {
             brainzmash_user_agent: string;
             /** @description Which metadata sources are tried, in order. A source left out is not consulted at all, except musicbrainz, which always answers as a last resort. Omitted on a PATCH leaves the stored order alone. */
             source_order?: components["schemas"]["MetadataSource"][];
+            /** @description Whether an AcoustID application key is stored. Read-only here and ignored on a PATCH; it is written through POST /metadata/acoustid/apikey. Never returned, not even masked -- saying whether one exists is all a screen asking for one needs, and decrypting it to render would be gratuitous (ADR-14). */
+            acoustid_api_key?: components["schemas"]["SecretMask"];
         };
         /** @description ADR-48's commit-line knob (import.auto_commit_confidence) and the transfer ladder import walks when it places a file. */
         ImportSettings: {
@@ -5376,6 +5395,33 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MetadataSettings"];
                 };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    setAcoustIDAPIKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    api_key?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Replaced. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
