@@ -170,6 +170,24 @@ type QuerySearcher interface {
 	SearchReleaseGroupsByQuery(ctx context.Context, query string, limit int) ([]ReleaseGroupMatch, error)
 }
 
+// ArtistMatch is one hit from an artist search: enough to show a person in a
+// result list and to look the rest up once chosen, never the full Artist.
+type ArtistMatch struct {
+	Artist
+	// Score is MusicBrainz's own 0-100 relevance for the query. Kept as given
+	// rather than normalised: it orders one search's results and means nothing
+	// across searches.
+	Score int
+}
+
+// ArtistSearcher is an optional Source capability: finding an artist by name
+// for someone adding one that is not in the library yet (ADR-56, revision
+// 7.1). Same optional shape as QuerySearcher -- ADR-29's proxy artist search
+// is unverified live, so not every Source implements it.
+type ArtistSearcher interface {
+	SearchArtists(ctx context.Context, query string, limit int) ([]ArtistMatch, error)
+}
+
 // ArtistLookup is an optional Source capability: full artist detail beyond the
 // name and id ReleaseGroup.ArtistCredit already carries. Not every Source
 // implements it -- same reasoning as Searcher, the proxy's artist shape is

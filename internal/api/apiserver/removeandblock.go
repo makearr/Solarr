@@ -96,7 +96,7 @@ func (s *Server) RemoveAndBlockFile(w http.ResponseWriter, r *http.Request, medi
 func removeAndBlockInputFromBody(body gen.RemoveAndBlockRequest) RemoveAndBlockInput {
 	input := RemoveAndBlockInput{
 		Quarantine:            derefOr(body.Quarantine, false),
-		QuarantineReason:      string(derefOr(body.QuarantineReason, gen.UserDelete)),
+		QuarantineReason:      string(derefOr(body.QuarantineReason, gen.RemoveAndBlockRequestQuarantineReasonUserDelete)),
 		QuarantineRetainHours: derefOr(body.QuarantineRetainHours, 168),
 		Block:                 derefOr(body.Block, false),
 		OSHash:                derefOr(body.Oshash, ""),

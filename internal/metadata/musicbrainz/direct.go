@@ -204,6 +204,44 @@ func (d direct) SearchReleaseGroups(ctx context.Context, artist, title string, l
 	return matches, nil
 }
 
+// directArtistSearchResponse is ws/2's artist search JSON. The artist
+// documents it returns carry the same fields as a lookup plus a score, but
+// never relations, so a chosen result still needs Artist() for its Wikidata
+// QID.
+type directArtistSearchResponse struct {
+	Artists []struct {
+		directArtist
+		Score int `json:"score"`
+	} `json:"artists"`
+}
+
+// SearchArtists implements ArtistSearcher: MusicBrainz's Lucene search over
+// the artist document, for someone adding an artist the library has never
+// seen. Results come back in MusicBrainz's own relevance order, which is kept.
+func (d direct) SearchArtists(ctx context.Context, query string, limit int) ([]ArtistMatch, error) {
+	requestURL := fmt.Sprintf("%s/artist/?query=%s&fmt=json&limit=%d",
+		d.baseURL, url.QueryEscape(query), limit)
+
+	var parsed directArtistSearchResponse
+	if err := getJSON(ctx, d.client, requestURL, &parsed); err != nil {
+		return nil, fmt.Errorf("musicbrainz: search artist %q: %w", query, err)
+	}
+
+	matches := make([]ArtistMatch, len(parsed.Artists))
+	for i, a := range parsed.Artists {
+		matches[i] = ArtistMatch{
+			Artist: Artist{
+				MBID: a.ID, Name: a.Name, SortName: a.SortName,
+				Disambiguation: a.Disambiguation, Type: a.Type, Gender: a.Gender,
+				Country: a.Country, Area: a.Area.Name, BeginArea: a.BeginArea.Name,
+				Born: a.LifeSpan.Begin, Died: a.LifeSpan.End,
+			},
+			Score: a.Score,
+		}
+	}
+	return matches, nil
+}
+
 // SearchReleaseGroupsByQuery is QuerySearcher's own free-text search (todo
 // 4.17): MusicBrainz's Lucene default-field search over the release group's
 // own document (title, artist credit, tags, ...) rather than SearchReleaseGroups'

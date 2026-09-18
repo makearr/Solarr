@@ -9,6 +9,14 @@ generate:
   embedded-spec: false
   # strict-server is deliberately NOT generated.
   strict-server: false
+compatibility:
+  # Without this, an enum constant is bare until some *other* enum introduces a
+  # colliding value, at which point the generator renames one of them -- adding
+  # DiscoverKind silently renamed every ListWorksParamsSort constant and broke
+  # the build. Always prefixing makes a constant's name depend only on its own
+  # type, so a new enum can never rename an existing one.
+  always-prefix-enum-values: true
+
 output-options:
   # The spec describes only the endpoints that exist, so there is nothing to
   # prune and pruning would hide a mistake rather than fix one.

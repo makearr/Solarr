@@ -119,7 +119,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 
 	sort := WorkSort(derefOr(params.Sort, gen.ListWorksParamsSort("")))
 	direction := SortAscending
-	if derefOr(params.Dir, gen.ListWorksParamsDir("")) == gen.Desc {
+	if derefOr(params.Dir, gen.ListWorksParamsDir("")) == gen.ListWorksParamsDirDesc {
 		direction = SortDescending
 	}
 

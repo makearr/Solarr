@@ -1365,6 +1365,14 @@ paths:
           required: true
           description: At least 2 characters (section 21.5's own floor).
           schema: { type: string }
+        - name: kind
+          in: query
+          description: >-
+            What to search for. Defaults to album, which is what this endpoint
+            searched before artists became searchable.
+          schema:
+            allOf: [{ $ref: "#/components/schemas/DiscoverKind" }]
+            default: album
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
@@ -4423,11 +4431,25 @@ components:
             Empty on the last page, which is how a client knows to stop without
             one more request that returns nothing.
 
+    DiscoverKind:
+      type: string
+      description: >-
+        What a discover result is. An album is added as a monitored desired
+        item; an artist is added as a monitored person with a subscription,
+        whose albums arrive when the subscription expands.
+      enum: [album, artist]
+
     DiscoverResult:
       type: object
       description: One candidate a search found (ADR-56) -- not yet in the library.
       required: [provider, external_id, title]
       properties:
+        kind:
+          allOf: [{ $ref: "#/components/schemas/DiscoverKind" }]
+          description: Absent means album, which is what search returned before artists were searchable.
+        disambiguation:
+          type: string
+          description: MusicBrainz's own short note telling two same-named artists apart.
         provider: { type: string, example: "musicbrainz:release-group" }
         external_id: { type: string }
         title: { type: string }
@@ -4445,10 +4467,23 @@ components:
 
     DiscoverAddResult:
       type: object
-      required: [work_id, desired_item_id, priority]
+      description: >-
+        What an add produced. kind says which ids are populated: an album
+        carries work_id and desired_item_id, an artist person_id and
+        subscription_id.
+      required: [kind, priority]
       properties:
+        kind: { $ref: "#/components/schemas/DiscoverKind" }
         work_id: { type: integer, format: int64 }
         desired_item_id: { type: integer, format: int64 }
+        person_id:
+          type: integer
+          format: int64
+          description: The monitored person, for an artist add.
+        subscription_id:
+          type: integer
+          format: int64
+          description: The subscription whose expansion brings the discography in.
         priority:
           type: integer
           format: int64

@@ -2818,8 +2818,17 @@ export interface components {
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
         };
+        /**
+         * @description What a discover result is. An album is added as a monitored desired item; an artist is added as a monitored person with a subscription, whose albums arrive when the subscription expands.
+         * @enum {string}
+         */
+        DiscoverKind: "album" | "artist";
         /** @description One candidate a search found (ADR-56) -- not yet in the library. */
         DiscoverResult: {
+            /** @description Absent means album, which is what search returned before artists were searchable. */
+            kind?: components["schemas"]["DiscoverKind"];
+            /** @description MusicBrainz's own short note telling two same-named artists apart. */
+            disambiguation?: string;
             /** @example musicbrainz:release-group */
             provider: string;
             external_id: string;
@@ -2836,11 +2845,23 @@ export interface components {
             /** @default true */
             monitored: boolean;
         };
+        /** @description What an add produced. kind says which ids are populated: an album carries work_id and desired_item_id, an artist person_id and subscription_id. */
         DiscoverAddResult: {
+            kind: components["schemas"]["DiscoverKind"];
             /** Format: int64 */
-            work_id: number;
+            work_id?: number;
             /** Format: int64 */
-            desired_item_id: number;
+            desired_item_id?: number;
+            /**
+             * Format: int64
+             * @description The monitored person, for an artist add.
+             */
+            person_id?: number;
+            /**
+             * Format: int64
+             * @description The subscription whose expansion brings the discography in.
+             */
+            subscription_id?: number;
             /**
              * Format: int64
              * @description ADR-36's composite score, computed against the user_request trigger. There is no populated hunt_queue yet (stage 5/6), so this is the score alone, not a position within it.
@@ -5391,6 +5412,8 @@ export interface operations {
                 category_id: number;
                 /** @description At least 2 characters (section 21.5's own floor). */
                 q: string;
+                /** @description What to search for. Defaults to album, which is what this endpoint searched before artists became searchable. */
+                kind?: components["schemas"]["DiscoverKind"];
                 limit?: number;
             };
             header?: never;

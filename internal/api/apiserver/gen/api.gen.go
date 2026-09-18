@@ -35,11 +35,11 @@ const (
 
 // Defines values for ArrApp.
 const (
-	Lidarr   ArrApp = "lidarr"
-	Radarr   ArrApp = "radarr"
-	Readarr  ArrApp = "readarr"
-	Sonarr   ArrApp = "sonarr"
-	Whisparr ArrApp = "whisparr"
+	ArrAppLidarr   ArrApp = "lidarr"
+	ArrAppRadarr   ArrApp = "radarr"
+	ArrAppReadarr  ArrApp = "readarr"
+	ArrAppSonarr   ArrApp = "sonarr"
+	ArrAppWhisparr ArrApp = "whisparr"
 )
 
 // Defines values for ArrImportItemKind.
@@ -76,8 +76,8 @@ const (
 
 // Defines values for BlockedContentEntrySource.
 const (
-	Auto BlockedContentEntrySource = "auto"
-	User BlockedContentEntrySource = "user"
+	BlockedContentEntrySourceAuto BlockedContentEntrySource = "auto"
+	BlockedContentEntrySourceUser BlockedContentEntrySource = "user"
 )
 
 // Defines values for CandidateDecisionOutcome.
@@ -122,6 +122,12 @@ const (
 	DecisionOutcomeREJECT DecisionOutcome = "REJECT"
 )
 
+// Defines values for DiscoverKind.
+const (
+	DiscoverKindAlbum  DiscoverKind = "album"
+	DiscoverKindArtist DiscoverKind = "artist"
+)
+
 // Defines values for DownloaderProtocol.
 const (
 	DownloaderProtocolDdl     DownloaderProtocol = "ddl"
@@ -152,14 +158,14 @@ const (
 
 // Defines values for HealthStatusStatus.
 const (
-	Ok HealthStatusStatus = "ok"
+	HealthStatusStatusOk HealthStatusStatus = "ok"
 )
 
 // Defines values for IdentificationAttemptOutcome.
 const (
-	Identified IdentificationAttemptOutcome = "identified"
-	Queued     IdentificationAttemptOutcome = "queued"
-	Retry      IdentificationAttemptOutcome = "retry"
+	IdentificationAttemptOutcomeIdentified IdentificationAttemptOutcome = "identified"
+	IdentificationAttemptOutcomeQueued     IdentificationAttemptOutcome = "queued"
+	IdentificationAttemptOutcomeRetry      IdentificationAttemptOutcome = "retry"
 )
 
 // Defines values for ImportInspectRequestOrigin.
@@ -199,10 +205,10 @@ const (
 
 // Defines values for ImportUnitShape.
 const (
-	MULTIDISC ImportUnitShape = "MULTI_DISC"
-	PACK      ImportUnitShape = "PACK"
-	SET       ImportUnitShape = "SET"
-	SINGLE    ImportUnitShape = "SINGLE"
+	ImportUnitShapeMULTIDISC ImportUnitShape = "MULTI_DISC"
+	ImportUnitShapePACK      ImportUnitShape = "PACK"
+	ImportUnitShapeSET       ImportUnitShape = "SET"
+	ImportUnitShapeSINGLE    ImportUnitShape = "SINGLE"
 )
 
 // Defines values for IncompleteWorkState.
@@ -241,7 +247,7 @@ const (
 
 // Defines values for LogoutStatusStatus.
 const (
-	SignedOut LogoutStatusStatus = "signed-out"
+	LogoutStatusStatusSignedOut LogoutStatusStatus = "signed-out"
 )
 
 // Defines values for MeTier.
@@ -253,17 +259,17 @@ const (
 
 // Defines values for MediaType.
 const (
-	Adult     MediaType = "adult"
-	Audiobook MediaType = "audiobook"
-	Book      MediaType = "book"
-	Comic     MediaType = "comic"
-	Movie     MediaType = "movie"
-	Music     MediaType = "music"
-	News      MediaType = "news"
-	Podcast   MediaType = "podcast"
-	Rom       MediaType = "rom"
-	Tv        MediaType = "tv"
-	Youtube   MediaType = "youtube"
+	MediaTypeAdult     MediaType = "adult"
+	MediaTypeAudiobook MediaType = "audiobook"
+	MediaTypeBook      MediaType = "book"
+	MediaTypeComic     MediaType = "comic"
+	MediaTypeMovie     MediaType = "movie"
+	MediaTypeMusic     MediaType = "music"
+	MediaTypeNews      MediaType = "news"
+	MediaTypePodcast   MediaType = "podcast"
+	MediaTypeRom       MediaType = "rom"
+	MediaTypeTv        MediaType = "tv"
+	MediaTypeYoutube   MediaType = "youtube"
 )
 
 // Defines values for MoveJobReason.
@@ -285,16 +291,16 @@ const (
 
 // Defines values for PackDetectedFrom.
 const (
-	Structure        PackDetectedFrom = "structure"
-	StructureAndName PackDetectedFrom = "structure_and_name"
+	PackDetectedFromStructure        PackDetectedFrom = "structure"
+	PackDetectedFromStructureAndName PackDetectedFrom = "structure_and_name"
 )
 
 // Defines values for PackKind.
 const (
-	ANTHOLOGY   PackKind = "ANTHOLOGY"
-	TAKELA      PackKind = "BOX_SET"
-	COMPILATION PackKind = "COMPILATION"
-	DISCOGRAPHY PackKind = "DISCOGRAPHY"
+	PackKindANTHOLOGY   PackKind = "ANTHOLOGY"
+	PackKindBOXSET      PackKind = "BOX_SET"
+	PackKindCOMPILATION PackKind = "COMPILATION"
+	PackKindDISCOGRAPHY PackKind = "DISCOGRAPHY"
 )
 
 // Defines values for PackItemState.
@@ -323,19 +329,19 @@ const (
 
 // Defines values for ProblemType.
 const (
-	BadRequest       ProblemType = "bad-request"
-	Conflict         ProblemType = "conflict"
-	Forbidden        ProblemType = "forbidden"
-	Internal         ProblemType = "internal"
-	MethodNotAllowed ProblemType = "method-not-allowed"
-	NotFound         ProblemType = "not-found"
-	Unauthorized     ProblemType = "unauthorized"
-	Unavailable      ProblemType = "unavailable"
+	ProblemTypeBadRequest       ProblemType = "bad-request"
+	ProblemTypeConflict         ProblemType = "conflict"
+	ProblemTypeForbidden        ProblemType = "forbidden"
+	ProblemTypeInternal         ProblemType = "internal"
+	ProblemTypeMethodNotAllowed ProblemType = "method-not-allowed"
+	ProblemTypeNotFound         ProblemType = "not-found"
+	ProblemTypeUnauthorized     ProblemType = "unauthorized"
+	ProblemTypeUnavailable      ProblemType = "unavailable"
 )
 
 // Defines values for ReadyStatusStatus.
 const (
-	Ready ReadyStatusStatus = "ready"
+	ReadyStatusStatusReady ReadyStatusStatus = "ready"
 )
 
 // Defines values for RemoveAndBlockRequestBlockReason.
@@ -349,18 +355,18 @@ const (
 
 // Defines values for RemoveAndBlockRequestQuarantineReason.
 const (
-	FailedImport  RemoveAndBlockRequestQuarantineReason = "failed_import"
-	Junk          RemoveAndBlockRequestQuarantineReason = "junk"
-	RejectedWorse RemoveAndBlockRequestQuarantineReason = "rejected_worse"
-	Replaced      RemoveAndBlockRequestQuarantineReason = "replaced"
-	UserDelete    RemoveAndBlockRequestQuarantineReason = "user_delete"
+	RemoveAndBlockRequestQuarantineReasonFailedImport  RemoveAndBlockRequestQuarantineReason = "failed_import"
+	RemoveAndBlockRequestQuarantineReasonJunk          RemoveAndBlockRequestQuarantineReason = "junk"
+	RemoveAndBlockRequestQuarantineReasonRejectedWorse RemoveAndBlockRequestQuarantineReason = "rejected_worse"
+	RemoveAndBlockRequestQuarantineReasonReplaced      RemoveAndBlockRequestQuarantineReason = "replaced"
+	RemoveAndBlockRequestQuarantineReasonUserDelete    RemoveAndBlockRequestQuarantineReason = "user_delete"
 )
 
 // Defines values for Role.
 const (
-	Admin    Role = "admin"
-	Operator Role = "operator"
-	Readonly Role = "readonly"
+	RoleAdmin    Role = "admin"
+	RoleOperator Role = "operator"
+	RoleReadonly Role = "readonly"
 )
 
 // Defines values for RootFolderDrainState.
@@ -373,9 +379,9 @@ const (
 
 // Defines values for ScheduleLastOutcome.
 const (
-	Duplicate ScheduleLastOutcome = "duplicate"
-	Enqueued  ScheduleLastOutcome = "enqueued"
-	Error     ScheduleLastOutcome = "error"
+	ScheduleLastOutcomeDuplicate ScheduleLastOutcome = "duplicate"
+	ScheduleLastOutcomeEnqueued  ScheduleLastOutcome = "enqueued"
+	ScheduleLastOutcomeError     ScheduleLastOutcome = "error"
 )
 
 // Defines values for ScheduleTier.
@@ -387,12 +393,12 @@ const (
 
 // Defines values for SettingDefinitionKind.
 const (
-	Bool       SettingDefinitionKind = "bool"
-	Entity     SettingDefinitionKind = "entity"
-	Float      SettingDefinitionKind = "float"
-	Int        SettingDefinitionKind = "int"
-	String     SettingDefinitionKind = "string"
-	StringList SettingDefinitionKind = "string_list"
+	SettingDefinitionKindBool       SettingDefinitionKind = "bool"
+	SettingDefinitionKindEntity     SettingDefinitionKind = "entity"
+	SettingDefinitionKindFloat      SettingDefinitionKind = "float"
+	SettingDefinitionKindInt        SettingDefinitionKind = "int"
+	SettingDefinitionKindString     SettingDefinitionKind = "string"
+	SettingDefinitionKindStringList SettingDefinitionKind = "string_list"
 )
 
 // Defines values for SettingDefinitionTier.
@@ -404,18 +410,18 @@ const (
 
 // Defines values for TransferMethod.
 const (
-	Copy     TransferMethod = "copy"
-	Hardlink TransferMethod = "hardlink"
-	Move     TransferMethod = "move"
-	Reflink  TransferMethod = "reflink"
-	Symlink  TransferMethod = "symlink"
+	TransferMethodCopy     TransferMethod = "copy"
+	TransferMethodHardlink TransferMethod = "hardlink"
+	TransferMethodMove     TransferMethod = "move"
+	TransferMethodReflink  TransferMethod = "reflink"
+	TransferMethodSymlink  TransferMethod = "symlink"
 )
 
 // Defines values for UpdateDownloaderRequestProtocol.
 const (
-	Ddl     UpdateDownloaderRequestProtocol = "ddl"
-	Torrent UpdateDownloaderRequestProtocol = "torrent"
-	Usenet  UpdateDownloaderRequestProtocol = "usenet"
+	UpdateDownloaderRequestProtocolDdl     UpdateDownloaderRequestProtocol = "ddl"
+	UpdateDownloaderRequestProtocolTorrent UpdateDownloaderRequestProtocol = "torrent"
+	UpdateDownloaderRequestProtocolUsenet  UpdateDownloaderRequestProtocol = "usenet"
 )
 
 // Defines values for WantedState.
@@ -494,8 +500,8 @@ const (
 
 // Defines values for ListWorksParamsDir.
 const (
-	Asc  ListWorksParamsDir = "asc"
-	Desc ListWorksParamsDir = "desc"
+	ListWorksParamsDirAsc  ListWorksParamsDir = "asc"
+	ListWorksParamsDirDesc ListWorksParamsDir = "desc"
 )
 
 // Defines values for GetWorkArtworkParamsSize.
@@ -929,22 +935,40 @@ type DiscoverAddRequest struct {
 	Provider   string `json:"provider"`
 }
 
-// DiscoverAddResult defines model for DiscoverAddResult.
+// DiscoverAddResult What an add produced. kind says which ids are populated: an album carries work_id and desired_item_id, an artist person_id and subscription_id.
 type DiscoverAddResult struct {
-	DesiredItemId int64 `json:"desired_item_id"`
+	DesiredItemId *int64 `json:"desired_item_id,omitempty"`
+
+	// Kind What a discover result is. An album is added as a monitored desired item; an artist is added as a monitored person with a subscription, whose albums arrive when the subscription expands.
+	Kind DiscoverKind `json:"kind"`
+
+	// PersonId The monitored person, for an artist add.
+	PersonId *int64 `json:"person_id,omitempty"`
 
 	// Priority ADR-36's composite score, computed against the user_request trigger. There is no populated hunt_queue yet (stage 5/6), so this is the score alone, not a position within it.
 	Priority int64 `json:"priority"`
-	WorkId   int64 `json:"work_id"`
+
+	// SubscriptionId The subscription whose expansion brings the discography in.
+	SubscriptionId *int64 `json:"subscription_id,omitempty"`
+	WorkId         *int64 `json:"work_id,omitempty"`
 }
+
+// DiscoverKind What a discover result is. An album is added as a monitored desired item; an artist is added as a monitored person with a subscription, whose albums arrive when the subscription expands.
+type DiscoverKind string
 
 // DiscoverResult One candidate a search found (ADR-56) -- not yet in the library.
 type DiscoverResult struct {
-	Artist     *string `json:"artist,omitempty"`
-	ExternalId string  `json:"external_id"`
-	Provider   string  `json:"provider"`
-	Title      string  `json:"title"`
-	Year       *int64  `json:"year,omitempty"`
+	Artist *string `json:"artist,omitempty"`
+
+	// Disambiguation MusicBrainz's own short note telling two same-named artists apart.
+	Disambiguation *string `json:"disambiguation,omitempty"`
+	ExternalId     string  `json:"external_id"`
+
+	// Kind Absent means album, which is what search returned before artists were searchable.
+	Kind     *DiscoverKind `json:"kind,omitempty"`
+	Provider string        `json:"provider"`
+	Title    string        `json:"title"`
+	Year     *int64        `json:"year,omitempty"`
 }
 
 // DownloadFolder One watched upstream-download destination (todo 4.18, section 5.1). Registry only -- nothing acts on what lands here until stage 5.
@@ -2267,8 +2291,11 @@ type DiscoverSearchParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
 
 	// Q At least 2 characters (section 21.5's own floor).
-	Q     string `form:"q" json:"q"`
-	Limit *int   `form:"limit,omitempty" json:"limit,omitempty"`
+	Q string `form:"q" json:"q"`
+
+	// Kind What to search for. Defaults to album, which is what this endpoint searched before artists became searchable.
+	Kind  *DiscoverKind `form:"kind,omitempty" json:"kind,omitempty"`
+	Limit *int          `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // SetDownloaderCredentialsJSONBody defines parameters for SetDownloaderCredentials.
@@ -4875,6 +4902,14 @@ func (siw *ServerInterfaceWrapper) DiscoverSearch(w http.ResponseWriter, r *http
 	err = runtime.BindQueryParameter("form", true, true, "q", r.URL.Query(), &params.Q)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "kind", r.URL.Query(), &params.Kind)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
 		return
 	}
 

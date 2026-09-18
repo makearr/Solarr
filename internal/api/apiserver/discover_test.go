@@ -2,6 +2,8 @@ package apiserver_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -18,19 +20,24 @@ type fakeDiscover struct {
 
 	lastSearchCategoryID int64
 	lastSearchQuery      string
+	lastSearchKind       apiserver.DiscoverKind
 	lastSearchLimit      int
 	searchCalls          int
 
 	lastAddCategoryID int64
+	lastAddUserID     int64
 	lastAddProvider   string
 	lastAddExternalID string
 	lastAddMonitored  bool
 	addCalls          int
 }
 
-func (f *fakeDiscover) Search(_ context.Context, categoryID int64, query string, limit int) ([]apiserver.DiscoverResult, error) {
+func (f *fakeDiscover) Search(
+	_ context.Context, categoryID int64, kind apiserver.DiscoverKind, query string, limit int,
+) ([]apiserver.DiscoverResult, error) {
 	f.searchCalls++
 	f.lastSearchCategoryID, f.lastSearchQuery, f.lastSearchLimit = categoryID, query, limit
+	f.lastSearchKind = kind
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -38,11 +45,12 @@ func (f *fakeDiscover) Search(_ context.Context, categoryID int64, query string,
 }
 
 func (f *fakeDiscover) Add(
-	_ context.Context, categoryID int64, provider, externalID string, monitored bool,
+	_ context.Context, categoryID, userID int64, provider, externalID string, monitored bool,
 ) (apiserver.DiscoverAddResult, error) {
 	f.addCalls++
 	f.lastAddCategoryID, f.lastAddProvider, f.lastAddExternalID, f.lastAddMonitored =
 		categoryID, provider, externalID, monitored
+	f.lastAddUserID = userID
 	if f.err != nil {
 		return apiserver.DiscoverAddResult{}, f.err
 	}
@@ -152,5 +160,104 @@ func TestDiscoverAdd_MissingExternalIDAnswers400(t *testing.T) {
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/discover/add", `{"category_id":1,"provider":"musicbrainz:release-group"}`))
 	if recorder.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400 without external_id", recorder.Code)
+	}
+}
+
+// kind reaches the engine, so an artist search is not silently an album one.
+func TestDiscoverSearch_PassesTheKindThrough(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	path := fmt.Sprintf("/api/v1/discover/search?category_id=%d&q=heka&kind=artist", category.ID)
+	if recorder := fixture.do(authedGet(t, cookies, path)); recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if fixture.discover.lastSearchKind != apiserver.DiscoverArtist {
+		t.Errorf("lastSearchKind = %q, want artist", fixture.discover.lastSearchKind)
+	}
+}
+
+// Omitting kind keeps the behaviour this endpoint had before artists were
+// searchable, so an older client is unaffected.
+func TestDiscoverSearch_DefaultsToAlbum(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	path := fmt.Sprintf("/api/v1/discover/search?category_id=%d&q=heka", category.ID)
+	fixture.do(authedGet(t, cookies, path))
+	if fixture.discover.lastSearchKind != apiserver.DiscoverAlbum {
+		t.Errorf("lastSearchKind = %q, want album", fixture.discover.lastSearchKind)
+	}
+}
+
+func TestDiscoverSearch_RejectsAnUnknownKind(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	path := fmt.Sprintf("/api/v1/discover/search?category_id=%d&q=heka&kind=composer", category.ID)
+	recorder := fixture.do(authedGet(t, cookies, path))
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.discover.searchCalls != 0 {
+		t.Error("an unknown kind must be refused before it reaches the engine")
+	}
+}
+
+// An artist add reports person_id and subscription_id, and does not report
+// work_id or desired_item_id -- a client must never read a zero as a real row.
+func TestDiscoverAdd_ArtistReportsOnlyItsOwnIDs(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	fixture.discover.add = apiserver.DiscoverAddResult{
+		Kind: apiserver.DiscoverArtist, PersonID: 42, SubscriptionID: 7, Priority: 100,
+	}
+	body := fmt.Sprintf(
+		`{"category_id":%d,"provider":"musicbrainz:artist","external_id":"artist-1"}`, category.ID)
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/discover/add", body))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded["kind"] != "artist" {
+		t.Errorf("kind = %v, want artist", decoded["kind"])
+	}
+	if decoded["person_id"] != float64(42) || decoded["subscription_id"] != float64(7) {
+		t.Errorf("ids = %v/%v, want 42/7", decoded["person_id"], decoded["subscription_id"])
+	}
+	if _, present := decoded["work_id"]; present {
+		t.Error("work_id must be absent for an artist add, not zero")
+	}
+	if _, present := decoded["desired_item_id"]; present {
+		t.Error("desired_item_id must be absent for an artist add, not zero")
+	}
+}
+
+// The subscription is the calling user's, so the user id has to reach the
+// engine rather than being defaulted there.
+func TestDiscoverAdd_PassesTheCallingUser(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	user := fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	body := fmt.Sprintf(
+		`{"category_id":%d,"provider":"musicbrainz:artist","external_id":"artist-1"}`, category.ID)
+	fixture.do(authedPost(t, cookies, "/api/v1/discover/add", body))
+	if fixture.discover.lastAddUserID != user.ID {
+		t.Errorf("lastAddUserID = %d, want the signed-in user %d", fixture.discover.lastAddUserID, user.ID)
 	}
 }

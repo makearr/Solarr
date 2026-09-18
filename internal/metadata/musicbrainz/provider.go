@@ -50,6 +50,8 @@ const (
 	cacheKindReleases = "musicbrainz:releases"
 	// cacheKindRecordingSearch is a recording search's result set, keyed like cacheKindSearch.
 	cacheKindRecordingSearch = "musicbrainz:recording-search"
+	// cacheKindArtistSearch is an artist search's result set, keyed on query and limit.
+	cacheKindArtistSearch = "musicbrainz:artist-search"
 )
 
 // Provider is ADR-29 end to end: try each source in priority order, falling
@@ -215,6 +217,41 @@ func (p Provider) Releases(ctx context.Context, priority Priority, releaseGroupM
 		return nil, fmt.Errorf("musicbrainz: no source can list releases (release group %s)", releaseGroupMBID)
 	}
 	return nil, fmt.Errorf("musicbrainz: no source listed releases of %s: %w", releaseGroupMBID, errors.Join(errs...))
+}
+
+// SearchArtists answers artists matching a name, cache first, from the first
+// source able to search them -- what adding an artist the library has never
+// seen starts from (revision 7.1). Only ArtistSearcher sources are tried, the
+// same optional-capability shape SearchByQuery already uses; no source able to
+// search at all reads as "found nothing", since that is a wiring gap rather
+// than a failed lookup and the caller cannot act on the difference.
+func (p Provider) SearchArtists(ctx context.Context, priority Priority, query string, limit int) ([]ArtistMatch, error) {
+	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
+	key := queryCacheKey(query, limit)
+	if matches, ok := cachedJSON[[]ArtistMatch](ctx, p, cacheKindArtistSearch, key); ok {
+		return matches, nil
+	}
+
+	var errs []error
+	for _, source := range p.sources {
+		searcher, ok := source.(ArtistSearcher)
+		if !ok {
+			continue
+		}
+		matches, err := searcher.SearchArtists(ctx, query, limit)
+		if err != nil {
+			p.logger.WarnContext(ctx, "musicbrainz source artist search failed",
+				slog.String("source", source.Name()), slog.Any("error", err))
+			errs = append(errs, err)
+			continue
+		}
+		rememberJSON(ctx, p, source.Name(), cacheKindArtistSearch, key, matches)
+		return matches, nil
+	}
+	if len(errs) == 0 {
+		return nil, nil
+	}
+	return nil, fmt.Errorf("musicbrainz: no source answered artist search %q: %w", query, errors.Join(errs...))
 }
 
 // SearchRecordings answers recordings matching a track title (and artist, when known),

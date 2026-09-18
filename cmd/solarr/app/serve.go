@@ -504,7 +504,8 @@ func (p *process) startServer(ctx context.Context) error {
 		},
 		Discover: adapters.Discover{
 			Provider: p.musicBrainzProvider(), Identity: library.NewIdentity(p.library),
-			Desired: library.NewDesired(p.library), Categories: adapters.Categories{Cache: p.cache},
+			Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),
+			Categories:       adapters.Categories{Cache: p.cache},
 			DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(),
 		},
 		ArrSync: adapters.ArrSync{

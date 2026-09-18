@@ -19,12 +19,26 @@ import (
 // destination-suggestion ladder is not built, todo 4.17).
 var ErrDiscoverUnsupportedMediaType = errors.New("apiserver: no search provider for this category's media type")
 
+// DiscoverKind is what a discover result is: an album becomes a monitored
+// desired item, an artist a monitored person with a subscription.
+type DiscoverKind string
+
+// The two kinds discover can search for and add.
+const (
+	DiscoverAlbum  DiscoverKind = "album"
+	DiscoverArtist DiscoverKind = "artist"
+)
+
 // DiscoverResult is one candidate a search found, not yet in the library.
 type DiscoverResult struct {
+	Kind       DiscoverKind
 	Provider   string
 	ExternalID string
 	Title      string
 	Artist     string
+	// Disambiguation is the provider's own short note telling two same-named
+	// artists apart, empty when it offers none.
+	Disambiguation string
 	// Year is nil when the provider's own answer carries no release date at
 	// all (ADR-56 does not ask for day precision here, todo 4.20's own
 	// FreshSince is a different, later concern).
@@ -34,8 +48,14 @@ type DiscoverResult struct {
 // DiscoverAddResult is what adding a result created or reused (ADR-56: "the
 // result is a resolved work plus a desired_item", never a download).
 type DiscoverAddResult struct {
+	// Kind says which ids below are populated.
+	Kind          DiscoverKind
 	WorkID        int64
 	DesiredItemID int64
+	// PersonID and SubscriptionID are an artist add's own result: the albums
+	// themselves arrive when the subscription expands, not here.
+	PersonID       int64
+	SubscriptionID int64
 	// Priority is ADR-36's composite score, computed as a preview against
 	// TriggerUserRequest (ADR-56's own "shows the priority... the item will
 	// get") -- there is no real hunt_queue yet to report a rank within
@@ -52,11 +72,11 @@ type Discover interface {
 	// Search answers up to limit candidates for categoryID's media type.
 	// ErrQueryTooShort for a query under section 21.5's floor,
 	// ErrDiscoverUnsupportedMediaType when that media type has no provider.
-	Search(ctx context.Context, categoryID int64, query string, limit int) ([]DiscoverResult, error)
+	Search(ctx context.Context, categoryID int64, kind DiscoverKind, query string, limit int) ([]DiscoverResult, error)
 	// Add resolves-or-creates the work behind (provider, externalID) and
 	// ensures a monitored album-level desired_item for it, idempotently
 	// (Invariant 71 -- re-adding an existing result is not an error).
-	Add(ctx context.Context, categoryID int64, provider, externalID string, monitored bool) (DiscoverAddResult, error)
+	Add(ctx context.Context, categoryID, userID int64, provider, externalID string, monitored bool) (DiscoverAddResult, error)
 }
 
 // routeDiscoverSearch parses category_id/q/limit into gen.DiscoverSearchParams
@@ -72,6 +92,15 @@ func (s *Server) routeDiscoverSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	params := gen.DiscoverSearchParams{CategoryId: categoryID, Q: query.Get("q")}
+	if raw := query.Get("kind"); raw != "" {
+		kind := gen.DiscoverKind(raw)
+		if kind != gen.DiscoverKindAlbum && kind != gen.DiscoverKindArtist {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "kind must be album or artist")
+			return
+		}
+		params.Kind = &kind
+	}
 	if raw := query.Get("limit"); raw != "" {
 		limit, err := strconv.Atoi(raw)
 		if err != nil {
@@ -102,7 +131,11 @@ func (s *Server) DiscoverSearch(w http.ResponseWriter, r *http.Request, params g
 	}
 
 	limit := paginate.ClampLimit(derefOr(params.Limit, 0))
-	results, err := s.discover.Search(r.Context(), params.CategoryId, params.Q, limit)
+	kind := DiscoverAlbum
+	if params.Kind != nil {
+		kind = DiscoverKind(*params.Kind)
+	}
+	results, err := s.discover.Search(r.Context(), params.CategoryId, kind, params.Q, limit)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -113,9 +146,15 @@ func (s *Server) DiscoverSearch(w http.ResponseWriter, r *http.Request, params g
 		if result.Artist != "" {
 			artist = &result.Artist
 		}
+		var disambiguation *string
+		if result.Disambiguation != "" {
+			disambiguation = &result.Disambiguation
+		}
+		viewKind := gen.DiscoverKind(result.Kind)
 		views[i] = gen.DiscoverResult{
-			Provider: result.Provider, ExternalId: result.ExternalID,
+			Kind: &viewKind, Provider: result.Provider, ExternalId: result.ExternalID,
 			Title: result.Title, Artist: artist, Year: result.Year,
+			Disambiguation: disambiguation,
 		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)
@@ -153,13 +192,26 @@ func (s *Server) DiscoverAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := s.discover.Add(r.Context(), body.CategoryId, body.Provider, body.ExternalId,
-		derefOr(body.Monitored, true))
+	result, err := s.discover.Add(r.Context(), body.CategoryId, access.UserID(), body.Provider,
+		body.ExternalId, derefOr(body.Monitored, true))
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, gen.DiscoverAddResult{
-		WorkId: result.WorkID, DesiredItemId: result.DesiredItemID, Priority: result.Priority,
-	})
+	view := gen.DiscoverAddResult{Kind: gen.DiscoverKind(result.Kind), Priority: result.Priority}
+	// Only the ids this kind actually produced are reported, so a client never
+	// reads a zero as a real row.
+	if result.WorkID != 0 {
+		view.WorkId = &result.WorkID
+	}
+	if result.DesiredItemID != 0 {
+		view.DesiredItemId = &result.DesiredItemID
+	}
+	if result.PersonID != 0 {
+		view.PersonId = &result.PersonID
+	}
+	if result.SubscriptionID != 0 {
+		view.SubscriptionId = &result.SubscriptionID
+	}
+	writeJSON(w, s.logger, http.StatusOK, view)
 }

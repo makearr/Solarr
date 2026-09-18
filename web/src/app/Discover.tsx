@@ -10,6 +10,7 @@ import type { components } from "@/api/schema";
 import { useDebouncedValue } from "./useDebouncedValue";
 
 type DiscoverResult = components["schemas"]["DiscoverResult"];
+type DiscoverKind = components["schemas"]["DiscoverKind"];
 
 // Mirrors library.ErrQueryTooShort's floor (section 21.5, SearchBox's own constant).
 const MINIMUM_QUERY_LENGTH = 2;
@@ -23,16 +24,17 @@ const DEBOUNCE_MS = 250;
 export function Discover() {
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
   const [query, setQuery] = useState("");
+  const [kind, setKind] = useState<DiscoverKind>("album");
   const [added, setAdded] = useState<Set<string>>(new Set());
   const debounced = useDebouncedValue(query.trim(), DEBOUNCE_MS);
   const searchable = debounced.length >= MINIMUM_QUERY_LENGTH && categoryId !== undefined;
   const queryClient = useQueryClient();
 
   const results = useQuery({
-    queryKey: ["discover-search", categoryId, debounced],
+    queryKey: ["discover-search", categoryId, kind, debounced],
     queryFn: async () => {
       const { data, error } = await api.GET("/discover/search", {
-        params: { query: { category_id: Number(categoryId), q: debounced, limit: 20 } },
+        params: { query: { category_id: Number(categoryId), q: debounced, kind, limit: 20 } },
       });
       if (error) throw error;
       return data;
@@ -58,6 +60,7 @@ export function Discover() {
     onSuccess: (_data, result) => {
       setAdded((current) => new Set(current).add(resultKey(result)));
       void queryClient.invalidateQueries({ queryKey: ["works"] });
+      void queryClient.invalidateQueries({ queryKey: ["people"] });
     },
   });
 
@@ -65,6 +68,24 @@ export function Discover() {
     <div className="flex h-full flex-col gap-4 p-4">
       <div className="flex items-center gap-3">
         <h2 className="text-sm font-medium">Discover</h2>
+        <div className="flex gap-1" role="group" aria-label="What to search for">
+          {(["album", "artist"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={kind === option}
+              onClick={() => setKind(option)}
+              className={`rounded-md border px-2 py-1 text-xs capitalize
+                          focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                            kind === option
+                              ? "border-accent bg-accent text-accent-ink"
+                              : "border-border-subtle text-ink-muted hover:text-ink"
+                          }`}
+            >
+              {option}s
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="relative max-w-md">
@@ -75,7 +96,7 @@ export function Discover() {
         <input
           type="search"
           value={query}
-          placeholder="Search for an artist or album…"
+          placeholder={kind === "artist" ? "Search for an artist…" : "Search for an album…"}
           onChange={(event) => setQuery(event.target.value)}
           className="w-full rounded-md border border-border-subtle bg-surface py-1.5 pl-8 pr-3 text-sm
                      focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
@@ -104,7 +125,7 @@ export function Discover() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{result.title}</div>
                   <div className="truncate text-xs text-ink-muted">
-                    {result.artist}
+                    {result.kind === "artist" ? result.disambiguation : result.artist}
                     {result.year != null && ` · ${result.year}`}
                   </div>
                 </div>
@@ -130,7 +151,13 @@ export function Discover() {
         </ul>
       )}
 
-      {add.isSuccess && add.data && (
+      {add.isSuccess && add.data?.kind === "artist" && (
+        <p className="text-xs text-ink-muted">
+          Artist added and monitored. Their albums appear as the subscription expands, which runs on its
+          own schedule rather than immediately.
+        </p>
+      )}
+      {add.isSuccess && add.data?.kind === "album" && (
         <p className="text-xs text-ink-muted">
           Added with priority {add.data.priority}. There is no acquisition queue yet (stage 5) to show a
           position within — the score alone is what will decide it once one exists.

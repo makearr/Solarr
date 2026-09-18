@@ -649,7 +649,7 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 	}
 	if raw := query.Get("dir"); raw != "" {
 		switch gen.ListWorksParamsDir(raw) {
-		case gen.Asc, gen.Desc:
+		case gen.ListWorksParamsDirAsc, gen.ListWorksParamsDirDesc:
 			dir := gen.ListWorksParamsDir(raw)
 			params.Dir = &dir
 		default:

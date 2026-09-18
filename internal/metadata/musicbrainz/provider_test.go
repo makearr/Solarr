@@ -653,3 +653,76 @@ func TestProvider_TheCallersPriorityReachesTheRequest(t *testing.T) {
 		t.Errorf("priorities seen = %v, want %v", source.seen, want)
 	}
 }
+
+// fakeArtistSearchSource is a fakeSource that also implements ArtistSearcher.
+type fakeArtistSearchSource struct {
+	fakeSource
+	artistMatches []musicbrainz.ArtistMatch
+	searchErr     error
+	searchCalls   int
+}
+
+func (f *fakeArtistSearchSource) SearchArtists(context.Context, string, int) ([]musicbrainz.ArtistMatch, error) {
+	f.searchCalls++
+	if f.searchErr != nil {
+		return nil, f.searchErr
+	}
+	return f.artistMatches, nil
+}
+
+func TestProvider_SearchArtistsSkipsSourcesThatCannotSearchArtists(t *testing.T) {
+	proxy := &fakeSource{name: "proxy"} // no ArtistSearcher
+	direct := &fakeArtistSearchSource{
+		fakeSource: fakeSource{name: "direct"},
+		artistMatches: []musicbrainz.ArtistMatch{
+			{Artist: musicbrainz.Artist{MBID: "artist-1", Name: "Vutu Doci"}, Score: 100},
+		},
+	}
+	provider := newProvider(t, proxy, direct)
+
+	matches, err := provider.SearchArtists(t.Context(), musicbrainz.PriorityInteractive, "vutu doci", 10)
+	if err != nil {
+		t.Fatalf("SearchArtists: %v", err)
+	}
+	if len(matches) != 1 || matches[0].Name != "Vutu Doci" {
+		t.Fatalf("matches = %+v, want the one capable source's answer", matches)
+	}
+	if direct.searchCalls != 1 {
+		t.Errorf("searchCalls = %d, want 1", direct.searchCalls)
+	}
+}
+
+// A failing source falls through to the next, the same as every other
+// capability on this provider.
+func TestProvider_SearchArtistsFallsThroughAFailingSource(t *testing.T) {
+	first := &fakeArtistSearchSource{fakeSource: fakeSource{name: "first"}, searchErr: errors.New("first down")}
+	second := &fakeArtistSearchSource{
+		fakeSource: fakeSource{name: "second"},
+		artistMatches: []musicbrainz.ArtistMatch{
+			{Artist: musicbrainz.Artist{MBID: "artist-2", Name: "Heka"}},
+		},
+	}
+	provider := newProvider(t, first, second)
+
+	matches, err := provider.SearchArtists(t.Context(), musicbrainz.PriorityInteractive, "heka", 10)
+	if err != nil {
+		t.Fatalf("SearchArtists: %v", err)
+	}
+	if len(matches) != 1 || matches[0].Name != "Heka" {
+		t.Errorf("matches = %+v, want the second source's answer", matches)
+	}
+}
+
+// No source able to search artists at all is a wiring gap, not a failed
+// lookup: the caller cannot act on the difference, so it reads as no results.
+func TestProvider_SearchArtistsAnswersNothingWhenNoSourceCanSearch(t *testing.T) {
+	provider := newProvider(t, &fakeSource{name: "proxy"})
+
+	matches, err := provider.SearchArtists(t.Context(), musicbrainz.PriorityInteractive, "anyone", 10)
+	if err != nil {
+		t.Fatalf("SearchArtists: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Errorf("matches = %+v, want none", matches)
+	}
+}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/priority"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
@@ -22,6 +23,7 @@ type Discover struct {
 	Provider         musicbrainz.Provider
 	Identity         library.Identity
 	Desired          library.Desired
+	People           library.People
 	Categories       Categories
 	DefaultProfileID int64
 	Clock            clock.Clock
@@ -30,13 +32,18 @@ type Discover struct {
 // Search resolves categoryID to its media type and, for music, runs a
 // free-text MusicBrainz release-group search (PriorityInteractive: a user is
 // looking at this right now, ADR-29's own top priority).
-func (a Discover) Search(ctx context.Context, categoryID int64, query string, limit int) ([]apiserver.DiscoverResult, error) {
+func (a Discover) Search(
+	ctx context.Context, categoryID int64, kind apiserver.DiscoverKind, query string, limit int,
+) ([]apiserver.DiscoverResult, error) {
 	if len([]rune(query)) < 2 {
 		return nil, apiserver.ErrQueryTooShort
 	}
 	category, ok := a.Categories.Category(categoryID)
 	if !ok || category.MediaType != "music" {
 		return nil, apiserver.ErrDiscoverUnsupportedMediaType
+	}
+	if kind == apiserver.DiscoverArtist {
+		return a.searchArtists(ctx, query, limit)
 	}
 
 	matches, err := a.Provider.SearchByQuery(ctx, musicbrainz.PriorityInteractive, query, limit)
@@ -46,8 +53,27 @@ func (a Discover) Search(ctx context.Context, categoryID int64, query string, li
 	results := make([]apiserver.DiscoverResult, len(matches))
 	for i, match := range matches {
 		results[i] = apiserver.DiscoverResult{
-			Provider: music.ProviderReleaseGroup, ExternalID: match.MBID,
+			Kind: apiserver.DiscoverAlbum, Provider: music.ProviderReleaseGroup, ExternalID: match.MBID,
 			Title: match.Title, Artist: match.ArtistCredit, Year: releaseYear(match.FirstReleaseDate),
+		}
+	}
+	return results, nil
+}
+
+// searchArtists is Search's artist half (revision 7.1). The disambiguation
+// comes through because two artists sharing a name is the normal case, not an
+// edge one, and the name alone cannot tell them apart.
+func (a Discover) searchArtists(ctx context.Context, query string, limit int) ([]apiserver.DiscoverResult, error) {
+	matches, err := a.Provider.SearchArtists(ctx, musicbrainz.PriorityInteractive, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("musicbrainz: %w", err)
+	}
+	results := make([]apiserver.DiscoverResult, len(matches))
+	for i, match := range matches {
+		results[i] = apiserver.DiscoverResult{
+			Kind: apiserver.DiscoverArtist, Provider: music.ProviderArtist, ExternalID: match.MBID,
+			Title: match.Name, Disambiguation: match.Disambiguation,
+			Year: releaseYear(match.Born),
 		}
 	}
 	return results, nil
@@ -61,10 +87,16 @@ func (a Discover) Search(ctx context.Context, categoryID int64, query string, li
 // same accepted gap subscription-discovered works already carry (no
 // enrichment or artwork until something else gives one an edition).
 func (a Discover) Add(
-	ctx context.Context, categoryID int64, provider, externalID string, monitored bool,
+	ctx context.Context, categoryID, userID int64, provider, externalID string, monitored bool,
 ) (apiserver.DiscoverAddResult, error) {
 	category, ok := a.Categories.Category(categoryID)
-	if !ok || category.MediaType != "music" || provider != music.ProviderReleaseGroup {
+	if !ok || category.MediaType != "music" {
+		return apiserver.DiscoverAddResult{}, apiserver.ErrDiscoverUnsupportedMediaType
+	}
+	if provider == music.ProviderArtist {
+		return a.addArtist(ctx, category, userID, externalID, monitored)
+	}
+	if provider != music.ProviderReleaseGroup {
 		return apiserver.DiscoverAddResult{}, apiserver.ErrDiscoverUnsupportedMediaType
 	}
 
@@ -101,7 +133,59 @@ func (a Discover) Add(
 	score := priority.Compute(priority.DefaultWeights(), priority.Input{
 		Trigger: priority.TriggerUserRequest, CategoryRank: category.PriorityRank, QueuedSince: now,
 	}, now)
-	return apiserver.DiscoverAddResult{WorkID: workIDs[0], DesiredItemID: item.ID, Priority: score}, nil
+	return apiserver.DiscoverAddResult{
+		Kind: apiserver.DiscoverAlbum, WorkID: workIDs[0], DesiredItemID: item.ID, Priority: score,
+	}, nil
+}
+
+// addArtist creates or reuses the person behind an artist MBID and subscribes
+// the caller to them (ADR-32). It deliberately creates no desired items: the
+// discography arrives when subscription.expand runs, which is the mechanism
+// that already decides per release group whether it is admitted. Idempotent
+// twice over -- ResolvePerson returns an existing person untouched and
+// Subscribe returns an existing subscription's id (Invariant 80).
+func (a Discover) addArtist(
+	ctx context.Context, category settings.Category, userID int64, externalID string, monitored bool,
+) (apiserver.DiscoverAddResult, error) {
+	// Re-fetched rather than trusted from the request, the same rule the album
+	// path follows: an external id names identity, the provider says the rest.
+	artist, err := a.Provider.Artist(ctx, musicbrainz.PriorityInteractive, externalID)
+	if err != nil {
+		return apiserver.DiscoverAddResult{}, fmt.Errorf("musicbrainz: %w", err)
+	}
+
+	now := a.Clock.Now()
+	personID, err := a.People.ResolvePerson(ctx, now, library.PersonLink{
+		Provider: music.ProviderArtist, ExternalID: externalID,
+		Person: library.PersonIdentity{
+			Name: artist.Name, SortName: artist.SortName, Disambiguation: artist.Disambiguation,
+			Kind: artist.Type, Gender: artist.Gender, Country: artist.Country,
+			Born: artist.Born, Died: artist.Died,
+		},
+	})
+	if err != nil {
+		return apiserver.DiscoverAddResult{}, fmt.Errorf("resolve person: %w", err)
+	}
+
+	// Not monitored means "have them in the library without watching them", so
+	// no subscription is created and nothing expands.
+	var subscriptionID int64
+	if monitored {
+		subscriptionID, err = a.People.Subscribe(ctx, now, personID, userID, library.SubscriptionRequest{
+			MediaTypes: []string{"music"}, MonitorBackCatalogue: true,
+		})
+		if err != nil {
+			return apiserver.DiscoverAddResult{}, fmt.Errorf("subscribe: %w", err)
+		}
+	}
+
+	score := priority.Compute(priority.DefaultWeights(), priority.Input{
+		Trigger: priority.TriggerUserRequest, CategoryRank: category.PriorityRank, QueuedSince: now,
+	}, now)
+	return apiserver.DiscoverAddResult{
+		Kind: apiserver.DiscoverArtist, PersonID: personID, SubscriptionID: subscriptionID,
+		Priority: score,
+	}, nil
 }
 
 // releaseYear reads only the leading year off a MusicBrainz partial date
