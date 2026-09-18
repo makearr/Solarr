@@ -19,6 +19,7 @@ import (
 // a work, not a root folder, to derive one from.
 type WorksMonitor struct {
 	Works            library.Works
+	Identity         library.Identity
 	Desired          library.Desired
 	Categories       music.CategoryFinder
 	DefaultProfileID int64
@@ -223,4 +224,17 @@ func boolToInt64(value bool) int64 {
 		return 1
 	}
 	return 0
+}
+
+// RemoveWork stops wanting an album. The work is looked up first so a missing
+// id answers sql.ErrNoRows rather than silently succeeding on nothing.
+func (a WorksMonitor) RemoveWork(ctx context.Context, workID int64) (apiserver.RemoveWorkResult, error) {
+	if _, err := a.Works.Detail(ctx, workID); err != nil {
+		return apiserver.RemoveWorkResult{}, err
+	}
+	result, err := a.Identity.RemoveWork(ctx, workID)
+	if err != nil {
+		return apiserver.RemoveWorkResult{}, err
+	}
+	return apiserver.RemoveWorkResult{WorkDeleted: result.WorkDeleted, FilesKept: result.FilesKept}, nil
 }

@@ -1,4 +1,4 @@
-import { useParams, Link } from "@tanstack/react-router";
+import { useNavigate, useParams, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 
@@ -49,6 +49,8 @@ export function WorkDetail() {
     },
   });
 
+  const navigate = useNavigate();
+
   const search = useMutation({
     mutationFn: async () => {
       if (id === undefined) return;
@@ -78,6 +80,22 @@ export function WorkDetail() {
       if (error) throw error;
     },
     onSuccess: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: async () => {
+      if (id === undefined) return undefined;
+      const { data, error } = await api.POST("/works/{id}/remove", { params: { path: { id } } });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["works"] });
+      // A kept album still exists, so staying on its page is right; a deleted
+      // one has no page left to show.
+      if (result?.work_deleted) void navigate({ to: "/" });
+      else invalidate();
+    },
   });
 
   const setPartMonitored = useMutation({
@@ -147,6 +165,25 @@ export function WorkDetail() {
                 : setMonitored.isPending
                   ? "…"
                   : "Monitor"}
+            </button>
+            <button
+              type="button"
+              disabled={remove.isPending}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Stop wanting ${work.title}?\n\n` +
+                      "No files are deleted. If any of its files are in the library the album " +
+                      "stays too, because the next scan would find them again.",
+                  )
+                ) {
+                  remove.mutate();
+                }
+              }}
+              className="shrink-0 rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted
+                         enabled:hover:text-danger disabled:cursor-default"
+            >
+              Remove
             </button>
           </div>
         </header>

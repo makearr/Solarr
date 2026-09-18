@@ -324,3 +324,43 @@ func resolveEdition(
 	}
 	return edition.ID, true, nil
 }
+
+// RemoveWorkResult is what removing an album actually did.
+type RemoveWorkResult struct {
+	// WorkDeleted is false when the work was kept because files remain: the
+	// next scan would recreate it, so deleting the row would be a lie.
+	WorkDeleted bool
+	FilesKept   int64
+}
+
+// RemoveWork drops the intent to have an album -- every desired_item for the
+// work -- and deletes the work itself only when the library holds no files
+// for it. Files are never touched either way: removing an album is about no
+// longer wanting it, and deleting bytes goes through quarantine (section
+// 10.8), never through here.
+func (i Identity) RemoveWork(ctx context.Context, workID int64) (RemoveWorkResult, error) {
+	var result RemoveWorkResult
+	err := i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		files, err := queries.CountWorkFiles(ctx, workID)
+		if err != nil {
+			return fmt.Errorf("count files: %w", err)
+		}
+		if err := queries.DeleteDesiredItemsForWork(ctx, workID); err != nil {
+			return fmt.Errorf("delete desired items: %w", err)
+		}
+		result.FilesKept = files
+		if files > 0 {
+			return nil
+		}
+		if err := queries.DeleteWork(ctx, workID); err != nil {
+			return fmt.Errorf("delete work: %w", err)
+		}
+		result.WorkDeleted = true
+		return nil
+	})
+	if err != nil {
+		return RemoveWorkResult{}, fmt.Errorf("library: remove work %d: %w", workID, err)
+	}
+	return result, nil
+}

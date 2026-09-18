@@ -1921,6 +1921,15 @@ type RemoveAndBlockResult struct {
 	ReopenedItems []int64 `json:"reopened_items"`
 }
 
+// RemoveWorkResult What removing an album actually did.
+type RemoveWorkResult struct {
+	// FilesKept How many files the library still holds for this work. None were touched.
+	FilesKept int64 `json:"files_kept"`
+
+	// WorkDeleted False when the album was kept because files for it remain in the library.
+	WorkDeleted bool `json:"work_deleted"`
+}
+
 // Role defines model for Role.
 type Role string
 
@@ -3207,6 +3216,9 @@ type ServerInterface interface {
 	// Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
 	// (POST /works/{id}/parts/{partId}/wanted)
 	SetTrackWanted(w http.ResponseWriter, r *http.Request, id int64, partId int64)
+	// Stop wanting an album. Administrator only.
+	// (POST /works/{id}/remove)
+	RemoveWork(w http.ResponseWriter, r *http.Request, id int64)
 	// Search every configured indexer for this work's own wanted album (stage 5's candidate pipeline, section 10.1/10.2). Synchronous -- one album, a handful of indexer calls, tiers 0-2 (exact, +year, +alias) widening only until one clears the match-distance gate.
 	// (POST /works/{id}/search)
 	SearchWork(w http.ResponseWriter, r *http.Request, id int64)
@@ -4059,6 +4071,12 @@ func (_ Unimplemented) SetPartMonitored(w http.ResponseWriter, r *http.Request, 
 // Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
 // (POST /works/{id}/parts/{partId}/wanted)
 func (_ Unimplemented) SetTrackWanted(w http.ResponseWriter, r *http.Request, id int64, partId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Stop wanting an album. Administrator only.
+// (POST /works/{id}/remove)
+func (_ Unimplemented) RemoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8375,6 +8393,39 @@ func (siw *ServerInterfaceWrapper) SetTrackWanted(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// RemoveWork operation middleware
+func (siw *ServerInterfaceWrapper) RemoveWork(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveWork(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SearchWork operation middleware
 func (siw *ServerInterfaceWrapper) SearchWork(w http.ResponseWriter, r *http.Request) {
 
@@ -8943,6 +8994,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/wanted", wrapper.SetTrackWanted)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/remove", wrapper.RemoveWork)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/search", wrapper.SearchWork)

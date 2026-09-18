@@ -23,6 +23,10 @@ type fakeWorksMonitor struct {
 	setWorkCalls      int
 	setPartCalls      int
 
+	removeResult apiserver.RemoveWorkResult
+	removeWorkID int64
+	removeCalls  int
+
 	lastTrackPartID int64
 	lastTrackWanted *bool
 	setTrackCalls   int
@@ -336,5 +340,55 @@ func TestBulkSetWorkMonitored_UnreadableCategoryAnswers404(t *testing.T) {
 	}
 	if fixture.worksMonitor.bulkCalls != 0 {
 		t.Error("BulkSetMonitored must not be reached for a category the caller cannot read")
+	}
+}
+
+func (f *fakeWorksMonitor) RemoveWork(_ context.Context, workID int64) (apiserver.RemoveWorkResult, error) {
+	f.removeCalls++
+	f.removeWorkID = workID
+	if f.err != nil {
+		return apiserver.RemoveWorkResult{}, f.err
+	}
+	return f.removeResult, nil
+}
+
+func TestRemoveWork_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/3/remove", ""))
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", recorder.Code)
+	}
+	if fixture.worksMonitor.removeCalls != 0 {
+		t.Error("a non-administrator must not reach the engine")
+	}
+}
+
+// An album whose files are still in the library is kept, and the response
+// says so rather than claiming a deletion that did not happen.
+func TestRemoveWork_ReportsAKeptAlbumWithItsFileCount(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.worksMonitor.removeResult = apiserver.RemoveWorkResult{WorkDeleted: false, FilesKept: 9}
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/3/remove", ""))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	var body struct {
+		WorkDeleted bool  `json:"work_deleted"`
+		FilesKept   int64 `json:"files_kept"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.WorkDeleted || body.FilesKept != 9 {
+		t.Errorf("body = %+v, want work_deleted false and files_kept 9", body)
+	}
+	if fixture.worksMonitor.removeWorkID != 3 {
+		t.Errorf("removeWorkID = %d, want 3", fixture.worksMonitor.removeWorkID)
 	}
 }

@@ -153,6 +153,20 @@ func (q *Queries) CountMonitoredParts(ctx context.Context, workID int64) (int64,
 	return monitored_parts, err
 }
 
+const countWorkFiles = `-- name: CountWorkFiles :one
+SELECT CAST(COUNT(*) AS INTEGER) AS total FROM work_file WHERE work_id = ?
+`
+
+// How many files the library actually holds for one work. Removing an album
+// deletes the work row only when this is zero: with files on disk the work
+// would be recreated by the next scan, so deleting it would be a lie.
+func (q *Queries) CountWorkFiles(ctx context.Context, workID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countWorkFiles, workID)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const createEdition = `-- name: CreateEdition :one
 INSERT INTO edition (work_id, kind, label, year, format, catalogue_number,
                      barcode, runtime_ms, is_default)

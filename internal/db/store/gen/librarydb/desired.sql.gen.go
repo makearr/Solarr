@@ -263,6 +263,17 @@ func (q *Queries) CreateDesiredItem(ctx context.Context, arg CreateDesiredItemPa
 	return i, err
 }
 
+const deleteDesiredItemsForWork = `-- name: DeleteDesiredItemsForWork :exec
+DELETE FROM desired_item WHERE work_id = ?
+`
+
+// Every desired item for one work, however many profiles target it (F33
+// widened the key). Removing an album is removing the intent to have it.
+func (q *Queries) DeleteDesiredItemsForWork(ctx context.Context, workID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteDesiredItemsForWork, workID)
+	return err
+}
+
 const detachFile = `-- name: DetachFile :exec
 DELETE FROM desired_item_file
 WHERE desired_item_id = ? AND media_object_id = ? AND role = ?

@@ -2246,6 +2246,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop wanting an album. Administrator only.
+         * @description Deletes every desired item for the work, and the work itself only when the library holds no files for it -- with files on disk the next scan would recreate it, so deleting the row would be a lie. **Files are never touched**: deleting bytes goes through quarantine (section 10.8), never through here.
+         */
+        post: operations["removeWork"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/people/{id}/remove": {
         parameters: {
             query?: never;
@@ -2857,6 +2877,16 @@ export interface components {
             items: components["schemas"]["Work"][];
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
+        };
+        /** @description What removing an album actually did. */
+        RemoveWorkResult: {
+            /** @description False when the album was kept because files for it remain in the library. */
+            work_deleted: boolean;
+            /**
+             * Format: int64
+             * @description How many files the library still holds for this work. None were touched.
+             */
+            files_kept: number;
         };
         /** @description One thing wrong with this instance right now. */
         HealthCheck: {
@@ -7719,6 +7749,31 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    removeWork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What was removed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoveWorkResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };

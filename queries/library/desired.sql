@@ -214,3 +214,8 @@ WHERE d.monitored = 1 AND d.state IN ('MISSING', 'PARTIAL')
   AND d.id > sqlc.arg(after_id)
 ORDER BY d.id
 LIMIT sqlc.arg(page_size);
+
+-- Every desired item for one work, however many profiles target it (F33
+-- widened the key). Removing an album is removing the intent to have it.
+-- name: DeleteDesiredItemsForWork :exec
+DELETE FROM desired_item WHERE work_id = ?;

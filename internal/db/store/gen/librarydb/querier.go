@@ -87,6 +87,10 @@ type Querier interface {
 	// Library health's own "unmatched files" figure (todo 4.8) -- same filter
 	// shape as ListUnidentified below, a count rather than a page.
 	CountUnidentified(ctx context.Context, arg CountUnidentifiedParams) (int64, error)
+	// How many files the library actually holds for one work. Removing an album
+	// deletes the work row only when this is zero: with files on disk the work
+	// would be recreated by the next scan, so deleting it would be a lie.
+	CountWorkFiles(ctx context.Context, workID int64) (int64, error)
 	// The "parts" count for one category (ADR-54's work_part-entity navigation levels,
 	// e.g. music's Tracks): every work_part belonging to a work visible to the
 	// category, by the same on-disk-or-desired union CountWorksVisibleToCategory uses.
@@ -144,6 +148,9 @@ type Querier interface {
 	// two admins, or a retried request -- reports that nothing changed rather than
 	// silently overwriting who decided it and when.
 	DecideRequest(ctx context.Context, arg DecideRequestParams) (int64, error)
+	// Every desired item for one work, however many profiles target it (F33
+	// widened the key). Removing an album is removing the intent to have it.
+	DeleteDesiredItemsForWork(ctx context.Context, workID int64) error
 	// Import revert's own use (todo 4.9): only ever called for an edition
 	// CommitUnit itself created (import_unit.edition_created), and only after
 	// every import_unit referencing it has been cleared (ClearImportUnitPlacement) --

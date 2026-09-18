@@ -127,6 +127,16 @@ type WorksMonitor interface {
 	BulkSetMonitored(
 		ctx context.Context, rootFolderIDs, categoryIDs, ids, excludedIDs []int64, monitored, preview bool,
 	) (int64, error)
+	// RemoveWork drops every desired item for the work, and the work itself
+	// only when no files remain for it. Never touches files. Answers a
+	// missing work id with an error wrapping sql.ErrNoRows.
+	RemoveWork(ctx context.Context, workID int64) (RemoveWorkResult, error)
+}
+
+// RemoveWorkResult is what removing an album did.
+type RemoveWorkResult struct {
+	WorkDeleted bool
+	FilesKept   int64
 }
 
 // routeGetWork parses the id path parameter, mirroring routeUser: a malformed
@@ -488,4 +498,36 @@ func buildPartViews(rows []PartRow) []gen.WorkPart {
 		}
 	}
 	return views
+}
+
+func (s *Server) routeRemoveWork(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a work id must be a number")
+		return
+	}
+	s.RemoveWork(w, r, id)
+}
+
+// RemoveWork stops wanting an album (revision 7.3). Administrator only, and
+// deliberately a POST rather than a DELETE: the files stay, and so does the
+// album itself when any of them are still in the library.
+func (s *Server) RemoveWork(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.worksMonitor == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "works are not available")
+		return
+	}
+	result, err := s.worksMonitor.RemoveWork(r.Context(), id)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.RemoveWorkResult{
+		WorkDeleted: result.WorkDeleted, FilesKept: result.FilesKept,
+	})
 }

@@ -497,7 +497,7 @@ func (p *process) startServer(ctx context.Context) error {
 		LibrarySize: library.NewCounters(p.library),
 		Works:       adapters.Works{Works: library.NewWorks(p.library), Clock: clock.NewSystem()},
 		WorkDetail:  adapters.WorkDetail{Works: library.NewWorks(p.library)},
-		WorksMonitor: adapters.WorksMonitor{
+		WorksMonitor: adapters.WorksMonitor{Identity: library.NewIdentity(p.library),
 			Works: library.NewWorks(p.library), Desired: library.NewDesired(p.library),
 			Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
 			Logger: p.logger,
