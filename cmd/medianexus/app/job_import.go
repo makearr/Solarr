@@ -6,6 +6,7 @@ import (
 	"github.com/makearr/MediaNexus/internal/importing/importjob"
 	"github.com/makearr/MediaNexus/internal/jobs"
 	"github.com/makearr/MediaNexus/internal/media/music"
+	"github.com/makearr/MediaNexus/internal/moving/mover"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
 	"github.com/makearr/MediaNexus/internal/platform/mediatool"
 )
@@ -71,7 +72,19 @@ func (p *process) importCommitter() music.Committer {
 		BlockedContent:   library.NewBlockedContentStore(p.library),
 		Clock:            clock.NewSystem(),
 		DefaultProfileID: p.defaultQualityProfileID,
+		TransferLadder:   p.transferLadder,
 	})
+}
+
+// transferLadder reads the configured order per commit, so changing it in the
+// interface takes effect on the next import rather than the next restart.
+func (p *process) transferLadder() []mover.PlaceMethod {
+	configured := p.cache.Snapshot().ImportTransferLadder()
+	ladder := make([]mover.PlaceMethod, 0, len(configured))
+	for _, method := range configured {
+		ladder = append(ladder, mover.PlaceMethod(method))
+	}
+	return ladder
 }
 
 // mediaTool builds the ffprobe reader every import path needs -- the same

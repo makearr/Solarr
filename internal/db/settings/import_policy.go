@@ -2,11 +2,72 @@ package settings
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 
 	"github.com/makearr/MediaNexus/internal/db/store/gen/settingsdb"
 	"github.com/makearr/MediaNexus/internal/platform/clock"
 )
+
+// KeyImportTransferLadder is the ordered list of transfer methods import walks
+// until one succeeds, tier normal: which of them placed a file is invisible on
+// disk, so the order has to be stated rather than inferred (2026-09-18).
+const KeyImportTransferLadder = "import.transfer_ladder"
+
+// The transfer methods a ladder may name. These pair one-for-one with
+// mover.PlaceMethod, which this package may not import (ADR-25 layering);
+// music.Committer maps between them.
+const (
+	TransferReflink  = "reflink"
+	TransferHardlink = "hardlink"
+	TransferMove     = "move"
+	TransferCopy     = "copy"
+	TransferSymlink  = "symlink"
+)
+
+// DefaultImportTransferLadder is the order the user gave on 2026-09-18.
+// Mirrors mover.DefaultLadder, which this package may not import.
+var DefaultImportTransferLadder = []string{
+	TransferReflink, TransferHardlink, TransferMove, TransferCopy, TransferSymlink,
+}
+
+// ValidTransferMethod reports whether name is one of the five known methods.
+func ValidTransferMethod(name string) bool {
+	switch name {
+	case TransferReflink, TransferHardlink, TransferMove, TransferCopy, TransferSymlink:
+		return true
+	default:
+		return false
+	}
+}
+
+// ImportTransferLadder reads the configured order, falling back to the shipped
+// default when nothing is stored -- an absent row means "use the default
+// ladder", never "place nothing".
+func (s *Snapshot) ImportTransferLadder() []string {
+	ladder := s.policyStringList(KeyImportTransferLadder)
+	if len(ladder) == 0 {
+		return DefaultImportTransferLadder
+	}
+	return ladder
+}
+
+// SetImportTransferLadder writes the order (ADR-44: validated on write, since
+// an unknown or empty ladder would fail every future import at placement time).
+func (c *Cache) SetImportTransferLadder(ctx context.Context, cl clock.Clock, ladder []string) error {
+	if problems := validateImportTransferLadder(ladder); len(problems) > 0 {
+		return problems
+	}
+	encoded, err := json.Marshal(ladder)
+	if err != nil {
+		return err
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetInstanceSetting(ctx, settingsdb.SetInstanceSettingParams{
+			Key: KeyImportTransferLadder, ValueJson: string(encoded), UpdatedAt: cl.Now().Unix(),
+		})
+	})
+}
 
 // KeyImportAutoCommitConfidence is ADR-48's single commit-line knob, tier normal:
 // the confidence a unit's IDENTIFY result must clear to import automatically

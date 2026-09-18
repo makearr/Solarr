@@ -36,6 +36,7 @@ type Document struct {
 type ScalarSettingsEntry struct {
 	AuthRequired               bool     `yaml:"auth_required"`
 	ImportAutoCommitConfidence float64  `yaml:"import_auto_commit_confidence"`
+	ImportTransferLadder       []string `yaml:"import_transfer_ladder,omitempty"`
 	NetworkPort                int      `yaml:"network_port,omitempty"`
 	NetworkProxyURL            string   `yaml:"network_proxy_url,omitempty"`
 	NetworkProxyBypass         []string `yaml:"network_proxy_bypass,omitempty"`
@@ -132,6 +133,7 @@ func (c *Cache) Export() Document {
 	settingsEntry := ScalarSettingsEntry{
 		AuthRequired:               snapshot.AuthRequired(),
 		ImportAutoCommitConfidence: snapshot.ImportAutoCommitConfidence(),
+		ImportTransferLadder:       snapshot.ImportTransferLadder(),
 		NetworkPort:                network.Port,
 		NetworkProxyURL:            network.ProxyURL,
 		NetworkProxyBypass:         network.ProxyBypass,
@@ -272,6 +274,13 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 	if d.Settings != nil {
 		for _, problem := range validateImportAutoCommitConfidence(d.Settings.ImportAutoCommitConfidence) {
 			problems = append(problems, prefixed("settings", problem))
+		}
+		// Absent means "say nothing about it", unlike the API setter where an
+		// empty ladder is a user clearing every method and is refused.
+		if len(d.Settings.ImportTransferLadder) > 0 {
+			for _, problem := range validateImportTransferLadder(d.Settings.ImportTransferLadder) {
+				problems = append(problems, prefixed("settings", problem))
+			}
 		}
 		network := NetworkSettings{
 			Port: d.Settings.NetworkPort, ProxyURL: d.Settings.NetworkProxyURL,
@@ -659,8 +668,18 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 		return fmt.Errorf("settings.network_allow_cidrs: %w", err)
 	}
 
+	ladder := entry.ImportTransferLadder
+	if len(ladder) == 0 {
+		ladder = DefaultImportTransferLadder
+	}
+	transferLadder, err := json.Marshal(ladder)
+	if err != nil {
+		return fmt.Errorf("settings.import_transfer_ladder: %w", err)
+	}
+
 	values := map[string]string{
 		KeyAuthRequired:               strconv.FormatBool(entry.AuthRequired),
+		KeyImportTransferLadder:       string(transferLadder),
 		KeyImportAutoCommitConfidence: strconv.FormatFloat(entry.ImportAutoCommitConfidence, 'f', -1, 64),
 		KeyNetworkPort:                strconv.Itoa(entry.NetworkPort),
 		KeyNetworkProxyURL:            entry.NetworkProxyURL,

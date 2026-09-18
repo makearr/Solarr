@@ -99,6 +99,37 @@ func validateImportAutoCommitConfidence(confidence float64) config.Problems {
 	return nil
 }
 
+// validateImportTransferLadder checks the order before it is written (ADR-44).
+// An empty ladder is refused rather than silently meaning the default: a user
+// who cleared every method asked for something impossible, and answering that
+// with a hidden fallback is how a setting stops meaning what it says.
+func validateImportTransferLadder(ladder []string) config.Problems {
+	var problems config.Problems
+	if len(ladder) == 0 {
+		problems = append(problems, config.Problem{
+			Path: KeyImportTransferLadder, Expectation: "at least one transfer method",
+		})
+	}
+	seen := make(map[string]bool, len(ladder))
+	for _, method := range ladder {
+		if !ValidTransferMethod(method) {
+			problems = append(problems, config.Problem{
+				Path: KeyImportTransferLadder, Value: method,
+				Expectation: "one of reflink, hardlink, move, copy, symlink",
+			})
+			continue
+		}
+		if seen[method] {
+			problems = append(problems, config.Problem{
+				Path: KeyImportTransferLadder, Value: method,
+				Expectation: "each transfer method named at most once",
+			})
+		}
+		seen[method] = true
+	}
+	return problems
+}
+
 // validateQualityProfile checks a quality profile before it is written (ADR-44):
 // a name, and rules/upgrade JSON that actually decodes as ADR-40's shape --
 // internal/identify/score.Parse/ParseUpgrade own that shape, so a typo like `"compare":

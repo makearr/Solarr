@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, Undo2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Ban, Info, Undo2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -85,6 +85,7 @@ export function Import() {
       <div className="flex flex-wrap items-start gap-4">
         <InspectForm />
         <ThresholdControl />
+        <TransferLadderControl />
       </div>
 
       <div className="flex min-h-0 flex-1 gap-4">
@@ -155,6 +156,230 @@ function ThresholdControl() {
           </span>
         </label>
       ))}
+      {update.isError && <p className="text-danger">That could not be changed.</p>}
+    </fieldset>
+  );
+}
+
+type TransferMethod = components["schemas"]["TransferMethod"];
+
+/** What each transfer method actually does on disk, in the terms someone
+ *  choosing between them needs: whether it costs disk space, whether the
+ *  source survives, and whether the library keeps depending on it. */
+const TRANSFER_METHODS: readonly {
+  id: TransferMethod;
+  label: string;
+  summary: string;
+  detail: string;
+}[] = [
+  {
+    id: "reflink",
+    label: "Reflink",
+    summary: "Clone, sharing disk blocks",
+    detail:
+      "Copy-on-write clone. Costs almost no extra disk space, because both files share the " +
+      "same blocks until one is changed, and the two are fully independent afterwards. " +
+      "Needs a filesystem that supports it (XFS with reflink, Btrfs, ZFS 2.2+). Be aware " +
+      "that a reflink looks exactly like an ordinary copy: it has its own inode, a link " +
+      "count of 1, and du reports its full size.",
+  },
+  {
+    id: "hardlink",
+    label: "Hardlink",
+    summary: "A second name for the same bytes",
+    detail:
+      "Adds a second directory entry pointing at the same bytes, so it costs no extra disk " +
+      "space at all. Both names are equal: deleting one leaves the other working. Only " +
+      "possible within a single filesystem. This is the usual choice when the download " +
+      "folder and the library sit on the same disk and the source must stay put, such as " +
+      "a torrent that is still seeding.",
+  },
+  {
+    id: "move",
+    label: "Move",
+    summary: "Relocate the file; the source is gone",
+    detail:
+      "Renames the file into the library, or copies it and deletes the source when a rename " +
+      "is not possible across filesystems. The source no longer exists afterwards, so never " +
+      "choose this for files something else still needs, such as a seeding torrent. A move " +
+      "almost always succeeds, so any method listed below it is only reached if you remove " +
+      "or reorder it.",
+  },
+  {
+    id: "copy",
+    label: "Copy",
+    summary: "Independent bytes, full disk cost",
+    detail:
+      "Writes a completely independent second copy and verifies it against the source. " +
+      "Uses as much extra disk space as the file itself, and works everywhere. The copy is " +
+      "checked byte for byte before the import is accepted.",
+  },
+  {
+    id: "symlink",
+    label: "Symlink",
+    summary: "A pointer to the source, not a real file",
+    detail:
+      "Leaves the library holding a pointer to the original file rather than any bytes of " +
+      "its own. Costs no space, but the library entry breaks the moment the source is " +
+      "moved or deleted, so it is a poor fit for anything under a download-cleanup policy.",
+  },
+];
+
+/** The import transfer ladder: methods are tried top to bottom until one
+ *  succeeds. Order is the whole point, so it is edited as a list rather than
+ *  picked as a single value -- which method actually placed a file is
+ *  invisible on disk, so the choice has to be stated here. */
+function TransferLadderControl() {
+  const queryClient = useQueryClient();
+  const [explaining, setExplaining] = useState<TransferMethod | null>(null);
+
+  const settings = useQuery({
+    queryKey: ["import-settings"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/import/settings");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const update = useMutation({
+    mutationFn: async (ladder: TransferMethod[]) => {
+      const { error } = await api.PATCH("/import/settings", {
+        body: {
+          auto_commit_confidence: settings.data?.auto_commit_confidence ?? 0.9,
+          transfer_ladder: ladder,
+        },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["import-settings"] }),
+  });
+
+  if (!settings.data) return null;
+  const ladder = (settings.data.transfer_ladder ?? []) as TransferMethod[];
+  const disabled = TRANSFER_METHODS.filter((method) => !ladder.includes(method.id));
+
+  const move = (index: number, delta: number) => {
+    const target = index + delta;
+    const moving = ladder[index];
+    const displaced = ladder[target];
+    if (moving === undefined || displaced === undefined) return;
+    const next = [...ladder];
+    next[index] = displaced;
+    next[target] = moving;
+    update.mutate(next);
+  };
+
+  const describe = (id: TransferMethod) => TRANSFER_METHODS.find((method) => method.id === id);
+
+  // The first always-succeeding method makes everything below it unreachable.
+  // Saying so beats letting someone wonder why a rung never fires.
+  const alwaysSucceedsAt = ladder.findIndex((id) => id === "move" || id === "copy");
+
+  return (
+    <fieldset className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
+      <legend className="px-1 text-ink-muted">Transfer order</legend>
+      <p className="pb-1 text-[0.6875rem] text-ink-muted">
+        Tried top to bottom until one works.
+      </p>
+
+      {ladder.map((id, index) => {
+        const method = describe(id);
+        if (!method) return null;
+        return (
+          <div key={id} className="flex flex-col">
+            <div className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked
+                disabled={update.isPending || ladder.length === 1}
+                aria-label={`Use ${method.label}`}
+                onChange={() => update.mutate(ladder.filter((entry) => entry !== id))}
+              />
+              <span className="w-4 text-ink-muted">{index + 1}.</span>
+              <span className="flex-1 text-ink">
+                {method.label}
+                <span className="pl-1 text-ink-muted">{method.summary}</span>
+              </span>
+              <button
+                type="button"
+                className="rounded p-0.5 text-ink-muted hover:text-ink disabled:opacity-30"
+                disabled={index === 0 || update.isPending}
+                aria-label={`Move ${method.label} up`}
+                onClick={() => move(index, -1)}
+              >
+                <ArrowUp size={12} />
+              </button>
+              <button
+                type="button"
+                className="rounded p-0.5 text-ink-muted hover:text-ink disabled:opacity-30"
+                disabled={index === ladder.length - 1 || update.isPending}
+                aria-label={`Move ${method.label} down`}
+                onClick={() => move(index, 1)}
+              >
+                <ArrowDown size={12} />
+              </button>
+              <button
+                type="button"
+                className="rounded p-0.5 text-ink-muted hover:text-ink"
+                aria-label={`What does ${method.label} do?`}
+                aria-expanded={explaining === id}
+                onClick={() => setExplaining(explaining === id ? null : id)}
+              >
+                <Info size={12} />
+              </button>
+            </div>
+            {explaining === id && (
+              <p className="ml-6 py-1 text-[0.6875rem] leading-relaxed text-ink-muted">
+                {method.detail}
+              </p>
+            )}
+            {alwaysSucceedsAt >= 0 && index === alwaysSucceedsAt && index < ladder.length - 1 && (
+              <p className="ml-6 py-1 text-[0.6875rem] text-ink-muted">
+                {method.label} almost always succeeds, so nothing below it is normally reached.
+              </p>
+            )}
+          </div>
+        );
+      })}
+
+      {disabled.length > 0 && (
+        <div className="mt-1 flex flex-col gap-1 border-t border-border-subtle pt-2">
+          {disabled.map((method) => (
+            <div key={method.id} className="flex flex-col">
+              <div className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={false}
+                  disabled={update.isPending}
+                  aria-label={`Use ${method.label}`}
+                  onChange={() => update.mutate([...ladder, method.id])}
+                />
+                <span className="w-4" />
+                <span className="flex-1 text-ink-muted">
+                  {method.label}
+                  <span className="pl-1">{method.summary}</span>
+                </span>
+                <button
+                  type="button"
+                  className="rounded p-0.5 text-ink-muted hover:text-ink"
+                  aria-label={`What does ${method.label} do?`}
+                  aria-expanded={explaining === method.id}
+                  onClick={() => setExplaining(explaining === method.id ? null : method.id)}
+                >
+                  <Info size={12} />
+                </button>
+              </div>
+              {explaining === method.id && (
+                <p className="ml-6 py-1 text-[0.6875rem] leading-relaxed text-ink-muted">
+                  {method.detail}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {update.isError && <p className="text-danger">That could not be changed.</p>}
     </fieldset>
   );

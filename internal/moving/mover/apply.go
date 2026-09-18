@@ -78,54 +78,141 @@ func ApplyOne(fsys fsx.FS, move PlannedMove, roots RootPath) error {
 	return nil
 }
 
-// PlaceMethod names which rung of ADR-11 A's import ladder actually placed a
-// file -- recorded in the import decision (ADR-11: "the reason is recorded"),
+// PlaceMethod names which rung of the import ladder actually placed a file --
+// recorded in the import decision (ADR-11: "the reason is recorded"),
 // distinct from PlannedMove's SameFilesystem, which is about the four
 // already-library-owned move reasons (RENAME/CATEGORY/REBALANCE/DRAIN), not
 // import's first placement of a file the library does not own yet.
 type PlaceMethod string
 
-// The three rungs this pass implements. "move" (ADR-11's fourth rung, delete
-// the source outright) is deliberately not built: nothing yet depends on the
-// source disappearing -- acquisition cleanup is stage 5, and a watched-folder
-// workflow that wants that does not exist either (private/questions.md).
+// The five rungs a ladder may name. PlaceMove consumes the source and
+// PlaceSymlink leaves the library depending on it, so neither is ever
+// reached unless the user's own ladder names it (2026-09-18).
 const (
 	PlaceReflink  PlaceMethod = "reflink"
 	PlaceHardlink PlaceMethod = "hardlink"
+	PlaceMove     PlaceMethod = "move"
 	PlaceCopy     PlaceMethod = "copy"
+	PlaceSymlink  PlaceMethod = "symlink"
 )
 
-// PlaceOne places one file at destAbs from sourceAbs by ADR-11 A's own
-// ladder -- reflink, then hardlink, then copy -- and never modifies or
-// removes sourceAbs at any rung: unlike ApplyOne, whose SameFilesystem path
-// is a real Rename because the library already owns that file, an import
-// source is never the library's to delete (that is the still-unbuilt
-// acquisition/watched-folder cleanup policy's job, not this function's).
-// A failed rung falls through to the next one on *any* error, not only
+// ErrNoRungSucceeded means every rung the ladder named was refused by the
+// filesystem, so the file was not placed at all.
+var ErrNoRungSucceeded = errors.New("mover: no transfer method in the ladder could place the file")
+
+// ErrUnknownMethod names a ladder entry that is not one of the five rungs.
+var ErrUnknownMethod = errors.New("mover: unknown transfer method")
+
+// DefaultLadder is the order the user gave on 2026-09-18: share the bytes
+// where the filesystem allows it, move them where it does not. Move always
+// succeeds (rename, else copy-and-unlink), so the two rungs behind it are
+// reachable only once a user reorders the ladder or drops move from it.
+var DefaultLadder = []PlaceMethod{PlaceReflink, PlaceHardlink, PlaceMove, PlaceCopy, PlaceSymlink}
+
+// ValidMethod reports whether method names a rung PlaceOne can actually walk.
+func ValidMethod(method PlaceMethod) bool {
+	switch method {
+	case PlaceReflink, PlaceHardlink, PlaceMove, PlaceCopy, PlaceSymlink:
+		return true
+	default:
+		return false
+	}
+}
+
+// ConsumesSource reports whether a rung leaves the source file gone, which is
+// what a still-seeding torrent must never be subjected to (private/notes.md).
+func ConsumesSource(method PlaceMethod) bool { return method == PlaceMove }
+
+// DependsOnSource reports whether a rung leaves the library pointing at the
+// source rather than owning bytes of its own -- Invariant 19's hazard, since
+// a source under a cleanup policy takes the library entry with it.
+func DependsOnSource(method PlaceMethod) bool { return method == PlaceSymlink }
+
+// PlaceOne places one file at destAbs from sourceAbs by walking ladder in
+// order and returns the rung that succeeded, so a caller can report what
+// actually happened rather than what was asked for -- a reflink and a copy
+// are indistinguishable on disk, which is exactly how an XFS import read as
+// "it copied everything" (2026-09-18). An empty ladder means DefaultLadder.
+// Only PlaceMove removes sourceAbs, and only when the ladder named it: every
+// other rung leaves the source exactly where it was, since an import source
+// is not otherwise the library's to delete.
+// A failed rung falls through to the next on *any* error, not only
 // fsx.ErrUnsupported: fsx.FS.Link's own doc comment promises ErrUnsupported
 // across filesystems, but neither the real nor the fake implementation
 // actually returns it there (both return a raw EXDEV) -- falling through on
-// any error is the contract that is actually honoured, and a genuine
-// permission or disk problem still surfaces from the final copy rung, which
-// does not fall through further.
-func PlaceOne(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64) (PlaceMethod, error) {
+// any error is the contract that is actually honoured. When every rung
+// fails the last rung's own error is returned, wrapped in ErrNoRungSucceeded.
+func PlaceOne(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64, ladder []PlaceMethod) (PlaceMethod, error) {
+	if len(ladder) == 0 {
+		ladder = DefaultLadder
+	}
+	for _, method := range ladder {
+		if !ValidMethod(method) {
+			return "", fmt.Errorf("%w: %q", ErrUnknownMethod, method)
+		}
+	}
 	if err := fsys.MkdirAll(path.Dir(destAbs), 0o755); err != nil {
 		return "", fmt.Errorf("mover: create destination directory for %q: %w", destAbs, err)
 	}
 
-	if err := fsys.Reflink(sourceAbs, destAbs); err == nil {
-		return PlaceReflink, nil
+	var lastErr error
+	for _, method := range ladder {
+		err := placeBy(fsys, method, sourceAbs, destAbs, sizeBytes)
+		if err == nil {
+			return method, nil
+		}
+		lastErr = fmt.Errorf("mover: %s %q to %q: %w", method, sourceAbs, destAbs, err)
 	}
-	if err := fsys.Link(sourceAbs, destAbs); err == nil {
-		return PlaceHardlink, nil
+	return "", fmt.Errorf("%w: %w", ErrNoRungSucceeded, lastErr)
+}
+
+// placeBy attempts exactly one rung, leaving no destination behind on failure
+// so the next rung finds the path free rather than already taken.
+func placeBy(fsys fsx.FS, method PlaceMethod, sourceAbs, destAbs string, sizeBytes int64) error {
+	switch method {
+	case PlaceReflink:
+		return fsys.Reflink(sourceAbs, destAbs)
+	case PlaceHardlink:
+		return fsys.Link(sourceAbs, destAbs)
+	case PlaceSymlink:
+		return fsys.Symlink(sourceAbs, destAbs)
+	case PlaceMove:
+		return moveFile(fsys, sourceAbs, destAbs, sizeBytes)
+	case PlaceCopy:
+		return copyVerified(fsys, sourceAbs, destAbs, sizeBytes)
+	default:
+		return fmt.Errorf("%w: %q", ErrUnknownMethod, method)
 	}
+}
+
+// copyVerified copies and proves the bytes arrived, discarding a failed
+// destination so a later rung is not blocked by a partial file.
+func copyVerified(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64) error {
 	if err := copyFile(fsys, sourceAbs, destAbs); err != nil {
-		return "", fmt.Errorf("mover: copy %q to %q: %w", sourceAbs, destAbs, err)
+		_ = fsys.Remove(destAbs)
+		return err
 	}
 	if err := verify(fsys, sourceAbs, destAbs, sizeBytes); err != nil {
-		return "", err
+		_ = fsys.Remove(destAbs)
+		return err
 	}
-	return PlaceCopy, nil
+	return nil
+}
+
+// moveFile renames where it can and copies-then-unlinks where it cannot. The
+// source is removed only after the copy verifies, so a failed move never
+// destroys the only copy of a file.
+func moveFile(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64) error {
+	if err := fsys.Rename(sourceAbs, destAbs); err == nil {
+		return nil
+	}
+	if err := copyVerified(fsys, sourceAbs, destAbs, sizeBytes); err != nil {
+		return err
+	}
+	if err := fsys.Remove(sourceAbs); err != nil {
+		return fmt.Errorf("remove source after copy: %w", err)
+	}
+	return nil
 }
 
 func copyFile(fsys fsx.FS, sourceAbs, destAbs string) error {

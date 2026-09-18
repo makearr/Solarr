@@ -63,7 +63,14 @@ type Committer struct {
 	blockedContent   BlockedContent
 	clock            clock.Clock
 	defaultProfileID int64
+	transferLadder   TransferLadder
 }
+
+// TransferLadder answers the ordered transfer methods import should try, read
+// per commit rather than captured once so a settings change takes effect
+// without a restart -- the same live-read shape the egress proxy already uses.
+// A nil func or an empty result means mover.DefaultLadder.
+type TransferLadder func() []mover.PlaceMethod
 
 // BlockedContent is the ADR-53 part 2 check CommitUnit's import gate needs
 // (todo 4.15) -- library.BlockedContentStore's own shape, narrowed to an
@@ -87,6 +94,7 @@ type CommitterConfig struct {
 	BlockedContent   BlockedContent
 	Clock            clock.Clock
 	DefaultProfileID int64
+	TransferLadder   TransferLadder
 }
 
 // NewCommitter builds one.
@@ -95,7 +103,7 @@ func NewCommitter(config CommitterConfig) Committer {
 		fsys: config.FS, roots: config.Roots, affinity: config.Affinity, physical: config.Physical,
 		identity: config.Identity, desired: config.Desired, categories: config.Categories,
 		blockedContent: config.BlockedContent, clock: config.Clock,
-		defaultProfileID: config.DefaultProfileID,
+		defaultProfileID: config.DefaultProfileID, transferLadder: config.TransferLadder,
 	}
 }
 
@@ -122,6 +130,11 @@ type Placed struct {
 	// choice is what to do with these (todo 4.9: logged, not surfaced in the
 	// UI, since nothing about import_unit persists a per-file warning today).
 	PathWarnings map[int64][]string
+	// TransferMethods is parallel to MediaObjectIDs: which rung of the ladder
+	// actually placed each file. Recorded because no two rungs are
+	// distinguishable on disk -- a reflink and a copy look identical, which is
+	// how an XFS import read as "it copied everything" (2026-09-18).
+	TransferMethods []mover.PlaceMethod
 }
 
 // ErrNoPlacement means placement.Resolve deferred: no root folder in
@@ -292,9 +305,17 @@ func (c Committer) CommitMatchedUnit(
 		}
 	}
 
+	ladder := mover.DefaultLadder
+	if c.transferLadder != nil {
+		if configured := c.transferLadder(); len(configured) > 0 {
+			ladder = configured
+		}
+	}
+
 	files := make([]library.PhysicalFile, len(unit.Media))
 	trackFiles := make([]TrackFile, len(unit.Media))
 	pathWarnings := make([][]string, len(unit.Media))
+	transferMethods := make([]mover.PlaceMethod, len(unit.Media))
 	for index, media := range unit.Media {
 		fileTags, err := tags.TagsFor(ctx, model.FileRef{RelPath: media.RelPath})
 		if err != nil {
@@ -309,9 +330,11 @@ func (c Committer) CommitMatchedUnit(
 
 		sourceAbs := path.Join(sourceRoot, media.RelPath)
 		destAbs := path.Join(destRoot.Path, destRelPath)
-		if _, err := mover.PlaceOne(c.fsys, sourceAbs, destAbs, media.SizeBytes); err != nil {
+		method, err := mover.PlaceOne(c.fsys, sourceAbs, destAbs, media.SizeBytes, ladder)
+		if err != nil {
 			return Placed{}, fmt.Errorf("music: place %q: %w", media.RelPath, err)
 		}
+		transferMethods[index] = method
 		files[index] = library.PhysicalFile{
 			RelPath: destRelPath, SizeBytes: media.SizeBytes, QuickHash: quickHashes[index], FirstSeenAt: now,
 		}
@@ -358,7 +381,7 @@ func (c Committer) CommitMatchedUnit(
 		WorkID: resolution.WorkID, WorkCreated: resolution.WorkCreated,
 		EditionID: resolution.EditionID, EditionCreated: resolution.EditionCreated,
 		MediaObjectIDs: mediaObjectIDs, LibraryPathIDs: libraryPathIDs,
-		PathWarnings: pathWarningsByObject,
+		PathWarnings: pathWarningsByObject, TransferMethods: transferMethods,
 	}, nil
 }
 

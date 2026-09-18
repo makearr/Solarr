@@ -166,6 +166,14 @@ func NewDefaultRegistry() *Registry {
 			"automatically rather than wait in the manual queue (ADR-48).",
 		Default: "0.9",
 	})
+	registry.MustRegister(SettingDef{
+		Key: KeyImportTransferLadder, Kind: KindStringList, Tier: TierNormal,
+		Name: "Import transfer order",
+		HelpText: "Transfer methods tried in order until one succeeds: reflink, " +
+			"hardlink, move, copy, symlink. Move deletes the source; symlink leaves " +
+			"the library depending on it.",
+		Default: `["reflink","hardlink","move","copy","symlink"]`,
+	})
 
 	// Network (ADR-58): self-hosted networking, tuned by someone running
 	// this behind a reverse proxy or restricting it to a LAN -- advanced,
