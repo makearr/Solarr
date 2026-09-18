@@ -402,6 +402,15 @@ const (
 	SettingDefinitionTierNormal   SettingDefinitionTier = "normal"
 )
 
+// Defines values for TransferMethod.
+const (
+	Copy     TransferMethod = "copy"
+	Hardlink TransferMethod = "hardlink"
+	Move     TransferMethod = "move"
+	Reflink  TransferMethod = "reflink"
+	Symlink  TransferMethod = "symlink"
+)
+
 // Defines values for UpdateDownloaderRequestProtocol.
 const (
 	Ddl     UpdateDownloaderRequestProtocol = "ddl"
@@ -1270,10 +1279,13 @@ type ImportSessionOrigin string
 // ImportSessionState defines model for ImportSession.State.
 type ImportSessionState string
 
-// ImportSettings ADR-48's own single commit-line knob (import.auto_commit_confidence).
+// ImportSettings ADR-48's commit-line knob (import.auto_commit_confidence) and the transfer ladder import walks when it places a file.
 type ImportSettings struct {
 	// AutoCommitConfidence 0.75-0.95, the section 11.4 table's five named levels. Default 0.90.
 	AutoCommitConfidence float32 `json:"auto_commit_confidence"`
+
+	// TransferLadder Transfer methods tried in order until one succeeds. Each may appear at most once and the list may not be empty. Omitted on a PATCH leaves the stored order alone. Default reflink, hardlink, move, copy, symlink.
+	TransferLadder *[]TransferMethod `json:"transfer_ladder,omitempty"`
 }
 
 // ImportUnit One unit ADR-48's pipeline found and decided.
@@ -2031,6 +2043,9 @@ type TierValue struct {
 	// Rank Lower is better.
 	Rank int `json:"rank"`
 }
+
+// TransferMethod How import gets a file into the library. reflink clones it copy-on-write, sharing disk blocks but presenting as an independent file; hardlink makes a second directory entry for the same bytes; move renames it, or copies and deletes the source when it cannot; copy writes independent bytes; symlink leaves the library pointing at the source. Only reflink and hardlink avoid using more disk space, only move removes the source, and only symlink leaves the library dependent on it.
+type TransferMethod string
 
 // UnidentifiedCandidate One ranked candidate the ADR-24 chain found but was not confident enough to resolve automatically -- RunChain's merged Candidates, best first. Empty on a file that matched nothing at all.
 type UnidentifiedCandidate struct {
@@ -2881,10 +2896,10 @@ type ServerInterface interface {
 	// Commit one unit DECIDE queued below the confidence threshold, by hand ("commit what was held", ADR-48). Administrator only.
 	// (POST /import/sessions/{id}/units/{unitId}/commit)
 	CommitImportUnit(w http.ResponseWriter, r *http.Request, id int64, unitId int64)
-	// The commit line (ADR-48's own single knob, import.auto_commit_confidence).
+	// The commit line and the transfer ladder.
 	// (GET /import/settings)
 	GetImportSettings(w http.ResponseWriter, r *http.Request)
-	// Change the commit line. Administrator only.
+	// Change the commit line or the transfer ladder. Administrator only.
 	// (PATCH /import/settings)
 	UpdateImportSettings(w http.ResponseWriter, r *http.Request)
 	// Every configured indexer connection (stage 5, ADR-37/43/47).
@@ -3481,13 +3496,13 @@ func (_ Unimplemented) CommitImportUnit(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// The commit line (ADR-48's own single knob, import.auto_commit_confidence).
+// The commit line and the transfer ladder.
 // (GET /import/settings)
 func (_ Unimplemented) GetImportSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Change the commit line. Administrator only.
+// Change the commit line or the transfer ladder. Administrator only.
 // (PATCH /import/settings)
 func (_ Unimplemented) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)

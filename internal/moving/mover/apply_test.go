@@ -150,7 +150,7 @@ func TestPlaceOne_PrefersReflinkAndLeavesTheSource(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
 	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
 
-	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")))
+	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), nil)
 	if err != nil {
 		t.Fatalf("PlaceOne: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestPlaceOne_FallsBackToHardlinkWithoutReflink(t *testing.T) {
 	fsys.SetReflinkSupported(false)
 	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
 
-	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")))
+	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), nil)
 	if err != nil {
 		t.Fatalf("PlaceOne: %v", err)
 	}
@@ -189,7 +189,8 @@ func TestPlaceOne_FallsBackToHardlinkWithoutReflink(t *testing.T) {
 }
 
 // With neither reflink nor hardlink available (the cross-filesystem case),
-// PlaceOne falls all the way to a verified copy -- ADR-11 A's own last rung
+// PlaceOne falls all the way to a verified copy -- the ladder is named
+// explicitly because the shipped default reaches move first (2026-09-18).
 // this pass implements ("move" is deliberately not built, questions.md).
 func TestPlaceOne_FallsBackToCopyAcrossFilesystems(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
@@ -197,7 +198,8 @@ func TestPlaceOne_FallsBackToCopyAcrossFilesystems(t *testing.T) {
 	fsys.SetHardlinkSupported(false)
 	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
 
-	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")))
+	ladder := []mover.PlaceMethod{mover.PlaceReflink, mover.PlaceHardlink, mover.PlaceCopy}
+	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
 	if err != nil {
 		t.Fatalf("PlaceOne: %v", err)
 	}
@@ -221,8 +223,161 @@ func TestPlaceOne_DetectsASizeMismatchOnCopy(t *testing.T) {
 	fsys.SetHardlinkSupported(false)
 	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
 
-	_, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes"))+1)
+	ladder := []mover.PlaceMethod{mover.PlaceReflink, mover.PlaceHardlink, mover.PlaceCopy}
+	_, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes"))+1, ladder)
 	if err == nil || !errors.Is(err, mover.ErrHashMismatch) {
 		t.Fatalf("PlaceOne = %v, want ErrHashMismatch for the wrong expected size", err)
+	}
+}
+
+// The ladder is walked in the caller's own order, not a fixed one: asking for
+// hardlink first on a filesystem that also supports reflink must hardlink.
+func TestPlaceOne_WalksTheLadderInOrder(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
+
+	ladder := []mover.PlaceMethod{mover.PlaceHardlink, mover.PlaceReflink, mover.PlaceCopy}
+	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
+	if err != nil {
+		t.Fatalf("PlaceOne: %v", err)
+	}
+	if method != mover.PlaceHardlink {
+		t.Errorf("method = %q, want hardlink -- the ladder's own first entry", method)
+	}
+}
+
+// Move is the one rung that consumes the source, and only when named.
+func TestPlaceOne_MoveConsumesTheSource(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
+
+	ladder := []mover.PlaceMethod{mover.PlaceMove}
+	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
+	if err != nil {
+		t.Fatalf("PlaceOne: %v", err)
+	}
+	if method != mover.PlaceMove {
+		t.Errorf("method = %q, want move", method)
+	}
+	if readFile(t, fsys, "/library/New/track.flac") != "the bytes" {
+		t.Error("destination does not have the source's content")
+	}
+	if exists(fsys, "/downloads/Old/track.flac") {
+		t.Error("move must remove the source once the destination is in place")
+	}
+}
+
+// A cross-filesystem move copies, verifies, and only then unlinks -- a failed
+// move must never be the reason the only copy of a file disappeared.
+func TestPlaceOne_MoveAcrossFilesystemsVerifiesBeforeUnlinking(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	fsys.SetHardlinkSupported(false)
+	fsys.SetReflinkSupported(false)
+	fsys.SetRenameSupported(false)
+	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
+
+	ladder := []mover.PlaceMethod{mover.PlaceMove}
+	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
+	if err != nil {
+		t.Fatalf("PlaceOne: %v", err)
+	}
+	if method != mover.PlaceMove {
+		t.Errorf("method = %q, want move", method)
+	}
+	if readFile(t, fsys, "/library/New/track.flac") != "the bytes" {
+		t.Error("destination does not have the source's content")
+	}
+	if exists(fsys, "/downloads/Old/track.flac") {
+		t.Error("move must remove the source once the copy verified")
+	}
+}
+
+// A move whose copy fails verification leaves the source alone: losing the
+// destination is recoverable, losing the source is not.
+func TestPlaceOne_MoveKeepsTheSourceWhenVerifyFails(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	fsys.SetHardlinkSupported(false)
+	fsys.SetReflinkSupported(false)
+	fsys.SetRenameSupported(false)
+	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
+
+	ladder := []mover.PlaceMethod{mover.PlaceMove}
+	_, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes"))+1, ladder)
+	if err == nil {
+		t.Fatal("PlaceOne = nil, want a failure for the wrong expected size")
+	}
+	if !exists(fsys, "/downloads/Old/track.flac") {
+		t.Error("a failed move must never remove the source")
+	}
+}
+
+// Symlink is reachable only because the user's own ladder named it -- ADR-11
+// bans it as a default, not as a choice (2026-09-18).
+func TestPlaceOne_SymlinkOnlyWhenTheLadderNamesIt(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
+
+	ladder := []mover.PlaceMethod{mover.PlaceSymlink}
+	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
+	if err != nil {
+		t.Fatalf("PlaceOne: %v", err)
+	}
+	if method != mover.PlaceSymlink {
+		t.Errorf("method = %q, want symlink", method)
+	}
+	if !exists(fsys, "/downloads/Old/track.flac") {
+		t.Error("symlink must never remove the source")
+	}
+}
+
+// A ladder naming only a method the filesystem refuses fails loudly rather
+// than falling back to something the user did not ask for.
+func TestPlaceOne_FailsWhenNoRungSucceeds(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	fsys.SetHardlinkSupported(false)
+	fsys.SetReflinkSupported(false)
+	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
+
+	ladder := []mover.PlaceMethod{mover.PlaceReflink, mover.PlaceHardlink}
+	_, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
+	if err == nil || !errors.Is(err, mover.ErrNoRungSucceeded) {
+		t.Fatalf("PlaceOne = %v, want ErrNoRungSucceeded", err)
+	}
+	if exists(fsys, "/library/New/track.flac") {
+		t.Error("nothing may be left at the destination when every rung failed")
+	}
+}
+
+// An unknown method is refused before anything is placed, so a typo in the
+// setting cannot half-import a unit.
+func TestPlaceOne_RefusesAnUnknownMethodBeforePlacing(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
+
+	ladder := []mover.PlaceMethod{mover.PlaceHardlink, mover.PlaceMethod("teleport")}
+	_, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
+	if err == nil || !errors.Is(err, mover.ErrUnknownMethod) {
+		t.Fatalf("PlaceOne = %v, want ErrUnknownMethod", err)
+	}
+	if exists(fsys, "/library/New/track.flac") {
+		t.Error("an invalid ladder must be refused before any rung runs")
+	}
+}
+
+// A rung that fails must leave nothing at the destination, or the next rung
+// finds the path already taken and a corrupt file sits at a real library name.
+func TestPlaceOne_AFailedCopyRungLeavesTheDestinationFreeForTheNextOne(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
+
+	// The size is a lie, so the copy rung's verify refuses bytes that are in
+	// fact correct -- the hardlink rung behind it must still be reachable.
+	ladder := []mover.PlaceMethod{mover.PlaceCopy, mover.PlaceHardlink}
+	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes"))+1, ladder)
+	if err != nil {
+		t.Fatalf("PlaceOne: %v", err)
+	}
+	if method != mover.PlaceHardlink {
+		t.Errorf("method = %q, want hardlink -- the failed copy must not block the next rung", method)
 	}
 }

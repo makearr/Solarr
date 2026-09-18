@@ -939,7 +939,7 @@ paths:
     get:
       operationId: getImportSettings
       tags: [settings]
-      summary: The commit line (ADR-48's own single knob, import.auto_commit_confidence).
+      summary: The commit line and the transfer ladder.
       responses:
         "200":
           description: The current threshold.
@@ -950,7 +950,7 @@ paths:
     patch:
       operationId: updateImportSettings
       tags: [settings]
-      summary: Change the commit line. Administrator only.
+      summary: Change the commit line or the transfer ladder. Administrator only.
       description: >-
         Applies to every entry point (manual import, watched folder,
         post-download import and bulk adoption alike): read once when each
@@ -5235,13 +5235,36 @@ components:
 
     ImportSettings:
       type: object
-      description: ADR-48's own single commit-line knob (import.auto_commit_confidence).
+      description: >-
+        ADR-48's commit-line knob (import.auto_commit_confidence) and the
+        transfer ladder import walks when it places a file.
       required: [auto_commit_confidence]
       properties:
         auto_commit_confidence:
           type: number
           format: float
           description: 0.75-0.95, the section 11.4 table's five named levels. Default 0.90.
+        transfer_ladder:
+          type: array
+          description: >-
+            Transfer methods tried in order until one succeeds. Each may appear
+            at most once and the list may not be empty. Omitted on a PATCH
+            leaves the stored order alone. Default
+            reflink, hardlink, move, copy, symlink.
+          items: { $ref: "#/components/schemas/TransferMethod" }
+
+    TransferMethod:
+      type: string
+      description: >-
+        How import gets a file into the library. reflink clones it
+        copy-on-write, sharing disk blocks but presenting as an independent
+        file; hardlink makes a second directory entry for the same bytes;
+        move renames it, or copies and deletes the source when it cannot;
+        copy writes independent bytes; symlink leaves the library pointing at
+        the source. Only reflink and hardlink avoid using more disk space,
+        only move removes the source, and only symlink leaves the library
+        dependent on it.
+      enum: [reflink, hardlink, move, copy, symlink]
 
     ImportInspectRequest:
       type: object

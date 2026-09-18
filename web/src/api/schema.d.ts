@@ -648,7 +648,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The commit line (ADR-48's own single knob, import.auto_commit_confidence). */
+        /** The commit line and the transfer ladder. */
         get: operations["getImportSettings"];
         put?: never;
         post?: never;
@@ -656,7 +656,7 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Change the commit line. Administrator only.
+         * Change the commit line or the transfer ladder. Administrator only.
          * @description Applies to every entry point (manual import, watched folder, post-download import and bulk adoption alike): read once when each import.inspect run starts, so a session already INSPECTING keeps the threshold it was recorded with (ImportSession.threshold) until it next resumes, not retroactively (todo 4.9's own five named levels: 0.95 "Only what was proven" down to 0.75 "Permissive", 0.90 "Confident" the shipped default). Validated on write (ADR-44).
          */
         patch: operations["updateImportSettings"];
@@ -3448,14 +3448,21 @@ export interface components {
             /** @description Sent to BrainzMash, whose front door refuses agents not starting "Lidarr/". Printable ASCII, 1-256 characters. Default Lidarr/2.9.6.4552. */
             brainzmash_user_agent: string;
         };
-        /** @description ADR-48's own single commit-line knob (import.auto_commit_confidence). */
+        /** @description ADR-48's commit-line knob (import.auto_commit_confidence) and the transfer ladder import walks when it places a file. */
         ImportSettings: {
             /**
              * Format: float
              * @description 0.75-0.95, the section 11.4 table's five named levels. Default 0.90.
              */
             auto_commit_confidence: number;
+            /** @description Transfer methods tried in order until one succeeds. Each may appear at most once and the list may not be empty. Omitted on a PATCH leaves the stored order alone. Default reflink, hardlink, move, copy, symlink. */
+            transfer_ladder?: components["schemas"]["TransferMethod"][];
         };
+        /**
+         * @description How import gets a file into the library. reflink clones it copy-on-write, sharing disk blocks but presenting as an independent file; hardlink makes a second directory entry for the same bytes; move renames it, or copies and deletes the source when it cannot; copy writes independent bytes; symlink leaves the library pointing at the source. Only reflink and hardlink avoid using more disk space, only move removes the source, and only symlink leaves the library dependent on it.
+         * @enum {string}
+         */
+        TransferMethod: "reflink" | "hardlink" | "move" | "copy" | "symlink";
         /** @description Where to look, and what kind of import this is (ADR-48). */
         ImportInspectRequest: {
             source_path: string;
