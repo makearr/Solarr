@@ -524,6 +524,10 @@ func (s *Server) RemoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 	}
 	result, err := s.worksMonitor.RemoveWork(r.Context(), id)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
+			return
+		}
 		writeError(w, s.logger, err)
 		return
 	}

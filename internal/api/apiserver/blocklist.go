@@ -2,6 +2,8 @@ package apiserver
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -119,6 +121,10 @@ func (s *Server) RemoveBlocklistEntry(w http.ResponseWriter, r *http.Request, id
 		return
 	}
 	if err := s.blocklist.Remove(r.Context(), id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such blocklist entry")
+			return
+		}
 		writeError(w, s.logger, err)
 		return
 	}

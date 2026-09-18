@@ -453,3 +453,18 @@ func TestRemovePerson_PassesThePersonAndCallingUser(t *testing.T) {
 		t.Errorf("removeUserID = %d, want %d", fixture.subscriber.removeUserID, user.ID)
 	}
 }
+
+// The spec declares a 404 for a missing person; before this was checked the
+// handler answered 500, which is the "declares a 404 that can never fire"
+// defect this codebase has now hit twice.
+func TestRemovePerson_MissingPersonIsNotFound(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.subscriber.err = sql.ErrNoRows
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/999/remove", ""))
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 (%s)", recorder.Code, recorder.Body)
+	}
+}

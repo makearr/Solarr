@@ -392,3 +392,15 @@ func TestRemoveWork_ReportsAKeptAlbumWithItsFileCount(t *testing.T) {
 		t.Errorf("removeWorkID = %d, want 3", fixture.worksMonitor.removeWorkID)
 	}
 }
+
+func TestRemoveWork_MissingWorkIsNotFound(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.worksMonitor.err = sql.ErrNoRows
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/999/remove", ""))
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 (%s)", recorder.Code, recorder.Body)
+	}
+}

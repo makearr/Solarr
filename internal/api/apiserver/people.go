@@ -411,6 +411,10 @@ func (s *Server) RemovePerson(w http.ResponseWriter, r *http.Request, id int64) 
 		return
 	}
 	if err := s.peopleSubscriber.Remove(r.Context(), id, access.UserID()); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such person")
+			return
+		}
 		writeError(w, s.logger, err)
 		return
 	}
