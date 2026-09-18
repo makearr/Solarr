@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -162,5 +163,29 @@ func TestLookup_AsksForMetadataWithASpaceSeparatedList(t *testing.T) {
 	}
 	if got := transport.lastQuery.Get("meta"); got != "recordings releasegroups" {
 		t.Errorf("meta = %q, want a space-separated list", got)
+	}
+}
+
+// The names are the point of the rung: a file whose tags say nothing still has
+// an artist and a title once its audio is recognised, and those are what the
+// ordered metadata sources get searched with (D12).
+func TestLookup_CarriesTheNamesAndJoinsAnArtistCredit(t *testing.T) {
+	body := `{"status":"ok","results":[{"score":0.98,"recordings":[
+	  {"id":"rec-1","title":"Covabapoz Fofu","duration":220.0,
+	   "artists":[{"name":"Heka","joinphrase":" & "},{"name":"Roma Ryan"}],
+	   "releasegroups":[{"id":"rg-1"}]}]}]}`
+	client := newClient(t, &fakeTransport{body: body}, "key")
+
+	matches, err := client.Lookup(t.Context(), "AQAD", 3*time.Minute)
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	want := acoustid.Recording{
+		MBID: "rec-1", Title: "Covabapoz Fofu", Artist: "Heka & Roma Ryan", Duration: 220 * time.Second,
+		ReleaseGroupMBIDs: []string{"rg-1"},
+	}
+	if len(matches) != 1 || len(matches[0].Recordings) != 1 ||
+		!reflect.DeepEqual(matches[0].Recordings[0], want) {
+		t.Errorf("recordings = %+v, want %+v", matches, want)
 	}
 }

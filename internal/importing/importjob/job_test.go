@@ -14,6 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
@@ -54,6 +55,9 @@ type pathTagTool struct {
 	// number -- a generic hook for injecting a concurrent action mid-walk
 	// (todo 4.9's "assign a category later" test needs one between clusters).
 	onCall func(callNumber int)
+	// chromaprint is what Fingerprint answers; fingerprinted records what it was asked for.
+	chromaprint   string
+	fingerprinted []string
 }
 
 func (t *pathTagTool) Available(context.Context) error { return nil }
@@ -94,8 +98,28 @@ func (t *pathTagTool) WriteTags(context.Context, []mediatool.TagEdit) error {
 	return mediatool.ErrWriteUnsupported
 }
 
-func (t *pathTagTool) Fingerprint(context.Context, []string) ([]mediatool.Fingerprint, error) {
-	return nil, nil
+func (t *pathTagTool) Fingerprint(_ context.Context, paths []string) ([]mediatool.Fingerprint, error) {
+	t.fingerprinted = append(t.fingerprinted, paths...)
+	prints := make([]mediatool.Fingerprint, len(paths))
+	for i, p := range paths {
+		prints[i] = mediatool.Fingerprint{Path: p, Chromaprint: t.chromaprint, Duration: 215 * time.Second}
+	}
+	return prints, nil
+}
+
+// fakeAcoustID stands in for the real lookup: a unit no tag could name, and one
+// answer for whatever fingerprint it is handed.
+type fakeAcoustID struct {
+	enabled bool
+	matches []acoustid.Match
+	calls   int
+}
+
+func (f *fakeAcoustID) Enabled() bool { return f.enabled }
+
+func (f *fakeAcoustID) Lookup(context.Context, string, time.Duration) ([]acoustid.Match, error) {
+	f.calls++
+	return f.matches, nil
 }
 
 func writeFile(t *testing.T, fsys *fsx.Mem, absolute string, sizeBytes int) {
@@ -166,6 +190,16 @@ func (f *fixture) job(t *testing.T, policy float64) *importjob.Job {
 	return importjob.NewJob(importjob.Config{
 		FS: f.fsys, Sessions: library.NewImportSessions(f.store), Policy: fixedPolicy(policy),
 		Tool: f.tool, Packs: library.NewPacks(f.store), Clock: f.clock, Logger: slog.New(slog.DiscardHandler),
+	})
+}
+
+// jobWithAcoustID is job(), plus ADR-29's fingerprint rung.
+func (f *fixture) jobWithAcoustID(t *testing.T, policy float64, lookup *fakeAcoustID) *importjob.Job {
+	t.Helper()
+	return importjob.NewJob(importjob.Config{
+		FS: f.fsys, Sessions: library.NewImportSessions(f.store), Policy: fixedPolicy(policy),
+		Tool: f.tool, AcoustID: lookup, Packs: library.NewPacks(f.store),
+		Clock: f.clock, Logger: slog.New(slog.DiscardHandler),
 	})
 }
 
@@ -800,5 +834,51 @@ func TestJob_SkipsPackDetectionForAdoption(t *testing.T) {
 func TestActionKeyFor_IsPerSourcePath(t *testing.T) {
 	if importjob.ActionKeyFor("/a") == importjob.ActionKeyFor("/b") {
 		t.Error("ActionKeyFor gave the same key for two different source paths")
+	}
+}
+
+// A download whose files carry no usable tags at all is exactly what the
+// fingerprint rung exists for: without it the unit is held for a human.
+func TestJob_FingerprintIdentifiesAUnitNoTagCouldName(t *testing.T) {
+	fx := newFixture(t, "Unknown/01.flac", "Unknown/02.flac")
+	fx.tool.chromaprint = "AQADtE"
+	lookup := &fakeAcoustID{enabled: true, matches: []acoustid.Match{
+		{Score: 0.98, ReleaseGroupMBIDs: []string{releaseGroupMBID}},
+	}}
+
+	job := fx.jobWithAcoustID(t, 0.90, lookup)
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	sessions := fx.sessions()
+	list, err := sessions.List(t.Context(), library.ImportDone)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("sessions = %+v (err %v), want one done session", list, err)
+	}
+	units, err := sessions.ListUnits(t.Context(), list[0].ID)
+	if err != nil {
+		t.Fatalf("ListUnits: %v", err)
+	}
+	if len(units) != 1 || units[0].Decision != library.UnitCommit {
+		t.Fatalf("units = %+v, want one COMMIT identified by fingerprint", units)
+	}
+	if lookup.calls == 0 || len(fx.tool.fingerprinted) == 0 {
+		t.Errorf("lookup calls = %d, fingerprinted = %v, want the rung to have run", lookup.calls, fx.tool.fingerprinted)
+	}
+}
+
+// Without a key the rung is off, and nothing decodes audio for a lookup that
+// cannot happen -- the unit is simply held, as it was before the rung existed.
+func TestJob_NoAcoustIDKeyMeansNoFingerprinting(t *testing.T) {
+	fx := newFixture(t, "Unknown/01.flac", "Unknown/02.flac")
+	lookup := &fakeAcoustID{enabled: false}
+
+	job := fx.jobWithAcoustID(t, 0.90, lookup)
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if lookup.calls != 0 || len(fx.tool.fingerprinted) != 0 {
+		t.Errorf("lookup calls = %d, fingerprinted = %v, want neither", lookup.calls, fx.tool.fingerprinted)
 	}
 }

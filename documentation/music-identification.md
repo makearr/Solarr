@@ -13,7 +13,9 @@ A scan batch is one directory's files. Each pass only sees what the previous one
    whole release tracklists. Identified → every file gets the release group *and* the release
    (edition). Ambiguous → queued with the rival albums. Anything else → next pass.
 3. **Per-file text search** (`SearchIdentifier`): the older title-only match.
-4. **Folder siblings**: an unresolved file joins the one album its identified siblings agree on.
+4. **Fingerprints**: what is left is fingerprinted, named by AcoustID and matched as an album
+   with those names (see below). Skipped, and recorded as skipped, with no API key configured.
+5. **Folder siblings**: an unresolved file joins the one album its identified siblings agree on.
 
 Import runs the chain per unit, then `RefineUnitByAlbum`, which replaces anything but an
 embedded-MBID answer with an album match. Enrichment's edition choice for a work identified
@@ -87,18 +89,43 @@ matched files, and a 3-CD set put three files numbered `06` in one folder (found
 
 ## Fingerprints (AcoustID)
 
-The last rung, for a file no other pass could name: `fpcalc` fingerprints the audio and
-acoustid.org answers with MusicBrainz recording and release-group ids, which then go back
-through the ordered metadata sources like any other candidate — AcoustID identifies, it never
-supplies data. A match below 0.70 is dropped, and a match naming no ids identifies nothing.
+The last pass, for files no earlier one could name. Every still-unidentified file in the batch
+is fingerprinted in one `fpcalc` call, each fingerprint is looked up, and what comes back is a
+*name* — artist and title — not an album. Those names then go through the same album matching
+pass 2 uses: whole tracklists, scored together, seeded with the release groups AcoustID named,
+most agreed-on first. AcoustID identifies; the ordered metadata sources supply the data.
+
+Asking a single file which album it belongs to is unanswerable: one recording appears on its
+album, its single, and every compilation since. A folder answers it, which is why this pass
+matches albums rather than files. With no album lookup configured it falls back to per-file
+matching, which can answer only when AcoustID named exactly one release group.
+
+Two rules earned by measuring against the real service (2026-09-18):
+
+- **The folder outvotes a wrong link.** AcoustID's database is crowd-contributed, and a real
+  Heka track came back with a recording by a band called Badtown Boys listed *first*. The
+  artist most of the folder's files name decides which candidate each file is; one file cannot
+  tell which of its own candidates is the wrong one.
+- **The recording id is never asserted.** AcoustID names every recording MusicBrainz holds of
+  one performance. Passing one of them to the matcher refutes every release that uses another
+  — which is what happened: the correct album was rejected for all 12 of its tracks. Only the
+  names and the file's own decoded length are used.
+
+A match below 0.70 is dropped, and a match naming nothing identifies nothing. A work the
+matcher identifies is named after its release group, not after the folder it sits in: an
+untagged rip lives in "Ripped/CD01", and that is a fact about our directories, not the record.
 
 It needs an **application** API key, free from https://acoustid.org/new-application, entered
 under Settings → Metadata. The key an AcoustID account shows on its own page is a different
 one, for submitting fingerprints, and a lookup refuses it. Stored sealed in `settings.db`
 (`metadata.acoustid.api_key`), never returned by the API — `GET /metadata/settings` says only
 whether one exists, `POST /metadata/acoustid/apikey` replaces it and an empty key clears it.
-With no key the rung reports itself disabled and does not fingerprint at all, so identification
+With no key the pass reports itself disabled and does not fingerprint at all, so identification
 keeps working with one fewer pass.
+
+Every file's outcome is recorded on its own identification attempt, including
+`fingerprint: disabled_no_key`: a file skipped for want of a key is not a file AcoustID had no
+answer for, and only the record tells them apart once a key is entered.
 
 The `meta` parameter is a **space**-separated list. Sent with a literal `+`, AcoustID answers
 `ok` carrying bare AcoustID ids and no metadata rather than refusing, and every result is then

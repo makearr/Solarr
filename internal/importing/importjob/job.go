@@ -97,6 +97,9 @@ type Job struct {
 	search music.Searcher
 	// albums is optional: when set, a unit its embedded MBIDs did not identify is matched as an album.
 	albums music.AlbumLookup
+	// acoustID is optional: when set, a unit nothing else named is fingerprinted
+	// and looked up (ADR-29's own last rung). Disabled without a key of its own.
+	acoustID music.AcoustIDLookup
 	// committer is optional: nil means a COMMIT decision never places a file,
 	// today's own default for a session with no destination category
 	// (private/questions.md) or a caller (a test) with no real library to
@@ -122,6 +125,7 @@ type Config struct {
 	Tool      mediatool.Tool
 	Search    music.Searcher
 	Albums    music.AlbumLookup
+	AcoustID  music.AcoustIDLookup
 	Committer Committer
 	Packs     library.Packs
 	Events    *events.Bus
@@ -137,7 +141,8 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		fsys: config.FS, sessions: config.Sessions, policy: config.Policy,
-		tool: config.Tool, search: config.Search, albums: config.Albums, committer: config.Committer, packs: config.Packs,
+		tool: config.Tool, search: config.Search, albums: config.Albums, acoustID: config.AcoustID,
+		committer: config.Committer, packs: config.Packs,
 		events: config.Events, clock: config.Clock, logger: logger,
 	}
 }
@@ -489,6 +494,14 @@ func (j *Job) commitCluster(
 	if j.search != nil {
 		identifiers = append(identifiers,
 			music.NewSearchIdentifier(music.SearchIdentifierConfig{Tags: tagSource, Search: j.search}))
+	}
+	// No Enabled() check here: the identifier answers nothing and decodes nothing
+	// without a key, so one place decides whether the rung is on (D12).
+	if j.acoustID != nil {
+		identifiers = append(identifiers, music.NewAcoustIDIdentifier(music.AcoustIDIdentifierConfig{
+			Fingerprints: j.tool, Lookup: j.acoustID,
+			Absolute: func(relPath string) string { return path.Join(sourcePath, relPath) },
+		}))
 	}
 
 	newUnits := make([]library.NewUnit, len(batch))

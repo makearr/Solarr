@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -643,8 +644,12 @@ func traumaLookup(groups ...string) *fakeAlbumLookup {
 	lookup := &fakeAlbumLookup{
 		searches: map[string][]musicbrainz.ReleaseGroupMatch{},
 		releases: map[string][]musicbrainz.Release{},
+		// groups answers a release group recalled by id alone, which is how a
+		// seed arrives -- from an identified sibling, or from a fingerprint.
+		groups: map[string]musicbrainz.ReleaseGroup{},
 	}
 	for _, group := range groups {
+		lookup.groups[group] = musicbrainz.ReleaseGroup{MBID: group, Title: "Kebilegev Bibihi", PrimaryType: "Album"}
 		lookup.searches["P!po/Kebilegev Bibihi"] = append(lookup.searches["P!po/Kebilegev Bibihi"],
 			musicbrainz.ReleaseGroupMatch{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: group, Title: "Kebilegev Bibihi", PrimaryType: "Album"}, ArtistCredit: "P!po"})
 		lookup.releases[group] = []musicbrainz.Release{releaseOf("release-of-"+group, "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks)}
@@ -804,4 +809,266 @@ func mustQuickHash(t *testing.T, fsys *fsx.Mem, relPath string, size int64) stri
 		t.Fatalf("QuickHash: %v", err)
 	}
 	return hash
+}
+
+// newFingerprintConsumer adds ADR-29's fingerprint rung to the scan chain.
+func newFingerprintConsumer(
+	t *testing.T, prints *fakeFingerprinter, lookup *fakeLookup,
+) (music.Consumer, *store.Store, *fsx.Mem) {
+	t.Helper()
+	opened, fsys, fake := newTestLibrary(t)
+	attempts := library.NewAttempts(opened)
+	consumer := music.NewConsumer(music.ConsumerConfig{
+		FS: fsys, Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened),
+		Unidentified: library.NewUnidentified(opened), Attempts: &attempts,
+		Fingerprints: prints, AcoustID: lookup,
+		Clock: fake, Logger: slog.New(slog.DiscardHandler),
+	})
+	return consumer, opened, fsys
+}
+
+// untaggedFile is a file no earlier pass can name: no MBIDs, and no searcher configured.
+func untaggedFile(t *testing.T, fsys *fsx.Mem) []scan.Observed {
+	t.Helper()
+	content := []byte("a rip with no tags worth the name")
+	writeMusicFile(t, fsys, "unknown/track01.flac", content)
+	return []scan.Observed{observedFile("unknown/track01.flac", int64(len(content)), mediatool.Tags{})}
+}
+
+func TestObserve_FingerprintIdentifiesAFileNoEarlierPassCould(t *testing.T) {
+	prints := &fakeFingerprinter{print: mediatool.Fingerprint{Chromaprint: "AQADtE", Duration: 215 * time.Second}}
+	lookup := &fakeLookup{enabled: true, matches: []acoustid.Match{
+		{Score: 0.97, ReleaseGroupMBIDs: []string{releaseGroupMBID}},
+	}}
+	consumer, opened, fsys := newFingerprintConsumer(t, prints, lookup)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+
+	if err := consumer.Observe(t.Context(), root, 0, untaggedFile(t, fsys)); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queries := librarydb.New(opened.Read())
+	if _, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID,
+	}); err != nil {
+		t.Fatalf("GetWorkByExternalID: %v, want the fingerprint match resolved to a work", err)
+	}
+	if prints.calls != 1 || lookup.calls != 1 {
+		t.Errorf("fingerprint calls = %d, lookup calls = %d, want one each", prints.calls, lookup.calls)
+	}
+	if passes := passesFor(t, opened, 1, "unknown/track01.flac", fsys); !slices.Contains(passes, "fingerprint:identified") {
+		t.Errorf("passes = %v, want the fingerprint pass recorded as identified", passes)
+	}
+}
+
+// A file skipped for want of a key is not a file AcoustID could not name, and the
+// attempt record is what tells them apart once a key is entered (D12).
+func TestObserve_NoAcoustIDKeyRecordsTheSkipRatherThanSilence(t *testing.T) {
+	prints := &fakeFingerprinter{print: mediatool.Fingerprint{Chromaprint: "AQADtE", Duration: 215 * time.Second}}
+	lookup := &fakeLookup{enabled: false}
+	consumer, opened, fsys := newFingerprintConsumer(t, prints, lookup)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+
+	if err := consumer.Observe(t.Context(), root, 0, untaggedFile(t, fsys)); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	if prints.calls != 0 {
+		t.Errorf("fingerprint calls = %d, want none -- decoding audio for a lookup that cannot happen", prints.calls)
+	}
+	passes := passesFor(t, opened, 1, "unknown/track01.flac", fsys)
+	if !slices.Contains(passes, "fingerprint:disabled_no_key") {
+		t.Errorf("passes = %v, want the skip recorded", passes)
+	}
+}
+
+// The rung is last for a reason: fingerprinting decodes audio and then makes a
+// network call, so a file an earlier pass names must never reach it.
+func TestObserve_AFileItsTagsIdentifyIsNeverFingerprinted(t *testing.T) {
+	prints := &fakeFingerprinter{print: mediatool.Fingerprint{Chromaprint: "AQADtE", Duration: 215 * time.Second}}
+	lookup := &fakeLookup{enabled: true}
+	consumer, _, fsys := newFingerprintConsumer(t, prints, lookup)
+	content := []byte("tagged")
+	writeMusicFile(t, fsys, "P!po/Kebilegev Bibihi/01.m4a", content)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+	batch := []scan.Observed{observedFile("P!po/Kebilegev Bibihi/01.m4a", int64(len(content)),
+		mediatool.Tags{"album": "Kebilegev Bibihi", "musicbrainz_releasegroupid": releaseGroupMBID})}
+
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if prints.calls != 0 || lookup.calls != 0 {
+		t.Errorf("fingerprint calls = %d, lookup calls = %d, want none for a file its tags named",
+			prints.calls, lookup.calls)
+	}
+}
+
+// passesFor reads one file's recorded passes as "pass:outcome" strings.
+func passesFor(t *testing.T, opened *store.Store, rootID int64, relPath string, fsys *fsx.Mem) []string {
+	t.Helper()
+	info, err := fsys.Stat(path.Join(testRoot, relPath))
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	registered, err := library.NewPhysical(opened).RegisterBatch(t.Context(), rootID, []library.PhysicalFile{{
+		RelPath: relPath, SizeBytes: info.Size,
+		QuickHash: mustQuickHash(t, fsys, relPath, info.Size), FirstSeenAt: observedAt,
+	}})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	attempts, err := library.NewAttempts(opened).List(t.Context(), registered[0].MediaObjectID)
+	if err != nil {
+		t.Fatalf("List attempts: %v", err)
+	}
+	var passes []string
+	for _, attempt := range attempts {
+		for _, pass := range attempt.Passes {
+			passes = append(passes, pass.Pass+":"+pass.Outcome)
+		}
+	}
+	return passes
+}
+
+// The case the rung exists for, end to end: a folder whose files carry no tags at
+// all is named by its audio, and the names are then matched against whole
+// tracklists like any other album -- which is the only way to tell which of the
+// many release groups a recording appears on this folder actually is.
+func TestObserve_FingerprintNamesAFolderAndTheAlbumMatcherIdentifiesIt(t *testing.T) {
+	prints := &fakeFingerprinter{byPath: map[string]mediatool.Fingerprint{}}
+	lookup := &fakeLookup{enabled: true, byPrint: map[string][]acoustid.Match{}}
+	batch := make([]scan.Observed, len(traumaTracks))
+
+	opened, fsys, fake := newTestLibrary(t)
+	for i, track := range traumaTracks {
+		relPath := fmt.Sprintf("Unknown/Unknown Album/%02d.m4a", i+1)
+		content := []byte("untagged " + track.title)
+		writeMusicFile(t, fsys, relPath, content)
+		batch[i] = observedFile(relPath, int64(len(content)), mediatool.Tags{})
+		batch[i].Probe.Measured.Duration = time.Duration(track.seconds) * time.Second
+
+		fingerprint := fmt.Sprintf("AQAD-%d", i)
+		prints.byPath[path.Join(testRoot, relPath)] = mediatool.Fingerprint{
+			Chromaprint: fingerprint, Duration: batch[i].Probe.Measured.Duration,
+		}
+		lookup.byPrint[fingerprint] = []acoustid.Match{{
+			Score: 0.97,
+			Recordings: []acoustid.Recording{{
+				MBID: "recording-" + track.title, Title: track.title, Artist: "P!po",
+				// Every track names the album; the first also names a compilation it
+				// appears on, which must not win by being seen first.
+				ReleaseGroupMBIDs: releaseGroupsFor(i, releaseGroupMBID),
+			}},
+		}}
+	}
+
+	attempts := library.NewAttempts(opened)
+	consumer := music.NewConsumer(music.ConsumerConfig{
+		FS: fsys, Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened),
+		Unidentified: library.NewUnidentified(opened), Attempts: &attempts,
+		Albums:       traumaLookup(releaseGroupMBID),
+		Fingerprints: prints, AcoustID: lookup,
+		Clock: fake, Logger: slog.New(slog.DiscardHandler),
+	})
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queries := librarydb.New(opened.Read())
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID,
+	})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v, want the album the fingerprinted names matched", err)
+	}
+	// Named after the record, not after the directory it was ripped into.
+	if work.CanonicalTitle != "Kebilegev Bibihi" {
+		t.Errorf("CanonicalTitle = %q, want the matched release group's own title", work.CanonicalTitle)
+	}
+	if prints.calls != 1 {
+		t.Errorf("Fingerprint calls = %d, want one call for the whole batch", prints.calls)
+	}
+	passes := passesFor(t, opened, 1, "Unknown/Unknown Album/01.m4a", fsys)
+	if !slices.Contains(passes, "fingerprint:identified") {
+		t.Errorf("passes = %v, want the fingerprint pass recorded as identified", passes)
+	}
+}
+
+// releaseGroupsFor gives the album to every track and a compilation to the first,
+// so the seed order has to be decided by agreement rather than by first sight.
+func releaseGroupsFor(index int, album string) []string {
+	if index == 0 {
+		return []string{"compilation-only-this-track-is-on", album}
+	}
+	return []string{album}
+}
+
+// AcoustID's database is crowd-contributed, and a real Heka track answered with a
+// recording by a band called Badtown Boys, listed first (measured 2026-09-18). One
+// file cannot tell which of its candidates is the wrong one; the folder can, because
+// every other file names the same artist and none of them names that one.
+func TestObserve_AWrongRecordingIsOutvotedByTheRestOfTheFolder(t *testing.T) {
+	prints := &fakeFingerprinter{byPath: map[string]mediatool.Fingerprint{}}
+	lookup := &fakeLookup{enabled: true, byPrint: map[string][]acoustid.Match{}}
+	batch := make([]scan.Observed, len(traumaTracks))
+
+	opened, fsys, fake := newTestLibrary(t)
+	for i, track := range traumaTracks {
+		relPath := fmt.Sprintf("Unknown/Unknown Album/%02d.m4a", i+1)
+		content := []byte("untagged " + track.title)
+		writeMusicFile(t, fsys, relPath, content)
+		batch[i] = observedFile(relPath, int64(len(content)), mediatool.Tags{})
+		batch[i].Probe.Measured.Duration = time.Duration(track.seconds) * time.Second
+
+		fingerprint := fmt.Sprintf("AQAD-%d", i)
+		prints.byPath[path.Join(testRoot, relPath)] = mediatool.Fingerprint{
+			Chromaprint: fingerprint, Duration: batch[i].Probe.Measured.Duration,
+		}
+		right := acoustid.Recording{
+			MBID: "recording-" + track.title, Title: track.title, Artist: "P!po",
+			Duration:          time.Duration(track.seconds) * time.Second,
+			ReleaseGroupMBIDs: []string{releaseGroupMBID},
+		}
+		recordings := []acoustid.Recording{right}
+		if i == 0 {
+			// Same length, wrong entirely, and first in the list.
+			wrong := acoustid.Recording{
+				MBID: "recording-bogus", Title: "Zek't Hefa Up On Me", Artist: "Badtown Boys",
+				Duration:          time.Duration(track.seconds) * time.Second,
+				ReleaseGroupMBIDs: []string{"another-fine-day"},
+			}
+			recordings = []acoustid.Recording{wrong, right}
+		}
+		lookup.byPrint[fingerprint] = []acoustid.Match{{Score: 0.97, Recordings: recordings}}
+	}
+
+	attempts := library.NewAttempts(opened)
+	albums := traumaLookup(releaseGroupMBID)
+	consumer := music.NewConsumer(music.ConsumerConfig{
+		FS: fsys, Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened),
+		Unidentified: library.NewUnidentified(opened), Attempts: &attempts,
+		Albums:       albums,
+		Fingerprints: prints, AcoustID: lookup,
+		Clock: fake, Logger: slog.New(slog.DiscardHandler),
+	})
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queries := librarydb.New(opened.Read())
+	if _, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID,
+	}); err != nil {
+		t.Fatalf("GetWorkByExternalID: %v, want the album the folder agreed on", err)
+	}
+	// The outvoted recording's own album is never even recalled: recall is capped
+	// at ten release groups, so every seed a wrong link contributes costs a real
+	// candidate its place.
+	if slices.Contains(albums.asked, "album:another-fine-day") {
+		t.Errorf("the outvoted recording's album was recalled: %v", albums.asked)
+	}
 }

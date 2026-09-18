@@ -43,6 +43,7 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		Tool:      p.mediaTool(),
 		Search:    p.musicBrainzProvider(),
 		Albums:    p.musicBrainzProvider(),
+		AcoustID:  p.acoustIDLookup(),
 		Committer: p.importCommitter(),
 		Packs:     library.NewPacks(p.library),
 		Events:    p.bus,

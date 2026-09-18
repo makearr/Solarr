@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/metacache"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
@@ -92,6 +93,37 @@ func (p *process) musicBrainzBudget() musicBrainzBudget {
 		}
 	})
 	return p.musicBrainzShared
+}
+
+// acoustIDLookup answers the process's one AcoustID client: ADR-29's fingerprint
+// rung, on its own ADR-13 bucket at the 3 req/s acoustid.org publishes.
+func (p *process) acoustIDLookup() acoustid.Client {
+	p.acoustIDOnce.Do(func() {
+		wall := clock.NewSystem()
+		limiter := httpx.NewLimiter(wall, httpx.Config{
+			Providers: map[string]httpx.Limits{acoustid.Name: {MinInterval: acoustIDMinInterval}},
+		}, nil)
+		client := httpx.NewClient(wall, httpx.NewGuard(nil, nil, nil), limiter,
+			httpx.NewBreaker(wall, httpx.BreakerConfig{}), httpx.ClientConfig{
+				Provider: acoustid.Name, UserAgent: httpx.UserAgent(p.build.Version), Proxy: p.liveProxyPolicy(),
+			})
+		p.acoustIDShared = acoustid.New(client, "", p.acoustIDKey)
+	})
+	return p.acoustIDShared
+}
+
+// acoustIDMinInterval is acoustid.org's published 3 requests per second.
+const acoustIDMinInterval = 334 * time.Millisecond
+
+// acoustIDKey opens the stored key per lookup, so entering one in the interface
+// takes effect without a restart; unreadable means the rung is off, not broken.
+func (p *process) acoustIDKey() string {
+	key, err := p.cache.AcoustIDAPIKey()
+	if err != nil {
+		p.logger.Warn("acoustid key could not be opened; the fingerprint rung stays disabled", "error", err)
+		return ""
+	}
+	return string(key)
 }
 
 // musicBrainzProvider builds ADR-29's provider on the process's one ADR-13 registry,

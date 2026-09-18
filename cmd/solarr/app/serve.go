@@ -27,6 +27,7 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/jobs/cachebudget"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/moving/drainjob"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
@@ -91,6 +92,11 @@ type process struct {
 	// draw on the same 1 req/s budget (ADR-13), see musicBrainzBudget.
 	musicBrainzOnce   sync.Once
 	musicBrainzShared musicBrainzBudget
+
+	// acoustIDOnce builds acoustIDShared once, for the same reason: scan and
+	// import must share AcoustID's own 3 req/s bucket, not take one each.
+	acoustIDOnce   sync.Once
+	acoustIDShared acoustid.Client
 }
 
 // Serve is the startup sequence of architecture section 15.1, in order.

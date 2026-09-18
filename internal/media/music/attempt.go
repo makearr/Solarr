@@ -5,6 +5,7 @@ const (
 	PassEmbeddedTags   = "embedded_tags"
 	PassAlbumMatch     = "album_match"
 	PassTextSearch     = "text_search"
+	PassFingerprint    = "fingerprint"
 	PassFolderSiblings = "folder_siblings"
 )
 
@@ -16,6 +17,9 @@ const (
 	PassOutcomeJoined              = "joined"
 	PassOutcomeSiblingsDisagree    = "siblings_disagree"
 	PassOutcomeNoIdentifiedSibling = "no_identified_sibling"
+	// PassOutcomeDisabled is recorded rather than skipped silently, so the files
+	// an absent AcoustID key cost can be found once a key is entered (D12).
+	PassOutcomeDisabled = "disabled_no_key"
 )
 
 // What a whole run ended in.

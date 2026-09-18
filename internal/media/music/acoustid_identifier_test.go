@@ -14,30 +14,45 @@ import (
 
 type fakeFingerprinter struct {
 	print mediatool.Fingerprint
-	err   error
-	calls int
+	// byPath answers per file, for a batch whose files are different recordings.
+	byPath map[string]mediatool.Fingerprint
+	err    error
+	calls  int
 }
 
-func (f *fakeFingerprinter) Fingerprint(context.Context, []string) ([]mediatool.Fingerprint, error) {
+func (f *fakeFingerprinter) Fingerprint(_ context.Context, paths []string) ([]mediatool.Fingerprint, error) {
 	f.calls++
 	if f.err != nil {
 		return nil, f.err
 	}
-	return []mediatool.Fingerprint{f.print}, nil
+	prints := make([]mediatool.Fingerprint, len(paths))
+	for i, one := range paths {
+		if found, ok := f.byPath[one]; ok {
+			prints[i] = found
+			continue
+		}
+		prints[i] = f.print
+	}
+	return prints, nil
 }
 
 type fakeLookup struct {
 	enabled bool
 	matches []acoustid.Match
+	// byPrint answers per fingerprint, the way the real service does.
+	byPrint map[string][]acoustid.Match
 	err     error
 	calls   int
 }
 
 func (f *fakeLookup) Enabled() bool { return f.enabled }
-func (f *fakeLookup) Lookup(context.Context, string, time.Duration) ([]acoustid.Match, error) {
+func (f *fakeLookup) Lookup(_ context.Context, fingerprint string, _ time.Duration) ([]acoustid.Match, error) {
 	f.calls++
 	if f.err != nil {
 		return nil, f.err
+	}
+	if f.byPrint != nil {
+		return f.byPrint[fingerprint], nil
 	}
 	return f.matches, nil
 }
@@ -79,7 +94,8 @@ func TestAcoustIDIdentifier_RunsAfterEveryCheaperRung(t *testing.T) {
 func TestAcoustIDIdentifier_ReportsReleaseGroupsWithAcoustIDsOwnScore(t *testing.T) {
 	prints := &fakeFingerprinter{print: mediatool.Fingerprint{Chromaprint: "AQAD", Duration: 3 * time.Minute}}
 	lookup := &fakeLookup{enabled: true, matches: []acoustid.Match{
-		{Score: 0.93, RecordingMBIDs: []string{"rec-1"}, ReleaseGroupMBIDs: []string{"rg-1", "rg-2"}},
+		{Score: 0.93, Recordings: []acoustid.Recording{{MBID: "rec-1", Title: "Sesoge"}},
+			ReleaseGroupMBIDs: []string{"rg-1", "rg-2"}},
 	}}
 	identifier := newAcoustID(prints, lookup)
 

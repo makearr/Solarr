@@ -35,16 +35,33 @@ var ErrNoKey = errors.New("acoustid: no API key configured")
 // worse than none (ADR-24 -- a network match is a guess with a confidence).
 const MinScore = 0.70
 
-// Match is one result: how well the fingerprint matched, and the MusicBrainz
-// ids that go with it.
+// Match is one result: how well the fingerprint matched, and what MusicBrainz
+// knows the audio to be.
 type Match struct {
 	// Score is AcoustID's own 0..1 confidence for the fingerprint itself.
 	Score float64
-	// RecordingMBIDs are the recordings this audio matched. A recording maps to
-	// the track, not the album, so the caller resolves upward from it.
-	RecordingMBIDs []string
+	// Recordings are the recordings this audio matched. A recording is the
+	// track, not the album, so the caller resolves upward from it -- which is
+	// what the names are for: a file whose tags say nothing still has an artist
+	// and a title once its audio has been recognised.
+	Recordings []Recording
 	// ReleaseGroupMBIDs are the albums those recordings appear on, when
 	// AcoustID reported them.
+	ReleaseGroupMBIDs []string
+}
+
+// Recording is one matched recording: its MusicBrainz id and the names that go
+// with it. AcoustID identifies and nothing more (D12), so these are what a
+// caller searches the ordered metadata sources with.
+type Recording struct {
+	MBID   string
+	Title  string
+	Artist string
+	// Duration is what MusicBrainz holds for the recording, not the file's own.
+	Duration time.Duration
+	// ReleaseGroupMBIDs are the albums this recording appears on. Held per
+	// recording, not merged: one fingerprint can name recordings by different
+	// artists entirely, and their albums must not be pooled.
 	ReleaseGroupMBIDs []string
 }
 
@@ -107,17 +124,26 @@ func (c Client) Lookup(ctx context.Context, fingerprint string, duration time.Du
 		match := Match{Score: result.Score}
 		seenGroup := map[string]bool{}
 		for _, recording := range result.Recordings {
-			if recording.ID != "" {
-				match.RecordingMBIDs = append(match.RecordingMBIDs, recording.ID)
-			}
+			var groups []string
 			for _, group := range recording.ReleaseGroups {
-				if group.ID != "" && !seenGroup[group.ID] {
+				if group.ID == "" {
+					continue
+				}
+				groups = append(groups, group.ID)
+				if !seenGroup[group.ID] {
 					seenGroup[group.ID] = true
 					match.ReleaseGroupMBIDs = append(match.ReleaseGroupMBIDs, group.ID)
 				}
 			}
+			if recording.ID != "" {
+				match.Recordings = append(match.Recordings, Recording{
+					MBID: recording.ID, Title: recording.Title, Artist: creditOf(recording.Artists),
+					Duration:          time.Duration(recording.Duration * float64(time.Second)),
+					ReleaseGroupMBIDs: groups,
+				})
+			}
 		}
-		if len(match.RecordingMBIDs) == 0 && len(match.ReleaseGroupMBIDs) == 0 {
+		if len(match.Recordings) == 0 && len(match.ReleaseGroupMBIDs) == 0 {
 			// A scored match naming nothing identifies nothing.
 			continue
 		}
@@ -135,12 +161,32 @@ type response struct {
 	Results []struct {
 		Score      float64 `json:"score"`
 		Recordings []struct {
-			ID            string `json:"id"`
+			ID            string           `json:"id"`
+			Title         string           `json:"title"`
+			Duration      float64          `json:"duration"`
+			Artists       []responseArtist `json:"artists"`
 			ReleaseGroups []struct {
 				ID string `json:"id"`
 			} `json:"releasegroups"`
 		} `json:"recordings"`
 	} `json:"results"`
+}
+
+// responseArtist is one name in a recording's artist credit.
+type responseArtist struct {
+	Name       string `json:"name"`
+	JoinPhrase string `json:"joinphrase"`
+}
+
+// creditOf joins an artist credit the way MusicBrainz itself renders one, so a
+// collaboration reads "A & B" rather than losing everyone but the first.
+func creditOf(artists []responseArtist) string {
+	var credit strings.Builder
+	for _, artist := range artists {
+		credit.WriteString(artist.Name)
+		credit.WriteString(artist.JoinPhrase)
+	}
+	return strings.TrimSpace(credit.String())
 }
 
 // maxResponseBytes bounds a reply nobody legitimately sends more than.

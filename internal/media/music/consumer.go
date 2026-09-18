@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -61,6 +64,8 @@ type Consumer struct {
 	attempts     *library.Attempts
 	search       Searcher
 	albums       AlbumLookup
+	fingerprints Fingerprinter
+	acoustID     AcoustIDLookup
 	clock        clock.Clock
 	chain        model.ChainConfig
 	logger       *slog.Logger
@@ -93,7 +98,11 @@ type ConsumerConfig struct {
 	// Albums identifies a folder's untagged files together against whole tracklists.
 	// Nil leaves identification per file.
 	Albums AlbumLookup
-	Clock  clock.Clock
+	// Fingerprints and AcoustID together add ADR-29's fingerprint rung, for a
+	// file every earlier pass left unnamed. Either one nil leaves it out.
+	Fingerprints Fingerprinter
+	AcoustID     AcoustIDLookup
+	Clock        clock.Clock
 	// Chain tunes RunChain (model.ChainConfig). The zero value takes the package
 	// defaults above.
 	Chain  model.ChainConfig
@@ -121,6 +130,7 @@ func NewConsumer(config ConsumerConfig) Consumer {
 	return Consumer{
 		fsys: config.FS, physical: config.Physical, identity: config.Identity,
 		unidentified: config.Unidentified, attempts: config.Attempts, search: config.Search, albums: config.Albums,
+		fingerprints: config.Fingerprints, acoustID: config.AcoustID,
 		clock: config.Clock, chain: chain, logger: logger,
 		desired: config.Desired, categories: config.Categories, defaultProfileID: config.DefaultProfileID,
 	}
@@ -171,12 +181,17 @@ func (c Consumer) Observe(
 	}
 
 	tags := tagSourceFor(root, readable)
-	embedded := []model.Identifier{NewMBIDIdentifier(tags)}
-	var search []model.Identifier
+	passes := passIdentifiers{embedded: []model.Identifier{NewMBIDIdentifier(tags)}}
 	if c.search != nil {
-		search = []model.Identifier{NewSearchIdentifier(SearchIdentifierConfig{Tags: tags, Search: c.search})}
+		passes.search = []model.Identifier{NewSearchIdentifier(SearchIdentifierConfig{Tags: tags, Search: c.search})}
 	}
-	out := c.identifyBatch(ctx, root.ID, readable, mediaObjectIDs, embedded, search)
+	if c.fingerprints != nil && c.acoustID != nil {
+		passes.fingerprint = []model.Identifier{NewAcoustIDIdentifier(AcoustIDIdentifierConfig{
+			Fingerprints: c.fingerprints, Lookup: c.acoustID,
+			Absolute: func(relPath string) string { return path.Join(root.Path, relPath) },
+		})}
+	}
+	out := c.identifyBatch(ctx, root.ID, root.Path, readable, mediaObjectIDs, passes)
 	links, trackFiles, queued, resolved := out.links, out.trackFiles, out.queued, out.resolved
 	if c.attempts != nil {
 		if err := c.attempts.Record(ctx, out.attempts()); err != nil {
@@ -206,14 +221,22 @@ func (c Consumer) Observe(
 	return nil
 }
 
+// passIdentifiers are the chain's identifiers per pass; an empty slice skips its pass.
+type passIdentifiers struct {
+	embedded    []model.Identifier
+	search      []model.Identifier
+	fingerprint []model.Identifier
+}
+
 // identifyBatch identifies a directory batch in passes: embedded MBIDs, whole-album matching,
-// per-file text search, folder siblings. queued feeds the F29 queue; resolved clears it.
+// per-file text search, fingerprints, folder siblings. queued feeds the F29 queue; resolved clears it.
 func (c Consumer) identifyBatch(
-	ctx context.Context, rootFolderID int64, observed []scan.Observed, mediaObjectIDs []int64,
-	embedded, search []model.Identifier,
+	ctx context.Context, rootFolderID int64, rootPath string, observed []scan.Observed, mediaObjectIDs []int64,
+	passes passIdentifiers,
 ) *batchResult {
 	out := &batchResult{
-		rootFolderID: rootFolderID, observed: observed, mediaObjectIDs: mediaObjectIDs, at: c.clock.Now().Unix(),
+		rootFolderID: rootFolderID, rootPath: rootPath, observed: observed, mediaObjectIDs: mediaObjectIDs,
+		at:     c.clock.Now().Unix(),
 		passes: make(map[int][]library.AttemptPass), outcomes: make(map[int]string),
 	}
 	all := make([]pendingFile, len(observed))
@@ -221,12 +244,15 @@ func (c Consumer) identifyBatch(
 		all[index] = pendingFile{index: index}
 	}
 
-	pending := c.runChain(ctx, out, PassEmbeddedTags, embedded, all)
+	pending := c.runChain(ctx, out, PassEmbeddedTags, passes.embedded, all)
 	if c.albums != nil && len(pending) > 0 {
 		pending = c.identifyAlbums(ctx, out, pending)
 	}
-	if len(search) > 0 && len(pending) > 0 {
-		pending = c.runChain(ctx, out, PassTextSearch, search, pending)
+	if len(passes.search) > 0 && len(pending) > 0 {
+		pending = c.runChain(ctx, out, PassTextSearch, passes.search, pending)
+	}
+	if len(passes.fingerprint) > 0 && len(pending) > 0 {
+		pending = c.fingerprintPass(ctx, out, passes.fingerprint, pending)
 	}
 
 	// A file nothing could identify joins its folder's album when every
@@ -256,6 +282,7 @@ func (c Consumer) identifyBatch(
 // batchResult accumulates what identifyBatch's passes decide for one batch.
 type batchResult struct {
 	rootFolderID   int64
+	rootPath       string
 	observed       []scan.Observed
 	mediaObjectIDs []int64
 	at             int64
@@ -268,6 +295,11 @@ type batchResult struct {
 	// passes and outcomes are the attempt record, per batch index, for files past their embedded tags.
 	passes   map[int][]library.AttemptPass
 	outcomes map[int]string
+}
+
+// noted reports whether this file already has a record for that pass.
+func (r *batchResult) noted(index int, pass string) bool {
+	return slices.ContainsFunc(r.passes[index], func(p library.AttemptPass) bool { return p.Pass == pass })
 }
 
 func (r *batchResult) identify(index int, link library.WorkLink, file TrackFile) {
@@ -312,6 +344,212 @@ func (r *batchResult) attempts() []library.Attempt {
 type pendingFile struct {
 	index      int
 	candidates []model.Identification
+}
+
+// fingerprintPass recovers names from the audio itself and matches the folder as an album
+// with them -- AcoustID identifies, the ordered metadata sources supply the data (D12).
+// A single recording names many release groups (its album, its single, every compilation
+// it was ever on), so asking which of them this file belongs to is unanswerable per file
+// and ordinary for a folder scored against whole tracklists. With no album lookup
+// configured it falls back to the per-file chain, which can answer only when AcoustID
+// named exactly one.
+//
+// With no key configured it records that it did not run: a file skipped for a missing key
+// is not a file AcoustID had no answer for, and only the record tells them apart (D12).
+func (c Consumer) fingerprintPass(
+	ctx context.Context, out *batchResult, identifiers []model.Identifier, files []pendingFile,
+) []pendingFile {
+	if c.acoustID == nil || !c.acoustID.Enabled() {
+		for _, file := range files {
+			out.note(file.index, library.AttemptPass{Pass: PassFingerprint, Outcome: PassOutcomeDisabled})
+		}
+		return files
+	}
+	if c.albums == nil {
+		return c.runChain(ctx, out, PassFingerprint, identifiers, files)
+	}
+
+	named, locals, seeds, pending := c.namesFromAudio(ctx, out, files)
+	if len(named) == 0 {
+		return pending
+	}
+	decision, err := IdentifyAlbum(ctx, c.albums, musicbrainz.PriorityIdentify, locals, seeds)
+	if err != nil {
+		c.logger.Warn("album identification from fingerprints failed",
+			slog.String("path", out.observed[named[0].index].File.RelPath), slog.Any("error", err))
+		for _, file := range named {
+			out.note(file.index, library.AttemptPass{Pass: PassFingerprint, Outcome: PassOutcomeFailed})
+		}
+		return append(pending, named...)
+	}
+	return append(pending, applyAlbumDecision(out, PassFingerprint, named, decision)...)
+}
+
+// namesFromAudio fingerprints every still-unidentified file in one call and asks AcoustID
+// what each one is. It answers the files it could name with their recovered tracks, the
+// release groups to seed recall with -- most agreed-on first, since the album every track
+// names is the album the folder is -- and the files it could not name, still pending.
+func (c Consumer) namesFromAudio(
+	ctx context.Context, out *batchResult, files []pendingFile,
+) (named []pendingFile, locals []LocalTrack, seeds []string, pending []pendingFile) {
+	paths := make([]string, len(files))
+	for i, file := range files {
+		paths[i] = path.Join(out.rootPath, out.observed[file.index].File.RelPath)
+	}
+	prints, err := c.fingerprints.Fingerprint(ctx, paths)
+	if err != nil || len(prints) != len(files) {
+		c.logger.Warn("fingerprinting failed", slog.Any("error", err))
+		for _, file := range files {
+			out.note(file.index, library.AttemptPass{Pass: PassFingerprint, Outcome: PassOutcomeFailed})
+		}
+		return nil, nil, nil, files
+	}
+
+	recognised := make([][]acoustid.Recording, len(files))
+	for i, file := range files {
+		if prints[i].Err != nil || prints[i].Chromaprint == "" {
+			out.note(file.index, library.AttemptPass{Pass: PassFingerprint, Outcome: PassOutcomeNone})
+			continue
+		}
+		matches, err := c.acoustID.Lookup(ctx, prints[i].Chromaprint, prints[i].Duration)
+		if err != nil {
+			c.logger.Warn("acoustid lookup failed",
+				slog.String("path", out.observed[file.index].File.RelPath), slog.Any("error", err))
+			out.note(file.index, library.AttemptPass{Pass: PassFingerprint, Outcome: PassOutcomeFailed})
+			continue
+		}
+		recognised[i] = namedRecordings(matches)
+	}
+
+	artist := consensusArtist(recognised)
+	groupCounts := make(map[string]int)
+	var groupOrder []string
+	for i, file := range files {
+		one := out.observed[file.index]
+		recording, found := chooseRecording(recognised[i], artist, prints[i].Duration)
+		if !found {
+			if len(recognised[i]) == 0 && out.noted(file.index, PassFingerprint) {
+				// The lookup already recorded why it answered nothing.
+				pending = append(pending, file)
+				continue
+			}
+			out.note(file.index, library.AttemptPass{Pass: PassFingerprint, Outcome: PassOutcomeNone})
+			pending = append(pending, file)
+			continue
+		}
+		named = append(named, file)
+		locals = append(locals, recordedTrack(one, recording, prints[i].Duration))
+		for _, group := range recording.ReleaseGroupMBIDs {
+			if groupCounts[group] == 0 {
+				groupOrder = append(groupOrder, group)
+			}
+			groupCounts[group]++
+		}
+	}
+	slices.SortStableFunc(groupOrder, func(a, b string) int { return groupCounts[b] - groupCounts[a] })
+	return named, locals, groupOrder, pending
+}
+
+// namedRecordings is every recording a lookup named, best-scoring match first.
+func namedRecordings(matches []acoustid.Match) []acoustid.Recording {
+	var recordings []acoustid.Recording
+	for _, match := range matches {
+		for _, recording := range match.Recordings {
+			if recording.Title != "" {
+				recordings = append(recordings, recording)
+			}
+		}
+	}
+	return recordings
+}
+
+// consensusArtist is the artist the folder agrees on: the name most of its files
+// have among their own candidates, counted once per file. AcoustID's database is
+// crowd-contributed and a fingerprint can carry an outright wrong link -- a real
+// Heka track answered with a recording by a band called Badtown Boys, first in the
+// list (measured 2026-09-18). One file cannot tell which of its candidates is the
+// wrong one; a folder can.
+func consensusArtist(recognised [][]acoustid.Recording) string {
+	counts := make(map[string]int)
+	names := make(map[string]string)
+	for _, recordings := range recognised {
+		seen := make(map[string]bool)
+		for _, recording := range recordings {
+			key := strings.ToLower(strings.TrimSpace(recording.Artist))
+			if key == "" || seen[key] {
+				continue
+			}
+			seen[key] = true
+			counts[key]++
+			names[key] = recording.Artist
+		}
+	}
+	best, bestCount := "", 1
+	for key, count := range counts {
+		if count > bestCount || (count == bestCount && key < best) {
+			best, bestCount = key, count
+		}
+	}
+	return names[best]
+}
+
+// chooseRecording picks which of one file's candidates it actually is: the folder's
+// own artist decides, and among that artist's recordings the one whose length is
+// closest to the file's. With no consensus the closest length alone decides.
+func chooseRecording(
+	recordings []acoustid.Recording, artist string, duration time.Duration,
+) (acoustid.Recording, bool) {
+	best, found := acoustid.Recording{}, false
+	for _, recording := range recordings {
+		if artist != "" && !strings.EqualFold(recording.Artist, artist) {
+			continue
+		}
+		if !found || closer(recording.Duration, best.Duration, duration) {
+			best, found = recording, true
+		}
+	}
+	if found {
+		return best, true
+	}
+	for _, recording := range recordings {
+		if !found || closer(recording.Duration, best.Duration, duration) {
+			best, found = recording, true
+		}
+	}
+	return best, found
+}
+
+// closer reports whether candidate is nearer to want than incumbent is.
+func closer(candidate, incumbent, want time.Duration) bool {
+	if want <= 0 {
+		return false
+	}
+	return (candidate - want).Abs() < (incumbent - want).Abs()
+}
+
+// recordedTrack is one file as album matching sees it once its audio has been
+// recognised: the names come from the recording, the length from the file itself,
+// and the position from its name, since AcoustID knows neither.
+func recordedTrack(one scan.Observed, recording acoustid.Recording, decoded time.Duration) LocalTrack {
+	local := ReadLocalTrack(one.Probe.Tags, one.Probe.Measured, one.File.RelPath)
+	// A name recovered from the audio is evidence of the same standing as a tag --
+	// stronger, in truth, since a tag can say anything and the audio cannot.
+	local.Title = Claim{Value: recording.Title, Provenance: ProvenanceTag}
+	local.Artist = Claim{Value: recording.Artist, Provenance: ProvenanceTag}
+	// The recording id is deliberately not asserted: AcoustID names every
+	// recording MusicBrainz holds of one performance, so picking one of them
+	// refutes every release that happens to use another -- measured against the
+	// real service, which refuted the correct album for all 12 of its tracks.
+	// A scan does not measure durations -- the probe job fills those in later
+	// (ADR-39) -- but fpcalc just decoded the file and reports its real length,
+	// which is what tells a 12-track album from the box set it also appears on.
+	if local.Duration == 0 {
+		local.Duration = decoded
+	}
+	if local.Duration == 0 {
+		local.Duration = recording.Duration
+	}
+	return local
 }
 
 // runChain runs the ADR-24 chain per pending file, answering what is still unresolved; a file
@@ -379,27 +617,38 @@ func (c Consumer) identifyAlbums(ctx context.Context, out *batchResult, files []
 			pending = append(pending, group...)
 			continue
 		}
-		candidates := AlbumCandidates(decision)
-		for _, file := range group {
-			out.note(file.index, library.AttemptPass{
-				Pass: PassAlbumMatch, Outcome: string(decision.Outcome), Candidates: library.AttemptCandidatesFrom(candidates),
-			})
-		}
-		switch decision.Outcome {
-		case AlbumIdentified:
-			for i, file := range group {
-				out.identify(file.index, albumLink(out, file.index, *decision.Best, decision.Best.Tracks[i]),
-					albumTrackFile(out, file.index, decision.Best.Tracks[i]))
-			}
-		case AlbumAmbiguous:
-			for _, file := range group {
-				out.queue(file.index, candidates)
-			}
-		default:
-			pending = append(pending, group...)
-		}
+		pending = append(pending, applyAlbumDecision(out, PassAlbumMatch, group, decision)...)
 	}
 	return pending
+}
+
+// applyAlbumDecision records one album match and acts on it: identified links every
+// file to its own matched track, ambiguous is queued rather than guessed per file,
+// anything else stays pending for a later pass. Shared by both passes that match an
+// album -- from tags, and from names recovered by fingerprinting.
+func applyAlbumDecision(
+	out *batchResult, pass string, group []pendingFile, decision AlbumDecision,
+) []pendingFile {
+	candidates := AlbumCandidates(decision)
+	for _, file := range group {
+		out.note(file.index, library.AttemptPass{
+			Pass: pass, Outcome: string(decision.Outcome), Candidates: library.AttemptCandidatesFrom(candidates),
+		})
+	}
+	switch decision.Outcome {
+	case AlbumIdentified:
+		for i, file := range group {
+			out.identify(file.index, albumLink(out, file.index, *decision.Best, decision.Best.Tracks[i]),
+				albumTrackFile(out, file.index, decision.Best.Tracks[i]))
+		}
+	case AlbumAmbiguous:
+		for _, file := range group {
+			out.queue(file.index, candidates)
+		}
+	default:
+		return group
+	}
+	return nil
 }
 
 // groupByAlbum splits pending files by their album tag; untagged files join the only tagged
@@ -446,7 +695,8 @@ func albumLink(out *batchResult, index int, best ReleaseScore, track *ReleaseTra
 	release := best.Candidate.Release.MBID
 	return library.WorkLink{
 		Provider: ProviderReleaseGroup, ExternalID: best.Candidate.ReleaseGroup.MBID, Confidence: confidence,
-		Work: newWorkIdentity(out.observed[index]), RootFolderID: out.rootFolderID, MediaObjectID: out.mediaObjectIDs[index],
+		Work:         matchedWorkIdentity(out.observed[index], best.Candidate.ReleaseGroup),
+		RootFolderID: out.rootFolderID, MediaObjectID: out.mediaObjectIDs[index],
 		Edition: &library.EditionLink{
 			Provider: ProviderRelease, ExternalID: release, Confidence: confidence,
 			Edition: library.EditionIdentity{Kind: "unknown", Label: release},
@@ -601,6 +851,19 @@ func tagSourceFor(root settings.RootFolder, observed []scan.Observed) Resolved {
 // newWorkIdentity is what to name a work if the chain's identity needs one created.
 // The album tag names it; a file tagged sparsely falls back to its containing
 // directory, which is how a Lidarr-managed library already names an album folder.
+// matchedWorkIdentity names a work MusicBrainz has just identified after its own
+// release group, not after the folder it happened to be in: an untagged rip lives in
+// "Ripped/CD01", and calling the album that would be describing our own directory
+// layout rather than the record (found live, 2026-09-18).
+func matchedWorkIdentity(observed scan.Observed, group musicbrainz.ReleaseGroup) library.WorkIdentity {
+	identity := newWorkIdentity(observed)
+	if group.Title != "" {
+		identity.CanonicalTitle, identity.SortTitle = group.Title, SortTitle(group.Title)
+	}
+	identity.PrimaryType = group.PrimaryType
+	return identity
+}
+
 func newWorkIdentity(observed scan.Observed) library.WorkIdentity {
 	title := observed.Probe.Tags.First("album")
 	if title == "" {
