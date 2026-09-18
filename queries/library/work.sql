@@ -301,3 +301,25 @@ LIMIT sqlc.arg(page_size);
 -- would be recreated by the next scan, so deleting it would be a lie.
 -- name: CountWorkFiles :one
 SELECT CAST(COUNT(*) AS INTEGER) AS total FROM work_file WHERE work_id = ?;
+
+-- Releases in a date window that this library has a reason to care about:
+-- either something wants the work, or an artist credited on it is monitored.
+-- A work with several dates of the same kind in different regions would repeat,
+-- so the earliest per work is taken -- a calendar shows one entry per release.
+-- name: ListCalendarEntries :many
+SELECT w.id, w.canonical_title, w.sort_title, w.primary_type,
+       COALESCE(w.primary_artist_sort_name, '') AS artist_sort,
+       MIN(wd.date) AS release_date,
+       EXISTS (SELECT 1 FROM work_file wf WHERE wf.work_id = w.id) AS on_disk
+FROM work_date wd
+JOIN work w ON w.id = wd.work_id
+WHERE wd.kind = sqlc.arg(kind)
+  AND wd.date >= sqlc.arg(from_date) AND wd.date <= sqlc.arg(to_date)
+  AND (
+    EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = w.id AND di.monitored = 1)
+    OR EXISTS (SELECT 1 FROM credit c JOIN person p ON p.id = c.person_id
+               WHERE c.work_id = w.id AND c.role = 'artist' AND p.monitored = 1)
+  )
+GROUP BY w.id
+ORDER BY release_date, w.sort_title, w.id
+LIMIT sqlc.arg(page_size);

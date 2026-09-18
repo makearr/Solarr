@@ -168,6 +168,41 @@ paths:
               schema: { $ref: "#/components/schemas/LibraryHealth" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /calendar:
+    get:
+      operationId: listCalendar
+      tags: [library]
+      summary: Releases in a date window, earliest first.
+      description: >-
+        Only works this library has a reason to care about: something wants the
+        work, or an artist credited on it is monitored. Dates come from the
+        provider and may be partial ("2024", "2024-03"), which is shown as
+        given rather than guessed into a day.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: ISO date, inclusive.
+          schema: { type: string }
+        - name: to
+          in: query
+          required: true
+          description: ISO date, inclusive.
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
+      responses:
+        "200":
+          description: Matching releases.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CalendarEntry" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /system/logs:
     get:
       operationId: listLogs
@@ -4657,6 +4692,24 @@ components:
           type: integer
           format: int64
           description: How many files the library still holds for this work. None were touched.
+
+    CalendarEntry:
+      type: object
+      description: One release in the calendar window.
+      required: [work_id, title, release_date, on_disk]
+      properties:
+        work_id: { type: integer, format: int64 }
+        title: { type: string }
+        artist: { type: string }
+        primary_type:
+          type: string
+          description: MusicBrainz's own vocabulary ("Album", "Single"), absent when unknown.
+        release_date:
+          type: string
+          description: A partial ISO date as the provider gave it -- "2024", "2024-03" or "2024-03-01".
+        on_disk:
+          type: boolean
+          description: Whether the library already holds a file for this work.
 
     LogRecord:
       type: object

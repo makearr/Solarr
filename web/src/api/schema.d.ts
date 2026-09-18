@@ -161,6 +161,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Releases in a date window, earliest first.
+         * @description Only works this library has a reason to care about: something wants the work, or an artist credited on it is monitored. Dates come from the provider and may be partial ("2024", "2024-03"), which is shown as given rather than guessed into a day.
+         */
+        get: operations["listCalendar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/logs": {
         parameters: {
             query?: never;
@@ -2999,6 +3019,19 @@ export interface components {
              */
             files_kept: number;
         };
+        /** @description One release in the calendar window. */
+        CalendarEntry: {
+            /** Format: int64 */
+            work_id: number;
+            title: string;
+            artist?: string;
+            /** @description MusicBrainz's own vocabulary ("Album", "Single"), absent when unknown. */
+            primary_type?: string;
+            /** @description A partial ISO date as the provider gave it -- "2024", "2024-03" or "2024-03-01". */
+            release_date: string;
+            /** @description Whether the library already holds a file for this work. */
+            on_disk: boolean;
+        };
         /** @description One captured log line. */
         LogRecord: {
             /** Format: date-time */
@@ -4349,6 +4382,34 @@ export interface operations {
                     "application/json": components["schemas"]["LibraryHealth"];
                 };
             };
+            401: components["responses"]["Problem"];
+        };
+    };
+    listCalendar: {
+        parameters: {
+            query: {
+                /** @description ISO date, inclusive. */
+                from: string;
+                /** @description ISO date, inclusive. */
+                to: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching releases. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarEntry"][];
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
         };
     };

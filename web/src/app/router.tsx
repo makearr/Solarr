@@ -33,6 +33,7 @@ import { RootFolders } from "./RootFolders";
 import { GeneralSettings } from "./Settings";
 import { Backups } from "./Backups";
 import { Blocklist } from "./Blocklist";
+import { Calendar } from "./Calendar";
 import { Logs } from "./Logs";
 import { SchedulerPage } from "./Scheduler";
 import { Shell } from "./Shell";
@@ -89,6 +90,7 @@ const routes = [
     },
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/libraries", component: Libraries }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/calendar", component: Calendar }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/albums", component: Library }),
   // Real screens (unlike naming below), so each gets its own static route
   // rather than falling through the generic $section catch-all. Quality and

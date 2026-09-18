@@ -811,6 +811,82 @@ func (q *Queries) LinkWorkPartExternalID(ctx context.Context, arg LinkWorkPartEx
 	return err
 }
 
+const listCalendarEntries = `-- name: ListCalendarEntries :many
+SELECT w.id, w.canonical_title, w.sort_title, w.primary_type,
+       COALESCE(w.primary_artist_sort_name, '') AS artist_sort,
+       MIN(wd.date) AS release_date,
+       EXISTS (SELECT 1 FROM work_file wf WHERE wf.work_id = w.id) AS on_disk
+FROM work_date wd
+JOIN work w ON w.id = wd.work_id
+WHERE wd.kind = ?1
+  AND wd.date >= ?2 AND wd.date <= ?3
+  AND (
+    EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = w.id AND di.monitored = 1)
+    OR EXISTS (SELECT 1 FROM credit c JOIN person p ON p.id = c.person_id
+               WHERE c.work_id = w.id AND c.role = 'artist' AND p.monitored = 1)
+  )
+GROUP BY w.id
+ORDER BY release_date, w.sort_title, w.id
+LIMIT ?4
+`
+
+type ListCalendarEntriesParams struct {
+	Kind     string
+	FromDate string
+	ToDate   string
+	PageSize int64
+}
+
+type ListCalendarEntriesRow struct {
+	ID             int64
+	CanonicalTitle string
+	SortTitle      string
+	PrimaryType    sql.NullString
+	ArtistSort     string
+	ReleaseDate    interface{}
+	OnDisk         bool
+}
+
+// Releases in a date window that this library has a reason to care about:
+// either something wants the work, or an artist credited on it is monitored.
+// A work with several dates of the same kind in different regions would repeat,
+// so the earliest per work is taken -- a calendar shows one entry per release.
+func (q *Queries) ListCalendarEntries(ctx context.Context, arg ListCalendarEntriesParams) ([]ListCalendarEntriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCalendarEntries,
+		arg.Kind,
+		arg.FromDate,
+		arg.ToDate,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCalendarEntriesRow{}
+	for rows.Next() {
+		var i ListCalendarEntriesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CanonicalTitle,
+			&i.SortTitle,
+			&i.PrimaryType,
+			&i.ArtistSort,
+			&i.ReleaseDate,
+			&i.OnDisk,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEditionExternalIDs = `-- name: ListEditionExternalIDs :many
 SELECT provider, external_id, edition_id, confidence
 FROM edition_external_id WHERE edition_id = ? ORDER BY provider, external_id

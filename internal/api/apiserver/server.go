@@ -166,7 +166,10 @@ type Config struct {
 
 	// LogReader answers the most recent log records.
 	LogReader LogReader
-	ArrSync   ArrSync
+
+	// Calendar answers releases in a date window.
+	Calendar CalendarReader
+	ArrSync  ArrSync
 	// LibraryHealth answers todo 4.8's own aggregate report (unprobed files,
 	// unmatched files, incomplete works, roots near reserve, blocked hashes
 	// found in the library). Optional: without it, the endpoint answers 503.
@@ -232,6 +235,7 @@ type Server struct {
 	blocklist             Blocklist
 	backups               Backups
 	logReader             LogReader
+	calendar              CalendarReader
 	indexerTester         IndexerTester
 	downloaderTester      DownloaderTester
 	candidateSearcher     CandidateSearcher
@@ -312,6 +316,7 @@ func New(config Config) (*Server, error) {
 		blocklist:             config.Blocklist,
 		backups:               config.Backups,
 		logReader:             config.LogReader,
+		calendar:              config.Calendar,
 		indexerTester:         config.IndexerTester,
 		downloaderTester:      config.DownloaderTester,
 		candidateSearcher:     config.CandidateSearcher,
@@ -358,6 +363,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/dashboard", server.GetDashboard)
 			secured.Get("/library/health", server.GetLibraryHealth)
 			secured.Get("/system/health", server.GetSystemHealth)
+			secured.Get("/calendar", server.routeListCalendar)
 			secured.Get("/system/logs", server.routeListLogs)
 			secured.Get("/system/backups", server.ListBackups)
 			secured.Post("/system/backups", server.RunBackupNow)

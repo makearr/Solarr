@@ -316,6 +316,11 @@ type Querier interface {
 	// present copies, revisit if that stops being true.
 	ListBlockedContentPresentInLibrary(ctx context.Context, arg ListBlockedContentPresentInLibraryParams) ([]ListBlockedContentPresentInLibraryRow, error)
 	ListBlocklist(ctx context.Context, arg ListBlocklistParams) ([]BlocklistedRelease, error)
+	// Releases in a date window that this library has a reason to care about:
+	// either something wants the work, or an artist credited on it is monitored.
+	// A work with several dates of the same kind in different regions would repeat,
+	// so the earliest per work is taken -- a calendar shows one entry per release.
+	ListCalendarEntries(ctx context.Context, arg ListCalendarEntriesParams) ([]ListCalendarEntriesRow, error)
 	ListCollectionMembers(ctx context.Context, collectionID int64) ([]CollectionMember, error)
 	ListCollectionsForWork(ctx context.Context, workID int64) ([]Collection, error)
 	ListCountersForScope(ctx context.Context, scope string) ([]Counter, error)

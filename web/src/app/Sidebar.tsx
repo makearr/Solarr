@@ -15,6 +15,7 @@ import {
   Settings,
   Share2,
   type LucideIcon,
+  CalendarDays,
 } from "lucide-react";
 
 import { api } from "@/api/client";
@@ -32,6 +33,9 @@ type LibraryEntry = components["schemas"]["Library"];
 // a person now surfaces under their own library (Music -> Artists), and
 // global search still spans every category.
 const SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier: Tier }[] = [
+  // Normal: "what is coming out" is an ordinary thing to want, not an
+  // operational screen.
+  { to: "/calendar", label: "Calendar", icon: CalendarDays, tier: "normal" },
   { to: "/unidentified", label: "Unidentified", icon: HelpCircle, tier: "advanced" },
   { to: "/activity", label: "Activity", icon: Activity, tier: "advanced" },
 ];

@@ -825,6 +825,22 @@ type CacheReport struct {
 	MetadataSharePercent int64  `json:"metadata_share_percent"`
 }
 
+// CalendarEntry One release in the calendar window.
+type CalendarEntry struct {
+	Artist *string `json:"artist,omitempty"`
+
+	// OnDisk Whether the library already holds a file for this work.
+	OnDisk bool `json:"on_disk"`
+
+	// PrimaryType MusicBrainz's own vocabulary ("Album", "Single"), absent when unknown.
+	PrimaryType *string `json:"primary_type,omitempty"`
+
+	// ReleaseDate A partial ISO date as the provider gave it -- "2024", "2024-03" or "2024-03-01".
+	ReleaseDate string `json:"release_date"`
+	Title       string `json:"title"`
+	WorkId      int64  `json:"work_id"`
+}
+
 // CandidateDecision One release an indexer answered, decided against a specific desired item (section 10.1/12). components/rejections/deferrals are the same shape Decision itself carries -- quality is omitted here since a candidate is compared against a profile, not against another candidate (no ADR-40 tiered comparison to show).
 type CandidateDecision struct {
 	CandidateId int64            `json:"candidate_id"`
@@ -2379,6 +2395,16 @@ type UpdateCacheBudgetJSONBody struct {
 	MetadataSharePercent int64 `json:"metadata_share_percent"`
 }
 
+// ListCalendarParams defines parameters for ListCalendar.
+type ListCalendarParams struct {
+	// From ISO date, inclusive.
+	From string `form:"from" json:"from"`
+
+	// To ISO date, inclusive.
+	To    string `form:"to" json:"to"`
+	Limit *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // CreateCategoryJSONBody defines parameters for CreateCategory.
 type CreateCategoryJSONBody struct {
 	MediaType    string `json:"media_type"`
@@ -2945,6 +2971,9 @@ type ServerInterface interface {
 	// Remove everything in both namespaces immediately. Administrator only.
 	// (POST /cache/clear)
 	ClearCache(w http.ResponseWriter, r *http.Request)
+	// Releases in a date window, earliest first.
+	// (GET /calendar)
+	ListCalendar(w http.ResponseWriter, r *http.Request, params ListCalendarParams)
 	// Every category the caller may read (ADR-27).
 	// (GET /categories)
 	ListCategories(w http.ResponseWriter, r *http.Request)
@@ -3458,6 +3487,12 @@ func (_ Unimplemented) UpdateCacheBudget(w http.ResponseWriter, r *http.Request)
 // Remove everything in both namespaces immediately. Administrator only.
 // (POST /cache/clear)
 func (_ Unimplemented) ClearCache(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Releases in a date window, earliest first.
+// (GET /calendar)
+func (_ Unimplemented) ListCalendar(w http.ResponseWriter, r *http.Request, params ListCalendarParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4822,6 +4857,71 @@ func (siw *ServerInterfaceWrapper) ClearCache(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ClearCache(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCalendar operation middleware
+func (siw *ServerInterfaceWrapper) ListCalendar(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCalendarParams
+
+	// ------------- Required query parameter "from" -------------
+
+	if paramValue := r.URL.Query().Get("from"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "from", r.URL.Query(), &params.From)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "to" -------------
+
+	if paramValue := r.URL.Query().Get("to"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "to", r.URL.Query(), &params.To)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCalendar(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8939,6 +9039,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/cache/clear", wrapper.ClearCache)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/calendar", wrapper.ListCalendar)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories", wrapper.ListCategories)
