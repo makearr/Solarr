@@ -503,6 +503,7 @@ func (p *process) startServer(ctx context.Context) error {
 			Logger: p.logger,
 		},
 		SystemHealth: adapters.SystemHealth{Cache: p.cache},
+		Blocklist:    adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
 		Discover: adapters.Discover{
 			Provider: p.musicBrainzProvider(), Identity: library.NewIdentity(p.library),
 			Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),

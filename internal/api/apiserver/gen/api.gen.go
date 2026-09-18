@@ -729,6 +729,33 @@ type BlockedPresent struct {
 	Title            string `json:"title"`
 }
 
+// BlocklistEntry One release that will not be grabbed again (section 10.11).
+type BlocklistEntry struct {
+	ContentHash *string   `json:"content_hash,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+
+	// ExpiresAt Absent means permanent. Only automatic entries expire.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	Guid      *string    `json:"guid,omitempty"`
+	Id        int64      `json:"id"`
+	IndexerId *int64     `json:"indexer_id,omitempty"`
+
+	// Reason Why it was blocked, as the engine recorded it.
+	Reason string `json:"reason"`
+
+	// Source Whether a person blocked this or the software did.
+	Source string `json:"source"`
+	Title  string `json:"title"`
+}
+
+// BlocklistPage One cursor page of blocked releases.
+type BlocklistPage struct {
+	Items []BlocklistEntry `json:"items"`
+
+	// NextCursor Absent on the last page.
+	NextCursor *int64 `json:"next_cursor,omitempty"`
+}
+
 // BuildInfo defines model for BuildInfo.
 type BuildInfo struct {
 	BuildDate time.Time `json:"build_date"`
@@ -2298,6 +2325,12 @@ type ListBlockedContentParams struct {
 	Limit   *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListBlocklistParams defines parameters for ListBlocklist.
+type ListBlocklistParams struct {
+	After *int64 `form:"after,omitempty" json:"after,omitempty"`
+	Limit *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // UpdateCacheBudgetJSONBody defines parameters for UpdateCacheBudget.
 type UpdateCacheBudgetJSONBody struct {
 	ImagesSharePercent   int64 `json:"images_share_percent"`
@@ -2844,6 +2877,12 @@ type ServerInterface interface {
 	// Reverse a block. Administrator only.
 	// (DELETE /blocked/{id})
 	RemoveBlockedContent(w http.ResponseWriter, r *http.Request, id int64)
+	// Releases that failed and will not be grabbed again (section 10.11).
+	// (GET /blocklist)
+	ListBlocklist(w http.ResponseWriter, r *http.Request, params ListBlocklistParams)
+	// Let a release be grabbed again. Administrator only.
+	// (DELETE /blocklist/{id})
+	RemoveBlocklistEntry(w http.ResponseWriter, r *http.Request, id int64)
 	// The cache's own budgets and last-measured size per namespace (ADR-60).
 	// (GET /cache)
 	GetCache(w http.ResponseWriter, r *http.Request)
@@ -3327,6 +3366,18 @@ func (_ Unimplemented) ListBlockedContent(w http.ResponseWriter, r *http.Request
 // Reverse a block. Administrator only.
 // (DELETE /blocked/{id})
 func (_ Unimplemented) RemoveBlockedContent(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Releases that failed and will not be grabbed again (section 10.11).
+// (GET /blocklist)
+func (_ Unimplemented) ListBlocklist(w http.ResponseWriter, r *http.Request, params ListBlocklistParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Let a release be grabbed again. Administrator only.
+// (DELETE /blocklist/{id})
+func (_ Unimplemented) RemoveBlocklistEntry(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4549,6 +4600,82 @@ func (siw *ServerInterfaceWrapper) RemoveBlockedContent(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RemoveBlockedContent(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListBlocklist operation middleware
+func (siw *ServerInterfaceWrapper) ListBlocklist(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListBlocklistParams
+
+	// ------------- Optional query parameter "after" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "after", r.URL.Query(), &params.After)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBlocklist(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveBlocklistEntry operation middleware
+func (siw *ServerInterfaceWrapper) RemoveBlocklistEntry(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveBlocklistEntry(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8622,6 +8749,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/blocked/{id}", wrapper.RemoveBlockedContent)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/blocklist", wrapper.ListBlocklist)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/blocklist/{id}", wrapper.RemoveBlocklistEntry)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/cache", wrapper.GetCache)

@@ -2246,6 +2246,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/blocklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Releases that failed and will not be grabbed again (section 10.11).
+         * @description Cursor-paged, newest first. An automatic entry carries an expiry and ages out on its own; a manual one is permanent until removed here.
+         */
+        get: operations["listBlocklist"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/blocklist/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Let a release be grabbed again. Administrator only. */
+        delete: operations["removeBlocklistEntry"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}/remove": {
         parameters: {
             query?: never;
@@ -2877,6 +2914,36 @@ export interface components {
             items: components["schemas"]["Work"][];
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
+        };
+        /** @description One cursor page of blocked releases. */
+        BlocklistPage: {
+            items: components["schemas"]["BlocklistEntry"][];
+            /**
+             * Format: int64
+             * @description Absent on the last page.
+             */
+            next_cursor?: number;
+        };
+        /** @description One release that will not be grabbed again (section 10.11). */
+        BlocklistEntry: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            indexer_id?: number;
+            guid?: string;
+            content_hash?: string;
+            title: string;
+            /** @description Why it was blocked, as the engine recorded it. */
+            reason: string;
+            /** @description Whether a person blocked this or the software did. */
+            source: string;
+            /**
+             * Format: date-time
+             * @description Absent means permanent. Only automatic entries expire.
+             */
+            expires_at?: string;
+            /** Format: date-time */
+            created_at: string;
         };
         /** @description What removing an album actually did. */
         RemoveWorkResult: {
@@ -7749,6 +7816,53 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listBlocklist: {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of entries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlocklistPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    removeBlocklistEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };

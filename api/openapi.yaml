@@ -3570,6 +3570,45 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /blocklist:
+    get:
+      operationId: listBlocklist
+      tags: [library]
+      summary: Releases that failed and will not be grabbed again (section 10.11).
+      description: >-
+        Cursor-paged, newest first. An automatic entry carries an expiry and
+        ages out on its own; a manual one is permanent until removed here.
+      parameters:
+        - name: after
+          in: query
+          schema: { type: integer, format: int64 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: One page of entries.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlocklistPage" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /blocklist/{id}:
+    delete:
+      operationId: removeBlocklistEntry
+      tags: [library]
+      summary: Let a release be grabbed again. Administrator only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/remove:
     post:
       operationId: removeWork
@@ -4501,6 +4540,41 @@ components:
           description: >-
             Empty on the last page, which is how a client knows to stop without
             one more request that returns nothing.
+
+    BlocklistPage:
+      type: object
+      description: One cursor page of blocked releases.
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/BlocklistEntry" }
+        next_cursor:
+          type: integer
+          format: int64
+          description: Absent on the last page.
+
+    BlocklistEntry:
+      type: object
+      description: One release that will not be grabbed again (section 10.11).
+      required: [id, title, reason, source, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        indexer_id: { type: integer, format: int64 }
+        guid: { type: string }
+        content_hash: { type: string }
+        title: { type: string }
+        reason:
+          type: string
+          description: Why it was blocked, as the engine recorded it.
+        source:
+          type: string
+          description: Whether a person blocked this or the software did.
+        expires_at:
+          type: string
+          format: date-time
+          description: Absent means permanent. Only automatic entries expire.
+        created_at: { type: string, format: date-time }
 
     RemoveWorkResult:
       type: object
