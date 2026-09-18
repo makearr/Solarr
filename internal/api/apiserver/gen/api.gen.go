@@ -687,6 +687,16 @@ type AuthPolicy struct {
 // AuthPolicyConfiguredMode How config.yml says callers authenticate when they must. Turning authentication back on restores this mode rather than guessing one.
 type AuthPolicyConfiguredMode string
 
+// BackupFile One backup file on disk.
+type BackupFile struct {
+	Name string `json:"name"`
+
+	// PreMigration Taken before a schema migration, and kept outside the retention rotation (ADR-15).
+	PreMigration *bool     `json:"pre_migration,omitempty"`
+	SizeBytes    int64     `json:"size_bytes"`
+	TakenAt      time.Time `json:"taken_at"`
+}
+
 // BlockedContentEntry Bytes that never enter the library again (ADR-53 part 2), keyed on content hashes, never on a filename (Invariant 82). At least one of `oshash`/`quick_hash`/`chromaprint`/`phash` is always present.
 type BlockedContentEntry struct {
 	Chromaprint *string    `json:"chromaprint,omitempty"`
@@ -3207,6 +3217,12 @@ type ServerInterface interface {
 	// Create the administrator account, once.
 	// (POST /setup/admin)
 	CreateFirstAdministrator(w http.ResponseWriter, r *http.Request)
+	// The backup files on disk, newest first.
+	// (GET /system/backups)
+	ListBackups(w http.ResponseWriter, r *http.Request)
+	// Back up every database now. Administrator only.
+	// (POST /system/backups)
+	RunBackupNow(w http.ResponseWriter, r *http.Request)
 	// The address this host appears to come from.
 	// (GET /system/egress)
 	GetEgress(w http.ResponseWriter, r *http.Request)
@@ -4026,6 +4042,18 @@ func (_ Unimplemented) GetSetupStatus(w http.ResponseWriter, r *http.Request) {
 // Create the administrator account, once.
 // (POST /setup/admin)
 func (_ Unimplemented) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The backup files on disk, newest first.
+// (GET /system/backups)
+func (_ Unimplemented) ListBackups(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Back up every database now. Administrator only.
+// (POST /system/backups)
+func (_ Unimplemented) RunBackupNow(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7959,6 +7987,50 @@ func (siw *ServerInterfaceWrapper) CreateFirstAdministrator(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// ListBackups operation middleware
+func (siw *ServerInterfaceWrapper) ListBackups(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBackups(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RunBackupNow operation middleware
+func (siw *ServerInterfaceWrapper) RunBackupNow(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RunBackupNow(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetEgress operation middleware
 func (siw *ServerInterfaceWrapper) GetEgress(w http.ResponseWriter, r *http.Request) {
 
@@ -9079,6 +9151,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/setup/admin", wrapper.CreateFirstAdministrator)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/system/backups", wrapper.ListBackups)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/system/backups", wrapper.RunBackupNow)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/system/egress", wrapper.GetEgress)

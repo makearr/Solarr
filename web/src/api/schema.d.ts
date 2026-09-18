@@ -161,6 +161,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The backup files on disk, newest first.
+         * @description Reads the backup directory itself rather than a record of what was taken: a backup that is not on disk is not a backup. Restoring stays the documented offline procedure (ADR-15) -- nothing here restores.
+         */
+        get: operations["listBackups"];
+        put?: never;
+        /**
+         * Back up every database now. Administrator only.
+         * @description A routine backup, subject to the same retention as the scheduled ones. Runs synchronously: a backup that has not finished is not one a user should be told about.
+         */
+        post: operations["runBackupNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/health": {
         parameters: {
             query?: never;
@@ -2955,6 +2979,16 @@ export interface components {
              */
             files_kept: number;
         };
+        /** @description One backup file on disk. */
+        BackupFile: {
+            name: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /** Format: date-time */
+            taken_at: string;
+            /** @description Taken before a schema migration, and kept outside the retention rotation (ADR-15). */
+            pre_migration?: boolean;
+        };
         /** @description One thing wrong with this instance right now. */
         HealthCheck: {
             /**
@@ -4280,6 +4314,50 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+        };
+    };
+    listBackups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every backup file currently present. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupFile"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    runBackupNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The backups that were written. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupFile"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
         };
     };
     getSystemHealth: {

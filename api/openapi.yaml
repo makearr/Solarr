@@ -168,6 +168,44 @@ paths:
               schema: { $ref: "#/components/schemas/LibraryHealth" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /system/backups:
+    get:
+      operationId: listBackups
+      tags: [system]
+      summary: The backup files on disk, newest first.
+      description: >-
+        Reads the backup directory itself rather than a record of what was
+        taken: a backup that is not on disk is not a backup. Restoring stays
+        the documented offline procedure (ADR-15) -- nothing here restores.
+      responses:
+        "200":
+          description: Every backup file currently present.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BackupFile" }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: runBackupNow
+      tags: [system]
+      summary: Back up every database now. Administrator only.
+      description: >-
+        A routine backup, subject to the same retention as the scheduled ones.
+        Runs synchronously: a backup that has not finished is not one a user
+        should be told about.
+      responses:
+        "200":
+          description: The backups that were written.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BackupFile" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "500": { $ref: "#/components/responses/Problem" }
+
   /system/health:
     get:
       operationId: getSystemHealth
@@ -4588,6 +4626,18 @@ components:
           type: integer
           format: int64
           description: How many files the library still holds for this work. None were touched.
+
+    BackupFile:
+      type: object
+      description: One backup file on disk.
+      required: [name, size_bytes, taken_at]
+      properties:
+        name: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        taken_at: { type: string, format: date-time }
+        pre_migration:
+          type: boolean
+          description: Taken before a schema migration, and kept outside the retention rotation (ADR-15).
 
     HealthCheck:
       type: object

@@ -160,7 +160,10 @@ type Config struct {
 
 	// Blocklist reads and reverses section 10.11's failure memory.
 	Blocklist Blocklist
-	ArrSync   ArrSync
+
+	// Backups lists and takes backups (ADR-15). Restoring stays offline.
+	Backups Backups
+	ArrSync ArrSync
 	// LibraryHealth answers todo 4.8's own aggregate report (unprobed files,
 	// unmatched files, incomplete works, roots near reserve, blocked hashes
 	// found in the library). Optional: without it, the endpoint answers 503.
@@ -224,6 +227,7 @@ type Server struct {
 	libraryHealth         LibraryHealth
 	systemHealth          SystemHealthSource
 	blocklist             Blocklist
+	backups               Backups
 	indexerTester         IndexerTester
 	downloaderTester      DownloaderTester
 	candidateSearcher     CandidateSearcher
@@ -302,6 +306,7 @@ func New(config Config) (*Server, error) {
 		libraryHealth:         config.LibraryHealth,
 		systemHealth:          config.SystemHealth,
 		blocklist:             config.Blocklist,
+		backups:               config.Backups,
 		indexerTester:         config.IndexerTester,
 		downloaderTester:      config.DownloaderTester,
 		candidateSearcher:     config.CandidateSearcher,
@@ -348,6 +353,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/dashboard", server.GetDashboard)
 			secured.Get("/library/health", server.GetLibraryHealth)
 			secured.Get("/system/health", server.GetSystemHealth)
+			secured.Get("/system/backups", server.ListBackups)
+			secured.Post("/system/backups", server.RunBackupNow)
 			secured.Get("/blocklist", server.routeListBlocklist)
 			secured.Delete("/blocklist/{id}", server.routeRemoveBlocklistEntry)
 			secured.Get("/system/egress", server.GetEgress)

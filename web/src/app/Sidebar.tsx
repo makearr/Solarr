@@ -58,6 +58,7 @@ const SETTINGS_SECTIONS: readonly { to: string; label: string; tier?: Tier }[] =
   // Advanced: an install with no acquisition yet has an empty blocklist and
   // no way to fill one.
   { to: "/settings/blocklist", label: "Blocklist", tier: "advanced" },
+  { to: "/settings/backups", label: "Backups", tier: "advanced" },
   { to: "/settings/cache", label: "Cache", tier: "expert" },
 ];
 
