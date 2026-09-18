@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/identify/score"
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/identify/score"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // MediaTypes are the eleven the product plans for (architecture Part I). Manga,

@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 func TestProbeCoverage_ReconcileCountsProbedAgainstTotal(t *testing.T) {

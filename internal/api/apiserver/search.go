@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/api/authz"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
 )
 
 // ErrQueryTooShort reports a search query too short to run (section 21.5's 2-character

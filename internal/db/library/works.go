@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 // workColumns is the sqlc model's field order, which the scan below depends on

@@ -5,8 +5,8 @@ package library
 import (
 	"context"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 // Counters reads the counter table. Every library figure a dashboard shows is a

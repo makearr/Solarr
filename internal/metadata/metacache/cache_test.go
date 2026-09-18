@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/metadata/metacache"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/migrations"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/metadata/metacache"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/migrations"
 )
 
 func newCache(t *testing.T) metacache.Cache {

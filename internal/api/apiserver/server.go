@@ -14,11 +14,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/jobs"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/events"
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/events"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // APIPrefix is where every versioned endpoint lives (section 13.1).

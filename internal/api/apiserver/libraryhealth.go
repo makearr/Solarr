@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/api/authz"
-	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // LibraryHealth answers todo 4.8's own aggregate report over library.db.

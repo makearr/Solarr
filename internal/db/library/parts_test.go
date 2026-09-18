@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 func createPart(t *testing.T, opened *store.Store, workID int64, mediaRef, sortKey, title string) librarydb.WorkPart {

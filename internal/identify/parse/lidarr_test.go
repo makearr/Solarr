@@ -3,7 +3,7 @@ package parse_test
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/identify/parse"
+	"github.com/makearr/Solarr/internal/identify/parse"
 )
 
 // TestParse_HashedReleaseIsRejected ports Lidarr's ValidateBeforeParsing: a

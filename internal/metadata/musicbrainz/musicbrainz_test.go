@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // fakeTransport answers canned responses keyed by the exact URL requested, so a

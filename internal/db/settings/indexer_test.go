@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/platform/secrets"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
 func TestCreateIndexer_RoundTripsThroughSealAndOpen(t *testing.T) {

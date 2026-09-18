@@ -5,11 +5,11 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/api/authz"
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // GetImportSettings answers ADR-48's own commit-line threshold, the same

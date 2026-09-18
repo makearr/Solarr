@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/identify/model"
-	"github.com/makearr/MediaNexus/internal/media/music"
-	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // fakeSearcher answers a fixed set of matches (or a fixed error) for any query,

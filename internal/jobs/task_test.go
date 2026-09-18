@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/jobs"
+	"github.com/makearr/Solarr/internal/jobs"
 )
 
 func noopEnqueue(context.Context) (jobs.EnqueueResult, error) { return jobs.EnqueueResult{}, nil }

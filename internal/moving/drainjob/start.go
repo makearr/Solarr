@@ -13,19 +13,19 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/jobs"
-	"github.com/makearr/MediaNexus/internal/moving/mover"
-	"github.com/makearr/MediaNexus/internal/moving/moverjob"
-	"github.com/makearr/MediaNexus/internal/moving/placement"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/moving/mover"
+	"github.com/makearr/Solarr/internal/moving/moverjob"
+	"github.com/makearr/Solarr/internal/moving/placement"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // Roots is the settings-side facts and writes Start needs. Only the types
 // are taken from internal/db/settings (the same lightweight use
 // internal/scanning/scan's own Roots interface already makes) -- the actual cache
-// access stays behind this interface, a cmd/medianexus adapter bridging it.
+// access stays behind this interface, a cmd/solarr adapter bridging it.
 type Roots interface {
 	RootFolder(id int64) (settings.RootFolder, bool)
 	CategoryRoots() []settings.CategoryRoot

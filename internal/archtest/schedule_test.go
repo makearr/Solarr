@@ -13,8 +13,8 @@ import (
 )
 
 // schedulerDir is where ADR-59's task registry declares every periodic
-// action (cmd/medianexus/app.buildTaskRegistry).
-const schedulerDir = "cmd/medianexus/app"
+// action (cmd/solarr/app.buildTaskRegistry).
+const schedulerDir = "cmd/solarr/app"
 
 // TestScheduledTasks_EveryEnqueueMethodIsRegistered is Invariant 90: "every
 // periodic action is registered ... an unregistered schedule fails the
@@ -39,7 +39,7 @@ func TestScheduledTasks_EveryEnqueueMethodIsRegistered(t *testing.T) {
 	registered := registeredTaskEnqueueFuncs(t, dir)
 	for _, name := range declared {
 		if !slices.Contains(registered, name) {
-			t.Errorf("cmd/medianexus/app.(*process).%s matches ADR-59's schedulable shape "+
+			t.Errorf("cmd/solarr/app.(*process).%s matches ADR-59's schedulable shape "+
 				"(func(context.Context) (jobs.EnqueueResult, error) on *process) but is not "+
 				"registered as a Task in buildTaskRegistry (Invariant 90)", name)
 		}
@@ -152,7 +152,7 @@ func isSelector(expr ast.Expr, pkg, name string) bool {
 }
 
 // forEachGoFile parses every non-test .go file directly in dir (no
-// recursion needed: cmd/medianexus/app is one package, not a tree) and calls fn
+// recursion needed: cmd/solarr/app is one package, not a tree) and calls fn
 // with each parsed file.
 func forEachGoFile(t *testing.T, dir string, fn func(*ast.File)) {
 	t.Helper()

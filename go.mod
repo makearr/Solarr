@@ -1,4 +1,4 @@
-module github.com/makearr/MediaNexus
+module github.com/makearr/Solarr
 
 go 1.27.0
 

@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/jobsdb"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/migrations"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/jobsdb"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/migrations"
 )
 
 // newEventStore opens jobs.db directly: the event log is beside the queue in that file

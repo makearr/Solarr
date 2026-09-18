@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/migrations"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/migrations"
 )
 
 func newLibrary(t *testing.T) (*store.Store, *librarydb.Queries) {

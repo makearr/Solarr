@@ -9,15 +9,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
-	"github.com/makearr/MediaNexus/internal/jobs"
-	"github.com/makearr/MediaNexus/internal/media/music"
-	"github.com/makearr/MediaNexus/internal/moving/moverjob"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/migrations"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/moving/moverjob"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/migrations"
 )
 
 type fakeRenameRoots map[int64]settings.RootFolder

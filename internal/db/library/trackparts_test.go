@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/library"
 )
 
 // setUpAlbumWithParts is a small helper: resolves a work with a root folder

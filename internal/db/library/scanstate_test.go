@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/library"
 )
 
 var (

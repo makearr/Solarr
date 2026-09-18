@@ -5,7 +5,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 // rankInGroups finds which tier group a value falls in, case-insensitively. found

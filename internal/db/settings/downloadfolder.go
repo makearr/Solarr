@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/settingsdb"
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // DownloadFolder is one watched upstream-download destination (todo 4.18,

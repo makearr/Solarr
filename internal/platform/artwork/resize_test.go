@@ -4,7 +4,7 @@ import (
 	"image"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/platform/artwork"
+	"github.com/makearr/Solarr/internal/platform/artwork"
 )
 
 func TestResizeLongestEdge_ScalesTheLongerSideToTheTarget(t *testing.T) {

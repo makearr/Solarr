@@ -13,7 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/goccy/go-yaml"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/api/apiserver"
 )
 
 // The compile-time assertion catches a spec operation with no handler; this

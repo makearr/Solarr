@@ -1,6 +1,6 @@
 package score
 
-import "github.com/makearr/MediaNexus/internal/identify/model"
+import "github.com/makearr/Solarr/internal/identify/model"
 
 // LanguagePolicy is section 19.8's axis: required is a hard gate, preferred an
 // additive score, both any_of not all_of -- mirrors settings.LanguageProfile's shape.

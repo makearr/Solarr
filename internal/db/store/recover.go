@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // ErrCorrupt reports a database SQLite will not vouch for. It wraps whatever the

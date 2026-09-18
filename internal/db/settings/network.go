@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // ADR-58's own keys, the same instance_setting shape auth.required and the

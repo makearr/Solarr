@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/moving/naming"
+	"github.com/makearr/Solarr/internal/moving/naming"
 )
 
 // TestRenderPath_ShippedMusicDefault is section 11.8's own worked example: it

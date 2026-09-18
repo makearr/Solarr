@@ -10,7 +10,7 @@ Packages are grouped by pipeline. Each leaf directory is one Go package and its 
 package name, so `internal/metadata/musicbrainz` is imported as `musicbrainz`.
 
 ```text
-cmd/medianexus/            CLI: serve, config check, user, healthcheck, version
+cmd/solarr/            CLI: serve, config check, user, healthcheck, version
 ├── app/                   the server process: startup order, job registration (job_*.go),
 │                          schedules, shutdown
 └── adapters/              bridges apiserver/job interfaces to library and settings
@@ -97,4 +97,4 @@ One place: `jobs.Executor`. It refuses to run a job type declared mutating when 
 2. `internal/db/store` — the write queue explains the concurrency model.
 3. `internal/jobs` — the queue, then the executor, then the dispatcher.
 4. `internal/api/apiserver/server.go` — how a request becomes an identity and then an answer.
-5. `cmd/medianexus/app/serve.go` — the startup order, architecture section 15.1 in code.
+5. `cmd/solarr/app/serve.go` — the startup order, architecture section 15.1 in code.

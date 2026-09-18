@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
-	"github.com/makearr/MediaNexus/internal/media/music"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/media/music"
 )
 
 func workDetailFixture() library.WorkDetail {

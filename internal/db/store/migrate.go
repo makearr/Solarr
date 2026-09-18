@@ -28,7 +28,7 @@ var (
 	ErrBackupDirRequired = errors.New("store: a backup directory is required before migrating")
 )
 
-// CoreOwner is the schema owner for MediaNexus itself. It reserves no prefix,
+// CoreOwner is the schema owner for Solarr itself. It reserves no prefix,
 // because core tables are the unprefixed ones.
 const CoreOwner = "core"
 

@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // maxLidarrResponseBytes bounds what one call can make this process read.
@@ -37,7 +37,7 @@ type LidarrStatus struct {
 }
 
 // LidarrRootFolder is one of Lidarr's own configured root folders --
-// ADR-52's "root folders are matched by path against roots MediaNexus
+// ADR-52's "root folders are matched by path against roots Solarr
 // already knows".
 type LidarrRootFolder struct {
 	ID   int64  `json:"id"`
@@ -73,7 +73,7 @@ type LidarrAlbum struct {
 // LidarrQualityProfile is GET /api/v1/qualityprofile's own shape -- report
 // only (ADR-52: "custom formats do not translate either... imported as a
 // report of what existed"), the same treatment applied here since no
-// MediaNexus profile-creation UI exists yet to propose a mapping into
+// Solarr profile-creation UI exists yet to propose a mapping into
 // (todo 4.3).
 type LidarrQualityProfile struct {
 	ID   int64  `json:"id"`

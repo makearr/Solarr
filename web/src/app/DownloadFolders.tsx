@@ -10,7 +10,7 @@ type DownloadFolder = components["schemas"]["DownloadFolder"];
 /** todo 4.18, section 5.1: the folders upstream download clients write to.
  *  A registry only -- nothing acts on what lands here until stage 5, and
  *  Contents below is a live, uncached listing, never a comparison against
- *  what MediaNexus has already imported. */
+ *  what Solarr has already imported. */
 export function DownloadFolders() {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -49,7 +49,7 @@ export function DownloadFolders() {
         <h1 className="text-lg font-semibold">Download folders</h1>
         <p className="text-sm leading-relaxed text-ink-muted">
           Folders upstream download clients write to, watched from here -- never written to by
-          MediaNexus. What acts on what lands here is stage 5; this is the registry alone.
+          Solarr. What acts on what lands here is stage 5; this is the registry alone.
         </p>
       </header>
 

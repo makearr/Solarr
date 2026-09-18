@@ -1,9 +1,9 @@
-# MediaNexus
+# Solarr
 
 One application for your entire media library — music, TV, movies, audiobooks, books, comics
 and more. It works out what you want, what you have, what's missing, and goes and gets it.
 
-MediaNexus replaces Radarr, Sonarr and Lidarr with a single engine, and can run alongside them
+Solarr replaces Radarr, Sonarr and Lidarr with a single engine, and can run alongside them
 while you decide whether to switch.
 
 ---
@@ -12,7 +12,7 @@ while you decide whether to switch.
 
 ### Finds what's missing, continuously
 
-You describe the library you want. MediaNexus works out the difference between that and what's
+You describe the library you want. Solarr works out the difference between that and what's
 on disk, and closes the gap — new releases as they appear, gaps in old collections, and
 upgrades when something better shows up. It keeps a running picture of what's still outstanding
 and works through it at a pace your indexers and download client can sustain.
@@ -58,7 +58,7 @@ with it.
 
 ### Explains every decision
 
-Any time MediaNexus does something — or doesn't — you can ask why and get a real answer:
+Any time Solarr does something — or doesn't — you can ask why and get a real answer:
 
 ```
 Cige: Part Two (2024)                                          WAITING
@@ -98,7 +98,7 @@ artist's discography lands on one disk rather than being scattered — and you c
 content is distributed: most free space, fill one drive at a time, proportional weighting, or by
 hand.
 
-Retiring a drive is a button. Mark it for draining and MediaNexus moves everything off it onto
+Retiring a drive is a button. Mark it for draining and Solarr moves everything off it onto
 your other disks, keeping artists and series intact, showing you what it will do before it
 starts, and telling you up front if there isn't enough room rather than filling the others and
 giving up half way.
@@ -116,14 +116,14 @@ proposes no renames at all.
 
 ### Music, done properly
 
-MediaNexus was built music-first, because music is the hardest case. Album completeness is
+Solarr was built music-first, because music is the hardest case. Album completeness is
 tracked track by track. Existing tags are read and trusted, never trampled — it fills gaps
 rather than overwriting the work you've already done. Collaborations, compilations, multi-disc
 releases and classical credits all work.
 
 ### Tells you when it's doing less
 
-If MediaNexus slows down, it says so, in plain terms:
+If Solarr slows down, it says so, in plain terms:
 
 ```
 ⚠ Hunt searches paused
@@ -135,7 +135,7 @@ If MediaNexus slows down, it says so, in plain terms:
 
 ## Fast, and one thing to run
 
-MediaNexus is written in Go and ships as a single binary with the web interface built into it —
+Solarr is written in Go and ships as a single binary with the web interface built into it —
 nothing to install alongside it, no database server, no message broker, no cache. It's built to
 stay quick with hundreds of thousands of files: lists stay smooth however far you scroll, counts
 appear instantly instead of being recalculated every time you look at them, and long jobs like
@@ -158,7 +158,7 @@ collection.
 
 ## Moving from Radarr, Sonarr, Lidarr and friends
 
-Connect MediaNexus to your existing setup — Sonarr, Radarr, Lidarr, Readarr, Whisparr or
+Connect Solarr to your existing setup — Sonarr, Radarr, Lidarr, Readarr, Whisparr or
 Prowlarr — and it imports what's monitored, along with your root folders, quality profiles,
 indexers and download clients. You see exactly what it will bring across before it does, and
 anything that doesn't translate cleanly is shown to you rather than silently guessed at.

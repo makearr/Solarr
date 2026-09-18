@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/library"
 )
 
 // seedSessionWithUnits creates one session and n undecided units, answering

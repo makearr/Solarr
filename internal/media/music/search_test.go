@@ -11,15 +11,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/acquiring/indexer"
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
-	"github.com/makearr/MediaNexus/internal/jobs"
-	"github.com/makearr/MediaNexus/internal/media/music"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/migrations"
+	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/migrations"
 )
 
 // searchTestEnv is a real (temp file) library.db and settings.db together --

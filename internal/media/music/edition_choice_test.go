@@ -3,7 +3,7 @@ package music
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 )
 
 func release(mbid, status, date string, titles ...string) musicbrainz.Release {

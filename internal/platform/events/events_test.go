@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/events"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/events"
 )
 
 func newBus(t *testing.T) (*events.Bus, *clock.Fake) {

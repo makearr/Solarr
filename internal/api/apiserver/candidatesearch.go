@@ -10,9 +10,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/api/authz"
-	"github.com/makearr/MediaNexus/internal/identify/model"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 // ErrWorkNotWanted reports a search attempted against a work with no

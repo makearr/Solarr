@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/makearr/MediaNexus/internal/jobs"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // SearchCategoryJobType is the registered type of a per-category candidate

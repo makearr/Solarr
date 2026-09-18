@@ -8,7 +8,7 @@ import (
 
 // AddURLRequest is one NZB submission (ADR-57's own acquire.send). name is
 // the NZB's own download URL, not a display name -- SABnzbd fetches it
-// itself rather than MediaNexus downloading the artefact first.
+// itself rather than Solarr downloading the artefact first.
 type AddURLRequest struct {
 	NZBURL   string
 	Category string

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/library"
 )
 
 func TestBlocklist_CreateRequiresGuidOrContentHash(t *testing.T) {

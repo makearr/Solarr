@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/platform/archive"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/archive"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 func TestDetectFormat(t *testing.T) {

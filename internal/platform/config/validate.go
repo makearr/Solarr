@@ -48,7 +48,7 @@ func (c Config) validateVersion() Problems {
 		// Downgrading would silently discard settings this binary cannot
 		// represent, so a newer file is a hard failure (§14.2).
 		return Problems{newProblem("version", strconv.Itoa(c.Version),
-			fmt.Sprintf("written by a newer MediaNexus; this binary understands up to %d", CurrentVersion))}
+			fmt.Sprintf("written by a newer Solarr; this binary understands up to %d", CurrentVersion))}
 	}
 	return nil
 }

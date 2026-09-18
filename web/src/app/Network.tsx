@@ -137,7 +137,7 @@ function NetworkForm({
         <span className="text-[0.6875rem]">
           0 leaves it unset -- config.yml (or 5454) governs. A real choice is written into
           config.yml directly, not just here, so it survives however the next restart happens. If
-          a chosen port turns out unreachable, the MEDIANEXUS_SERVER_PORT environment variable
+          a chosen port turns out unreachable, the SOLARR_SERVER_PORT environment variable
           always wins over both and is the way back in.
         </span>
       </label>

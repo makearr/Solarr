@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/settingsdb"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
 )
 
 // SetPreference stores one user's preference value as raw JSON, encoded by

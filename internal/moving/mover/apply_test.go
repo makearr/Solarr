@@ -5,9 +5,9 @@ import (
 	"io"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/moving/mover"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/moving/mover"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 func writeFile(t *testing.T, fsys *fsx.Mem, absolutePath, content string) {

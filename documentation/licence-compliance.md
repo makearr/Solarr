@@ -1,6 +1,6 @@
 # Licence compliance
 
-MediaNexus is **AGPL-3.0-or-later**. Most of that licence is satisfied by shipping `LICENSE`
+Solarr is **AGPL-3.0-or-later**. Most of that licence is satisfied by shipping `LICENSE`
 and keeping `ATTRIBUTION.md` current. One clause is a **functional requirement** and is easy
 to overlook.
 
@@ -9,7 +9,7 @@ to overlook.
 > If you modify the Program, your modified version must prominently offer all users
 > interacting with it remotely… an opportunity to receive the Corresponding Source.
 
-MediaNexus is a web application, so anyone using it interacts remotely. The obligation is not
+Solarr is a web application, so anyone using it interacts remotely. The obligation is not
 discharged by a file in the repository — **the running program must offer its source.**
 
 ### What this requires in the product
@@ -48,7 +48,7 @@ Also exposed at `GET /api/v1/about`, so the information is available without the
 
 ### Known gap, not addressed here
 
-`sourceURL` defaults to `https://github.com/makearr/MediaNexus`, which is **private**
+`sourceURL` defaults to `https://github.com/makearr/Solarr`, which is **private**
 (`CLAUDE.md` §8). For an unmodified build, the About view's "Corresponding Source" link is
 not actually reachable by a third party today -- the obligation only bites once someone other
 than the operator interacts with a deployed instance, which is not yet the case here. Revisit

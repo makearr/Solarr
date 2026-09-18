@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // Reflink support is a property of the filesystem under the test runner, which is overlayfs in

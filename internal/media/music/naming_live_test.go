@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/media/music"
-	"github.com/makearr/MediaNexus/internal/moving/naming"
+	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/moving/naming"
 )
 
 // realMusicLibrary is where the user's actual, curated library is mounted

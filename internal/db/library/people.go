@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 // PersonIdentity is what a person should look like if one has to be created --

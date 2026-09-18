@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 func TestClassifyAddress(t *testing.T) {

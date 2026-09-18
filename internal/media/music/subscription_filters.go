@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 )
 
 // DefaultExcludedSecondaryTypes is section 19.6's own default: an artist

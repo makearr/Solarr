@@ -3,7 +3,7 @@ package library_test
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/library"
 )
 
 // Library health's own "unmatched files" figure (todo 4.8).

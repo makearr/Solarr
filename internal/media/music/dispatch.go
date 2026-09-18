@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/acquiring/sabnzbd"
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // ErrDecisionNotFound reports a decision id that does not belong to the

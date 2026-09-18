@@ -66,7 +66,7 @@ export function Downloaders() {
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold">Download clients</h1>
         <p className="text-sm leading-relaxed text-ink-muted">
-          SABnzbd and other download clients (ADR-46). MediaNexus implements no download client of
+          SABnzbd and other download clients (ADR-46). Solarr implements no download client of
           its own -- this is the connection record, never the transfer.
         </p>
       </header>

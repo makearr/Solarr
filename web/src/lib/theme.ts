@@ -23,7 +23,7 @@ export const THEMES = [
  *  the OS reports a preference between two, and has no opinion about Jellyfin. */
 export type Theme = "system" | (string & {});
 
-const STORAGE_KEY = "medianexus.theme";
+const STORAGE_KEY = "solarr.theme";
 const DEFAULT_BASE: ThemeDefinition = { id: "light", label: "Light", base: "light" };
 
 export function definition(id: string): ThemeDefinition {

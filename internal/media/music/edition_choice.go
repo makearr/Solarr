@@ -3,7 +3,7 @@ package music
 import (
 	"slices"
 
-	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 )
 
 // chooseRelease picks the edition an album identified only at release-group level takes its

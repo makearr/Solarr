@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/jobs/cachebudget"
-	"github.com/makearr/MediaNexus/internal/metadata/metacache"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
-	"github.com/makearr/MediaNexus/migrations"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/jobs/cachebudget"
+	"github.com/makearr/Solarr/internal/metadata/metacache"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/migrations"
 )
 
 const imagesDir = "/cache/images"

@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 // AttributeClaim mirrors media_attributes' full column set (ADR-39: "release

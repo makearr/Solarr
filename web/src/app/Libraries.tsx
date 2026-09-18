@@ -33,7 +33,7 @@ export function Libraries() {
     <div className="flex h-full flex-col gap-4 overflow-auto p-6">
       <div>
         <h1 className="text-lg font-semibold tracking-tight">Libraries</h1>
-        <p className="text-sm text-ink-muted">Every collection MediaNexus manages.</p>
+        <p className="text-sm text-ink-muted">Every collection Solarr manages.</p>
       </div>
 
       {libraries.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}

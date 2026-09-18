@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // ProxyName is the ADR-13 provider bucket for the Servarr metadata proxy --

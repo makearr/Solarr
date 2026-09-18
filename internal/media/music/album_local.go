@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/identify/parse"
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/identify/parse"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // placeholderValues say nothing about a file; a claim holding one abstains.

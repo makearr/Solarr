@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/identify/model"
-	"github.com/makearr/MediaNexus/internal/identify/parse"
-	"github.com/makearr/MediaNexus/internal/identify/score"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/parse"
+	"github.com/makearr/Solarr/internal/identify/score"
 )
 
 // maxScoreSimulateBody bounds an authenticated but unbounded-by-nature POST body.

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // ErrCircuitOpen reports a provider being skipped entirely (Invariant 27).

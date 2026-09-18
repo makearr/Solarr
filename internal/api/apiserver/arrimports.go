@@ -8,8 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/api/authz"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
 )
 
 // ErrArrAppNotYetSupported means Sync was asked to run a connection for an
@@ -68,7 +68,7 @@ type ArrImportRevertResult struct {
 }
 
 // ArrSync runs and reverts *Arr imports (todo 4.13, ADR-52). Defined here
-// and implemented by cmd/medianexus/adapters.ArrSync, the same split
+// and implemented by cmd/solarr/adapters.ArrSync, the same split
 // Discover's own interface keeps -- this package never imports
 // internal/db/library directly.
 type ArrSync interface {

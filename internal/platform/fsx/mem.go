@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // maxSymlinkDepth matches the kernel's limit closely enough to make a loop an

@@ -25,19 +25,19 @@ GID         := $(shell id -g)
 MOUNT       := -v $(CURDIR):/src -w /src
 # Mounted at /go/pkg rather than /go/pkg/mod: the checksum database cache lives
 # beside the module cache at /go/pkg/sumdb, and a module download fails without it.
-CACHE       := -v medianexus-gopath:/go/pkg -v medianexus-gobuild:/.cache/go-build
+CACHE       := -v solarr-gopath:/go/pkg -v solarr-gobuild:/.cache/go-build
 GOENV       := -e GOCACHE=/.cache/go-build -e CGO_ENABLED=0 -e HOME=/tmp
 RUN_GO      := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) $(CACHE) $(GOENV) $(GO_IMAGE)
 # ADR-22's scale is 500000; the default keeps an ordinary test run to seconds.
 BENCH_FILES ?=
 RUN_GO_BENCH := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) $(CACHE) $(GOENV) \
-                 -e MEDIANEXUS_BENCH=1 -e MEDIANEXUS_BENCH_FILES=$(BENCH_FILES) $(GO_IMAGE)
+                 -e SOLARR_BENCH=1 -e SOLARR_BENCH_FILES=$(BENCH_FILES) $(GO_IMAGE)
 RUN_NODE    := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT)/web -w /src/web \
-                 -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
+                 -v solarr-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
 # The spec lives at the repository root, not under web/, so generation needs a
 # runner whose working directory is the root.
 RUN_NODE_ROOT := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) \
-                 -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
+                 -v solarr-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
 
 .PHONY: help verify build test race bench bench-drivers lint vet fmt fmt-check sqlc sqlc-check \
         api web web-test web-dev image image-local builder binfmt milestone version cache-init clean-cache deps tidy \
@@ -71,7 +71,7 @@ BUILD_DATE  := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 # space ("music, usenet") needs its own quoting or the build fails outright.
 LDFLAGS     := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE) \
                -X 'main.milestone=$(MILESTONE)'
-IMAGE       ?= ghcr.io/makearr/medianexus
+IMAGE       ?= ghcr.io/makearr/solarr
 PLATFORMS   ?= linux/amd64,linux/arm64
 ARCH        := $(shell uname -m | sed -e s/x86_64/amd64/ -e s/aarch64/arm64/)
 
@@ -81,7 +81,7 @@ HAS_BUILDX  := $(shell docker buildx version >/dev/null 2>&1 && echo yes)
 
 # The default "docker" driver cannot export a manifest list, so a multi-arch build needs a
 # container-driver builder.
-BUILDER     ?= medianexus
+BUILDER     ?= solarr
 TOKEN       ?= $(shell grep -oP 'ghp_[A-Za-z0-9]+' private/secrets.md 2>/dev/null | head -1)
 
 help:  ## List targets
@@ -90,7 +90,7 @@ help:  ## List targets
 # # Docker creates named volumes owned by root, so a container running as the # invoking user
 # cannot write to the module or build cache.
 cache-init:
-	@docker run --rm -u 0 $(CACHE) -v medianexus-npm:/tmp/.npm $(GO_IMAGE) sh -c \
+	@docker run --rm -u 0 $(CACHE) -v solarr-npm:/tmp/.npm $(GO_IMAGE) sh -c \
 	  'for dir in /go/pkg /.cache/go-build /tmp/.npm; do \
 	     [ "$$(stat -c %u $$dir)" = "$(UID)" ] || chown -R $(UID):$(GID) $$dir; \
 	   done'
@@ -105,7 +105,7 @@ license-check: ## Fail if the About page's embedded LICENSE/ATTRIBUTION copies d
 	  { echo "license-check: internal/api/apiserver/legal/ATTRIBUTION.md is stale -- copy ATTRIBUTION.md over it"; exit 1; }
 
 build: cache-init  ## Build the binary (CGO_ENABLED=0, per ADR-30)
-	$(RUN_GO) go build -trimpath -ldflags "$(LDFLAGS)" -o /src/medianexus ./cmd/medianexus
+	$(RUN_GO) go build -trimpath -ldflags "$(LDFLAGS)" -o /src/solarr ./cmd/solarr
 
 test: cache-init  ## Unit tests
 	$(RUN_GO) go test -count=1 ./...
@@ -171,7 +171,7 @@ web-test:   ## Frontend unit tests only
 
 web-dev:    ## Vite dev server on :5173, proxying the API
 	docker run --rm -it -u $(UID):$(GID) $(MOUNT)/web -w /src/web -p 5173:5173 \
-	  -v medianexus-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE) npm run dev
+	  -v solarr-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE) npm run dev
 
 ## ---- versioning: builds advance BUILD, milestones advance MINOR ----
 ## Full scheme: documentation/versioning.md
@@ -231,5 +231,5 @@ binfmt:     ## Register qemu emulators for cross-arch builds (needed once per bu
 	@docker run --privileged --rm tonistiigi/binfmt --install all >/dev/null
 
 clean-cache:
-	-docker volume rm medianexus-gopath medianexus-gobuild medianexus-npm
+	-docker volume rm solarr-gopath solarr-gobuild solarr-npm
 	-docker buildx rm $(BUILDER)

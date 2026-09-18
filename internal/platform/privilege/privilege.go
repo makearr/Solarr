@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // DefaultUID and DefaultGID apply only when PUID and PGID are unset. The image
@@ -69,7 +69,7 @@ func numeric(lookup Lookup, name string, fallback int) (int, bool, error) {
 	// Root is what this package exists to leave.
 	if value <= 0 {
 		return 0, false, fmt.Errorf("%s must be greater than 0, got %d -- "+
-			"MediaNexus does not run as root; set it to the owner of your volumes", name, value)
+			"Solarr does not run as root; set it to the owner of your volumes", name, value)
 	}
 	return value, true, nil
 }
@@ -122,7 +122,7 @@ func Apply(fsys fsx.FS, identity Identity, directories []string, logger *slog.Lo
 		slog.Int("uid", identity.UID),
 		slog.Int("gid", identity.GID),
 		slog.Any("took_ownership_of", outcome.Chowned),
-		slog.String("note", "PUID/PGID set this. Volumes MediaNexus did not create "+
+		slog.String("note", "PUID/PGID set this. Volumes Solarr did not create "+
 			"are left alone; mismatches are reported, not corrected"))
 	return outcome, nil
 }

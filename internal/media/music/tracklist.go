@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/identify/match"
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/identify/match"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // titleMatchThreshold is the minimum internal/identify/match title similarity Align

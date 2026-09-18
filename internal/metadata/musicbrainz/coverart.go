@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // CoverArtName is the ADR-13 rate-limit and breaker bucket for the Cover Art

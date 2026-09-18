@@ -49,7 +49,7 @@ export function App() {
   if (setup.error !== null || !setup.data) {
     return (
       <Splash>
-        The server could not be reached. Check that MediaNexus is running and that any reverse
+        The server could not be reached. Check that Solarr is running and that any reverse
         proxy forwards <code className="font-mono">/api/v1</code>.
       </Splash>
     );

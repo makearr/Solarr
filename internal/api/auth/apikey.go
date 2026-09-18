@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/platform/secrets"
+	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
 // apiKeyPrefix makes a leaked key recognisable in a log or a paste, so it can

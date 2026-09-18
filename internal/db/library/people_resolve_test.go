@@ -3,8 +3,8 @@ package library_test
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 // newWorkForCredits creates a bare work to attach credits/genres to, via the

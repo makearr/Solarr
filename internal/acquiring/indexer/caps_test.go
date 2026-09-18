@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/acquiring/indexer"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // capsFixtureXML is a representative t=caps response -- the shape shared by

@@ -56,7 +56,7 @@ const POSTER_MIN_WIDTH = 168;
 const POSTER_GAP = 16;
 const POSTER_PADDING = 16;
 const POSTER_LABEL_HEIGHT = 46;
-const VIEW_STORAGE_KEY = "medianexus.library.view";
+const VIEW_STORAGE_KEY = "solarr.library.view";
 
 /** Albums open as a poster wall (Lidarr's own album view, 2026-09-13); the
  *  table is a click away and remembered once chosen. */
@@ -77,7 +77,7 @@ const COLUMN_LABELS: Record<OptionalColumn, string> = {
   year: "Released",
   added_at: "Added",
 };
-const COLUMNS_STORAGE_KEY = "medianexus.library.columns";
+const COLUMNS_STORAGE_KEY = "solarr.library.columns";
 
 function loadVisibleColumns(): OptionalColumn[] {
   try {

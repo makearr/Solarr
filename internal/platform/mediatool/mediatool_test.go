@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // fakeRunner answers by tool and argument, and counts what it was asked to do, so a

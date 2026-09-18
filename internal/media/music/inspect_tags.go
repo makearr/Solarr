@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/importing/inspect"
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/importing/inspect"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // BuildInspectTagReader probes every one of mediaRelPaths under root in one

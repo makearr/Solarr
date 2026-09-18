@@ -7,7 +7,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // cronParser matches internal/platform/config's validator, so a schedule accepted at startup

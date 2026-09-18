@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 )
 
 const (

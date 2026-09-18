@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/moving/naming"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/moving/naming"
 )
 
 // compiledDefaultFolder and compiledDefaultFile are the shipped default

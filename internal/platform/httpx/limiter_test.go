@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 func newLimiter(config httpx.Config) (*httpx.Limiter, *clock.Fake) {

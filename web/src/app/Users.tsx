@@ -62,7 +62,7 @@ function MyTierSection({ tier }: { tier: Tier }) {
       <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
         <p className="text-xs text-ink-muted">
           How much of the interface you see -- each level includes the ones below it. Purely a
-          display preference: it never changes what MediaNexus does.
+          display preference: it never changes what Solarr does.
         </p>
         <div className="flex flex-wrap gap-2">
           {TIERS.map((option) => (

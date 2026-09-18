@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // DefaultBatchSize is how many files one emitted batch carries, matching ADR-3's

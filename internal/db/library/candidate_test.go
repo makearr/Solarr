@@ -3,7 +3,7 @@ package library_test
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/library"
 )
 
 func TestCandidates_UpsertRefreshesClaimedFactsOnARepeatedFind(t *testing.T) {

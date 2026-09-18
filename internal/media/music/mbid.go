@@ -5,7 +5,7 @@ package music
 import (
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // Provider strings for MusicBrainz identity. They are level-specific because a

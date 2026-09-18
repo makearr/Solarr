@@ -8,16 +8,16 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/identify/model"
-	"github.com/makearr/MediaNexus/internal/importing/inspect"
-	"github.com/makearr/MediaNexus/internal/moving/mover"
-	"github.com/makearr/MediaNexus/internal/moving/naming"
-	"github.com/makearr/MediaNexus/internal/moving/placement"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/importing/inspect"
+	"github.com/makearr/Solarr/internal/moving/mover"
+	"github.com/makearr/Solarr/internal/moving/naming"
+	"github.com/makearr/Solarr/internal/moving/placement"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // PlacementRoots is the settings-side facts CommitUnit's placement step

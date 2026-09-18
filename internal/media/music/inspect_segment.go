@@ -1,8 +1,8 @@
 package music
 
 import (
-	"github.com/makearr/MediaNexus/internal/identify/parse"
-	"github.com/makearr/MediaNexus/internal/importing/inspect"
+	"github.com/makearr/Solarr/internal/identify/parse"
+	"github.com/makearr/Solarr/internal/importing/inspect"
 )
 
 // InspectSegmentPlausible adapts parse.SegmentConfidence to inspect's own

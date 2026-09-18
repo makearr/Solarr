@@ -3,7 +3,7 @@ package model_test
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 func TestDecision_ScoreSumsComponents(t *testing.T) {

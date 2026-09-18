@@ -1908,7 +1908,7 @@ type RootFolder struct {
 	ReadOnly   *bool  `json:"read_only,omitempty"`
 	TotalBytes *int64 `json:"total_bytes,omitempty"`
 
-	// Writable Whether this process can write here. False is reported, never enforced: ownership on the host is the operator's to decide, and MediaNexus does not chown a library it did not create. Absent when it has not been probed.
+	// Writable Whether this process can write here. False is reported, never enforced: ownership on the host is the operator's to decide, and Solarr does not chown a library it did not create. Absent when it has not been probed.
 	Writable *bool `json:"writable,omitempty"`
 }
 

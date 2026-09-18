@@ -10,8 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/api/authz"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
 )
 
 // maxDrainBody bounds what a caller can make the server read for a drain request.
@@ -22,7 +22,7 @@ const maxDrainBody = 4 << 10
 var ErrNothingToDrain = errors.New("root folder has no files to drain")
 
 // DrainStarter starts or stops ADR-51's own drain over a root folder.
-// Defined here and implemented by the caller (cmd/medianexus), the same
+// Defined here and implemented by the caller (cmd/solarr), the same
 // reasoning every library-backed interface in this package already gives --
 // apiserver never imports internal/db/library or internal/moving/mover directly.
 type DrainStarter interface {

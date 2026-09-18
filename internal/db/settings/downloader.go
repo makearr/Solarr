@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/settingsdb"
-	"github.com/makearr/MediaNexus/internal/platform/config"
-	"github.com/makearr/MediaNexus/internal/platform/secrets"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
+	"github.com/makearr/Solarr/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
 // Downloader is one download client connection (stage 5, ADR-46/57): SABnzbd

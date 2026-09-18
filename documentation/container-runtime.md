@@ -28,7 +28,7 @@ Running them as root answers yes and the application then fails later as somebod
 ## What is owned, and what is not
 
 Owned: `config_dir`, `data_dir`, `db_dir`, `cache_dir`, `backup_dir` — the directories
-MediaNexus creates.
+Solarr creates.
 
 Never owned: the media roots. They hold the 500k files of ADR-22, they belong to the operator,
 and rewriting their ownership on every boot would be slow and presumptuous.
@@ -72,7 +72,7 @@ The default port is **5454** (`EXPOSE 5454`, `docker-compose.yml` maps `5454:545
 
 Resolution order, applied at startup and reported in the startup banner:
 
-1. `MEDIANEXUS_SERVER_PORT` — always wins. This is the recovery path out of a bad setting
+1. `SOLARR_SERVER_PORT` — always wins. This is the recovery path out of a bad setting
    written from the interface: if a value written from the Network screen locks the port to
    something unreachable, set this and restart.
 2. `settings.db`'s own policy — what the Network screen writes. Changing it there needs a
@@ -81,7 +81,7 @@ Resolution order, applied at startup and reported in the startup banner:
    has been written from the screen yet.
 4. `5454` — the default if none of the above set anything.
 
-The image's own `HEALTHCHECK` (`medianexus healthcheck`) re-derives this same order from
+The image's own `HEALTHCHECK` (`solarr healthcheck`) re-derives this same order from
 `config.yml` and `settings.db` independently on every run, so a port changed from the interface
 does not make the container report itself unhealthy.
 

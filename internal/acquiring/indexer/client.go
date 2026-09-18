@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // maxResponseBytes bounds what one caps or search call can make this

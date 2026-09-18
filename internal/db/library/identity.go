@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 // WorkIdentity is what a work should look like if one has to be created. Naming only

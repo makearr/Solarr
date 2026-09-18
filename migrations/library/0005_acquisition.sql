@@ -57,7 +57,7 @@ CREATE TABLE acquisition (
   client_fingerprint  TEXT,
   protocol            TEXT    NOT NULL
                       CHECK (protocol IN ('usenet', 'torrent', 'ddl', 'feed')),
-  -- ddl and feed only: MediaNexus is the client and does not survive a restart
+  -- ddl and feed only: Solarr is the client and does not survive a restart
   -- the way SABnzbd does, so progress is persisted and resumed by range (ADR-46).
   ddl_resolved_url    TEXT,
   ddl_bytes_done      INTEGER NOT NULL DEFAULT 0,

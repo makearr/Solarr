@@ -86,5 +86,5 @@ jobs:
       - name: Benchmarks
         # -p 1 and its own job: a latency assertion measures whatever else is running.
         env:
-          MEDIANEXUS_BENCH: "1"
+          SOLARR_BENCH: "1"
         run: go test -count=1 -p 1 -run=TestADR28 -bench=. -benchmem -timeout 60m ./...

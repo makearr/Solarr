@@ -3,7 +3,7 @@ package migrations_test
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/migrations"
+	"github.com/makearr/Solarr/migrations"
 )
 
 // A migration's DisablesForeignKeys comes from a marker comment inside its own file (checked into

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // ErrUnsupportedProvider reports a resolve request naming a provider this

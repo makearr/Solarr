@@ -3,8 +3,8 @@ package apiserver
 import (
 	"net/http"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/api/authz"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
 )
 
 // ListSettingDefinitions answers every registered setting (ADR-26, todo

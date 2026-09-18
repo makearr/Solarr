@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 // evaluateScoring is ADR-40 stage 3: the additive, tie-breaking-only score. Every

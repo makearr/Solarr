@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/identify/match"
+	"github.com/makearr/Solarr/internal/identify/match"
 )
 
 func TestEditPenalty(t *testing.T) {

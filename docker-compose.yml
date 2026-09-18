@@ -1,9 +1,9 @@
 # Example deployment. Copy, adjust the paths, and run `docker compose up -d`.
 # See documentation/container-runtime.md.
 services:
-  medianexus:
-    image: ghcr.io/makearr/medianexus:latest
-    container_name: medianexus
+  solarr:
+    image: ghcr.io/makearr/solarr:latest
+    container_name: solarr
     restart: unless-stopped
 
     environment:

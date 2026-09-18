@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/settingsdb"
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // ImportList is one per-library *Arr-shaped import list (ADR-38, todo 4.16).

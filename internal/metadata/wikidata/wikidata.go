@@ -15,7 +15,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // maxResponseBytes bounds one lookup. A Wikipedia summary extract is a few

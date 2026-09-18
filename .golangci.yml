@@ -73,7 +73,7 @@ linters:
       - path: internal/platform/fsx/(os|reflink)\.go
         linters: [forbidigo]
       # CLI commands write to stdout by definition.
-      - path: cmd/medianexus/
+      - path: cmd/solarr/
         linters: [forbidigo]
       # Tests drive the real filesystem and clock deliberately, and construct
       # http.Response values directly, which bodyclose cannot reason about.
@@ -89,4 +89,4 @@ formatters:
       simplify: true
     goimports:
       local-prefixes:
-        - github.com/makearr/MediaNexus
+        - github.com/makearr/Solarr

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 // fakeIdentifier is a strategy stub: it returns whatever the test built and counts

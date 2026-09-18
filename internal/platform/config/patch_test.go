@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // Against the real shipped template (create.go's own document, not a
@@ -29,7 +29,7 @@ func TestSetServerPort_RoundTripsThroughTheRealShippedTemplate(t *testing.T) {
 	// A spot check of comment text unique to the real template -- proof this
 	// ran against the actual shipped document, not a stand-in, and that the
 	// comment survived a full parse-and-reserialise round trip.
-	if !strings.Contains(text, "Run 'medianexus config check'") {
+	if !strings.Contains(text, "Run 'solarr config check'") {
 		t.Error("patched document lost a comment from the real template")
 	}
 	if _, err := config.Parse(patched); err != nil {

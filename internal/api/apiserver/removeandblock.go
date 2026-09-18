@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 )
 
 // RemoveAndBlocker runs ADR-53 section 3's compound action. Defined here and

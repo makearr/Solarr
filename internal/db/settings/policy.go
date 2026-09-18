@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/makearr/MediaNexus/internal/db/store/gen/settingsdb"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // KeyAuthRequired is whether a caller must present a credential at all. Policy

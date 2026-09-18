@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/library"
 )
 
 func registerOne(t *testing.T, physical library.Physical, relPath string) int64 {

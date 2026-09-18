@@ -6,8 +6,8 @@ import (
 	"io/fs"
 	"path/filepath"
 
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
-	"github.com/makearr/MediaNexus/internal/platform/privilege"
+	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/privilege"
 )
 
 // FilesystemRoots checks a candidate library root against a real filesystem.
@@ -70,7 +70,7 @@ func (r FilesystemRoots) probeWritable(directory string) error {
 
 // Readable reports whether this process can list a download folder's
 // contents. Read-only, unlike Writable's create-then-remove probe: a
-// download folder is never written to by MediaNexus (section 5.1) -- it is
+// download folder is never written to by Solarr (section 5.1) -- it is
 // someone else's client writing there, only ever watched from here.
 func (r FilesystemRoots) Readable(path string) error {
 	_, err := r.FS.ReadDir(path)

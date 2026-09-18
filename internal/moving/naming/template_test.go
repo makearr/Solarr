@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/moving/naming"
+	"github.com/makearr/Solarr/internal/moving/naming"
 )
 
 func mustCompile(t *testing.T, spec string) []naming.Segment {

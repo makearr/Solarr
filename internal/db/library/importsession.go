@@ -6,10 +6,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
-	"github.com/makearr/MediaNexus/internal/identify/model"
-	"github.com/makearr/MediaNexus/internal/importing/inspect"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/importing/inspect"
 )
 
 // Import session states (import_session.state, migration 0018).

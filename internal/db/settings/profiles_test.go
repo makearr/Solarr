@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/identify/model"
-	"github.com/makearr/MediaNexus/internal/identify/score"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/score"
 )
 
 func TestCreateQualityProfile_RoundTrips(t *testing.T) {

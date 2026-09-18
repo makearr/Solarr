@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 // ScanProgress is one root folder's sweep state (section 10.4). The zero value is a

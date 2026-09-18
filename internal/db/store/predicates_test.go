@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store"
 )
 
 func TestPredicates_NoFilterMeansNoClause(t *testing.T) {

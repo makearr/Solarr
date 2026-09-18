@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/jobsdb"
-	"github.com/makearr/MediaNexus/internal/jobs"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/jobsdb"
+	"github.com/makearr/Solarr/internal/jobs"
 )
 
 func statesOf(t *testing.T, queue *jobs.Queue, ids ...int64) []jobs.State {

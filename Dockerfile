@@ -27,7 +27,7 @@ ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
 ARG MILESTONE=
 # A fork overrides this: documentation/licence-compliance.md.
-ARG SOURCE_URL=https://github.com/makearr/MediaNexus
+ARG SOURCE_URL=https://github.com/makearr/Solarr
 
 WORKDIR /src
 
@@ -47,7 +47,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
         -X main.buildDate=${BUILD_DATE} \
         -X 'main.milestone=${MILESTONE}' \
         -X main.sourceURL=${SOURCE_URL}" \
-      -o /out/medianexus ./cmd/medianexus
+      -o /out/solarr ./cmd/solarr
 
 # Alpine rather than distroless: a self-hosted deployment gets debugged in place.
 FROM alpine:3
@@ -62,7 +62,7 @@ COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
 # the RUN the comment above avoided -- no way to apk-install without one.
 RUN apk add --no-cache ffmpeg chromaprint
 
-COPY --from=build /out/medianexus /usr/local/bin/medianexus
+COPY --from=build /out/solarr /usr/local/bin/solarr
 
 # So ownership reads as a name and the process has a passwd entry.
 COPY --from=rootfs /etc/passwd /etc/passwd
@@ -80,7 +80,7 @@ EXPOSE 5454
 # A subcommand of the same binary, so the image needs no curl. start-period
 # covers migrations on a large database.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD ["/usr/local/bin/medianexus", "healthcheck"]
+  CMD ["/usr/local/bin/solarr", "healthcheck"]
 
-ENTRYPOINT ["/usr/local/bin/medianexus"]
+ENTRYPOINT ["/usr/local/bin/solarr"]
 CMD ["serve"]

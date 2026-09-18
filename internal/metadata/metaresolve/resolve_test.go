@@ -3,7 +3,7 @@ package metaresolve_test
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/metadata/metaresolve"
+	"github.com/makearr/Solarr/internal/metadata/metaresolve"
 )
 
 func resolveField(t *testing.T, values []metaresolve.Value, priority []string, field string) (metaresolve.Resolved, bool) {

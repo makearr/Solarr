@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/acquiring/sabnzbd"
+	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
 )
 
 // queueFixtureJSON is a representative mode=queue response, trimmed to the

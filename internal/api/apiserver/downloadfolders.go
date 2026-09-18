@@ -8,15 +8,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/api/authz"
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // DownloadFolderChecker inspects a candidate download folder -- read-only,
 // unlike RootChecker's own write probe (section 5.1): a download folder is
-// never written to by MediaNexus, only watched.
+// never written to by Solarr, only watched.
 type DownloadFolderChecker interface {
 	// Validate refuses a path that cannot be a download folder at all.
 	Validate(path string) error

@@ -19,7 +19,7 @@ const settingsPackageDir = "internal/db/settings"
 // Seed*) and internal/jobs/cachebudget (a measurement sweep writing its own
 // probed facts) are deliberately out of scope: neither takes a caller-
 // supplied key.
-var settingsCallerDirs = []string{"internal/api/apiserver", "cmd/medianexus/adapters"}
+var settingsCallerDirs = []string{"internal/api/apiserver", "cmd/solarr/adapters"}
 
 // exemptScalarSetters are (*settings.Cache) methods that write a scalar
 // instance_setting row but are deliberately not gated by

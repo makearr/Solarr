@@ -7,8 +7,8 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // scheduleCronParser matches internal/jobs' own cronParser (five fields:

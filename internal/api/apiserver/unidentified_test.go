@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver"
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/platform/paginate"
+	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
 // fakeUnidentifiedReader mirrors fakeWorksReader: it records the root folder ids

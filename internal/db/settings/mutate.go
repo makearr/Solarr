@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/db/store/gen/settingsdb"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // Reference is one kind of thing holding on to an entity, and how many there are (§6).

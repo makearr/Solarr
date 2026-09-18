@@ -19,16 +19,16 @@ import (
 	"path"
 	"sync"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/identify/model"
-	"github.com/makearr/MediaNexus/internal/importing/inspect"
-	"github.com/makearr/MediaNexus/internal/importing/pack"
-	"github.com/makearr/MediaNexus/internal/jobs"
-	"github.com/makearr/MediaNexus/internal/media/music"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/events"
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/importing/inspect"
+	"github.com/makearr/Solarr/internal/importing/pack"
+	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/events"
+	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // JobType is the registered type of an import inspection run.
@@ -59,7 +59,7 @@ type Payload struct {
 // Policy is what this job needs from settings.db -- asked fresh per run
 // rather than cached, the same "ask, don't cache" discipline every other
 // job's settings dependency already uses. No internal/db/settings import
-// here (architecture §2) -- cmd/medianexus/adapters bridges both methods
+// here (architecture §2) -- cmd/solarr/adapters bridges both methods
 // over a real settings.Cache the same way it already bridges
 // ImportAutoCommitConfidence.
 type Policy interface {
@@ -325,7 +325,7 @@ func packItemStateFor(unit library.Unit) string {
 }
 
 // identifyParallelism bounds IDENTIFY's fan-out across one cluster's units.
-// IDENTIFY is pure CPU today (Search is wired nil in production, cmd/medianexus/app/job_import.go)
+// IDENTIFY is pure CPU today (Search is wired nil in production, cmd/solarr/app/job_import.go)
 // so this has no live payoff yet, but todo 4.21 asks for it built ahead of a
 // real Searcher -- the same mediatool.defaultParallelism figure, for the same
 // reason: a bound worth the same order of magnitude as the machine, not tied

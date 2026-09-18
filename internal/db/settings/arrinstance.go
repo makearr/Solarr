@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/settingsdb"
-	"github.com/makearr/MediaNexus/internal/platform/config"
-	"github.com/makearr/MediaNexus/internal/platform/secrets"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
+	"github.com/makearr/Solarr/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
 // ArrApp names one *Arr application client (todo 4.13, ADR-52). Only Lidarr

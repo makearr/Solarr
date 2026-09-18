@@ -3,7 +3,7 @@ package placement_test
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/moving/placement"
+	"github.com/makearr/Solarr/internal/moving/placement"
 )
 
 func baseCandidate(id int64) placement.RootCandidate {

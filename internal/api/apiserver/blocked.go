@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 )
 
 // BlockedContentLister answers ADR-53 part 2's own hash blocks. Defined here

@@ -27,7 +27,7 @@ var (
 	ErrNotAbsolute = errors.New("fsx: root must be an absolute path")
 )
 
-// FileInfo is the subset of stat MediaNexus uses. It is a value type rather than
+// FileInfo is the subset of stat Solarr uses. It is a value type rather than
 // os.FileInfo so an in-memory filesystem does not have to impersonate one.
 type FileInfo struct {
 	Name    string

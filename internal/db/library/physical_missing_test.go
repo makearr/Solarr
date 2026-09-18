@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/library"
 )
 
 // last_seen_at is what a rescan touches, whether the path is brand new or already

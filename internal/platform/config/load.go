@@ -9,7 +9,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // ErrNotFound reports a missing config.yml. It is not itself a failure: a first

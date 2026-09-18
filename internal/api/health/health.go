@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store"
 )
 
 // wedgedQueueDepth is the write-queue depth taken as evidence that the writer has stopped

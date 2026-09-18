@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 var (
@@ -22,7 +22,7 @@ var (
 )
 
 // SessionCookieName is the cookie the browser carries.
-const SessionCookieName = "medianexus_session"
+const SessionCookieName = "solarr_session"
 
 // DefaultSessionTTL is how long a login lasts.
 const DefaultSessionTTL = 30 * 24 * time.Hour
@@ -40,7 +40,7 @@ func NewSessions(encryptionKey []byte, cl clock.Clock, ttl time.Duration) *Sessi
 		ttl = DefaultSessionTTL
 	}
 	derived := hmac.New(sha256.New, encryptionKey)
-	derived.Write([]byte("medianexus:session:v1"))
+	derived.Write([]byte("solarr:session:v1"))
 	return &Sessions{key: derived.Sum(nil), clock: cl, ttl: ttl}
 }
 

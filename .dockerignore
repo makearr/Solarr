@@ -14,7 +14,7 @@ documentation
 web/node_modules
 internal/api/webui/dist
 Makefile.local
-medianexus
+solarr
 *.db
 *.db-wal
 *.db-shm

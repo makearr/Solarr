@@ -158,7 +158,7 @@ export function Sidebar() {
       }`}
     >
       <div className={`flex items-center gap-2 px-4 py-3 ${collapsed ? "justify-center" : "justify-between"}`}>
-        {!collapsed && <span className="text-sm font-semibold tracking-tight">MediaNexus</span>}
+        {!collapsed && <span className="text-sm font-semibold tracking-tight">Solarr</span>}
         <ThemeToggle />
       </div>
 

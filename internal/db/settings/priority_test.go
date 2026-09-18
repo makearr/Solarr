@@ -3,7 +3,7 @@ package settings_test
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 func TestPrioritySettings_DefaultsWhenNothingIsStored(t *testing.T) {

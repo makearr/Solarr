@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 func TestParse_DefaultsAreValidOnTheirOwn(t *testing.T) {
@@ -30,7 +30,7 @@ version: 1
 server:
   bind: 127.0.0.1
   port: 9000
-  base_url: /medianexus
+  base_url: /solarr
 paths:
   config_dir: /config
   data_dir: /config/data
@@ -200,7 +200,7 @@ func TestParse_ValueRules(t *testing.T) {
 		{"port out of range", "version: 1\nserver:\n  port: 70000\n", "server.port"},
 		{"port zero", "version: 1\nserver:\n  port: 0\n", "server.port"},
 		{"bind not an address", "version: 1\nserver:\n  bind: not-an-ip\n", "server.bind"},
-		{"base_url without a slash", "version: 1\nserver:\n  base_url: medianexus\n", "server.base_url"},
+		{"base_url without a slash", "version: 1\nserver:\n  base_url: solarr\n", "server.base_url"},
 		{"relative path", "version: 1\npaths:\n  db_dir: data/db\n", "paths.db_dir"},
 		{"unknown auth mode", "version: 1\nsecurity:\n  auth_mode: kerberos\n", "security.auth_mode"},
 		{"bad CIDR", "version: 1\nsecurity:\n  auth_mode: local\n  trusted_proxy_cidrs: [10.0.0.0/64]\n", "security.trusted_proxy_cidrs[0]"},

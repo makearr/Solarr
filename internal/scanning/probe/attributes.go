@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // losslessCodecs are ffprobe's own codec_name values for a lossless audio

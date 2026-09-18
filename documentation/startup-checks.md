@@ -27,7 +27,7 @@ three are ordinary deployment mistakes.
 operator's responsibility.**
 
 SQLite's WAL mode is explicitly unsupported on NFS and SMB, and their locking is
-unreliable enough to corrupt a database. MediaNexus says so — here, in ADR-2,
+unreliable enough to corrupt a database. Solarr says so — here, in ADR-2,
 and in the comments of the example `docker-compose.yml` — and does not detect
 it. Media, downloads and backups may live anywhere; only the databases care.
 

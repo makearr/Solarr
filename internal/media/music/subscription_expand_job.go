@@ -7,10 +7,10 @@ import (
 	"slices"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/jobs"
-	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // SubscriptionExpandJobType is the registered type of the discography

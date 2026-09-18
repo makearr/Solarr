@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 // Identity is the release's identity claim -- media identity, never polluted by

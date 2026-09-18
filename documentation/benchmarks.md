@@ -25,7 +25,7 @@ works carrying parts and a film satisfied by one file. Three details are deliber
   find at any scale.
 - **Timestamps come from a fixed epoch**, never the clock.
 
-Scale is `MEDIANEXUS_BENCH_FILES`, defaulting to 20,000 files so an ordinary `make test`
+Scale is `SOLARR_BENCH_FILES`, defaulting to 20,000 files so an ordinary `make test`
 stays quick. ADR-22's figure is 500,000:
 
 ```sh

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 func authedPost(t *testing.T, cookies []*http.Cookie, target, body string) *http.Request {

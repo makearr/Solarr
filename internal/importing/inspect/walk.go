@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // walk recurses to arbitrary depth under root and classifies every file it finds.

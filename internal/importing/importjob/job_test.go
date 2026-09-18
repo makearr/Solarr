@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/importing/importjob"
-	"github.com/makearr/MediaNexus/internal/jobs"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
-	"github.com/makearr/MediaNexus/migrations"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/importing/importjob"
+	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
+	"github.com/makearr/Solarr/migrations"
 
 	"log/slog"
 )
@@ -715,7 +715,7 @@ func TestJob_PicksUpACategoryAssignedMidRun(t *testing.T) {
 }
 
 // Two releases by the same artist, each its own top-level directory under
-// the walked source (the real scene-fixture shape /storage/test/medianexus/
+// the walked source (the real scene-fixture shape /storage/test/solarr/
 // music/ itself has for this exact artist) -- todo 4.11's own detector
 // groups them into one pack once the whole walk finishes, whatever each
 // unit's own decision turned out to be (both QUEUE here, no embedded MBID).

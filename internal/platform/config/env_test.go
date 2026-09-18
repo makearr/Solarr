@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 func env(pairs ...string) config.Lookup {
@@ -21,12 +21,12 @@ func env(pairs ...string) config.Lookup {
 
 func TestEnvName(t *testing.T) {
 	cases := map[string]string{
-		"server.port":              "MEDIANEXUS_SERVER_PORT",
-		"paths.db_dir":             "MEDIANEXUS_PATHS_DB_DIR",
-		"security.auth_mode":       "MEDIANEXUS_SECURITY_AUTH_MODE",
-		"database.cache_size_kb":   "MEDIANEXUS_DATABASE_CACHE_SIZE_KB",
-		"retention.decisions_full": "MEDIANEXUS_RETENTION_DECISIONS_FULL",
-		"mode":                     "MEDIANEXUS_MODE",
+		"server.port":              "SOLARR_SERVER_PORT",
+		"paths.db_dir":             "SOLARR_PATHS_DB_DIR",
+		"security.auth_mode":       "SOLARR_SECURITY_AUTH_MODE",
+		"database.cache_size_kb":   "SOLARR_DATABASE_CACHE_SIZE_KB",
+		"retention.decisions_full": "SOLARR_RETENTION_DECISIONS_FULL",
+		"mode":                     "SOLARR_MODE",
 	}
 	for path, want := range cases {
 		if got := config.EnvName(path); got != want {
@@ -38,7 +38,7 @@ func TestEnvName(t *testing.T) {
 func TestParseWithEnv_OverridesAFileValue(t *testing.T) {
 	parsed, err := config.ParseWithEnv(
 		[]byte("version: 1\nserver:\n  port: 8080\n"),
-		env("MEDIANEXUS_SERVER_PORT", "9999"))
+		env("SOLARR_SERVER_PORT", "9999"))
 	if err != nil {
 		t.Fatalf("ParseWithEnv: %v", err)
 	}
@@ -49,14 +49,14 @@ func TestParseWithEnv_OverridesAFileValue(t *testing.T) {
 
 // A string override is literal text, not YAML source: a value starting with a
 // YAML-special character (here *, a cron wildcard and also YAML's alias-reference
-// syntax) must not be misread as document syntax. Found live: MEDIANEXUS_BACKUP_
+// syntax) must not be misread as document syntax. Found live: SOLARR_BACKUP_
 // SCHEDULE="* * * * *" crashed startup with "undefined alias name" before this was
 // fixed to assign string-kind fields directly rather than route them through
 // yaml.Unmarshal.
 func TestParseWithEnv_ACronScheduleStartingWithAsteriskIsNotYAML(t *testing.T) {
 	parsed, err := config.ParseWithEnv(
 		[]byte("version: 1\n"),
-		env("MEDIANEXUS_BACKUP_SCHEDULE", "* * * * *"))
+		env("SOLARR_BACKUP_SCHEDULE", "* * * * *"))
 	if err != nil {
 		t.Fatalf("ParseWithEnv: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestParseWithEnv_OtherYAMLSpecialCharactersAreAlsoLiteral(t *testing.T) {
 	cases := []string{"&anchor-like", "!tag-like", "[not-a-list]", "{not-a-map}"}
 	for _, value := range cases {
 		parsed, err := config.ParseWithEnv(
-			[]byte("version: 1\n"), env("MEDIANEXUS_SECURITY_TRUSTED_PROXY_HEADER", value))
+			[]byte("version: 1\n"), env("SOLARR_SECURITY_TRUSTED_PROXY_HEADER", value))
 		if err != nil {
 			t.Fatalf("ParseWithEnv(%q): %v", value, err)
 		}
@@ -85,7 +85,7 @@ func TestParseWithEnv_OtherYAMLSpecialCharactersAreAlsoLiteral(t *testing.T) {
 func TestParseWithEnv_LeavesUnsetValuesAlone(t *testing.T) {
 	parsed, err := config.ParseWithEnv(
 		[]byte("version: 1\nserver:\n  port: 8080\n"),
-		env("MEDIANEXUS_LOGGING_LEVEL", "debug"))
+		env("SOLARR_LOGGING_LEVEL", "debug"))
 	if err != nil {
 		t.Fatalf("ParseWithEnv: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestParseWithEnv_LeavesUnsetValuesAlone(t *testing.T) {
 // ADR-44: an override is validated identically to a file value.
 func TestParseWithEnv_AnInvalidOverrideFailsLikeAFileValue(t *testing.T) {
 	_, fromFile := config.Parse([]byte("version: 1\nserver:\n  port: 70000\n"))
-	_, fromEnv := config.ParseWithEnv([]byte("version: 1\n"), env("MEDIANEXUS_SERVER_PORT", "70000"))
+	_, fromEnv := config.ParseWithEnv([]byte("version: 1\n"), env("SOLARR_SERVER_PORT", "70000"))
 
 	if fromFile == nil || fromEnv == nil {
 		t.Fatalf("expected both to fail; file=%v env=%v", fromFile, fromEnv)
@@ -111,23 +111,23 @@ func TestParseWithEnv_AnInvalidOverrideFailsLikeAFileValue(t *testing.T) {
 }
 
 func TestParseWithEnv_UnparseableOverrideNamesTheVariable(t *testing.T) {
-	_, err := config.ParseWithEnv([]byte("version: 1\n"), env("MEDIANEXUS_SERVER_PORT", "eighty"))
+	_, err := config.ParseWithEnv([]byte("version: 1\n"), env("SOLARR_SERVER_PORT", "eighty"))
 	if err == nil {
 		t.Fatal("a non-numeric port was accepted")
 	}
-	if !strings.Contains(err.Error(), "MEDIANEXUS_SERVER_PORT") {
+	if !strings.Contains(err.Error(), "SOLARR_SERVER_PORT") {
 		t.Errorf("the error does not name the variable that caused it:\n%s", err)
 	}
 }
 
 func TestParseWithEnv_ParsesTypedValues(t *testing.T) {
 	parsed, err := config.ParseWithEnv([]byte("version: 1\n"), env(
-		"MEDIANEXUS_DATABASE_BUSY_TIMEOUT", "45s",
-		"MEDIANEXUS_STORAGE_MIN_FREE_BYTES", "250GB",
-		"MEDIANEXUS_RETENTION_DECISIONS_FULL", "30d",
-		"MEDIANEXUS_MODE", "shadow",
-		"MEDIANEXUS_BACKUP_SETTINGS_ON_CHANGE", "false",
-		"MEDIANEXUS_SECURITY_TRUSTED_PROXY_CIDRS", "[10.0.0.0/8, 192.168.0.0/16]",
+		"SOLARR_DATABASE_BUSY_TIMEOUT", "45s",
+		"SOLARR_STORAGE_MIN_FREE_BYTES", "250GB",
+		"SOLARR_RETENTION_DECISIONS_FULL", "30d",
+		"SOLARR_MODE", "shadow",
+		"SOLARR_BACKUP_SETTINGS_ON_CHANGE", "false",
+		"SOLARR_SECURITY_TRUSTED_PROXY_CIDRS", "[10.0.0.0/8, 192.168.0.0/16]",
 	))
 	if err != nil {
 		t.Fatalf("ParseWithEnv: %v", err)
@@ -157,11 +157,11 @@ func TestParseWithEnv_ParsesTypedValues(t *testing.T) {
 // what a Docker deployment actually sets.
 func TestParseWithEnv_DocumentedPathAliasesWork(t *testing.T) {
 	parsed, err := config.ParseWithEnv([]byte("version: 1\n"), env(
-		"MEDIANEXUS_CONFIG_DIR", "/srv/config",
-		"MEDIANEXUS_DB_DIR", "/srv/db",
-		"MEDIANEXUS_DATA_DIR", "/srv/data",
-		"MEDIANEXUS_CACHE_DIR", "/srv/cache",
-		"MEDIANEXUS_BACKUP_DIR", "/srv/backups",
+		"SOLARR_CONFIG_DIR", "/srv/config",
+		"SOLARR_DB_DIR", "/srv/db",
+		"SOLARR_DATA_DIR", "/srv/data",
+		"SOLARR_CACHE_DIR", "/srv/cache",
+		"SOLARR_BACKUP_DIR", "/srv/backups",
 	))
 	if err != nil {
 		t.Fatalf("ParseWithEnv: %v", err)
@@ -178,8 +178,8 @@ func TestParseWithEnv_ConflictingAliasAndCanonicalNameIsAnError(t *testing.T) {
 	// A container with two variables disagreeing about where the database lives
 	// should say so, not silently pick one.
 	_, err := config.ParseWithEnv([]byte("version: 1\n"), env(
-		"MEDIANEXUS_DB_DIR", "/srv/db",
-		"MEDIANEXUS_PATHS_DB_DIR", "/other/db",
+		"SOLARR_DB_DIR", "/srv/db",
+		"SOLARR_PATHS_DB_DIR", "/other/db",
 	))
 	if err == nil {
 		t.Fatal("two variables disagreeing about paths.db_dir were accepted")
@@ -191,8 +191,8 @@ func TestParseWithEnv_ConflictingAliasAndCanonicalNameIsAnError(t *testing.T) {
 
 func TestParseWithEnv_AgreeingAliasAndCanonicalNameIsFine(t *testing.T) {
 	parsed, err := config.ParseWithEnv([]byte("version: 1\n"), env(
-		"MEDIANEXUS_DB_DIR", "/srv/db",
-		"MEDIANEXUS_PATHS_DB_DIR", "/srv/db",
+		"SOLARR_DB_DIR", "/srv/db",
+		"SOLARR_PATHS_DB_DIR", "/srv/db",
 	))
 	if err != nil {
 		t.Fatalf("ParseWithEnv: %v", err)
@@ -209,7 +209,7 @@ func TestParseWithEnv_AgreeingAliasAndCanonicalNameIsFine(t *testing.T) {
 // unconditionally regardless of what made the key invalid.
 func TestParseWithEnv_AMalformedSecretPassesThroughLiterally(t *testing.T) {
 	parsed, err := config.ParseWithEnv([]byte("version: 1\n"), env(
-		"MEDIANEXUS_SECURITY_ENCRYPTION_KEY", "S3CR3T-not-a-valid-key",
+		"SOLARR_SECURITY_ENCRYPTION_KEY", "S3CR3T-not-a-valid-key",
 	))
 	if err != nil {
 		t.Fatalf("ParseWithEnv: %v", err)

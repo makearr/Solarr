@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/identify/priority"
+	"github.com/makearr/Solarr/internal/identify/priority"
 )
 
 var epoch = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)

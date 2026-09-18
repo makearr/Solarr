@@ -7,7 +7,7 @@ package musicbrainz
 
 import "context"
 
-// ReleaseGroup is work-level data: MediaNexus's work_external_id provider
+// ReleaseGroup is work-level data: Solarr's work_external_id provider
 // "musicbrainz:release-group" (internal/media/music).
 type ReleaseGroup struct {
 	MBID  string

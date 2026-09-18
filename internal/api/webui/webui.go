@@ -92,7 +92,7 @@ func explainMissingBundle(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusServiceUnavailable)
 	_, _ = w.Write([]byte(`<!doctype html>
 <meta charset="utf-8">
-<title>MediaNexus</title>
+<title>Solarr</title>
 <body style="font-family: system-ui, sans-serif; max-width: 34rem; margin: 4rem auto; padding: 0 1rem">
 <h1 style="font-size: 1.1rem">The web interface is not in this binary</h1>
 <p>The API is running normally; only the compiled interface is absent. This is a

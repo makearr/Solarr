@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver"
-	"github.com/makearr/MediaNexus/internal/api/authz"
-	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 func int64Ptr(v int64) *int64 { return &v }

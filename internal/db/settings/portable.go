@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/makearr/MediaNexus/internal/db/store/gen/settingsdb"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // Document is configuration a person can read, diff and share (F9). Policy
@@ -321,7 +321,7 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 			Path:  "version",
 			Value: fmt.Sprint(d.Version),
 			Expectation: fmt.Sprintf(
-				"a version this build understands (%d or lower); upgrade MediaNexus to read it",
+				"a version this build understands (%d or lower); upgrade Solarr to read it",
 				DocumentVersion),
 		})
 	}

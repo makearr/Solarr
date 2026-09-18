@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/api/authz"
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // CacheBudget is ADR-60's own policy: a total byte ceiling, a per-entry age
@@ -32,7 +32,7 @@ type CacheReport struct {
 
 // CacheManager exposes ADR-60's cache budget, its last measurement, and the
 // manual clear to the API. Defined here and implemented by a
-// cmd/medianexus adapter over internal/jobs/cachebudget.Sweep and
+// cmd/solarr adapter over internal/jobs/cachebudget.Sweep and
 // internal/db/settings.Cache, the same reasoning WorksReader's own doc comment
 // gives for every other reader interface in this package.
 type CacheManager interface {

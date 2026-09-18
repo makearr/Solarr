@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"unicode"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // KeyBrainzMashUserAgent is the agent the BrainzMash source sends, read live on every request.

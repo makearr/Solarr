@@ -12,15 +12,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/api/authz"
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/identify/model"
-	"github.com/makearr/MediaNexus/internal/platform/paginate"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
 // NavigationProvider resolves a media type's ADR-54 declared levels. Defined
-// here and implemented by the caller (cmd/medianexus), the same reason
+// here and implemented by the caller (cmd/solarr), the same reason
 // WorksReader is: this package never imports internal/media/music directly.
 type NavigationProvider interface {
 	LevelsFor(mediaType string) ([]model.Level, bool)

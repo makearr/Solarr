@@ -111,7 +111,7 @@ export function StatusBar() {
             </span>
           )}
           {about.data?.version && (
-            <a href="/about" className="font-mono hover:text-ink hover:underline" title="About MediaNexus">
+            <a href="/about" className="font-mono hover:text-ink hover:underline" title="About Solarr">
               v{about.data.version}
             </a>
           )}

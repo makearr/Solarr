@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 // EditionDetail is one edition with the external ids recorded against it.

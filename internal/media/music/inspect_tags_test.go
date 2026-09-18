@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/media/music"
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // fakeTagTool answers ReadTags from a fixed table, keyed by the exact path

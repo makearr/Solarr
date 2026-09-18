@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // defaultTimeout bounds a single request. Indexer searches are the slow case and
@@ -19,12 +19,12 @@ const defaultTimeout = 30 * time.Second
 const defaultMaxRedirects = 5
 
 // sourceURL is where the corresponding source lives (AGPL §13).
-const sourceURL = "https://github.com/makearr/MediaNexus"
+const sourceURL = "https://github.com/makearr/Solarr"
 
 // UserAgent builds the identifying header. MusicBrainz blocks generic agents, so
 // this is a functional requirement rather than politeness.
 func UserAgent(version string) string {
-	return fmt.Sprintf("MediaNexus/%s ( %s )", version, sourceURL)
+	return fmt.Sprintf("Solarr/%s ( %s )", version, sourceURL)
 }
 
 // ClientConfig describes one provider's client.

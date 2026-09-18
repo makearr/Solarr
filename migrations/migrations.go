@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store"
 )
 
 //go:embed settings/*.sql jobs/*.sql library/*.sql metadata/*.sql

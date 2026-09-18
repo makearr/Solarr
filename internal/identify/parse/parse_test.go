@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/identify/parse"
+	"github.com/makearr/Solarr/internal/identify/parse"
 )
 
 func TestNormalize(t *testing.T) {

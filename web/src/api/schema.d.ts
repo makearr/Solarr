@@ -110,7 +110,7 @@ export interface paths {
         };
         /**
          * The address this host appears to come from.
-         * @description What the outside world sees when MediaNexus connects out, which is the number that matters for whether traffic is leaving past a VPN. Resolved by asking a configurable echo service through httpx, cached, and absent rather than guessed when the check is disabled or has not succeeded. Per-indexer proxies (ADR-47) can egress differently; this is the app's own path out.
+         * @description What the outside world sees when Solarr connects out, which is the number that matters for whether traffic is leaving past a VPN. Resolved by asking a configurable echo service through httpx, cached, and absent rather than guessed when the check is disabled or has not succeeded. Per-indexer proxies (ADR-47) can egress differently; this is the app's own path out.
          */
         get: operations["getEgress"];
         put?: never;
@@ -403,7 +403,7 @@ export interface paths {
         put?: never;
         /**
          * Watch a folder upstream download clients write to. Administrator only.
-         * @description The path is probed for existence and readability before it is accepted, the same as a root folder's own write probe -- a typo or an unmounted volume surfaces here rather than silently sitting unreadable. Never written to by MediaNexus (section 5.1): readability is checked, not writability.
+         * @description The path is probed for existence and readability before it is accepted, the same as a root folder's own write probe -- a typo or an unmounted volume surfaces here rather than silently sitting unreadable. Never written to by Solarr (section 5.1): readability is checked, not writability.
          */
         post: operations["addDownloadFolder"];
         delete?: never;
@@ -1011,7 +1011,7 @@ export interface paths {
         };
         /**
          * The instance's own configured root folders, read live. Administrator only.
-         * @description For the setup wizard's own "import the root folder(s)" step: the paths as *this* instance's own container sees them, not translated against MediaNexus's own mounts -- creating a MediaNexus root folder at one of them only succeeds when the two containers share the same mount layout, the common case for sibling containers in one compose file. A path that does not exist here is refused the same way any other POST /rootfolders is, not silently accepted.
+         * @description For the setup wizard's own "import the root folder(s)" step: the paths as *this* instance's own container sees them, not translated against Solarr's own mounts -- creating a Solarr root folder at one of them only succeeds when the two containers share the same mount layout, the common case for sibling containers in one compose file. A path that does not exist here is refused the same way any other POST /rootfolders is, not silently accepted.
          */
         get: operations["listArrInstanceRootFolders"];
         put?: never;
@@ -2389,7 +2389,7 @@ export interface components {
             label?: string;
             /** @description An unmounted root counts as unavailable, never as free space (Invariant 20a). */
             online: boolean;
-            /** @description Whether this process can write here. False is reported, never enforced: ownership on the host is the operator's to decide, and MediaNexus does not chown a library it did not create. Absent when it has not been probed. */
+            /** @description Whether this process can write here. False is reported, never enforced: ownership on the host is the operator's to decide, and Solarr does not chown a library it did not create. Absent when it has not been probed. */
             writable?: boolean;
             /** @description Curated policy, not a probed fact: blocks new placement, upgrade-in-place and tag write-back, and blocks renaming unless allow_rename is also set (Invariant 69). */
             read_only?: boolean;
@@ -4124,7 +4124,7 @@ export interface operations {
             /** @description Signed in. The session cookie is set on this response. */
             200: {
                 headers: {
-                    /** @description The `medianexus_session` cookie. */
+                    /** @description The `solarr_session` cookie. */
                     "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
@@ -4198,7 +4198,7 @@ export interface operations {
             /** @description Created, and signed in. The session cookie is set here. */
             201: {
                 headers: {
-                    /** @description The `medianexus_session` cookie. */
+                    /** @description The `solarr_session` cookie. */
                     "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };

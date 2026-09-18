@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // DirectName is the ADR-13 provider bucket for musicbrainz.org itself -- the

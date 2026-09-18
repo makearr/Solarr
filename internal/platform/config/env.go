@@ -10,16 +10,16 @@ import (
 )
 
 // EnvPrefix namespaces every override.
-const EnvPrefix = "MEDIANEXUS_"
+const EnvPrefix = "SOLARR_"
 
 // pathAliases are the short environment variable names §14 documents for the directory
 // settings, because those are the ones a Docker deployment actually sets.
 var pathAliases = map[string]string{
-	"MEDIANEXUS_CONFIG_DIR": "paths.config_dir",
-	"MEDIANEXUS_DATA_DIR":   "paths.data_dir",
-	"MEDIANEXUS_DB_DIR":     "paths.db_dir",
-	"MEDIANEXUS_CACHE_DIR":  "paths.cache_dir",
-	"MEDIANEXUS_BACKUP_DIR": "paths.backup_dir",
+	"SOLARR_CONFIG_DIR": "paths.config_dir",
+	"SOLARR_DATA_DIR":   "paths.data_dir",
+	"SOLARR_DB_DIR":     "paths.db_dir",
+	"SOLARR_CACHE_DIR":  "paths.cache_dir",
+	"SOLARR_BACKUP_DIR": "paths.backup_dir",
 }
 
 // EnvName returns the generated variable name for a dotted setting path.

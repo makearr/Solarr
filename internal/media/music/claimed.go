@@ -6,9 +6,9 @@ import (
 	"path"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/identify/parse"
-	"github.com/makearr/MediaNexus/internal/scanning/scan"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/identify/parse"
+	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
 // recordClaimedAttributes writes ADR-39's claimed half (todo 4.2) for every

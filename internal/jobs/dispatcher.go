@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // DefaultTick is how often the dispatcher looks for work.

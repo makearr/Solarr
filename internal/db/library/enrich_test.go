@@ -3,8 +3,8 @@ package library_test
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 func createPlaceholderEdition(t *testing.T, opened *librarydb.Queries, identity library.Identity, releaseGroupID, releaseID string) (workID, editionID int64) {

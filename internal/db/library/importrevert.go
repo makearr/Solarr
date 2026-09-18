@@ -7,7 +7,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 // ErrSessionNotRevertible reports that sessionID is not in a state Revert

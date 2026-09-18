@@ -73,7 +73,7 @@ sitting beside `VERSION`. It does not change any version component. The name sho
 
 - In the GitHub release title: `26.09.3 — music, usenet`
 - On the About page and `/api/v1/about`, next to the version, when one is set
-- In `medianexus version`'s CLI output
+- In `solarr version`'s CLI output
 
 A milestone is a claim that **something works**, named by the person deciding it works — not a
 counter, and nothing advances it automatically. Naming a new milestone (or renaming the current

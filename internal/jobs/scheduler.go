@@ -8,7 +8,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // cronParser matches internal/platform/config's own validator and store.BackupSchedule's,
@@ -20,7 +20,7 @@ var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month 
 // twice").
 var ErrAlreadyRunning = errors.New("jobs: this task is already running")
 
-// ErrUnknownTask is a caller (the API, via a cmd/medianexus adapter) asking
+// ErrUnknownTask is a caller (the API, via a cmd/solarr adapter) asking
 // about a task key TaskRegistry never registered.
 var ErrUnknownTask = errors.New("jobs: unknown task")
 
@@ -30,7 +30,7 @@ var ErrNoFullMode = errors.New("jobs: this task has no full-run mode")
 
 // ScheduleSource resolves a task's live, current cadence and enabled flag,
 // re-read every tick so a setting change takes effect without a restart.
-// Implemented by a cmd/medianexus adapter over internal/db/settings.Cache --
+// Implemented by a cmd/solarr adapter over internal/db/settings.Cache --
 // this package never imports internal/db/settings (architecture §2).
 type ScheduleSource interface {
 	// Cadence returns the task's effective cron expression: an override if

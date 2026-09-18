@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // roundTripper is the fake provider. ADR-17 requires the fakes to model failure,
@@ -118,7 +118,7 @@ func TestClient_SendsTheIdentifyingUserAgent(t *testing.T) {
 
 	// MusicBrainz blocks generic agents, so this is functional (ADR-29).
 	got := transport.requests[0].Header.Get("User-Agent")
-	if want := "MediaNexus/1.2.3 ( https://github.com/makearr/MediaNexus )"; got != want {
+	if want := "Solarr/1.2.3 ( https://github.com/makearr/Solarr )"; got != want {
 		t.Errorf("User-Agent = %q, want %q", got, want)
 	}
 }

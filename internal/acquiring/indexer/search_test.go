@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/acquiring/indexer"
 )
 
 // searchFixtureXML is a representative t=search response -- RSS 2.0 with

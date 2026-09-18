@@ -11,12 +11,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/api/authz"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
 )
 
 // ImportSessionLister reads ADR-48 import sessions and their units. Defined
-// here and implemented by the caller (cmd/medianexus), the same reasoning
+// here and implemented by the caller (cmd/solarr), the same reasoning
 // WorksReader's own doc comment gives for every library-backed interface --
 // apiserver never imports internal/db/library directly.
 type ImportSessionLister interface {

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver"
-	"github.com/makearr/MediaNexus/internal/platform/events"
+	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/platform/events"
 )
 
 // frame is one parsed SSE message.

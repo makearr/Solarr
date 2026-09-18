@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/metadata/metacache"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/metadata/metacache"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // Priority is ADR-29's request-priority ladder: within one source's rate-limit bucket a

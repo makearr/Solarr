@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/settingsdb"
-	"github.com/makearr/MediaNexus/internal/platform/config"
-	"github.com/makearr/MediaNexus/internal/platform/secrets"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
+	"github.com/makearr/Solarr/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
 // Indexer is one search provider connection (stage 5, ADR-37/43/47): Newznab

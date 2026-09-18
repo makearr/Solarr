@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 )
 
 // Trimmed from a real api.lidarr.audio/api/v0.4/album response (fetched live

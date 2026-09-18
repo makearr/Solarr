@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 func resolvePersonNamed(t *testing.T, people library.People, externalID, name, sortName string) int64 {

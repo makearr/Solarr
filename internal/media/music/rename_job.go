@@ -5,20 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/jobs"
-	"github.com/makearr/MediaNexus/internal/moving/mover"
-	"github.com/makearr/MediaNexus/internal/moving/moverjob"
-	"github.com/makearr/MediaNexus/internal/moving/placement"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/moving/mover"
+	"github.com/makearr/Solarr/internal/moving/moverjob"
+	"github.com/makearr/Solarr/internal/moving/placement"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // RenameRoots resolves one root folder's own policy and filesystem facts.
 // Only the type is taken from internal/db/settings (the same lightweight use
 // internal/scanning/scan's own Roots interface already makes) -- actual cache access
 // stays behind this interface, satisfied by the same adapter
-// cmd/medianexus already built for internal/moving/drainjob.Roots, a strict
+// cmd/solarr already built for internal/moving/drainjob.Roots, a strict
 // superset of this one method.
 type RenameRoots interface {
 	RootFolder(id int64) (settings.RootFolder, bool)

@@ -8,10 +8,10 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/api/auth"
-	"github.com/makearr/MediaNexus/internal/api/authz"
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/api/auth"
+	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // APIKeyHeader is the non-interactive credential header.

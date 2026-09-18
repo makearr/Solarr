@@ -9,15 +9,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/api/authz"
-	"github.com/makearr/MediaNexus/internal/jobs"
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // Scheduler exposes ADR-59's task registry, live settings and run-state to
 // the API, and a manual trigger. Defined here and implemented by a
-// cmd/medianexus adapter over internal/jobs.TaskRegistry/ScheduleStates and
+// cmd/solarr adapter over internal/jobs.TaskRegistry/ScheduleStates and
 // internal/db/settings.Cache, the same reasoning WorksReader's own doc comment
 // gives for every other reader interface in this package.
 type Scheduler interface {

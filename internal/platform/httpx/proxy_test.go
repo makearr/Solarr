@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 func mustParseURL(t *testing.T, raw string) *url.URL {

@@ -1,5 +1,5 @@
 // Package egress reports the address this host appears to connect from. It is
-// the only outbound call MediaNexus makes without being asked, which is why it
+// the only outbound call Solarr makes without being asked, which is why it
 // is switchable off and names the service that answered.
 package egress
 
@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // maxResponse bounds what an echo service can make this process read. An address

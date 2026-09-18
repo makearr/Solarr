@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 // gateStatus separates "actively violates the requirement" from "not measured

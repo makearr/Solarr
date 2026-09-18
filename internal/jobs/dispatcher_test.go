@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/jobs"
+	"github.com/makearr/Solarr/internal/jobs"
 )
 
 func TestDispatcher_RunsQueuedWork(t *testing.T) {

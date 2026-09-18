@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver"
-	"github.com/makearr/MediaNexus/internal/api/authz"
-	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // fakeChecker makes either probe fail without arranging a broken database.
@@ -30,7 +30,7 @@ func newServer(t *testing.T, checker apiserver.Checker) *apiserver.Server {
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
 		Build: apiserver.BuildInfo{
 			Version: "1.2.3", Commit: "abc1234", BuildDate: "2026-03-01T00:00:00Z",
-			SourceURL: "https://github.com/makearr/MediaNexus", License: "AGPL-3.0-or-later",
+			SourceURL: "https://github.com/makearr/Solarr", License: "AGPL-3.0-or-later",
 		},
 		Checker: checker,
 		Logger:  slog.New(slog.DiscardHandler),
@@ -142,14 +142,14 @@ func TestAbout_IsUnauthenticatedAndNamesTheExactBuild(t *testing.T) {
 
 func TestRoutes_HonourTheBaseURL(t *testing.T) {
 	server, err := apiserver.New(apiserver.Config{
-		Bind: "127.0.0.1", Port: 0, BaseURL: "/medianexus/",
+		Bind: "127.0.0.1", Port: 0, BaseURL: "/solarr/",
 		Checker: fakeChecker{}, Logger: slog.New(slog.DiscardHandler),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 
-	if got := get(t, server, "/medianexus/api/v1/health").Code; got != http.StatusOK {
+	if got := get(t, server, "/solarr/api/v1/health").Code; got != http.StatusOK {
 		t.Errorf("health under the base URL = %d, want 200", got)
 	}
 	if got := get(t, server, "/api/v1/health").Code; got != http.StatusNotFound {

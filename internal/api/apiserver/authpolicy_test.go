@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // ADR-26 (todo 4.14): "a setting not in the registry cannot be written." An

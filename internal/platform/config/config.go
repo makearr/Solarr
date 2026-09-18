@@ -37,7 +37,7 @@ type Network struct {
 }
 
 // PublicIPCheck asks a third party what address this host connects from. It is
-// the only unprompted outbound call MediaNexus makes, so it is switchable off
+// the only unprompted outbound call Solarr makes, so it is switchable off
 // and names the service it asks.
 type PublicIPCheck struct {
 	Enabled  bool     `yaml:"enabled"`

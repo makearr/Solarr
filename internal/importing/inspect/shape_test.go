@@ -3,7 +3,7 @@ package inspect_test
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/importing/inspect"
+	"github.com/makearr/Solarr/internal/importing/inspect"
 )
 
 // A unit of exactly one media file is a single, never an album.

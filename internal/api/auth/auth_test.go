@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/api/auth"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/api/auth"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 const password = "correct horse battery staple"

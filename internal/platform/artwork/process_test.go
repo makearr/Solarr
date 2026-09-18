@@ -9,7 +9,7 @@ import (
 
 	xwebp "golang.org/x/image/webp"
 
-	"github.com/makearr/MediaNexus/internal/platform/artwork"
+	"github.com/makearr/Solarr/internal/platform/artwork"
 )
 
 // syntheticCover builds a non-trivial image -- a smooth gradient, not a flat

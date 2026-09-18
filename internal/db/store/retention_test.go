@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store"
 )
 
 // listNames returns just the base names ListBackups found, for readable assertions.

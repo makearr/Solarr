@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/makearr/MediaNexus/internal/identify/match"
-	"github.com/makearr/MediaNexus/internal/identify/model"
-	"github.com/makearr/MediaNexus/internal/identify/parse"
-	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/identify/match"
+	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/parse"
+	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // StrategyParse is this strategy's name in Identification.Strategy, ADR-24's fifth

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/identify/parse"
+	"github.com/makearr/Solarr/internal/identify/parse"
 )
 
 // corpusCase is one line of testdata/releases/*.jsonl -- ADR-18's golden corpus.

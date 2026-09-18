@@ -1,4 +1,4 @@
-# MediaNexus documentation
+# Solarr documentation
 
 The project wiki. Anything needing more than a brief comment belongs here, in an appropriately
 named file, linked from the code by path.

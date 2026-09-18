@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // minBackupsKept is the retention floor regardless of configuration -- "minimum 3

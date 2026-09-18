@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/config"
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // An empty environment, so these tests do not depend on the runner's.
@@ -183,7 +183,7 @@ func TestCreate_TemplateDocumentsTheEnvironmentOverrides(t *testing.T) {
 	}
 	document := readAll(t, fsys, "/config/config.yml")
 
-	for _, want := range []string{"MEDIANEXUS_SERVER_PORT", "MEDIANEXUS_DB_DIR", "medianexus config check"} {
+	for _, want := range []string{"SOLARR_SERVER_PORT", "SOLARR_DB_DIR", "solarr config check"} {
 		if !strings.Contains(document, want) {
 			t.Errorf("the generated file does not mention %q", want)
 		}
@@ -199,8 +199,8 @@ func TestCreate_AppliesEnvironmentOverridesOnTheFirstRun(t *testing.T) {
 	}
 
 	environment := map[string]string{
-		"MEDIANEXUS_DB_DIR":      "/srv/db",
-		"MEDIANEXUS_SERVER_PORT": "9999",
+		"SOLARR_DB_DIR":      "/srv/db",
+		"SOLARR_SERVER_PORT": "9999",
 	}
 	lookup := func(key string) (string, bool) {
 		value, found := environment[key]
@@ -234,7 +234,7 @@ func TestCreate_AppliesEnvironmentOverridesOnTheFirstRun(t *testing.T) {
 func TestCreate_MakesTheDirectoryItWritesInto(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
 
-	const path = "/srv/medianexus/config/config.yml"
+	const path = "/srv/solarr/config/config.yml"
 	if _, err := config.Create(fsys, path, fixedKey, noEnv); err != nil {
 		t.Fatalf("Create: %v", err)
 	}

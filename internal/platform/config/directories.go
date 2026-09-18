@@ -7,8 +7,8 @@ import (
 	"io/fs"
 	"path/filepath"
 
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
-	"github.com/makearr/MediaNexus/internal/platform/privilege"
+	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/privilege"
 )
 
 // directoryPermissions is what a created directory gets. The process umask
@@ -40,7 +40,7 @@ func (c Config) DirectoryRequirements() []DirectoryRequirement {
 	}
 }
 
-// ManagedDirectories are the paths MediaNexus may take ownership of. Never the
+// ManagedDirectories are the paths Solarr may take ownership of. Never the
 // media roots. See documentation/container-runtime.md.
 func (c Config) ManagedDirectories() []string {
 	requirements := c.DirectoryRequirements()
@@ -94,7 +94,7 @@ func probeWritable(fsys fsx.FS, directory string) error {
 	probe := filepath.Join(directory, probeName)
 
 	if err := fsx.WriteAtomic(fsys, probe, func(w io.Writer) error {
-		_, err := w.Write([]byte("mediaNexus write probe\n"))
+		_, err := w.Write([]byte("solarr write probe\n"))
 		return err
 	}); err != nil {
 		return err

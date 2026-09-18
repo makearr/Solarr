@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"io/fs"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 // Get answers one quarantine entry by id. A missing id surfaces

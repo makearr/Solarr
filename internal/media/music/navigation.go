@@ -1,6 +1,6 @@
 package music
 
-import "github.com/makearr/MediaNexus/internal/identify/model"
+import "github.com/makearr/Solarr/internal/identify/model"
 
 // Level keys, stable across releases: a URL, a last-visited preference and an
 // API call all reference these, so renaming one is a compatibility break.

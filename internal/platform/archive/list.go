@@ -14,7 +14,7 @@ import (
 	"github.com/nwaples/rardecode/v2"
 	"github.com/ulikunitz/xz"
 
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // List reads path's entries without writing anything (ADR-49: "no writes,

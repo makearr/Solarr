@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/makearr/MediaNexus/internal/api/authz"
+	"github.com/makearr/Solarr/internal/api/authz"
 )
 
 // WriteErrorForTest exposes the domain-error mapping to the package's external test.

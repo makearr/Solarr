@@ -13,8 +13,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/metadatadb"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/metadatadb"
 )
 
 // ErrNotFound reports a cache miss.

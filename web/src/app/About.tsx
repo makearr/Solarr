@@ -44,7 +44,7 @@ export function About() {
       <header className="flex shrink-0 items-center justify-between border-b border-border-subtle
                          bg-surface px-4 py-3">
         <a href="/" className="text-sm font-semibold tracking-tight hover:underline">
-          MediaNexus
+          Solarr
         </a>
         <ThemeToggle />
       </header>
@@ -104,7 +104,7 @@ export function About() {
             )}
 
             <p className="mt-4 text-xs text-ink-muted">
-              MediaNexus is free software: you can redistribute it and/or modify it under the
+              Solarr is free software: you can redistribute it and/or modify it under the
               terms of the GNU Affero General Public License as published by the Free Software
               Foundation. The link above points at the exact source this build was made from.
             </p>

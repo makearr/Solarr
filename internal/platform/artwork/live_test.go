@@ -9,7 +9,7 @@ import (
 
 	xwebp "golang.org/x/image/webp"
 
-	"github.com/makearr/MediaNexus/internal/platform/artwork"
+	"github.com/makearr/Solarr/internal/platform/artwork"
 )
 
 // coverArtURL is KI Pecezinu's real front cover, fetched live during design of

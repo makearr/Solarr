@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/identify/match"
-	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/identify/match"
+	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 )
 
 // Album matching scores a folder against whole tracklists: documentation/music-identification.md.

@@ -2,7 +2,7 @@ openapi: 3.0.3
 
 # This document describes the API that EXISTS, not the one planned (section 13.2).
 info:
-  title: MediaNexus
+  title: Solarr
   description: Media management, discovery and acquisition.
   version: 0.0.1
   license:
@@ -117,7 +117,7 @@ paths:
       tags: [system]
       summary: The address this host appears to come from.
       description: >-
-        What the outside world sees when MediaNexus connects out, which is the
+        What the outside world sees when Solarr connects out, which is the
         number that matters for whether traffic is leaving past a VPN. Resolved
         by asking a configurable echo service through httpx, cached, and absent
         rather than guessed when the check is disabled or has not succeeded.
@@ -199,7 +199,7 @@ paths:
           description: Signed in. The session cookie is set on this response.
           headers:
             Set-Cookie:
-              description: The `medianexus_session` cookie.
+              description: The `solarr_session` cookie.
               schema: { type: string }
           content:
             application/json:
@@ -266,7 +266,7 @@ paths:
           description: Created, and signed in. The session cookie is set here.
           headers:
             Set-Cookie:
-              description: The `medianexus_session` cookie.
+              description: The `solarr_session` cookie.
               schema: { type: string }
           content:
             application/json:
@@ -591,7 +591,7 @@ paths:
         The path is probed for existence and readability before it is
         accepted, the same as a root folder's own write probe -- a typo or
         an unmounted volume surfaces here rather than silently sitting
-        unreadable. Never written to by MediaNexus (section 5.1):
+        unreadable. Never written to by Solarr (section 5.1):
         readability is checked, not writability.
       requestBody:
         required: true
@@ -1567,7 +1567,7 @@ paths:
       description: >-
         For the setup wizard's own "import the root folder(s)" step: the
         paths as *this* instance's own container sees them, not translated
-        against MediaNexus's own mounts -- creating a MediaNexus root folder
+        against Solarr's own mounts -- creating a Solarr root folder
         at one of them only succeeds when the two containers share the same
         mount layout, the common case for sibling containers in one compose
         file. A path that does not exist here is refused the same way any
@@ -3614,7 +3614,7 @@ components:
     session:
       type: apiKey
       in: cookie
-      name: medianexus_session
+      name: solarr_session
     apiKey:
       type: apiKey
       in: header
@@ -3827,7 +3827,7 @@ components:
           description: >-
             Whether this process can write here. False is reported, never
             enforced: ownership on the host is the operator's to decide, and
-            MediaNexus does not chown a library it did not create. Absent when
+            Solarr does not chown a library it did not create. Absent when
             it has not been probed.
         read_only:
           type: boolean

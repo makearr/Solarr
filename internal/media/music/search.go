@@ -15,15 +15,15 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/acquiring/indexer"
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
-	"github.com/makearr/MediaNexus/internal/identify/match"
-	"github.com/makearr/MediaNexus/internal/identify/model"
-	"github.com/makearr/MediaNexus/internal/identify/parse"
-	"github.com/makearr/MediaNexus/internal/identify/score"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/identify/match"
+	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/parse"
+	"github.com/makearr/Solarr/internal/identify/score"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // ErrTrackSearchNotSupported reports a SINGLE (track-level) desired item --
@@ -72,7 +72,7 @@ type IndexerSearcher interface {
 
 // IndexerConn is one configured, enabled indexer ready to search --
 // building the client (credentials, egress) is the caller's own job
-// (cmd/medianexus/app/providers.go), the same split ArrSync's own
+// (cmd/solarr/app/providers.go), the same split ArrSync's own
 // LidarrClientFactory already keeps.
 type IndexerConn struct {
 	ID     int64
@@ -377,7 +377,7 @@ func languagePolicyFor(snapshot *settings.Snapshot, categoryID int64) *score.Lan
 }
 
 // protocolForImpl maps an indexer's own protocol family to candidate.protocol's
-// vocabulary (ADR-43: Newznab is usenet, Torznab is torrent -- MediaNexus
+// vocabulary (ADR-43: Newznab is usenet, Torznab is torrent -- Solarr
 // speaks no other indexer protocol yet).
 func protocolForImpl(impl string) string {
 	if impl == "torznab" {

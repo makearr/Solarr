@@ -9,15 +9,15 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/jobs"
-	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
-	"github.com/makearr/MediaNexus/internal/metadata/wikidata"
-	"github.com/makearr/MediaNexus/internal/platform/artwork"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
-	"github.com/makearr/MediaNexus/internal/platform/httpx"
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/metadata/wikidata"
+	"github.com/makearr/Solarr/internal/platform/artwork"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // maxPersonImageBytes mirrors ArtworkJob's own maxImageBytes -- a person's

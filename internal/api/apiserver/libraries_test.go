@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver"
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/identify/model"
+	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 // fakeNavigation answers a fixed set of levels per media type, so a test can

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 func TestMetadataSettings_DefaultsWhenNothingIsStored(t *testing.T) {
@@ -17,7 +17,7 @@ func TestMetadataSettings_DefaultsWhenNothingIsStored(t *testing.T) {
 
 func TestSetMetadataSettings_RoundTrips(t *testing.T) {
 	cache, cl := newCache(t)
-	want := settings.MetadataSettings{BrainzMashUserAgent: "MediaNexus/26.09 ( https://github.com/makearr/MediaNexus )"}
+	want := settings.MetadataSettings{BrainzMashUserAgent: "Solarr/26.09 ( https://github.com/makearr/Solarr )"}
 	if err := cache.SetMetadataSettings(t.Context(), cl, want); err != nil {
 		t.Fatalf("SetMetadataSettings: %v", err)
 	}

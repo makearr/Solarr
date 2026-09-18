@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store"
 )
 
 func TestNewBackupSchedule_RejectsAnInvalidExpression(t *testing.T) {

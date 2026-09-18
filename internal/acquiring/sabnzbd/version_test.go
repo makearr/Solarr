@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/acquiring/sabnzbd"
+	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
 )
 
 func TestVersion_ParsesAndSendsTheAPIKey(t *testing.T) {

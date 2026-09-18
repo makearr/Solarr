@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/library"
 )
 
 // refineWithReleaseMBID mirrors createPlaceholderEdition (enrich_test.go) but

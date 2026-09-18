@@ -3,7 +3,7 @@ package settings_test
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // Nothing stored yet reads as ADR-48's own default, "Confident" (0.90) -- an

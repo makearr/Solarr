@@ -1,6 +1,6 @@
 package score
 
-import "github.com/makearr/MediaNexus/internal/identify/model"
+import "github.com/makearr/Solarr/internal/identify/model"
 
 // Evaluate runs ADR-40's three stages against one candidate. preferred substitutes
 // a scoring spec's "$preferred" placeholder, e.g. release groups the user favours.

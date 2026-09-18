@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 func TestCreateDownloadFolder_RoundTrips(t *testing.T) {

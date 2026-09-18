@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/importing/importjob"
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/importing/importjob"
+	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // timed skips a measurement outside `make bench`, the same rule
@@ -20,8 +20,8 @@ import (
 // means nothing under the unit suite's parallel, -race-instrumented run.
 func timed(tb testing.TB) {
 	tb.Helper()
-	if os.Getenv("MEDIANEXUS_BENCH") == "" {
-		tb.Skip("timing measurement: run make bench, or set MEDIANEXUS_BENCH=1")
+	if os.Getenv("SOLARR_BENCH") == "" {
+		tb.Skip("timing measurement: run make bench, or set SOLARR_BENCH=1")
 	}
 }
 

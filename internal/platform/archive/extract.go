@@ -12,7 +12,7 @@ import (
 	"github.com/bodgit/sevenzip"
 	"github.com/nwaples/rardecode/v2"
 
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // Extract expands source into destDir, subject to limits. destDir is always

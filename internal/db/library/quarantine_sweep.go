@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 // quarantineSweepBatchSize bounds one page of a sweep's own reads -- ADR-3's

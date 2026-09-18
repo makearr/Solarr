@@ -3,7 +3,7 @@ package pack_test
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/importing/pack"
+	"github.com/makearr/Solarr/internal/importing/pack"
 )
 
 // The source itself declares what it is -- "Artist-Discography-1990-2020-

@@ -7,9 +7,9 @@ import (
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/makearr/MediaNexus/internal/api/authz"
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // Generous for a hand-edited file, bounded against an unauthenticated read.
@@ -32,7 +32,7 @@ func (s *Server) ExportSettings(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", yamlContentType)
 	// Named, or a browser saves it as "export".
-	w.Header().Set("Content-Disposition", `attachment; filename="medianexus-settings.yaml"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="solarr-settings.yaml"`)
 	if _, err := w.Write(encoded); err != nil {
 		s.logger.Warn("could not write the settings export", "error", err)
 	}

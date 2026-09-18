@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-const STORAGE_KEY = "medianexus.sidebar.open";
+const STORAGE_KEY = "solarr.sidebar.open";
 
 /** Reads the remembered open set, or null when nothing is remembered yet, so a
  *  first visit can start from sensible defaults. Corrupt storage counts as

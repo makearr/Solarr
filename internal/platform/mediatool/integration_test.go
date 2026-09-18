@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // requireFFmpeg skips rather than fails: CI builds in a Go image with no media

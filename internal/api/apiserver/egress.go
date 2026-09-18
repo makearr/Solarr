@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/api/authz"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
 )
 
 // EgressStatus is what the public-address check last learned. Mirrored here so

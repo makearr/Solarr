@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // WalkState is one resumable Walk's persisted progress -- the same role

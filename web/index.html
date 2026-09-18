@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MediaNexus</title>
+    <title>Solarr</title>
     <!-- Before first paint, or a dark-mode user sees a light flash. -->
     <script>
       (() => {
@@ -11,7 +11,7 @@
            this runs before any module loads, which is the whole point. */
         const DARK = ["dark", "jellyfin", "arr", "nord"];
         try {
-          const stored = localStorage.getItem("medianexus.theme");
+          const stored = localStorage.getItem("solarr.theme");
           const theme = stored
             || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
           document.documentElement.dataset.theme = theme;

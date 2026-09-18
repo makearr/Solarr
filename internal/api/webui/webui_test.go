@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/api/webui"
+	"github.com/makearr/Solarr/internal/api/webui"
 )
 
 // Present in a release build, absent in a fresh checkout; both are defined.

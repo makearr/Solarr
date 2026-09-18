@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/moving/mover"
-	"github.com/makearr/MediaNexus/internal/moving/placement"
+	"github.com/makearr/Solarr/internal/moving/mover"
+	"github.com/makearr/Solarr/internal/moving/placement"
 )
 
 func drainCandidate(id int64, fsID string, freeBytes int64) placement.RootCandidate {

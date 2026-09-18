@@ -8,7 +8,7 @@ package pack
 import (
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/identify/parse"
+	"github.com/makearr/Solarr/internal/identify/parse"
 )
 
 // Kinds (pack.kind, migration 0026). Re-exported by internal/db/library the

@@ -85,7 +85,7 @@ each was over a gigabyte on hardware that is often a NAS.
 
 `database.cache_size_kb` in `config.yml` therefore sizes `library.db`, the only one that
 grows. The others take their size and pool from what they hold, in
-`cmd/medianexus/app/serve.go`:
+`cmd/solarr/app/serve.go`:
 
 | Database | Read pool | Page cache | Why |
 |---|---|---|---|

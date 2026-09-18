@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver"
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/platform/secrets"
+	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
 // fakeConnectionTester serves both IndexerTester and DownloaderTester --
@@ -59,7 +59,7 @@ func TestTestIndexer_ReturnsTheTesterResult(t *testing.T) {
 
 // A connection that answers but not usefully is still a 200 -- ok:false in
 // the body, not an HTTP error. The distinction matters: a 4xx/5xx here would
-// look like MediaNexus's own request failed, not the indexer's answer.
+// look like Solarr's own request failed, not the indexer's answer.
 func TestTestIndexer_UnreachableIsA200WithOKFalse(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.createUser(t, "admin", settings.RoleAdmin)

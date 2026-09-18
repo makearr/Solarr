@@ -14,12 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/db/library/fixture"
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/library/fixture"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // The ADR-28 table as code: ceilings stated at 500k files, so a smaller corpus has
@@ -52,21 +52,21 @@ const (
 // in -- ADR-28 gives benchmarks their own CI job for exactly this reason.
 func timed(tb testing.TB) {
 	tb.Helper()
-	if os.Getenv("MEDIANEXUS_BENCH") == "" {
-		tb.Skip("timing measurement: run make bench, or set MEDIANEXUS_BENCH=1")
+	if os.Getenv("SOLARR_BENCH") == "" {
+		tb.Skip("timing measurement: run make bench, or set SOLARR_BENCH=1")
 	}
 }
 
 // corpusScale is the ADR-22 figure to measure at: 500000 for the real thing.
 func corpusScale(tb testing.TB) int {
 	tb.Helper()
-	raw := os.Getenv("MEDIANEXUS_BENCH_FILES")
+	raw := os.Getenv("SOLARR_BENCH_FILES")
 	if raw == "" {
 		return fixture.DefaultFiles
 	}
 	files, err := strconv.Atoi(raw)
 	if err != nil || files <= 0 {
-		tb.Fatalf("MEDIANEXUS_BENCH_FILES=%q is not a positive count", raw)
+		tb.Fatalf("SOLARR_BENCH_FILES=%q is not a positive count", raw)
 	}
 	return files
 }

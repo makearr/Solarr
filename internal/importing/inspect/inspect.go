@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // Tags is what a caller can tell this package about one file's embedded metadata,

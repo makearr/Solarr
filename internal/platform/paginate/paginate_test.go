@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/platform/paginate"
+	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
 func TestCursor_RoundTrips(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/makearr/MediaNexus/internal/api/auth"
-	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/Solarr/internal/api/auth"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 type loginRequest struct {
@@ -91,7 +91,7 @@ var decoyHash = sync.OnceValue(func() string {
 	if _, err := rand.Read(filler); err != nil {
 		// Falling back to a fixed value still costs a full argon2id run, which
 		// is the only property that matters here.
-		return mustHash("medianexus-decoy")
+		return mustHash("solarr-decoy")
 	}
 	return mustHash(string(filler))
 })

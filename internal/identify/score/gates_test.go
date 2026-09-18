@@ -3,7 +3,7 @@ package score
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 var seriesTiers = map[string][][]string{

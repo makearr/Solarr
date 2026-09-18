@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/platform/secrets"
+	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
 const password = "hunter2-correct-horse-battery-staple"

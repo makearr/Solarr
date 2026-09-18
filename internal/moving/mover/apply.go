@@ -8,7 +8,7 @@ import (
 	"io"
 	"path"
 
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // tempSuffix marks a cross-filesystem copy still in flight -- never a real

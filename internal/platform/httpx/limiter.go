@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // Limiter is the one global rate-limit registry (ADR-13).

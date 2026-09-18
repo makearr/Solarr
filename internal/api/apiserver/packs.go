@@ -10,12 +10,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/makearr/MediaNexus/internal/api/apiserver/gen"
-	"github.com/makearr/MediaNexus/internal/api/authz"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
 )
 
 // PackLister answers ADR-50's own detected packs. Defined here and
-// implemented by the caller (cmd/medianexus), the same reasoning every
+// implemented by the caller (cmd/solarr), the same reasoning every
 // other library-backed interface in this package already gives --
 // apiserver never imports internal/db/library directly.
 type PackLister interface {

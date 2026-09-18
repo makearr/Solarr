@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/makearr/MediaNexus/internal/db/store/gen/jobsdb"
+	"github.com/makearr/Solarr/internal/db/store/gen/jobsdb"
 )
 
 func convertJob(row jobsdb.Job) Job {

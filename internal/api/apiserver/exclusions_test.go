@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 func authedPatch(t *testing.T, cookies []*http.Cookie, target, body string) *http.Request {

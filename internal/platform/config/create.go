@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // keyPrefix marks how the encryption key is encoded, so a future change of
@@ -95,19 +95,19 @@ func Create(fsys fsx.FS, path string, generateKey func() (string, error), lookup
 
 // template is hand-written rather than marshalled from Default, because a bootstrap file a
 // human edits deserves comments explaining what each setting is for.
-const template = `# MediaNexus bootstrap configuration.
+const template = `# Solarr bootstrap configuration.
 #
 # Only what must be known before a database can be opened lives here. Everything
 # else — indexers, download clients, quality profiles, categories, root folders —
 # is configured in the web interface and stored in settings.db.
 #
 # Every setting can also be given as an environment variable:
-#   server.port  ->  MEDIANEXUS_SERVER_PORT
-# The five directories additionally accept the short forms MEDIANEXUS_CONFIG_DIR,
-# MEDIANEXUS_DATA_DIR, MEDIANEXUS_DB_DIR, MEDIANEXUS_CACHE_DIR and
-# MEDIANEXUS_BACKUP_DIR.
+#   server.port  ->  SOLARR_SERVER_PORT
+# The five directories additionally accept the short forms SOLARR_CONFIG_DIR,
+# SOLARR_DATA_DIR, SOLARR_DB_DIR, SOLARR_CACHE_DIR and
+# SOLARR_BACKUP_DIR.
 #
-# Run 'medianexus config check' to validate this file without starting up.
+# Run 'solarr config check' to validate this file without starting up.
 
 # Schema version of this file, not the application version. Do not edit.
 version: %d
@@ -185,7 +185,7 @@ workers:
   import: 1
 
 network:
-  # The only outbound call MediaNexus makes on its own. It asks a third party
+  # The only outbound call Solarr makes on its own. It asks a third party
   # what address this host connects from, which is what tells you whether
   # traffic is leaving past a VPN. Set enabled: false and nothing is contacted.
   public_ip_check:

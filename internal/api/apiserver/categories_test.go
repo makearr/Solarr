@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 func authedDelete(t *testing.T, cookies []*http.Cookie, target string) *http.Request {

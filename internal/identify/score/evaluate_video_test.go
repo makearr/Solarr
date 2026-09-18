@@ -3,7 +3,7 @@ package score
 import (
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 // seriesStandardProfileJSON is ADR-40's own worked example, translated verbatim

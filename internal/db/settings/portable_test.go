@@ -8,8 +8,8 @@ import (
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/makearr/MediaNexus/internal/db/settings"
-	"github.com/makearr/MediaNexus/internal/platform/config"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // An export that cannot be imported is a backup that cannot be restored.

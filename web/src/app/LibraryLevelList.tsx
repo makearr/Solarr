@@ -32,7 +32,7 @@ const POSTER_LABEL_HEIGHT = 46;
 const POSTER_LEVELS = new Set(["artists", "albums"]);
 
 type ViewMode = "poster" | "list";
-const VIEW_STORAGE_KEY = "medianexus.level.view";
+const VIEW_STORAGE_KEY = "solarr.level.view";
 
 /** The remembered poster/list choice per level, so switching to the list on
  *  Tracks does not also flatten the Artists wall. */

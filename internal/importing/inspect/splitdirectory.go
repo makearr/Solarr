@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // SplitDirectory reproduces exactly what Walker.Walk's own visit does for one

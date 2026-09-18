@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/makearr/MediaNexus/internal/db/store"
-	"github.com/makearr/MediaNexus/internal/db/store/gen/librarydb"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // freshCountsScope is the counter scope the fresh-works sweep reconciles
@@ -37,7 +37,7 @@ func NewFreshCounts(opened *store.Store, cl clock.Clock) FreshCounts {
 // match, returning the correction made (nil when nothing drifted). since is
 // the same already-resolved cutoff date WorkFilter.FreshSince takes -- this
 // package never calls time.Now() (forbidigo), so the caller resolves it the
-// same way cmd/medianexus/adapters.Works already does for the Library
+// same way cmd/solarr/adapters.Works already does for the Library
 // list's own fresh=true filter, and the two can never disagree about what
 // "fresh" means.
 func (c FreshCounts) Reconcile(ctx context.Context, since string) ([]Correction, error) {

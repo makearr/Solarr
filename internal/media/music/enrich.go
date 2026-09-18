@@ -5,12 +5,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 )
 
 // refinementFor turns one MusicBrainz answer into what library.RefineEdition
-// needs: interpreting MusicBrainz's own vocabulary into MediaNexus's is this
+// needs: interpreting MusicBrainz's own vocabulary into Solarr's is this
 // package's job, never core's (ADR-23). workReleaseDate is the release
 // group's FirstReleaseDate at whatever precision MusicBrainz gave it
 // (YYYY, YYYY-MM or YYYY-MM-DD) -- kept alongside workYear rather than only

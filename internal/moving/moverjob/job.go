@@ -16,11 +16,11 @@ import (
 	"log/slog"
 	"path"
 
-	"github.com/makearr/MediaNexus/internal/db/library"
-	"github.com/makearr/MediaNexus/internal/jobs"
-	"github.com/makearr/MediaNexus/internal/moving/mover"
-	"github.com/makearr/MediaNexus/internal/platform/clock"
-	"github.com/makearr/MediaNexus/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/moving/mover"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // JobType is the registered type of one Apply run over an accepted move plan.
@@ -60,7 +60,7 @@ type RootFolder struct {
 // RootFolders resolves a root folder id to its current path and filesystem.
 // internal/moving/moverjob does not import internal/db/settings directly, the same
 // separation internal/moving/mover and internal/importing/importjob already keep -- a
-// cmd/medianexus adapter bridges this to the real settings cache.
+// cmd/solarr adapter bridges this to the real settings cache.
 type RootFolders interface {
 	RootFolder(rootFolderID int64) (RootFolder, bool)
 }
@@ -74,7 +74,7 @@ type RootFolders interface {
 // DRAINING forever with no caller ever checking back). internal/moving/moverjob
 // itself has no way to answer "is this root now empty" (that needs
 // internal/db/library.Physical.PathsForRoot, which this package does not
-// import), so a cmd/medianexus adapter over internal/moving/drainjob answers it.
+// import), so a cmd/solarr adapter over internal/moving/drainjob answers it.
 type DrainCompletion interface {
 	CompleteDrainIfEmpty(ctx context.Context, rootFolderID, moveJobID int64) error
 }

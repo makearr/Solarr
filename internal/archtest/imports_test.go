@@ -18,13 +18,13 @@ import (
 
 // allowedInternalImports is the dependency graph of architecture §2, written out.
 var allowedInternalImports = map[string][]string{
-	"cmd/medianexus": {
-		"cmd/medianexus/app", "internal/api/apiserver", "internal/api/auth", "internal/db/settings",
+	"cmd/solarr": {
+		"cmd/solarr/app", "internal/api/apiserver", "internal/api/auth", "internal/db/settings",
 		"internal/db/store", "internal/platform/clock", "internal/platform/config", "internal/platform/fsx",
 		"migrations",
 	},
-	"cmd/medianexus/app": {
-		"cmd/medianexus/adapters", "internal/acquiring/indexer", "internal/acquiring/sabnzbd",
+	"cmd/solarr/app": {
+		"cmd/solarr/adapters", "internal/acquiring/indexer", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
 		"internal/api/webui", "internal/db/library", "internal/db/recovery", "internal/db/settings",
 		"internal/db/store", "internal/importing/arrimport", "internal/importing/importjob", "internal/jobs",
@@ -35,7 +35,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/httpx", "internal/platform/mediatool", "internal/platform/privilege",
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
-	"cmd/medianexus/adapters": {
+	"cmd/solarr/adapters": {
 		"internal/acquiring/indexer", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/db/library", "internal/db/settings",
 		"internal/identify/model", "internal/identify/priority", "internal/importing/arrimport",
@@ -215,7 +215,7 @@ var allowedInternalImports = map[string][]string{
 	},
 	// ADR-51's resumable Apply: claims a move_item, calls mover.ApplyOne, then
 	// records/unlinks through internal/db/library. No internal/db/settings import --
-	// a cmd/medianexus adapter bridges RootFolders the same way importjob's
+	// a cmd/solarr adapter bridges RootFolders the same way importjob's
 	// Policy is bridged.
 	"internal/moving/moverjob": {
 		"internal/platform/clock", "internal/platform/fsx", "internal/jobs", "internal/db/library", "internal/moving/mover",
@@ -321,7 +321,7 @@ func allowedFor(pkg string) (allowed []string, declared bool) {
 }
 
 // packageImports maps each package directory, relative to the repository root, to the
-// MediaNexus packages it imports.
+// Solarr packages it imports.
 func packageImports(t *testing.T, root, module string) map[string][]string {
 	t.Helper()
 	result := make(map[string][]string)

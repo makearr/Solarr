@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/identify/model"
-	"github.com/makearr/MediaNexus/internal/media/music"
-	"github.com/makearr/MediaNexus/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // fixedTags answers with one set of tags for any file, for the cases that are about

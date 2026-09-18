@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/makearr/MediaNexus/internal/importing/inspect"
+	"github.com/makearr/Solarr/internal/importing/inspect"
 )
 
 // walkAll runs a Walker to completion from the beginning and collects every

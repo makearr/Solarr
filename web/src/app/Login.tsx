@@ -27,7 +27,7 @@ export function Login() {
     <div className="flex h-full flex-col">
       <header className="flex shrink-0 items-center justify-between border-b border-border-subtle
                          bg-surface px-4 py-3">
-        <span className="text-sm font-semibold tracking-tight">MediaNexus</span>
+        <span className="text-sm font-semibold tracking-tight">Solarr</span>
         <ThemeToggle />
       </header>
 
