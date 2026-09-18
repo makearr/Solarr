@@ -5404,6 +5404,14 @@ components:
           description: The facts the candidate's verdict rests on, as IdentificationCandidate's.
           items: { $ref: "#/components/schemas/IdentificationEvidence" }
 
+    TransferMethodCount:
+      type: object
+      description: How many of a unit's files arrived by one transfer method.
+      required: [method, files]
+      properties:
+        method: { $ref: "#/components/schemas/TransferMethod" }
+        files: { type: integer, format: int64 }
+
     ImportUnit:
       type: object
       description: One unit ADR-48's pipeline found and decided.
@@ -5441,6 +5449,15 @@ components:
           type: integer
           format: int64
           description: Non-null once todo 4.11's own detection finds this unit belongs to a pack.
+        transfer_methods:
+          type: array
+          description: >-
+            How this unit's files were actually placed, one entry per method
+            used. Absent for a unit that has not been committed, and for one
+            committed before the method was recorded -- a reflink and a copy
+            are indistinguishable on disk, so an unrecorded placement is
+            reported as unknown rather than guessed.
+          items: { $ref: "#/components/schemas/TransferMethodCount" }
 
     Pack:
       type: object

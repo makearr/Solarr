@@ -358,10 +358,11 @@ type ImportUnit struct {
 }
 
 type ImportUnitFile struct {
-	ID            int64
-	UnitID        int64
-	MediaObjectID int64
-	LibraryPathID sql.NullInt64
+	ID             int64
+	UnitID         int64
+	MediaObjectID  int64
+	LibraryPathID  sql.NullInt64
+	TransferMethod sql.NullString
 }
 
 type LibraryPath struct {

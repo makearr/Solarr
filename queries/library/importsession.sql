@@ -153,10 +153,11 @@ WHERE id = sqlc.arg(id);
 -- library_path_id is nullable: 0029's own migration comment explains why
 -- (which path this unit's own placement created, when it can be known).
 -- name: InsertImportUnitFile :exec
-INSERT INTO import_unit_file (unit_id, media_object_id, library_path_id) VALUES (?, ?, ?);
+INSERT INTO import_unit_file (unit_id, media_object_id, library_path_id, transfer_method)
+VALUES (?, ?, ?, ?);
 
 -- name: ListImportUnitFilesForSession :many
-SELECT iuf.unit_id, iuf.media_object_id, iuf.library_path_id
+SELECT iuf.unit_id, iuf.media_object_id, iuf.library_path_id, iuf.transfer_method
 FROM import_unit_file iuf
 JOIN import_unit iu ON iu.id = iuf.unit_id
 WHERE iu.session_id = ?
@@ -171,3 +172,15 @@ ORDER BY iuf.id;
 -- name: ClearImportUnitPlacement :exec
 UPDATE import_unit SET work_id = NULL, edition_id = NULL, work_created = 0, edition_created = 0
 WHERE id = ?;
+
+-- One row per (unit, method) for a whole session, so the import screen can
+-- say how each unit's files actually arrived without reading every file row.
+-- Mirrors ListImportUnitFilesForSession's own join and filter; rows written
+-- before migration 0034 carry no method and are left out rather than guessed.
+-- name: CountImportUnitTransferMethodsForSession :many
+SELECT iuf.unit_id, iuf.transfer_method, CAST(COUNT(*) AS INTEGER) AS file_count
+FROM import_unit_file iuf
+JOIN import_unit iu ON iu.id = iuf.unit_id
+WHERE iu.session_id = ? AND iuf.transfer_method IS NOT NULL
+GROUP BY iuf.unit_id, iuf.transfer_method
+ORDER BY iuf.unit_id, iuf.transfer_method;

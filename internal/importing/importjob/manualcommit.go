@@ -288,6 +288,7 @@ func (m ManualCommitter) place(
 		WorkID: placed.WorkID, WorkCreated: placed.WorkCreated,
 		EditionID: placed.EditionID, EditionCreated: placed.EditionCreated,
 		MediaObjectIDs: placed.MediaObjectIDs, LibraryPathIDs: placed.LibraryPathIDs,
+		TransferMethods: placed.TransferMethodNames(),
 	}); err != nil {
 		return music.Placed{}, fmt.Errorf("importjob: record placement for unit %d: %w", unit.ID, err)
 	}

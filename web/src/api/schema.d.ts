@@ -3567,6 +3567,12 @@ export interface components {
             /** @description The facts the candidate's verdict rests on, as IdentificationCandidate's. */
             evidence?: components["schemas"]["IdentificationEvidence"][];
         };
+        /** @description How many of a unit's files arrived by one transfer method. */
+        TransferMethodCount: {
+            method: components["schemas"]["TransferMethod"];
+            /** Format: int64 */
+            files: number;
+        };
         /** @description One unit ADR-48's pipeline found and decided. */
         ImportUnit: {
             /** Format: int64 */
@@ -3600,6 +3606,8 @@ export interface components {
              * @description Non-null once todo 4.11's own detection finds this unit belongs to a pack.
              */
             pack_id?: number;
+            /** @description How this unit's files were actually placed, one entry per method used. Absent for a unit that has not been committed, and for one committed before the method was recorded -- a reflink and a copy are indistinguishable on disk, so an unrecorded placement is reported as unknown rather than guessed. */
+            transfer_methods?: components["schemas"]["TransferMethodCount"][];
         };
         /** @description One source, many works (ADR-50, todo 4.11) -- a provenance fact, not an identity tier. */
         Pack: {

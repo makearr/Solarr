@@ -153,9 +153,19 @@ func (a ImportSessions) ListImportUnits(
 	if err != nil {
 		return nil, err
 	}
+	// One aggregate read per page rather than per unit: a session's methods
+	// are a handful of rows, not one per file.
+	methods, err := a.Sessions.UnitTransferMethods(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
 	rows := make([]apiserver.ImportUnitRow, len(units))
 	for i, u := range units {
 		rows[i] = importUnitRow(u)
+		for _, m := range methods[u.ID] {
+			rows[i].TransferMethods = append(rows[i].TransferMethods,
+				apiserver.TransferMethodCount{Method: m.Method, Files: m.Files})
+		}
 	}
 	return rows, nil
 }

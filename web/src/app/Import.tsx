@@ -760,6 +760,22 @@ function UnitList({ sessionId }: { sessionId: number }) {
   );
 }
 
+/** Past tense, because it already happened: "reflinked", not "reflink". The
+ *  whole point of recording the method is that a reflink and a copy look
+ *  identical on disk, so the word has to come from the record. */
+const TRANSFER_PAST: Record<TransferMethod, string> = {
+  reflink: "reflinked",
+  hardlink: "hardlinked",
+  move: "moved",
+  copy: "copied",
+  symlink: "symlinked",
+};
+
+function describeTransfer(methods: { method: TransferMethod; files: number }[]): string {
+  if (methods.length === 1) return TRANSFER_PAST[methods[0]!.method];
+  return methods.map((m) => `${m.files} ${TRANSFER_PAST[m.method]}`).join(", ");
+}
+
 function UnitRow({ sessionId, unit }: { sessionId: number; unit: ImportUnit }) {
   const [expanded, setExpanded] = useState(false);
   const queryClient = useQueryClient();
@@ -792,6 +808,9 @@ function UnitRow({ sessionId, unit }: { sessionId: number; unit: ImportUnit }) {
           <span className="text-ink-muted">
             {unit.file_count} files, {Math.round(unit.confidence * 100)}% confidence
           </span>
+          {(unit.transfer_methods?.length ?? 0) > 0 && (
+            <span className="text-ink-muted">{describeTransfer(unit.transfer_methods!)}</span>
+          )}
         </button>
         {unit.decision === "QUEUE" && (unit.candidates?.length ?? 0) > 0 && (
           <button

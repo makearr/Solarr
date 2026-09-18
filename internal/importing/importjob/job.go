@@ -579,6 +579,7 @@ func (j *Job) placeCommitted(
 			WorkID: placed.WorkID, WorkCreated: placed.WorkCreated,
 			EditionID: placed.EditionID, EditionCreated: placed.EditionCreated,
 			MediaObjectIDs: placed.MediaObjectIDs, LibraryPathIDs: placed.LibraryPathIDs,
+			TransferMethods: placed.TransferMethodNames(),
 		}); err != nil {
 			j.logger.Warn("import commit: could not record placement",
 				slog.Int64("unit_id", ids[i]), slog.Any("error", err))

@@ -1,0 +1,14 @@
+-- Which rung of the import transfer ladder actually placed each file
+-- (mover.PlaceMethod: reflink, hardlink, move, copy or symlink).
+--
+-- ADR-11 as amended 2026-09-18 says the method is recorded, and CommitUnit
+-- has returned it since the ladder landed, but nothing persisted it -- so the
+-- interface still could not answer the question that started all of this: a
+-- reflink and a copy are indistinguishable on disk, and an XFS import that
+-- cloned every file read as one that had copied them.
+--
+-- Nullable, and deliberately not backfilled: a row written before this
+-- migration has no record of how its file arrived, and guessing from the
+-- filesystem now would be a guess about the past dressed up as a fact. NULL
+-- means "not recorded", which the interface reports as such.
+ALTER TABLE import_unit_file ADD COLUMN transfer_method TEXT;

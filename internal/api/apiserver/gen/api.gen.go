@@ -1310,6 +1310,9 @@ type ImportUnit struct {
 	SessionId int64           `json:"session_id"`
 	Shape     ImportUnitShape `json:"shape"`
 
+	// TransferMethods How this unit's files were actually placed, one entry per method used. Absent for a unit that has not been committed, and for one committed before the method was recorded -- a reflink and a copy are indistinguishable on disk, so an unrecorded placement is reported as unknown rather than guessed.
+	TransferMethods *[]TransferMethodCount `json:"transfer_methods,omitempty"`
+
 	// WorkId Non-null once this unit is actually placed in the library, not merely decided COMMIT -- null with decision=COMMIT means the session has no category_id to place into, or placement has not run yet.
 	WorkId *int64 `json:"work_id,omitempty"`
 }
@@ -2046,6 +2049,14 @@ type TierValue struct {
 
 // TransferMethod How import gets a file into the library. reflink clones it copy-on-write, sharing disk blocks but presenting as an independent file; hardlink makes a second directory entry for the same bytes; move renames it, or copies and deletes the source when it cannot; copy writes independent bytes; symlink leaves the library pointing at the source. Only reflink and hardlink avoid using more disk space, only move removes the source, and only symlink leaves the library dependent on it.
 type TransferMethod string
+
+// TransferMethodCount How many of a unit's files arrived by one transfer method.
+type TransferMethodCount struct {
+	Files int64 `json:"files"`
+
+	// Method How import gets a file into the library. reflink clones it copy-on-write, sharing disk blocks but presenting as an independent file; hardlink makes a second directory entry for the same bytes; move renames it, or copies and deletes the source when it cannot; copy writes independent bytes; symlink leaves the library pointing at the source. Only reflink and hardlink avoid using more disk space, only move removes the source, and only symlink leaves the library dependent on it.
+	Method TransferMethod `json:"method"`
+}
 
 // UnidentifiedCandidate One ranked candidate the ADR-24 chain found but was not confident enough to resolve automatically -- RunChain's merged Candidates, best first. Empty on a file that matched nothing at all.
 type UnidentifiedCandidate struct {

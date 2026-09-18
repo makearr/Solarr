@@ -67,6 +67,11 @@ type Querier interface {
 	CountFreshWorks(ctx context.Context, arg CountFreshWorksParams) (int64, error)
 	// Recomputable from the observations, which is why they are kept individually.
 	CountGroupOutcomes(ctx context.Context, arg CountGroupOutcomesParams) ([]CountGroupOutcomesRow, error)
+	// One row per (unit, method) for a whole session, so the import screen can
+	// say how each unit's files actually arrived without reading every file row.
+	// Mirrors ListImportUnitFilesForSession's own join and filter; rows written
+	// before migration 0034 carry no method and are left out rather than guessed.
+	CountImportUnitTransferMethodsForSession(ctx context.Context, sessionID int64) ([]CountImportUnitTransferMethodsForSessionRow, error)
 	// The root_folder_id half of the ADR-25 orphan check. See CountDesiredItemsByCategory.
 	CountLibraryPathsByRootFolder(ctx context.Context) ([]CountLibraryPathsByRootFolderRow, error)
 	// Probe coverage, the same per-root shape CountLibraryPathsByRootFolder already

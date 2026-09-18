@@ -151,6 +151,16 @@ type ImportUnitRow struct {
 	Evidence          ImportEvidence
 	Candidates        []ImportCandidate
 	Reason            string
+	// TransferMethods is how this unit's files were actually placed, empty
+	// until it is committed and for units committed before it was recorded.
+	TransferMethods []TransferMethodCount
+}
+
+// TransferMethodCount is how many of a unit's files arrived by one rung of
+// the import transfer ladder.
+type TransferMethodCount struct {
+	Method string
+	Files  int64
 }
 
 // InspectImport enqueues ADR-48's own inspection job. Administrator only --
@@ -620,6 +630,13 @@ func importUnitView(row ImportUnitRow) gen.ImportUnit {
 	}
 	if row.EditionID != nil {
 		view.EditionId = row.EditionID
+	}
+	if len(row.TransferMethods) > 0 {
+		methods := make([]gen.TransferMethodCount, len(row.TransferMethods))
+		for i, m := range row.TransferMethods {
+			methods[i] = gen.TransferMethodCount{Method: gen.TransferMethod(m.Method), Files: m.Files}
+		}
+		view.TransferMethods = &methods
 	}
 	if row.Reason != "" {
 		view.Reason = &row.Reason

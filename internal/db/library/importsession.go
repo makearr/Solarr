@@ -248,6 +248,9 @@ type Placement struct {
 	// comment (internal/media/music). Left nil by a caller that cannot supply
 	// it; ImportRevert then falls back to its own unambiguous-only rule.
 	LibraryPathIDs []int64
+	// TransferMethods is parallel to MediaObjectIDs too: which ladder rung
+	// placed each file, left nil by a caller that does not know.
+	TransferMethods []string
 }
 
 // RecordPlacement writes one unit's placement, in one transaction: the
@@ -270,8 +273,13 @@ func (s ImportSessions) RecordPlacement(ctx context.Context, unitID int64, place
 			if index < len(placement.LibraryPathIDs) {
 				libraryPathID = &placement.LibraryPathIDs[index]
 			}
+			var transferMethod sql.NullString
+			if index < len(placement.TransferMethods) && placement.TransferMethods[index] != "" {
+				transferMethod = sql.NullString{String: placement.TransferMethods[index], Valid: true}
+			}
 			if err := queries.InsertImportUnitFile(ctx, librarydb.InsertImportUnitFileParams{
 				UnitID: unitID, MediaObjectID: mediaObjectID, LibraryPathID: nullInt64(libraryPathID),
+				TransferMethod: transferMethod,
 			}); err != nil {
 				return fmt.Errorf("insert unit %d file %d: %w", unitID, mediaObjectID, err)
 			}
@@ -303,6 +311,9 @@ func (s ImportSessions) ClearUnitPlacement(ctx context.Context, unitID int64) er
 type UnitFile struct {
 	MediaObjectID int64
 	LibraryPathID *int64
+	// TransferMethod is which rung of the import ladder placed this file, or
+	// empty for a row written before the method was recorded (migration 0034).
+	TransferMethod string
 }
 
 // UnitFiles maps every placed unit in a session to the media_object rows its
@@ -321,6 +332,33 @@ func (s ImportSessions) UnitFiles(ctx context.Context, sessionID int64) (map[int
 		}
 		byUnit[row.UnitID] = append(byUnit[row.UnitID], UnitFile{
 			MediaObjectID: row.MediaObjectID, LibraryPathID: libraryPathID,
+			TransferMethod: row.TransferMethod.String,
+		})
+	}
+	return byUnit, nil
+}
+
+// TransferMethodCount is how many of a unit's files arrived by one rung.
+type TransferMethodCount struct {
+	Method string
+	Files  int64
+}
+
+// UnitTransferMethods reports, per unit in a session, how its files were
+// actually placed -- the answer to "did it link them or copy them?", which is
+// invisible on disk (a reflink and a copy look identical). Units whose rows
+// predate migration 0034 simply have no entry.
+func (s ImportSessions) UnitTransferMethods(
+	ctx context.Context, sessionID int64,
+) (map[int64][]TransferMethodCount, error) {
+	rows, err := librarydb.New(s.store.Read()).CountImportUnitTransferMethodsForSession(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("library: count unit transfer methods for session %d: %w", sessionID, err)
+	}
+	byUnit := make(map[int64][]TransferMethodCount, len(rows))
+	for _, row := range rows {
+		byUnit[row.UnitID] = append(byUnit[row.UnitID], TransferMethodCount{
+			Method: row.TransferMethod.String, Files: row.FileCount,
 		})
 	}
 	return byUnit, nil

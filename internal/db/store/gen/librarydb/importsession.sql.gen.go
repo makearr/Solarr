@@ -26,6 +26,48 @@ func (q *Queries) ClearImportUnitPlacement(ctx context.Context, id int64) error 
 	return err
 }
 
+const countImportUnitTransferMethodsForSession = `-- name: CountImportUnitTransferMethodsForSession :many
+SELECT iuf.unit_id, iuf.transfer_method, CAST(COUNT(*) AS INTEGER) AS file_count
+FROM import_unit_file iuf
+JOIN import_unit iu ON iu.id = iuf.unit_id
+WHERE iu.session_id = ? AND iuf.transfer_method IS NOT NULL
+GROUP BY iuf.unit_id, iuf.transfer_method
+ORDER BY iuf.unit_id, iuf.transfer_method
+`
+
+type CountImportUnitTransferMethodsForSessionRow struct {
+	UnitID         int64
+	TransferMethod sql.NullString
+	FileCount      int64
+}
+
+// One row per (unit, method) for a whole session, so the import screen can
+// say how each unit's files actually arrived without reading every file row.
+// Mirrors ListImportUnitFilesForSession's own join and filter; rows written
+// before migration 0034 carry no method and are left out rather than guessed.
+func (q *Queries) CountImportUnitTransferMethodsForSession(ctx context.Context, sessionID int64) ([]CountImportUnitTransferMethodsForSessionRow, error) {
+	rows, err := q.db.QueryContext(ctx, countImportUnitTransferMethodsForSession, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountImportUnitTransferMethodsForSessionRow{}
+	for rows.Next() {
+		var i CountImportUnitTransferMethodsForSessionRow
+		if err := rows.Scan(&i.UnitID, &i.TransferMethod, &i.FileCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createImportSession = `-- name: CreateImportSession :one
 
 INSERT INTO import_session (source_path, origin, acquisition_id, category_id, state,
@@ -234,19 +276,26 @@ func (q *Queries) InsertImportUnit(ctx context.Context, arg InsertImportUnitPara
 }
 
 const insertImportUnitFile = `-- name: InsertImportUnitFile :exec
-INSERT INTO import_unit_file (unit_id, media_object_id, library_path_id) VALUES (?, ?, ?)
+INSERT INTO import_unit_file (unit_id, media_object_id, library_path_id, transfer_method)
+VALUES (?, ?, ?, ?)
 `
 
 type InsertImportUnitFileParams struct {
-	UnitID        int64
-	MediaObjectID int64
-	LibraryPathID sql.NullInt64
+	UnitID         int64
+	MediaObjectID  int64
+	LibraryPathID  sql.NullInt64
+	TransferMethod sql.NullString
 }
 
 // library_path_id is nullable: 0029's own migration comment explains why
 // (which path this unit's own placement created, when it can be known).
 func (q *Queries) InsertImportUnitFile(ctx context.Context, arg InsertImportUnitFileParams) error {
-	_, err := q.db.ExecContext(ctx, insertImportUnitFile, arg.UnitID, arg.MediaObjectID, arg.LibraryPathID)
+	_, err := q.db.ExecContext(ctx, insertImportUnitFile,
+		arg.UnitID,
+		arg.MediaObjectID,
+		arg.LibraryPathID,
+		arg.TransferMethod,
+	)
 	return err
 }
 
@@ -313,7 +362,7 @@ func (q *Queries) ListImportSessions(ctx context.Context, arg ListImportSessions
 }
 
 const listImportUnitFilesForSession = `-- name: ListImportUnitFilesForSession :many
-SELECT iuf.unit_id, iuf.media_object_id, iuf.library_path_id
+SELECT iuf.unit_id, iuf.media_object_id, iuf.library_path_id, iuf.transfer_method
 FROM import_unit_file iuf
 JOIN import_unit iu ON iu.id = iuf.unit_id
 WHERE iu.session_id = ?
@@ -321,9 +370,10 @@ ORDER BY iuf.id
 `
 
 type ListImportUnitFilesForSessionRow struct {
-	UnitID        int64
-	MediaObjectID int64
-	LibraryPathID sql.NullInt64
+	UnitID         int64
+	MediaObjectID  int64
+	LibraryPathID  sql.NullInt64
+	TransferMethod sql.NullString
 }
 
 func (q *Queries) ListImportUnitFilesForSession(ctx context.Context, sessionID int64) ([]ListImportUnitFilesForSessionRow, error) {
@@ -335,7 +385,12 @@ func (q *Queries) ListImportUnitFilesForSession(ctx context.Context, sessionID i
 	items := []ListImportUnitFilesForSessionRow{}
 	for rows.Next() {
 		var i ListImportUnitFilesForSessionRow
-		if err := rows.Scan(&i.UnitID, &i.MediaObjectID, &i.LibraryPathID); err != nil {
+		if err := rows.Scan(
+			&i.UnitID,
+			&i.MediaObjectID,
+			&i.LibraryPathID,
+			&i.TransferMethod,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

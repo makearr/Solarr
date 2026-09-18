@@ -137,6 +137,19 @@ type Placed struct {
 	TransferMethods []mover.PlaceMethod
 }
 
+// TransferMethodNames answers TransferMethods as plain strings, so a caller
+// can persist them without taking a dependency on the mover for a conversion.
+func (p Placed) TransferMethodNames() []string {
+	if len(p.TransferMethods) == 0 {
+		return nil
+	}
+	names := make([]string, len(p.TransferMethods))
+	for index, method := range p.TransferMethods {
+		names[index] = string(method)
+	}
+	return names
+}
+
 // ErrNoPlacement means placement.Resolve deferred: no root folder in
 // categoryID currently qualifies. The unit stays COMMIT-decided-but-unplaced
 // (import_unit.work_id still NULL) for a later retry, the same as any other
