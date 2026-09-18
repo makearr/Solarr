@@ -99,7 +99,12 @@ type Fingerprint struct {
 	Path        string
 	Duration    time.Duration
 	Chromaprint string
-	Err         error
+	// Partial marks a fingerprint fpcalc produced while still failing: it
+	// decoded enough to fingerprint but hit a problem. Usable, and worth
+	// knowing about, since a damaged file is exactly what fingerprinting is
+	// for.
+	Partial bool
+	Err     error
 }
 
 // TagEdit is one file's pending tag changes. Write-back fills gaps only and never

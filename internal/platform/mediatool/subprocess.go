@@ -15,6 +15,9 @@ import (
 const (
 	ffprobeBinary = "ffprobe"
 	fpcalcBinary  = "fpcalc"
+	// fpcalcSeconds matches what AcoustID itself fingerprints (its own docs and
+	// DroppedNeedle's recipe both use two minutes).
+	fpcalcSeconds = "120"
 	ffmpegBinary  = "ffmpeg"
 )
 
@@ -158,26 +161,37 @@ func (s *Subprocess) fingerprintOne(ctx context.Context, path string) Fingerprin
 	bounded, cancel := context.WithTimeout(ctx, perFileTimeout)
 	defer cancel()
 
-	output, err := s.runner.Run(bounded, fpcalcBinary, "-json", path)
-	if err != nil {
-		return Fingerprint{Path: path, Err: err}
-	}
+	// -length bounds how much audio is decoded. AcoustID matches on the first
+	// two minutes, so decoding a whole 70-minute file buys nothing and costs
+	// real time on a library-wide pass. Not -raw: AcoustID wants the compressed
+	// form, and -raw is for callers doing their own comparison.
+	output, runErr := s.runner.Run(bounded, fpcalcBinary, "-length", fpcalcSeconds, "-json", path)
 
 	var decoded struct {
 		Duration    float64 `json:"duration"`
 		Fingerprint string  `json:"fingerprint"`
 	}
-	if err := json.Unmarshal(output, &decoded); err != nil {
-		return Fingerprint{Path: path, Err: fmt.Errorf("mediatool: fingerprint %s: %w", path, err)}
+	decodeErr := json.Unmarshal(output, &decoded)
+
+	// fpcalc exits non-zero on a file it could only partly decode while still
+	// printing a usable fingerprint. Throwing that away loses exactly the
+	// damaged files fingerprinting exists to identify, so a fingerprint that
+	// parsed is kept and the failure is reported as Partial instead.
+	if decodeErr == nil && decoded.Fingerprint != "" {
+		return Fingerprint{
+			Path:        path,
+			Duration:    time.Duration(decoded.Duration * float64(time.Second)),
+			Chromaprint: decoded.Fingerprint,
+			Partial:     runErr != nil,
+		}
 	}
-	if decoded.Fingerprint == "" {
-		return Fingerprint{Path: path, Err: fmt.Errorf("mediatool: fingerprint %s: fpcalc returned none", path)}
+	if runErr != nil {
+		return Fingerprint{Path: path, Err: runErr}
 	}
-	return Fingerprint{
-		Path:        path,
-		Duration:    time.Duration(decoded.Duration * float64(time.Second)),
-		Chromaprint: decoded.Fingerprint,
+	if decodeErr != nil {
+		return Fingerprint{Path: path, Err: fmt.Errorf("mediatool: fingerprint %s: %w", path, decodeErr)}
 	}
+	return Fingerprint{Path: path, Err: fmt.Errorf("mediatool: fingerprint %s: fpcalc returned none", path)}
 }
 
 // ffprobeOutput is only the fields that are used. ffprobe reports far more, and

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -20,6 +21,8 @@ type fakeRunner struct {
 	// respond returns the output for one invocation, keyed on the last argument,
 	// which is the path in every call this package makes.
 	respond func(name, path string) ([]byte, error)
+	// record, when set, receives each invocation's full argument list.
+	record func(args []string)
 
 	mu       sync.Mutex
 	calls    int
@@ -54,6 +57,9 @@ func (f *fakeRunner) Run(ctx context.Context, name string, args ...string) ([]by
 
 	f.mu.Lock()
 	f.calls++
+	if f.record != nil {
+		f.record(args)
+	}
 	f.mu.Unlock()
 	return f.respond(name, args[len(args)-1])
 }
@@ -387,5 +393,62 @@ func TestEmbeddedPicture_AnyOtherFailureIsAnError(t *testing.T) {
 	_, err := mediatool.New(runner, 1).EmbeddedPicture(t.Context(), "/music/a.m4a")
 	if err == nil || errors.Is(err, mediatool.ErrNoEmbeddedPicture) {
 		t.Errorf("EmbeddedPicture error = %v, want a real failure, not ErrNoEmbeddedPicture", err)
+	}
+}
+
+// AcoustID matches on the first two minutes, so decoding a whole file buys
+// nothing. -raw is deliberately not used: AcoustID wants the compressed form.
+func TestFingerprint_BoundsHowMuchAudioIsDecoded(t *testing.T) {
+	var arguments []string
+	runner := &fakeRunner{
+		respond: func(string, string) ([]byte, error) {
+			return []byte(`{"duration":215.23,"fingerprint":"AQADtE..."}`), nil
+		},
+		record: func(args []string) { arguments = args },
+	}
+	if _, err := mediatool.New(runner, 1).Fingerprint(t.Context(), []string{"/m/a.flac"}); err != nil {
+		t.Fatalf("Fingerprint: %v", err)
+	}
+	if !slices.Contains(arguments, "-length") || !slices.Contains(arguments, "120") {
+		t.Errorf("fpcalc args = %v, want -length 120", arguments)
+	}
+	if slices.Contains(arguments, "-raw") {
+		t.Errorf("fpcalc args = %v, want the compressed fingerprint, not -raw", arguments)
+	}
+}
+
+// fpcalc exits non-zero on a file it could only partly decode while still
+// printing a usable fingerprint. Discarding that loses exactly the damaged
+// files fingerprinting exists to identify.
+func TestFingerprint_KeepsAFingerprintFromAFailedRun(t *testing.T) {
+	runner := &fakeRunner{respond: func(string, string) ([]byte, error) {
+		return []byte(`{"duration":215.23,"fingerprint":"AQADtE..."}`), errors.New("exit status 3")
+	}}
+	prints, err := mediatool.New(runner, 1).Fingerprint(t.Context(), []string{"/m/a.flac"})
+	if err != nil {
+		t.Fatalf("Fingerprint: %v", err)
+	}
+	if prints[0].Err != nil {
+		t.Errorf("Err = %v, want the usable fingerprint kept", prints[0].Err)
+	}
+	if prints[0].Chromaprint != "AQADtE..." {
+		t.Errorf("Chromaprint = %q, want it kept", prints[0].Chromaprint)
+	}
+	if !prints[0].Partial {
+		t.Error("Partial = false, want the failure reported alongside the fingerprint")
+	}
+}
+
+// A failed run that printed nothing usable is still a failure.
+func TestFingerprint_AFailedRunWithNoFingerprintIsAnError(t *testing.T) {
+	runner := &fakeRunner{respond: func(string, string) ([]byte, error) {
+		return nil, errors.New("exit status 2")
+	}}
+	prints, err := mediatool.New(runner, 1).Fingerprint(t.Context(), []string{"/m/a.flac"})
+	if err != nil {
+		t.Fatalf("Fingerprint: %v", err)
+	}
+	if prints[0].Err == nil {
+		t.Error("Err = nil, want the failure reported when nothing was produced")
 	}
 }

@@ -96,6 +96,10 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/clock", "internal/platform/fsx", "internal/importing/inspect", "internal/importing/pack",
 		"internal/identify/model", "internal/platform/paginate", "internal/db/store", "internal/db/store/gen/librarydb",
 	},
+	// ADR-29's fingerprint rung (D12). Talks to acoustid.org and nothing else:
+	// it identifies, and the caller resolves what it names through the ordered
+	// metadata sources, so it never reaches a database or another provider.
+	"internal/metadata/acoustid": {"internal/platform/httpx"},
 	// The only unprompted outbound call, so it needs the one way out (Invariant 28).
 	"internal/platform/egress": {"internal/platform/clock", "internal/platform/httpx"},
 	"internal/db/store":        {"internal/platform/clock", "internal/platform/fsx"},
