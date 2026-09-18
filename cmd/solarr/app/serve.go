@@ -518,6 +518,7 @@ func (p *process) startServer(ctx context.Context) error {
 		SystemHealth: adapters.SystemHealth{Cache: p.cache},
 		Blocklist:    adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
 		LogReader:    logSource{ring: p.logRing},
+		Calendar:     adapters.Calendar{Calendar: library.NewCalendar(p.library)},
 		Backups: backupSource{
 			FS: p.fsys, Directory: p.config.Paths.BackupDir,
 			Stores: []*store.Store{p.library, p.jobs, p.settings},
