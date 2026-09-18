@@ -554,3 +554,24 @@ func TestADR28_DeepCursorSeeksRatherThanScans(t *testing.T) {
 		t.Errorf("a deep cursor scans the index from the start:\n%s", plan)
 	}
 }
+
+// Descending pages must seek too. The tie-break was flipped to descending
+// (2026-09-18) precisely so the cursor is a uniform-direction row value and
+// SQLite can seek it; with the old mixed direction it scanned the whole index.
+func TestADR28_DeepDescendingCursorSeeksRatherThanScans(t *testing.T) {
+	timed(t)
+
+	works := library.NewWorks(corpus(t))
+	plan, err := works.ExplainList(t.Context(),
+		library.WorkFilter{Direction: library.SortDescending},
+		library.WorkCursor{SortTitle: "silver signals 900", ID: 90000}, listPageSize)
+	if err != nil {
+		t.Fatalf("ExplainList: %v", err)
+	}
+	if !strings.Contains(plan, "SEARCH work USING") {
+		t.Errorf("a deep descending cursor does not seek into the index:\n%s", plan)
+	}
+	if strings.Contains(plan, "SCAN work") {
+		t.Errorf("a deep descending cursor scans the index from the start:\n%s", plan)
+	}
+}

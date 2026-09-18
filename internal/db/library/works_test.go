@@ -505,3 +505,50 @@ func TestWorks_AlternateTitles_EmptyForAWorkWithNoTitlesRecorded(t *testing.T) {
 		t.Errorf("aliases = %v, want none -- nothing populates work_title yet", aliases)
 	}
 }
+
+// The descending twin of the test above. The cursor WHERE is a row value, so
+// it only agrees with the ORDER BY while the id tie-break runs in the same
+// direction as the sort. A mixed direction still *looks* right -- it seeks,
+// and a first page is correct -- but silently drops rows inside a tie group,
+// which is exactly what a plan assertion cannot see.
+func TestListWorks_DescendingPaginationWalksEveryRowExactlyOnce(t *testing.T) {
+	const total = 250
+	const pageSize = 20
+
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	for range total {
+		createWork(t, opened, "music", "Greatest Hits")
+	}
+
+	seen := make(map[int64]int, total)
+	cursor := library.WorkCursor{}
+	filter := library.WorkFilter{Direction: library.SortDescending}
+	for page := 0; ; page++ {
+		if page > total {
+			t.Fatal("pagination did not terminate; the cursor is not advancing")
+		}
+		rows, err := works.List(t.Context(), filter, cursor, pageSize)
+		if err != nil {
+			t.Fatalf("page %d: %v", page, err)
+		}
+		if len(rows) == 0 {
+			break
+		}
+		for _, row := range rows {
+			seen[row.ID]++
+		}
+		last := rows[len(rows)-1]
+		cursor = library.WorkCursor{SortTitle: last.SortTitle, ID: last.ID}
+	}
+
+	if len(seen) != total {
+		t.Errorf("walked %d distinct works descending, want %d -- %d skipped",
+			len(seen), total, total-len(seen))
+	}
+	for id, times := range seen {
+		if times != 1 {
+			t.Errorf("work %d returned %d times", id, times)
+		}
+	}
+}
