@@ -161,6 +161,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The most recent log records, newest first.
+         * @description A bounded in-memory buffer of what this process logged since it started, not a log file: there is no history across restarts, and raising the configured log level quiets this too. Advanced tier.
+         */
+        get: operations["listLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/backups": {
         parameters: {
             query?: never;
@@ -2979,6 +2999,15 @@ export interface components {
              */
             files_kept: number;
         };
+        /** @description One captured log line. */
+        LogRecord: {
+            /** Format: date-time */
+            time: string;
+            level: string;
+            message: string;
+            /** @description The record's own attributes, rendered as key=value in the order they were logged. */
+            attrs?: string[];
+        };
         /** @description One backup file on disk. */
         BackupFile: {
             name: string;
@@ -4311,6 +4340,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LibraryHealth"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    listLogs: {
+        parameters: {
+            query?: {
+                /** @description Drop anything below this level. Defaults to everything captured. */
+                level?: "debug" | "info" | "warn" | "error";
+                /** @description Match the message or any attribute, case-insensitively. */
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching records, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogRecord"][];
                 };
             };
             401: components["responses"]["Problem"];

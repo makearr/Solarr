@@ -33,6 +33,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/egress"
 	"github.com/makearr/Solarr/internal/platform/events"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/logbuffer"
 	"github.com/makearr/Solarr/internal/platform/privilege"
 	"github.com/makearr/Solarr/internal/platform/secrets"
 	"github.com/makearr/Solarr/migrations"
@@ -45,10 +46,12 @@ type Build struct {
 
 // process is everything the server owns, so shutdown has one place to look.
 type process struct {
-	build    Build
-	config   config.Config
-	fsys     fsx.FS
-	logger   *slog.Logger
+	build  Build
+	config config.Config
+	fsys   fsx.FS
+	logger *slog.Logger
+	// logRing is the in-memory buffer the Logs screen reads (revision 7.16).
+	logRing  *logbuffer.Ring
 	settings *store.Store
 	jobs     *store.Store
 	library  *store.Store
@@ -109,7 +112,7 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 		return err
 	}
 
-	logger := newLogger(loaded)
+	logger, logRing := newLogger(loaded)
 	logger.Info("timezone", "tz", timezone)
 
 	// Between loading config and checking directories, both deliberately:
@@ -123,7 +126,8 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	}
 
 	running := &process{
-		build: build, config: loaded, fsys: fsys, logger: logger, timezone: timezone, configPath: configPath,
+		build: build, config: loaded, fsys: fsys, logger: logger, logRing: logRing,
+		timezone: timezone, configPath: configPath,
 	}
 	defer running.close()
 
@@ -152,12 +156,21 @@ func loadOrCreateConfig(fsys fsx.FS, path string, out io.Writer) (config.Config,
 	return config.Create(fsys, path, config.GenerateKey, config.OSEnv())
 }
 
-func newLogger(loaded config.Config) *slog.Logger {
+// logRingCapacity is how many records the Logs screen can show. Bounded by
+// count rather than bytes: a count is what an operator reasons about.
+const logRingCapacity = 2000
+
+// newLogger builds the process logger and the in-memory ring the Logs screen
+// reads. The ring wraps the real handler rather than replacing it, so nothing
+// stops being written to stdout.
+func newLogger(loaded config.Config) (*slog.Logger, *logbuffer.Ring) {
 	options := &slog.HandlerOptions{Level: slogLevel(loaded.Logging.Level)}
+	var handler slog.Handler = slog.NewJSONHandler(os.Stdout, options)
 	if loaded.Logging.Format == config.FormatText {
-		return slog.New(slog.NewTextHandler(os.Stdout, options))
+		handler = slog.NewTextHandler(os.Stdout, options)
 	}
-	return slog.New(slog.NewJSONHandler(os.Stdout, options))
+	ring := logbuffer.NewRing(handler, logRingCapacity)
+	return slog.New(ring), ring
 }
 
 func slogLevel(level config.LogLevel) slog.Level {
@@ -504,6 +517,7 @@ func (p *process) startServer(ctx context.Context) error {
 		},
 		SystemHealth: adapters.SystemHealth{Cache: p.cache},
 		Blocklist:    adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
+		LogReader:    logSource{ring: p.logRing},
 		Backups: backupSource{
 			FS: p.fsys, Directory: p.config.Paths.BackupDir,
 			Stores: []*store.Store{p.library, p.jobs, p.settings},

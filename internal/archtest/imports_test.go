@@ -32,7 +32,8 @@ var allowedInternalImports = map[string][]string{
 		"internal/metadata/musicbrainz", "internal/metadata/wikidata", "internal/moving/drainjob",
 		"internal/moving/mover", "internal/moving/moverjob", "internal/platform/clock", "internal/platform/config",
 		"internal/platform/egress", "internal/platform/events", "internal/platform/fsx",
-		"internal/platform/httpx", "internal/platform/mediatool", "internal/platform/privilege",
+		"internal/platform/httpx", "internal/platform/logbuffer", "internal/platform/mediatool",
+		"internal/platform/privilege",
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
 	"cmd/solarr/adapters": {
@@ -53,12 +54,15 @@ var allowedInternalImports = map[string][]string{
 		"internal/jobs", "internal/identify/model", "internal/platform/paginate", "internal/identify/parse",
 		"internal/platform/privilege", "internal/identify/score", "internal/db/settings", "internal/platform/secrets",
 	},
-	"internal/platform/clock":  {},
-	"internal/platform/config": {"internal/platform/fsx", "internal/platform/privilege"},
-	"internal/platform/events": {"internal/platform/clock"},
-	"internal/platform/fsx":    {"internal/platform/clock"},
-	"internal/platform/httpx":  {"internal/platform/clock"},
-	"internal/api/health":      {"internal/db/store"},
+	"internal/platform/clock": {},
+	// A bounded in-memory slog handler (revision 7.16). Stdlib only: it wraps
+	// whatever handler it is given and knows nothing about this codebase.
+	"internal/platform/logbuffer": {},
+	"internal/platform/config":    {"internal/platform/fsx", "internal/platform/privilege"},
+	"internal/platform/events":    {"internal/platform/clock"},
+	"internal/platform/fsx":       {"internal/platform/clock"},
+	"internal/platform/httpx":     {"internal/platform/clock"},
+	"internal/api/health":         {"internal/db/store"},
 	"internal/jobs": {
 		"internal/platform/clock", "internal/platform/paginate", "internal/db/store", "internal/db/store/gen/jobsdb",
 	},

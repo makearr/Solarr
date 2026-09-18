@@ -33,6 +33,7 @@ import { RootFolders } from "./RootFolders";
 import { GeneralSettings } from "./Settings";
 import { Backups } from "./Backups";
 import { Blocklist } from "./Blocklist";
+import { Logs } from "./Logs";
 import { SchedulerPage } from "./Scheduler";
 import { Shell } from "./Shell";
 import { defaultLevelKey } from "./Sidebar";
@@ -197,6 +198,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/general", component: GeneralSettings }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/blocklist", component: Blocklist }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/backups", component: Backups }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/logs", component: Logs }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/user", component: UserSettings }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/scheduler", component: SchedulerPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/cache", component: CacheSettingsPage }),

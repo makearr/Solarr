@@ -168,6 +168,37 @@ paths:
               schema: { $ref: "#/components/schemas/LibraryHealth" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /system/logs:
+    get:
+      operationId: listLogs
+      tags: [system]
+      summary: The most recent log records, newest first.
+      description: >-
+        A bounded in-memory buffer of what this process logged since it
+        started, not a log file: there is no history across restarts, and
+        raising the configured log level quiets this too. Advanced tier.
+      parameters:
+        - name: level
+          in: query
+          description: Drop anything below this level. Defaults to everything captured.
+          schema: { type: string, enum: [debug, info, warn, error] }
+        - name: q
+          in: query
+          description: Match the message or any attribute, case-insensitively.
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 2000, default: 200 }
+      responses:
+        "200":
+          description: Matching records, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LogRecord" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /system/backups:
     get:
       operationId: listBackups
@@ -4626,6 +4657,19 @@ components:
           type: integer
           format: int64
           description: How many files the library still holds for this work. None were touched.
+
+    LogRecord:
+      type: object
+      description: One captured log line.
+      required: [time, level, message]
+      properties:
+        time: { type: string, format: date-time }
+        level: { type: string }
+        message: { type: string }
+        attrs:
+          type: array
+          description: The record's own attributes, rendered as key=value in the order they were logged.
+          items: { type: string }
 
     BackupFile:
       type: object

@@ -496,6 +496,14 @@ const (
 	GetPersonArtworkParamsSizeThumb GetPersonArtworkParamsSize = "thumb"
 )
 
+// Defines values for ListLogsParamsLevel.
+const (
+	ListLogsParamsLevelDebug ListLogsParamsLevel = "debug"
+	ListLogsParamsLevelError ListLogsParamsLevel = "error"
+	ListLogsParamsLevelInfo  ListLogsParamsLevel = "info"
+	ListLogsParamsLevelWarn  ListLogsParamsLevel = "warn"
+)
+
 // Defines values for ListWorksParamsSort.
 const (
 	ListWorksParamsSortAdded  ListWorksParamsSort = "added"
@@ -1623,6 +1631,15 @@ type LibraryLevelPage struct {
 	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
+// LogRecord One captured log line.
+type LogRecord struct {
+	// Attrs The record's own attributes, rendered as key=value in the order they were logged.
+	Attrs   *[]string `json:"attrs,omitempty"`
+	Level   string    `json:"level"`
+	Message string    `json:"message"`
+	Time    time.Time `json:"time"`
+}
+
 // LogoutStatus defines model for LogoutStatus.
 type LogoutStatus struct {
 	Status LogoutStatusStatus `json:"status"`
@@ -2594,6 +2611,19 @@ type CreateFirstAdministratorJSONBody struct {
 	Username string `json:"username"`
 }
 
+// ListLogsParams defines parameters for ListLogs.
+type ListLogsParams struct {
+	// Level Drop anything below this level. Defaults to everything captured.
+	Level *ListLogsParamsLevel `form:"level,omitempty" json:"level,omitempty"`
+
+	// Q Match the message or any attribute, case-insensitively.
+	Q     *string `form:"q,omitempty" json:"q,omitempty"`
+	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListLogsParamsLevel defines parameters for ListLogs.
+type ListLogsParamsLevel string
+
 // CreateUserJSONBody defines parameters for CreateUser.
 type CreateUserJSONBody struct {
 	Password string `json:"password"`
@@ -3229,6 +3259,9 @@ type ServerInterface interface {
 	// Configuration and operational problems with this instance (Lidarr's System health).
 	// (GET /system/health)
 	GetSystemHealth(w http.ResponseWriter, r *http.Request)
+	// The most recent log records, newest first.
+	// (GET /system/logs)
+	ListLogs(w http.ResponseWriter, r *http.Request, params ListLogsParams)
 	// Every account, with its role and category grants.
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -4066,6 +4099,12 @@ func (_ Unimplemented) GetEgress(w http.ResponseWriter, r *http.Request) {
 // Configuration and operational problems with this instance (Lidarr's System health).
 // (GET /system/health)
 func (_ Unimplemented) GetSystemHealth(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The most recent log records, newest first.
+// (GET /system/logs)
+func (_ Unimplemented) ListLogs(w http.ResponseWriter, r *http.Request, params ListLogsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8075,6 +8114,57 @@ func (siw *ServerInterfaceWrapper) GetSystemHealth(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ListLogs operation middleware
+func (siw *ServerInterfaceWrapper) ListLogs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListLogsParams
+
+	// ------------- Optional query parameter "level" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "level", r.URL.Query(), &params.Level)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "level", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLogs(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -9163,6 +9253,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/system/health", wrapper.GetSystemHealth)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/system/logs", wrapper.ListLogs)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/users", wrapper.ListUsers)
