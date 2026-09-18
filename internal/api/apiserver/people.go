@@ -87,6 +87,10 @@ type PeopleSubscriber interface {
 		ctx context.Context, personID, userID int64, mediaTypes, roles []string,
 		monitorBackCatalogue bool, excludeSecondaryTypes *[]string,
 	) error
+	// Remove unsubscribes, unmonitors and deletes the person. It never
+	// touches files: removing an artist means no longer following them.
+	// A missing person answers an error wrapping sql.ErrNoRows.
+	Remove(ctx context.Context, personID, userID int64) error
 }
 
 // PreviewReleaseGroupRow is one release group in an artist's discography,
@@ -377,4 +381,38 @@ func buildSubscriptionPreviewView(row SubscriptionPreviewRow) gen.SubscriptionPr
 	return gen.SubscriptionPreview{
 		ReleaseGroups: groups, DefaultExcludedSecondaryTypes: row.DefaultExcludedSecondaryTypes,
 	}
+}
+
+func (s *Server) routeRemovePerson(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a person id must be a number")
+		return
+	}
+	s.RemovePerson(w, r, id)
+}
+
+// RemovePerson stops following an artist and forgets them (revision 7.3).
+// Administrator only, and deliberately not a DELETE on /people/{id}: the
+// files stay, so this removes a relationship rather than the content.
+func (s *Server) RemovePerson(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.peopleSubscriber == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "people are not available")
+		return
+	}
+	if err := s.peopleSubscriber.Remove(r.Context(), id, access.UserID()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

@@ -545,7 +545,7 @@ func (p *process) startServer(ctx context.Context) error {
 		ImagesDir:  filepath.Join(p.config.Paths.CacheDir, "images"),
 		ConfigPath: p.configPath,
 		People:     adapters.People{People: library.NewPeople(p.library)},
-		PeopleSubscriber: adapters.People{
+		PeopleSubscriber: adapters.People{Subscriptions: library.NewSubscriptions(p.library),
 			People: library.NewPeople(p.library), Clock: clock.NewSystem(),
 		},
 		SubscriptionPreviewer: adapters.People{

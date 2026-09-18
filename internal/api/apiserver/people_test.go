@@ -51,6 +51,16 @@ type fakePeopleSubscriber struct {
 	lastRoles              []string
 	lastMonitorBack        bool
 	lastExcludeSecondaries *[]string
+
+	removeCalled   bool
+	removePersonID int64
+	removeUserID   int64
+}
+
+func (f *fakePeopleSubscriber) Remove(_ context.Context, personID, userID int64) error {
+	f.removeCalled = true
+	f.removePersonID, f.removeUserID = personID, userID
+	return f.err
 }
 
 func (f *fakePeopleSubscriber) Subscribe(
@@ -408,5 +418,38 @@ func TestPreviewSubscription_MissingPersonAnswers404(t *testing.T) {
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/404/subscription-preview"))
 	if recorder.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", recorder.Code)
+	}
+}
+
+func TestRemovePerson_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/1/remove", ""))
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", recorder.Code)
+	}
+	if fixture.subscriber.removeCalled {
+		t.Error("a non-administrator must not reach the engine")
+	}
+}
+
+// The subscription removed is the caller's own, so the user id has to reach
+// the engine rather than being guessed there.
+func TestRemovePerson_PassesThePersonAndCallingUser(t *testing.T) {
+	fixture := newWorksFixture(t)
+	user := fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/remove", ""))
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body = %s, want 204", recorder.Code, recorder.Body)
+	}
+	if fixture.subscriber.removePersonID != 7 {
+		t.Errorf("removePersonID = %d, want 7", fixture.subscriber.removePersonID)
+	}
+	if fixture.subscriber.removeUserID != user.ID {
+		t.Errorf("removeUserID = %d, want %d", fixture.subscriber.removeUserID, user.ID)
 	}
 }

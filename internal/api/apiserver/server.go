@@ -403,6 +403,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/people/{id}", server.routeGetPerson)
 			secured.Get("/people/{id}/artwork", server.routeGetPersonArtwork)
 			secured.Post("/people/{id}/subscribe", server.routeSubscribePerson)
+			secured.Post("/people/{id}/remove", server.routeRemovePerson)
 			secured.Get("/people/{id}/subscription-preview", server.routePreviewSubscription)
 			secured.Get("/exclusions", server.ListExclusionPatterns)
 			secured.Post("/exclusions", server.CreateExclusionPattern)

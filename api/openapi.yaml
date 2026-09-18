@@ -3570,6 +3570,29 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /people/{id}/remove:
+    post:
+      operationId: removePerson
+      tags: [library]
+      summary: Stop following an artist and forget them. Administrator only.
+      description: >-
+        Unsubscribes the caller, unmonitors, and deletes the person row and
+        its credits. **Files on disk are never touched**: removing an artist
+        is about no longer following them, not about deleting music. Their
+        albums stay in the library as works, since a work belongs to the
+        library rather than to the person credited on it -- delete those
+        separately if they are unwanted.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /people/{id}/subscription-preview:
     parameters:
       - name: id

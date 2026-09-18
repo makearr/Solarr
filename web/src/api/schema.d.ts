@@ -2246,6 +2246,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/people/{id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop following an artist and forget them. Administrator only.
+         * @description Unsubscribes the caller, unmonitors, and deletes the person row and its credits. **Files on disk are never touched**: removing an artist is about no longer following them, not about deleting music. Their albums stay in the library as works, since a work belongs to the library rather than to the person credited on it -- delete those separately if they are unwanted.
+         */
+        post: operations["removePerson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/people/{id}/subscription-preview": {
         parameters: {
             query?: never;
@@ -7699,6 +7719,29 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    removePerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };

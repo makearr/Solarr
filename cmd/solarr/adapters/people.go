@@ -17,9 +17,31 @@ import (
 // needed for Preview (todo 4.4) -- ListPeople/GetPersonDetail/Subscribe
 // never touch MusicBrainz directly.
 type People struct {
-	People   library.People
-	Provider musicbrainz.Provider
-	Clock    clock.Clock
+	People        library.People
+	Subscriptions library.Subscriptions
+	Provider      musicbrainz.Provider
+	Clock         clock.Clock
+}
+
+// Remove stops following an artist and deletes them (revision 7.3). The
+// subscription goes first so a half-finished removal leaves a person who is
+// merely no longer followed, rather than a subscription pointing at a person
+// who no longer exists. Files are never touched: a work belongs to the
+// library, not to the person credited on it.
+func (a People) Remove(ctx context.Context, personID, userID int64) error {
+	if _, err := a.People.Detail(ctx, personID); err != nil {
+		return err
+	}
+	subscriptionID, found, err := a.Subscriptions.Find(ctx, "person", personID, userID)
+	if err != nil {
+		return fmt.Errorf("adapters: find subscription for person %d: %w", personID, err)
+	}
+	if found {
+		if err := a.Subscriptions.Delete(ctx, subscriptionID); err != nil {
+			return fmt.Errorf("adapters: delete subscription %d: %w", subscriptionID, err)
+		}
+	}
+	return a.People.Delete(ctx, personID)
 }
 
 func (a People) ListPeople(

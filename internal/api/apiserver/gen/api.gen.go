@@ -3069,6 +3069,9 @@ type ServerInterface interface {
 	// A person's cached Wikidata image, if one was found.
 	// (GET /people/{id}/artwork)
 	GetPersonArtwork(w http.ResponseWriter, r *http.Request, id int64, params GetPersonArtworkParams)
+	// Stop following an artist and forget them. Administrator only.
+	// (POST /people/{id}/remove)
+	RemovePerson(w http.ResponseWriter, r *http.Request, id int64)
 	// Subscribe to a person (ADR-32) -- media types x roles x filters.
 	// (POST /people/{id}/subscribe)
 	SubscribePerson(w http.ResponseWriter, r *http.Request, id int64)
@@ -3780,6 +3783,12 @@ func (_ Unimplemented) GetPerson(w http.ResponseWriter, r *http.Request, id int6
 // A person's cached Wikidata image, if one was found.
 // (GET /people/{id}/artwork)
 func (_ Unimplemented) GetPersonArtwork(w http.ResponseWriter, r *http.Request, id int64, params GetPersonArtworkParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Stop following an artist and forget them. Administrator only.
+// (POST /people/{id}/remove)
+func (_ Unimplemented) RemovePerson(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6987,6 +6996,39 @@ func (siw *ServerInterfaceWrapper) GetPersonArtwork(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// RemovePerson operation middleware
+func (siw *ServerInterfaceWrapper) RemovePerson(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemovePerson(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SubscribePerson operation middleware
 func (siw *ServerInterfaceWrapper) SubscribePerson(w http.ResponseWriter, r *http.Request) {
 
@@ -8763,6 +8805,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/people/{id}/artwork", wrapper.GetPersonArtwork)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/people/{id}/remove", wrapper.RemovePerson)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/people/{id}/subscribe", wrapper.SubscribePerson)

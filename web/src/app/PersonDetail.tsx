@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useParams, Link } from "@tanstack/react-router";
+import { useNavigate, useParams, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
@@ -82,6 +82,7 @@ export function PersonDetail() {
   });
 
   const [subscribing, setSubscribing] = useState(false);
+  const navigate = useNavigate();
 
   const subscribe = useMutation({
     mutationFn: async (excludeSecondaryTypes: string[] | undefined) => {
@@ -96,6 +97,18 @@ export function PersonDetail() {
       setSubscribing(false);
       void queryClient.invalidateQueries({ queryKey: ["person", id] });
       void queryClient.invalidateQueries({ queryKey: ["people"] });
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: async () => {
+      if (id === undefined) return;
+      const { error } = await api.POST("/people/{id}/remove", { params: { path: { id } } });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["people"] });
+      void navigate({ to: "/people" });
     },
   });
 
@@ -167,6 +180,24 @@ export function PersonDetail() {
                 Monitored
               </span>
             )}
+            <button
+              type="button"
+              disabled={remove.isPending}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Stop following ${person.name} and remove them from the library?\n\n` +
+                      "Their albums and any files stay exactly where they are — this only removes the artist.",
+                  )
+                ) {
+                  remove.mutate();
+                }
+              }}
+              className="shrink-0 rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted
+                         enabled:hover:text-danger disabled:cursor-default"
+            >
+              Remove
+            </button>
           </div>
         </header>
 
