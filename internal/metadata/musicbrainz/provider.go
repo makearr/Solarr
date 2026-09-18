@@ -60,10 +60,46 @@ const (
 // repeat lookup costs nothing.
 type Provider struct {
 	sources      []Source
+	liveOrder    func() []string
 	cache        metacache.Cache
 	clock        clock.Clock
 	logger       *slog.Logger
 	refreshAfter time.Duration
+}
+
+// orderedSources answers the sources to try, in order, for one call. When a
+// LiveOrder is configured it is consulted every time rather than captured, so
+// reordering the list in the interface takes effect immediately -- the jobs
+// hold a Provider for the life of the process, so anything captured at
+// construction would stay stale until a restart.
+//
+// A source the order does not mention is dropped; a name the order mentions
+// that no source provides is ignored. Direct MusicBrainz is always appended
+// when the order left it out, because something has to answer (ADR-29: the
+// proxies are preferred, never required).
+func (p Provider) orderedSources() []Source {
+	if p.liveOrder == nil {
+		return p.sources
+	}
+	order := p.liveOrder()
+	if len(order) == 0 {
+		return p.sources
+	}
+	byName := make(map[string]Source, len(p.sources))
+	for _, source := range p.sources {
+		byName[source.Name()] = source
+	}
+	ordered := make([]Source, 0, len(p.sources))
+	for _, name := range order {
+		if source, found := byName[name]; found {
+			ordered = append(ordered, source)
+			delete(byName, name)
+		}
+	}
+	if fallback, found := byName[DirectName]; found {
+		ordered = append(ordered, fallback)
+	}
+	return ordered
 }
 
 // Config is what a Provider needs. Sources are tried in order -- ADR-29 puts the
@@ -71,9 +107,13 @@ type Provider struct {
 // which or how many.
 type Config struct {
 	Sources []Source
-	Cache   metacache.Cache
-	Clock   clock.Clock
-	Logger  *slog.Logger
+	// LiveOrder answers the source names to try, in order, and is called once
+	// per lookup. Optional: nil keeps Sources' own order. Mirrors how the
+	// egress proxy is read live rather than captured.
+	LiveOrder func() []string
+	Cache     metacache.Cache
+	Clock     clock.Clock
+	Logger    *slog.Logger
 	// RefreshAfter is how old a cache entry may be before it is treated as a miss
 	// (ADR-29's staleness policy). Zero means never expire -- today's behaviour.
 	RefreshAfter time.Duration
@@ -86,7 +126,7 @@ func New(config Config) Provider {
 		logger = slog.Default()
 	}
 	return Provider{
-		sources: config.Sources, cache: config.Cache, clock: config.Clock, logger: logger,
+		sources: config.Sources, liveOrder: config.LiveOrder, cache: config.Cache, clock: config.Clock, logger: logger,
 		refreshAfter: config.RefreshAfter,
 	}
 }
@@ -101,7 +141,7 @@ func (p Provider) Album(
 	}
 
 	var errs []error
-	for _, source := range p.sources {
+	for _, source := range p.orderedSources() {
 		rg, release, err := source.Album(ctx, releaseGroupMBID, releaseMBID)
 		if err != nil {
 			p.logger.WarnContext(ctx, "musicbrainz source failed",
@@ -130,7 +170,7 @@ func (p Provider) Search(
 	}
 
 	var errs []error
-	for _, source := range p.sources {
+	for _, source := range p.orderedSources() {
 		searcher, ok := source.(Searcher)
 		if !ok {
 			continue
@@ -164,7 +204,7 @@ func (p Provider) SearchByQuery(ctx context.Context, priority Priority, query st
 	}
 
 	var errs []error
-	for _, source := range p.sources {
+	for _, source := range p.orderedSources() {
 		searcher, ok := source.(QuerySearcher)
 		if !ok {
 			continue
@@ -198,7 +238,7 @@ func (p Provider) Releases(ctx context.Context, priority Priority, releaseGroupM
 		return releases, nil
 	}
 	var errs []error
-	for _, source := range p.sources {
+	for _, source := range p.orderedSources() {
 		lister, ok := source.(ReleaseLister)
 		if !ok {
 			continue
@@ -233,7 +273,7 @@ func (p Provider) SearchArtists(ctx context.Context, priority Priority, query st
 	}
 
 	var errs []error
-	for _, source := range p.sources {
+	for _, source := range p.orderedSources() {
 		searcher, ok := source.(ArtistSearcher)
 		if !ok {
 			continue
@@ -264,7 +304,7 @@ func (p Provider) SearchRecordings(ctx context.Context, priority Priority, artis
 	}
 
 	var errs []error
-	for _, source := range p.sources {
+	for _, source := range p.orderedSources() {
 		searcher, ok := source.(RecordingSearcher)
 		if !ok {
 			continue
@@ -292,7 +332,7 @@ func (p Provider) Artist(ctx context.Context, priority Priority, mbid string) (A
 	}
 
 	var errs []error
-	for _, source := range p.sources {
+	for _, source := range p.orderedSources() {
 		lookup, ok := source.(ArtistLookup)
 		if !ok {
 			continue
@@ -323,7 +363,7 @@ func (p Provider) ArtistReleaseGroups(ctx context.Context, priority Priority, ar
 	}
 
 	var errs []error
-	for _, source := range p.sources {
+	for _, source := range p.orderedSources() {
 		discography, ok := source.(Discography)
 		if !ok {
 			continue

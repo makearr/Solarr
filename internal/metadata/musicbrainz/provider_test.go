@@ -726,3 +726,75 @@ func TestProvider_SearchArtistsAnswersNothingWhenNoSourceCanSearch(t *testing.T)
 		t.Errorf("matches = %+v, want none", matches)
 	}
 }
+
+// newOrderedProvider is newProvider with a live order the test can change
+// between calls, standing in for someone reordering the list in the interface.
+func newOrderedProvider(t *testing.T, order *[]string, sources ...musicbrainz.Source) musicbrainz.Provider {
+	t.Helper()
+	return musicbrainz.New(musicbrainz.Config{
+		Sources: sources, LiveOrder: func() []string { return *order },
+		Cache: newTestCache(t), Clock: clock.NewFakeAtEpoch(),
+		Logger: slog.New(slog.DiscardHandler),
+	})
+}
+
+// The order is consulted per lookup, not captured: the jobs hold one Provider
+// for the life of the process, so a captured order would need a restart.
+func TestProvider_LiveOrderIsReadOnEveryLookup(t *testing.T) {
+	first := &fakeSource{name: "first", rg: musicbrainz.ReleaseGroup{MBID: "from-first"}}
+	second := &fakeSource{name: "second", rg: musicbrainz.ReleaseGroup{MBID: "from-second"}}
+	order := []string{"first", "second"}
+	provider := newOrderedProvider(t, &order, first, second)
+
+	group, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "", "a")
+	if err != nil {
+		t.Fatalf("Album: %v", err)
+	}
+	if group.MBID != "from-first" {
+		t.Fatalf("MBID = %q, want the first source's answer", group.MBID)
+	}
+
+	order = []string{"second", "first"}
+	group, _, err = provider.Album(t.Context(), musicbrainz.PriorityEnrich, "", "b")
+	if err != nil {
+		t.Fatalf("Album after reorder: %v", err)
+	}
+	if group.MBID != "from-second" {
+		t.Errorf("MBID = %q, want the reordered first source's answer", group.MBID)
+	}
+}
+
+// A source the order leaves out is not consulted at all.
+func TestProvider_LiveOrderOmitsUnlistedSources(t *testing.T) {
+	skipped := &fakeSource{name: "skipped", rg: musicbrainz.ReleaseGroup{MBID: "wrong"}}
+	wanted := &fakeSource{name: "wanted", rg: musicbrainz.ReleaseGroup{MBID: "right"}}
+	order := []string{"wanted"}
+	provider := newOrderedProvider(t, &order, skipped, wanted)
+
+	group, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "", "a")
+	if err != nil {
+		t.Fatalf("Album: %v", err)
+	}
+	if group.MBID != "right" {
+		t.Errorf("MBID = %q, want the listed source", group.MBID)
+	}
+	if skipped.calls != 0 {
+		t.Errorf("skipped source was called %d times, want 0", skipped.calls)
+	}
+}
+
+// Direct MusicBrainz answers even when an order forgot it: something has to
+// answer, and the others are proxies of it (ADR-29).
+func TestProvider_DirectMusicBrainzIsAlwaysReachable(t *testing.T) {
+	direct := &fakeSource{name: musicbrainz.DirectName, rg: musicbrainz.ReleaseGroup{MBID: "from-direct"}}
+	order := []string{"something-else"}
+	provider := newOrderedProvider(t, &order, direct)
+
+	group, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "", "a")
+	if err != nil {
+		t.Fatalf("Album: %v", err)
+	}
+	if group.MBID != "from-direct" {
+		t.Errorf("MBID = %q, want direct MusicBrainz to answer anyway", group.MBID)
+	}
+}

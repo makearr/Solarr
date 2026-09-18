@@ -51,6 +51,7 @@ type ScalarSettingsEntry struct {
 	PriorityUpgradeWeight      int64    `yaml:"priority_upgrade_weight,omitempty"`
 	PriorityNewReleaseDays     int64    `yaml:"priority_new_release_days,omitempty"`
 	BrainzMashUserAgent        string   `yaml:"brainzmash_user_agent,omitempty"`
+	MetadataSourceOrder        []string `yaml:"metadata_source_order,omitempty"`
 }
 
 // CategoryEntry is one category and the roots attached to it.
@@ -148,6 +149,7 @@ func (c *Cache) Export() Document {
 		PriorityUpgradeWeight:      priority.UpgradeWeight,
 		PriorityNewReleaseDays:     priority.NewReleaseDays,
 		BrainzMashUserAgent:        snapshot.MetadataSettings().BrainzMashUserAgent,
+		MetadataSourceOrder:        snapshot.MetadataSettings().SourceOrder,
 	}
 
 	roots := snapshot.RootFolders()
@@ -306,7 +308,14 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 		}
 		// Absent means the document predates the setting, so the stored agent is kept.
 		if d.Settings.BrainzMashUserAgent != "" {
-			for _, problem := range validateMetadataSettings(MetadataSettings{BrainzMashUserAgent: d.Settings.BrainzMashUserAgent}) {
+			// Absent means "say nothing about it", so the order validated here
+			// is the document's own when it has one and the default otherwise.
+			order := d.Settings.MetadataSourceOrder
+			if len(order) == 0 {
+				order = DefaultMetadataSourceOrder
+			}
+			for _, problem := range validateMetadataSettings(MetadataSettings{
+				BrainzMashUserAgent: d.Settings.BrainzMashUserAgent, SourceOrder: order}) {
 				problems = append(problems, prefixed("settings", problem))
 			}
 		}
@@ -694,6 +703,13 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 		KeyPriorityGapWeight:          strconv.FormatInt(entry.PriorityGapWeight, 10),
 		KeyPriorityUpgradeWeight:      strconv.FormatInt(entry.PriorityUpgradeWeight, 10),
 		KeyPriorityNewReleaseDays:     strconv.FormatInt(entry.PriorityNewReleaseDays, 10),
+	}
+	if len(entry.MetadataSourceOrder) > 0 {
+		encodedOrder, err := json.Marshal(entry.MetadataSourceOrder)
+		if err != nil {
+			return fmt.Errorf("settings.metadata_source_order: %w", err)
+		}
+		values[KeyMetadataSourceOrder] = string(encodedOrder)
 	}
 	if entry.BrainzMashUserAgent != "" {
 		values[KeyBrainzMashUserAgent] = entry.BrainzMashUserAgent

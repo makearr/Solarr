@@ -3681,10 +3681,17 @@ export interface components {
              */
             new_release_days: number;
         };
+        /**
+         * @description A metadata source. brainzmash and musicbrainz-proxy are third-party proxies of musicbrainz; musicbrainz is the direct upstream and cannot be removed from the order, only reordered.
+         * @enum {string}
+         */
+        MetadataSource: "brainzmash" | "musicbrainz-proxy" | "musicbrainz";
         /** @description The metadata providers' own settings. */
         MetadataSettings: {
             /** @description Sent to BrainzMash, whose front door refuses agents not starting "Lidarr/". Printable ASCII, 1-256 characters. Default Lidarr/2.9.6.4552. */
             brainzmash_user_agent: string;
+            /** @description Which metadata sources are tried, in order. A source left out is not consulted at all, except musicbrainz, which always answers as a last resort. Omitted on a PATCH leaves the stored order alone. */
+            source_order?: components["schemas"]["MetadataSource"][];
         };
         /** @description ADR-48's commit-line knob (import.auto_commit_confidence) and the transfer ladder import walks when it places a file. */
         ImportSettings: {

@@ -5531,6 +5531,14 @@ components:
           format: int64
           description: Days after release an item still counts as new rather than a gap. Default 7.
 
+    MetadataSource:
+      type: string
+      description: >-
+        A metadata source. brainzmash and musicbrainz-proxy are third-party
+        proxies of musicbrainz; musicbrainz is the direct upstream and cannot
+        be removed from the order, only reordered.
+      enum: [brainzmash, musicbrainz-proxy, musicbrainz]
+
     MetadataSettings:
       type: object
       description: The metadata providers' own settings.
@@ -5541,6 +5549,13 @@ components:
           description: >-
             Sent to BrainzMash, whose front door refuses agents not starting
             "Lidarr/". Printable ASCII, 1-256 characters. Default Lidarr/2.9.6.4552.
+        source_order:
+          type: array
+          description: >-
+            Which metadata sources are tried, in order. A source left out is
+            not consulted at all, except musicbrainz, which always answers as
+            a last resort. Omitted on a PATCH leaves the stored order alone.
+          items: { $ref: "#/components/schemas/MetadataSource" }
 
     ImportSettings:
       type: object

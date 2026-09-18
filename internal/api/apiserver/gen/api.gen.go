@@ -278,6 +278,13 @@ const (
 	MediaTypeYoutube   MediaType = "youtube"
 )
 
+// Defines values for MetadataSource.
+const (
+	MetadataSourceBrainzmash       MetadataSource = "brainzmash"
+	MetadataSourceMusicbrainz      MetadataSource = "musicbrainz"
+	MetadataSourceMusicbrainzProxy MetadataSource = "musicbrainz-proxy"
+)
+
 // Defines values for MoveJobReason.
 const (
 	MoveJobReasonCATEGORY  MoveJobReason = "CATEGORY"
@@ -1668,7 +1675,13 @@ type MediaType string
 type MetadataSettings struct {
 	// BrainzmashUserAgent Sent to BrainzMash, whose front door refuses agents not starting "Lidarr/". Printable ASCII, 1-256 characters. Default Lidarr/2.9.6.4552.
 	BrainzmashUserAgent string `json:"brainzmash_user_agent"`
+
+	// SourceOrder Which metadata sources are tried, in order. A source left out is not consulted at all, except musicbrainz, which always answers as a last resort. Omitted on a PATCH leaves the stored order alone.
+	SourceOrder *[]MetadataSource `json:"source_order,omitempty"`
 }
+
+// MetadataSource A metadata source. brainzmash and musicbrainz-proxy are third-party proxies of musicbrainz; musicbrainz is the direct upstream and cannot be removed from the order, only reordered.
+type MetadataSource string
 
 // MoveJob defines model for MoveJob.
 type MoveJob struct {

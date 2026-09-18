@@ -253,6 +253,13 @@ func NewDefaultRegistry() *Registry {
 
 	// Metadata providers: only needed while a provider filters agents, so advanced.
 	registry.MustRegister(SettingDef{
+		Key: KeyMetadataSourceOrder, Kind: KindStringList, Tier: TierAdvanced,
+		Name: "Metadata source order",
+		HelpText: "Which metadata sources are tried, in order. A source left out is not " +
+			"consulted; direct MusicBrainz can be reordered but not removed.",
+		Default: `["brainzmash","musicbrainz-proxy","musicbrainz"]`,
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyBrainzMashUserAgent, Kind: KindString, Tier: TierAdvanced,
 		Name:     "BrainzMash User-Agent",
 		HelpText: "Sent to BrainzMash, whose front door refuses agents not starting \"Lidarr/\".",

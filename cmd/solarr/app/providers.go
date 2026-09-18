@@ -99,13 +99,22 @@ func (p *process) musicBrainzBudget() musicBrainzBudget {
 func (p *process) musicBrainzProvider() musicbrainz.Provider {
 	sources := p.config.Metadata.MusicBrainz
 	return musicbrainz.New(musicbrainz.Config{
-		Sources: p.musicBrainzSources(sources), Cache: metacache.New(p.metadata), Clock: clock.NewSystem(),
+		Sources: p.musicBrainzSources(sources), LiveOrder: p.liveMetadataSourceOrder,
+		Cache: metacache.New(p.metadata), Clock: clock.NewSystem(),
 		Logger: p.logger, RefreshAfter: sources.RefreshAfter.AsDuration(),
 	})
 }
 
-// musicBrainzSources answers the sources in the order they are tried: BrainzMash,
-// the Servarr proxy, then direct MusicBrainz, which every failure falls back to.
+// liveMetadataSourceOrder answers the configured order on every lookup rather
+// than at construction: the jobs hold one Provider for the life of the
+// process, so a captured order would stay stale until a restart.
+func (p *process) liveMetadataSourceOrder() []string {
+	return p.cache.Snapshot().MetadataSettings().SourceOrder
+}
+
+// musicBrainzSources builds every source config.yml enables. Which of them are
+// tried, and in what order, is liveMetadataSourceOrder's job -- this only
+// decides what exists to choose from.
 func (p *process) musicBrainzSources(sources config.MusicBrainzConfig) []musicbrainz.Source {
 	wall := clock.NewSystem()
 	guard := httpx.NewGuard(nil, nil, nil)
