@@ -482,8 +482,10 @@ var planCases = []struct {
 		library.WorkCursor{SortArtist: "artist 50", SortTitle: "silver signals 50", ID: 100}, "work_primary_artist_sort"},
 }
 
-// A list that sorts its whole result cannot meet the ADR-28 page target at 500k, whatever
-// the measured p99 says at a smaller scale.
+// A list whose ordering the index cannot supply degrades as filters change,
+// whatever the measured p99 says at a smaller scale. Note the assertion is
+// about the plan, not about a full sort: under LIMIT a temp b-tree is bounded
+// and measured free at 250k (2026-09-18, notes.md).
 func TestADR28_ListPlansReachAnIndexAndNeverSort(t *testing.T) {
 	timed(t)
 
@@ -496,14 +498,20 @@ func TestADR28_ListPlansReachAnIndexAndNeverSort(t *testing.T) {
 		if !strings.Contains(plan, item.index) {
 			t.Errorf("%s does not reach %s:\n%s", item.name, item.index, plan)
 		}
+		// "uses a temp b-tree", not "sorts its whole result": under LIMIT the
+		// b-tree is bounded, and measurement showed no runtime cost from one
+		// (2026-09-18, notes.md). The assertion still stands -- an ordering the
+		// index cannot supply is a plan that degrades as filters change -- but
+		// the old wording sent a reader hunting for a full sort that was never
+		// happening.
 		if strings.Contains(plan, "TEMP B-TREE") {
-			t.Errorf("%s sorts its whole result:\n%s", item.name, plan)
+			t.Errorf("%s uses a temp b-tree for ORDER BY rather than an index:\n%s", item.name, plan)
 		}
 	}
 }
 
 // The Tracks level's own acceptance case (ADR-54): reaches
-// work_primary_artist_sort and never sorts the whole corpus.
+// work_primary_artist_sort and takes its ordering from the index.
 func TestADR28_TrackAlbumPagePlanReachesTheIndexAndNeverSorts(t *testing.T) {
 	timed(t)
 
@@ -517,6 +525,6 @@ func TestADR28_TrackAlbumPagePlanReachesTheIndexAndNeverSorts(t *testing.T) {
 		t.Errorf("plan does not reach work_primary_artist_sort:\n%s", plan)
 	}
 	if strings.Contains(plan, "TEMP B-TREE") {
-		t.Errorf("plan sorts its whole result:\n%s", plan)
+		t.Errorf("plan uses a temp b-tree for ORDER BY rather than an index:\n%s", plan)
 	}
 }

@@ -401,3 +401,35 @@ func TestListLibraryLevel_UngrantedCategoryAnswers404(t *testing.T) {
 		t.Errorf("status = %d, want 404", recorder.Code)
 	}
 }
+
+// Adding an artist and immediately reading "Artists 0" says the add failed,
+// which it did not: the count is persons credited on works, and credits only
+// arrive with enrichment. No number is shown until there is one.
+func TestLibraries_ArtistsCountIsOmittedWhenZero(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/libraries"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	var libraries []struct {
+		Levels []struct {
+			Key   string `json:"key"`
+			Count *int   `json:"count"`
+		} `json:"levels"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &libraries); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(libraries) == 0 {
+		t.Fatal("no libraries returned")
+	}
+	for _, level := range libraries[0].Levels {
+		if level.Key == "artists" && level.Count != nil {
+			t.Errorf("artists count = %d, want it omitted while zero", *level.Count)
+		}
+	}
+}

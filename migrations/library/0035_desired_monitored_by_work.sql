@@ -1,0 +1,20 @@
+-- Every work list plan used a temp b-tree for its ORDER BY, which ADR-28's
+-- plan test forbids. That test only runs under SOLARR_BENCH=1, so it had been
+-- failing unseen.
+--
+-- The cause was not the outer ORDER BY: work_sort already satisfies it. It was
+-- the wanted_state column, a correlated subquery ending in ORDER BY di.id
+-- LIMIT 1. No existing index served both its WHERE (work_id, monitored) and
+-- that inner ordering, so SQLite sorted inside the subquery. This index
+-- matches it exactly: partial on monitored = 1, then (work_id, id), so the
+-- seek and the inner ordering both come from the index. desired_active stays;
+-- it serves the state-first queries it was built for.
+--
+-- Measured honestly, 2026-09-18: this buys no runtime. At 250k works a list
+-- page takes 0.04 ms with or without it, where a real full scan of that table
+-- takes 6 ms -- the outer covering index already supplied the order and LIMIT
+-- bounded the temp b-tree, so nothing was ever sorting a whole result set.
+-- It is kept because it is nearly free (partial, monitored rows only) and
+-- makes the plans match the invariant as written, not because it made
+-- anything faster.
+CREATE INDEX desired_monitored_by_work ON desired_item(work_id, id) WHERE monitored = 1;

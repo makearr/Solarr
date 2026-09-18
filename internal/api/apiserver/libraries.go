@@ -192,6 +192,13 @@ func countFor(values map[string]int64, entity model.LevelEntity) *int {
 	if !ok {
 		return nil
 	}
+	// A zero artist count is never informative: the count is persons credited
+	// on works in this library, and credits only exist once enrichment has
+	// fetched each album. Adding an artist and immediately reading "Artists 0"
+	// says the add failed, which it did not. No number until there is one.
+	if entity == model.LevelEntityPerson && value == 0 {
+		return nil
+	}
 	count := int(value)
 	return &count
 }
