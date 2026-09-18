@@ -72,7 +72,7 @@ export function QualityProfiles() {
         </p>
       )}
 
-      {profiles.data && profiles.data.length > 0 ? (
+      {isTierVisible(tier, "expert") && profiles.data && profiles.data.length > 0 ? (
         <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
           {profiles.data.map((profile) =>
             editingId === profile.id ? (
@@ -114,6 +114,7 @@ export function QualityProfiles() {
           )}
         </ul>
       ) : (
+        isTierVisible(tier, "expert") &&
         !profiles.isLoading && (
           <p className="rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">
             No quality profile exists yet.
