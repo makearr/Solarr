@@ -149,3 +149,18 @@ func TestLookup_ReportsARefusal(t *testing.T) {
 		t.Errorf("err = %v, want the refusal reported", err)
 	}
 }
+
+// A literal "+" is not the meta separator: AcoustID then answers bare ids with
+// no metadata and no error, which the score filter silently discards. Measured
+// against the real service, 2026-09-18.
+func TestLookup_AsksForMetadataWithASpaceSeparatedList(t *testing.T) {
+	transport := &fakeTransport{body: goodBody}
+	client := newClient(t, transport, "key")
+
+	if _, err := client.Lookup(t.Context(), "AQAD", 3*time.Minute); err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if got := transport.lastQuery.Get("meta"); got != "recordings releasegroups" {
+		t.Errorf("meta = %q, want a space-separated list", got)
+	}
+}

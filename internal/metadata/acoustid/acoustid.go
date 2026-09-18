@@ -86,7 +86,9 @@ func (c Client) Lookup(ctx context.Context, fingerprint string, duration time.Du
 	query.Set("duration", strconv.Itoa(int(duration.Seconds())))
 	// recordings gives the ids; releasegroups the albums they sit on. Both are
 	// wanted, because a recording alone does not say which album it belongs to.
-	query.Set("meta", "recordings+releasegroups")
+	// Space-separated, never "+": a literal plus is not the separator, and
+	// AcoustID then answers bare ids with no metadata at all rather than failing.
+	query.Set("meta", "recordings releasegroups")
 	query.Set("format", "json")
 
 	var decoded response
