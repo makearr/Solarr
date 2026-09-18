@@ -192,8 +192,10 @@ function SourceOrder({
 }
 
 /** A tooltip rather than standing text, on the user's own choice (2026-09-18).
- *  title carries it for pointer and for assistive technology; the visible
- *  bubble is for keyboard focus, which title alone never shows. */
+ *  Hover and focus open it; there is deliberately no click toggle, because a
+ *  click also focuses, so the two fought and the tooltip never appeared.
+ *  title carries the same text for assistive technology and for a native
+ *  hover tip. */
 function SourceInfo({ source }: { source: (typeof SOURCES)[number] }) {
   const [open, setOpen] = useState(false);
   return (
@@ -204,9 +206,10 @@ function SourceInfo({ source }: { source: (typeof SOURCES)[number] }) {
         aria-label={`What is ${source.label}?`}
         aria-expanded={open}
         className="rounded p-0.5 text-ink-muted hover:text-ink"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
-        onClick={() => setOpen((showing) => !showing)}
       >
         <Info size={12} />
       </button>
