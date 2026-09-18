@@ -223,6 +223,12 @@ func TestEvents_SystemEventsFollowRole(t *testing.T) {
 	}
 }
 
+// Publishing is synchronous into the subscriber's channel, but the stream
+// drains that channel on its own goroutine, so which events have reached the
+// pending batch when a flush fires is a race. The requirement is that the
+// library event is never delivered, not that both land in one frame -- so this
+// waits for the job event to arrive and asserts the library event never did,
+// which is deterministic. It used to assert a single batch and flaked.
 func TestEvents_FiltersByRequestedTopics(t *testing.T) {
 	fixture := newAuthFixture(t, apiserver.AuthLocal)
 	body, closeStream := fixture.openStream(t, "avs", "?topics=job")
@@ -230,12 +236,24 @@ func TestEvents_FiltersByRequestedTopics(t *testing.T) {
 
 	fixture.bus.Publish(events.Event{Topic: events.TopicLibrary, Entity: "work:1", Kind: "updated"})
 	fixture.bus.Publish(events.Event{Topic: events.TopicJob, Entity: "job:1", Kind: "updated"})
-	fixture.clock.BlockUntilWaiters(1)
-	fixture.clock.Advance(apiserver.FlushInterval)
 
-	frames := readFrames(t, body, 1, 3*time.Second)
-	if len(frames[0].batch) != 1 || frames[0].batch[0].Topic != events.TopicJob {
-		t.Errorf("batch = %+v, want only the job event", frames[0].batch)
+	var delivered []events.Event
+	deadline := time.Now().Add(3 * time.Second)
+	for len(delivered) == 0 && time.Now().Before(deadline) {
+		fixture.clock.BlockUntilWaiters(1)
+		fixture.clock.Advance(apiserver.FlushInterval)
+		for _, frame := range readFrames(t, body, 1, 3*time.Second) {
+			delivered = append(delivered, frame.batch...)
+		}
+	}
+
+	if len(delivered) == 0 {
+		t.Fatal("nothing was delivered; the job event should have been")
+	}
+	for _, event := range delivered {
+		if event.Topic != events.TopicJob {
+			t.Errorf("delivered %+v, want only job events", event)
+		}
 	}
 }
 
