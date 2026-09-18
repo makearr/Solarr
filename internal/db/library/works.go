@@ -161,20 +161,39 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	// The id tie-break always advances ascending: it is a distinct sort key, not
 	// affected by the sort column's own direction, and ORDER BY keeps it
 	// ascending too so the two stay consistent.
+	// Ascending cursors compare as a row value, which SQLite can answer with an
+	// index seek. The equivalent OR form cannot: it makes SQLite scan the index
+	// from the beginning, measured at 6.6 ms a page against 0.01 ms at 250k
+	// works (notes.md 8.17). A descending cursor keeps the OR form, because its
+	// tie-break still advances ascending and a row value cannot express one
+	// direction per column.
+	rowValues := filter.Direction != SortDescending
+
 	var orderBy string
 	if filter.Sort == WorkSortArtist {
 		// Exactly the expression migration 0022 indexes, so the order stays indexed.
 		artist := "COALESCE(primary_artist_sort_name, '')"
-		predicates.AddIf(after.ID != 0,
-			"("+artist+" "+operator+" ? OR ("+artist+" = ? AND (work.sort_title "+operator+
-				" ? OR (work.sort_title = ? AND work.id > ?))))",
-			after.SortArtist, after.SortArtist, after.SortTitle, after.SortTitle, after.ID)
+		if rowValues {
+			predicates.AddIf(after.ID != 0,
+				"("+artist+", work.sort_title, work.id) > (?, ?, ?)",
+				after.SortArtist, after.SortTitle, after.ID)
+		} else {
+			predicates.AddIf(after.ID != 0,
+				"("+artist+" "+operator+" ? OR ("+artist+" = ? AND (work.sort_title "+operator+
+					" ? OR (work.sort_title = ? AND work.id > ?))))",
+				after.SortArtist, after.SortArtist, after.SortTitle, after.SortTitle, after.ID)
+		}
 		orderBy = artist + orderDirection + ", work.sort_title" + orderDirection + ", work.id"
 	} else {
 		column, cursorValue := sortColumn(filter.Sort, after)
-		predicates.AddIf(after.ID != 0,
-			"("+column+" "+operator+" ? OR ("+column+" = ? AND work.id > ?))",
-			cursorValue, cursorValue, after.ID)
+		if rowValues {
+			predicates.AddIf(after.ID != 0,
+				"("+column+", work.id) > (?, ?)", cursorValue, after.ID)
+		} else {
+			predicates.AddIf(after.ID != 0,
+				"("+column+" "+operator+" ? OR ("+column+" = ? AND work.id > ?))",
+				cursorValue, cursorValue, after.ID)
+		}
 		orderBy = column + orderDirection + ", work.id"
 	}
 

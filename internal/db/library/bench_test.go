@@ -470,6 +470,12 @@ var planCases = []struct {
 	// over work_type_sort for this combination and still sorts -- a real, narrower,
 	// pre-existing gap unrelated to workArtistColumn's fix, left open (notes.md).
 	{"category visibility", library.WorkFilter{CategoryIDs: []int64{1}}, library.WorkCursor{}, "work_sort"},
+	// A deep cursor must SEEK into the index, not scan it from the start. The
+	// OR-form cursor this replaced scanned, measured at 6.6 ms a page against
+	// 0.01 ms at 250k works (notes.md 8.17), and no index change helped --
+	// only writing the comparison as a row value did.
+	{"deep cursor", library.WorkFilter{},
+		library.WorkCursor{SortTitle: "silver signals 900", ID: 90000}, "work_sort"},
 	// Fresh (todo 4.20): an EXISTS-correlated subquery against work_date, the
 	// same shape addVisibility's own EXISTS clauses already use rather than
 	// IN, for the same reason -- it must not make SQLite abandon the outer
@@ -526,5 +532,25 @@ func TestADR28_TrackAlbumPagePlanReachesTheIndexAndNeverSorts(t *testing.T) {
 	}
 	if strings.Contains(plan, "TEMP B-TREE") {
 		t.Errorf("plan uses a temp b-tree for ORDER BY rather than an index:\n%s", plan)
+	}
+}
+
+// A deep cursor page must seek into the index rather than scan it: scanning is
+// what made deep pagination 600x slower than a first page, and the plan is the
+// only thing that says which happened.
+func TestADR28_DeepCursorSeeksRatherThanScans(t *testing.T) {
+	timed(t)
+
+	works := library.NewWorks(corpus(t))
+	plan, err := works.ExplainList(t.Context(), library.WorkFilter{},
+		library.WorkCursor{SortTitle: "silver signals 900", ID: 90000}, listPageSize)
+	if err != nil {
+		t.Fatalf("ExplainList: %v", err)
+	}
+	if !strings.Contains(plan, "SEARCH work USING") {
+		t.Errorf("a deep cursor does not seek into the index:\n%s", plan)
+	}
+	if strings.Contains(plan, "SCAN work") {
+		t.Errorf("a deep cursor scans the index from the start:\n%s", plan)
 	}
 }
