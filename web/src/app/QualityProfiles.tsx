@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { isTierVisible, useTier } from "@/lib/useTier";
 
 type QualityProfile = components["schemas"]["QualityProfile"];
 
@@ -20,6 +22,7 @@ type QualityProfile = components["schemas"]["QualityProfile"];
  *  got you here (a category merely references one by id, not built yet --
  *  desired_item creation for music is itself blocked on this existing). */
 export function QualityProfiles() {
+  const tier = useTier();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
@@ -45,13 +48,18 @@ export function QualityProfiles() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-3 p-6">
-      <h1 className="text-lg font-semibold">Quality profiles</h1>
-      <p className="text-sm leading-relaxed text-ink-muted">
-        Hard gates, then tiers, then an additive score (ADR-40). Nothing assigns a profile to a
-        category yet -- desired_item creation for music is itself blocked on this system existing
-        at all -- so this manages the profiles themselves, ahead of that caller.
-      </p>
-      {remove.isError && (
+      <h1 className="text-lg font-semibold">Quality</h1>
+      <LibraryProfilePicker profiles={profiles.data ?? []} />
+      {!isTierVisible(tier, "expert") ? null : (
+        <>
+          <h2 className="pt-4 text-sm font-medium">All profiles</h2>
+          <p className="text-sm leading-relaxed text-ink-muted">
+            Hard gates, then tiers, then an additive score (ADR-40). Editing the rules directly is
+            expert work; picking one for a library above is not.
+          </p>
+        </>
+      )}
+      {isTierVisible(tier, "expert") && remove.isError && (
         <p className="text-xs text-danger">
           {(remove.error as { detail?: string }).detail ?? "That profile could not be removed."}
         </p>
@@ -113,27 +121,28 @@ export function QualityProfiles() {
         )
       )}
 
-      {creating ? (
-        <div className="rounded-lg border border-border-subtle bg-surface p-3">
-          <QualityProfileForm
-            onDone={() => {
-              setCreating(false);
-              invalidate();
-            }}
-            onCancel={() => setCreating(false)}
-          />
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="w-fit rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted
-                     hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2
-                     focus-visible:outline-accent"
-        >
-          New quality profile
-        </button>
-      )}
+      {isTierVisible(tier, "expert") &&
+        (creating ? (
+          <div className="rounded-lg border border-border-subtle bg-surface p-3">
+            <QualityProfileForm
+              onDone={() => {
+                setCreating(false);
+                invalidate();
+              }}
+              onCancel={() => setCreating(false)}
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="w-fit rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted
+                       hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2
+                       focus-visible:outline-accent"
+          >
+            New quality profile
+          </button>
+        ))}
     </div>
   );
 }
@@ -229,3 +238,81 @@ function QualityProfileForm({
 const inputStyle =
   "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+
+/** Which profile this library uses, as cards. The shipped four are plain
+ *  choices a normal user should be able to make; only editing the rules
+ *  behind them is expert work (revision 9.2). Opened from a library's own
+ *  config section, so there is a category to assign to -- reached any other
+ *  way there is nothing to pick for and it stays hidden. */
+function LibraryProfilePicker({ profiles }: { profiles: QualityProfile[] }) {
+  const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
+  const queryClient = useQueryClient();
+
+  const category = useQuery({
+    queryKey: ["category", categoryId],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/categories/{id}", {
+        params: { path: { id: Number(categoryId) } },
+      });
+      if (error) throw error;
+      return data;
+    },
+    enabled: categoryId !== undefined,
+  });
+
+  const choose = useMutation({
+    mutationFn: async (profileId: number) => {
+      // CategoryWrite is a wholesale write, so the fields this screen does not
+      // own are sent back as they are rather than blanked.
+      const current = category.data;
+      if (current === undefined) return;
+      const { error } = await api.PATCH("/categories/{id}", {
+        params: { path: { id: Number(categoryId) } },
+        body: {
+          name: current.name,
+          priority_rank: current.priority_rank,
+          monitor_discovered: current.monitor_discovered,
+          language_profile_id: current.language_profile_id,
+          quality_profile_id: profileId,
+        },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["category", categoryId] });
+      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+    },
+  });
+
+  if (categoryId === undefined || !category.data) return null;
+  const chosen = category.data.quality_profile_id;
+
+  return (
+    <section className="flex flex-col gap-2">
+      <p className="text-sm leading-relaxed text-ink-muted">
+        What this library should aim for. Everything it looks for is judged against this.
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {profiles.map((profile) => (
+          <button
+            key={profile.id}
+            type="button"
+            aria-pressed={chosen === profile.id}
+            disabled={choose.isPending}
+            onClick={() => choose.mutate(profile.id)}
+            className={`flex flex-col items-start gap-0.5 rounded-lg border p-3 text-left text-sm
+                        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                          chosen === profile.id
+                            ? "border-accent bg-accent/10"
+                            : "border-border-subtle bg-surface hover:border-accent"
+                        }`}
+          >
+            <span className="font-medium">{profile.name}</span>
+            {chosen === profile.id && <span className="text-xs text-accent">In use</span>}
+          </button>
+        ))}
+      </div>
+      {choose.isError && <p className="text-xs text-danger">That could not be applied.</p>}
+    </section>
+  );
+}
