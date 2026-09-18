@@ -125,8 +125,7 @@ export function Discover() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{result.title}</div>
                   <div className="truncate text-xs text-ink-muted">
-                    {result.kind === "artist" ? result.disambiguation : result.artist}
-                    {result.year != null && ` · ${result.year}`}
+                    {subtitle(result)}
                   </div>
                 </div>
                 <button
@@ -170,6 +169,13 @@ export function Discover() {
       )}
     </div>
   );
+}
+
+/** The separator only earns its place between two present parts -- an artist
+ *  with no disambiguation was rendering as "· 1958". */
+function subtitle(result: DiscoverResult): string {
+  const lead = result.kind === "artist" ? result.disambiguation : result.artist;
+  return [lead, result.year?.toString()].filter(Boolean).join(" · ");
 }
 
 function resultKey(result: DiscoverResult): string {
