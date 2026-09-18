@@ -22,7 +22,7 @@ internal/
 ├── db/         store (+gen)  settings  library (+fixture)  recovery
 ├── jobs/       the durable queue, executor, dispatcher, task registry
 │               + capacity  cachebudget
-├── metadata/   musicbrainz  wikidata  metacache  metaresolve
+├── metadata/   musicbrainz  wikidata  acoustid  metacache  metaresolve
 ├── identify/   model  parse  match  score  priority
 ├── scanning/   scan  probe
 ├── importing/  inspect  importjob

@@ -156,7 +156,9 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 		cancel()
 		c.limiter.Observe(c.provider, Outcome{Success: false})
 		c.breaker.Observe(c.provider, false)
-		return nil, fmt.Errorf("httpx: %s %s: %w", request.Method, request.URL.Redacted(), err)
+		redacted := RedactURL(request.URL)
+		return nil, fmt.Errorf("httpx: %s %s: %w", request.Method, redacted,
+			redactRequestError(err, redacted))
 	}
 
 	class := ClassifyStatus(response.StatusCode)
@@ -182,7 +184,7 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 	_ = response.Body.Close()
 	return nil, &StatusError{
 		Provider:   c.provider,
-		URL:        request.URL.Redacted(),
+		URL:        RedactURL(request.URL),
 		Status:     response.StatusCode,
 		Class:      class,
 		RetryAfter: retryAfter,
