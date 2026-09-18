@@ -253,6 +253,13 @@ func NewDefaultRegistry() *Registry {
 
 	// Metadata providers: only needed while a provider filters agents, so advanced.
 	registry.MustRegister(SettingDef{
+		Key: KeyAcoustIDAPIKey, Kind: KindString, Tier: TierAdvanced,
+		Name: "AcoustID API key",
+		HelpText: "Enables fingerprint identification for files no other rung could name. " +
+			"Free from acoustid.org. Stored encrypted; without one that rung is skipped.",
+		Default: "",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyMetadataSourceOrder, Kind: KindStringList, Tier: TierAdvanced,
 		Name: "Metadata source order",
 		HelpText: "Which metadata sources are tried, in order. A source left out is not " +
