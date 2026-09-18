@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Ban, Info, Undo2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Ban, HelpCircle, Undo2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -229,9 +229,9 @@ const TRANSFER_METHODS: readonly {
  *  succeeds. Order is the whole point, so it is edited as a list rather than
  *  picked as a single value -- which method actually placed a file is
  *  invisible on disk, so the choice has to be stated here. */
-function TransferLadderControl() {
+export function TransferLadderControl() {
   const queryClient = useQueryClient();
-  const [explaining, setExplaining] = useState<TransferMethod | null>(null);
+  const [explaining, setExplaining] = useState(false);
 
   const settings = useQuery({
     queryKey: ["import-settings"],
@@ -270,118 +270,135 @@ function TransferLadderControl() {
     update.mutate(next);
   };
 
-  const describe = (id: TransferMethod) => TRANSFER_METHODS.find((method) => method.id === id);
-
-  // The first always-succeeding method makes everything below it unreachable.
-  // Saying so beats letting someone wonder why a rung never fires.
-  const alwaysSucceedsAt = ladder.findIndex((id) => id === "move" || id === "copy");
+  const label = (id: TransferMethod) =>
+    TRANSFER_METHODS.find((method) => method.id === id)?.label ?? id;
 
   return (
     <fieldset className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
-      <legend className="px-1 text-ink-muted">Transfer order</legend>
-      <p className="pb-1 text-[0.6875rem] text-ink-muted">
-        Tried top to bottom until one works.
-      </p>
+      <legend className="flex items-center gap-1 px-1 text-ink-muted">
+        Transfer order
+        <button
+          type="button"
+          className="rounded p-0.5 text-ink-muted hover:text-ink"
+          aria-label="What do the transfer methods do?"
+          onClick={() => setExplaining(true)}
+        >
+          <HelpCircle size={12} />
+        </button>
+      </legend>
 
-      {ladder.map((id, index) => {
-        const method = describe(id);
-        if (!method) return null;
-        return (
-          <div key={id} className="flex flex-col">
-            <div className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked
-                disabled={update.isPending || ladder.length === 1}
-                aria-label={`Use ${method.label}`}
-                onChange={() => update.mutate(ladder.filter((entry) => entry !== id))}
-              />
-              <span className="w-4 text-ink-muted">{index + 1}.</span>
-              <span className="flex-1 text-ink">
-                {method.label}
-                <span className="pl-1 text-ink-muted">{method.summary}</span>
-              </span>
-              <button
-                type="button"
-                className="rounded p-0.5 text-ink-muted hover:text-ink disabled:opacity-30"
-                disabled={index === 0 || update.isPending}
-                aria-label={`Move ${method.label} up`}
-                onClick={() => move(index, -1)}
-              >
-                <ArrowUp size={12} />
-              </button>
-              <button
-                type="button"
-                className="rounded p-0.5 text-ink-muted hover:text-ink disabled:opacity-30"
-                disabled={index === ladder.length - 1 || update.isPending}
-                aria-label={`Move ${method.label} down`}
-                onClick={() => move(index, 1)}
-              >
-                <ArrowDown size={12} />
-              </button>
-              <button
-                type="button"
-                className="rounded p-0.5 text-ink-muted hover:text-ink"
-                aria-label={`What does ${method.label} do?`}
-                aria-expanded={explaining === id}
-                onClick={() => setExplaining(explaining === id ? null : id)}
-              >
-                <Info size={12} />
-              </button>
-            </div>
-            {explaining === id && (
-              <p className="ml-6 py-1 text-[0.6875rem] leading-relaxed text-ink-muted">
-                {method.detail}
-              </p>
-            )}
-            {alwaysSucceedsAt >= 0 && index === alwaysSucceedsAt && index < ladder.length - 1 && (
-              <p className="ml-6 py-1 text-[0.6875rem] text-ink-muted">
-                {method.label} almost always succeeds, so nothing below it is normally reached.
-              </p>
-            )}
-          </div>
-        );
-      })}
+      {ladder.map((id, index) => (
+        <div key={id} className="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked
+            disabled={update.isPending || ladder.length === 1}
+            aria-label={`Use ${label(id)}`}
+            onChange={() => update.mutate(ladder.filter((entry) => entry !== id))}
+          />
+          <span className="w-4 text-ink-muted">{index + 1}.</span>
+          <span className="flex-1 text-ink">{label(id)}</span>
+          <button
+            type="button"
+            className="rounded p-0.5 text-ink-muted hover:text-ink disabled:opacity-30"
+            disabled={index === 0 || update.isPending}
+            aria-label={`Move ${label(id)} up`}
+            onClick={() => move(index, -1)}
+          >
+            <ArrowUp size={12} />
+          </button>
+          <button
+            type="button"
+            className="rounded p-0.5 text-ink-muted hover:text-ink disabled:opacity-30"
+            disabled={index === ladder.length - 1 || update.isPending}
+            aria-label={`Move ${label(id)} down`}
+            onClick={() => move(index, 1)}
+          >
+            <ArrowDown size={12} />
+          </button>
+        </div>
+      ))}
 
       {disabled.length > 0 && (
         <div className="mt-1 flex flex-col gap-1 border-t border-border-subtle pt-2">
           {disabled.map((method) => (
-            <div key={method.id} className="flex flex-col">
-              <div className="flex items-center gap-1">
-                <input
-                  type="checkbox"
-                  checked={false}
-                  disabled={update.isPending}
-                  aria-label={`Use ${method.label}`}
-                  onChange={() => update.mutate([...ladder, method.id])}
-                />
-                <span className="w-4" />
-                <span className="flex-1 text-ink-muted">
-                  {method.label}
-                  <span className="pl-1">{method.summary}</span>
-                </span>
-                <button
-                  type="button"
-                  className="rounded p-0.5 text-ink-muted hover:text-ink"
-                  aria-label={`What does ${method.label} do?`}
-                  aria-expanded={explaining === method.id}
-                  onClick={() => setExplaining(explaining === method.id ? null : method.id)}
-                >
-                  <Info size={12} />
-                </button>
-              </div>
-              {explaining === method.id && (
-                <p className="ml-6 py-1 text-[0.6875rem] leading-relaxed text-ink-muted">
-                  {method.detail}
-                </p>
-              )}
+            <div key={method.id} className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={false}
+                disabled={update.isPending}
+                aria-label={`Use ${method.label}`}
+                onChange={() => update.mutate([...ladder, method.id])}
+              />
+              <span className="w-4" />
+              <span className="flex-1 text-ink-muted">{method.label}</span>
             </div>
           ))}
         </div>
       )}
 
       {update.isError && <p className="text-danger">That could not be changed.</p>}
+      {explaining && <TransferMethodHelp onClose={() => setExplaining(false)} />}
     </fieldset>
+  );
+}
+
+/** The one explanation for all five methods, shown only when asked for. A
+ *  plain overlay rather than a Radix dialog: no primitive is installed yet and
+ *  one panel does not earn the dependency. */
+function TransferMethodHelp({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="transfer-help-title"
+        className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-lg border border-border-subtle bg-surface p-4 text-xs shadow-lg"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <h2 id="transfer-help-title" className="text-sm text-ink">
+            Transfer methods
+          </h2>
+          <button
+            type="button"
+            className="rounded px-2 py-0.5 text-ink-muted hover:text-ink"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+        <p className="pt-2 text-ink-muted">
+          Each method is tried in turn until one succeeds.
+        </p>
+        <dl className="flex flex-col gap-3 pt-3">
+          {TRANSFER_METHODS.map((method) => (
+            <div key={method.id}>
+              <dt className="text-ink">
+                {method.label}
+                <span className="pl-1 text-ink-muted">{method.summary}</span>
+              </dt>
+              <dd className="pt-0.5 leading-relaxed text-ink-muted">{method.detail}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="pt-3 leading-relaxed text-ink-muted">
+          Move and copy almost always succeed, so any method placed below them is
+          normally never reached.
+        </p>
+      </div>
+    </div>
   );
 }
 
