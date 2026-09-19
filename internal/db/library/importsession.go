@@ -87,6 +87,9 @@ type Session struct {
 	// session (todo 4.21's ETA) -- distinct from UnitsTotal, which is "found
 	// so far", not a real total.
 	UnitsEstimated *int64
+	// DismissedAt is nil while the session is still shown on the Import
+	// screen. Dismissal hides the row, it never deletes it.
+	DismissedAt *int64
 }
 
 // NewSession is what Create needs to start one run.
@@ -415,6 +418,31 @@ func (s ImportSessions) RequestCancel(ctx context.Context, sessionID int64) erro
 	return nil
 }
 
+// ErrSessionNotDismissable reports that a session has not finished, so there
+// is nothing settled to hide, or that it is already hidden.
+var ErrSessionNotDismissable = errors.New("library: import session has not finished")
+
+// Dismiss hides a finished session from the Import screen. The row stays: it
+// is still the record of what the session placed, and a revert still reaches
+// it by id.
+func (s ImportSessions) Dismiss(ctx context.Context, sessionID, at int64) error {
+	var affected int64
+	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		rows, err := librarydb.New(tx).DismissImportSession(ctx, librarydb.DismissImportSessionParams{
+			ID: sessionID, DismissedAt: sql.NullInt64{Int64: at, Valid: true},
+		})
+		affected = rows
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("library: dismiss import session %d: %w", sessionID, err)
+	}
+	if affected == 0 {
+		return ErrSessionNotDismissable
+	}
+	return nil
+}
+
 // SetExtractDir records the workspace a session is using, so a startup sweep
 // can find and remove an orphan left behind by a crash (architecture.md §6.1).
 func (s ImportSessions) SetExtractDir(ctx context.Context, sessionID int64, dir string) error {
@@ -473,9 +501,10 @@ func (s ImportSessions) SetCategory(ctx context.Context, sessionID, categoryID i
 // List returns every session, newest first, optionally filtered to one state.
 // A plain list rather than cursor-paginated: session counts never approach
 // library scale (Invariant 22 is about files, not import runs).
-func (s ImportSessions) List(ctx context.Context, filterState string) ([]Session, error) {
+func (s ImportSessions) List(ctx context.Context, filterState string, includeDismissed bool) ([]Session, error) {
 	rows, err := librarydb.New(s.store.Read()).ListImportSessions(ctx, librarydb.ListImportSessionsParams{
 		FilterByState: boolToInt(filterState != ""), State: filterState,
+		IncludeDismissed: boolToInt(includeDismissed),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: list import sessions: %w", err)
@@ -558,7 +587,7 @@ func sessionFromRow(row librarydb.ImportSession) Session {
 		UnitsSkipped: row.UnitsSkipped, UnitsFailed: row.UnitsFailed,
 		BytesImported: row.BytesImported, ExtractDir: row.ExtractDir.String,
 		StartedAt: row.StartedAt, FinishedAt: int64Ptr(row.FinishedAt), Error: row.Error.String,
-		UnitsEstimated: int64Ptr(row.UnitsEstimated),
+		UnitsEstimated: int64Ptr(row.UnitsEstimated), DismissedAt: int64Ptr(row.DismissedAt),
 	}
 }
 

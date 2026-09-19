@@ -107,3 +107,28 @@ func (c *Cache) SetImportAutoCommitConfidence(ctx context.Context, cl clock.Cloc
 		})
 	})
 }
+
+// KeyImportRenameOnImport is Lidarr's own "rename tracks" switch at the
+// import boundary, tier normal: on, an imported file is named by the
+// category's template; off, it keeps the name it arrived with.
+const KeyImportRenameOnImport = "import.rename_on_import"
+
+// DefaultImportRenameOnImport is on, the shape every shipped naming template
+// assumes (2026-09-19).
+const DefaultImportRenameOnImport = true
+
+// ImportRenameOnImport reads the switch, defaulting to on when nothing is
+// stored -- an absent row means "name it by the template", never "keep
+// whatever the indexer called it".
+func (s *Snapshot) ImportRenameOnImport() bool {
+	return s.policyBool(KeyImportRenameOnImport, DefaultImportRenameOnImport)
+}
+
+// SetImportRenameOnImport writes the switch.
+func (c *Cache) SetImportRenameOnImport(ctx context.Context, cl clock.Clock, rename bool) error {
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetInstanceSetting(ctx, settingsdb.SetInstanceSettingParams{
+			Key: KeyImportRenameOnImport, ValueJson: boolPolicy(rename), UpdatedAt: cl.Now().Unix(),
+		})
+	})
+}

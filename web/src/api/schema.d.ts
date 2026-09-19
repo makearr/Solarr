@@ -537,6 +537,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/storage/browse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a directory, for picking a path by hand. Administrator only.
+         * @description Reads one directory live, non-recursively, so a path can be browsed rather than typed from memory (2026-09-19 review). A path that is not itself a directory lists the nearest real directory above it and keeps only the entries whose names start with what was typed, which is what makes this serve as typeahead as well as a browser. An absent or empty path lists the filesystem root. Administrator only: it reports what exists on the host, the same trust boundary adding a root folder already carries.
+         */
+        get: operations["browsePath"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schedules": {
         parameters: {
             query?: never;
@@ -2001,6 +2021,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/import/sessions/{id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hide a finished session from the Import screen. Administrator only.
+         * @description Hides, never deletes (2026-09-19 review): the row stays as the record of what the session placed, and revert still reaches it by id. Only a session that has stopped may be dismissed, so a run in progress cannot be hidden out from under itself.
+         */
+        post: operations["dismissImportSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/import/sessions/{id}/commit": {
         parameters: {
             query?: never;
@@ -2697,6 +2739,21 @@ export interface components {
         /** @description One top-level entry a live directory read found. Not matched against import state -- that comparison is stage 5's own job, not built yet, so this is a plain listing, not an "unimported files" view. */
         DownloadFolderEntry: {
             name: string;
+            is_dir: boolean;
+        };
+        /** @description One directory read live for the path picker: what was actually listed, its parent, and its own entries. The listed directory is not always the path asked for -- a partial path lists the nearest real directory above it, filtered by what has been typed so far. */
+        PathListing: {
+            /** @description The directory that was listed. */
+            path: string;
+            /** @description The directory above it, absent at the filesystem root. */
+            parent?: string;
+            entries: components["schemas"]["PathEntry"][];
+            /** @description True when the directory held more entries than were returned. */
+            truncated?: boolean;
+        };
+        PathEntry: {
+            name: string;
+            path: string;
             is_dir: boolean;
         };
         /** @description One registered periodic task (ADR-59), its effective settings and run-state. */
@@ -3882,6 +3939,8 @@ export interface components {
             auto_commit_confidence: number;
             /** @description Transfer methods tried in order until one succeeds. Each may appear at most once and the list may not be empty. Omitted on a PATCH leaves the stored order alone. Default reflink, hardlink, move, copy, symlink. */
             transfer_ladder?: components["schemas"]["TransferMethod"][];
+            /** @description Whether a committed file is named by the library's own template (on, the default) or keeps the name it arrived with. The folder structure comes from the template either way. Omitted on a PATCH leaves the stored value alone. */
+            rename_on_import?: boolean;
         };
         /**
          * @description How import gets a file into the library. reflink clones it copy-on-write, sharing disk blocks but presenting as an independent file; hardlink makes a second directory entry for the same bytes; move renames it, or copies and deletes the source when it cannot; copy writes independent bytes; symlink leaves the library pointing at the source. Only reflink and hardlink avoid using more disk space, only move removes the source, and only symlink leaves the library dependent on it.
@@ -3982,6 +4041,11 @@ export interface components {
             /** Format: date-time */
             finished_at?: string;
             error?: string;
+            /**
+             * Format: date-time
+             * @description When this finished session was hidden from the Import screen. Absent while it is still shown. Dismissal hides, never deletes: the session is still what a revert reads.
+             */
+            dismissed_at?: string;
         };
         ImportEvidenceSignal: {
             kind: string;
@@ -5227,6 +5291,33 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    browsePath: {
+        parameters: {
+            query?: {
+                path?: string;
+                /** @description Leave out plain files. Default false. */
+                dirs_only?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The directory's own entries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PathListing"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };
@@ -7568,6 +7659,8 @@ export interface operations {
         parameters: {
             query?: {
                 state?: "INSPECTING" | "IMPORTING" | "CANCELLING" | "DONE" | "FAILED" | "REVERTED" | "CANCELLED";
+                /** @description Include sessions hidden from the screen. Default false. */
+                include_dismissed?: boolean;
             };
             header?: never;
             path?: never;
@@ -7667,6 +7760,31 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             /** @description The session is not running. */
+            409: components["responses"]["Problem"];
+        };
+    };
+    dismissImportSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hidden. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The session has not finished. */
             409: components["responses"]["Problem"];
         };
     };

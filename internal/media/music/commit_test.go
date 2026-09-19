@@ -113,6 +113,14 @@ func newCommitterEnv(t *testing.T) (*store.Store, *fsx.Mem, *clock.Fake) {
 // already uses for scan-time discovery, since CommitUnit shares
 // DiscoverWanted with it.
 func newCommitter(t *testing.T, accepts bool) (music.Committer, *store.Store, *fsx.Mem) {
+	return newCommitterRenaming(t, accepts, nil)
+}
+
+// newCommitterRenaming is newCommitter with the rename-on-import switch
+// under a test's control; nil means the shipped default (rename).
+func newCommitterRenaming(
+	t *testing.T, accepts bool, rename music.RenameOnImport,
+) (music.Committer, *store.Store, *fsx.Mem) {
 	t.Helper()
 	opened, fsys, fake := newCommitterEnv(t)
 
@@ -137,7 +145,7 @@ func newCommitter(t *testing.T, accepts bool) (music.Committer, *store.Store, *f
 		Categories: fakeCategories{
 			commitCategoryID: {ID: commitCategoryID, MonitorDiscovered: settings.MonitorDiscoveredMonitored},
 		},
-		Clock: fake, DefaultProfileID: 42,
+		Clock: fake, DefaultProfileID: 42, RenameOnImport: rename,
 	})
 	return committer, opened, fsys
 }
@@ -662,5 +670,43 @@ func TestCommitMatchedUnit_UsesTheMatchedReleaseAndDiscPrefixedNames(t *testing.
 		if _, err := fsys.Stat(path.Join(commitDestRoot, want)); err != nil {
 			t.Errorf("%q was not placed: %v", want, err)
 		}
+	}
+}
+
+// Rename-on-import off is Lidarr's own "rename tracks" switch: the template
+// still decides the folders, the file keeps the name it arrived with.
+func TestCommitUnit_KeepsTheSourceFileNameWhenRenamingIsOff(t *testing.T) {
+	committer, opened, fsys := newCommitterRenaming(t, true, func() bool { return false })
+
+	track := []byte("airbag bytes")
+	writeCommitSourceFile(t, fsys, "Katupoken/KI Pecezinu/eac-01_airbag.flac", track)
+
+	unit := testUnit("Katupoken/KI Pecezinu", []inspect.File{
+		{RelPath: "Katupoken/KI Pecezinu/eac-01_airbag.flac", SizeBytes: int64(len(track))},
+	})
+	probes := []mediatool.Probe{{
+		Path: path.Join(commitSourceRoot, "Katupoken/KI Pecezinu/eac-01_airbag.flac"),
+		Tags: mediatool.Tags{
+			"album": "KI Pecezinu", "albumartist": "Katupoken", "date": "1997-06-16",
+			"tracknumber": "1", "title": "Sesoge",
+		},
+	}}
+	best := model.Identification{
+		Strategy: "embedded-tag", Confidence: 0.95,
+		ExternalID: &model.ExternalID{Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 0.95},
+	}
+
+	placed, err := committer.CommitUnit(t.Context(), commitSourceRoot, unit,
+		best, music.UnitTagSourceFor(commitSourceRoot, probes), commitCategoryID)
+	if err != nil {
+		t.Fatalf("CommitUnit: %v", err)
+	}
+	paths, err := library.NewPhysical(opened).PathsForObject(t.Context(), placed.MediaObjectIDs[0])
+	if err != nil {
+		t.Fatalf("PathsForObject: %v", err)
+	}
+	want := "Katupoken/KI Pecezinu (1997)/eac-01_airbag.flac"
+	if paths[0].RelPath != want {
+		t.Errorf("RelPath = %q, want %q", paths[0].RelPath, want)
 	}
 }

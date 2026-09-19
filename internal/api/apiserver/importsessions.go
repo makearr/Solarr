@@ -21,11 +21,14 @@ import (
 // WorksReader's own doc comment gives for every library-backed interface --
 // apiserver never imports internal/db/library directly.
 type ImportSessionLister interface {
-	ListImportSessions(ctx context.Context, filterState string) ([]ImportSessionRow, error)
+	ListImportSessions(ctx context.Context, filterState string, includeDismissed bool) ([]ImportSessionRow, error)
 	GetImportSession(ctx context.Context, id int64) (ImportSessionRow, error)
 	ListImportUnits(ctx context.Context, sessionID int64, filterDecision string, afterID int64, limit int) ([]ImportUnitRow, error)
 	// CancelImportSession only flips the flag the job itself polls for (ADR-48).
 	CancelImportSession(ctx context.Context, id int64) error
+	// DismissImportSession hides a finished session from the screen without
+	// deleting anything it recorded.
+	DismissImportSession(ctx context.Context, id int64) error
 	// RevertImportSession undoes every file a session placed (ADR-48).
 	RevertImportSession(ctx context.Context, id int64, retainHours int) (ImportRevertResult, error)
 	// AssignImportCategory gives a session a destination category and places
@@ -44,6 +47,10 @@ type ImportSessionLister interface {
 
 // ErrImportSessionNotRunning is CancelImportSession's refusal to a non-running session.
 var ErrImportSessionNotRunning = errors.New("apiserver: import session is not running")
+
+// ErrImportSessionNotFinished is DismissImportSession's refusal to hide a
+// session that is still running.
+var ErrImportSessionNotFinished = errors.New("apiserver: import session has not finished")
 
 // ErrImportSessionNotRevertible is RevertImportSession's refusal to a
 // session not yet finished, or already reverted.
@@ -125,6 +132,7 @@ type ImportSessionRow struct {
 	StartedAt                               time.Time
 	FinishedAt                              *time.Time
 	Error                                   string
+	DismissedAt                             *time.Time
 }
 
 // ImportEvidenceSignal is one GROUP signal that shaped a unit's boundary.
@@ -212,6 +220,10 @@ func (s *Server) routeListImportSessions(w http.ResponseWriter, r *http.Request)
 	if raw := r.URL.Query().Get("state"); raw != "" {
 		state := gen.ListImportSessionsParamsState(raw)
 		params.State = &state
+	}
+	if r.URL.Query().Get("include_dismissed") == "true" {
+		include := true
+		params.IncludeDismissed = &include
 	}
 	s.ListImportSessions(w, r, params)
 }
@@ -344,7 +356,8 @@ func (s *Server) ListImportSessions(w http.ResponseWriter, r *http.Request, para
 	if params.State != nil {
 		filterState = string(*params.State)
 	}
-	rows, err := s.importSessions.ListImportSessions(r.Context(), filterState)
+	includeDismissed := params.IncludeDismissed != nil && *params.IncludeDismissed
+	rows, err := s.importSessions.ListImportSessions(r.Context(), filterState, includeDismissed)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -403,6 +416,43 @@ func (s *Server) CancelImportSession(w http.ResponseWriter, r *http.Request, id 
 	default:
 		w.WriteHeader(http.StatusAccepted)
 	}
+}
+
+// DismissImportSession hides a finished session from the Import screen.
+// Administrator only, like every other write on a session.
+func (s *Server) DismissImportSession(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.importSessions == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "import sessions are not available")
+		return
+	}
+
+	err := s.importSessions.DismissImportSession(r.Context(), id)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such import session")
+	case errors.Is(err, ErrImportSessionNotFinished):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Still running", "a session is dismissed once it has finished")
+	case err != nil:
+		writeError(w, s.logger, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// routeDismissImportSession parses the id path parameter, mirroring routeCancelImportSession.
+func (s *Server) routeDismissImportSession(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a session id must be a number")
+		return
+	}
+	s.DismissImportSession(w, r, id)
 }
 
 // RevertImportSession undoes every file a session placed. Administrator
@@ -652,6 +702,9 @@ func importSessionView(row ImportSessionRow) gen.ImportSession {
 	}
 	if row.Error != "" {
 		view.Error = &row.Error
+	}
+	if row.DismissedAt != nil {
+		view.DismissedAt = row.DismissedAt
 	}
 	return view
 }

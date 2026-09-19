@@ -108,7 +108,7 @@ func TestADR28_ImportJobProcessesUnitsUnderItsTarget(t *testing.T) {
 	}
 	elapsed := time.Since(started)
 
-	done, err := fx.sessions().List(t.Context(), library.ImportDone)
+	done, err := fx.sessions().List(t.Context(), library.ImportDone, false)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}

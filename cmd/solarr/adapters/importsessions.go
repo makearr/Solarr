@@ -27,9 +27,9 @@ type ImportSessions struct {
 }
 
 func (a ImportSessions) ListImportSessions(
-	ctx context.Context, filterState string,
+	ctx context.Context, filterState string, includeDismissed bool,
 ) ([]apiserver.ImportSessionRow, error) {
-	sessions, err := a.Sessions.List(ctx, filterState)
+	sessions, err := a.Sessions.List(ctx, filterState, includeDismissed)
 	if err != nil {
 		return nil, err
 	}
@@ -56,6 +56,19 @@ func (a ImportSessions) CancelImportSession(ctx context.Context, id int64) error
 	err := a.Sessions.RequestCancel(ctx, id)
 	if errors.Is(err, library.ErrSessionNotCancellable) {
 		return apiserver.ErrImportSessionNotRunning
+	}
+	return err
+}
+
+// DismissImportSession checks existence first for a genuine 404, the same
+// shape CancelImportSession above keeps.
+func (a ImportSessions) DismissImportSession(ctx context.Context, id int64) error {
+	if _, err := a.Sessions.Get(ctx, id); err != nil {
+		return err
+	}
+	err := a.Sessions.Dismiss(ctx, id, a.Clock.Now().Unix())
+	if errors.Is(err, library.ErrSessionNotDismissable) {
+		return apiserver.ErrImportSessionNotFinished
 	}
 	return err
 }
@@ -204,6 +217,10 @@ func importSessionRow(s library.Session) apiserver.ImportSessionRow {
 	if s.FinishedAt != nil {
 		finished := time.Unix(*s.FinishedAt, 0)
 		row.FinishedAt = &finished
+	}
+	if s.DismissedAt != nil {
+		dismissed := time.Unix(*s.DismissedAt, 0)
+		row.DismissedAt = &dismissed
 	}
 	return row
 }

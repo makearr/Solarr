@@ -74,6 +74,7 @@ func (p *process) importCommitter() music.Committer {
 		Clock:            clock.NewSystem(),
 		DefaultProfileID: p.defaultQualityProfileID,
 		TransferLadder:   p.transferLadder,
+		RenameOnImport:   p.renameOnImport,
 	})
 }
 
@@ -86,6 +87,12 @@ func (p *process) transferLadder() []mover.PlaceMethod {
 		ladder = append(ladder, mover.PlaceMethod(method))
 	}
 	return ladder
+}
+
+// renameOnImport reads the switch per commit, the same live read the ladder
+// above is.
+func (p *process) renameOnImport() bool {
+	return p.cache.Snapshot().ImportRenameOnImport()
 }
 
 // mediaTool builds the ffprobe reader every import path needs -- the same

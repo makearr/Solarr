@@ -65,7 +65,7 @@ func (t *pathTagTool) Available(context.Context) error { return nil }
 func (t *pathTagTool) ReadTags(ctx context.Context, paths []string) ([]mediatool.Probe, error) {
 	t.calls++
 	if t.cancelAfterCalls != 0 && t.calls == t.cancelAfterCalls {
-		inspecting, _ := t.sessions.List(ctx, library.ImportInspecting)
+		inspecting, _ := t.sessions.List(ctx, library.ImportInspecting, false)
 		for _, session := range inspecting {
 			if session.SourcePath == t.cancelSourcePath {
 				_ = t.sessions.RequestCancel(ctx, session.ID)
@@ -230,7 +230,7 @@ func TestJob_IdentifiesAndCommitsAConfidentUnit(t *testing.T) {
 	}
 
 	sessions := fx.sessions()
-	list, err := sessions.List(t.Context(), library.ImportDone)
+	list, err := sessions.List(t.Context(), library.ImportDone, false)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -291,7 +291,7 @@ func TestJob_PoisonsAUnitCarryingARefusedFile(t *testing.T) {
 	}
 
 	sessions := fx.sessions()
-	list, err := sessions.List(t.Context(), library.ImportDone)
+	list, err := sessions.List(t.Context(), library.ImportDone, false)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -327,7 +327,7 @@ func TestJob_QueuesAnUnidentifiedUnit(t *testing.T) {
 	}
 
 	sessions := fx.sessions()
-	list, err := sessions.List(t.Context(), library.ImportDone)
+	list, err := sessions.List(t.Context(), library.ImportDone, false)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -353,7 +353,7 @@ func TestJob_RecordsFailedForAnUnreadableUnit(t *testing.T) {
 	}
 
 	sessions := fx.sessions()
-	list, err := sessions.List(t.Context(), library.ImportDone)
+	list, err := sessions.List(t.Context(), library.ImportDone, false)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -387,7 +387,7 @@ func TestJob_ResumesRatherThanDuplicatingOnARetry(t *testing.T) {
 		t.Fatal("first Run succeeded, want the injected transient failure to have stopped it")
 	}
 	sessions := fx.sessions()
-	inspecting, err := sessions.List(t.Context(), library.ImportInspecting)
+	inspecting, err := sessions.List(t.Context(), library.ImportInspecting, false)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -400,7 +400,7 @@ func TestJob_ResumesRatherThanDuplicatingOnARetry(t *testing.T) {
 		t.Fatalf("retried Run: %v", err)
 	}
 
-	done, err := sessions.List(t.Context(), library.ImportDone)
+	done, err := sessions.List(t.Context(), library.ImportDone, false)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestJob_ResumesTheMatchingSessionWhenSeveralAreInProgress(t *testing.T) {
 	}
 
 	sessions := fx.sessions()
-	inspecting, err := sessions.List(t.Context(), library.ImportInspecting)
+	inspecting, err := sessions.List(t.Context(), library.ImportInspecting, false)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -459,7 +459,7 @@ func TestJob_ResumesTheMatchingSessionWhenSeveralAreInProgress(t *testing.T) {
 		t.Fatalf("retried Run for A: %v", err)
 	}
 
-	done, err := sessions.List(t.Context(), library.ImportDone)
+	done, err := sessions.List(t.Context(), library.ImportDone, false)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -493,7 +493,7 @@ func TestJob_StopsAtTheNextClusterBoundaryWhenCancelled(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	cancelled, err := fx.sessions().List(t.Context(), library.ImportCancelled)
+	cancelled, err := fx.sessions().List(t.Context(), library.ImportCancelled, false)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -566,7 +566,7 @@ func TestJob_RecordsAUnitsEstimate(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	done, err := fx.sessions().List(t.Context(), library.ImportDone)
+	done, err := fx.sessions().List(t.Context(), library.ImportDone, false)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -601,7 +601,7 @@ func TestJob_DoesNotRecomputeTheEstimateOnAResume(t *testing.T) {
 		t.Fatalf("retried Run: %v", err)
 	}
 
-	done, err := fx.sessions().List(t.Context(), library.ImportDone)
+	done, err := fx.sessions().List(t.Context(), library.ImportDone, false)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -645,7 +645,7 @@ func TestJob_MapsEachUnitInAClusterToItsOwnDecision(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	done, err := fx.sessions().List(t.Context(), library.ImportDone)
+	done, err := fx.sessions().List(t.Context(), library.ImportDone, false)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -697,7 +697,7 @@ func TestJob_PicksUpACategoryAssignedMidRun(t *testing.T) {
 		if callNumber != 1 {
 			return
 		}
-		inspecting, err := sessions.List(t.Context(), library.ImportInspecting)
+		inspecting, err := sessions.List(t.Context(), library.ImportInspecting, false)
 		if err != nil {
 			t.Fatalf("List: %v", err)
 		}
@@ -718,7 +718,7 @@ func TestJob_PicksUpACategoryAssignedMidRun(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	done, err := sessions.List(t.Context(), library.ImportDone)
+	done, err := sessions.List(t.Context(), library.ImportDone, false)
 	if err != nil || len(done) != 1 {
 		t.Fatalf("List: %v, %+v", err, done)
 	}
@@ -766,7 +766,7 @@ func TestJob_DetectsAPackFromSiblingArtistAgreement(t *testing.T) {
 	}
 
 	sessions := fx.sessions()
-	done, err := sessions.List(t.Context(), library.ImportDone)
+	done, err := sessions.List(t.Context(), library.ImportDone, false)
 	if err != nil || len(done) != 1 {
 		t.Fatalf("List: %v, %+v", err, done)
 	}
@@ -852,7 +852,7 @@ func TestJob_FingerprintIdentifiesAUnitNoTagCouldName(t *testing.T) {
 	}
 
 	sessions := fx.sessions()
-	list, err := sessions.List(t.Context(), library.ImportDone)
+	list, err := sessions.List(t.Context(), library.ImportDone, false)
 	if err != nil || len(list) != 1 {
 		t.Fatalf("sessions = %+v (err %v), want one done session", list, err)
 	}
@@ -900,7 +900,7 @@ func TestJob_PreviewHoldsEvenAConfidentUnit(t *testing.T) {
 	}
 
 	sessions := fx.sessions()
-	list, err := sessions.List(t.Context(), library.ImportDone)
+	list, err := sessions.List(t.Context(), library.ImportDone, false)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}

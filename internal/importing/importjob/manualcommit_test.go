@@ -105,7 +105,7 @@ func TestManualCommitter_CommitHeldPlacesAQueuedUnitUsingItsTopCandidate(t *test
 	}
 
 	sessions := fx.sessions()
-	done, err := sessions.List(t.Context(), library.ImportDone)
+	done, err := sessions.List(t.Context(), library.ImportDone, false)
 	if err != nil || len(done) != 1 {
 		t.Fatalf("List: %v, %+v", err, done)
 	}
@@ -157,7 +157,7 @@ func TestManualCommitter_CommitHeldRefusesAUnitThatIsNotQueued(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	sessions := fx.sessions()
-	done, _ := sessions.List(t.Context(), library.ImportDone)
+	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 	units, _ := sessions.ListUnits(t.Context(), done[0].ID)
 	if units[0].Decision != library.UnitCommit {
 		t.Fatalf("unit decision = %q, want COMMIT (test setup)", units[0].Decision)
@@ -180,7 +180,7 @@ func TestManualCommitter_CommitHeldRefusesAUnitWithNoCandidate(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	sessions := fx.sessions()
-	done, _ := sessions.List(t.Context(), library.ImportDone)
+	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 	units, _ := sessions.ListUnits(t.Context(), done[0].ID)
 	if units[0].Decision != library.UnitQueue || units[0].CandidatesJSON != "" {
 		t.Fatalf("unit = %+v, want QUEUE with no candidates (test setup)", units[0])
@@ -203,7 +203,7 @@ func TestManualCommitter_CommitHeldRefusesWithNoSessionCategory(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	sessions := fx.sessions()
-	done, _ := sessions.List(t.Context(), library.ImportDone)
+	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 	units, _ := sessions.ListUnits(t.Context(), done[0].ID)
 
 	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
@@ -230,7 +230,7 @@ func TestManualCommitter_CommitHeldRefusesWhenTheUnitChangedSinceInspection(t *t
 		t.Fatalf("Run: %v", err)
 	}
 	sessions := fx.sessions()
-	done, _ := sessions.List(t.Context(), library.ImportDone)
+	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 	units, _ := sessions.ListUnits(t.Context(), done[0].ID)
 
 	if err := fx.fsys.Remove(filepath.Join(root, "Artist/Album/02.flac")); err != nil {
@@ -277,7 +277,7 @@ func TestManualCommitter_CommitHeldPlacesTheCorrectSiblingWhenUnitsShareADirecto
 		t.Fatalf("Run: %v", err)
 	}
 	sessions := fx.sessions()
-	done, _ := sessions.List(t.Context(), library.ImportDone)
+	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 	units, _ := sessions.ListUnits(t.Context(), done[0].ID)
 	if len(units) != 2 || units[0].RelPath != units[1].RelPath {
 		t.Fatalf("units = %+v, want 2 sharing one rel_path (test setup)", units)
@@ -334,7 +334,7 @@ func TestManualCommitter_CommitHeldRefusesAReveredSession(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	sessions := fx.sessions()
-	done, _ := sessions.List(t.Context(), library.ImportDone)
+	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 	units, _ := sessions.ListUnits(t.Context(), done[0].ID)
 	if err := sessions.Finish(t.Context(), done[0].ID, library.ImportReverted, fx.clock.Now().Unix(), ""); err != nil {
 		t.Fatalf("Finish: %v", err)
@@ -361,7 +361,7 @@ func TestManualCommitter_PlaceUnplacedPlacesEveryUndecidedCommitUnit(t *testing.
 		t.Fatalf("Run: %v", err)
 	}
 	sessions := fx.sessions()
-	done, _ := sessions.List(t.Context(), library.ImportDone)
+	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 	units, _ := sessions.ListUnits(t.Context(), done[0].ID)
 	if units[0].Decision != library.UnitCommit || units[0].WorkID != nil {
 		t.Fatalf("unit = %+v, want COMMIT-decided but unplaced (test setup)", units[0])
@@ -403,7 +403,7 @@ func TestManualCommitter_PlaceUnplacedRefusesWithNoCategory(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	sessions := fx.sessions()
-	done, _ := sessions.List(t.Context(), library.ImportDone)
+	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 
 	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
 	_, errs := manual.PlaceUnplaced(t.Context(), done[0].ID)
@@ -424,7 +424,7 @@ func TestManualCommitter_PlaceUnplacedIsBestEffortAcrossSeveralUnits(t *testing.
 		t.Fatalf("Run: %v", err)
 	}
 	sessions := fx.sessions()
-	done, _ := sessions.List(t.Context(), library.ImportDone)
+	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 	units, _ := sessions.ListUnits(t.Context(), done[0].ID)
 	if len(units) != 2 {
 		t.Fatalf("got %d units, want 2 (test setup)", len(units))
@@ -458,7 +458,7 @@ func TestManualCommitter_CommitAllHeldCommitsEveryUnitAPreviewHeld(t *testing.T)
 		t.Fatalf("Run: %v", err)
 	}
 	sessions := fx.sessions()
-	done, _ := sessions.List(t.Context(), library.ImportDone)
+	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 	units, _ := sessions.ListUnits(t.Context(), done[0].ID)
 	if len(units) != 2 || units[0].Decision != library.UnitQueue || units[1].Decision != library.UnitQueue {
 		t.Fatalf("units = %+v, want two QUEUE (test setup)", units)
@@ -489,7 +489,7 @@ func TestManualCommitter_CommitAllHeldCommitsOnlyTheNamedSubset(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	sessions := fx.sessions()
-	done, _ := sessions.List(t.Context(), library.ImportDone)
+	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 	units, _ := sessions.ListUnits(t.Context(), done[0].ID)
 	if err := sessions.SetCategory(t.Context(), done[0].ID, 9); err != nil {
 		t.Fatalf("SetCategory: %v", err)
@@ -524,7 +524,7 @@ func TestManualCommitter_CommitAllHeldRefusesWithNoCategory(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	sessions := fx.sessions()
-	done, _ := sessions.List(t.Context(), library.ImportDone)
+	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 
 	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
 	_, errs := manual.CommitAllHeld(t.Context(), done[0].ID, nil)
@@ -544,7 +544,7 @@ func TestManualCommitter_CommitAllHeldSkipsAUnitThatIsNotQueued(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	sessions := fx.sessions()
-	done, _ := sessions.List(t.Context(), library.ImportDone)
+	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 	if err := sessions.SetCategory(t.Context(), done[0].ID, 9); err != nil {
 		t.Fatalf("SetCategory: %v", err)
 	}

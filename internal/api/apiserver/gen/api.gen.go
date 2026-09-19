@@ -1412,15 +1412,18 @@ type ImportRevertResult struct {
 // ImportSession One inspection-and-import run over one source path (ADR-48).
 type ImportSession struct {
 	// BytesImported Only committed units' bytes.
-	BytesImported int64               `json:"bytes_imported"`
-	CategoryId    *int64              `json:"category_id,omitempty"`
-	Error         *string             `json:"error,omitempty"`
-	FinishedAt    *time.Time          `json:"finished_at,omitempty"`
-	Id            int64               `json:"id"`
-	Origin        ImportSessionOrigin `json:"origin"`
-	SourcePath    string              `json:"source_path"`
-	StartedAt     time.Time           `json:"started_at"`
-	State         ImportSessionState  `json:"state"`
+	BytesImported int64  `json:"bytes_imported"`
+	CategoryId    *int64 `json:"category_id,omitempty"`
+
+	// DismissedAt When this finished session was hidden from the Import screen. Absent while it is still shown. Dismissal hides, never deletes: the session is still what a revert reads.
+	DismissedAt *time.Time          `json:"dismissed_at,omitempty"`
+	Error       *string             `json:"error,omitempty"`
+	FinishedAt  *time.Time          `json:"finished_at,omitempty"`
+	Id          int64               `json:"id"`
+	Origin      ImportSessionOrigin `json:"origin"`
+	SourcePath  string              `json:"source_path"`
+	StartedAt   time.Time           `json:"started_at"`
+	State       ImportSessionState  `json:"state"`
 
 	// Threshold import.auto_commit_confidence's value in force for this run.
 	Threshold      float32 `json:"threshold"`
@@ -1444,6 +1447,9 @@ type ImportSessionState string
 type ImportSettings struct {
 	// AutoCommitConfidence 0.75-0.95, the section 11.4 table's five named levels. Default 0.90.
 	AutoCommitConfidence float32 `json:"auto_commit_confidence"`
+
+	// RenameOnImport Whether a committed file is named by the library's own template (on, the default) or keeps the name it arrived with. The folder structure comes from the template either way. Omitted on a PATCH leaves the stored value alone.
+	RenameOnImport *bool `json:"rename_on_import,omitempty"`
 
 	// TransferLadder Transfer methods tried in order until one succeeds. Each may appear at most once and the list may not be empty. Omitted on a PATCH leaves the stored order alone. Default reflink, hardlink, move, copy, symlink.
 	TransferLadder *[]TransferMethod `json:"transfer_ladder,omitempty"`
@@ -1889,6 +1895,27 @@ type PartFile struct {
 	Lossless      bool    `json:"lossless"`
 	MediaObjectId int64   `json:"media_object_id"`
 	VideoCodec    *string `json:"video_codec,omitempty"`
+}
+
+// PathEntry defines model for PathEntry.
+type PathEntry struct {
+	IsDir bool   `json:"is_dir"`
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+}
+
+// PathListing One directory read live for the path picker: what was actually listed, its parent, and its own entries. The listed directory is not always the path asked for -- a partial path lists the nearest real directory above it, filtered by what has been typed so far.
+type PathListing struct {
+	Entries []PathEntry `json:"entries"`
+
+	// Parent The directory above it, absent at the filesystem root.
+	Parent *string `json:"parent,omitempty"`
+
+	// Path The directory that was listed.
+	Path string `json:"path"`
+
+	// Truncated True when the directory held more entries than were returned.
+	Truncated *bool `json:"truncated,omitempty"`
 }
 
 // Permission `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.
@@ -2553,6 +2580,9 @@ type StreamEventsParams struct {
 // ListImportSessionsParams defines parameters for ListImportSessions.
 type ListImportSessionsParams struct {
 	State *ListImportSessionsParamsState `form:"state,omitempty" json:"state,omitempty"`
+
+	// IncludeDismissed Include sessions hidden from the screen. Default false.
+	IncludeDismissed *bool `form:"include_dismissed,omitempty" json:"include_dismissed,omitempty"`
 }
 
 // ListImportSessionsParamsState defines parameters for ListImportSessions.
@@ -2773,6 +2803,14 @@ type SetAuthPolicyJSONBody struct {
 type CreateFirstAdministratorJSONBody struct {
 	Password string `json:"password"`
 	Username string `json:"username"`
+}
+
+// BrowsePathParams defines parameters for BrowsePath.
+type BrowsePathParams struct {
+	Path *string `form:"path,omitempty" json:"path,omitempty"`
+
+	// DirsOnly Leave out plain files. Default false.
+	DirsOnly *bool `form:"dirs_only,omitempty" json:"dirs_only,omitempty"`
 }
 
 // ListLogsParams defines parameters for ListLogs.
@@ -3225,6 +3263,9 @@ type ServerInterface interface {
 	// Commit the units this session held for review, all or a chosen subset. Administrator only.
 	// (POST /import/sessions/{id}/commit)
 	CommitHeldImportUnits(w http.ResponseWriter, r *http.Request, id int64)
+	// Hide a finished session from the Import screen. Administrator only.
+	// (POST /import/sessions/{id}/dismiss)
+	DismissImportSession(w http.ResponseWriter, r *http.Request, id int64)
 	// Undo every file this session placed. Administrator only.
 	// (POST /import/sessions/{id}/revert)
 	RevertImportSession(w http.ResponseWriter, r *http.Request, id int64)
@@ -3444,6 +3485,9 @@ type ServerInterface interface {
 	// Create the administrator account, once.
 	// (POST /setup/admin)
 	CreateFirstAdministrator(w http.ResponseWriter, r *http.Request)
+	// List a directory, for picking a path by hand. Administrator only.
+	// (GET /storage/browse)
+	BrowsePath(w http.ResponseWriter, r *http.Request, params BrowsePathParams)
 	// The backup files on disk, newest first.
 	// (GET /system/backups)
 	ListBackups(w http.ResponseWriter, r *http.Request)
@@ -3867,6 +3911,12 @@ func (_ Unimplemented) AssignImportSessionCategory(w http.ResponseWriter, r *htt
 // Commit the units this session held for review, all or a chosen subset. Administrator only.
 // (POST /import/sessions/{id}/commit)
 func (_ Unimplemented) CommitHeldImportUnits(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Hide a finished session from the Import screen. Administrator only.
+// (POST /import/sessions/{id}/dismiss)
+func (_ Unimplemented) DismissImportSession(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4305,6 +4355,12 @@ func (_ Unimplemented) GetSetupStatus(w http.ResponseWriter, r *http.Request) {
 // Create the administrator account, once.
 // (POST /setup/admin)
 func (_ Unimplemented) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List a directory, for picking a path by hand. Administrator only.
+// (GET /storage/browse)
+func (_ Unimplemented) BrowsePath(w http.ResponseWriter, r *http.Request, params BrowsePathParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6098,6 +6154,14 @@ func (siw *ServerInterfaceWrapper) ListImportSessions(w http.ResponseWriter, r *
 		return
 	}
 
+	// ------------- Optional query parameter "include_dismissed" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "include_dismissed", r.URL.Query(), &params.IncludeDismissed)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "include_dismissed", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListImportSessions(w, r, params)
 	}))
@@ -6232,6 +6296,39 @@ func (siw *ServerInterfaceWrapper) CommitHeldImportUnits(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CommitHeldImportUnits(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DismissImportSession operation middleware
+func (siw *ServerInterfaceWrapper) DismissImportSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DismissImportSession(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8453,6 +8550,49 @@ func (siw *ServerInterfaceWrapper) CreateFirstAdministrator(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// BrowsePath operation middleware
+func (siw *ServerInterfaceWrapper) BrowsePath(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params BrowsePathParams
+
+	// ------------- Optional query parameter "path" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "path", r.URL.Query(), &params.Path)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "path", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "dirs_only" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "dirs_only", r.URL.Query(), &params.DirsOnly)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dirs_only", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BrowsePath(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListBackups operation middleware
 func (siw *ServerInterfaceWrapper) ListBackups(w http.ResponseWriter, r *http.Request) {
 
@@ -9508,6 +9648,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/import/sessions/{id}/commit", wrapper.CommitHeldImportUnits)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/import/sessions/{id}/dismiss", wrapper.DismissImportSession)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/import/sessions/{id}/revert", wrapper.RevertImportSession)
 	})
 	r.Group(func(r chi.Router) {
@@ -9725,6 +9868,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/setup/admin", wrapper.CreateFirstAdministrator)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/storage/browse", wrapper.BrowsePath)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/system/backups", wrapper.ListBackups)

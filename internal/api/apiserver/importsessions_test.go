@@ -21,6 +21,10 @@ type fakeImportSessionLister struct {
 	// cancelErr is what CancelImportSession returns; cancelled is the last id it was asked to cancel.
 	cancelErr error
 	cancelled int64
+	// dismissErr is what DismissImportSession returns; dismissed is the last
+	// id it was asked to hide.
+	dismissErr error
+	dismissed  int64
 	// revertErr/revertResult are what RevertImportSession returns; reverted/lastRetainHours
 	// are the last id and retention it was asked to revert with.
 	revertErr       error
@@ -28,11 +32,12 @@ type fakeImportSessionLister struct {
 	reverted        int64
 	lastRetainHours int
 
-	lastFilterState    string
-	lastSessionID      int64
-	lastFilterDecision string
-	lastAfterID        int64
-	lastLimit          int
+	lastFilterState      string
+	lastIncludeDismissed bool
+	lastSessionID        int64
+	lastFilterDecision   string
+	lastAfterID          int64
+	lastLimit            int
 
 	// assignErr/assignResult are what AssignImportCategory returns; assignedSession/
 	// assignedCategory are the last arguments it was called with.
@@ -82,6 +87,11 @@ func (f *fakeImportSessionLister) CancelImportSession(_ context.Context, id int6
 	return f.cancelErr
 }
 
+func (f *fakeImportSessionLister) DismissImportSession(_ context.Context, id int64) error {
+	f.dismissed = id
+	return f.dismissErr
+}
+
 func (f *fakeImportSessionLister) RevertImportSession(
 	_ context.Context, id int64, retainHours int,
 ) (apiserver.ImportRevertResult, error) {
@@ -91,9 +101,9 @@ func (f *fakeImportSessionLister) RevertImportSession(
 }
 
 func (f *fakeImportSessionLister) ListImportSessions(
-	_ context.Context, filterState string,
+	_ context.Context, filterState string, includeDismissed bool,
 ) ([]apiserver.ImportSessionRow, error) {
-	f.lastFilterState = filterState
+	f.lastFilterState, f.lastIncludeDismissed = filterState, includeDismissed
 	return f.sessions, f.err
 }
 

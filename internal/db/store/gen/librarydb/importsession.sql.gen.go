@@ -76,7 +76,7 @@ VALUES (?1, ?2, ?3,
         ?4, 'INSPECTING', ?5, ?6)
 RETURNING id, source_path, origin, acquisition_id, category_id, state, threshold,
           units_total, units_committed, units_queued, bytes_imported, extract_dir,
-          started_at, finished_at, error, units_skipped, units_failed, units_estimated
+          started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at
 `
 
 type CreateImportSessionParams struct {
@@ -119,8 +119,32 @@ func (q *Queries) CreateImportSession(ctx context.Context, arg CreateImportSessi
 		&i.UnitsSkipped,
 		&i.UnitsFailed,
 		&i.UnitsEstimated,
+		&i.DismissedAt,
 	)
 	return i, err
+}
+
+const dismissImportSession = `-- name: DismissImportSession :execrows
+UPDATE import_session SET dismissed_at = ?1
+WHERE id = ?2 AND dismissed_at IS NULL
+  AND state IN ('DONE', 'FAILED', 'CANCELLED', 'REVERTED')
+`
+
+type DismissImportSessionParams struct {
+	DismissedAt sql.NullInt64
+	ID          int64
+}
+
+// Hides a finished session from the Import screen without deleting anything:
+// the row is still what a revert reads. Only from a state that has stopped,
+// so a run in progress cannot be dismissed out from under itself. :execrows
+// distinguishes "no such session, or still running" from "now hidden".
+func (q *Queries) DismissImportSession(ctx context.Context, arg DismissImportSessionParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, dismissImportSession, arg.DismissedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const finishImportSession = `-- name: FinishImportSession :exec
@@ -149,7 +173,7 @@ func (q *Queries) FinishImportSession(ctx context.Context, arg FinishImportSessi
 const getImportSession = `-- name: GetImportSession :one
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error, units_skipped, units_failed, units_estimated
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at
 FROM import_session WHERE id = ?
 `
 
@@ -175,6 +199,7 @@ func (q *Queries) GetImportSession(ctx context.Context, id int64) (ImportSession
 		&i.UnitsSkipped,
 		&i.UnitsFailed,
 		&i.UnitsEstimated,
+		&i.DismissedAt,
 	)
 	return i, err
 }
@@ -302,15 +327,17 @@ func (q *Queries) InsertImportUnitFile(ctx context.Context, arg InsertImportUnit
 const listImportSessions = `-- name: ListImportSessions :many
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error, units_skipped, units_failed, units_estimated
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at
 FROM import_session
-WHERE ?1 = 0 OR state = ?2
+WHERE (?1 = 0 OR state = ?2)
+  AND (?3 = 1 OR dismissed_at IS NULL)
 ORDER BY started_at DESC
 `
 
 type ListImportSessionsParams struct {
-	FilterByState interface{}
-	State         string
+	FilterByState    interface{}
+	State            string
+	IncludeDismissed interface{}
 }
 
 // Small, operator-facing list -- session counts never approach library scale
@@ -320,7 +347,7 @@ type ListImportSessionsParams struct {
 // already uses -- an "arg = ” OR ..." single-argument form leaves sqlc unable to
 // infer a concrete type for the argument.
 func (q *Queries) ListImportSessions(ctx context.Context, arg ListImportSessionsParams) ([]ImportSession, error) {
-	rows, err := q.db.QueryContext(ctx, listImportSessions, arg.FilterByState, arg.State)
+	rows, err := q.db.QueryContext(ctx, listImportSessions, arg.FilterByState, arg.State, arg.IncludeDismissed)
 	if err != nil {
 		return nil, err
 	}
@@ -347,6 +374,7 @@ func (q *Queries) ListImportSessions(ctx context.Context, arg ListImportSessions
 			&i.UnitsSkipped,
 			&i.UnitsFailed,
 			&i.UnitsEstimated,
+			&i.DismissedAt,
 		); err != nil {
 			return nil, err
 		}

@@ -37,6 +37,7 @@ type ScalarSettingsEntry struct {
 	AuthRequired               bool     `yaml:"auth_required"`
 	ImportAutoCommitConfidence float64  `yaml:"import_auto_commit_confidence"`
 	ImportTransferLadder       []string `yaml:"import_transfer_ladder,omitempty"`
+	ImportRenameOnImport       bool     `yaml:"import_rename_on_import"`
 	NetworkPort                int      `yaml:"network_port,omitempty"`
 	NetworkProxyEnabled        bool     `yaml:"network_proxy_enabled"`
 	NetworkProxyURL            string   `yaml:"network_proxy_url,omitempty"`
@@ -137,6 +138,7 @@ func (c *Cache) Export() Document {
 		AuthRequired:               snapshot.AuthRequired(),
 		ImportAutoCommitConfidence: snapshot.ImportAutoCommitConfidence(),
 		ImportTransferLadder:       snapshot.ImportTransferLadder(),
+		ImportRenameOnImport:       snapshot.ImportRenameOnImport(),
 		NetworkPort:                network.Port,
 		NetworkProxyEnabled:        network.ProxyEnabled,
 		NetworkProxyURL:            network.ProxyURL,
@@ -696,6 +698,7 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 		KeyAuthRequired:               strconv.FormatBool(entry.AuthRequired),
 		KeyImportTransferLadder:       string(transferLadder),
 		KeyImportAutoCommitConfidence: strconv.FormatFloat(entry.ImportAutoCommitConfidence, 'f', -1, 64),
+		KeyImportRenameOnImport:       strconv.FormatBool(entry.ImportRenameOnImport),
 		KeyNetworkPort:                strconv.Itoa(entry.NetworkPort),
 		KeyNetworkProxyEnabled:        strconv.FormatBool(entry.NetworkProxyEnabled),
 		KeyNetworkProxyURL:            entry.NetworkProxyURL,
