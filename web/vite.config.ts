@@ -17,6 +17,9 @@ export default defineConfig({
     // does not mind having one.
     environment: "jsdom",
     setupFiles: ["./src/test-setup.ts"],
+    // e2e/ is the Playwright smoke suite (make e2e). It needs a real browser and
+    // a running instance, so vitest must not try to collect it.
+    exclude: ["node_modules/**", "e2e/**"],
   },
   build: {
     outDir: "../internal/api/webui/dist",

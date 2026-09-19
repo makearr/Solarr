@@ -40,7 +40,7 @@ RUN_NODE_ROOT := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) \
                  -v solarr-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
 
 .PHONY: help verify build test race bench bench-drivers lint vet fmt fmt-check sqlc sqlc-check \
-        api web web-test web-dev image image-local builder binfmt milestone version cache-init clean-cache deps tidy \
+        api web web-test web-dev e2e image image-local builder binfmt milestone version cache-init clean-cache deps tidy \
         license-check
 
 # Version is year.month.release.build (documentation/versioning.md). Never parse a
@@ -165,6 +165,10 @@ api:        ## Regenerate Go server + TS client from api/openapi.yaml
 ## ---- web ----
 web:        ## Production build, embedded via embed.FS. Lints and tests first.
 	$(RUN_NODE) npm ci && $(RUN_NODE) npm run build
+
+e2e:        ## One-shot smoke run: builds the image, drives a throwaway instance, removes it
+	@$(MAKE) --no-print-directory image-local
+	@scripts/e2e.sh
 
 web-test:   ## Frontend unit tests only
 	$(RUN_NODE) npm ci && $(RUN_NODE) npm run test

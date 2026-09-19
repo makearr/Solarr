@@ -4,7 +4,9 @@ import reactHooks from "eslint-plugin-react-hooks";
 
 // The rules of hooks are invisible to tsc. See documentation/web-interface.md.
 export default tseslint.config(
-  { ignores: ["src/api/schema.d.ts"] },
+  // e2e/ is the Playwright suite: its own package, its own dependencies, not
+  // part of the bundle this config lints.
+  { ignores: ["src/api/schema.d.ts", "e2e/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

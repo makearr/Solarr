@@ -61,3 +61,7 @@ config.local.yml
 # Claude Code harness state, including worktree-isolated subagent checkouts
 # (each a full nested working tree -- never something to commit)
 /.claude/
+
+# The smoke suite writes its report, screenshots and traces here.
+web/e2e/out/
+web/e2e/node_modules/

@@ -1,0 +1,9 @@
+{
+  "name": "solarr-e2e",
+  "private": true,
+  "type": "module",
+  "description": "The one-shot smoke suite. Pinned to the Playwright image's own version so the browsers already in the image are the ones that run.",
+  "devDependencies": {
+    "@playwright/test": "1.50.0"
+  }
+}
