@@ -184,8 +184,12 @@ func NewDefaultRegistry() *Registry {
 		Name: "Port", HelpText: "0 (unset) defers to config.yml/the built-in default.", Default: "0",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyNetworkProxyEnabled, Kind: KindBool, Tier: TierAdvanced,
+		Name: "Use a proxy", HelpText: "Off until turned on: the URL below does nothing while it is.", Default: "false",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyNetworkProxyURL, Kind: KindString, Tier: TierAdvanced,
-		Name: "Egress proxy", HelpText: "http, https or socks5, with an explicit port.", Default: "",
+		Name: "Proxy", HelpText: "http, https or socks5, with an explicit port.", Default: "",
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyNetworkProxyBypass, Kind: KindStringList, Tier: TierAdvanced,
@@ -193,10 +197,16 @@ func NewDefaultRegistry() *Registry {
 		Default: `["127.0.0.0/8","10.0.0.0/8","172.16.0.0/12","192.168.0.0/16"]`,
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyNetworkAllowCIDRsEnabled, Kind: KindBool, Tier: TierAdvanced,
+		Name:     "Enforce the IP whitelist",
+		HelpText: "Off until turned on, so the prefilled ranges are a suggestion until then.",
+		Default:  "false",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyNetworkAllowCIDRs, Kind: KindStringList, Tier: TierAdvanced,
 		Name:     "IP whitelist",
-		HelpText: "Empty allows every address; non-empty can only deny (Invariant 89).",
-		Default:  "[]",
+		HelpText: "Once enforced this can only deny, never grant (Invariant 89).",
+		Default:  `["127.0.0.0/8","10.0.0.0/8","172.16.0.0/12","192.168.0.0/16"]`,
 	})
 
 	// Cache (ADR-60): sizing and database maintenance -- expert, per

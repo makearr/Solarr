@@ -17,12 +17,14 @@ import (
 )
 
 type networkSettingsBody struct {
-	Port            int      `json:"port"`
-	InEffectPort    int      `json:"in_effect_port"`
-	RestartRequired bool     `json:"restart_required"`
-	ProxyURL        *string  `json:"proxy_url,omitempty"`
-	ProxyBypass     []string `json:"proxy_bypass"`
-	AllowCIDRs      []string `json:"allow_cidrs"`
+	Port              int      `json:"port"`
+	InEffectPort      int      `json:"in_effect_port"`
+	RestartRequired   bool     `json:"restart_required"`
+	ProxyURL          *string  `json:"proxy_url,omitempty"`
+	ProxyEnabled      bool     `json:"proxy_enabled"`
+	ProxyBypass       []string `json:"proxy_bypass"`
+	AllowCIDRsEnabled bool     `json:"allow_cidrs_enabled"`
+	AllowCIDRs        []string `json:"allow_cidrs"`
 }
 
 func TestGetNetworkSettings_RequiresAuthentication(t *testing.T) {
@@ -46,9 +48,10 @@ func TestGetNetworkSettings_DefaultsToNothingConfigured(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if body.Port != 0 || body.RestartRequired || len(body.AllowCIDRs) != 0 ||
-		!slices.Equal(body.ProxyBypass, settings.DefaultProxyBypass) {
-		t.Errorf("body = %+v, want nothing configured but the default proxy bypass", body)
+	if body.Port != 0 || body.RestartRequired || body.ProxyEnabled || body.AllowCIDRsEnabled ||
+		!slices.Equal(body.ProxyBypass, settings.DefaultLocalRanges) ||
+		!slices.Equal(body.AllowCIDRs, settings.DefaultLocalRanges) {
+		t.Errorf("body = %+v, want the ranges prefilled and both switches off", body)
 	}
 }
 
@@ -71,7 +74,8 @@ func TestUpdateNetworkSettings_RoundTripsAndReportsRestartRequired(t *testing.T)
 	cookies := fixture.signIn(t, "admin")
 
 	request := authedPatch(t, cookies, "/api/v1/network",
-		`{"port":6000,"proxy_url":"socks5://10.0.0.5:1080","proxy_bypass":[".lan"],"allow_cidrs":["192.0.2.0/24"]}`)
+		`{"port":6000,"proxy_enabled":true,"proxy_url":"socks5://10.0.0.5:1080","proxy_bypass":[".lan"],`+
+			`"allow_cidrs_enabled":true,"allow_cidrs":["192.0.2.0/24"]}`)
 	recorder := fixture.do(request)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
@@ -214,13 +218,15 @@ func TestUpdateNetworkSettings_RefusesAnAllowlistThatWouldLockOutTheCaller(t *te
 	cookies := fixture.signIn(t, "admin")
 
 	// httptest.NewRequest's default RemoteAddr is 192.0.2.1, excluded here.
-	request := authedPatch(t, cookies, "/api/v1/network", `{"port":0,"proxy_bypass":[],"allow_cidrs":["10.0.0.0/8"]}`)
+	request := authedPatch(t, cookies, "/api/v1/network",
+		`{"port":0,"proxy_bypass":[],"allow_cidrs_enabled":true,"allow_cidrs":["10.0.0.0/8"]}`)
 	recorder := fixture.do(request)
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, body = %s, want 400", recorder.Code, recorder.Body)
 	}
-	if got := fixture.cache.Snapshot().NetworkSettings().AllowCIDRs; len(got) != 0 {
-		t.Errorf("AllowCIDRs = %v, want unchanged (empty)", got)
+	if got := fixture.cache.Snapshot().NetworkSettings(); got.AllowCIDRsEnabled ||
+		!slices.Equal(got.AllowCIDRs, settings.DefaultLocalRanges) {
+		t.Errorf("NetworkSettings = %+v, want the unwritten default still in place", got)
 	}
 }
 
@@ -260,7 +266,8 @@ func TestIPAllowlist_RefusesAnExcludedAddressEvenOnAnUnauthenticatedRoute(t *tes
 	fixture := newWorksFixture(t)
 	// Set directly with a caller address the list includes, past the lockout guard tested elsewhere.
 	err := fixture.cache.SetNetworkSettings(t.Context(), fixture.clock,
-		settings.NetworkSettings{AllowCIDRs: []string{"10.0.0.0/8"}}, netip.MustParseAddr("10.0.0.1"))
+		settings.NetworkSettings{AllowCIDRsEnabled: true, AllowCIDRs: []string{"10.0.0.0/8"}},
+		netip.MustParseAddr("10.0.0.1"))
 	if err != nil {
 		t.Fatalf("SetNetworkSettings: %v", err)
 	}
@@ -275,7 +282,8 @@ func TestIPAllowlist_RefusesAnExcludedAddressEvenOnAnUnauthenticatedRoute(t *tes
 func TestIPAllowlist_HealthIsAlwaysExempt(t *testing.T) {
 	fixture := newWorksFixture(t)
 	err := fixture.cache.SetNetworkSettings(t.Context(), fixture.clock,
-		settings.NetworkSettings{AllowCIDRs: []string{"10.0.0.0/8"}}, netip.MustParseAddr("10.0.0.1"))
+		settings.NetworkSettings{AllowCIDRsEnabled: true, AllowCIDRs: []string{"10.0.0.0/8"}},
+		netip.MustParseAddr("10.0.0.1"))
 	if err != nil {
 		t.Fatalf("SetNetworkSettings: %v", err)
 	}
@@ -327,7 +335,8 @@ func TestIPAllowlist_NeverGrantsOrAuthenticates(t *testing.T) {
 func TestIPAllowlist_TrustsForwardedForOnlyBehindATrustedProxy(t *testing.T) {
 	fixture := newWorksFixture(t)
 	if err := fixture.cache.SetNetworkSettings(t.Context(), fixture.clock,
-		settings.NetworkSettings{AllowCIDRs: []string{"10.0.0.0/8"}}, netip.MustParseAddr("10.0.0.1")); err != nil {
+		settings.NetworkSettings{AllowCIDRsEnabled: true, AllowCIDRs: []string{"10.0.0.0/8"}},
+		netip.MustParseAddr("10.0.0.1")); err != nil {
 		t.Fatalf("SetNetworkSettings: %v", err)
 	}
 

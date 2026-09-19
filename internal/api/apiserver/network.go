@@ -24,8 +24,9 @@ func (s *Server) ipAllowlist(next http.Handler) http.Handler {
 			return
 		}
 
-		cidrs := s.auth.Settings.Snapshot().NetworkSettings().AllowCIDRs
-		if len(cidrs) == 0 {
+		network := s.auth.Settings.Snapshot().NetworkSettings()
+		cidrs := network.AllowCIDRs
+		if !network.AllowCIDRsEnabled || len(cidrs) == 0 {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -65,14 +66,16 @@ func (s *Server) UpdateNetworkSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	wanted := settings.NetworkSettings{
-		Port: body.Port, ProxyBypass: body.ProxyBypass, AllowCIDRs: body.AllowCidrs,
+		Port: body.Port, ProxyEnabled: body.ProxyEnabled, ProxyBypass: body.ProxyBypass,
+		AllowCIDRsEnabled: body.AllowCidrsEnabled, AllowCIDRs: body.AllowCidrs,
 	}
 	if body.ProxyUrl != nil {
 		wanted.ProxyURL = *body.ProxyUrl
 	}
 
 	if err := s.auth.Registry.LookupAll(
-		settings.KeyNetworkPort, settings.KeyNetworkProxyURL, settings.KeyNetworkProxyBypass, settings.KeyNetworkAllowCIDRs,
+		settings.KeyNetworkPort, settings.KeyNetworkProxyEnabled, settings.KeyNetworkProxyURL,
+		settings.KeyNetworkProxyBypass, settings.KeyNetworkAllowCIDRsEnabled, settings.KeyNetworkAllowCIDRs,
 	); err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -140,7 +143,8 @@ func (s *Server) networkSettingsView() gen.NetworkSettings {
 	view := gen.NetworkSettings{
 		Port: stored.Port, InEffectPort: s.effectivePort,
 		RestartRequired: stored.Port != 0 && stored.Port != s.effectivePort,
-		ProxyBypass:     stored.ProxyBypass, AllowCidrs: stored.AllowCIDRs,
+		ProxyEnabled:    stored.ProxyEnabled, ProxyBypass: stored.ProxyBypass,
+		AllowCidrsEnabled: stored.AllowCIDRsEnabled, AllowCidrs: stored.AllowCIDRs,
 	}
 	if stored.ProxyURL != "" {
 		view.ProxyUrl = &stored.ProxyURL

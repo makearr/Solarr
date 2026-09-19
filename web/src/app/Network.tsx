@@ -7,6 +7,7 @@ import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
 type NetworkSettings = components["schemas"]["NetworkSettings"];
+type NetworkUpdate = components["schemas"]["NetworkSettingsUpdate"];
 
 /** todo 4.19, ADR-58: the listen port, the global egress proxy and the IP
  *  allowlist. The allowlist can only ever deny -- it never authenticates and
@@ -27,12 +28,7 @@ export function Network() {
   });
 
   const update = useMutation({
-    mutationFn: async (body: {
-      port: number;
-      proxy_url?: string;
-      proxy_bypass: string[];
-      allow_cidrs: string[];
-    }) => {
+    mutationFn: async (body: NetworkUpdate) => {
       const { error } = await api.PATCH("/network", { body });
       if (error) throw error;
     },
@@ -73,14 +69,16 @@ function NetworkForm({
   busy,
 }: {
   network: NetworkSettings;
-  onSave: (body: { port: number; proxy_url?: string; proxy_bypass: string[]; allow_cidrs: string[] }) => void;
+  onSave: (body: NetworkUpdate) => void;
   busy: boolean;
 }) {
   // The field carries the port actually being served, not the stored 0 that
   // means "config.yml governs" (asked for 2026-09-19).
   const [port, setPort] = useState(network.port === 0 ? network.in_effect_port : network.port);
+  const [proxyEnabled, setProxyEnabled] = useState(network.proxy_enabled);
   const [proxyURL, setProxyURL] = useState(network.proxy_url ?? "");
   const [proxyBypass, setProxyBypass] = useState(network.proxy_bypass.join("\n"));
+  const [allowEnabled, setAllowEnabled] = useState(network.allow_cidrs_enabled);
   const [allowCIDRs, setAllowCIDRs] = useState(network.allow_cidrs.join("\n"));
 
   const parsedBypass = splitLines(proxyBypass);
@@ -88,6 +86,8 @@ function NetworkForm({
 
   const dirty =
     port !== (network.port === 0 ? network.in_effect_port : network.port) ||
+    proxyEnabled !== network.proxy_enabled ||
+    allowEnabled !== network.allow_cidrs_enabled ||
     proxyURL !== (network.proxy_url ?? "") ||
     parsedBypass.join("\n") !== network.proxy_bypass.join("\n") ||
     parsedAllow.join("\n") !== network.allow_cidrs.join("\n");
@@ -99,8 +99,10 @@ function NetworkForm({
         event.preventDefault();
         onSave({
           port,
+          proxy_enabled: proxyEnabled,
           proxy_url: proxyURL.trim() === "" ? undefined : proxyURL.trim(),
           proxy_bypass: parsedBypass,
+          allow_cidrs_enabled: allowEnabled,
           allow_cidrs: parsedAllow,
         });
       }}
@@ -124,6 +126,13 @@ function NetworkForm({
         )}
       </label>
 
+      <Toggle
+        label="Send outbound traffic through a proxy"
+        checked={proxyEnabled}
+        disabled={busy}
+        onChange={setProxyEnabled}
+      />
+
       <label className="flex flex-col gap-1">
         Proxy
         <input
@@ -134,7 +143,7 @@ function NetworkForm({
           onChange={(event) => setProxyURL(event.target.value)}
           className={`${inputStyle} w-64`}
         />
-        <span className="text-[0.6875rem]">Empty means no proxy. http, https or socks5, with a port.</span>
+        <span className="text-[0.6875rem]">http, https or socks5, with a port. Used only while the box above is ticked.</span>
       </label>
 
       <label className="flex flex-col gap-1">
@@ -152,6 +161,13 @@ function NetworkForm({
         </span>
       </label>
 
+      <Toggle
+        label="Only allow these addresses to reach this instance"
+        checked={allowEnabled}
+        disabled={busy}
+        onChange={setAllowEnabled}
+      />
+
       <label className="flex flex-col gap-1">
         IP whitelist
         <textarea
@@ -163,8 +179,8 @@ function NetworkForm({
           className={`${inputStyle} w-64 font-mono`}
         />
         <span className="text-[0.6875rem]">
-          One CIDR per line. Empty allows every address, the default. /api/v1/health always stays
-          reachable, and a change that would exclude the address you're using right now is
+          One CIDR per line, used only while the box above is ticked. /api/v1/health always stays
+          reachable, and enabling a list that would exclude the address you're using right now is
           refused outright.
         </span>
       </label>
@@ -180,6 +196,30 @@ function NetworkForm({
         </button>
       )}
     </form>
+  );
+}
+
+function Toggle({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-ink">
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      {label}
+    </label>
   );
 }
 

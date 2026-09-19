@@ -100,7 +100,8 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 	known := []string{
 		settings.KeyAuthRequired,
 		settings.KeyImportAutoCommitConfidence, settings.KeyImportTransferLadder,
-		settings.KeyNetworkPort, settings.KeyNetworkProxyURL, settings.KeyNetworkProxyBypass, settings.KeyNetworkAllowCIDRs,
+		settings.KeyNetworkPort, settings.KeyNetworkProxyEnabled, settings.KeyNetworkProxyURL,
+		settings.KeyNetworkProxyBypass, settings.KeyNetworkAllowCIDRsEnabled, settings.KeyNetworkAllowCIDRs,
 		settings.KeyCacheMaxBytes, settings.KeyCacheMaxAgeDays, settings.KeyCacheImagesShare, settings.KeyCacheMetadataShare,
 		settings.KeyPriorityUserRequestWeight, settings.KeyPriorityNewReleaseWeight,
 		settings.KeyPriorityGapWeight, settings.KeyPriorityUpgradeWeight, settings.KeyPriorityNewReleaseDays,

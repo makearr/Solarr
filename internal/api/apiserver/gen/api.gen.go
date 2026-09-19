@@ -1738,10 +1738,13 @@ type MoveJobReason string
 // MoveJobState defines model for MoveJob.State.
 type MoveJobState string
 
-// NetworkSettings ADR-58's own port resolution, egress proxy and IP allowlist. The IP allowlist can only ever deny -- it never authenticates and never grants (Invariant 89).
+// NetworkSettings ADR-58's own port resolution, proxy and IP whitelist. The whitelist can only ever deny -- it never authenticates and never grants (Invariant 89) -- and neither it nor the proxy does anything until its own enable flag is on.
 type NetworkSettings struct {
-	// AllowCidrs Empty means every address is allowed, the default.
+	// AllowCidrs Prefilled with the private ranges on a fresh instance, so enabling the whitelist is one click rather than four lines of typing.
 	AllowCidrs []string `json:"allow_cidrs"`
+
+	// AllowCidrsEnabled Off, the default, means every address is allowed however the list below is filled in.
+	AllowCidrsEnabled bool `json:"allow_cidrs_enabled"`
 
 	// InEffectPort The port this running instance actually bound to at startup.
 	InEffectPort int `json:"in_effect_port"`
@@ -1752,7 +1755,10 @@ type NetworkSettings struct {
 	// ProxyBypass CIDRs and host suffixes (".lan") that always go direct.
 	ProxyBypass []string `json:"proxy_bypass"`
 
-	// ProxyUrl Empty means no egress proxy. Scheme is http, https or socks5.
+	// ProxyEnabled Off means proxy_url is ignored, whatever it holds.
+	ProxyEnabled bool `json:"proxy_enabled"`
+
+	// ProxyUrl Empty means no proxy. Scheme is http, https or socks5.
 	ProxyUrl *string `json:"proxy_url,omitempty"`
 
 	// RestartRequired port disagrees with in_effect_port -- the change is stored but not live yet.
@@ -1761,10 +1767,12 @@ type NetworkSettings struct {
 
 // NetworkSettingsUpdate The writable half of NetworkSettings.
 type NetworkSettingsUpdate struct {
-	AllowCidrs  []string `json:"allow_cidrs"`
-	Port        int      `json:"port"`
-	ProxyBypass []string `json:"proxy_bypass"`
-	ProxyUrl    *string  `json:"proxy_url,omitempty"`
+	AllowCidrs        []string `json:"allow_cidrs"`
+	AllowCidrsEnabled bool     `json:"allow_cidrs_enabled"`
+	Port              int      `json:"port"`
+	ProxyBypass       []string `json:"proxy_bypass"`
+	ProxyEnabled      bool     `json:"proxy_enabled"`
+	ProxyUrl          *string  `json:"proxy_url,omitempty"`
 }
 
 // Pack One source, many works (ADR-50, todo 4.11) -- a provenance fact, not an identity tier.
@@ -3216,7 +3224,7 @@ type ServerInterface interface {
 	// Port resolution, egress proxy and IP allowlist (ADR-58).
 	// (GET /network)
 	GetNetworkSettings(w http.ResponseWriter, r *http.Request)
-	// Change the port, egress proxy or IP allowlist. Administrator only.
+	// Change the port, proxy or IP whitelist. Administrator only.
 	// (PATCH /network)
 	UpdateNetworkSettings(w http.ResponseWriter, r *http.Request)
 	// Every detected pack (ADR-50, todo 4.11), newest first.
@@ -3957,7 +3965,7 @@ func (_ Unimplemented) GetNetworkSettings(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Change the port, egress proxy or IP allowlist. Administrator only.
+// Change the port, proxy or IP whitelist. Administrator only.
 // (PATCH /network)
 func (_ Unimplemented) UpdateNetworkSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)

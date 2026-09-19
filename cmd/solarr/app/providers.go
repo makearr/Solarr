@@ -25,7 +25,7 @@ import (
 func (p *process) liveProxyPolicy() httpx.LiveProxyPolicy {
 	return func() httpx.ProxyPolicy {
 		network := p.cache.Snapshot().NetworkSettings()
-		if network.ProxyURL == "" {
+		if !network.ProxyEnabled || network.ProxyURL == "" {
 			return httpx.ProxyPolicy{}
 		}
 		parsed, err := url.Parse(network.ProxyURL)

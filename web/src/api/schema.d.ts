@@ -633,8 +633,8 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Change the port, egress proxy or IP allowlist. Administrator only.
-         * @description Written wholesale, like the cache budget. A port change needs a restart before it takes effect. An allow_cidrs list that would exclude the address making this very change is refused outright (ADR-44, Invariant 89) -- this is the one setting where a mistake costs a container shell to undo.
+         * Change the port, proxy or IP whitelist. Administrator only.
+         * @description Written wholesale, like the cache budget. A port change needs a restart before it takes effect. An enabled allow_cidrs list that would exclude the address making this very change is refused outright (ADR-44, Invariant 89) -- this is the one setting where a mistake costs a container shell to undo.
          */
         patch: operations["updateNetworkSettings"];
         trace?: never;
@@ -2707,7 +2707,7 @@ export interface components {
             /** Format: date-time */
             measured_at?: string;
         };
-        /** @description ADR-58's own port resolution, egress proxy and IP allowlist. The IP allowlist can only ever deny -- it never authenticates and never grants (Invariant 89). */
+        /** @description ADR-58's own port resolution, proxy and IP whitelist. The whitelist can only ever deny -- it never authenticates and never grants (Invariant 89) -- and neither it nor the proxy does anything until its own enable flag is on. */
         NetworkSettings: {
             /** @description 0 means nothing has been written from this screen yet -- config.yml (or its own 5454 default) governs until it is. */
             port: number;
@@ -2715,18 +2715,24 @@ export interface components {
             in_effect_port: number;
             /** @description port disagrees with in_effect_port -- the change is stored but not live yet. */
             restart_required: boolean;
-            /** @description Empty means no egress proxy. Scheme is http, https or socks5. */
+            /** @description Off means proxy_url is ignored, whatever it holds. */
+            proxy_enabled: boolean;
+            /** @description Empty means no proxy. Scheme is http, https or socks5. */
             proxy_url?: string;
             /** @description CIDRs and host suffixes (".lan") that always go direct. */
             proxy_bypass: string[];
-            /** @description Empty means every address is allowed, the default. */
+            /** @description Off, the default, means every address is allowed however the list below is filled in. */
+            allow_cidrs_enabled: boolean;
+            /** @description Prefilled with the private ranges on a fresh instance, so enabling the whitelist is one click rather than four lines of typing. */
             allow_cidrs: string[];
         };
         /** @description The writable half of NetworkSettings. */
         NetworkSettingsUpdate: {
             port: number;
+            proxy_enabled: boolean;
             proxy_url?: string;
             proxy_bypass: string[];
+            allow_cidrs_enabled: boolean;
             allow_cidrs: string[];
         };
         /** @description What one drainRootFolder call computed -- a preview, a refusal, or an accepted and enqueued plan (ADR-51). */
