@@ -54,7 +54,15 @@ type Payload struct {
 	Origin        string `json:"origin"`
 	CategoryID    *int64 `json:"category_id,omitempty"`
 	AcquisitionID *int64 `json:"acquisition_id,omitempty"`
+	// Preview holds every unit for review instead of placing the confident
+	// ones (Lidarr's interactive import, revision.md 7.9).
+	Preview bool `json:"preview,omitempty"`
 }
+
+// ReasonPreview is why a unit a preview run would otherwise have committed is
+// waiting, so the Import screen can say so rather than implying IDENTIFY was
+// unsure.
+const ReasonPreview = "held for review"
 
 // Policy is what this job needs from settings.db -- asked fresh per run
 // rather than cached, the same "ask, don't cache" discipline every other
@@ -181,7 +189,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	result, err := inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{Cursor: cursor},
 		inspect.WalkOptions{},
 		func(ctx context.Context, batch []inspect.Unit) error {
-			return j.commitCluster(ctx, sessionID, payload.SourcePath, identifyCfg, batch)
+			return j.commitCluster(ctx, sessionID, payload.SourcePath, identifyCfg, payload.Preview, batch)
 		})
 	if errors.Is(err, errCancelled) {
 		j.logger.Info("import inspection cancelled",
@@ -464,7 +472,7 @@ func (j *Job) poisonedByExclusion(batch []inspect.Unit, categoryID *int64) []str
 // PATCH must place into it -- the same "ask, don't cache" rule Policy's own
 // per-run read already follows.
 func (j *Job) commitCluster(
-	ctx context.Context, sessionID int64, sourcePath string, cfg model.ChainConfig, batch []inspect.Unit,
+	ctx context.Context, sessionID int64, sourcePath string, cfg model.ChainConfig, preview bool, batch []inspect.Unit,
 ) error {
 	session, err := j.sessions.Get(ctx, sessionID)
 	if err != nil {
@@ -535,6 +543,9 @@ func (j *Job) commitCluster(
 			decisions[i] = library.UnitDecision{UnitID: ids[i], Decision: library.UnitSkip, Reason: reason}
 		}
 	}
+	if preview {
+		holdForReview(decisions)
+	}
 	if err := j.sessions.SetUnitDecisions(ctx, sessionID, decisions); err != nil {
 		return fmt.Errorf("importjob: record decisions: %w", err)
 	}
@@ -543,6 +554,22 @@ func (j *Job) commitCluster(
 	}
 	j.publishProgress(ctx, sessionID, importPhaseWalking, batch[len(batch)-1].Directory)
 	return nil
+}
+
+// holdForReview is a preview run's own override of DECIDE: every unit that
+// would have committed waits for a human instead. Done here rather than by
+// raising the confidence bar, because album matching answers on its own
+// capped scale (albumConfidence never reaches an embedded MBID's own
+// certainty, deliberately) -- a threshold high enough to hold it would be
+// meaningless against every other strategy's. SKIP and FAILED are left alone:
+// neither was ever going to be placed.
+func holdForReview(decisions []library.UnitDecision) {
+	for i, decision := range decisions {
+		if decision.Decision == library.UnitCommit {
+			decisions[i].Decision = library.UnitQueue
+			decisions[i].Reason = ReasonPreview
+		}
+	}
 }
 
 // placeCommitted is ADR-48's own "COMMIT actually imports": every unit this

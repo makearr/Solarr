@@ -3055,6 +3055,46 @@ paths:
           $ref: "#/components/responses/Problem"
           description: The session is not running.
 
+  /import/sessions/{id}/commit:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: commitHeldImportUnits
+      tags: [library]
+      summary: >-
+        Commit the units this session held for review, all or a chosen
+        subset. Administrator only.
+      description: >-
+        The bulk half of "commit what was held" (ADR-48): each unit is placed
+        with the same top-ranked candidate IDENTIFY already found, exactly as
+        `POST .../units/{unitId}/commit` does one at a time, never a re-run of
+        IDENTIFY and never a choice among the other candidates. Pairs with a
+        `preview` inspection, which holds every unit on purpose. Best-effort:
+        a unit that cannot be committed is reported in `errors` and the rest
+        still go. Refused with 409 if the session has no category yet (assign
+        one first) or was reverted; a unit that is not QUEUE is skipped, not
+        an error.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportCommitHeldRequest" }
+      responses:
+        "200":
+          description: Committed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportCommitHeldResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          $ref: "#/components/responses/Problem"
+          description: The session has no category, or was reverted.
+
   /import/sessions/{id}/revert:
     parameters:
       - name: id
@@ -5689,12 +5729,41 @@ components:
           type: integer
           format: int64
           description: The target category, when known up front. Omitted means "decide per unit".
+        preview:
+          type: boolean
+          description: >-
+            Hold every unit for review instead of placing the confident ones.
+            The run demands a confidence no candidate can reach, so each unit
+            lands QUEUE with its candidates intact and
+            `POST /import/sessions/{id}/commit` places the ones you pick.
+            Defaults to false.
 
     ImportInspectResult:
       type: object
       required: [enqueued]
       properties:
         enqueued: { type: boolean }
+
+    ImportCommitHeldRequest:
+      type: object
+      description: Which held units to commit. An empty or absent list means all of them.
+      properties:
+        unit_ids:
+          type: array
+          items: { type: integer, format: int64 }
+
+    ImportCommitHeldResult:
+      type: object
+      description: >-
+        POST .../commit's own outcome: every QUEUE unit asked for, committed
+        best-effort with its own top-ranked candidate.
+      required: [units_committed, errors]
+      properties:
+        units_committed: { type: integer, format: int64 }
+        errors:
+          type: array
+          items: { type: string }
+          description: One entry per unit that could not be committed; never fatal to the rest.
 
     ImportRevertRequest:
       type: object

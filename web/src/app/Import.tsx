@@ -413,12 +413,18 @@ function InspectForm() {
   const [categoryId, setCategoryId] = useState<number | "">(
     routeCategoryId ? Number(routeCategoryId) : "",
   );
+  const [preview, setPreview] = useState(false);
   const categories = useCategories();
 
   const inspect = useMutation({
     mutationFn: async () => {
       const { error } = await api.POST("/import/inspect", {
-        body: { source_path: sourcePath, origin, category_id: categoryId === "" ? undefined : categoryId },
+        body: {
+          source_path: sourcePath,
+          origin,
+          category_id: categoryId === "" ? undefined : categoryId,
+          preview,
+        },
       });
       if (error) throw error;
     },
@@ -475,6 +481,16 @@ function InspectForm() {
           ))}
         </select>
       </label>
+      <label className="flex items-center gap-2 self-center pt-4 text-xs text-ink">
+        <input
+          type="checkbox"
+          checked={preview}
+          onChange={(event) => setPreview(event.target.checked)}
+        />
+        <span title="Nothing is placed until you say so: every unit waits below with its candidates.">
+          Preview first
+        </span>
+      </label>
       <button
         type="submit"
         disabled={!sourcePath.trim() || inspect.isPending}
@@ -507,7 +523,10 @@ function useCategories() {
 }
 
 const RUNNING_STATES = new Set<ImportSession["state"]>(["INSPECTING", "CANCELLING"]);
-const REVERTIBLE_STATES = new Set<ImportSession["state"]>(["DONE", "FAILED", "CANCELLED"]);
+// A session that has stopped walking: the only kind that can be reverted, and
+// the only kind whose held units are final enough to commit by hand. REVERTED
+// is deliberately not one -- nothing may be placed into it again.
+const FINISHED_STATES = new Set<ImportSession["state"]>(["DONE", "FAILED", "CANCELLED"]);
 
 /** Rate from measured throughput, absent while the sample is small (todo
  *  4.21's own wording) -- no total is known ahead of time (units_estimated
@@ -606,6 +625,21 @@ function SessionRow({
     },
   });
 
+  const commitHeld = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/import/sessions/{id}/commit", {
+        params: { path: { id: session.id } },
+        body: {},
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      invalidate();
+      void queryClient.invalidateQueries({ queryKey: ["import-units", session.id] });
+    },
+  });
+
   return (
     <div
       className={`flex flex-col gap-1.5 rounded-lg border p-3 text-left text-xs ${
@@ -653,7 +687,7 @@ function SessionRow({
             <Ban aria-hidden className="size-3.5" />
           </button>
         )}
-        {REVERTIBLE_STATES.has(session.state) && session.units_committed > 0 && (
+        {FINISHED_STATES.has(session.state) && session.units_committed > 0 && (
           <button
             type="button"
             onClick={() => {
@@ -672,6 +706,31 @@ function SessionRow({
       </div>
       {session.category_id === undefined && session.state !== "REVERTED" && (
         <AssignCategory sessionId={session.id} />
+      )}
+      {FINISHED_STATES.has(session.state) && session.units_queued > 0 && session.category_id !== undefined && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm(`Commit all ${session.units_queued} held units using their top-ranked candidate?`)) {
+                commitHeld.mutate();
+              }
+            }}
+            disabled={commitHeld.isPending}
+            className="rounded-md border border-border-subtle px-2 py-1 text-ink hover:border-accent
+                       disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2
+                       focus-visible:outline-accent"
+          >
+            {commitHeld.isPending ? "Committing…" : `Commit all ${session.units_queued} held`}
+          </button>
+          {commitHeld.data && (
+            <span className="text-ink-muted">
+              {commitHeld.data.units_committed} committed
+              {commitHeld.data.errors.length > 0 && `, ${commitHeld.data.errors.length} could not be`}
+            </span>
+          )}
+          {commitHeld.isError && <span className="text-danger">That could not be committed.</span>}
+        </div>
       )}
     </div>
   );

@@ -1280,6 +1280,18 @@ type ImportCandidate struct {
 	WorkId     *int64                    `json:"work_id,omitempty"`
 }
 
+// ImportCommitHeldRequest Which held units to commit. An empty or absent list means all of them.
+type ImportCommitHeldRequest struct {
+	UnitIds *[]int64 `json:"unit_ids,omitempty"`
+}
+
+// ImportCommitHeldResult POST .../commit's own outcome: every QUEUE unit asked for, committed best-effort with its own top-ranked candidate.
+type ImportCommitHeldResult struct {
+	// Errors One entry per unit that could not be committed; never fatal to the rest.
+	Errors         []string `json:"errors"`
+	UnitsCommitted int64    `json:"units_committed"`
+}
+
 // ImportEvidence Every GROUP signal that shaped this unit's boundary (ADR-10 shape).
 type ImportEvidence struct {
 	// Ambiguous True when grouping had to infer a boundary from a weaker signal rather than a decisive one.
@@ -1299,8 +1311,11 @@ type ImportInspectRequest struct {
 	CategoryId *int64 `json:"category_id,omitempty"`
 
 	// Origin Defaults to manual when omitted.
-	Origin     *ImportInspectRequestOrigin `json:"origin,omitempty"`
-	SourcePath string                      `json:"source_path"`
+	Origin *ImportInspectRequestOrigin `json:"origin,omitempty"`
+
+	// Preview Hold every unit for review instead of placing the confident ones. The run demands a confidence no candidate can reach, so each unit lands QUEUE with its candidates intact and `POST /import/sessions/{id}/commit` places the ones you pick. Defaults to false.
+	Preview    *bool  `json:"preview,omitempty"`
+	SourcePath string `json:"source_path"`
 }
 
 // ImportInspectRequestOrigin Defaults to manual when omitted.
@@ -2809,6 +2824,9 @@ type InspectImportJSONRequestBody = ImportInspectRequest
 // AssignImportSessionCategoryJSONRequestBody defines body for AssignImportSessionCategory for application/json ContentType.
 type AssignImportSessionCategoryJSONRequestBody AssignImportSessionCategoryJSONBody
 
+// CommitHeldImportUnitsJSONRequestBody defines body for CommitHeldImportUnits for application/json ContentType.
+type CommitHeldImportUnitsJSONRequestBody = ImportCommitHeldRequest
+
 // RevertImportSessionJSONRequestBody defines body for RevertImportSession for application/json ContentType.
 type RevertImportSessionJSONRequestBody = ImportRevertRequest
 
@@ -3090,6 +3108,9 @@ type ServerInterface interface {
 	// Give a session a destination category, and place everything it already decided COMMIT (ADR-48). Administrator only.
 	// (POST /import/sessions/{id}/category)
 	AssignImportSessionCategory(w http.ResponseWriter, r *http.Request, id int64)
+	// Commit the units this session held for review, all or a chosen subset. Administrator only.
+	// (POST /import/sessions/{id}/commit)
+	CommitHeldImportUnits(w http.ResponseWriter, r *http.Request, id int64)
 	// Undo every file this session placed. Administrator only.
 	// (POST /import/sessions/{id}/revert)
 	RevertImportSession(w http.ResponseWriter, r *http.Request, id int64)
@@ -3717,6 +3738,12 @@ func (_ Unimplemented) CancelImportSession(w http.ResponseWriter, r *http.Reques
 // Give a session a destination category, and place everything it already decided COMMIT (ADR-48). Administrator only.
 // (POST /import/sessions/{id}/category)
 func (_ Unimplemented) AssignImportSessionCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Commit the units this session held for review, all or a chosen subset. Administrator only.
+// (POST /import/sessions/{id}/commit)
+func (_ Unimplemented) CommitHeldImportUnits(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6031,6 +6058,39 @@ func (siw *ServerInterfaceWrapper) AssignImportSessionCategory(w http.ResponseWr
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AssignImportSessionCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CommitHeldImportUnits operation middleware
+func (siw *ServerInterfaceWrapper) CommitHeldImportUnits(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CommitHeldImportUnits(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9189,6 +9249,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/import/sessions/{id}/category", wrapper.AssignImportSessionCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/import/sessions/{id}/commit", wrapper.CommitHeldImportUnits)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/import/sessions/{id}/revert", wrapper.RevertImportSession)

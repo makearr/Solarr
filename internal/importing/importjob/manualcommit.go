@@ -140,6 +140,48 @@ func (m ManualCommitter) PlaceUnplaced(ctx context.Context, sessionID int64) (pl
 	return placed, errs
 }
 
+// CommitAllHeld force-commits the units a preview run held for review --
+// revision.md 7.9's "commit all / selected", which is CommitHeld's own
+// override repeated, not a second decision path. only, when non-empty, names
+// the subset to commit; every other QUEUE unit is left alone. Best-effort per
+// unit, the same tolerance PlaceUnplaced has: one bad unit does not stop the
+// rest.
+func (m ManualCommitter) CommitAllHeld(
+	ctx context.Context, sessionID int64, only []int64,
+) (committed int, errs []error) {
+	session, err := m.sessions.Get(ctx, sessionID)
+	if err != nil {
+		return 0, []error{fmt.Errorf("importjob: get session %d: %w", sessionID, err)}
+	}
+	if err := checkPlaceable(session); err != nil {
+		return 0, []error{err}
+	}
+
+	units, err := m.sessions.ListUnits(ctx, sessionID)
+	if err != nil {
+		return 0, []error{fmt.Errorf("importjob: list units for session %d: %w", sessionID, err)}
+	}
+	for _, unit := range units {
+		if unit.Decision != library.UnitQueue {
+			continue
+		}
+		if len(only) > 0 && !slices.Contains(only, unit.ID) {
+			continue
+		}
+		best, err := topCandidate(unit)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if _, err := m.place(ctx, session, unit, best); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		committed++
+	}
+	return committed, errs
+}
+
 // checkPlaceable guards both entry points against the two states that must
 // never gain a new placement: no destination category yet, and a session
 // whose own placements were already undone (ClearImportUnitPlacement does

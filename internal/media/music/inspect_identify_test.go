@@ -1,11 +1,15 @@
 package music_test
 
 import (
+	"fmt"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
@@ -90,5 +94,60 @@ func TestIdentifyUnit_EmptyMediaIsNotAnError(t *testing.T) {
 	}
 	if result.Best != nil || len(result.Candidates) != 0 {
 		t.Errorf("result = %+v, want the zero value", result)
+	}
+}
+
+// traumaUnit is a unit of the six Kebilegev Bibihi tracks, tagged the way a
+// clean rip is but carrying no embedded MBID -- the case that reaches album
+// matching rather than short-circuiting on StrategyEmbeddedTag.
+func traumaUnit() (inspect.Unit, map[string]mediatool.Probe, *fakeAlbumLookup) {
+	unit := unitFor("downloads/P!po - Kebilegev Bibihi")
+	probes := make(map[string]mediatool.Probe, len(traumaTracks))
+	for i, track := range traumaTracks {
+		relPath := fmt.Sprintf("downloads/P!po - Kebilegev Bibihi/%02d.flac", i+1)
+		unit.Media = append(unit.Media, inspect.File{RelPath: relPath, Class: inspect.ClassMedia})
+		probes[relPath] = mediatool.Probe{
+			Path: "/" + relPath,
+			Tags: mediatool.Tags{
+				"title": track.title, "artist": "P!po", "album": "Kebilegev Bibihi",
+				"track": strconv.Itoa(i + 1),
+			},
+			Measured: mediatool.Measured{Duration: time.Duration(track.seconds) * time.Second},
+		}
+	}
+	lookup := &fakeAlbumLookup{
+		searches: map[string][]musicbrainz.ReleaseGroupMatch{"P!po/Kebilegev Bibihi": {
+			{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg-studio", Title: "Kebilegev Bibihi", PrimaryType: "Album"}, ArtistCredit: "P!po"},
+		}},
+		releases: map[string][]musicbrainz.Release{"rg-studio": {studioRelease}},
+	}
+	return unit, probes, lookup
+}
+
+// albumConfidence is capped below an embedded MBID's own certainty on purpose
+// (a network match is a guess, ADR-24), so an album match can never reach the
+// 0.90 import.auto_commit_confidence default. Asserted here because gating one
+// scale with the other looked right and queued every album -- caught only by
+// importing a real folder.
+func TestRefineUnitByAlbum_AnswersOnItsOwnCappedScale(t *testing.T) {
+	unit, probes, lookup := traumaUnit()
+
+	refined, placement, err := music.RefineUnitByAlbum(t.Context(), lookup, unit, probes, model.ChainResult{})
+	if err != nil {
+		t.Fatalf("RefineUnitByAlbum: %v", err)
+	}
+	if refined.Best == nil {
+		t.Fatalf("Best = nil, want the album match (candidates %+v)", refined.Candidates)
+	}
+	if refined.Best.ExternalID.ExternalID != "rg-studio" {
+		t.Errorf("Best = %q, want rg-studio", refined.Best.ExternalID.ExternalID)
+	}
+	if placement == nil {
+		t.Error("no placement returned for an identified album")
+	}
+	if refined.Best.Confidence >= 0.90 {
+		t.Errorf("Confidence = %.2f, want below the 0.90 auto-commit default: an album match "+
+			"is scored on its own capped scale, and comparing the two queues every album",
+			refined.Best.Confidence)
 	}
 }

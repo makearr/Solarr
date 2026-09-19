@@ -452,6 +452,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/import/sessions/{id}", server.routeGetImportSession)
 			secured.Post("/import/sessions/{id}/category", server.routeAssignImportCategory)
 			secured.Post("/import/sessions/{id}/cancel", server.routeCancelImportSession)
+			secured.Post("/import/sessions/{id}/commit", server.routeCommitHeldImportUnits)
 			secured.Post("/import/sessions/{id}/revert", server.routeRevertImportSession)
 			secured.Get("/import/sessions/{id}/units", server.routeListImportUnits)
 			secured.Post("/import/sessions/{id}/units/{unitId}/commit", server.routeCommitImportUnit)

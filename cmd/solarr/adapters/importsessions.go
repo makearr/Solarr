@@ -107,6 +107,28 @@ func (a ImportSessions) AssignImportCategory(ctx context.Context, id, categoryID
 	return apiserver.ImportPlacementResult{UnitsPlaced: int64(placed), Errors: messages}, nil
 }
 
+// CommitHeldImportUnits maps the two refusals that stop the whole call;
+// a per-unit failure stays in Errors, never an error, since the bulk commit
+// is best-effort the same way PlaceUnplaced is.
+func (a ImportSessions) CommitHeldImportUnits(
+	ctx context.Context, sessionID int64, unitIDs []int64,
+) (apiserver.ImportPlacementResult, error) {
+	committed, commitErrs := a.Manual.CommitAllHeld(ctx, sessionID, unitIDs)
+	messages := make([]string, 0, len(commitErrs))
+	for _, commitErr := range commitErrs {
+		switch {
+		case errors.Is(commitErr, sql.ErrNoRows):
+			return apiserver.ImportPlacementResult{}, sql.ErrNoRows
+		case errors.Is(commitErr, importjob.ErrSessionHasNoCategory):
+			return apiserver.ImportPlacementResult{}, apiserver.ErrImportSessionHasNoCategory
+		case errors.Is(commitErr, importjob.ErrSessionReverted):
+			return apiserver.ImportPlacementResult{}, apiserver.ErrImportSessionReverted
+		}
+		messages = append(messages, commitErr.Error())
+	}
+	return apiserver.ImportPlacementResult{UnitsPlaced: int64(committed), Errors: messages}, nil
+}
+
 // CommitImportUnit maps importjob.ManualCommitter's own sentinel errors to
 // their apiserver counterparts.
 func (a ImportSessions) CommitImportUnit(ctx context.Context, sessionID, unitID int64) (apiserver.ImportUnitRow, error) {
@@ -241,9 +263,11 @@ type ImportInspector struct {
 	Queue *jobs.Queue
 }
 
-func (a ImportInspector) InspectImport(ctx context.Context, sourcePath, origin string, categoryID *int64) error {
+func (a ImportInspector) InspectImport(
+	ctx context.Context, sourcePath, origin string, categoryID *int64, preview bool,
+) error {
 	_, err := importjob.Enqueue(ctx, a.Queue, importjob.Payload{
-		SourcePath: sourcePath, Origin: origin, CategoryID: categoryID,
+		SourcePath: sourcePath, Origin: origin, CategoryID: categoryID, Preview: preview,
 	})
 	return err
 }

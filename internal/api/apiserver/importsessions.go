@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -35,6 +36,10 @@ type ImportSessionLister interface {
 	// ("commit what was held"), using the same top-ranked candidate IDENTIFY
 	// already found.
 	CommitImportUnit(ctx context.Context, sessionID, unitID int64) (ImportUnitRow, error)
+	// CommitHeldImportUnits force-commits the units a session held for
+	// review, all of them or the named subset -- CommitImportUnit repeated,
+	// best-effort.
+	CommitHeldImportUnits(ctx context.Context, sessionID int64, unitIDs []int64) (ImportPlacementResult, error)
 }
 
 // ErrImportSessionNotRunning is CancelImportSession's refusal to a non-running session.
@@ -103,7 +108,7 @@ type ImportPlacementResult struct {
 // separate from ImportSessionLister, since a real caller might reasonably
 // want reads without the write (or the reverse).
 type ImportInspector interface {
-	InspectImport(ctx context.Context, sourcePath, origin string, categoryID *int64) error
+	InspectImport(ctx context.Context, sourcePath, origin string, categoryID *int64, preview bool) error
 }
 
 // ImportSessionRow is one import_session row.
@@ -192,7 +197,8 @@ func (s *Server) InspectImport(w http.ResponseWriter, r *http.Request) {
 		origin = string(*body.Origin)
 	}
 
-	if err := s.importInspector.InspectImport(r.Context(), body.SourcePath, origin, body.CategoryId); err != nil {
+	preview := body.Preview != nil && *body.Preview
+	if err := s.importInspector.InspectImport(r.Context(), body.SourcePath, origin, body.CategoryId, preview); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
@@ -252,6 +258,17 @@ func (s *Server) routeAssignImportCategory(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	s.AssignImportSessionCategory(w, r, id)
+}
+
+// routeCommitHeldImportUnits parses the id path parameter, mirroring routeAssignImportCategory.
+func (s *Server) routeCommitHeldImportUnits(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a session id must be a number")
+		return
+	}
+	s.CommitHeldImportUnits(w, r, id)
 }
 
 // routeCommitImportUnit parses the id and unitId path parameters, mirroring routeListImportUnits.
@@ -467,6 +484,55 @@ func importPlacementResultView(result ImportPlacementResult) gen.ImportPlacement
 		errs = []string{}
 	}
 	return gen.ImportPlacementResult{UnitsPlaced: result.UnitsPlaced, Errors: errs}
+}
+
+// CommitHeldImportUnits commits the units a session held for review, all or
+// a chosen subset. Administrator only, the same trust boundary
+// CommitImportUnit already carries.
+func (s *Server) CommitHeldImportUnits(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.importSessions == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "import sessions are not available")
+		return
+	}
+
+	// The body is optional: no body at all means "commit every held unit".
+	var body gen.CommitHeldImportUnitsJSONRequestBody
+	if r.Body != nil {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "the request body could not be read")
+			return
+		}
+	}
+	var unitIDs []int64
+	if body.UnitIds != nil {
+		unitIDs = *body.UnitIds
+	}
+
+	result, err := s.importSessions.CommitHeldImportUnits(r.Context(), id, unitIDs)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such import session")
+	case errors.Is(err, ErrImportSessionHasNoCategory):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"No category", "this session has no category yet; assign one before committing")
+	case errors.Is(err, ErrImportSessionReverted):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Reverted", "this session was reverted; nothing further can be placed into it")
+	case err != nil:
+		writeError(w, s.logger, err)
+	default:
+		errs := result.Errors
+		if errs == nil {
+			errs = []string{}
+		}
+		writeJSON(w, s.logger, http.StatusOK,
+			gen.ImportCommitHeldResult{UnitsCommitted: result.UnitsPlaced, Errors: errs})
+	}
 }
 
 // CommitImportUnit force-commits one QUEUE-decision unit by hand ("commit

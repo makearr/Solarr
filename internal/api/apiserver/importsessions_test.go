@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/settings"
 )
 
@@ -45,6 +47,20 @@ type fakeImportSessionLister struct {
 	commitResult    apiserver.ImportUnitRow
 	commitSessionID int64
 	commitUnitID    int64
+
+	// heldErr/heldResult are what CommitHeldImportUnits returns; heldSessionID/
+	// heldUnitIDs are the last arguments it was called with.
+	heldErr       error
+	heldResult    apiserver.ImportPlacementResult
+	heldSessionID int64
+	heldUnitIDs   []int64
+}
+
+func (f *fakeImportSessionLister) CommitHeldImportUnits(
+	_ context.Context, sessionID int64, unitIDs []int64,
+) (apiserver.ImportPlacementResult, error) {
+	f.heldSessionID, f.heldUnitIDs = sessionID, unitIDs
+	return f.heldResult, f.heldErr
 }
 
 func (f *fakeImportSessionLister) AssignImportCategory(
@@ -108,12 +124,15 @@ type fakeImportInspector struct {
 
 	lastSourcePath, lastOrigin string
 	lastCategoryID             *int64
+	lastPreview                bool
 	calls                      int
 }
 
-func (f *fakeImportInspector) InspectImport(_ context.Context, sourcePath, origin string, categoryID *int64) error {
+func (f *fakeImportInspector) InspectImport(
+	_ context.Context, sourcePath, origin string, categoryID *int64, preview bool,
+) error {
 	f.calls++
-	f.lastSourcePath, f.lastOrigin, f.lastCategoryID = sourcePath, origin, categoryID
+	f.lastSourcePath, f.lastOrigin, f.lastCategoryID, f.lastPreview = sourcePath, origin, categoryID, preview
 	return f.err
 }
 
@@ -587,5 +606,110 @@ func TestCommitImportUnit_AnswersConflictVariants(t *testing.T) {
 				t.Errorf("status = %d, want 409 (%s)", recorder.Code, recorder.Body)
 			}
 		})
+	}
+}
+
+func TestInspectImport_PassesPreviewThrough(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		want       bool
+	}{
+		{"absent", `{"source_path":"/downloads/incoming"}`, false},
+		{"false", `{"source_path":"/downloads/incoming","preview":false}`, false},
+		{"true", `{"source_path":"/downloads/incoming","preview":true}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newWorksFixture(t)
+			fixture.createUser(t, "admin", settings.RoleAdmin)
+			cookies := fixture.signIn(t, "admin")
+
+			recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/inspect", tc.body))
+			if recorder.Code != http.StatusAccepted {
+				t.Fatalf("status = %d, want 202 (%s)", recorder.Code, recorder.Body)
+			}
+			if fixture.importInspector.lastPreview != tc.want {
+				t.Errorf("preview = %v, want %v", fixture.importInspector.lastPreview, tc.want)
+			}
+		})
+	}
+}
+
+func TestCommitHeldImportUnits_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "viewer", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "viewer")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/7/commit", `{}`))
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.importSessions.heldSessionID != 0 {
+		t.Errorf("the commit ran despite the caller not being an administrator")
+	}
+}
+
+func TestCommitHeldImportUnits_CommitsEverythingWhenNoSubsetIsNamed(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.importSessions.heldResult = apiserver.ImportPlacementResult{UnitsPlaced: 3}
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/7/commit", `{}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.importSessions.heldSessionID != 7 {
+		t.Errorf("session id = %d, want 7", fixture.importSessions.heldSessionID)
+	}
+	if fixture.importSessions.heldUnitIDs != nil {
+		t.Errorf("unit ids = %v, want nil (every held unit)", fixture.importSessions.heldUnitIDs)
+	}
+
+	var body gen.ImportCommitHeldResult
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := gen.ImportCommitHeldResult{UnitsCommitted: 3, Errors: []string{}}
+	if !reflect.DeepEqual(body, want) {
+		t.Errorf("body = %+v, want %+v", body, want)
+	}
+}
+
+func TestCommitHeldImportUnits_PassesTheNamedSubsetThrough(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/7/commit",
+		`{"unit_ids":[11,13]}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	}
+	if !reflect.DeepEqual(fixture.importSessions.heldUnitIDs, []int64{11, 13}) {
+		t.Errorf("unit ids = %v, want [11 13]", fixture.importSessions.heldUnitIDs)
+	}
+}
+
+func TestCommitHeldImportUnits_RefusesASessionWithNoCategory(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.importSessions.heldErr = apiserver.ErrImportSessionHasNoCategory
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/7/commit", `{}`))
+	if recorder.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+func TestCommitHeldImportUnits_AnswersNotFoundForAnUnknownSession(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.importSessions.heldErr = sql.ErrNoRows
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/7/commit", `{}`))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 (%s)", recorder.Code, recorder.Body)
 	}
 }

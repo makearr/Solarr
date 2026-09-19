@@ -882,3 +882,48 @@ func TestJob_NoAcoustIDKeyMeansNoFingerprinting(t *testing.T) {
 		t.Errorf("lookup calls = %d, fingerprinted = %v, want neither", lookup.calls, fx.tool.fingerprinted)
 	}
 }
+
+// Preview holds a unit that would otherwise have committed outright: the same
+// fixture as TestJob_IdentifiesAndCommitsAConfidentUnit, whose embedded MBIDs
+// clear any real threshold, so a QUEUE here can only be preview's own doing.
+func TestJob_PreviewHoldsEvenAConfidentUnit(t *testing.T) {
+	fx := newFixture(t, "Artist/Album/01.flac", "Artist/Album/02.flac")
+	fx.tool.byPath[filepath.Join(root, "Artist/Album/01.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+	fx.tool.byPath[filepath.Join(root, "Artist/Album/02.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+
+	job := fx.job(t, 0.90)
+	payload := importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual, Preview: true}
+	if err := fx.run(t, job, payload); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	sessions := fx.sessions()
+	list, err := sessions.List(t.Context(), library.ImportDone)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("got %d done sessions, want 1", len(list))
+	}
+	if list[0].UnitsQueued != 1 || list[0].UnitsCommitted != 0 {
+		t.Errorf("counts = queued=%d committed=%d, want 1/0", list[0].UnitsQueued, list[0].UnitsCommitted)
+	}
+
+	units, err := sessions.ListUnits(t.Context(), list[0].ID)
+	if err != nil {
+		t.Fatalf("ListUnits: %v", err)
+	}
+	if len(units) != 1 || units[0].Decision != library.UnitQueue {
+		t.Fatalf("units = %+v, want one QUEUE", units)
+	}
+	// Said plainly, so the screen does not imply IDENTIFY was unsure.
+	if units[0].Reason != importjob.ReasonPreview {
+		t.Errorf("Reason = %q, want %q", units[0].Reason, importjob.ReasonPreview)
+	}
+	// Held, not blinded: the candidate is still there for the commit to use.
+	if units[0].CandidatesJSON == "" {
+		t.Error("the held unit carries no candidates, so nothing could commit it later")
+	}
+}

@@ -1942,6 +1942,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/import/sessions/{id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commit the units this session held for review, all or a chosen subset. Administrator only.
+         * @description The bulk half of "commit what was held" (ADR-48): each unit is placed with the same top-ranked candidate IDENTIFY already found, exactly as `POST .../units/{unitId}/commit` does one at a time, never a re-run of IDENTIFY and never a choice among the other candidates. Pairs with a `preview` inspection, which holds every unit on purpose. Best-effort: a unit that cannot be committed is reported in `errors` and the rest still go. Refused with 409 if the session has no category yet (assign one first) or was reverted; a unit that is not QUEUE is skipped, not an error.
+         */
+        post: operations["commitHeldImportUnits"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/import/sessions/{id}/revert": {
         parameters: {
             query?: never;
@@ -3773,9 +3795,22 @@ export interface components {
              * @description The target category, when known up front. Omitted means "decide per unit".
              */
             category_id?: number;
+            /** @description Hold every unit for review instead of placing the confident ones. The run demands a confidence no candidate can reach, so each unit lands QUEUE with its candidates intact and `POST /import/sessions/{id}/commit` places the ones you pick. Defaults to false. */
+            preview?: boolean;
         };
         ImportInspectResult: {
             enqueued: boolean;
+        };
+        /** @description Which held units to commit. An empty or absent list means all of them. */
+        ImportCommitHeldRequest: {
+            unit_ids?: number[];
+        };
+        /** @description POST .../commit's own outcome: every QUEUE unit asked for, committed best-effort with its own top-ranked candidate. */
+        ImportCommitHeldResult: {
+            /** Format: int64 */
+            units_committed: number;
+            /** @description One entry per unit that could not be committed; never fatal to the rest. */
+            errors: string[];
         };
         ImportRevertRequest: {
             /** @description Defaults to 168 (one week), the same default RemoveAndBlockRequest uses. */
@@ -7425,6 +7460,37 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             /** @description The session is not running. */
+            409: components["responses"]["Problem"];
+        };
+    };
+    commitHeldImportUnits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitHeldRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitHeldResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The session has no category, or was reverted. */
             409: components["responses"]["Problem"];
         };
     };

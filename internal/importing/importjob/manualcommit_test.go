@@ -444,3 +444,121 @@ func TestManualCommitter_PlaceUnplacedIsBestEffortAcrossSeveralUnits(t *testing.
 		t.Errorf("errs = %v, want exactly 1", errs)
 	}
 }
+
+// The pairing revision.md 7.9 asks for: a preview run holds two confident
+// units, and one call commits them both.
+func TestManualCommitter_CommitAllHeldCommitsEveryUnitAPreviewHeld(t *testing.T) {
+	fx := newFixture(t, "Artist/Album1/01.flac", "Artist/Album2/01.flac")
+	fx.tool.byPath[filepath.Join(root, "Artist/Album1/01.flac")] = mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+	fx.tool.byPath[filepath.Join(root, "Artist/Album2/01.flac")] = mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+
+	job := fx.job(t, 0.90)
+	payload := importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual, Preview: true}
+	if err := fx.run(t, job, payload); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	sessions := fx.sessions()
+	done, _ := sessions.List(t.Context(), library.ImportDone)
+	units, _ := sessions.ListUnits(t.Context(), done[0].ID)
+	if len(units) != 2 || units[0].Decision != library.UnitQueue || units[1].Decision != library.UnitQueue {
+		t.Fatalf("units = %+v, want two QUEUE (test setup)", units)
+	}
+	if err := sessions.SetCategory(t.Context(), done[0].ID, 9); err != nil {
+		t.Fatalf("SetCategory: %v", err)
+	}
+
+	committer := &fakeCommitter{workID: seedWork(t, fx)}
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
+	committed, errs := manual.CommitAllHeld(t.Context(), done[0].ID, nil)
+	if len(errs) != 0 {
+		t.Fatalf("errs = %v, want none", errs)
+	}
+	if committed != 2 {
+		t.Errorf("committed = %d, want 2", committed)
+	}
+}
+
+func TestManualCommitter_CommitAllHeldCommitsOnlyTheNamedSubset(t *testing.T) {
+	fx := newFixture(t, "Artist/Album1/01.flac", "Artist/Album2/01.flac")
+	fx.tool.byPath[filepath.Join(root, "Artist/Album1/01.flac")] = mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+	fx.tool.byPath[filepath.Join(root, "Artist/Album2/01.flac")] = mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+
+	job := fx.job(t, 0.90)
+	payload := importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual, Preview: true}
+	if err := fx.run(t, job, payload); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	sessions := fx.sessions()
+	done, _ := sessions.List(t.Context(), library.ImportDone)
+	units, _ := sessions.ListUnits(t.Context(), done[0].ID)
+	if err := sessions.SetCategory(t.Context(), done[0].ID, 9); err != nil {
+		t.Fatalf("SetCategory: %v", err)
+	}
+
+	committer := &fakeCommitter{workID: seedWork(t, fx)}
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
+	committed, errs := manual.CommitAllHeld(t.Context(), done[0].ID, []int64{units[1].ID})
+	if len(errs) != 0 {
+		t.Fatalf("errs = %v, want none", errs)
+	}
+	if committed != 1 {
+		t.Fatalf("committed = %d, want 1", committed)
+	}
+
+	left, err := sessions.GetUnit(t.Context(), units[0].ID)
+	if err != nil {
+		t.Fatalf("GetUnit: %v", err)
+	}
+	if left.WorkID != nil {
+		t.Error("the unit that was not named got committed anyway")
+	}
+}
+
+func TestManualCommitter_CommitAllHeldRefusesWithNoCategory(t *testing.T) {
+	fx := newFixture(t, "Artist/Album/01.flac")
+	fx.tool.byPath[filepath.Join(root, "Artist/Album/01.flac")] = mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+
+	job := fx.job(t, 0.90)
+	payload := importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual, Preview: true}
+	if err := fx.run(t, job, payload); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	sessions := fx.sessions()
+	done, _ := sessions.List(t.Context(), library.ImportDone)
+
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
+	_, errs := manual.CommitAllHeld(t.Context(), done[0].ID, nil)
+	if len(errs) != 1 || !errors.Is(errs[0], importjob.ErrSessionHasNoCategory) {
+		t.Errorf("errs = %v, want one ErrSessionHasNoCategory", errs)
+	}
+}
+
+// A unit that already committed is not an error to skip -- only QUEUE units
+// have a held decision to override.
+func TestManualCommitter_CommitAllHeldSkipsAUnitThatIsNotQueued(t *testing.T) {
+	fx := newFixture(t, "Artist/Album/01.flac")
+	fx.tool.byPath[filepath.Join(root, "Artist/Album/01.flac")] = mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+
+	job := fx.job(t, 0.90) // no preview: the unit clears the threshold and is COMMIT
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	sessions := fx.sessions()
+	done, _ := sessions.List(t.Context(), library.ImportDone)
+	if err := sessions.SetCategory(t.Context(), done[0].ID, 9); err != nil {
+		t.Fatalf("SetCategory: %v", err)
+	}
+
+	committer := &fakeCommitter{workID: seedWork(t, fx)}
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
+	committed, errs := manual.CommitAllHeld(t.Context(), done[0].ID, nil)
+	if len(errs) != 0 {
+		t.Fatalf("errs = %v, want none", errs)
+	}
+	if committed != 0 {
+		t.Errorf("committed = %d, want 0 -- a COMMIT unit has no held decision to override", committed)
+	}
+	if len(committer.calls) != 0 {
+		t.Errorf("the committer ran %d times, want 0", len(committer.calls))
+	}
+}
