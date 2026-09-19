@@ -40,9 +40,11 @@ const SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier: Ti
   { to: "/activity", label: "Activity", icon: Activity, tier: "advanced" },
 ];
 
-const STORAGE_SECTIONS: readonly { to: string; label: string; icon: LucideIcon }[] = [
+// The whole section is advanced and Move & drain expert (2026-09-19):
+// nothing here is needed to run a library, and a move is irreversible work.
+const STORAGE_SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier?: Tier }[] = [
   { to: "/storage/roots", label: "Root folders", icon: HardDrive },
-  { to: "/storage/moves", label: "Move & drain", icon: ArrowLeftRight },
+  { to: "/storage/moves", label: "Move & drain", icon: ArrowLeftRight, tier: "expert" },
   { to: "/storage/downloads", label: "Download folders", icon: Download },
   { to: "/storage/import", label: "Import", icon: ScanSearch },
 ];
@@ -190,24 +192,28 @@ export function Sidebar() {
         {libraryTree}
       </CollapsibleSection>
 
-      <CollapsibleSection
-        label="Storage"
-        icon={HardDrive}
-        to="/storage/roots"
-        collapsed={collapsed}
-        active={path.startsWith("/storage")}
-        isOpen={sections.isOpen("storage")}
-        onToggle={() => sections.toggle("storage")}
-      >
-        {STORAGE_SECTIONS.map(({ to, label, icon: Icon }) => (
-          <li key={to}>
-            <Link to={to} className={sectionLinkClass(path.startsWith(to), false)}>
-              <Icon aria-hidden className="size-4 shrink-0" />
-              {label}
-            </Link>
-          </li>
-        ))}
-      </CollapsibleSection>
+      {isTierVisible(tier, "advanced") && (
+        <CollapsibleSection
+          label="Storage"
+          icon={HardDrive}
+          to="/storage/roots"
+          collapsed={collapsed}
+          active={path.startsWith("/storage")}
+          isOpen={sections.isOpen("storage")}
+          onToggle={() => sections.toggle("storage")}
+        >
+          {STORAGE_SECTIONS.filter((entry) => isTierVisible(tier, entry.tier ?? "advanced")).map(
+            ({ to, label, icon: Icon }) => (
+              <li key={to}>
+                <Link to={to} className={sectionLinkClass(path.startsWith(to), false)}>
+                  <Icon aria-hidden className="size-4 shrink-0" />
+                  {label}
+                </Link>
+              </li>
+            ),
+          )}
+        </CollapsibleSection>
+      )}
 
       <CollapsibleSection
         label="Connections"

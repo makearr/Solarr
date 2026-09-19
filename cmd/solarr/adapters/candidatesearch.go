@@ -21,6 +21,7 @@ import (
 // acquire.send.
 type CandidateSearch struct {
 	Works    library.Works
+	Monitor  WorksMonitor
 	Search   music.Search
 	Dispatch music.Dispatch
 	Queue    *jobs.Queue
@@ -48,6 +49,30 @@ func (c CandidateSearch) SearchWork(ctx context.Context, workID int64) (apiserve
 	}
 
 	result, err := c.Search.SearchItem(ctx, detail.Wanted.ID, indexers, c.Clock.Now())
+	if err != nil {
+		return apiserver.SearchItemResult{}, err
+	}
+	return searchItemResultView(result), nil
+}
+
+// SearchTrack runs the pipeline against one track's own SINGLE item,
+// creating and monitoring it first: asking for a track to be found is
+// asking for it.
+func (c CandidateSearch) SearchTrack(ctx context.Context, workID, partID int64) (apiserver.SearchItemResult, error) {
+	wanted, err := c.Monitor.SetTrackWanted(ctx, workID, partID, true)
+	if err != nil {
+		return apiserver.SearchItemResult{}, err
+	}
+
+	indexers, err := c.Indexers(ctx)
+	if err != nil {
+		return apiserver.SearchItemResult{}, fmt.Errorf("adapters: track search: indexers: %w", err)
+	}
+	if len(indexers) == 0 {
+		return apiserver.SearchItemResult{}, apiserver.ErrNoIndexersConfigured
+	}
+
+	result, err := c.Search.SearchItem(ctx, wanted.ID, indexers, c.Clock.Now())
 	if err != nil {
 		return apiserver.SearchItemResult{}, err
 	}

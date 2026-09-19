@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
+import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import type { components } from "@/api/schema";
 import { MEDIA_TYPES } from "./Categories";
 
@@ -367,14 +368,50 @@ function CreateAdministrator() {
 function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () => void }) {
   const [path, setPath] = useState("");
   const [label, setLabel] = useState("");
+  // A root folder belongs to a library (2026-09-19): one created here with
+  // no library attached is invisible to every import and scan afterwards.
+  const [categoryId, setCategoryId] = useState<number | "new">("new");
+  const [mediaType, setMediaType] = useState<MediaType>("music");
+  const [libraryName, setLibraryName] = useState(mediaTypeName("music"));
+  const [libraryNameTouched, setLibraryNameTouched] = useState(false);
+
+  const categories = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/categories");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const existing = categories.data ?? [];
+  const changeMediaType = (value: MediaType) => {
+    setMediaType(value);
+    if (!libraryNameTouched) setLibraryName(mediaTypeName(value));
+  };
 
   const add = useMutation({
     mutationFn: async () => {
-      const { data, error } = await api.POST("/rootfolders", {
+      let attachTo = categoryId;
+      if (attachTo === "new") {
+        const { data: category, error: categoryError } = await api.POST("/categories", {
+          body: { name: libraryName.trim() || mediaTypeName(mediaType), media_type: mediaType },
+        });
+        if (categoryError) throw categoryError;
+        attachTo = category!.id;
+      }
+
+      const { data: root, error } = await api.POST("/rootfolders", {
         body: { path, label: label.trim() || undefined },
       });
       if (error) throw error;
-      return data;
+
+      const { error: attachError } = await api.POST("/categories/{id}/rootfolders", {
+        params: { path: { id: attachTo } },
+        body: { root_folder_id: root!.id },
+      });
+      if (attachError) throw attachError;
+      return root;
     },
     onSuccess: onAdded,
   });
@@ -406,6 +443,52 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
             onChange={(event) => setLabel(event.target.value)}
           />
         </Field>
+
+        <Field label="Library" hint="Which library this folder holds. Nothing can be imported into a folder with no library.">
+          <select
+            className={inputStyle}
+            value={categoryId}
+            onChange={(event) =>
+              setCategoryId(event.target.value === "new" ? "new" : Number(event.target.value))
+            }
+          >
+            {existing.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+            <option value="new">Create a new library…</option>
+          </select>
+        </Field>
+
+        {categoryId === "new" && (
+          <>
+            <Field label="What it holds">
+              <select
+                className={inputStyle}
+                value={mediaType}
+                onChange={(event) => changeMediaType(event.target.value as MediaType)}
+              >
+                {MEDIA_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {mediaTypeName(type)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Library name">
+              <input
+                className={inputStyle}
+                value={libraryName}
+                placeholder={mediaTypeName(mediaType)}
+                onChange={(event) => {
+                  setLibraryName(event.target.value);
+                  setLibraryNameTouched(true);
+                }}
+              />
+            </Field>
+          </>
+        )}
 
         {add.isError && <Problem error={add.error} />}
 

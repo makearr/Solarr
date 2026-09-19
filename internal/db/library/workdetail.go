@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -17,11 +18,25 @@ type EditionDetail struct {
 type PartDetail struct {
 	Part        librarydb.WorkPart
 	ExternalIDs []librarydb.WorkPartExternalID
+	// File is what is actually on disk for this part, nil when nothing
+	// covers it. Aligned per media_ref, the same link present_count is
+	// counted from.
+	File *PartFile
 	// Wanted is the track's own SINGLE desired_item, when one exists -- nil
 	// until someone explicitly wants this one track on its own (todo 4.4),
 	// independent of Part.Monitored (which only shrinks or grows the
 	// album's own required_count).
 	Wanted *DesiredItemStatus
+}
+
+// PartFile is the one file covering a part, and what probing measured of it.
+type PartFile struct {
+	MediaObjectID int64
+	AudioCodec    string
+	VideoCodec    string
+	Container     string
+	BitrateKbps   int64
+	Lossless      bool
 }
 
 // Credit is one work-level credit, with the person's own name -- the work
@@ -41,6 +56,9 @@ type DesiredItemStatus struct {
 	RequiredCount *int64
 	PresentCount  int64
 	State         string
+	// LastSearchedAt is the hunt queue's own record, 0 when this item has
+	// never been searched for.
+	LastSearchedAt int64
 }
 
 // WorkDetail is a work's own fields, its editions, its parts, its credits and
@@ -63,13 +81,8 @@ type WorkDetail struct {
 }
 
 // OnDisk reports whether this work is linked to any root folder at all
-// (work_root_folder, migration 0012's bridge) -- the coarsest possible
-// "is there really a file for this" signal available today. Per-track
-// presence needs a real media_object-to-work_part link that does not exist
-// yet (work_part is populated from a provider's tracklist, never linked to
-// the files a scan actually found) -- real scope of its own, not attempted
-// here rather than approximated with something that could show wrong counts
-// on a root folder shared by several works.
+// (work_root_folder, migration 0012's bridge). Per-part presence is
+// PartDetail.File, aligned through desired_item_file.media_ref.
 func (d WorkDetail) OnDisk() bool { return len(d.RootFolderIDs) > 0 }
 
 // Detail composes one work's full structural detail. A missing id surfaces
@@ -104,6 +117,25 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 	if err != nil {
 		return WorkDetail{}, fmt.Errorf("library: work detail: parts: %w", err)
 	}
+	partFiles, err := queries.ListPartFilesForWork(ctx, id)
+	if err != nil {
+		return WorkDetail{}, fmt.Errorf("library: work detail: part files: %w", err)
+	}
+	fileByRef := make(map[string]PartFile, len(partFiles))
+	for _, row := range partFiles {
+		if _, seen := fileByRef[row.MediaRef]; seen {
+			continue
+		}
+		fileByRef[row.MediaRef] = PartFile{
+			MediaObjectID: row.MediaObjectID,
+			AudioCodec:    row.AudioCodec.String,
+			VideoCodec:    row.VideoCodec.String,
+			Container:     row.Container.String,
+			BitrateKbps:   bitrateKbps(row.OverallBitrate, row.AudioBitrate),
+			Lossless:      row.Lossless.Valid && row.Lossless.Int64 == 1,
+		}
+	}
+
 	partDetails := make([]PartDetail, len(parts))
 	for index, part := range parts {
 		partExternalIDs, err := queries.ListWorkPartExternalIDs(ctx, part.ID)
@@ -111,6 +143,9 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 			return WorkDetail{}, fmt.Errorf("library: work detail: part external ids: %w", err)
 		}
 		partDetails[index] = PartDetail{Part: part, ExternalIDs: partExternalIDs}
+		if file, found := fileByRef[part.MediaRef]; found {
+			partDetails[index].File = &file
+		}
 	}
 
 	rootFolderIDs, err := queries.ListRootFoldersForWork(ctx, id)
@@ -142,6 +177,14 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 	if err != nil {
 		return WorkDetail{}, fmt.Errorf("library: work detail: desired items: %w", err)
 	}
+	searchTimes, err := queries.ListHuntSearchTimesForWork(ctx, id)
+	if err != nil {
+		return WorkDetail{}, fmt.Errorf("library: work detail: hunt times: %w", err)
+	}
+	lastSearched := make(map[int64]int64, len(searchTimes))
+	for _, row := range searchTimes {
+		lastSearched[row.DesiredItemID] = row.LastSearchedAt
+	}
 	var wanted *DesiredItemStatus
 	trackWanted := make(map[string]*DesiredItemStatus, len(items))
 	categoryIDs := make([]int64, 0, len(items))
@@ -152,7 +195,8 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 			categoryIDs = append(categoryIDs, item.CategoryID)
 		}
 		status := DesiredItemStatus{
-			ID: item.ID, Monitored: item.Monitored == 1, PresentCount: item.PresentCount, State: item.State,
+			ID: item.ID, Monitored: item.Monitored == 1, PresentCount: item.PresentCount,
+			State: item.State, LastSearchedAt: lastSearched[item.ID],
 		}
 		if item.RequiredCount.Valid {
 			status.RequiredCount = &item.RequiredCount.Int64
@@ -173,4 +217,17 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 		Parts: partDetails, Credits: credits, Genres: genres, RootFolderIDs: rootFolderIDs,
 		CategoryIDs: categoryIDs, Wanted: wanted,
 	}, nil
+}
+
+// bitrateKbps prefers the whole file's measured rate and falls back to the
+// audio stream's, both stored in bits per second.
+func bitrateKbps(overall, audio sql.NullInt64) int64 {
+	switch {
+	case overall.Valid && overall.Int64 > 0:
+		return overall.Int64 / 1000
+	case audio.Valid && audio.Int64 > 0:
+		return audio.Int64 / 1000
+	default:
+		return 0
+	}
 }

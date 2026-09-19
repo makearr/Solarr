@@ -83,6 +83,19 @@ FROM desired_item_file WHERE desired_item_id = ? ORDER BY role, media_ref, media
 SELECT desired_item_id, media_object_id, role, media_ref, added_at
 FROM desired_item_file WHERE media_object_id = ? ORDER BY desired_item_id;
 
+-- Which part of a work has a file, and what that file measures. The same
+-- media_ref present_count is derived from, so the album detail and the
+-- artist overview cannot disagree about what is there.
+-- name: ListPartFilesForWork :many
+SELECT f.media_ref, f.media_object_id, o.overall_bitrate, o.audio_bitrate,
+       a.audio_codec, a.video_codec, a.container, a.lossless
+FROM desired_item d
+JOIN desired_item_file f ON f.desired_item_id = d.id
+JOIN media_object o ON o.id = f.media_object_id
+LEFT JOIN media_attributes a ON a.id = o.measured_attributes_id
+WHERE d.work_id = ? AND f.role = 'primary' AND f.media_ref <> ''
+ORDER BY f.media_ref, f.media_object_id;
+
 -- Only 'primary' counts: a trailer belongs to the work without satisfying it.
 -- name: CountPrimaryFiles :one
 SELECT COUNT(DISTINCT media_ref) AS covered
@@ -136,6 +149,15 @@ ON CONFLICT (desired_item_id) DO UPDATE SET
   priority = excluded.priority,
   release_date = excluded.release_date,
   eligible_after = excluded.eligible_after;
+
+-- When each of a work's desired items was last searched, for the album
+-- detail's own "last searched" column. Absent means never.
+-- name: ListHuntSearchTimesForWork :many
+SELECT h.desired_item_id, h.last_searched_at
+FROM hunt_queue h
+JOIN desired_item d ON d.id = h.desired_item_id
+WHERE d.work_id = ?
+ORDER BY h.desired_item_id;
 
 -- name: RemoveFromHuntQueue :exec
 DELETE FROM hunt_queue WHERE desired_item_id = ?;

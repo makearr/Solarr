@@ -620,6 +620,44 @@ func (q *Queries) ListFilesForDesiredItem(ctx context.Context, desiredItemID int
 	return items, nil
 }
 
+const listHuntSearchTimesForWork = `-- name: ListHuntSearchTimesForWork :many
+SELECT h.desired_item_id, h.last_searched_at
+FROM hunt_queue h
+JOIN desired_item d ON d.id = h.desired_item_id
+WHERE d.work_id = ?
+ORDER BY h.desired_item_id
+`
+
+type ListHuntSearchTimesForWorkRow struct {
+	DesiredItemID  int64
+	LastSearchedAt int64
+}
+
+// When each of a work's desired items was last searched, for the album
+// detail's own "last searched" column. Absent means never.
+func (q *Queries) ListHuntSearchTimesForWork(ctx context.Context, workID int64) ([]ListHuntSearchTimesForWorkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listHuntSearchTimesForWork, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListHuntSearchTimesForWorkRow{}
+	for rows.Next() {
+		var i ListHuntSearchTimesForWorkRow
+		if err := rows.Scan(&i.DesiredItemID, &i.LastSearchedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIncompleteDesiredItems = `-- name: ListIncompleteDesiredItems :many
 SELECT d.id, d.work_id, w.canonical_title, d.category_id, d.state,
        d.required_count, d.present_count
@@ -670,6 +708,63 @@ func (q *Queries) ListIncompleteDesiredItems(ctx context.Context, arg ListIncomp
 			&i.State,
 			&i.RequiredCount,
 			&i.PresentCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPartFilesForWork = `-- name: ListPartFilesForWork :many
+SELECT f.media_ref, f.media_object_id, o.overall_bitrate, o.audio_bitrate,
+       a.audio_codec, a.video_codec, a.container, a.lossless
+FROM desired_item d
+JOIN desired_item_file f ON f.desired_item_id = d.id
+JOIN media_object o ON o.id = f.media_object_id
+LEFT JOIN media_attributes a ON a.id = o.measured_attributes_id
+WHERE d.work_id = ? AND f.role = 'primary' AND f.media_ref <> ''
+ORDER BY f.media_ref, f.media_object_id
+`
+
+type ListPartFilesForWorkRow struct {
+	MediaRef       string
+	MediaObjectID  int64
+	OverallBitrate sql.NullInt64
+	AudioBitrate   sql.NullInt64
+	AudioCodec     sql.NullString
+	VideoCodec     sql.NullString
+	Container      sql.NullString
+	Lossless       sql.NullInt64
+}
+
+// Which part of a work has a file, and what that file measures. The same
+// media_ref present_count is derived from, so the album detail and the
+// artist overview cannot disagree about what is there.
+func (q *Queries) ListPartFilesForWork(ctx context.Context, workID int64) ([]ListPartFilesForWorkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPartFilesForWork, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPartFilesForWorkRow{}
+	for rows.Next() {
+		var i ListPartFilesForWorkRow
+		if err := rows.Scan(
+			&i.MediaRef,
+			&i.MediaObjectID,
+			&i.OverallBitrate,
+			&i.AudioBitrate,
+			&i.AudioCodec,
+			&i.VideoCodec,
+			&i.Container,
+			&i.Lossless,
 		); err != nil {
 			return nil, err
 		}

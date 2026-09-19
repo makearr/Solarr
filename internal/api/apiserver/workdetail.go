@@ -55,6 +55,18 @@ type PartRow struct {
 	// Wanted is the track's own SINGLE desired_item, nil until someone
 	// explicitly wants this one track on its own (todo 4.4).
 	Wanted *WantedRow
+	// File is what is on disk for this part, nil when nothing is.
+	File *PartFileRow
+}
+
+// PartFileRow is the file covering one part, and what probing measured.
+type PartFileRow struct {
+	MediaObjectID int64
+	AudioCodec    string
+	VideoCodec    string
+	Container     string
+	BitrateKbps   int64
+	Lossless      bool
 }
 
 // CreditRow is one work-level credit, the person's own name included so a
@@ -67,11 +79,12 @@ type CreditRow struct {
 
 // WantedRow is the work's own album-level SET desired_item, when one exists.
 type WantedRow struct {
-	ID            int64
-	Monitored     bool
-	RequiredCount *int64
-	PresentCount  int64
-	State         string
+	ID             int64
+	Monitored      bool
+	RequiredCount  *int64
+	PresentCount   int64
+	State          string
+	LastSearchedAt int64
 }
 
 // WorkDetailRow is a work's full detail. RootFolderIDs and CategoryIDs are not
@@ -407,10 +420,14 @@ func (s *Server) workVisible(w http.ResponseWriter, r *http.Request, access auth
 }
 
 func buildWantedView(row WantedRow) gen.Wanted {
-	return gen.Wanted{
+	view := gen.Wanted{
 		Id: row.ID, Monitored: row.Monitored, RequiredCount: row.RequiredCount,
 		PresentCount: row.PresentCount, State: gen.WantedState(row.State),
 	}
+	if row.LastSearchedAt > 0 {
+		view.LastSearchedAt = &row.LastSearchedAt
+	}
+	return view
 }
 
 // workDetailVisible is GetWork's own ADR-27 visibility check: row is visible
@@ -495,6 +512,13 @@ func buildPartViews(rows []PartRow) []gen.WorkPart {
 		if row.Wanted != nil {
 			wanted := buildWantedView(*row.Wanted)
 			views[index].Wanted = &wanted
+		}
+		if row.File != nil {
+			views[index].File = &gen.PartFile{
+				MediaObjectId: row.File.MediaObjectID, AudioCodec: strPtr(row.File.AudioCodec),
+				VideoCodec: strPtr(row.File.VideoCodec), Container: strPtr(row.File.Container),
+				BitrateKbps: row.File.BitrateKbps, Lossless: row.File.Lossless,
+			}
 		}
 	}
 	return views

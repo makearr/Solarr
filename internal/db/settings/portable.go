@@ -38,8 +38,10 @@ type ScalarSettingsEntry struct {
 	ImportAutoCommitConfidence float64  `yaml:"import_auto_commit_confidence"`
 	ImportTransferLadder       []string `yaml:"import_transfer_ladder,omitempty"`
 	NetworkPort                int      `yaml:"network_port,omitempty"`
+	NetworkProxyEnabled        bool     `yaml:"network_proxy_enabled"`
 	NetworkProxyURL            string   `yaml:"network_proxy_url,omitempty"`
 	NetworkProxyBypass         []string `yaml:"network_proxy_bypass,omitempty"`
+	NetworkAllowCIDRsEnabled   bool     `yaml:"network_allow_cidrs_enabled"`
 	NetworkAllowCIDRs          []string `yaml:"network_allow_cidrs,omitempty"`
 	CacheMaxBytes              int64    `yaml:"cache_max_bytes,omitempty"`
 	CacheMaxAgeDays            int64    `yaml:"cache_max_age_days,omitempty"`
@@ -136,8 +138,10 @@ func (c *Cache) Export() Document {
 		ImportAutoCommitConfidence: snapshot.ImportAutoCommitConfidence(),
 		ImportTransferLadder:       snapshot.ImportTransferLadder(),
 		NetworkPort:                network.Port,
+		NetworkProxyEnabled:        network.ProxyEnabled,
 		NetworkProxyURL:            network.ProxyURL,
 		NetworkProxyBypass:         network.ProxyBypass,
+		NetworkAllowCIDRsEnabled:   network.AllowCIDRsEnabled,
 		NetworkAllowCIDRs:          network.AllowCIDRs,
 		CacheMaxBytes:              cacheBudget.MaxBytes,
 		CacheMaxAgeDays:            cacheBudget.MaxAgeDays,
@@ -285,8 +289,9 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 			}
 		}
 		network := NetworkSettings{
-			Port: d.Settings.NetworkPort, ProxyURL: d.Settings.NetworkProxyURL,
-			ProxyBypass: d.Settings.NetworkProxyBypass, AllowCIDRs: d.Settings.NetworkAllowCIDRs,
+			Port: d.Settings.NetworkPort, ProxyEnabled: d.Settings.NetworkProxyEnabled,
+			ProxyURL: d.Settings.NetworkProxyURL, ProxyBypass: d.Settings.NetworkProxyBypass,
+			AllowCIDRsEnabled: d.Settings.NetworkAllowCIDRsEnabled, AllowCIDRs: d.Settings.NetworkAllowCIDRs,
 		}
 		for _, problem := range validateNetworkSettings(network, callerAddress) {
 			problems = append(problems, prefixed("settings", problem))
@@ -559,9 +564,10 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 				continue
 			}
 			created, err := queries.CreateRootFolder(ctx, settingsdb.CreateRootFolderParams{
-				Path:   root.Path,
-				Label:  sql.NullString{String: root.Label, Valid: root.Label != ""},
-				Online: 1,
+				Path:         root.Path,
+				Label:        sql.NullString{String: root.Label, Valid: root.Label != ""},
+				Online:       1,
+				MinFreeBytes: DefaultMinFreeBytes,
 			})
 			if err != nil {
 				return fmt.Errorf("root folder %q: %w", root.Path, err)
@@ -691,8 +697,10 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 		KeyImportTransferLadder:       string(transferLadder),
 		KeyImportAutoCommitConfidence: strconv.FormatFloat(entry.ImportAutoCommitConfidence, 'f', -1, 64),
 		KeyNetworkPort:                strconv.Itoa(entry.NetworkPort),
+		KeyNetworkProxyEnabled:        strconv.FormatBool(entry.NetworkProxyEnabled),
 		KeyNetworkProxyURL:            entry.NetworkProxyURL,
 		KeyNetworkProxyBypass:         string(proxyBypass),
+		KeyNetworkAllowCIDRsEnabled:   strconv.FormatBool(entry.NetworkAllowCIDRsEnabled),
 		KeyNetworkAllowCIDRs:          string(allowCIDRs),
 		KeyCacheMaxBytes:              strconv.FormatInt(entry.CacheMaxBytes, 10),
 		KeyCacheMaxAgeDays:            strconv.FormatInt(entry.CacheMaxAgeDays, 10),

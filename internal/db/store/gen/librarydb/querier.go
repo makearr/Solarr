@@ -361,6 +361,9 @@ type Querier interface {
 	// genre of its own (ADR-32's own fields are biographical, not stylistic).
 	ListGenresForPersonDiscography(ctx context.Context, personID int64) ([]string, error)
 	ListGroupObservations(ctx context.Context, arg ListGroupObservationsParams) ([]GroupObservation, error)
+	// When each of a work's desired items was last searched, for the album
+	// detail's own "last searched" column. Absent means never.
+	ListHuntSearchTimesForWork(ctx context.Context, workID int64) ([]ListHuntSearchTimesForWorkRow, error)
 	ListIdentificationAttempts(ctx context.Context, mediaObjectID int64) ([]IdentificationAttempt, error)
 	ListImportDecisionsNeedingReview(ctx context.Context, limit int64) ([]ImportDecision, error)
 	// Small, operator-facing list -- session counts never approach library scale
@@ -399,6 +402,10 @@ type Querier interface {
 	// discography import makes one row) but nothing bounds them the way a
 	// session count is bounded (Invariant 22's own reasoning).
 	ListPacksPage(ctx context.Context, arg ListPacksPageParams) ([]Pack, error)
+	// Which part of a work has a file, and what that file measures. The same
+	// media_ref present_count is derived from, so the album detail and the
+	// artist overview cannot disagree about what is there.
+	ListPartFilesForWork(ctx context.Context, workID int64) ([]ListPartFilesForWorkRow, error)
 	ListPathsForObject(ctx context.Context, mediaObjectID int64) ([]LibraryPath, error)
 	// ADR-51's drain: every real file to evacuate, with its size for
 	// mover.PlanDrain's own affinity-group byte totals. Primary paths only,

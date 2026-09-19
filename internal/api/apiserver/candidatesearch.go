@@ -97,6 +97,9 @@ type Acquisition struct {
 // interface (todo 5.2's "manual search, per-item and per-category").
 type CandidateSearcher interface {
 	SearchWork(ctx context.Context, workID int64) (SearchItemResult, error)
+	// SearchTrack searches for one track on its own, wanting it first if
+	// nothing did.
+	SearchTrack(ctx context.Context, workID, partID int64) (SearchItemResult, error)
 	ListWorkCandidates(ctx context.Context, workID int64) ([]CandidateDecision, error)
 	// SearchCategory enqueues a search run; duplicate reports whether one
 	// was already running for this category.
@@ -124,6 +127,37 @@ func (s *Server) SearchWork(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	result, err := s.candidateSearcher.SearchWork(r.Context(), id)
+	if err != nil {
+		writeCandidateSearchError(w, s, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, searchItemResultView(result))
+}
+
+// routeSearchTrack parses both path parameters.
+func (s *Server) routeSearchTrack(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathID(w, s, r, "id", "a work id must be a number")
+	if err != nil {
+		return
+	}
+	partID, err := parsePathID(w, s, r, "partId", "a part id must be a number")
+	if err != nil {
+		return
+	}
+	s.SearchTrack(w, r, id, partID)
+}
+
+// SearchTrack runs the same pipeline against one track's own SINGLE item.
+func (s *Server) SearchTrack(w http.ResponseWriter, r *http.Request, id, partID int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.candidateSearcher == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeInternal,
+			"Not available", "searching is not wired up in this build")
+		return
+	}
+	result, err := s.candidateSearcher.SearchTrack(r.Context(), id, partID)
 	if err != nil {
 		writeCandidateSearchError(w, s, err)
 		return

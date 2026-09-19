@@ -1,10 +1,11 @@
 import { useNavigate, useParams, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download } from "lucide-react";
+import { Search as SearchIcon } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { discCountOf, formatTrackNumber } from "@/lib/trackNumber";
+import { usePreference } from "@/lib/usePreference";
 
 import { CoverArt } from "./CoverArt";
 
@@ -110,20 +111,18 @@ export function WorkDetail() {
     onSuccess: invalidate,
   });
 
-  // Distinct from setPartMonitored: that only resizes the album's own
-  // required_count, this stands up a standalone SINGLE desired_item for the
-  // track by itself (todo 4.4) -- for someone who wants one song rather than
-  // the whole release.
-  const setTrackWanted = useMutation({
-    mutationFn: async ({ partId, wanted }: { partId: number; wanted: boolean }) => {
+  const searchTrack = useMutation({
+    mutationFn: async (partId: number) => {
       if (id === undefined) return;
-      const { error } = await api.POST("/works/{id}/parts/{partId}/wanted", {
+      const { error } = await api.POST("/works/{id}/parts/{partId}/search", {
         params: { path: { id, partId } },
-        body: { wanted },
       });
       if (error) throw error;
     },
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      void queryClient.invalidateQueries({ queryKey: ["work", id, "candidates"] });
+    },
   });
 
   if (id === undefined) return <Message>No work id in the URL.</Message>;
@@ -254,26 +253,16 @@ export function WorkDetail() {
         )}
 
         {work.parts.length > 0 && (
-          <Section title={`Parts (${work.parts.length})`}>
-            <ul
-              className="divide-y divide-border-subtle rounded-lg border
-                         border-border-subtle bg-surface"
-            >
-              {work.parts.map((part) => (
-                <PartRow
-                  key={part.id}
-                  part={part}
-                  discCount={discCount}
-                  pending={setPartMonitored.isPending}
-                  onToggleMonitored={(monitored) =>
-                    setPartMonitored.mutate({ partId: part.id, monitored })
-                  }
-                  wantedPending={setTrackWanted.isPending}
-                  onToggleWanted={(wanted) => setTrackWanted.mutate({ partId: part.id, wanted })}
-                />
-              ))}
-            </ul>
-          </Section>
+          <PartsSection
+            parts={work.parts}
+            discCount={discCount}
+            monitorPending={setPartMonitored.isPending}
+            onToggleMonitored={(partId, monitored) =>
+              setPartMonitored.mutate({ partId, monitored })
+            }
+            searchPending={searchTrack.isPending ? searchTrack.variables : undefined}
+            onSearch={(partId) => searchTrack.mutate(partId)}
+          />
         )}
 
         {work.external_ids.length > 0 && (
@@ -392,22 +381,90 @@ function EditionCard({ edition }: { edition: Edition }) {
   );
 }
 
+// The columns a track row can carry beyond number, title and duration
+// (2026-09-19). Each is off until someone turns it on, and the choice is
+// stored per user rather than per browser.
+const OPTIONAL_COLUMNS = [
+  { key: "released", label: "Release date" },
+  { key: "searched", label: "Last searched" },
+  { key: "codec", label: "Codec" },
+  { key: "bitrate", label: "Bitrate" },
+] as const;
+
+type ColumnKey = (typeof OPTIONAL_COLUMNS)[number]["key"];
+
+function PartsSection({
+  parts,
+  discCount,
+  monitorPending,
+  onToggleMonitored,
+  searchPending,
+  onSearch,
+}: {
+  parts: readonly WorkPart[];
+  discCount: number;
+  monitorPending: boolean;
+  onToggleMonitored: (partId: number, monitored: boolean) => void;
+  searchPending: number | undefined;
+  onSearch: (partId: number) => void;
+}) {
+  const [columns, setColumns] = usePreference<ColumnKey[]>("album.columns", []);
+  const present = parts.filter((part) => part.file != null).length;
+
+  const toggle = (key: ColumnKey) =>
+    setColumns(columns.includes(key) ? columns.filter((c) => c !== key) : [...columns, key]);
+
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+          Tracks ({present} of {parts.length})
+        </h2>
+        <div className="ml-auto flex flex-wrap gap-x-3 gap-y-1 text-[0.6875rem] text-ink-muted">
+          {OPTIONAL_COLUMNS.map(({ key, label }) => (
+            <label key={key} className="flex items-center gap-1">
+              <input type="checkbox" checked={columns.includes(key)} onChange={() => toggle(key)} />
+              {label}
+            </label>
+          ))}
+        </div>
+      </div>
+      <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
+        {parts.map((part) => (
+          <PartRow
+            key={part.id}
+            part={part}
+            discCount={discCount}
+            columns={columns}
+            pending={monitorPending}
+            onToggleMonitored={(monitored) => onToggleMonitored(part.id, monitored)}
+            searching={searchPending === part.id}
+            onSearch={() => onSearch(part.id)}
+          />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function PartRow({
   part,
   discCount,
+  columns,
   pending,
   onToggleMonitored,
-  wantedPending,
-  onToggleWanted,
+  searching,
+  onSearch,
 }: {
   part: WorkPart;
   discCount: number;
+  columns: readonly ColumnKey[];
   pending: boolean;
   onToggleMonitored: (monitored: boolean) => void;
-  wantedPending: boolean;
-  onToggleWanted: (wanted: boolean) => void;
+  searching: boolean;
+  onSearch: () => void;
 }) {
-  const wanted = part.wanted?.monitored ?? false;
+  const file = part.file;
   return (
     <li className="flex items-center gap-3 px-3 py-2 text-sm">
       <button
@@ -423,6 +480,11 @@ function PartRow({
             : "border-border-subtle bg-transparent"
         }`}
       />
+      <span
+        aria-label={file ? "In the library" : "Missing"}
+        title={file ? "In the library" : "Missing"}
+        className={`size-2 shrink-0 rounded-full ${file ? "bg-ok" : "bg-danger"}`}
+      />
       <span className="w-10 shrink-0 text-right font-mono text-xs tabular-nums text-ink-muted">
         {formatTrackNumber(part.media_ref, part.sort_key, discCount)}
       </span>
@@ -432,29 +494,41 @@ function PartRow({
           {formatDuration(part.runtime_ms)}
         </span>
       )}
+
+      <span className="ml-auto flex shrink-0 items-center gap-3 font-mono text-[0.6875rem] text-ink-muted">
+        {columns.includes("released") && <span className="w-20 text-right">{part.date ?? "--"}</span>}
+        {columns.includes("searched") && (
+          <span className="w-20 text-right">{formatLastSearched(part.wanted?.last_searched_at)}</span>
+        )}
+        {columns.includes("codec") && (
+          <span className="w-16 text-right">{file?.audio_codec ?? file?.video_codec ?? "--"}</span>
+        )}
+        {columns.includes("bitrate") && (
+          <span className="w-20 text-right">
+            {file && file.bitrate_kbps > 0 ? `${file.bitrate_kbps} kbps` : "--"}
+          </span>
+        )}
+      </span>
+
       <button
         type="button"
-        aria-pressed={wanted}
-        aria-label={wanted ? "Stop wanting this track on its own" : "Want this track on its own"}
-        title={
-          wanted
-            ? "Wanted on its own, independent of the album"
-            : "Want just this track, independent of the album"
-        }
-        disabled={wantedPending}
-        onClick={() => onToggleWanted(!wanted)}
-        className={`ml-auto flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5
-                   text-[0.6875rem] disabled:opacity-50 ${
-                     wanted
-                       ? "border-accent text-accent"
-                       : "border-border-subtle text-ink-muted hover:text-ink"
-                   }`}
+        aria-label={`Search for ${part.title ?? part.media_ref}`}
+        title="Want this track on its own and search every indexer for it"
+        disabled={searching}
+        onClick={onSearch}
+        className="flex shrink-0 items-center gap-1 rounded-full border border-border-subtle px-1.5 py-0.5
+                   text-[0.6875rem] text-ink-muted hover:text-ink disabled:opacity-50"
       >
-        <Download aria-hidden className="size-3" />
-        {wanted ? "Wanted" : "Want"}
+        <SearchIcon aria-hidden className="size-3" />
+        {searching ? "Searching…" : "Search"}
       </button>
     </li>
   );
+}
+
+function formatLastSearched(at: number | undefined): string {
+  if (at == null || at === 0) return "never";
+  return new Date(at * 1000).toLocaleDateString();
 }
 
 function ExternalIDList({ ids }: { ids: readonly ExternalID[] }) {

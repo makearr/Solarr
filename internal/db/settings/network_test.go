@@ -2,6 +2,7 @@ package settings_test
 
 import (
 	"net/netip"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -10,23 +11,42 @@ import (
 func TestNetworkSettings_DefaultsWhenNothingIsStored(t *testing.T) {
 	cache, _ := newCache(t)
 	network := cache.Snapshot().NetworkSettings()
-	if network.Port != 0 || network.ProxyURL != "" || len(network.ProxyBypass) != 0 || len(network.AllowCIDRs) != 0 {
-		t.Errorf("NetworkSettings = %+v, want the zero value", network)
+	want := settings.NetworkSettings{
+		ProxyBypass: settings.DefaultLocalRanges, AllowCIDRs: settings.DefaultLocalRanges,
+	}
+	if network.Port != want.Port || network.ProxyURL != want.ProxyURL ||
+		network.ProxyEnabled || network.AllowCIDRsEnabled ||
+		!slices.Equal(network.ProxyBypass, want.ProxyBypass) ||
+		!slices.Equal(network.AllowCIDRs, want.AllowCIDRs) {
+		t.Errorf("NetworkSettings = %+v, want %+v with both switches off", network, want)
+	}
+}
+
+func TestNetworkSettings_AnEmptiedProxyBypassStaysEmpty(t *testing.T) {
+	cache, cl := newCache(t)
+	stored := settings.NetworkSettings{ProxyBypass: []string{}}
+	if err := cache.SetNetworkSettings(t.Context(), cl, stored, netip.MustParseAddr("10.0.0.1")); err != nil {
+		t.Fatalf("SetNetworkSettings: %v", err)
+	}
+	if got := cache.Snapshot().NetworkSettings().ProxyBypass; len(got) != 0 {
+		t.Errorf("ProxyBypass = %v, want the list the user emptied, not the default", got)
 	}
 }
 
 func TestSetNetworkSettings_RoundTrips(t *testing.T) {
 	cache, cl := newCache(t)
 	want := settings.NetworkSettings{
-		Port: 6000, ProxyURL: "socks5://10.0.0.5:1080",
-		ProxyBypass: []string{"10.0.0.0/8", ".lan"},
-		AllowCIDRs:  []string{"10.0.0.0/8", "192.168.1.10/32"},
+		Port: 6000, ProxyEnabled: true, ProxyURL: "socks5://10.0.0.5:1080",
+		ProxyBypass:       []string{"10.0.0.0/8", ".lan"},
+		AllowCIDRsEnabled: true,
+		AllowCIDRs:        []string{"10.0.0.0/8", "192.168.1.10/32"},
 	}
 	caller := netip.MustParseAddr("10.0.0.1")
 	if err := cache.SetNetworkSettings(t.Context(), cl, want, caller); err != nil {
 		t.Fatalf("SetNetworkSettings: %v", err)
 	}
 	if got := cache.Snapshot().NetworkSettings(); got.Port != want.Port || got.ProxyURL != want.ProxyURL ||
+		!got.ProxyEnabled || !got.AllowCIDRsEnabled ||
 		len(got.ProxyBypass) != 2 || len(got.AllowCIDRs) != 2 {
 		t.Errorf("NetworkSettings = %+v, want %+v", got, want)
 	}
@@ -90,9 +110,9 @@ func TestSetNetworkSettings_RefusesAnAllowlistThatWouldLockOutTheCaller(t *testi
 	cache, cl := newCache(t)
 	caller := netip.MustParseAddr("203.0.113.7")
 	err := cache.SetNetworkSettings(t.Context(), cl,
-		settings.NetworkSettings{AllowCIDRs: []string{"10.0.0.0/8"}}, caller)
+		settings.NetworkSettings{AllowCIDRsEnabled: true, AllowCIDRs: []string{"10.0.0.0/8"}}, caller)
 	if err == nil {
-		t.Fatal("an allowlist excluding the caller's own address was accepted")
+		t.Fatal("an enforced whitelist excluding the caller's own address was accepted")
 	}
 }
 
@@ -100,7 +120,7 @@ func TestSetNetworkSettings_AcceptsAnAllowlistThatIncludesTheCaller(t *testing.T
 	cache, cl := newCache(t)
 	caller := netip.MustParseAddr("10.1.2.3")
 	err := cache.SetNetworkSettings(t.Context(), cl,
-		settings.NetworkSettings{AllowCIDRs: []string{"10.0.0.0/8"}}, caller)
+		settings.NetworkSettings{AllowCIDRsEnabled: true, AllowCIDRs: []string{"10.0.0.0/8"}}, caller)
 	if err != nil {
 		t.Fatalf("SetNetworkSettings: %v", err)
 	}
@@ -110,9 +130,9 @@ func TestSetNetworkSettings_AcceptsAnAllowlistThatIncludesTheCaller(t *testing.T
 func TestSetNetworkSettings_RefusesWhenTheCallerAddressCannotBeVerified(t *testing.T) {
 	cache, cl := newCache(t)
 	err := cache.SetNetworkSettings(t.Context(), cl,
-		settings.NetworkSettings{AllowCIDRs: []string{"10.0.0.0/8"}}, netip.Addr{})
+		settings.NetworkSettings{AllowCIDRsEnabled: true, AllowCIDRs: []string{"10.0.0.0/8"}}, netip.Addr{})
 	if err == nil {
-		t.Fatal("an unverifiable caller address was accepted for a non-empty allowlist")
+		t.Fatal("an unverifiable caller address was accepted for an enforced whitelist")
 	}
 }
 
@@ -120,5 +140,35 @@ func TestSetNetworkSettings_EmptyAllowlistNeedsNoCallerAddress(t *testing.T) {
 	cache, cl := newCache(t)
 	if err := cache.SetNetworkSettings(t.Context(), cl, settings.NetworkSettings{}, netip.Addr{}); err != nil {
 		t.Fatalf("SetNetworkSettings with an empty allowlist: %v", err)
+	}
+}
+
+// The switch is what makes the list a rule, so a filled-in list nobody
+// enabled can never lock its own author out (2026-09-19).
+func TestSetNetworkSettings_AnUnenforcedWhitelistCannotLockAnyoneOut(t *testing.T) {
+	cache, cl := newCache(t)
+	caller := netip.MustParseAddr("203.0.113.7")
+	if err := cache.SetNetworkSettings(t.Context(), cl,
+		settings.NetworkSettings{AllowCIDRs: []string{"10.0.0.0/8"}}, caller); err != nil {
+		t.Fatalf("SetNetworkSettings: %v", err)
+	}
+}
+
+func TestSetNetworkSettings_RefusesEnforcingAnEmptyWhitelist(t *testing.T) {
+	cache, cl := newCache(t)
+	caller := netip.MustParseAddr("10.1.2.3")
+	err := cache.SetNetworkSettings(t.Context(), cl,
+		settings.NetworkSettings{AllowCIDRsEnabled: true}, caller)
+	if err == nil {
+		t.Fatal("a whitelist that allows nothing at all was accepted")
+	}
+}
+
+func TestSetNetworkSettings_RefusesEnablingAProxyWithNoURL(t *testing.T) {
+	cache, cl := newCache(t)
+	err := cache.SetNetworkSettings(t.Context(), cl,
+		settings.NetworkSettings{ProxyEnabled: true}, netip.Addr{})
+	if err == nil {
+		t.Fatal("a proxy was enabled with no URL to send anything to")
 	}
 }

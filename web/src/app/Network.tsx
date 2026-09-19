@@ -7,6 +7,7 @@ import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
 type NetworkSettings = components["schemas"]["NetworkSettings"];
+type NetworkUpdate = components["schemas"]["NetworkSettingsUpdate"];
 
 /** todo 4.19, ADR-58: the listen port, the global egress proxy and the IP
  *  allowlist. The allowlist can only ever deny -- it never authenticates and
@@ -27,12 +28,7 @@ export function Network() {
   });
 
   const update = useMutation({
-    mutationFn: async (body: {
-      port: number;
-      proxy_url?: string;
-      proxy_bypass: string[];
-      allow_cidrs: string[];
-    }) => {
+    mutationFn: async (body: NetworkUpdate) => {
       const { error } = await api.PATCH("/network", { body });
       if (error) throw error;
     },
@@ -46,13 +42,11 @@ export function Network() {
     <section className="flex flex-col gap-2">
       <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Network</h2>
       <p className="text-xs text-ink-muted">
-        Port resolution, a global egress proxy and an IP allowlist. The allowlist can only deny --
+        The listen port, a global proxy and an IP whitelist. The whitelist can only deny --
         it never authenticates and never grants.
       </p>
 
       <div className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3">
-        <PortRow network={network.data} />
-
         <NetworkForm
           network={network.data}
           onSave={(body) => update.mutate(body)}
@@ -69,43 +63,31 @@ export function Network() {
   );
 }
 
-function PortRow({ network }: { network: NetworkSettings }) {
-  return (
-    <div className="flex flex-col gap-1 border-b border-border-subtle pb-2.5 text-xs">
-      <div className="flex items-center gap-2">
-        <span className="font-medium">In effect</span>
-        <span className="text-ink-muted">{network.in_effect_port}</span>
-      </div>
-      {network.restart_required && (
-        <p className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
-          <AlertTriangle aria-hidden className="size-3.5" />
-          Port {network.port} is saved but not live yet -- restart the container for it to take
-          effect.
-        </p>
-      )}
-    </div>
-  );
-}
-
 function NetworkForm({
   network,
   onSave,
   busy,
 }: {
   network: NetworkSettings;
-  onSave: (body: { port: number; proxy_url?: string; proxy_bypass: string[]; allow_cidrs: string[] }) => void;
+  onSave: (body: NetworkUpdate) => void;
   busy: boolean;
 }) {
-  const [port, setPort] = useState(network.port);
+  // The field carries the port actually being served, not the stored 0 that
+  // means "config.yml governs" (asked for 2026-09-19).
+  const [port, setPort] = useState(network.port === 0 ? network.in_effect_port : network.port);
+  const [proxyEnabled, setProxyEnabled] = useState(network.proxy_enabled);
   const [proxyURL, setProxyURL] = useState(network.proxy_url ?? "");
   const [proxyBypass, setProxyBypass] = useState(network.proxy_bypass.join("\n"));
+  const [allowEnabled, setAllowEnabled] = useState(network.allow_cidrs_enabled);
   const [allowCIDRs, setAllowCIDRs] = useState(network.allow_cidrs.join("\n"));
 
   const parsedBypass = splitLines(proxyBypass);
   const parsedAllow = splitLines(allowCIDRs);
 
   const dirty =
-    port !== network.port ||
+    port !== (network.port === 0 ? network.in_effect_port : network.port) ||
+    proxyEnabled !== network.proxy_enabled ||
+    allowEnabled !== network.allow_cidrs_enabled ||
     proxyURL !== (network.proxy_url ?? "") ||
     parsedBypass.join("\n") !== network.proxy_bypass.join("\n") ||
     parsedAllow.join("\n") !== network.allow_cidrs.join("\n");
@@ -117,8 +99,10 @@ function NetworkForm({
         event.preventDefault();
         onSave({
           port,
+          proxy_enabled: proxyEnabled,
           proxy_url: proxyURL.trim() === "" ? undefined : proxyURL.trim(),
           proxy_bypass: parsedBypass,
+          allow_cidrs_enabled: allowEnabled,
           allow_cidrs: parsedAllow,
         });
       }}
@@ -134,16 +118,23 @@ function NetworkForm({
           onChange={(event) => setPort(Number(event.target.value))}
           className={inputStyle}
         />
-        <span className="text-[0.6875rem]">
-          0 leaves it unset -- config.yml (or 5454) governs. A real choice is written into
-          config.yml directly, not just here, so it survives however the next restart happens. If
-          a chosen port turns out unreachable, the SOLARR_SERVER_PORT environment variable
-          always wins over both and is the way back in.
-        </span>
+        {network.restart_required && (
+          <span className="flex items-center gap-1.5 text-[0.6875rem] text-amber-600 dark:text-amber-400">
+            <AlertTriangle aria-hidden className="size-3.5" />
+            Port {network.port} is saved but not live yet -- restart the container.
+          </span>
+        )}
       </label>
 
+      <Toggle
+        label="Send outbound traffic through a proxy"
+        checked={proxyEnabled}
+        disabled={busy}
+        onChange={setProxyEnabled}
+      />
+
       <label className="flex flex-col gap-1">
-        Egress proxy URL
+        Proxy
         <input
           type="text"
           placeholder="socks5://host:1080"
@@ -152,7 +143,7 @@ function NetworkForm({
           onChange={(event) => setProxyURL(event.target.value)}
           className={`${inputStyle} w-64`}
         />
-        <span className="text-[0.6875rem]">Empty means no proxy. http, https or socks5, with a port.</span>
+        <span className="text-[0.6875rem]">http, https or socks5, with a port. Used only while the box above is ticked.</span>
       </label>
 
       <label className="flex flex-col gap-1">
@@ -170,8 +161,15 @@ function NetworkForm({
         </span>
       </label>
 
+      <Toggle
+        label="Only allow these addresses to reach this instance"
+        checked={allowEnabled}
+        disabled={busy}
+        onChange={setAllowEnabled}
+      />
+
       <label className="flex flex-col gap-1">
-        IP allowlist
+        IP whitelist
         <textarea
           rows={3}
           placeholder={"10.0.0.0/8\n192.168.1.0/24"}
@@ -181,8 +179,8 @@ function NetworkForm({
           className={`${inputStyle} w-64 font-mono`}
         />
         <span className="text-[0.6875rem]">
-          One CIDR per line. Empty allows every address, the default. /api/v1/health always stays
-          reachable, and a change that would exclude the address you're using right now is
+          One CIDR per line, used only while the box above is ticked. /api/v1/health always stays
+          reachable, and enabling a list that would exclude the address you're using right now is
           refused outright.
         </span>
       </label>
@@ -198,6 +196,30 @@ function NetworkForm({
         </button>
       )}
     </form>
+  );
+}
+
+function Toggle({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-ink">
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      {label}
+    </label>
   );
 }
 

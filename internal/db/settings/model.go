@@ -152,6 +152,10 @@ type LanguageProfile struct {
 	RejectDubbed        bool
 }
 
+// DefaultMinFreeBytes is the reserve a newly created root folder starts
+// with: 8 GB, asked for 2026-09-19.
+const DefaultMinFreeBytes int64 = 8_000_000_000
+
 // RootFolder is a directory the library is stored in. Section 11.7's three
 // separate concepts, never conflated: Writable is a probed fact, ReadOnly is
 // the user's own policy, AcceptsNew (CategoryRoot, per category) is

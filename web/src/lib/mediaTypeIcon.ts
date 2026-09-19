@@ -36,3 +36,24 @@ const ICONS: Record<string, LucideIcon> = {
 export function mediaTypeIcon(mediaType: string): LucideIcon {
   return ICONS[mediaType] ?? Library;
 }
+
+// What a library of this type is called when nobody names it (2026-09-19):
+// the category's own word, so "Music" rather than an empty name field.
+const NAMES: Record<string, string> = {
+  music: "Music",
+  tv: "TV",
+  movie: "Movies",
+  audiobook: "Audiobooks",
+  book: "Books",
+  adult: "Adult",
+  comic: "Comics",
+  rom: "Games",
+  podcast: "Podcasts",
+  news: "News",
+  youtube: "YouTube",
+};
+
+/** The default name for a library of this media type. */
+export function mediaTypeName(mediaType: string): string {
+  return NAMES[mediaType] ?? mediaType;
+}

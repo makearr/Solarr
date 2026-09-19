@@ -15,30 +15,62 @@ import (
 // ADR-58's own keys, the same instance_setting shape auth.required and the
 // cache budget already use.
 const (
-	KeyNetworkPort        = "network.port"
-	KeyNetworkProxyURL    = "network.proxy_url"
-	KeyNetworkProxyBypass = "network.proxy_bypass"
-	KeyNetworkAllowCIDRs  = "network.allow_cidrs"
+	KeyNetworkPort              = "network.port"
+	KeyNetworkProxyEnabled      = "network.proxy_enabled"
+	KeyNetworkProxyURL          = "network.proxy_url"
+	KeyNetworkProxyBypass       = "network.proxy_bypass"
+	KeyNetworkAllowCIDRsEnabled = "network.allow_cidrs_enabled"
+	KeyNetworkAllowCIDRs        = "network.allow_cidrs"
 )
 
+// DefaultLocalRanges fills both lists on an instance that has never been
+// configured, so the ranges anyone would type are already there (2026-09-19).
+// Neither list does anything until its own enable flag is turned on.
+var DefaultLocalRanges = []string{"127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}
+
 // NetworkSettings is ADR-58's own policy. Port 0 means unset -- config.yml
-// governs until the Network screen writes one; AllowCIDRs empty allows all.
+// governs until the Network screen writes one. The proxy and the whitelist
+// each have their own enable flag, off until someone turns it on
+// (2026-09-19), so a prefilled list is a suggestion rather than a rule.
 type NetworkSettings struct {
-	Port        int
-	ProxyURL    string
-	ProxyBypass []string
-	AllowCIDRs  []string
+	Port              int
+	ProxyEnabled      bool
+	ProxyURL          string
+	ProxyBypass       []string
+	AllowCIDRsEnabled bool
+	AllowCIDRs        []string
 }
 
 // NetworkSettings reads the configured policy, or its zero-value defaults for
 // whatever nothing has stored yet.
 func (s *Snapshot) NetworkSettings() NetworkSettings {
 	return NetworkSettings{
-		Port:        int(s.policyInt(KeyNetworkPort, 0)),
-		ProxyURL:    s.policy[KeyNetworkProxyURL],
-		ProxyBypass: s.policyStringList(KeyNetworkProxyBypass),
-		AllowCIDRs:  s.policyStringList(KeyNetworkAllowCIDRs),
+		Port:              int(s.policyInt(KeyNetworkPort, 0)),
+		ProxyEnabled:      s.policyBool(KeyNetworkProxyEnabled, false),
+		ProxyURL:          s.policy[KeyNetworkProxyURL],
+		ProxyBypass:       s.policyStringListOr(KeyNetworkProxyBypass, DefaultLocalRanges),
+		AllowCIDRsEnabled: s.policyBool(KeyNetworkAllowCIDRsEnabled, false),
+		AllowCIDRs:        s.policyStringListOr(KeyNetworkAllowCIDRs, DefaultLocalRanges),
 	}
+}
+
+func (s *Snapshot) policyBool(key string, fallback bool) bool {
+	value, found := s.policy[key]
+	if !found {
+		return fallback
+	}
+	return value == "true"
+}
+
+func boolPolicy(value bool) string { return strconv.FormatBool(value) }
+
+// policyStringListOr distinguishes "never configured", which takes the
+// default, from a list the user deliberately emptied.
+func (s *Snapshot) policyStringListOr(key string, fallback []string) []string {
+	if raw, found := s.policy[key]; !found || raw == "" {
+		return fallback
+	}
+	return s.policyStringList(key)
 }
 
 func (s *Snapshot) policyStringList(key string) []string {
@@ -70,10 +102,12 @@ func (c *Cache) SetNetworkSettings(ctx context.Context, cl clock.Clock, ns Netwo
 	}
 
 	for key, value := range map[string]string{
-		KeyNetworkPort:        strconv.Itoa(ns.Port),
-		KeyNetworkProxyURL:    ns.ProxyURL,
-		KeyNetworkProxyBypass: string(proxyBypass),
-		KeyNetworkAllowCIDRs:  string(allowCIDRs),
+		KeyNetworkPort:              strconv.Itoa(ns.Port),
+		KeyNetworkProxyEnabled:      boolPolicy(ns.ProxyEnabled),
+		KeyNetworkProxyURL:          ns.ProxyURL,
+		KeyNetworkProxyBypass:       string(proxyBypass),
+		KeyNetworkAllowCIDRsEnabled: boolPolicy(ns.AllowCIDRsEnabled),
+		KeyNetworkAllowCIDRs:        string(allowCIDRs),
 	} {
 		if err := c.setPolicy(ctx, cl, key, value); err != nil {
 			return err
@@ -88,6 +122,12 @@ func validateNetworkSettings(ns NetworkSettings, callerAddress netip.Addr) confi
 	if ns.Port != 0 && (ns.Port < 1 || ns.Port > 65535) {
 		problems = append(problems, config.Problem{
 			Path: "port", Value: strconv.Itoa(ns.Port), Expectation: "0 (unset) or a port between 1 and 65535",
+		})
+	}
+
+	if ns.ProxyEnabled && strings.TrimSpace(ns.ProxyURL) == "" {
+		problems = append(problems, config.Problem{
+			Path: "proxy_url", Expectation: "a proxy URL, or turn the proxy off",
 		})
 	}
 
@@ -121,8 +161,16 @@ func validateNetworkSettings(ns NetworkSettings, callerAddress netip.Addr) confi
 		prefixes = append(prefixes, prefix)
 	}
 
-	// Only once every entry parses, or a lockout report obscures a typo.
-	if len(problems) == 0 && len(prefixes) > 0 && !addressAllowedByAny(callerAddress, prefixes) {
+	if ns.AllowCIDRsEnabled && len(ns.AllowCIDRs) == 0 {
+		problems = append(problems, config.Problem{
+			Path: "allow_cidrs", Expectation: "at least one CIDR, or turn the whitelist off",
+		})
+	}
+
+	// Only once every entry parses, or a lockout report obscures a typo. An
+	// off whitelist cannot lock anyone out, however it is filled in.
+	if len(problems) == 0 && ns.AllowCIDRsEnabled && len(prefixes) > 0 &&
+		!addressAllowedByAny(callerAddress, prefixes) {
 		problems = append(problems, config.Problem{
 			Path: "allow_cidrs", Value: strings.Join(ns.AllowCIDRs, ", "),
 			Expectation: "must include the address making this change, or it would lock out the caller",
