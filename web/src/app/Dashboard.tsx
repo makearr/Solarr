@@ -10,7 +10,6 @@ import { Poster } from "./Poster";
 import { SearchBox } from "./SearchBox";
 import { defaultLevelKey } from "./Sidebar";
 
-type RootFolder = components["schemas"]["RootFolder"];
 type LibraryEntry = components["schemas"]["Library"];
 
 // Seerr's own landing shape, asked for 2026-09-13: find something or add
@@ -169,67 +168,18 @@ export function Dashboard() {
 }
 
 function StatusPanels({ summary }: { summary: components["schemas"]["DashboardSummary"] }) {
-  const { root_folders: roots, jobs, library } = summary;
-  const offline = roots.filter((root) => !root.online);
-  const unwritable = roots.filter((root) => root.writable === false);
+  const { jobs } = summary;
 
   return (
-    <>
-      <Section title="Activity">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          <Tile label="Queued" value={jobs.pending} to="/activity" />
-          <Tile label="Running" value={jobs.running} to="/activity" tone="accent" />
-          <Tile label="Failed" value={jobs.failed} to="/activity" tone="danger" />
-          <Tile label="Done" value={jobs.succeeded} to="/activity" />
-          <Tile label="Cancelled" value={jobs.cancelled} to="/activity" />
-        </div>
-      </Section>
-
-      {library.probed + library.unprobed > 0 && (
-        <Section title="Probe coverage">
-          <Link
-            to="/library/health"
-            className="flex items-center gap-3 rounded-lg border border-border-subtle
-                       bg-surface px-3 py-2.5 text-sm hover:border-accent
-                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            <span className="font-mono tabular-nums">
-              {library.probed.toLocaleString()} of {(library.probed + library.unprobed).toLocaleString()} files probed
-            </span>
-            {library.unprobed > 0 && (
-              <span className="ml-auto shrink-0 text-xs text-ink-muted">
-                {library.unprobed.toLocaleString()} still unmeasured — view library health →
-              </span>
-            )}
-          </Link>
-        </Section>
-      )}
-
-      <Section title={`Storage (${roots.length})`}>
-        {roots.length === 0 ? (
-          <Note>
-            No library root is configured.{" "}
-            <Link to="/storage/roots" className="text-accent underline underline-offset-2">
-              Add one
-            </Link>{" "}
-            before importing anything.
-          </Note>
-        ) : (
-          <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
-            {roots.map((root) => (
-              <Root key={root.id} root={root} />
-            ))}
-          </ul>
-        )}
-        {(offline.length > 0 || unwritable.length > 0) && (
-          <Note tone="warn">
-            {offline.length > 0 && `${offline.length} root offline. `}
-            {unwritable.length > 0 &&
-              `${unwritable.length} root not writable by this process — reported, never corrected.`}
-          </Note>
-        )}
-      </Section>
-    </>
+    <Section title="Activity">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <Tile label="Queued" value={jobs.pending} to="/activity" />
+        <Tile label="Running" value={jobs.running} to="/activity" tone="accent" />
+        <Tile label="Failed" value={jobs.failed} to="/activity" tone="danger" />
+        <Tile label="Done" value={jobs.succeeded} to="/activity" />
+        <Tile label="Cancelled" value={jobs.cancelled} to="/activity" />
+      </div>
+    </Section>
   );
 }
 
@@ -263,19 +213,6 @@ function LibraryCard({ library }: { library: LibraryEntry }) {
     >
       {body}
     </Link>
-  );
-}
-
-function Root({ root }: { root: RootFolder }) {
-  return (
-    <li className="flex items-center gap-3 px-3 py-2 text-sm">
-      <span className="truncate font-medium">{root.label ?? root.path}</span>
-      {root.label && <span className="truncate font-mono text-xs text-ink-muted">{root.path}</span>}
-      <span className="ml-auto flex shrink-0 items-center gap-2 text-xs">
-        {root.writable === false && <Pill tone="warn">read-only</Pill>}
-        <Pill tone={root.online ? "ok" : "danger"}>{root.online ? "online" : "offline"}</Pill>
-      </span>
-    </li>
   );
 }
 
@@ -325,11 +262,6 @@ function Tile({
       <span className={`font-mono text-xl tabular-nums ${emphasis}`}>{value.toLocaleString()}</span>
     </Link>
   );
-}
-
-function Pill({ children, tone }: { children: React.ReactNode; tone: "ok" | "warn" | "danger" }) {
-  const colour = tone === "ok" ? "text-ok" : tone === "warn" ? "text-warn" : "text-danger";
-  return <span className={`rounded-full border border-current px-1.5 py-px ${colour}`}>{children}</span>;
 }
 
 function Note({ children, tone }: { children: React.ReactNode; tone?: "warn" }) {

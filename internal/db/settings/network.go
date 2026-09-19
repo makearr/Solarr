@@ -21,6 +21,10 @@ const (
 	KeyNetworkAllowCIDRs  = "network.allow_cidrs"
 )
 
+// DefaultProxyBypass is what an instance that has never been configured
+// skips the egress proxy for: the loopback and private ranges (2026-09-19).
+var DefaultProxyBypass = []string{"127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}
+
 // NetworkSettings is ADR-58's own policy. Port 0 means unset -- config.yml
 // governs until the Network screen writes one; AllowCIDRs empty allows all.
 type NetworkSettings struct {
@@ -36,9 +40,18 @@ func (s *Snapshot) NetworkSettings() NetworkSettings {
 	return NetworkSettings{
 		Port:        int(s.policyInt(KeyNetworkPort, 0)),
 		ProxyURL:    s.policy[KeyNetworkProxyURL],
-		ProxyBypass: s.policyStringList(KeyNetworkProxyBypass),
+		ProxyBypass: s.policyStringListOr(KeyNetworkProxyBypass, DefaultProxyBypass),
 		AllowCIDRs:  s.policyStringList(KeyNetworkAllowCIDRs),
 	}
+}
+
+// policyStringListOr distinguishes "never configured", which takes the
+// default, from a list the user deliberately emptied.
+func (s *Snapshot) policyStringListOr(key string, fallback []string) []string {
+	if raw, found := s.policy[key]; !found || raw == "" {
+		return fallback
+	}
+	return s.policyStringList(key)
 }
 
 func (s *Snapshot) policyStringList(key string) []string {

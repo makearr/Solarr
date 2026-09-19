@@ -102,21 +102,27 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 }
 
 const createRootFolder = `-- name: CreateRootFolder :one
-INSERT INTO root_folder (path, label, online)
-VALUES (?, ?, ?)
+INSERT INTO root_folder (path, label, online, min_free_bytes)
+VALUES (?, ?, ?, ?)
 RETURNING id, path, label, online, writable, writable_reason, read_only, allow_rename,
           total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
        drain_state, drain_job_id
 `
 
 type CreateRootFolderParams struct {
-	Path   string
-	Label  sql.NullString
-	Online int64
+	Path         string
+	Label        sql.NullString
+	Online       int64
+	MinFreeBytes int64
 }
 
 func (q *Queries) CreateRootFolder(ctx context.Context, arg CreateRootFolderParams) (RootFolder, error) {
-	row := q.db.QueryRowContext(ctx, createRootFolder, arg.Path, arg.Label, arg.Online)
+	row := q.db.QueryRowContext(ctx, createRootFolder,
+		arg.Path,
+		arg.Label,
+		arg.Online,
+		arg.MinFreeBytes,
+	)
 	var i RootFolder
 	err := row.Scan(
 		&i.ID,

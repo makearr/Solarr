@@ -189,11 +189,12 @@ func NewDefaultRegistry() *Registry {
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyNetworkProxyBypass, Kind: KindStringList, Tier: TierAdvanced,
-		Name: "Proxy bypass", HelpText: "CIDRs or host suffixes the egress proxy is skipped for.", Default: "[]",
+		Name: "Proxy bypass", HelpText: "CIDRs or host suffixes the egress proxy is skipped for.",
+		Default: `["127.0.0.0/8","10.0.0.0/8","172.16.0.0/12","192.168.0.0/16"]`,
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyNetworkAllowCIDRs, Kind: KindStringList, Tier: TierAdvanced,
-		Name:     "IP allowlist",
+		Name:     "IP whitelist",
 		HelpText: "Empty allows every address; non-empty can only deny (Invariant 89).",
 		Default:  "[]",
 	})

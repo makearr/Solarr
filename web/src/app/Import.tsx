@@ -467,7 +467,7 @@ function InspectForm() {
         </select>
       </label>
       <label className="flex flex-col gap-1 text-xs text-ink-muted">
-        Category
+        Library
         <select
           className={inputStyle}
           value={categoryId}
@@ -497,7 +497,7 @@ function InspectForm() {
         className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
                    focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
-        {inspect.isPending ? "Enqueuing…" : "Inspect"}
+        {inspect.isPending ? "Enqueuing…" : "Import"}
       </button>
       {inspect.isError && (
         <p className="w-full text-xs text-danger">

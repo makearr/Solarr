@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"slices"
 	"strings"
 	"testing"
 
@@ -45,8 +46,9 @@ func TestGetNetworkSettings_DefaultsToNothingConfigured(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if body.Port != 0 || body.RestartRequired || len(body.ProxyBypass) != 0 || len(body.AllowCIDRs) != 0 {
-		t.Errorf("body = %+v, want the zero value", body)
+	if body.Port != 0 || body.RestartRequired || len(body.AllowCIDRs) != 0 ||
+		!slices.Equal(body.ProxyBypass, settings.DefaultProxyBypass) {
+		t.Errorf("body = %+v, want nothing configured but the default proxy bypass", body)
 	}
 }
 

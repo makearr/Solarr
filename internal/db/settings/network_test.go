@@ -2,6 +2,7 @@ package settings_test
 
 import (
 	"net/netip"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -10,8 +11,21 @@ import (
 func TestNetworkSettings_DefaultsWhenNothingIsStored(t *testing.T) {
 	cache, _ := newCache(t)
 	network := cache.Snapshot().NetworkSettings()
-	if network.Port != 0 || network.ProxyURL != "" || len(network.ProxyBypass) != 0 || len(network.AllowCIDRs) != 0 {
-		t.Errorf("NetworkSettings = %+v, want the zero value", network)
+	want := settings.NetworkSettings{ProxyBypass: settings.DefaultProxyBypass}
+	if network.Port != want.Port || network.ProxyURL != want.ProxyURL ||
+		!slices.Equal(network.ProxyBypass, want.ProxyBypass) || len(network.AllowCIDRs) != 0 {
+		t.Errorf("NetworkSettings = %+v, want %+v", network, want)
+	}
+}
+
+func TestNetworkSettings_AnEmptiedProxyBypassStaysEmpty(t *testing.T) {
+	cache, cl := newCache(t)
+	stored := settings.NetworkSettings{ProxyBypass: []string{}}
+	if err := cache.SetNetworkSettings(t.Context(), cl, stored, netip.MustParseAddr("10.0.0.1")); err != nil {
+		t.Fatalf("SetNetworkSettings: %v", err)
+	}
+	if got := cache.Snapshot().NetworkSettings().ProxyBypass; len(got) != 0 {
+		t.Errorf("ProxyBypass = %v, want the list the user emptied, not the default", got)
 	}
 }
 

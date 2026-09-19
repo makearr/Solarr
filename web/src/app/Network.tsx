@@ -46,13 +46,11 @@ export function Network() {
     <section className="flex flex-col gap-2">
       <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Network</h2>
       <p className="text-xs text-ink-muted">
-        Port resolution, a global egress proxy and an IP allowlist. The allowlist can only deny --
+        The listen port, a global proxy and an IP whitelist. The whitelist can only deny --
         it never authenticates and never grants.
       </p>
 
       <div className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3">
-        <PortRow network={network.data} />
-
         <NetworkForm
           network={network.data}
           onSave={(body) => update.mutate(body)}
@@ -69,24 +67,6 @@ export function Network() {
   );
 }
 
-function PortRow({ network }: { network: NetworkSettings }) {
-  return (
-    <div className="flex flex-col gap-1 border-b border-border-subtle pb-2.5 text-xs">
-      <div className="flex items-center gap-2">
-        <span className="font-medium">In effect</span>
-        <span className="text-ink-muted">{network.in_effect_port}</span>
-      </div>
-      {network.restart_required && (
-        <p className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
-          <AlertTriangle aria-hidden className="size-3.5" />
-          Port {network.port} is saved but not live yet -- restart the container for it to take
-          effect.
-        </p>
-      )}
-    </div>
-  );
-}
-
 function NetworkForm({
   network,
   onSave,
@@ -96,7 +76,9 @@ function NetworkForm({
   onSave: (body: { port: number; proxy_url?: string; proxy_bypass: string[]; allow_cidrs: string[] }) => void;
   busy: boolean;
 }) {
-  const [port, setPort] = useState(network.port);
+  // The field carries the port actually being served, not the stored 0 that
+  // means "config.yml governs" (asked for 2026-09-19).
+  const [port, setPort] = useState(network.port === 0 ? network.in_effect_port : network.port);
   const [proxyURL, setProxyURL] = useState(network.proxy_url ?? "");
   const [proxyBypass, setProxyBypass] = useState(network.proxy_bypass.join("\n"));
   const [allowCIDRs, setAllowCIDRs] = useState(network.allow_cidrs.join("\n"));
@@ -105,7 +87,7 @@ function NetworkForm({
   const parsedAllow = splitLines(allowCIDRs);
 
   const dirty =
-    port !== network.port ||
+    port !== (network.port === 0 ? network.in_effect_port : network.port) ||
     proxyURL !== (network.proxy_url ?? "") ||
     parsedBypass.join("\n") !== network.proxy_bypass.join("\n") ||
     parsedAllow.join("\n") !== network.allow_cidrs.join("\n");
@@ -134,16 +116,16 @@ function NetworkForm({
           onChange={(event) => setPort(Number(event.target.value))}
           className={inputStyle}
         />
-        <span className="text-[0.6875rem]">
-          0 leaves it unset -- config.yml (or 5454) governs. A real choice is written into
-          config.yml directly, not just here, so it survives however the next restart happens. If
-          a chosen port turns out unreachable, the SOLARR_SERVER_PORT environment variable
-          always wins over both and is the way back in.
-        </span>
+        {network.restart_required && (
+          <span className="flex items-center gap-1.5 text-[0.6875rem] text-amber-600 dark:text-amber-400">
+            <AlertTriangle aria-hidden className="size-3.5" />
+            Port {network.port} is saved but not live yet -- restart the container.
+          </span>
+        )}
       </label>
 
       <label className="flex flex-col gap-1">
-        Egress proxy URL
+        Proxy
         <input
           type="text"
           placeholder="socks5://host:1080"
@@ -171,7 +153,7 @@ function NetworkForm({
       </label>
 
       <label className="flex flex-col gap-1">
-        IP allowlist
+        IP whitelist
         <textarea
           rows={3}
           placeholder={"10.0.0.0/8\n192.168.1.0/24"}

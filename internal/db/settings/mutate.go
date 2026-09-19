@@ -454,9 +454,10 @@ func (c *Cache) CreateRootFolder(ctx context.Context, path, label string) (RootF
 	var created settingsdb.RootFolder
 	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		row, err := queries.CreateRootFolder(ctx, settingsdb.CreateRootFolderParams{
-			Path:   path,
-			Label:  sql.NullString{String: label, Valid: label != ""},
-			Online: 1,
+			Path:         path,
+			Label:        sql.NullString{String: label, Valid: label != ""},
+			Online:       1,
+			MinFreeBytes: DefaultMinFreeBytes,
 		})
 		created = row
 		return err

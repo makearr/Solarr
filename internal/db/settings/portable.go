@@ -559,9 +559,10 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 				continue
 			}
 			created, err := queries.CreateRootFolder(ctx, settingsdb.CreateRootFolderParams{
-				Path:   root.Path,
-				Label:  sql.NullString{String: root.Label, Valid: root.Label != ""},
-				Online: 1,
+				Path:         root.Path,
+				Label:        sql.NullString{String: root.Label, Valid: root.Label != ""},
+				Online:       1,
+				MinFreeBytes: DefaultMinFreeBytes,
 			})
 			if err != nil {
 				return fmt.Errorf("root folder %q: %w", root.Path, err)
