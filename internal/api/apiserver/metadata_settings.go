@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -64,6 +65,13 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, s.logger, http.StatusOK, s.metadataSettingsView())
 }
 
+// FingerprintRetrier re-runs the files the fingerprint pass skipped while no
+// AcoustID key was configured (D12). Defined here and implemented by the caller,
+// the same reasoning every other engine-backed interface in this package gives.
+type FingerprintRetrier interface {
+	RetryFingerprintSkipped(ctx context.Context) (directories int, err error)
+}
+
 // SetAcoustIDAPIKey replaces or clears the AcoustID application key, administrator
 // only. An empty key clears it, disabling the fingerprint rung rather than failing it (D12).
 func (s *Server) SetAcoustIDAPIKey(w http.ResponseWriter, r *http.Request) {
@@ -82,6 +90,7 @@ func (s *Server) SetAcoustIDAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	key := secrets.Secret(strings.TrimSpace(derefOr(body.ApiKey, "")))
+	hadKey := s.auth.Settings.Snapshot().AcoustIDConfigured()
 	if err := s.auth.Settings.SetAcoustIDAPIKey(r.Context(), clock.NewSystem(), key); err != nil {
 		if errors.Is(err, settings.ErrSecretsUnavailable) {
 			writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
@@ -90,6 +99,17 @@ func (s *Server) SetAcoustIDAPIKey(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, s.logger, err)
 		return
+	}
+
+	// D12: the files an absent key made the fingerprint pass skip are recorded as
+	// such, and a key arriving is what re-runs them. Reported, never fatal -- the
+	// key is stored either way, and a full rescan still recovers them.
+	if key != "" && !hadKey && s.fingerprintRetrier != nil {
+		if directories, err := s.fingerprintRetrier.RetryFingerprintSkipped(r.Context()); err != nil {
+			s.logger.Warn("could not re-run what a missing AcoustID key skipped", "error", err)
+		} else if directories > 0 {
+			s.logger.Info("re-running what a missing AcoustID key skipped", "directories", directories)
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -597,7 +597,8 @@ func (p *process) startServer(ctx context.Context) error {
 			Manual: p.manualCommitter(),
 			Clock:  clock.NewSystem(),
 		},
-		ImportInspector: adapters.ImportInspector{Queue: p.queue},
+		ImportInspector:    adapters.ImportInspector{Queue: p.queue},
+		FingerprintRetrier: fingerprintRetrier{p: p},
 		DrainStarter: adapters.Drain{
 			Config: drainjob.Config{
 				Roots: adapters.DrainRoots{Cache: p.cache}, Files: library.NewPhysical(p.library),

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"path"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -108,4 +110,45 @@ func (a Attempts) List(ctx context.Context, mediaObjectID int64) ([]Attempt, err
 		}
 	}
 	return attempts, nil
+}
+
+// SkippedFile is one queued file whose newest identification run recorded the
+// pass and outcome asked for, with the directory a targeted rescan needs.
+type SkippedFile struct {
+	MediaObjectID int64
+	RootFolderID  int64
+	// Directory is rel_path's own parent, which is what scan.Payload.Directories
+	// takes -- a rescan works over directories, never single files.
+	Directory string
+}
+
+// ListSkipped answers the queued files whose newest run recorded pass/outcome,
+// D12's "find what a missing AcoustID key cost once a key is entered". Paged on
+// media_object_id (ADR-22: a cursor, never an OFFSET); the caller pages until it
+// answers fewer than pageSize. The pass filter is applied here rather than in SQL
+// because sqlc's SQLite parser cannot model json_each's columns in a WHERE.
+func (a Attempts) ListSkipped(
+	ctx context.Context, pass, outcome string, afterID int64, pageSize int,
+) (files []SkippedFile, lastID int64, err error) {
+	rows, err := librarydb.New(a.store.Read()).ListQueuedWithNewestAttempt(ctx,
+		librarydb.ListQueuedWithNewestAttemptParams{AfterID: afterID, PageSize: int64(pageSize)})
+	if err != nil {
+		return nil, afterID, fmt.Errorf("library: list queued files with their newest attempt: %w", err)
+	}
+	lastID = afterID
+	for _, row := range rows {
+		lastID = row.MediaObjectID
+		var passes []AttemptPass
+		if err := json.Unmarshal([]byte(row.PassesJson), &passes); err != nil {
+			return nil, lastID, fmt.Errorf("library: decode attempt for media object %d: %w", row.MediaObjectID, err)
+		}
+		if !slices.ContainsFunc(passes, func(p AttemptPass) bool { return p.Pass == pass && p.Outcome == outcome }) {
+			continue
+		}
+		files = append(files, SkippedFile{
+			MediaObjectID: row.MediaObjectID, RootFolderID: row.RootFolderID,
+			Directory: path.Dir(row.RelPath),
+		})
+	}
+	return files, lastID, nil
 }

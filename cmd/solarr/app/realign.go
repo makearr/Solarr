@@ -28,7 +28,7 @@ func (r realigner) RealignWorks(ctx context.Context, workIDs []int64) error {
 
 	var errs []error
 	for rootFolderID, directories := range directoriesByRoot {
-		categoryID, found := r.musicCategoryFor(rootFolderID)
+		categoryID, found := r.p.musicCategoryFor(rootFolderID)
 		if !found {
 			continue
 		}
@@ -44,8 +44,8 @@ func (r realigner) RealignWorks(ctx context.Context, workIDs []int64) error {
 
 // musicCategoryFor is the music category a root belongs to, the same one an
 // ordinary scan of that root is enqueued under (enqueueScans).
-func (r realigner) musicCategoryFor(rootFolderID int64) (int64, bool) {
-	snapshot := r.p.cache.Snapshot()
+func (p *process) musicCategoryFor(rootFolderID int64) (int64, bool) {
+	snapshot := p.cache.Snapshot()
 	for _, category := range snapshot.Categories() {
 		if category.MediaType != "music" {
 			continue

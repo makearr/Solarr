@@ -2,7 +2,9 @@ package apiserver_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -183,4 +185,78 @@ func acoustIDConfigured(t *testing.T, recorder *httptest.ResponseRecorder) bool 
 		t.Fatalf("unmarshal: %v", err)
 	}
 	return body.AcoustIDAPIKey.HasValue
+}
+
+// fakeFingerprintRetrier records whether a key arriving asked for the files an
+// absent one had skipped.
+type fakeFingerprintRetrier struct {
+	calls int
+	err   error
+}
+
+func (f *fakeFingerprintRetrier) RetryFingerprintSkipped(context.Context) (int, error) {
+	f.calls++
+	return 0, f.err
+}
+
+// D12: a key arriving is what re-runs the files its absence made the
+// fingerprint pass skip. It must fire exactly once, when there was no key
+// before -- not on an unrelated re-save, and not when the key is being cleared.
+func TestSetAcoustIDAPIKey_RetriesWhatAMissingKeySkipped(t *testing.T) {
+	fixture := newWorksFixture(t)
+	cipher, err := secrets.New(testArrCipherKey())
+	if err != nil {
+		t.Fatalf("secrets.New: %v", err)
+	}
+	fixture.cache.EnableSecrets(cipher)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	post := func(body string) {
+		t.Helper()
+		if recorder := fixture.do(authedPost(t, cookies,
+			"/api/v1/metadata/acoustid/apikey", body)); recorder.Code != http.StatusNoContent {
+			t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+		}
+	}
+
+	post(`{"api_key":"the-first-key"}`)
+	if fixture.fingerprintRetrier.calls != 1 {
+		t.Fatalf("retried %d times after the first key, want 1", fixture.fingerprintRetrier.calls)
+	}
+
+	// Replacing a key changes nothing about what was skipped: the rung was
+	// already running.
+	post(`{"api_key":"a-replacement-key"}`)
+	if fixture.fingerprintRetrier.calls != 1 {
+		t.Errorf("retried %d times after replacing the key, want still 1", fixture.fingerprintRetrier.calls)
+	}
+
+	post(`{"api_key":""}`)
+	if fixture.fingerprintRetrier.calls != 1 {
+		t.Errorf("retried %d times after clearing the key, want still 1", fixture.fingerprintRetrier.calls)
+	}
+}
+
+// The key is what the caller asked to store; a retry that cannot run is worth a
+// log line, never a failed write.
+func TestSetAcoustIDAPIKey_StoresTheKeyEvenIfTheRetryFails(t *testing.T) {
+	fixture := newWorksFixture(t)
+	cipher, err := secrets.New(testArrCipherKey())
+	if err != nil {
+		t.Fatalf("secrets.New: %v", err)
+	}
+	fixture.cache.EnableSecrets(cipher)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.fingerprintRetrier.err = errors.New("the queue is unreachable")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/metadata/acoustid/apikey", `{"api_key":"a-key"}`))
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	stored, err := fixture.cache.AcoustIDAPIKey()
+	if err != nil || string(stored) != "a-key" {
+		t.Errorf("stored key = %q (err %v), want it stored despite the retry failing", string(stored), err)
+	}
 }

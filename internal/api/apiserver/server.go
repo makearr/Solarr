@@ -118,6 +118,10 @@ type Config struct {
 	// ImportInspector enqueues ADR-48's own inspection job. Optional: without
 	// it, InspectImport answers 503.
 	ImportInspector ImportInspector
+	// FingerprintRetrier re-runs what a missing AcoustID key skipped, once one
+	// is entered (D12). Optional: without it the key is still stored, and a full
+	// rescan still recovers those files.
+	FingerprintRetrier FingerprintRetrier
 	// DrainStarter starts and stops ADR-51's own drain. Optional: without
 	// it, DrainRootFolder/StopDrainingRootFolder answer 503.
 	DrainStarter DrainStarter
@@ -219,6 +223,7 @@ type Server struct {
 	removeAndBlocker      RemoveAndBlocker
 	importSessions        ImportSessionLister
 	importInspector       ImportInspector
+	fingerprintRetrier    FingerprintRetrier
 	drainStarter          DrainStarter
 	moveJobs              MoveJobLister
 	renameStarter         RenameStarter
@@ -300,6 +305,7 @@ func New(config Config) (*Server, error) {
 		removeAndBlocker:      config.RemoveAndBlocker,
 		importSessions:        config.ImportSessions,
 		importInspector:       config.ImportInspector,
+		fingerprintRetrier:    config.FingerprintRetrier,
 		drainStarter:          config.DrainStarter,
 		moveJobs:              config.MoveJobs,
 		renameStarter:         config.RenameStarter,

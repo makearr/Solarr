@@ -69,6 +69,66 @@ func (q *Queries) ListIdentificationAttempts(ctx context.Context, mediaObjectID 
 	return items, nil
 }
 
+const listQueuedWithNewestAttempt = `-- name: ListQueuedWithNewestAttempt :many
+SELECT queue.media_object_id, queue.root_folder_id, queue.rel_path, attempt.passes_json
+FROM identification_queue AS queue
+JOIN identification_attempt AS attempt ON attempt.media_object_id = queue.media_object_id
+WHERE attempt.id = (
+    SELECT newest.id FROM identification_attempt AS newest
+    WHERE newest.media_object_id = queue.media_object_id
+    ORDER BY newest.attempted_at DESC, newest.id DESC
+    LIMIT 1
+  )
+  AND queue.media_object_id > ?1
+ORDER BY queue.media_object_id
+LIMIT ?2
+`
+
+type ListQueuedWithNewestAttemptParams struct {
+	AfterID  int64
+	PageSize int64
+}
+
+type ListQueuedWithNewestAttemptRow struct {
+	MediaObjectID int64
+	RootFolderID  int64
+	RelPath       string
+	PassesJson    string
+}
+
+// One page of queued files with what their newest attempt concluded. The caller
+// filters on the pass and outcome it cares about (D12's "re-run what a missing
+// AcoustID key skipped"): sqlc's SQLite parser cannot model json_each's columns
+// in a WHERE, and decoding one bounded page in Go is the same discipline every
+// cross-database composition here already uses.
+func (q *Queries) ListQueuedWithNewestAttempt(ctx context.Context, arg ListQueuedWithNewestAttemptParams) ([]ListQueuedWithNewestAttemptRow, error) {
+	rows, err := q.db.QueryContext(ctx, listQueuedWithNewestAttempt, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListQueuedWithNewestAttemptRow{}
+	for rows.Next() {
+		var i ListQueuedWithNewestAttemptRow
+		if err := rows.Scan(
+			&i.MediaObjectID,
+			&i.RootFolderID,
+			&i.RelPath,
+			&i.PassesJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pruneIdentificationAttempts = `-- name: PruneIdentificationAttempts :exec
 DELETE FROM identification_attempt
 WHERE identification_attempt.media_object_id = ?1

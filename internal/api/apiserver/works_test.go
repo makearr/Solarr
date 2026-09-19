@@ -70,6 +70,7 @@ type worksFixture struct {
 	removeAndBlocker     *fakeRemoveAndBlocker
 	importSessions       *fakeImportSessionLister
 	importInspector      *fakeImportInspector
+	fingerprintRetrier   *fakeFingerprintRetrier
 	drainStarter         *fakeDrainStarter
 	moveJobs             *fakeMoveJobLister
 	renameStarter        *fakeRenameStarter
@@ -229,6 +230,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	removeAndBlocker := &fakeRemoveAndBlocker{}
 	importSessions := &fakeImportSessionLister{}
 	importInspector := &fakeImportInspector{}
+	fingerprintRetrier := &fakeFingerprintRetrier{}
 	drainStarter := &fakeDrainStarter{}
 	moveJobs := &fakeMoveJobLister{}
 	renameStarter := &fakeRenameStarter{}
@@ -259,6 +261,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		RemoveAndBlocker:      removeAndBlocker,
 		ImportSessions:        importSessions,
 		ImportInspector:       importInspector,
+		FingerprintRetrier:    fingerprintRetrier,
 		DrainStarter:          drainStarter,
 		MoveJobs:              moveJobs,
 		RenameStarter:         renameStarter,
@@ -296,7 +299,8 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		artwork: artwork, people: people, subscriber: subscriber, subscriptionPreview: subscriptionPreview,
 		blockedContent: blockedContent, packs: packs, removeAndBlocker: removeAndBlocker,
 		importSessions: importSessions, importInspector: importInspector,
-		drainStarter: drainStarter, moveJobs: moveJobs, renameStarter: renameStarter,
+		fingerprintRetrier: fingerprintRetrier,
+		drainStarter:       drainStarter, moveJobs: moveJobs, renameStarter: renameStarter,
 		libraryTracks: libraryTracks, scheduler: scheduler, cacheManager: cacheManager, discover: discover,
 		arrSync: arrSync, indexerTester: indexerTester, downloaderTester: downloaderTester,
 		candidateSearcher: candidateSearcher, fsys: fsys, clock: fake,
