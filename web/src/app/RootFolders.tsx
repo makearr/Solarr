@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { HardDrive, Plus, X } from "lucide-react";
 
 import { api } from "@/api/client";
+import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import type { components } from "@/api/schema";
 import { MEDIA_TYPES } from "./Categories";
 
@@ -479,7 +480,8 @@ function AddRootFolder({
   const [label, setLabel] = useState("");
   const [libraryChoice, setLibraryChoice] = useState<string>(NEW_LIBRARY);
   const [libraryChoiceTouched, setLibraryChoiceTouched] = useState(false);
-  const [newLibraryName, setNewLibraryName] = useState("");
+  const [newLibraryName, setNewLibraryName] = useState(mediaTypeName("music"));
+  const [newLibraryNameTouched, setNewLibraryNameTouched] = useState(false);
   const [newLibraryMediaType, setNewLibraryMediaType] = useState<MediaType>("music");
 
   // categories arrives asynchronously (its own useQuery, one render behind
@@ -501,7 +503,10 @@ function AddRootFolder({
       let categoryId: number;
       if (libraryChoice === NEW_LIBRARY) {
         const { data: category, error: categoryError } = await api.POST("/categories", {
-          body: { name: newLibraryName, media_type: newLibraryMediaType },
+          body: {
+            name: newLibraryName.trim() || mediaTypeName(newLibraryMediaType),
+            media_type: newLibraryMediaType,
+          },
         });
         if (categoryError) throw categoryError;
         categoryId = category!.id;
@@ -518,13 +523,14 @@ function AddRootFolder({
     onSuccess: () => {
       setPath("");
       setLabel("");
-      setNewLibraryName("");
+      setNewLibraryName(mediaTypeName(newLibraryMediaType));
+      setNewLibraryNameTouched(false);
       onAdded();
     },
   });
 
   const creatingNewLibrary = libraryChoice === NEW_LIBRARY;
-  const ready = path.trim() !== "" && (!creatingNewLibrary || newLibraryName.trim() !== "");
+  const ready = path.trim() !== "";
 
   return (
     <form
@@ -579,9 +585,12 @@ function AddRootFolder({
             <input
               className={inputStyle}
               value={newLibraryName}
-              placeholder="Music"
+              placeholder={mediaTypeName(newLibraryMediaType)}
               autoComplete="off"
-              onChange={(event) => setNewLibraryName(event.target.value)}
+              onChange={(event) => {
+                setNewLibraryName(event.target.value);
+                setNewLibraryNameTouched(true);
+              }}
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-ink-muted">
@@ -589,11 +598,15 @@ function AddRootFolder({
             <select
               className={inputStyle}
               value={newLibraryMediaType}
-              onChange={(event) => setNewLibraryMediaType(event.target.value as MediaType)}
+              onChange={(event) => {
+                const value = event.target.value as MediaType;
+                setNewLibraryMediaType(value);
+                if (!newLibraryNameTouched) setNewLibraryName(mediaTypeName(value));
+              }}
             >
               {MEDIA_TYPES.map((type) => (
                 <option key={type} value={type}>
-                  {type}
+                  {mediaTypeName(type)}
                 </option>
               ))}
             </select>
