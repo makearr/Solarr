@@ -5,7 +5,9 @@ import { CoverArt } from "./CoverArt";
 
 /** One tile on the poster wall: a square cover with its name beneath, the
  *  shape Lidarr's artist and album views use. Circular for a person, square
- *  for a release -- the same distinction the old row thumbnails drew. */
+ *  for a release -- the same distinction the old row thumbnails drew.
+ *  Reads `small` (400px): a tile is 168-300px, so `full` (1000px) was
+ *  downloading roughly six times the bytes a wall of them can show. */
 export function Poster({
   subject,
   imageId,
@@ -32,7 +34,7 @@ export function Poster({
             subject={subject}
             workId={imageId}
             title={title}
-            size="full"
+            size="small"
             className={`aspect-square w-full bg-surface object-cover text-2xl ${shape}
                         border border-border-subtle group-hover:border-accent`}
           />
