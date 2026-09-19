@@ -69,11 +69,6 @@ const SETTINGS_SECTIONS: readonly { to: string; label: string; tier?: Tier }[] =
   { to: "/settings/cache", label: "Cache", tier: "expert" },
 ];
 
-/** How much of a library's own subtree a tier may see (ADR-26, asked for
- *  2026-09-13). Browsing the collection is the normal case; the operational
- *  screens are advanced; the two profile builders are expert. */
-const LEVEL_TIERS: Record<string, Tier> = { artists: "normal", albums: "normal", tracks: "advanced" };
-
 /** Libraries sharing a media type are grouped once there is more than one of
  *  that type (ADR-54) -- encounter order preserved, the caller's own
  *  snapshot order (Invariant 36), never re-sorted here. */
@@ -390,20 +385,18 @@ function LibraryNode({
 
       {!collapsed && isOpen && (
         <ul className="ml-5 flex flex-col gap-0.5 border-l border-border-subtle pl-2">
-          {library.levels
-            .filter((level) => isTierVisible(tier, LEVEL_TIERS[level.key] ?? "normal"))
-            .map((level) => (
-              <li key={level.key}>
-                <Link
-                  to="/library/$categoryId/$level"
-                  params={{ categoryId, level: level.key }}
-                  className={sectionLinkClass(isActive && activeLevel === level.key, false)}
-                >
-                  <span className="truncate">{level.label}</span>
-                  {level.count != null && <span className="ml-auto shrink-0 text-xs text-ink-muted">{level.count}</span>}
-                </Link>
-              </li>
-            ))}
+          {library.levels.map((level) => (
+            <li key={level.key}>
+              <Link
+                to="/library/$categoryId/$level"
+                params={{ categoryId, level: level.key }}
+                className={sectionLinkClass(isActive && activeLevel === level.key, false)}
+              >
+                <span className="truncate">{level.label}</span>
+                {level.count != null && <span className="ml-auto shrink-0 text-xs text-ink-muted">{level.count}</span>}
+              </Link>
+            </li>
+          ))}
           <li>
             <Link
               to="/library/$categoryId/wanted"
@@ -411,6 +404,27 @@ function LibraryNode({
               className={sectionLinkClass(isActive && activePath === `/library/${library.id}/wanted`, false)}
             >
               <span className="truncate">Wanted</span>
+            </Link>
+          </li>
+
+          {/* Normal: M1 acceptance 1, 7 and 8 have a plain user import a folder and
+              resolve what it could not identify, so neither may be hidden. */}
+          <li>
+            <Link
+              to="/library/$categoryId/import"
+              params={{ categoryId }}
+              className={sectionLinkClass(isActive && activePath === `/library/${library.id}/import`, false)}
+            >
+              <span className="truncate">Import</span>
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/unidentified"
+              search={{ category_id: categoryId }}
+              className={sectionLinkClass(activeUnidentifiedCategoryId === categoryId, false)}
+            >
+              <span className="truncate">Unidentified</span>
             </Link>
           </li>
 
@@ -427,29 +441,11 @@ function LibraryNode({
               </li>
               <li>
                 <Link
-                  to="/library/$categoryId/import"
-                  params={{ categoryId }}
-                  className={sectionLinkClass(isActive && activePath === `/library/${library.id}/import`, false)}
-                >
-                  <span className="truncate">Import</span>
-                </Link>
-              </li>
-              <li>
-                <Link
                   to="/library/$categoryId/activity"
                   params={{ categoryId }}
                   className={sectionLinkClass(isActive && activePath === `/library/${library.id}/activity`, false)}
                 >
                   <span className="truncate">Activity</span>
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/unidentified"
-                  search={{ category_id: categoryId }}
-                  className={sectionLinkClass(activeUnidentifiedCategoryId === categoryId, false)}
-                >
-                  <span className="truncate">Unidentified</span>
                 </Link>
               </li>
             </>
