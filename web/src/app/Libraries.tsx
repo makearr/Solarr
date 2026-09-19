@@ -7,7 +7,7 @@ import { api } from "@/api/client";
 import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
 import type { components } from "@/api/schema";
 
-import { MEDIA_TYPES } from "./Categories";
+import { MEDIA_TYPES, MEDIA_TYPE_NAME } from "./Categories";
 import { defaultLevelKey } from "./Sidebar";
 
 type LibraryEntry = components["schemas"]["Library"];
@@ -101,7 +101,9 @@ function AddLibrary() {
 
   const create = useMutation({
     mutationFn: async () => {
-      const { data, error } = await api.POST("/categories", { body: { name, media_type: mediaType } });
+      const { data, error } = await api.POST("/categories", {
+        body: { name: name.trim() || MEDIA_TYPE_NAME[mediaType], media_type: mediaType },
+      });
       if (error) throw error;
       return data;
     },
@@ -125,7 +127,7 @@ function AddLibrary() {
           className={inputStyle}
           value={name}
           autoComplete="off"
-          placeholder="Music"
+          placeholder={MEDIA_TYPE_NAME[mediaType]}
           onChange={(event) => setName(event.target.value)}
         />
       </label>
@@ -138,14 +140,14 @@ function AddLibrary() {
         >
           {MEDIA_TYPES.map((type) => (
             <option key={type} value={type}>
-              {type}
+              {MEDIA_TYPE_NAME[type]}
             </option>
           ))}
         </select>
       </label>
       <button
         type="submit"
-        disabled={!name.trim() || create.isPending}
+        disabled={create.isPending}
         className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink
                    disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2
                    focus-visible:outline-accent"

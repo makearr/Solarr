@@ -15,6 +15,16 @@ export const MEDIA_TYPES: readonly MediaType[] = [
   "podcast", "news", "youtube",
 ];
 
+/** What a library of each media type is called when its own name is left
+ *  blank -- "the default library name should always be the category, for
+ *  example Music" (2026-09-19). Also what the media-type picker shows, so
+ *  the two can never drift apart. */
+export const MEDIA_TYPE_NAME: Record<MediaType, string> = {
+  music: "Music", tv: "TV", movie: "Movies", audiobook: "Audiobooks", book: "Books",
+  adult: "Adult", comic: "Comics", rom: "ROMs", podcast: "Podcasts", news: "News",
+  youtube: "YouTube",
+};
+
 const MONITOR_DISCOVERED_OPTIONS: readonly MonitorDiscovered[] = ["monitored", "unmonitored", "none"];
 
 /** The policy boundary for naming, profiles and access (ADR-27). Section 21.14's
@@ -380,7 +390,7 @@ function AddCategory({ onAdded }: { onAdded: () => void }) {
   const create = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/categories", {
-        body: { name, media_type: mediaType },
+        body: { name: name.trim() || MEDIA_TYPE_NAME[mediaType], media_type: mediaType },
       });
       if (error) throw error;
       return data;
@@ -405,6 +415,7 @@ function AddCategory({ onAdded }: { onAdded: () => void }) {
           className={inputStyle}
           value={name}
           autoComplete="off"
+          placeholder={MEDIA_TYPE_NAME[mediaType]}
           onChange={(event) => setName(event.target.value)}
         />
       </label>
@@ -417,14 +428,14 @@ function AddCategory({ onAdded }: { onAdded: () => void }) {
         >
           {MEDIA_TYPES.map((type) => (
             <option key={type} value={type}>
-              {type}
+              {MEDIA_TYPE_NAME[type]}
             </option>
           ))}
         </select>
       </label>
       <button
         type="submit"
-        disabled={!name.trim() || create.isPending}
+        disabled={create.isPending}
         className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
                    focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
