@@ -1338,6 +1338,50 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /me/preferences:
+    get:
+      operationId: getMyPreferences
+      tags: [auth]
+      summary: >-
+        The caller's own interface state -- sort order, chosen columns and the
+        like. Self-service and per user: none of it changes behaviour, only
+        what this one person sees.
+      responses:
+        "200":
+          description: Every preference this caller has stored, as raw JSON values.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { type: string }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /me/preferences/{key}:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: setMyPreference
+      tags: [auth]
+      summary: Store one of the caller's own interface preferences.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value:
+                  type: string
+                  description: The preference's value, itself encoded as JSON.
+      responses:
+        "204": { description: Stored. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /me/apikeys:
     get:
       operationId: listMyAPIKeys
@@ -2343,6 +2387,39 @@ paths:
             The decision is not ACCEPT, no downloader matches its own
             protocol, or the desired item already has an acquisition in
             flight (Invariant 15).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /works/{id}/parts/{partId}/search:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: partId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: searchTrack
+      tags: [acquisition]
+      summary: Search every configured indexer for this one track.
+      description: >-
+        The track's own SINGLE desired_item is what gets searched, so this
+        ensures one exists and is monitored first -- asking for a track to
+        be found is asking for it, and a button labelled Search that quietly
+        found nothing because nothing wanted the track would be a lie.
+      responses:
+        "200":
+          description: What this run found, decided and persisted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchItemResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          description: No indexer is configured or enabled.
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
@@ -5246,9 +5323,31 @@ components:
             from monitored, which only affects the album's own required_count.
           allOf: [{ $ref: "#/components/schemas/Wanted" }]
           nullable: true
+        file:
+          description: >-
+            What is on disk for this part, absent when nothing is. Aligned
+            through the same media_ref the album's own present_count is
+            counted from, so the two can never disagree.
+          allOf: [{ $ref: "#/components/schemas/PartFile" }]
+          nullable: true
         external_ids:
           type: array
           items: { $ref: "#/components/schemas/ExternalID" }
+
+    PartFile:
+      type: object
+      description: The file covering one part, and what probing measured of it.
+      required: [media_object_id, bitrate_kbps, lossless]
+      properties:
+        media_object_id: { type: integer, format: int64 }
+        audio_codec: { type: string }
+        video_codec: { type: string }
+        container: { type: string }
+        bitrate_kbps:
+          type: integer
+          format: int64
+          description: 0 when the attribute probe has not measured this file yet.
+        lossless: { type: boolean }
 
     Credit:
       type: object
@@ -5274,6 +5373,10 @@ components:
       required: [id, monitored, present_count, state]
       properties:
         id: { type: integer, format: int64 }
+        last_searched_at:
+          type: integer
+          format: int64
+          description: Unix seconds of the last search for this item; absent means never.
         monitored: { type: boolean }
         required_count:
           type: integer

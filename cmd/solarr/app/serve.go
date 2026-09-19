@@ -513,14 +513,10 @@ func (p *process) startServer(ctx context.Context) error {
 		CacheManager: adapters.CacheManager{
 			Sweep: p.cacheSweep, Cache: p.cache, Registry: p.settingsRegistry, Clock: clock.NewSystem(),
 		},
-		LibrarySize: library.NewCounters(p.library),
-		Works:       adapters.Works{Works: library.NewWorks(p.library), Clock: clock.NewSystem()},
-		WorkDetail:  adapters.WorkDetail{Works: library.NewWorks(p.library)},
-		WorksMonitor: adapters.WorksMonitor{Identity: library.NewIdentity(p.library),
-			Works: library.NewWorks(p.library), Desired: library.NewDesired(p.library),
-			Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
-			Logger: p.logger,
-		},
+		LibrarySize:  library.NewCounters(p.library),
+		Works:        adapters.Works{Works: library.NewWorks(p.library), Clock: clock.NewSystem()},
+		WorkDetail:   adapters.WorkDetail{Works: library.NewWorks(p.library)},
+		WorksMonitor: p.worksMonitor(),
 		SystemHealth: adapters.SystemHealth{Cache: p.cache},
 		Blocklist:    adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
 		LogReader:    logSource{ring: p.logRing},
@@ -734,5 +730,16 @@ func (p *process) reportRootFolders() {
 			p.logger.Warn("library root is not writable; imports into it will fail",
 				"path", folder.Path, "detail", err.Error())
 		}
+	}
+}
+
+// worksMonitor is the album- and track-level monitoring surface, shared by
+// the API and by the track search that has to want a track before it can
+// look for one.
+func (p *process) worksMonitor() adapters.WorksMonitor {
+	return adapters.WorksMonitor{
+		Identity: library.NewIdentity(p.library), Works: library.NewWorks(p.library),
+		Desired: library.NewDesired(p.library), Categories: adapters.Categories{Cache: p.cache},
+		DefaultProfileID: p.defaultQualityProfileID, Logger: p.logger,
 	}
 }

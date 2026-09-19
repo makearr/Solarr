@@ -305,3 +305,53 @@ type categoryView struct {
 	// discover its limits by being refused.
 	Permission string `json:"permission"`
 }
+
+// GetMyPreferences answers the caller's own interface state: sort order,
+// chosen columns and the like, each value raw JSON the client itself wrote.
+func (s *Server) GetMyPreferences(w http.ResponseWriter, r *http.Request) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	preferences, err := s.auth.Settings.UserPreferences(r.Context(), access.UserID())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, preferences)
+}
+
+func (s *Server) routeSetMyPreference(w http.ResponseWriter, r *http.Request) {
+	s.SetMyPreference(w, r, chi.URLParam(r, "key"))
+}
+
+// SetMyPreference stores one of them. Self-service, like SetMyTier.
+func (s *Server) SetMyPreference(w http.ResponseWriter, r *http.Request, key string) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+
+	var body struct {
+		Value string `json:"value"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "expected a JSON object with value")
+		return
+	}
+
+	if err := s.auth.Settings.SetUserPreference(r.Context(), access.UserID(), key, body.Value); err != nil {
+		var problems config.Problems
+		if errors.As(err, &problems) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"The preference has problems", problems.Report("the preference", "Nothing was changed."))
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

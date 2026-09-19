@@ -908,6 +908,42 @@ export interface paths {
         patch: operations["setMyTier"];
         trace?: never;
     };
+    "/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own interface state -- sort order, chosen columns and the like. Self-service and per user: none of it changes behaviour, only what this one person sees. */
+        get: operations["getMyPreferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/preferences/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Store one of the caller's own interface preferences. */
+        put: operations["setMyPreference"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/apikeys": {
         parameters: {
             query?: never;
@@ -1504,6 +1540,29 @@ export interface paths {
         put?: never;
         /** Dispatch one ACCEPTed decision's own release to a matching downloader (ADR-57's acquire.send). No resource gate yet -- every dispatch here is a user's own explicit action (ADR-12's own "user request: never paused"), since nothing automatic calls this until stage 6's planner exists. */
         post: operations["sendCandidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/works/{id}/parts/{partId}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                partId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search every configured indexer for this one track.
+         * @description The track's own SINGLE desired_item is what gets searched, so this ensures one exists and is monitored first -- asking for a track to be found is asking for it, and a button labelled Search that quietly found nothing because nothing wanted the track would be a lie.
+         */
+        post: operations["searchTrack"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3452,7 +3511,23 @@ export interface components {
             monitored: boolean;
             /** @description This track's own SINGLE desired_item, when one exists -- distinct from monitored, which only affects the album's own required_count. */
             wanted?: components["schemas"]["Wanted"] | null;
+            /** @description What is on disk for this part, absent when nothing is. Aligned through the same media_ref the album's own present_count is counted from, so the two can never disagree. */
+            file?: components["schemas"]["PartFile"] | null;
             external_ids: components["schemas"]["ExternalID"][];
+        };
+        /** @description The file covering one part, and what probing measured of it. */
+        PartFile: {
+            /** Format: int64 */
+            media_object_id: number;
+            audio_codec?: string;
+            video_codec?: string;
+            container?: string;
+            /**
+             * Format: int64
+             * @description 0 when the attribute probe has not measured this file yet.
+             */
+            bitrate_kbps: number;
+            lossless: boolean;
         };
         /** @description One work-level credit (ADR-32) -- the person's own name, so a client never needs a second round-trip just to display it. */
         Credit: {
@@ -3471,6 +3546,11 @@ export interface components {
         Wanted: {
             /** Format: int64 */
             id: number;
+            /**
+             * Format: int64
+             * @description Unix seconds of the last search for this item; absent means never.
+             */
+            last_searched_at?: number;
             monitored: boolean;
             /**
              * Format: int64
@@ -5730,6 +5810,58 @@ export interface operations {
             401: components["responses"]["Problem"];
         };
     };
+    getMyPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every preference this caller has stored, as raw JSON values. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    setMyPreference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The preference's value, itself encoded as JSON. */
+                    value: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+        };
+    };
     listMyAPIKeys: {
         parameters: {
             query?: never;
@@ -6731,6 +6863,40 @@ export interface operations {
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             /** @description The decision is not ACCEPT, no downloader matches its own protocol, or the desired item already has an acquisition in flight (Invariant 15). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    searchTrack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                partId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What this run found, decided and persisted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchItemResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description No indexer is configured or enabled. */
             409: {
                 headers: {
                     [name: string]: unknown;

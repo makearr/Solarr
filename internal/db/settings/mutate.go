@@ -886,3 +886,39 @@ func (c *Cache) administratorIDs() []int64 {
 	}
 	return ids
 }
+
+// UserPreferences reads one user's stored interface state -- sort order,
+// chosen columns and the like (migration 0001's own user_preference table,
+// unused until 2026-09-19). Read straight from the database rather than the
+// snapshot: preferences scale with users times screens, and nothing outside
+// the one request that asked for them ever needs them in memory.
+func (c *Cache) UserPreferences(ctx context.Context, userID int64) (map[string]string, error) {
+	rows, err := c.queries.ListPreferencesForUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("settings: preferences for user %d: %w", userID, err)
+	}
+	out := make(map[string]string, len(rows))
+	for _, row := range rows {
+		out[row.Key] = row.ValueJson
+	}
+	return out, nil
+}
+
+// SetUserPreference stores one interface preference. Self-service, like
+// SetUserTier: nothing here changes behaviour, only what the caller sees.
+func (c *Cache) SetUserPreference(ctx context.Context, userID int64, key, valueJSON string) error {
+	if _, found := c.Snapshot().User(userID); !found {
+		return fmt.Errorf("%w: user %d", ErrNotFound, userID)
+	}
+	if strings.TrimSpace(key) == "" {
+		return config.Problems{{Path: "key", Expectation: "a preference key"}}
+	}
+	if !json.Valid([]byte(valueJSON)) {
+		return config.Problems{{Path: "value", Value: valueJSON, Expectation: "a JSON value"}}
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetPreference(ctx, settingsdb.SetPreferenceParams{
+			UserID: userID, Key: key, ValueJson: valueJSON,
+		})
+	})
+}

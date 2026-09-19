@@ -253,3 +253,52 @@ func TestWorkDetail_MissingWorkReportsNoRows(t *testing.T) {
 		t.Errorf("Detail on a missing id = %v, want an error wrapping sql.ErrNoRows", err)
 	}
 }
+
+// The album detail used to disagree with the artist overview: present_count
+// said the album was complete while every track rendered as missing, because
+// nothing carried per-part presence to the detail view (reported 2026-09-19).
+func TestWorkDetail_ReportsWhichPartsHaveAFile(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	work := createWork(t, opened, "music", "Tender Prey")
+
+	var present, absent librarydb.WorkPart
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		created, err := q.CreateWorkPart(ctx, librarydb.CreateWorkPartParams{
+			WorkID: work.ID, MediaRef: "01", SortKey: "01",
+			Title: sql.NullString{String: "The Furab Keke", Valid: true}, Monitored: 1,
+		})
+		if err != nil {
+			return err
+		}
+		present = created
+
+		created, err = q.CreateWorkPart(ctx, librarydb.CreateWorkPartParams{
+			WorkID: work.ID, MediaRef: "02", SortKey: "02",
+			Title: sql.NullString{String: "Up Jumped the Devil", Valid: true}, Monitored: 1,
+		})
+		absent = created
+		return err
+	})
+
+	item := createDesired(t, opened, work.ID, "SET", 2)
+	object := createObject(t, opened, "quick-mercy", 4096)
+	attach(t, opened, item.ID, object.ID, "primary", present.MediaRef)
+
+	got, err := works.Detail(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("Detail: %v", err)
+	}
+	if len(got.Parts) != 2 {
+		t.Fatalf("Parts = %d, want 2", len(got.Parts))
+	}
+	if got.Parts[0].Part.ID != present.ID || got.Parts[0].File == nil ||
+		got.Parts[0].File.MediaObjectID != object.ID {
+		t.Errorf("part %q File = %+v, want the attached media object %d",
+			present.MediaRef, got.Parts[0].File, object.ID)
+	}
+	if got.Parts[1].Part.ID != absent.ID || got.Parts[1].File != nil {
+		t.Errorf("part %q File = %+v, want nil -- nothing is attached to it",
+			absent.MediaRef, got.Parts[1].File)
+	}
+}

@@ -1837,6 +1837,18 @@ type ParsedTitle struct {
 	Year     *int      `json:"year,omitempty"`
 }
 
+// PartFile The file covering one part, and what probing measured of it.
+type PartFile struct {
+	AudioCodec *string `json:"audio_codec,omitempty"`
+
+	// BitrateKbps 0 when the attribute probe has not measured this file yet.
+	BitrateKbps   int64   `json:"bitrate_kbps"`
+	Container     *string `json:"container,omitempty"`
+	Lossless      bool    `json:"lossless"`
+	MediaObjectId int64   `json:"media_object_id"`
+	VideoCodec    *string `json:"video_codec,omitempty"`
+}
+
 // Permission `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.
 type Permission string
 
@@ -2300,9 +2312,12 @@ type UserAccount struct {
 
 // Wanted The work's own album-level SET desired_item (section 19.6) -- what makes "9 of 12 tracks" a fact rather than on_disk's coarse badge.
 type Wanted struct {
-	Id           int64 `json:"id"`
-	Monitored    bool  `json:"monitored"`
-	PresentCount int64 `json:"present_count"`
+	Id int64 `json:"id"`
+
+	// LastSearchedAt Unix seconds of the last search for this item; absent means never.
+	LastSearchedAt *int64 `json:"last_searched_at,omitempty"`
+	Monitored      bool   `json:"monitored"`
+	PresentCount   int64  `json:"present_count"`
 
 	// RequiredCount Null until a tracklist has been enriched -- never a guessed zero.
 	RequiredCount *int64      `json:"required_count"`
@@ -2371,12 +2386,15 @@ type WorkPage struct {
 type WorkPart struct {
 	Date        *string      `json:"date,omitempty"`
 	ExternalIds []ExternalID `json:"external_ids"`
-	Id          int64        `json:"id"`
-	MediaRef    string       `json:"media_ref"`
-	Monitored   bool         `json:"monitored"`
-	RuntimeMs   *int64       `json:"runtime_ms,omitempty"`
-	SortKey     string       `json:"sort_key"`
-	Title       *string      `json:"title,omitempty"`
+
+	// File What is on disk for this part, absent when nothing is. Aligned through the same media_ref the album's own present_count is counted from, so the two can never disagree.
+	File      *PartFile `json:"file"`
+	Id        int64     `json:"id"`
+	MediaRef  string    `json:"media_ref"`
+	Monitored bool      `json:"monitored"`
+	RuntimeMs *int64    `json:"runtime_ms,omitempty"`
+	SortKey   string    `json:"sort_key"`
+	Title     *string   `json:"title,omitempty"`
 
 	// Wanted This track's own SINGLE desired_item, when one exists -- distinct from monitored, which only affects the album's own required_count.
 	Wanted *Wanted `json:"wanted"`
@@ -2545,6 +2563,12 @@ type ResolveUnidentifiedJSONBody struct {
 // CreateMyAPIKeyJSONBody defines parameters for CreateMyAPIKey.
 type CreateMyAPIKeyJSONBody struct {
 	Name string `json:"name"`
+}
+
+// SetMyPreferenceJSONBody defines parameters for SetMyPreference.
+type SetMyPreferenceJSONBody struct {
+	// Value The preference's value, itself encoded as JSON.
+	Value string `json:"value"`
 }
 
 // SetMyTierJSONBody defines parameters for SetMyTier.
@@ -2867,6 +2891,9 @@ type ResolveUnidentifiedJSONRequestBody ResolveUnidentifiedJSONBody
 
 // CreateMyAPIKeyJSONRequestBody defines body for CreateMyAPIKey for application/json ContentType.
 type CreateMyAPIKeyJSONRequestBody CreateMyAPIKeyJSONBody
+
+// SetMyPreferenceJSONRequestBody defines body for SetMyPreference for application/json ContentType.
+type SetMyPreferenceJSONRequestBody SetMyPreferenceJSONBody
 
 // SetMyTierJSONRequestBody defines body for SetMyTier for application/json ContentType.
 type SetMyTierJSONRequestBody SetMyTierJSONBody
@@ -3206,6 +3233,12 @@ type ServerInterface interface {
 	// Revoke one of the caller's own keys. Refused (404, indistinguishable from missing, Invariant 37) for a key belonging to someone else -- never even reveals that a different user's key by that id exists.
 	// (DELETE /me/apikeys/{id})
 	DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, id int64)
+	// The caller's own interface state -- sort order, chosen columns and the like. Self-service and per user: none of it changes behaviour, only what this one person sees.
+	// (GET /me/preferences)
+	GetMyPreferences(w http.ResponseWriter, r *http.Request)
+	// Store one of the caller's own interface preferences.
+	// (PUT /me/preferences/{key})
+	SetMyPreference(w http.ResponseWriter, r *http.Request, key string)
 	// Change how much of the settings surface the caller is shown (ADR-26). Self-service: any authenticated user may set their own tier, not just an administrator -- raising or lowering it never changes behaviour, only what is displayed.
 	// (PATCH /me/tier)
 	SetMyTier(w http.ResponseWriter, r *http.Request)
@@ -3386,6 +3419,9 @@ type ServerInterface interface {
 	// Monitor or unmonitor a single part (track) of a work.
 	// (POST /works/{id}/parts/{partId}/monitor)
 	SetPartMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64)
+	// Search every configured indexer for this one track.
+	// (POST /works/{id}/parts/{partId}/search)
+	SearchTrack(w http.ResponseWriter, r *http.Request, id int64, partId int64)
 	// Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
 	// (POST /works/{id}/parts/{partId}/wanted)
 	SetTrackWanted(w http.ResponseWriter, r *http.Request, id int64, partId int64)
@@ -3929,6 +3965,18 @@ func (_ Unimplemented) DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, id
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// The caller's own interface state -- sort order, chosen columns and the like. Self-service and per user: none of it changes behaviour, only what this one person sees.
+// (GET /me/preferences)
+func (_ Unimplemented) GetMyPreferences(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Store one of the caller's own interface preferences.
+// (PUT /me/preferences/{key})
+func (_ Unimplemented) SetMyPreference(w http.ResponseWriter, r *http.Request, key string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Change how much of the settings surface the caller is shown (ADR-26). Self-service: any authenticated user may set their own tier, not just an administrator -- raising or lowering it never changes behaviour, only what is displayed.
 // (PATCH /me/tier)
 func (_ Unimplemented) SetMyTier(w http.ResponseWriter, r *http.Request) {
@@ -4286,6 +4334,12 @@ func (_ Unimplemented) SetWorkMonitored(w http.ResponseWriter, r *http.Request, 
 // Monitor or unmonitor a single part (track) of a work.
 // (POST /works/{id}/parts/{partId}/monitor)
 func (_ Unimplemented) SetPartMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Search every configured indexer for this one track.
+// (POST /works/{id}/parts/{partId}/search)
+func (_ Unimplemented) SearchTrack(w http.ResponseWriter, r *http.Request, id int64, partId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7044,6 +7098,61 @@ func (siw *ServerInterfaceWrapper) DeleteMyAPIKey(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetMyPreferences operation middleware
+func (siw *ServerInterfaceWrapper) GetMyPreferences(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMyPreferences(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetMyPreference operation middleware
+func (siw *ServerInterfaceWrapper) SetMyPreference(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetMyPreference(w, r, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetMyTier operation middleware
 func (siw *ServerInterfaceWrapper) SetMyTier(w http.ResponseWriter, r *http.Request) {
 
@@ -8863,6 +8972,48 @@ func (siw *ServerInterfaceWrapper) SetPartMonitored(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// SearchTrack operation middleware
+func (siw *ServerInterfaceWrapper) SearchTrack(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "partId" -------------
+	var partId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "partId", chi.URLParam(r, "partId"), &partId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "partId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchTrack(w, r, id, partId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetTrackWanted operation middleware
 func (siw *ServerInterfaceWrapper) SetTrackWanted(w http.ResponseWriter, r *http.Request) {
 
@@ -9349,6 +9500,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Delete(options.BaseURL+"/me/apikeys/{id}", wrapper.DeleteMyAPIKey)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/preferences", wrapper.GetMyPreferences)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/me/preferences/{key}", wrapper.SetMyPreference)
+	})
+	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/me/tier", wrapper.SetMyTier)
 	})
 	r.Group(func(r chi.Router) {
@@ -9527,6 +9684,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/monitor", wrapper.SetPartMonitored)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/search", wrapper.SearchTrack)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/wanted", wrapper.SetTrackWanted)

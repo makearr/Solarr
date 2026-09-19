@@ -118,7 +118,7 @@ func partRows(from []library.PartDetail) []apiserver.PartRow {
 			row.Wanted = &apiserver.WantedRow{
 				ID: detail.Wanted.ID, Monitored: detail.Wanted.Monitored,
 				RequiredCount: detail.Wanted.RequiredCount, PresentCount: detail.Wanted.PresentCount,
-				State: detail.Wanted.State,
+				State: detail.Wanted.State, LastSearchedAt: detail.Wanted.LastSearchedAt,
 			}
 		}
 		if detail.Part.Title.Valid {
@@ -129,6 +129,13 @@ func partRows(from []library.PartDetail) []apiserver.PartRow {
 		}
 		if detail.Part.Date.Valid {
 			row.Date = &detail.Part.Date.String
+		}
+		if detail.File != nil {
+			row.File = &apiserver.PartFileRow{
+				MediaObjectID: detail.File.MediaObjectID, AudioCodec: detail.File.AudioCodec,
+				VideoCodec: detail.File.VideoCodec, Container: detail.File.Container,
+				BitrateKbps: detail.File.BitrateKbps, Lossless: detail.File.Lossless,
+			}
 		}
 		rows[index] = row
 	}

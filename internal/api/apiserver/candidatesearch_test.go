@@ -23,6 +23,7 @@ type fakeCandidateSearcher struct {
 	sendErr      error
 
 	lastSearchWorkID     int64
+	lastSearchPartID     int64
 	lastListCandidatesID int64
 	lastSearchCategoryID int64
 	lastSendWorkID       int64
@@ -37,6 +38,12 @@ func (f *fakeCandidateSearcher) SendCandidate(_ context.Context, workID, decisio
 
 func (f *fakeCandidateSearcher) SearchWork(_ context.Context, workID int64) (apiserver.SearchItemResult, error) {
 	f.lastSearchWorkID = workID
+	return f.searchResult, f.searchErr
+}
+
+func (f *fakeCandidateSearcher) SearchTrack(_ context.Context, workID, partID int64) (apiserver.SearchItemResult, error) {
+	f.lastSearchWorkID = workID
+	f.lastSearchPartID = partID
 	return f.searchResult, f.searchErr
 }
 
@@ -289,5 +296,21 @@ func TestSearchCategory_ReportsADuplicateRun(t *testing.T) {
 	}
 	if !body.Duplicate {
 		t.Error("duplicate = false, want true -- a search was already running")
+	}
+}
+
+// A track search wants the track before it looks for it, so the button
+// cannot report "nothing found" for a track nothing was asking for.
+func TestSearchTrack_ReachesTheSearcherWithBothIDs(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/12/parts/34/search", ""))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if got := fixture.candidateSearcher; got.lastSearchWorkID != 12 || got.lastSearchPartID != 34 {
+		t.Errorf("searched work %d part %d, want 12 and 34", got.lastSearchWorkID, got.lastSearchPartID)
 	}
 }
