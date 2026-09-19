@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parse"
 )
 
@@ -24,6 +25,11 @@ type corpusCase struct {
 	Lossless       bool    `json:"lossless"`
 	Container      string  `json:"container"`
 	BitrateKbps    int     `json:"bitrate_kbps"`
+	BitrateMode    string  `json:"bitrate_mode"`
+	VBRPreset      string  `json:"vbr_preset"`
+	SampleRate     int     `json:"sample_rate"`
+	BitDepth       int     `json:"bit_depth"`
+	ProperRepack   bool    `json:"proper_repack"`
 	Source         string  `json:"source"`
 	Edition        string  `json:"edition"`
 	ReleaseGroup   string  `json:"release_group"`
@@ -90,29 +96,18 @@ func TestGoldenCorpus(t *testing.T) {
 				t.Errorf("Identity = %+v, want %+v", result.Identity, wantIdentity)
 			}
 
-			if result.Attributes.Format != c.Format {
-				t.Errorf("Format = %q, want %q", result.Attributes.Format, c.Format)
+			// Compared whole, so a field added to model.Attributes is asserted by
+			// every fixture from the moment it exists rather than when someone
+			// remembers to list it here.
+			wantAttributes := model.Attributes{
+				Format: c.Format, Lossless: c.Lossless, BitrateKbps: c.BitrateKbps,
+				BitrateMode: c.BitrateMode, VBRPreset: c.VBRPreset, SampleRate: c.SampleRate,
+				Container: c.Container, Source: c.Source, Edition: c.Edition,
+				ReleaseGroup: c.ReleaseGroup, Discs: c.Discs, BitDepth: c.BitDepth,
+				ProperRepack: c.ProperRepack,
 			}
-			if result.Attributes.Lossless != c.Lossless {
-				t.Errorf("Lossless = %v, want %v", result.Attributes.Lossless, c.Lossless)
-			}
-			if result.Attributes.Container != c.Container {
-				t.Errorf("Container = %q, want %q", result.Attributes.Container, c.Container)
-			}
-			if result.Attributes.BitrateKbps != c.BitrateKbps {
-				t.Errorf("BitrateKbps = %d, want %d", result.Attributes.BitrateKbps, c.BitrateKbps)
-			}
-			if result.Attributes.Source != c.Source {
-				t.Errorf("Source = %q, want %q", result.Attributes.Source, c.Source)
-			}
-			if result.Attributes.Edition != c.Edition {
-				t.Errorf("Edition = %q, want %q", result.Attributes.Edition, c.Edition)
-			}
-			if result.Attributes.ReleaseGroup != c.ReleaseGroup {
-				t.Errorf("ReleaseGroup = %q, want %q", result.Attributes.ReleaseGroup, c.ReleaseGroup)
-			}
-			if result.Attributes.Discs != c.Discs {
-				t.Errorf("Discs = %d, want %d", result.Attributes.Discs, c.Discs)
+			if result.Attributes != wantAttributes {
+				t.Errorf("Attributes = %+v, want %+v", result.Attributes, wantAttributes)
 			}
 
 			if result.Confidence < c.MinConfidence {

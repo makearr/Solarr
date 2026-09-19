@@ -51,8 +51,11 @@ var (
 	// (todo 4.2), not just stripped.
 	bitDepthRe   = regexp.MustCompile(`^(8|16|24|32)bit$`)
 	sampleRateRe = regexp.MustCompile(`^(\d+(?:\.\d+)?)khz$`)
-	bracketRe    = regexp.MustCompile(`\(([^()]*)\)|\[([^\[\]]*)\]|\{([^{}]*)\}`)
-	splitDashRe  = regexp.MustCompile(`\s+-\s+`)
+	// hiResPairRe is the scene's bare "-24-192-" for 24-bit/192kHz: two adjacent
+	// numbers that mean nothing apart and are each ambiguous alone.
+	hiResPairRe = regexp.MustCompile(`([-_ \[(])(8|16|24|32)([-_ ])(44|48|88|96|176|192|352)([-_ \])])`)
+	bracketRe   = regexp.MustCompile(`\(([^()]*)\)|\[([^\[\]]*)\]|\{([^{}]*)\}`)
+	splitDashRe = regexp.MustCompile(`\s+-\s+`)
 	// dashRunRe collapses two or more dashes left adjacent by noise-bracket
 	// removal (a bracket whose own contents contain a dash, e.g. "[WEB-AAC]",
 	// leaves "Love-" + " " + "-" + " " + "-TDS" behind) into one -- otherwise
@@ -154,6 +157,7 @@ func Parse(title string) Result {
 	simple = cleanTorrentSuffixRe.ReplaceAllString(simple, "")
 	simple = normalizeAirDate(simple)
 	simple = normalizeSixDigitAirDate(simple)
+	simple = normalizeHiResPair(simple)
 
 	claims := &claimSet{}
 
@@ -449,6 +453,13 @@ func isPlausibleGroupTag(word string) bool {
 	return true
 }
 
+// normalizeHiResPair rewrites the scene's bare depth/rate pair into the explicit
+// tokens the claim vocabulary already reads, so "192" is not taken for a kbps
+// claim and "24" is not left to be absorbed into the album title.
+func normalizeHiResPair(s string) string {
+	return hiResPairRe.ReplaceAllString(s, "${1}${2}bit${3}${4}khz${5}")
+}
+
 // claimField tries every vocabulary in turn against one already-lowercased word
 // and records the first match.
 func claimField(field string, claims *claimSet) bool {
@@ -459,7 +470,12 @@ func claimField(field string, claims *claimSet) bool {
 		claims.format, claims.lossless = losslessFormats[field], true
 		return true
 	case lossyFormats[field] != "":
-		claims.format = lossyFormats[field]
+		// A release offering both ("[FLAC][MP3]") keeps the lossless claim:
+		// letting the lossy one half-overwrite it left Format and Lossless
+		// disagreeing, which model.Attributes says can never happen.
+		if !claims.lossless {
+			claims.format = lossyFormats[field]
+		}
 		return true
 	case containerFormats[field] != "":
 		claims.container = containerFormats[field]
