@@ -574,17 +574,9 @@ func (p *process) startServer(ctx context.Context) error {
 		SubscriptionPreviewer: adapters.People{
 			People: library.NewPeople(p.library), Provider: p.musicBrainzProvider(), Clock: clock.NewSystem(),
 		},
-		BlockedContent: adapters.BlockedContent{Blocks: library.NewBlockedContentStore(p.library)},
-		Packs:          adapters.Packs{Packs: library.NewPacks(p.library)},
-		RemoveAndBlocker: adapters.RemoveAndBlock{
-			Action: library.NewRemoveAndBlock(
-				library.NewQuarantine(p.library, p.fsys, clock.NewSystem()),
-				library.NewBlockedContentStore(p.library), library.NewBlocklistStore(p.library),
-				library.NewDesired(p.library), library.NewPhysical(p.library),
-				adapters.RootFolderPath(p.cache),
-			),
-			Physical: library.NewPhysical(p.library), Clock: clock.NewSystem(),
-		},
+		BlockedContent:   adapters.BlockedContent{Blocks: library.NewBlockedContentStore(p.library)},
+		Packs:            adapters.Packs{Packs: library.NewPacks(p.library)},
+		RemoveAndBlocker: p.fileRemover(),
 		ImportSessions: adapters.ImportSessions{
 			Sessions: library.NewImportSessions(p.library),
 			Revert: library.NewImportRevert(
@@ -741,6 +733,21 @@ func (p *process) worksMonitor() adapters.WorksMonitor {
 	return adapters.WorksMonitor{
 		Identity: library.NewIdentity(p.library), Works: library.NewWorks(p.library),
 		Desired: library.NewDesired(p.library), Categories: adapters.Categories{Cache: p.cache},
+		Remover:          p.fileRemover(),
 		DefaultProfileID: p.defaultQualityProfileID, Logger: p.logger,
+	}
+}
+
+// fileRemover is ADR-53's own composed action, shared by the unwanted-files
+// screen and by deleting an album with its files.
+func (p *process) fileRemover() adapters.RemoveAndBlock {
+	return adapters.RemoveAndBlock{
+		Action: library.NewRemoveAndBlock(
+			library.NewQuarantine(p.library, p.fsys, clock.NewSystem()),
+			library.NewBlockedContentStore(p.library), library.NewBlocklistStore(p.library),
+			library.NewDesired(p.library), library.NewPhysical(p.library),
+			adapters.RootFolderPath(p.cache),
+		),
+		Physical: library.NewPhysical(p.library), Clock: clock.NewSystem(),
 	}
 }

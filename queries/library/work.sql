@@ -302,6 +302,10 @@ LIMIT sqlc.arg(page_size);
 -- name: CountWorkFiles :one
 SELECT CAST(COUNT(*) AS INTEGER) AS total FROM work_file WHERE work_id = ?;
 
+-- Every file of one work, for deleting an album's files along with it.
+-- name: ListWorkFiles :many
+SELECT media_object_id FROM work_file WHERE work_id = ? ORDER BY media_object_id;
+
 -- Releases in a date window that this library has a reason to care about:
 -- either something wants the work, or an artist credited on it is monitored.
 -- A work with several dates of the same kind in different regions would repeat,

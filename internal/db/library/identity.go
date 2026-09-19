@@ -338,6 +338,16 @@ type RemoveWorkResult struct {
 // for it. Files are never touched either way: removing an album is about no
 // longer wanting it, and deleting bytes goes through quarantine (section
 // 10.8), never through here.
+// WorkFiles answers every media object the work has on disk, for a caller
+// deleting an album's files along with it (2026-09-19).
+func (i Identity) WorkFiles(ctx context.Context, workID int64) ([]int64, error) {
+	files, err := librarydb.New(i.store.Read()).ListWorkFiles(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: work files %d: %w", workID, err)
+	}
+	return files, nil
+}
+
 func (i Identity) RemoveWork(ctx context.Context, workID int64) (RemoveWorkResult, error) {
 	var result RemoveWorkResult
 	err := i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {

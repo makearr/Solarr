@@ -2098,8 +2098,11 @@ type RemoveAndBlockResult struct {
 
 // RemoveWorkResult What removing an album actually did.
 type RemoveWorkResult struct {
-	// FilesKept How many files the library still holds for this work. None were touched.
+	// FilesKept How many files the library still holds for this work.
 	FilesKept int64 `json:"files_kept"`
+
+	// FilesQuarantined How many files delete_files moved out of the library.
+	FilesQuarantined *int64 `json:"files_quarantined,omitempty"`
 
 	// WorkDeleted False when the album was kept because files for it remain in the library.
 	WorkDeleted bool `json:"work_deleted"`
@@ -2866,6 +2869,12 @@ type SetTrackWantedJSONBody struct {
 	Wanted bool `json:"wanted"`
 }
 
+// RemoveWorkJSONBody defines parameters for RemoveWork.
+type RemoveWorkJSONBody struct {
+	// DeleteFiles Also move every file of this album into quarantine.
+	DeleteFiles *bool `json:"delete_files,omitempty"`
+}
+
 // AddArrInstanceJSONRequestBody defines body for AddArrInstance for application/json ContentType.
 type AddArrInstanceJSONRequestBody = AddArrInstanceRequest
 
@@ -3033,6 +3042,9 @@ type SetPartMonitoredJSONRequestBody SetPartMonitoredJSONBody
 
 // SetTrackWantedJSONRequestBody defines body for SetTrackWanted for application/json ContentType.
 type SetTrackWantedJSONRequestBody SetTrackWantedJSONBody
+
+// RemoveWorkJSONRequestBody defines body for RemoveWork for application/json ContentType.
+type RemoveWorkJSONRequestBody RemoveWorkJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -3492,7 +3504,7 @@ type ServerInterface interface {
 	// Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
 	// (POST /works/{id}/parts/{partId}/wanted)
 	SetTrackWanted(w http.ResponseWriter, r *http.Request, id int64, partId int64)
-	// Stop wanting an album. Administrator only.
+	// Stop wanting an album, and optionally delete its files. Administrator only.
 	// (POST /works/{id}/remove)
 	RemoveWork(w http.ResponseWriter, r *http.Request, id int64)
 	// Search every configured indexer for this work's own wanted album (stage 5's candidate pipeline, section 10.1/10.2). Synchronous -- one album, a handful of indexer calls, tiers 0-2 (exact, +year, +alias) widening only until one clears the match-distance gate.
@@ -4416,7 +4428,7 @@ func (_ Unimplemented) SetTrackWanted(w http.ResponseWriter, r *http.Request, id
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Stop wanting an album. Administrator only.
+// Stop wanting an album, and optionally delete its files. Administrator only.
 // (POST /works/{id}/remove)
 func (_ Unimplemented) RemoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)

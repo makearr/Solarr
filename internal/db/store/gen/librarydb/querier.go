@@ -488,6 +488,8 @@ type Querier interface {
 	// Where each named work's files live, every path of every one. The directories
 	// they sit in are what a scoped rescan reads once the work's tracklist exists.
 	ListWorkFileLocations(ctx context.Context, workIds interface{}) ([]ListWorkFileLocationsRow, error)
+	// Every file of one work, for deleting an album's files along with it.
+	ListWorkFiles(ctx context.Context, workID int64) ([]int64, error)
 	ListWorkPartExternalIDs(ctx context.Context, partID int64) ([]WorkPartExternalID, error)
 	ListWorkPartTitles(ctx context.Context, partID int64) ([]WorkPartTitle, error)
 	// Ordered by the module's sort key. Core never parses media_ref to order parts.

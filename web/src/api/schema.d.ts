@@ -2455,8 +2455,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Stop wanting an album. Administrator only.
-         * @description Deletes every desired item for the work, and the work itself only when the library holds no files for it -- with files on disk the next scan would recreate it, so deleting the row would be a lie. **Files are never touched**: deleting bytes goes through quarantine (section 10.8), never through here.
+         * Stop wanting an album, and optionally delete its files. Administrator only.
+         * @description Deletes every desired item for the work, and the work itself only when the library holds no files for it -- with files on disk the next scan would recreate it, so deleting the row would be a lie. Files are kept unless delete_files says otherwise, and even then they go to quarantine (section 10.8): nothing is ever deleted outright, so a mistaken delete stays recoverable for the retention window.
          */
         post: operations["removeWork"];
         delete?: never;
@@ -3119,9 +3119,14 @@ export interface components {
             work_deleted: boolean;
             /**
              * Format: int64
-             * @description How many files the library still holds for this work. None were touched.
+             * @description How many files the library still holds for this work.
              */
             files_kept: number;
+            /**
+             * Format: int64
+             * @description How many files delete_files moved out of the library.
+             */
+            files_quarantined?: number;
         };
         /** @description One release in the calendar window. */
         CalendarEntry: {
@@ -8396,7 +8401,17 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description Also move every file of this album into quarantine.
+                     * @default false
+                     */
+                    delete_files?: boolean;
+                };
+            };
+        };
         responses: {
             /** @description What was removed. */
             200: {

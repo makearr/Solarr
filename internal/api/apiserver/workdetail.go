@@ -143,13 +143,17 @@ type WorksMonitor interface {
 	// RemoveWork drops every desired item for the work, and the work itself
 	// only when no files remain for it. Never touches files. Answers a
 	// missing work id with an error wrapping sql.ErrNoRows.
-	RemoveWork(ctx context.Context, workID int64) (RemoveWorkResult, error)
+	// RemoveWork stops wanting an album. deleteFiles also puts its files
+	// into quarantine (section 10.8 -- never a direct delete).
+	RemoveWork(ctx context.Context, workID int64, deleteFiles bool) (RemoveWorkResult, error)
 }
 
 // RemoveWorkResult is what removing an album did.
 type RemoveWorkResult struct {
 	WorkDeleted bool
 	FilesKept   int64
+	// FilesQuarantined counts what deleteFiles moved out of the library.
+	FilesQuarantined int64
 }
 
 // routeGetWork parses the id path parameter, mirroring routeUser: a malformed
@@ -546,7 +550,16 @@ func (s *Server) RemoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 			"Unavailable", "works are not available")
 		return
 	}
-	result, err := s.worksMonitor.RemoveWork(r.Context(), id)
+	// An absent body means "stop wanting it, keep the files" -- what this
+	// endpoint has always done, so an old caller is unchanged.
+	var body struct {
+		DeleteFiles bool `json:"delete_files"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body)
+	}
+
+	result, err := s.worksMonitor.RemoveWork(r.Context(), id, body.DeleteFiles)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
@@ -557,5 +570,6 @@ func (s *Server) RemoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 	}
 	writeJSON(w, s.logger, http.StatusOK, gen.RemoveWorkResult{
 		WorkDeleted: result.WorkDeleted, FilesKept: result.FilesKept,
+		FilesQuarantined: &result.FilesQuarantined,
 	})
 }
