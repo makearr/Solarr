@@ -30,7 +30,11 @@ func (a Artists) ListLibraryArtists(
 
 	views := make([]apiserver.ArtistRow, len(rows))
 	for index, row := range rows {
-		views[index] = apiserver.ArtistRow{ID: row.ID, Name: row.Name, SortName: row.SortName}
+		views[index] = apiserver.ArtistRow{
+			ID: row.ID, Name: row.Name, SortName: row.SortName,
+			AlbumsWanted: row.AlbumsWanted, AlbumsComplete: row.AlbumsComplete,
+			Downloading: row.Downloading,
+		}
 	}
 	return views, nil
 }

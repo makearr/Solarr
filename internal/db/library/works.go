@@ -122,6 +122,15 @@ type WorkListRow struct {
 	// ArtistSortName is the primary artist's sort name, empty with none: what
 	// WorkSortArtist orders on, and so what its next-page cursor carries.
 	ArtistSortName string
+	// PresentCount, RequiredCount, AvailableFrom and Downloading are what the
+	// availability bar under a cover is drawn from (2026-09-19).
+	PresentCount  sql.NullInt64
+	RequiredCount sql.NullInt64
+	AvailableFrom sql.NullInt64
+	Downloading   bool
+	// OnDisk reports a root folder link, so an album nothing wants but whose
+	// files are present is not coloured as missing.
+	OnDisk bool
 }
 
 // Works reads the library list surface.
@@ -185,6 +194,8 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	}
 
 	query := "SELECT " + workColumns + ",\n       " + workArtistColumn + ",\n       " + workStateColumn +
+		",\n       " + discographyStatusColumns +
+		",\n       EXISTS (SELECT 1 FROM work_root_folder wrf WHERE wrf.work_id = work.id) AS on_disk" +
 		",\n       COALESCE(work.primary_artist_sort_name, '') AS artist_sort" +
 		"\nFROM work" + workArtistJoin +
 		predicates.Where() + "\nORDER BY " + orderBy + "\nLIMIT ?"
@@ -311,7 +322,9 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 		var work WorkListRow
 		if err := rows.Scan(&work.ID, &work.MediaType, &work.CanonicalTitle, &work.SortTitle,
 			&work.OriginalLanguage, &work.Year, &work.RuntimeMs, &work.AddedAt,
-			&work.UpdatedAt, &work.AddedBy, &work.Artist, &work.WantedState, &work.ArtistSortName); err != nil {
+			&work.UpdatedAt, &work.AddedBy, &work.Artist, &work.WantedState,
+			&work.PresentCount, &work.RequiredCount, &work.AvailableFrom, &work.Downloading,
+			&work.OnDisk, &work.ArtistSortName); err != nil {
 			return nil, fmt.Errorf("library: scan work: %w", err)
 		}
 		works = append(works, work)

@@ -18,12 +18,21 @@ import (
 // category the caller has no natural way to supply -- a work-detail page has
 // a work, not a root folder, to derive one from.
 type WorksMonitor struct {
-	Works            library.Works
-	Identity         library.Identity
-	Desired          library.Desired
+	Works    library.Works
+	Identity library.Identity
+	Desired  library.Desired
+	// Remover quarantines the files of an album being deleted with them.
+	Remover          FileRemover
 	Categories       music.CategoryFinder
 	DefaultProfileID int64
 	Logger           *slog.Logger
+}
+
+// FileRemover puts one file into quarantine. Narrow on purpose: deleting an
+// album's files is quarantine and nothing else -- no blocking, no blocklist
+// (section 10.8, ADR-53's steps are separate choices).
+type FileRemover interface {
+	QuarantineFile(ctx context.Context, mediaObjectID int64) error
 }
 
 // SetWorkMonitored always ensures the album item exists, monitored or not:
@@ -228,13 +237,36 @@ func boolToInt64(value bool) int64 {
 
 // RemoveWork stops wanting an album. The work is looked up first so a missing
 // id answers sql.ErrNoRows rather than silently succeeding on nothing.
-func (a WorksMonitor) RemoveWork(ctx context.Context, workID int64) (apiserver.RemoveWorkResult, error) {
+func (a WorksMonitor) RemoveWork(
+	ctx context.Context, workID int64, deleteFiles bool,
+) (apiserver.RemoveWorkResult, error) {
 	if _, err := a.Works.Detail(ctx, workID); err != nil {
 		return apiserver.RemoveWorkResult{}, err
 	}
+
+	var quarantined int64
+	if deleteFiles {
+		files, err := a.Identity.WorkFiles(ctx, workID)
+		if err != nil {
+			return apiserver.RemoveWorkResult{}, err
+		}
+		// Quarantine, never delete: section 10.8 -- the bytes stay
+		// recoverable for the retention window, and a mistaken delete of a
+		// whole album is exactly what that window is for.
+		for _, mediaObjectID := range files {
+			if err := a.Remover.QuarantineFile(ctx, mediaObjectID); err != nil {
+				return apiserver.RemoveWorkResult{}, err
+			}
+			quarantined++
+		}
+	}
+
 	result, err := a.Identity.RemoveWork(ctx, workID)
 	if err != nil {
 		return apiserver.RemoveWorkResult{}, err
 	}
-	return apiserver.RemoveWorkResult{WorkDeleted: result.WorkDeleted, FilesKept: result.FilesKept}, nil
+	return apiserver.RemoveWorkResult{
+		WorkDeleted: result.WorkDeleted, FilesKept: result.FilesKept,
+		FilesQuarantined: quarantined,
+	}, nil
 }

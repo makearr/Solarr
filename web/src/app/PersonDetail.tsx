@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { albumStatusLabel, albumStatusText } from "@/lib/albumStatus";
 import { discCountOf, formatTrackNumber } from "@/lib/trackNumber";
 
 import { CoverArt } from "./CoverArt";
@@ -473,7 +474,7 @@ function AlbumRow({ work }: { work: PersonWork }) {
           {work.title}
         </Link>
         {work.year != null && <span className="shrink-0 text-xs text-ink-muted">{work.year}</span>}
-        <AvailabilityBadge onDisk={work.on_disk} wantedState={work.wanted_state} />
+        <AvailabilityBadge work={work} />
       </div>
 
       {expanded && (
@@ -507,28 +508,19 @@ function AlbumRow({ work }: { work: PersonWork }) {
 // Mirrors WorkDetail's own WantedBadge/OnDiskBadge, simplified to what
 // PersonWork actually carries (no required/present track counts at this
 // level -- that is what expanding the row is for).
-function AvailabilityBadge({ onDisk, wantedState }: { onDisk: boolean; wantedState?: string }) {
-  if (wantedState) {
-    const complete = wantedState === "COMPLETE";
-    const label =
-      wantedState === "PARTIAL" ? "Partial" : wantedState === "UPGRADABLE" ? "Upgradable" : complete ? "Complete" : "Missing";
-    return (
-      <span
-        className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${
-          complete ? "border-current text-accent" : "border-border-subtle text-ink-muted"
-        }`}
-      >
-        {label}
-      </span>
-    );
-  }
+function AvailabilityBadge({ work }: { work: PersonWork }) {
+  const counts =
+    work.required_count != null && work.required_count > 0
+      ? `${work.present_count ?? 0}/${work.required_count}`
+      : null;
   return (
-    <span
-      className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${
-        onDisk ? "border-current text-accent" : "border-border-subtle text-ink-muted"
-      }`}
-    >
-      {onDisk ? "On disk" : "Not requested"}
+    <span className="flex shrink-0 items-center gap-2">
+      {counts && <span className="font-mono text-xs tabular-nums text-ink-muted">{counts}</span>}
+      <span
+        className={`rounded-full border border-current px-2 py-0.5 text-xs ${albumStatusText(work.status)}`}
+      >
+        {albumStatusLabel(work.status)}
+      </span>
     </span>
   );
 }

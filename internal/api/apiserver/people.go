@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -55,6 +56,47 @@ type PersonWorkRow struct {
 	// own wanted_state doc comment.
 	WantedState *string
 	OnDisk      bool
+	// PresentCount and RequiredCount are the album's own "9 of 12".
+	PresentCount  *int64
+	RequiredCount *int64
+	// AvailableFrom is the release date, nil when unknown; Downloading
+	// reports an acquisition in flight. Both feed AlbumStatus.
+	AvailableFrom *time.Time
+	Downloading   bool
+}
+
+// AlbumStatus is the colour an album carries wherever it is listed: red
+// incomplete, purple downloading, yellow not released yet, green complete
+// (2026-09-19). One vocabulary, so the artist page, the poster wall and the
+// album page cannot drift apart.
+type AlbumStatus string
+
+// The four states, in the order albumStatus decides them.
+const (
+	AlbumUnreleased  AlbumStatus = "unreleased"
+	AlbumDownloading AlbumStatus = "downloading"
+	AlbumComplete    AlbumStatus = "complete"
+	AlbumIncomplete  AlbumStatus = "incomplete"
+)
+
+// albumStatus decides one album's colour. Unreleased outranks everything:
+// an album that is not out yet is not missing, and colouring it red would
+// report a problem nobody can act on. Downloading outranks complete so a
+// finishing upgrade is visible while it runs.
+func albumStatus(row PersonWorkRow, now time.Time) AlbumStatus {
+	switch {
+	case row.AvailableFrom != nil && row.AvailableFrom.After(now):
+		return AlbumUnreleased
+	case row.Downloading:
+		return AlbumDownloading
+	case row.WantedState != nil && *row.WantedState == "COMPLETE":
+		return AlbumComplete
+	case row.WantedState == nil && row.OnDisk:
+		// Nothing wants it, but the files are here: on disk is complete.
+		return AlbumComplete
+	default:
+		return AlbumIncomplete
+	}
 }
 
 // PersonDetailRow is a person's full detail. Coverage (held vs missing vs
@@ -80,12 +122,13 @@ type PeopleReader interface {
 // PeopleSubscriber subscribes the calling user to a person (ADR-32).
 type PeopleSubscriber interface {
 	// Subscribe answers a missing person id with an error wrapping
-	// sql.ErrNoRows. excludeSecondaryTypes is nil for "use that media
-	// type's own default", non-nil (however short, including empty) for an
-	// explicit override -- todo 4.4's filter preview needs the distinction.
+	// sql.ErrNoRows. Both type lists are nil for "use the default" -- the
+	// library's own for primary types, the media type's for secondary ones
+	// -- and non-nil (however short, including empty) for an explicit
+	// per-artist override, which todo 4.4's filter preview needs.
 	Subscribe(
 		ctx context.Context, personID, userID int64, mediaTypes, roles []string,
-		monitorBackCatalogue bool, excludeSecondaryTypes *[]string,
+		monitorBackCatalogue bool, includePrimaryTypes, excludeSecondaryTypes *[]string,
 	) error
 	// Remove unsubscribes, unmonitors and deletes the person. It never
 	// touches files: removing an artist means no longer following them.
@@ -245,15 +288,17 @@ func (s *Server) GetPerson(w http.ResponseWriter, r *http.Request, id int64) {
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, buildPersonDetailView(detail))
+	writeJSON(w, s.logger, http.StatusOK, buildPersonDetailView(detail, s.wall.Now()))
 }
 
-func buildPersonDetailView(detail PersonDetailRow) gen.PersonDetail {
+func buildPersonDetailView(detail PersonDetailRow, now time.Time) gen.PersonDetail {
 	discography := make([]gen.PersonWork, len(detail.Discography))
 	for index, row := range detail.Discography {
 		discography[index] = gen.PersonWork{
 			Id: row.ID, MediaType: row.MediaType, Title: row.Title, SortTitle: row.SortTitle,
 			Year: yearOf(row.Year), PrimaryType: row.PrimaryType, OnDisk: row.OnDisk,
+			PresentCount: row.PresentCount, RequiredCount: row.RequiredCount,
+			Status: gen.PersonWorkStatus(albumStatus(row, now)),
 		}
 		if row.WantedState != nil {
 			state := gen.PersonWorkWantedState(*row.WantedState)
@@ -309,7 +354,8 @@ func (s *Server) SubscribePerson(w http.ResponseWriter, r *http.Request, id int6
 
 	roles := derefOr(body.Roles, nil)
 	err = s.peopleSubscriber.Subscribe(r.Context(), id, access.UserID(),
-		body.MediaTypes, roles, derefOr(body.MonitorBackCatalogue, false), body.ExcludeSecondaryTypes)
+		body.MediaTypes, roles, derefOr(body.MonitorBackCatalogue, false),
+		body.IncludePrimaryTypes, body.ExcludeSecondaryTypes)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such person")
 		return

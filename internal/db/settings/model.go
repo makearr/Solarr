@@ -88,7 +88,15 @@ type Category struct {
 	// disk that nobody asked for: "monitored" (default), "unmonitored", or
 	// "none" at all (section 19.6, todo 4.4).
 	MonitorDiscovered string
+	// MonitorReleaseTypes is which release types a monitored artist in this
+	// library brings in, overridable per artist by the subscription's own
+	// filters (2026-09-19).
+	MonitorReleaseTypes []string
 }
+
+// DefaultMonitorReleaseTypes is what a library monitors unless told
+// otherwise: the three types anyone means by "their albums".
+var DefaultMonitorReleaseTypes = []string{"Album", "EP", "Single"}
 
 // Monitor-discovered policy values (section 19.6).
 const (

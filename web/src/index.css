@@ -19,6 +19,7 @@
   --color-danger: oklch(58% 0.19 27);
   --color-ok: oklch(62% 0.15 150);
   --color-warn: oklch(72% 0.15 75);
+  --color-busy: oklch(58% 0.19 305);
 }
 
 @layer base {
@@ -37,6 +38,7 @@
     --color-danger: oklch(68% 0.17 27);
     --color-ok: oklch(72% 0.14 150);
     --color-warn: oklch(80% 0.14 75);
+    --color-busy: oklch(70% 0.16 305);
   }
 
   /* Jellyfin: near-black ground, its blue-to-purple accent. */
@@ -51,6 +53,7 @@
     --color-danger: oklch(66% 0.18 22);
     --color-ok: oklch(74% 0.15 165);
     --color-warn: oklch(80% 0.14 80);
+    --color-busy: oklch(72% 0.16 315);
   }
 
   /* Arr: the flat blue-grey and cyan of Sonarr and Radarr. */
@@ -65,6 +68,7 @@
     --color-danger: oklch(64% 0.19 25);
     --color-ok: oklch(74% 0.15 145);
     --color-warn: oklch(82% 0.15 85);
+    --color-busy: oklch(72% 0.15 300);
   }
 
   /* Nord: the arctic palette, lower contrast by design. */
@@ -79,6 +83,7 @@
     --color-danger: oklch(64% 0.13 20);
     --color-ok: oklch(76% 0.10 145);
     --color-warn: oklch(84% 0.10 85);
+    --color-busy: oklch(74% 0.09 300);
   }
 
   /* Paper: warm and low contrast, for reading in daylight. */
@@ -93,6 +98,7 @@
     --color-danger: oklch(52% 0.17 27);
     --color-ok: oklch(56% 0.13 150);
     --color-warn: oklch(66% 0.13 70);
+    --color-busy: oklch(52% 0.13 310);
   }
 
   body {

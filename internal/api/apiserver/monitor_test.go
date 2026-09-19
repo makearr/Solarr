@@ -23,9 +23,10 @@ type fakeWorksMonitor struct {
 	setWorkCalls      int
 	setPartCalls      int
 
-	removeResult apiserver.RemoveWorkResult
-	removeWorkID int64
-	removeCalls  int
+	removeResult      apiserver.RemoveWorkResult
+	removeWorkID      int64
+	removeDeleteFiles bool
+	removeCalls       int
 
 	lastTrackPartID int64
 	lastTrackWanted *bool
@@ -343,9 +344,12 @@ func TestBulkSetWorkMonitored_UnreadableCategoryAnswers404(t *testing.T) {
 	}
 }
 
-func (f *fakeWorksMonitor) RemoveWork(_ context.Context, workID int64) (apiserver.RemoveWorkResult, error) {
+func (f *fakeWorksMonitor) RemoveWork(
+	_ context.Context, workID int64, deleteFiles bool,
+) (apiserver.RemoveWorkResult, error) {
 	f.removeCalls++
 	f.removeWorkID = workID
+	f.removeDeleteFiles = deleteFiles
 	if f.err != nil {
 		return apiserver.RemoveWorkResult{}, f.err
 	}
@@ -402,5 +406,28 @@ func TestRemoveWork_MissingWorkIsNotFound(t *testing.T) {
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/999/remove", ""))
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+// Deleting an album's files is an explicit ask, never the default: an
+// absent body keeps them, which is what this endpoint has always done.
+func TestRemoveWork_OnlyDeletesFilesWhenAsked(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/3/remove", "")); recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if fixture.worksMonitor.removeDeleteFiles {
+		t.Error("an empty body deleted files")
+	}
+
+	request := authedPost(t, cookies, "/api/v1/works/3/remove", `{"delete_files":true}`)
+	if recorder := fixture.do(request); recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if !fixture.worksMonitor.removeDeleteFiles {
+		t.Error("delete_files:true did not reach the monitor")
 	}
 }

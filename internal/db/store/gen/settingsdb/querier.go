@@ -118,6 +118,7 @@ type Querier interface {
 	SetCategoryAccess(ctx context.Context, arg SetCategoryAccessParams) error
 	SetCategoryLanguageProfile(ctx context.Context, arg SetCategoryLanguageProfileParams) error
 	SetCategoryMonitorDiscovered(ctx context.Context, arg SetCategoryMonitorDiscoveredParams) error
+	SetCategoryMonitorReleaseTypes(ctx context.Context, arg SetCategoryMonitorReleaseTypesParams) error
 	SetCategoryQualityProfile(ctx context.Context, arg SetCategoryQualityProfileParams) error
 	// The enable transition on its own: this is the "preview before enabling" gate, a
 	// deliberate act distinct from editing a job's policy.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/authz"
 )
@@ -23,4 +24,9 @@ func IsNearReserveForTest(online bool, freeBytes *int64, minFreeBytes int64) boo
 // library.db composition to the package's external test.
 func (s *Server) CategoriesWithOfflineFilesForTest(ctx context.Context, access authz.Access) []CategoryOfflineFiles {
 	return s.categoriesWithOfflineFiles(ctx, access)
+}
+
+// AlbumStatusForTest exposes the album colour rule to the package's external test.
+func AlbumStatusForTest(row PersonWorkRow, now time.Time) string {
+	return string(albumStatus(row, now))
 }

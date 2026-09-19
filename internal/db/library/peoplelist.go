@@ -13,6 +13,31 @@ import (
 const personColumns = `id, name, sort_name, disambiguation, kind, gender, country,
        born, died, fields_json, monitored, added_at`
 
+// personCoverageColumns are the counts the availability bar under an
+// artist's picture is drawn from (2026-09-19): how many of the albums
+// credited to them are wanted, how many of those are complete, and whether
+// anything of theirs is downloading right now. Correlated subqueries for
+// workStateColumn's own reason -- a join would multiply the person row.
+const personCoverageColumns = `CAST((SELECT COUNT(*) FROM credit c
+      JOIN desired_item di ON di.work_id = c.work_id AND di.monitored = 1
+      WHERE c.person_id = person.id) AS INTEGER) AS albums_wanted,
+   CAST((SELECT COUNT(*) FROM credit c
+      JOIN desired_item di ON di.work_id = c.work_id AND di.monitored = 1
+      WHERE c.person_id = person.id AND di.state = 'COMPLETE') AS INTEGER) AS albums_complete,
+   EXISTS (SELECT 1 FROM credit c
+      JOIN desired_item di ON di.work_id = c.work_id
+      JOIN acquisition a ON a.desired_item_id = di.id
+      WHERE c.person_id = person.id
+        AND a.state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')) AS downloading`
+
+// PersonListRow is one person plus that coverage.
+type PersonListRow struct {
+	librarydb.Person
+	AlbumsWanted   int64
+	AlbumsComplete int64
+	Downloading    bool
+}
+
 // PersonFilter is what the people list can narrow on. A zero field is not a
 // filter (WorkFilter's own convention).
 type PersonFilter struct {
@@ -54,7 +79,8 @@ func composePeopleList(filter PersonFilter, after PersonCursor, pageSize int) (s
 		"(sort_name > ? OR (sort_name = ? AND id > ?))",
 		after.SortName, after.SortName, after.ID)
 
-	query := "SELECT " + personColumns + "\nFROM person" + predicates.Where() +
+	query := "SELECT " + personColumns + ",\n       " + personCoverageColumns +
+		"\nFROM person" + predicates.Where() +
 		"\nORDER BY sort_name, id\nLIMIT ?"
 	return query, predicates.Args(pageSize)
 }
@@ -97,7 +123,7 @@ func addNamePrefix(predicates *store.Predicates, prefix string) {
 // (named in architecture.md's own GET /people sketch) needs a join this pass
 // does not build -- real scope of its own, left for when a caller actually
 // needs it (generalise from evidence, not anticipation).
-func (p People) ListPeople(ctx context.Context, filter PersonFilter, after PersonCursor, pageSize int) ([]librarydb.Person, error) {
+func (p People) ListPeople(ctx context.Context, filter PersonFilter, after PersonCursor, pageSize int) ([]PersonListRow, error) {
 	query, arguments := composePeopleList(filter, after, pageSize)
 
 	rows, err := p.store.Read().QueryContext(ctx, query, arguments...)
@@ -106,15 +132,17 @@ func (p People) ListPeople(ctx context.Context, filter PersonFilter, after Perso
 	}
 	defer func() { _ = rows.Close() }()
 
-	var people []librarydb.Person
+	var people []PersonListRow
 	for rows.Next() {
-		var person librarydb.Person
+		var row PersonListRow
+		person := &row.Person
 		if err := rows.Scan(&person.ID, &person.Name, &person.SortName, &person.Disambiguation,
 			&person.Kind, &person.Gender, &person.Country, &person.Born, &person.Died,
-			&person.FieldsJson, &person.Monitored, &person.AddedAt); err != nil {
+			&person.FieldsJson, &person.Monitored, &person.AddedAt,
+			&row.AlbumsWanted, &row.AlbumsComplete, &row.Downloading); err != nil {
 			return nil, fmt.Errorf("library: scan person: %w", err)
 		}
-		people = append(people, person)
+		people = append(people, row)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("library: list people: %w", err)

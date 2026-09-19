@@ -42,6 +42,10 @@ export function Discover() {
     enabled: searchable,
   });
 
+  // On by default, and a choice: adding an artist without following them is
+  // "have them in the library, do not watch them" (asked for 2026-09-19).
+  const [monitor, setMonitor] = useState(true);
+
   const add = useMutation({
     mutationFn: async (result: DiscoverResult) => {
       const { data, error } = await api.POST("/discover/add", {
@@ -51,7 +55,7 @@ export function Discover() {
           external_id: result.external_id,
           // openapi-typescript makes a field with a `default` non-optional
           // even when not `required` (CLAUDE.md's own documented gotcha).
-          monitored: true,
+          monitored: monitor,
         },
       });
       if (error) throw error;
@@ -68,6 +72,10 @@ export function Discover() {
     <div className="flex h-full flex-col gap-4 p-4">
       <div className="flex items-center gap-3">
         <h2 className="text-sm font-medium">Discover</h2>
+        <label className="order-last ml-auto flex items-center gap-1.5 text-xs text-ink-muted">
+          <input type="checkbox" checked={monitor} onChange={(e) => setMonitor(e.target.checked)} />
+          Monitor what I add
+        </label>
         <div className="flex gap-1" role="group" aria-label="What to search for">
           {(["album", "artist"] as const).map((option) => (
             <button
@@ -152,8 +160,10 @@ export function Discover() {
 
       {add.isSuccess && add.data?.kind === "artist" && (
         <p className="text-xs text-ink-muted">
-          Artist added and monitored. Their albums appear as the subscription expands, which runs on its
-          own schedule rather than immediately.
+          {monitor
+            ? "Artist added and monitored. Their albums appear as the subscription expands, which runs " +
+              "on its own schedule rather than immediately."
+            : "Artist added, not monitored. Nothing of theirs will be looked for until you monitor them."}
         </p>
       )}
       {add.isSuccess && add.data?.kind === "album" && (

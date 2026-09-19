@@ -275,7 +275,32 @@ type DiscographyRow struct {
 	librarydb.Work
 	WantedState sql.NullString
 	OnDiskCount int64
+	// PresentCount and RequiredCount are the album's own "9 of 12", for the
+	// availability bar under its cover (2026-09-19).
+	PresentCount  sql.NullInt64
+	RequiredCount sql.NullInt64
+	// AvailableFrom is the release date the planner holds the item until,
+	// which is what makes an album unreleased rather than merely missing.
+	AvailableFrom sql.NullInt64
+	// Downloading reports an acquisition in flight for this album.
+	Downloading bool
 }
+
+// discographyStatusColumns are the four facts the artist page colours a row
+// by, each scalar against the same monitored desired_item workStateColumn
+// picks, for the same reason it is a subquery rather than a join.
+const discographyStatusColumns = `(SELECT di.present_count FROM desired_item di
+      WHERE di.work_id = work.id AND di.monitored = 1
+      ORDER BY di.id LIMIT 1) AS present_count,
+   (SELECT di.required_count FROM desired_item di
+      WHERE di.work_id = work.id AND di.monitored = 1
+      ORDER BY di.id LIMIT 1) AS required_count,
+   (SELECT di.available_from FROM desired_item di
+      WHERE di.work_id = work.id AND di.monitored = 1
+      ORDER BY di.id LIMIT 1) AS available_from,
+   EXISTS (SELECT 1 FROM acquisition a JOIN desired_item di ON di.id = a.desired_item_id
+      WHERE di.work_id = work.id
+        AND a.state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')) AS downloading`
 
 // Discography pages every work credited to a person, any role when role is
 // empty, oldest release first. Raw SQL, not sqlc, for the same reason
@@ -286,7 +311,8 @@ type DiscographyRow struct {
 func (p People) Discography(ctx context.Context, personID int64, role string) ([]DiscographyRow, error) {
 	query := `SELECT ` + workColumns + `, work.primary_type,
        ` + workStateColumn + `,
-       CAST((SELECT COUNT(*) FROM work_root_folder wrf WHERE wrf.work_id = work.id) AS INTEGER) AS on_disk_count
+       CAST((SELECT COUNT(*) FROM work_root_folder wrf WHERE wrf.work_id = work.id) AS INTEGER) AS on_disk_count,
+       ` + discographyStatusColumns + `
 FROM work
 JOIN credit c ON c.work_id = work.id
 WHERE c.person_id = ? AND (? = '' OR c.role = ?)
@@ -303,7 +329,8 @@ ORDER BY work.year, work.sort_title, work.id`
 		var row DiscographyRow
 		if err := rows.Scan(&row.ID, &row.MediaType, &row.CanonicalTitle, &row.SortTitle,
 			&row.OriginalLanguage, &row.Year, &row.RuntimeMs, &row.AddedAt, &row.UpdatedAt, &row.AddedBy,
-			&row.PrimaryType, &row.WantedState, &row.OnDiskCount); err != nil {
+			&row.PrimaryType, &row.WantedState, &row.OnDiskCount,
+			&row.PresentCount, &row.RequiredCount, &row.AvailableFrom, &row.Downloading); err != nil {
 			return nil, fmt.Errorf("library: scan discography row: %w", err)
 		}
 		discography = append(discography, row)
@@ -372,13 +399,18 @@ type SubscriptionRequest struct {
 	// Empty means "use that media type's own default" -- never written as an
 	// empty JSON object, so a caller that never sets this changes nothing.
 	FiltersJSON string
+	// CategoryID is the library this artist was added to, so the expansion
+	// puts their albums there rather than in whichever library of that media
+	// type happens to come first (2026-09-19). 0 leaves it unset, which the
+	// expansion reads as "the media type's own first library", the behaviour
+	// every subscription made before this had.
+	CategoryID int64
 }
 
 // Subscribe records a subscription and marks the person monitored, in one
 // transaction -- ADR-32: "adding a performer monitors their scenes regardless
-// of studio". CategoryID and ProfileID are deliberately left unset: both are
-// acquisition-planner concerns (which category's profile decides what to
-// grab), and there is no acquisition planner for music yet.
+// of studio". CategoryID records which library the artist was added to;
+// ProfileID stays unset, resolved from that category when the expansion runs.
 //
 // Idempotent on (person, user): a second call for the same pair returns the
 // existing subscription's id rather than erroring on the UNIQUE(subject_type,
@@ -428,6 +460,7 @@ func (p People) Subscribe(
 		}
 		subscription, err := queries.CreateSubscription(ctx, librarydb.CreateSubscriptionParams{
 			SubjectType: "person", SubjectID: personID,
+			CategoryID:     sql.NullInt64{Int64: request.CategoryID, Valid: request.CategoryID != 0},
 			MediaTypesJson: string(mediaTypesJSON), RolesJson: rolesJSON,
 			FiltersJson:          sql.NullString{String: request.FiltersJSON, Valid: request.FiltersJSON != ""},
 			MonitorBackCatalogue: monitorBackCatalogue, Enabled: 1,

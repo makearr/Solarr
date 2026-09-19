@@ -84,9 +84,12 @@ export function WorkDetail() {
   });
 
   const remove = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (deleteFiles: boolean) => {
       if (id === undefined) return undefined;
-      const { data, error } = await api.POST("/works/{id}/remove", { params: { path: { id } } });
+      const { data, error } = await api.POST("/works/{id}/remove", {
+        params: { path: { id } },
+        body: { delete_files: deleteFiles },
+      });
       if (error) throw error;
       return data;
     },
@@ -176,13 +179,32 @@ export function WorkDetail() {
                       "stays too, because the next scan would find them again.",
                   )
                 ) {
-                  remove.mutate();
+                  remove.mutate(false);
                 }
               }}
               className="shrink-0 rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted
                          enabled:hover:text-danger disabled:cursor-default"
             >
               Remove
+            </button>
+            <button
+              type="button"
+              disabled={remove.isPending}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Delete ${work.title} and its files?\n\n` +
+                      "The files go to quarantine rather than being deleted outright, so this " +
+                      "can be undone for as long as quarantine keeps them.",
+                  )
+                ) {
+                  remove.mutate(true);
+                }
+              }}
+              className="shrink-0 rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted
+                         enabled:hover:text-danger disabled:cursor-default"
+            >
+              Delete files
             </button>
           </div>
         </header>

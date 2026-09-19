@@ -3420,6 +3420,16 @@ paths:
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: sort
+          in: query
+          description: >-
+            Which order to list in. Every level defaults to title (an
+            artist's own name at the Artists level), which is what a browse
+            view opens on. A level that cannot honour a key ignores it.
+          schema: { type: string, enum: [title, artist, year, added] }
+        - name: dir
+          in: query
+          schema: { type: string, enum: [asc, desc] }
       responses:
         "200":
           description: One page.
@@ -3799,6 +3809,14 @@ paths:
                   items: { type: string }
                   description: Empty or absent means any role.
                 monitor_back_catalogue: { type: boolean, default: false }
+                include_primary_types:
+                  type: array
+                  items: { type: string }
+                  description: >-
+                    Which release-group types this artist brings in -- Album,
+                    EP and Single by default. Absent means the library's own
+                    setting; naming them here is the per-artist override
+                    (2026-09-19).
                 exclude_secondary_types:
                   type: array
                   items: { type: string }
@@ -3858,18 +3876,30 @@ paths:
     post:
       operationId: removeWork
       tags: [library]
-      summary: Stop wanting an album. Administrator only.
+      summary: Stop wanting an album, and optionally delete its files. Administrator only.
       description: >-
         Deletes every desired item for the work, and the work itself only when
         the library holds no files for it -- with files on disk the next scan
-        would recreate it, so deleting the row would be a lie. **Files are
-        never touched**: deleting bytes goes through quarantine (section
-        10.8), never through here.
+        would recreate it, so deleting the row would be a lie. Files are kept
+        unless delete_files says otherwise, and even then they go to
+        quarantine (section 10.8): nothing is ever deleted outright, so a
+        mistaken delete stays recoverable for the retention window.
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: integer, format: int64 }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                delete_files:
+                  type: boolean
+                  default: false
+                  description: Also move every file of this album into quarantine.
       responses:
         "200":
           description: What was removed.
@@ -4847,7 +4877,11 @@ components:
         files_kept:
           type: integer
           format: int64
-          description: How many files the library still holds for this work. None were touched.
+          description: How many files the library still holds for this work.
+        files_quarantined:
+          type: integer
+          format: int64
+          description: How many files delete_files moved out of the library.
 
     CalendarEntry:
       type: object
@@ -5236,7 +5270,7 @@ components:
       description: >-
         One work in a person's discography, plus the artist page's own
         "available / missing / requested" signal (Lidarr-like discography).
-      required: [id, media_type, title, sort_title, on_disk]
+      required: [id, media_type, title, sort_title, on_disk, status]
       properties:
         id: { type: integer, format: int64 }
         media_type: { type: string, example: "music" }
@@ -5257,6 +5291,22 @@ components:
         on_disk:
           type: boolean
           description: Whether this work is linked to any root folder at all (WorkDetail's own OnDisk).
+        present_count:
+          type: integer
+          format: int64
+          description: How many of the album's tracks are in the library.
+        required_count:
+          type: integer
+          format: int64
+          description: How many it needs, absent when nothing has counted them yet.
+        status:
+          type: string
+          enum: [complete, incomplete, downloading, unreleased]
+          description: >-
+            The colour this album carries wherever it is listed -- green
+            complete, red incomplete, purple downloading, yellow not released
+            yet. Unreleased outranks everything: an album that is not out is
+            not missing.
 
     PersonDetail:
       allOf:
@@ -6227,6 +6277,23 @@ components:
             Tracks-level row (the track's own parent album), absent on an
             Albums row (its own id already is the work id) or an Artists row
             (see GET /people/{id}/artwork instead).
+        present_count:
+          type: integer
+          format: int64
+          description: >-
+            How much of this row is here: tracks for an album, complete
+            albums for an artist. Absent on a level that counts neither.
+        required_count:
+          type: integer
+          format: int64
+          description: How much it would take to be complete.
+        status:
+          type: string
+          enum: [complete, incomplete, downloading, unreleased]
+          description: >-
+            PersonWork.status' own vocabulary, so the poster wall and the
+            artist page colour a row the same way. Absent on a level with
+            nothing to colour.
 
     LibraryLevelPage:
       type: object

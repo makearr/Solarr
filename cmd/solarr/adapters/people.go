@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -20,6 +22,7 @@ type People struct {
 	People        library.People
 	Subscriptions library.Subscriptions
 	Provider      musicbrainz.Provider
+	Categories    Categories
 	Clock         clock.Clock
 }
 
@@ -101,6 +104,17 @@ func (a People) GetPersonDetail(ctx context.Context, id int64) (apiserver.Person
 		if work.WantedState.Valid {
 			row.WantedState = &work.WantedState.String
 		}
+		if work.PresentCount.Valid {
+			row.PresentCount = &work.PresentCount.Int64
+		}
+		if work.RequiredCount.Valid {
+			row.RequiredCount = &work.RequiredCount.Int64
+		}
+		if work.AvailableFrom.Valid {
+			at := time.Unix(work.AvailableFrom.Int64, 0).UTC()
+			row.AvailableFrom = &at
+		}
+		row.Downloading = work.Downloading
 		discography[index] = row
 	}
 
@@ -144,21 +158,48 @@ func (a People) GetPersonDetail(ctx context.Context, id int64) (apiserver.Person
 
 func (a People) Subscribe(
 	ctx context.Context, personID, userID int64, mediaTypes, roles []string,
-	monitorBackCatalogue bool, excludeSecondaryTypes *[]string,
+	monitorBackCatalogue bool, includePrimaryTypes, excludeSecondaryTypes *[]string,
 ) error {
+	// Absent primary types mean the library's own setting, resolved here and
+	// stored on the subscription: the artist keeps what was chosen when they
+	// were added, even if the library's default moves later.
+	category, haveCategory := a.Categories.CategoryForMediaType(mediaTypeOrMusic(mediaTypes))
+	if includePrimaryTypes == nil && haveCategory {
+		types := category.MonitorReleaseTypes
+		includePrimaryTypes = &types
+	}
+
 	var filtersJSON string
-	if excludeSecondaryTypes != nil {
-		encoded, err := json.Marshal(music.SubscriptionFilters{ExcludeSecondaryTypes: excludeSecondaryTypes})
+	if includePrimaryTypes != nil || excludeSecondaryTypes != nil {
+		encoded, err := json.Marshal(music.SubscriptionFilters{
+			IncludePrimaryTypes: includePrimaryTypes, ExcludeSecondaryTypes: excludeSecondaryTypes,
+		})
 		if err != nil {
 			return fmt.Errorf("adapters: encode subscription filters: %w", err)
 		}
 		filtersJSON = string(encoded)
 	}
-	_, err := a.People.Subscribe(ctx, a.Clock.Now(), personID, userID, library.SubscriptionRequest{
+	request := library.SubscriptionRequest{
 		MediaTypes: mediaTypes, Roles: roles, MonitorBackCatalogue: monitorBackCatalogue,
 		FiltersJSON: filtersJSON,
-	})
+	}
+	if haveCategory {
+		request.CategoryID = category.ID
+	}
+	_, err := a.People.Subscribe(ctx, a.Clock.Now(), personID, userID, request)
 	return err
+}
+
+// monitorFiltersFor encodes a library's own release-type default onto a
+// subscription, so what an artist brings in is fixed when they are added
+// rather than moving with the library's setting afterwards.
+func monitorFiltersFor(category settings.Category) (string, error) {
+	types := category.MonitorReleaseTypes
+	encoded, err := json.Marshal(music.SubscriptionFilters{IncludePrimaryTypes: &types})
+	if err != nil {
+		return "", fmt.Errorf("adapters: encode subscription filters: %w", err)
+	}
+	return string(encoded), nil
 }
 
 // Preview answers an artist's discography unfiltered (todo 4.4), the same
@@ -191,4 +232,16 @@ func (a People) Preview(ctx context.Context, personID int64) (apiserver.Subscrip
 	return apiserver.SubscriptionPreviewRow{
 		ReleaseGroups: rows, DefaultExcludedSecondaryTypes: music.DefaultExcludedSecondaryTypes,
 	}, nil
+}
+
+// mediaTypeOrMusic picks the media type whose library setting a subscription
+// takes its release types from. One subscription can name several; music is
+// the only one with a release-type vocabulary today.
+func mediaTypeOrMusic(mediaTypes []string) string {
+	for _, mediaType := range mediaTypes {
+		if mediaType != "" {
+			return mediaType
+		}
+	}
+	return "music"
 }

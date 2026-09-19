@@ -2455,8 +2455,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Stop wanting an album. Administrator only.
-         * @description Deletes every desired item for the work, and the work itself only when the library holds no files for it -- with files on disk the next scan would recreate it, so deleting the row would be a lie. **Files are never touched**: deleting bytes goes through quarantine (section 10.8), never through here.
+         * Stop wanting an album, and optionally delete its files. Administrator only.
+         * @description Deletes every desired item for the work, and the work itself only when the library holds no files for it -- with files on disk the next scan would recreate it, so deleting the row would be a lie. Files are kept unless delete_files says otherwise, and even then they go to quarantine (section 10.8): nothing is ever deleted outright, so a mistaken delete stays recoverable for the retention window.
          */
         post: operations["removeWork"];
         delete?: never;
@@ -3119,9 +3119,14 @@ export interface components {
             work_deleted: boolean;
             /**
              * Format: int64
-             * @description How many files the library still holds for this work. None were touched.
+             * @description How many files the library still holds for this work.
              */
             files_kept: number;
+            /**
+             * Format: int64
+             * @description How many files delete_files moved out of the library.
+             */
+            files_quarantined?: number;
         };
         /** @description One release in the calendar window. */
         CalendarEntry: {
@@ -3468,6 +3473,21 @@ export interface components {
             wanted_state?: "MISSING" | "PARTIAL" | "COMPLETE" | "UPGRADABLE";
             /** @description Whether this work is linked to any root folder at all (WorkDetail's own OnDisk). */
             on_disk: boolean;
+            /**
+             * Format: int64
+             * @description How many of the album's tracks are in the library.
+             */
+            present_count?: number;
+            /**
+             * Format: int64
+             * @description How many it needs, absent when nothing has counted them yet.
+             */
+            required_count?: number;
+            /**
+             * @description The colour this album carries wherever it is listed -- green complete, red incomplete, purple downloading, yellow not released yet. Unreleased outranks everything: an album that is not out is not missing.
+             * @enum {string}
+             */
+            status: "complete" | "incomplete" | "downloading" | "unreleased";
         };
         PersonDetail: components["schemas"]["Person"] & {
             /** @description A Wikidata-sourced extract, when available (ADR-8). */
@@ -4165,6 +4185,21 @@ export interface components {
              * @description The work (album) this row's own cover art comes from -- set on a Tracks-level row (the track's own parent album), absent on an Albums row (its own id already is the work id) or an Artists row (see GET /people/{id}/artwork instead).
              */
             work_id?: number;
+            /**
+             * Format: int64
+             * @description How much of this row is here: tracks for an album, complete albums for an artist. Absent on a level that counts neither.
+             */
+            present_count?: number;
+            /**
+             * Format: int64
+             * @description How much it would take to be complete.
+             */
+            required_count?: number;
+            /**
+             * @description PersonWork.status' own vocabulary, so the poster wall and the artist page colour a row the same way. Absent on a level with nothing to colour.
+             * @enum {string}
+             */
+            status?: "complete" | "incomplete" | "downloading" | "unreleased";
         };
         LibraryLevelPage: {
             items: components["schemas"]["LibraryLevelItem"][];
@@ -7857,6 +7892,9 @@ export interface operations {
             query?: {
                 cursor?: string;
                 limit?: number;
+                /** @description Which order to list in. Every level defaults to title (an artist's own name at the Artists level), which is what a browse view opens on. A level that cannot honour a key ignores it. */
+                sort?: "title" | "artist" | "year" | "added";
+                dir?: "asc" | "desc";
             };
             header?: never;
             path: {
@@ -8287,6 +8325,8 @@ export interface operations {
                     roles?: string[];
                     /** @default false */
                     monitor_back_catalogue?: boolean;
+                    /** @description Which release-group types this artist brings in -- Album, EP and Single by default. Absent means the library's own setting; naming them here is the per-artist override (2026-09-19). */
+                    include_primary_types?: string[];
                     /** @description Overrides music.DefaultExcludedSecondaryTypes (compilation, live, remix, dj-mix, mixtape) when present -- an empty array means "exclude nothing", a real choice, distinct from absent (todo 4.4). Music-specific for now (internal/media/music.SubscriptionFilters); opaque to every other media type, per ADR-23. */
                     exclude_secondary_types?: string[];
                 };
@@ -8361,7 +8401,17 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description Also move every file of this album into quarantine.
+                     * @default false
+                     */
+                    delete_files?: boolean;
+                };
+            };
+        };
         responses: {
             /** @description What was removed. */
             200: {

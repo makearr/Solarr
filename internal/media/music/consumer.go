@@ -42,8 +42,10 @@ type Categories interface {
 // CategoryFinder resolves which category a media type's own discovery should
 // use when nothing more specific is configured -- subscription.expand's own
 // need (a subscription has no root folder to inherit a category from the way
-// a scan does), distinct from Categories' by-id lookup.
+// a scan does). It includes the by-id lookup, since a subscription that
+// recorded its own library uses that in preference (2026-09-19).
 type CategoryFinder interface {
+	Categories
 	CategoryForMediaType(mediaType string) (settings.Category, bool)
 }
 

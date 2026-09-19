@@ -258,6 +258,11 @@ type ArtistRow struct {
 	ID       int64
 	Name     string
 	SortName string
+	// AlbumsWanted and AlbumsComplete draw the bar under the picture;
+	// Downloading colours it while anything of theirs is in flight.
+	AlbumsWanted   int64
+	AlbumsComplete int64
+	Downloading    bool
 }
 
 // LibraryArtistsReader lists the Artists navigation level (a person-entity
@@ -340,6 +345,14 @@ func (s *Server) routeListLibraryLevel(w http.ResponseWriter, r *http.Request) {
 		}
 		params.Limit = &limit
 	}
+	if raw := query.Get("sort"); raw != "" {
+		sort := gen.ListLibraryLevelParamsSort(raw)
+		params.Sort = &sort
+	}
+	if raw := query.Get("dir"); raw != "" {
+		dir := gen.ListLibraryLevelParamsDir(raw)
+		params.Dir = &dir
+	}
 	s.ListLibraryLevel(w, r, id, level, params)
 }
 
@@ -378,9 +391,18 @@ func (s *Server) ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 
+	sort := WorkSort(derefOr(params.Sort, ""))
+	if sort == "title" {
+		sort = WorkSortTitle
+	}
+	direction := SortAscending
+	if derefOr(params.Dir, "") == "desc" {
+		direction = SortDescending
+	}
+
 	switch found.Entity {
 	case model.LevelEntityWork:
-		s.listLibraryLevelWorks(w, r, rootFolderIDs, categoryIDs, cursor, limit)
+		s.listLibraryLevelWorks(w, r, rootFolderIDs, categoryIDs, cursor, limit, sort, direction)
 	case model.LevelEntityWorkPart:
 		s.listLibraryLevelTracks(w, r, rootFolderIDs, categoryIDs, cursor, limit)
 	case model.LevelEntityPerson:
@@ -412,7 +434,8 @@ func (s *Server) findLevel(mediaType, key string) (model.Level, bool) {
 // existing WorksReader -- a level is a filter and a default sort, not a new
 // list implementation.
 func (s *Server) listLibraryLevelWorks(
-	w http.ResponseWriter, r *http.Request, rootFolderIDs, categoryIDs []int64, cursor levelCursor, limit int,
+	w http.ResponseWriter, r *http.Request, rootFolderIDs, categoryIDs []int64,
+	cursor levelCursor, limit int, sort WorkSort, direction SortDirection,
 ) {
 	if s.works == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
@@ -420,8 +443,11 @@ func (s *Server) listLibraryLevelWorks(
 		return
 	}
 	rows, err := s.works.ListWorks(r.Context(),
-		WorksFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs},
-		WorksCursor{SortTitle: cursor.field(0), ID: cursor.id}, limit+1)
+		WorksFilter{
+			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs,
+			Sort: sort, Direction: direction,
+		},
+		levelWorksCursor(sort, cursor), limit+1)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -431,14 +457,19 @@ func (s *Server) listLibraryLevelWorks(
 	var next string
 	if len(rows) > limit {
 		items = rows[:limit]
-		last := items[len(items)-1]
-		next = (levelCursor{fields: []string{last.SortTitle}, id: last.ID}).encode()
+		next = encodeLevelWorksCursor(sort, items[len(items)-1])
 	}
 
+	now := s.wall.Now()
 	views := make([]gen.LibraryLevelItem, len(items))
 	for index, row := range items {
+		status := gen.LibraryLevelItemStatus(albumStatus(PersonWorkRow{
+			WantedState: row.WantedState, OnDisk: row.OnDisk,
+			AvailableFrom: row.AvailableFrom, Downloading: row.Downloading,
+		}, now))
 		views[index] = gen.LibraryLevelItem{
 			Id: row.ID, Title: row.Title, Subtitle: row.Artist, Year: yearOf(row.Year),
+			PresentCount: row.PresentCount, RequiredCount: row.RequiredCount, Status: &status,
 		}
 	}
 	writeLibraryLevelPage(w, s.logger, views, next)
@@ -509,6 +540,13 @@ func (s *Server) listLibraryLevelArtists(
 	views := make([]gen.LibraryLevelItem, len(items))
 	for index, row := range items {
 		views[index] = gen.LibraryLevelItem{Id: row.ID, Title: row.Name}
+		if row.AlbumsWanted > 0 || row.Downloading {
+			wanted, complete := row.AlbumsWanted, row.AlbumsComplete
+			status := gen.LibraryLevelItemStatus(artistStatus(row))
+			views[index].PresentCount = &complete
+			views[index].RequiredCount = &wanted
+			views[index].Status = &status
+		}
 	}
 	writeLibraryLevelPage(w, s.logger, views, next)
 }
@@ -532,4 +570,56 @@ func writeLibraryLevelPage(w http.ResponseWriter, logger *slog.Logger, items []g
 		page.NextCursor = &nextCursor
 	}
 	writeJSON(w, logger, http.StatusOK, page)
+}
+
+// artistStatus is albumStatus one level up: an artist is as complete as
+// their wanted discography, and shows as downloading while anything of
+// theirs is in flight. There is no unreleased artist.
+func artistStatus(row ArtistRow) AlbumStatus {
+	switch {
+	case row.Downloading:
+		return AlbumDownloading
+	case row.AlbumsWanted > 0 && row.AlbumsComplete >= row.AlbumsWanted:
+		return AlbumComplete
+	default:
+		return AlbumIncomplete
+	}
+}
+
+// levelWorksCursor and encodeLevelWorksCursor carry whichever field the
+// active sort orders on through the level cursor's own generic text fields.
+// Year and added_at are numbers there, encoded as decimal text -- the cursor
+// exists to be handed back, never read.
+func levelWorksCursor(sort WorkSort, cursor levelCursor) WorksCursor {
+	out := WorksCursor{ID: cursor.id}
+	switch sort {
+	case WorkSortYear:
+		out.SortYear, _ = strconv.ParseInt(cursor.field(0), 10, 64)
+	case WorkSortAdded:
+		out.SortAdded, _ = strconv.ParseInt(cursor.field(0), 10, 64)
+	case WorkSortArtist:
+		out.SortArtist, out.SortTitle = cursor.field(0), cursor.field(1)
+	default:
+		out.SortTitle = cursor.field(0)
+	}
+	return out
+}
+
+func encodeLevelWorksCursor(sort WorkSort, last WorkRow) string {
+	switch sort {
+	case WorkSortYear:
+		year := int64(0)
+		if last.Year != nil {
+			year = *last.Year
+		}
+		return (levelCursor{fields: []string{strconv.FormatInt(year, 10)}, id: last.ID}).encode()
+	case WorkSortAdded:
+		return (levelCursor{
+			fields: []string{strconv.FormatInt(last.AddedAt.Unix(), 10)}, id: last.ID,
+		}).encode()
+	case WorkSortArtist:
+		return (levelCursor{fields: []string{last.ArtistSortName, last.SortTitle}, id: last.ID}).encode()
+	default:
+		return (levelCursor{fields: []string{last.SortTitle}, id: last.ID}).encode()
+	}
 }
