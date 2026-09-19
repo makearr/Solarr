@@ -87,6 +87,15 @@ type WorkRow struct {
 	// WantedState is the state of the desired_item ListWorks joined against
 	// when the row has a monitored one -- nil when it has none.
 	WantedState *string
+	// PresentCount, RequiredCount, AvailableFrom and Downloading feed the
+	// availability bar under a cover, the same four facts PersonWorkRow
+	// carries on the artist page.
+	PresentCount  *int64
+	RequiredCount *int64
+	AvailableFrom *time.Time
+	Downloading   bool
+	// OnDisk reports a file for this work, for albumStatus' own fallback.
+	OnDisk bool
 }
 
 // ListWorks returns a page of the library the caller may see (ADR-27). A work

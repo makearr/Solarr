@@ -41,14 +41,15 @@ type ArrInstance struct {
 }
 
 type Category struct {
-	ID                int64
-	MediaType         string
-	Name              string
-	PriorityRank      int64
-	QualityProfileID  sql.NullInt64
-	LanguageProfileID sql.NullInt64
-	MonitorDiscovered string
-	NamingProfileID   sql.NullInt64
+	ID                  int64
+	MediaType           string
+	Name                string
+	PriorityRank        int64
+	QualityProfileID    sql.NullInt64
+	LanguageProfileID   sql.NullInt64
+	MonitorDiscovered   string
+	NamingProfileID     sql.NullInt64
+	MonitorReleaseTypes string
 }
 
 type CategoryRootFolder struct {

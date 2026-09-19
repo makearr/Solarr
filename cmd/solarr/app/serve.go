@@ -568,7 +568,8 @@ func (p *process) startServer(ctx context.Context) error {
 		ConfigPath: p.configPath,
 		People:     adapters.People{People: library.NewPeople(p.library)},
 		PeopleSubscriber: adapters.People{Subscriptions: library.NewSubscriptions(p.library),
-			People: library.NewPeople(p.library), Clock: clock.NewSystem(),
+			People: library.NewPeople(p.library), Categories: adapters.Categories{Cache: p.cache},
+			Clock: clock.NewSystem(),
 		},
 		SubscriptionPreviewer: adapters.People{
 			People: library.NewPeople(p.library), Provider: p.musicBrainzProvider(), Clock: clock.NewSystem(),

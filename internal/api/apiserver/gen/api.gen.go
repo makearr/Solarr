@@ -251,6 +251,14 @@ const (
 	LibraryLevelEntityWorkPart     LibraryLevelEntity = "work_part"
 )
 
+// Defines values for LibraryLevelItemStatus.
+const (
+	LibraryLevelItemStatusComplete    LibraryLevelItemStatus = "complete"
+	LibraryLevelItemStatusDownloading LibraryLevelItemStatus = "downloading"
+	LibraryLevelItemStatusIncomplete  LibraryLevelItemStatus = "incomplete"
+	LibraryLevelItemStatusUnreleased  LibraryLevelItemStatus = "unreleased"
+)
+
 // Defines values for LogoutStatusStatus.
 const (
 	LogoutStatusStatusSignedOut LogoutStatusStatus = "signed-out"
@@ -330,6 +338,14 @@ const (
 	PermissionNone    Permission = "none"
 	PermissionRead    Permission = "read"
 	PermissionRequest Permission = "request"
+)
+
+// Defines values for PersonWorkStatus.
+const (
+	PersonWorkStatusComplete    PersonWorkStatus = "complete"
+	PersonWorkStatusDownloading PersonWorkStatus = "downloading"
+	PersonWorkStatusIncomplete  PersonWorkStatus = "incomplete"
+	PersonWorkStatusUnreleased  PersonWorkStatus = "unreleased"
 )
 
 // Defines values for PersonWorkWantedState.
@@ -470,6 +486,20 @@ const (
 	ListImportUnitsParamsDecisionFAILED ListImportUnitsParamsDecision = "FAILED"
 	ListImportUnitsParamsDecisionQUEUE  ListImportUnitsParamsDecision = "QUEUE"
 	ListImportUnitsParamsDecisionSKIP   ListImportUnitsParamsDecision = "SKIP"
+)
+
+// Defines values for ListLibraryLevelParamsSort.
+const (
+	ListLibraryLevelParamsSortAdded  ListLibraryLevelParamsSort = "added"
+	ListLibraryLevelParamsSortArtist ListLibraryLevelParamsSort = "artist"
+	ListLibraryLevelParamsSortTitle  ListLibraryLevelParamsSort = "title"
+	ListLibraryLevelParamsSortYear   ListLibraryLevelParamsSort = "year"
+)
+
+// Defines values for ListLibraryLevelParamsDir.
+const (
+	ListLibraryLevelParamsDirAsc  ListLibraryLevelParamsDir = "asc"
+	ListLibraryLevelParamsDirDesc ListLibraryLevelParamsDir = "desc"
 )
 
 // Defines values for SetMyTierJSONBodyTier.
@@ -1652,6 +1682,15 @@ type LibraryLevelItem struct {
 	Id        int64 `json:"id"`
 	Monitored *bool `json:"monitored,omitempty"`
 
+	// PresentCount How much of this row is here: tracks for an album, complete albums for an artist. Absent on a level that counts neither.
+	PresentCount *int64 `json:"present_count,omitempty"`
+
+	// RequiredCount How much it would take to be complete.
+	RequiredCount *int64 `json:"required_count,omitempty"`
+
+	// Status PersonWork.status' own vocabulary, so the poster wall and the artist page colour a row the same way. Absent on a level with nothing to colour.
+	Status *LibraryLevelItemStatus `json:"status,omitempty"`
+
 	// Subtitle A secondary line -- an artist credit, an album title, whatever the level has.
 	Subtitle *string `json:"subtitle,omitempty"`
 	Title    string  `json:"title"`
@@ -1660,6 +1699,9 @@ type LibraryLevelItem struct {
 	WorkId *int64 `json:"work_id,omitempty"`
 	Year   *int   `json:"year,omitempty"`
 }
+
+// LibraryLevelItemStatus PersonWork.status' own vocabulary, so the poster wall and the artist page colour a row the same way. Absent on a level with nothing to colour.
+type LibraryLevelItemStatus string
 
 // LibraryLevelPage defines model for LibraryLevelPage.
 type LibraryLevelPage struct {
@@ -1904,15 +1946,27 @@ type PersonWork struct {
 	// OnDisk Whether this work is linked to any root folder at all (WorkDetail's own OnDisk).
 	OnDisk bool `json:"on_disk"`
 
+	// PresentCount How many of the album's tracks are in the library.
+	PresentCount *int64 `json:"present_count,omitempty"`
+
 	// PrimaryType MusicBrainz's own release-group vocabulary (Album, EP, Single, Broadcast, Other, ...), when known -- absent for a work created before this existed, or from a source with no MusicBrainz answer.
 	PrimaryType *string `json:"primary_type,omitempty"`
-	SortTitle   string  `json:"sort_title"`
-	Title       string  `json:"title"`
+
+	// RequiredCount How many it needs, absent when nothing has counted them yet.
+	RequiredCount *int64 `json:"required_count,omitempty"`
+	SortTitle     string `json:"sort_title"`
+
+	// Status The colour this album carries wherever it is listed -- green complete, red incomplete, purple downloading, yellow not released yet. Unreleased outranks everything: an album that is not out is not missing.
+	Status PersonWorkStatus `json:"status"`
+	Title  string           `json:"title"`
 
 	// WantedState Set when this work has a monitored desired_item, same as Work's own.
 	WantedState *PersonWorkWantedState `json:"wanted_state,omitempty"`
 	Year        *int                   `json:"year,omitempty"`
 }
+
+// PersonWorkStatus The colour this album carries wherever it is listed -- green complete, red incomplete, purple downloading, yellow not released yet. Unreleased outranks everything: an album that is not out is not missing.
+type PersonWorkStatus string
 
 // PersonWorkWantedState Set when this work has a monitored desired_item, same as Work's own.
 type PersonWorkWantedState string
@@ -2540,7 +2594,17 @@ type SetLibraryLastLevelJSONBody struct {
 type ListLibraryLevelParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Sort Which order to list in. Every level defaults to title (an artist's own name at the Artists level), which is what a browse view opens on. A level that cannot honour a key ignores it.
+	Sort *ListLibraryLevelParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+	Dir  *ListLibraryLevelParamsDir  `form:"dir,omitempty" json:"dir,omitempty"`
 }
+
+// ListLibraryLevelParamsSort defines parameters for ListLibraryLevel.
+type ListLibraryLevelParamsSort string
+
+// ListLibraryLevelParamsDir defines parameters for ListLibraryLevel.
+type ListLibraryLevelParamsDir string
 
 // ListUnidentifiedParams defines parameters for ListUnidentified.
 type ListUnidentifiedParams struct {
@@ -2625,8 +2689,11 @@ type GetPersonArtworkParamsSize string
 type SubscribePersonJSONBody struct {
 	// ExcludeSecondaryTypes Overrides music.DefaultExcludedSecondaryTypes (compilation, live, remix, dj-mix, mixtape) when present -- an empty array means "exclude nothing", a real choice, distinct from absent (todo 4.4). Music-specific for now (internal/media/music.SubscriptionFilters); opaque to every other media type, per ADR-23.
 	ExcludeSecondaryTypes *[]string `json:"exclude_secondary_types,omitempty"`
-	MediaTypes            []string  `json:"media_types"`
-	MonitorBackCatalogue  *bool     `json:"monitor_back_catalogue,omitempty"`
+
+	// IncludePrimaryTypes Which release-group types this artist brings in -- Album, EP and Single by default. Absent means the library's own setting; naming them here is the per-artist override (2026-09-19).
+	IncludePrimaryTypes  *[]string `json:"include_primary_types,omitempty"`
+	MediaTypes           []string  `json:"media_types"`
+	MonitorBackCatalogue *bool     `json:"monitor_back_catalogue,omitempty"`
 
 	// Roles Empty or absent means any role.
 	Roles *[]string `json:"roles,omitempty"`
@@ -6846,6 +6913,22 @@ func (siw *ServerInterfaceWrapper) ListLibraryLevel(w http.ResponseWriter, r *ht
 	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "sort", r.URL.Query(), &params.Sort)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "dir" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "dir", r.URL.Query(), &params.Dir)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dir", Err: err})
 		return
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -20,6 +21,7 @@ type People struct {
 	People        library.People
 	Subscriptions library.Subscriptions
 	Provider      musicbrainz.Provider
+	Categories    Categories
 	Clock         clock.Clock
 }
 
@@ -101,6 +103,17 @@ func (a People) GetPersonDetail(ctx context.Context, id int64) (apiserver.Person
 		if work.WantedState.Valid {
 			row.WantedState = &work.WantedState.String
 		}
+		if work.PresentCount.Valid {
+			row.PresentCount = &work.PresentCount.Int64
+		}
+		if work.RequiredCount.Valid {
+			row.RequiredCount = &work.RequiredCount.Int64
+		}
+		if work.AvailableFrom.Valid {
+			at := time.Unix(work.AvailableFrom.Int64, 0).UTC()
+			row.AvailableFrom = &at
+		}
+		row.Downloading = work.Downloading
 		discography[index] = row
 	}
 
@@ -144,11 +157,23 @@ func (a People) GetPersonDetail(ctx context.Context, id int64) (apiserver.Person
 
 func (a People) Subscribe(
 	ctx context.Context, personID, userID int64, mediaTypes, roles []string,
-	monitorBackCatalogue bool, excludeSecondaryTypes *[]string,
+	monitorBackCatalogue bool, includePrimaryTypes, excludeSecondaryTypes *[]string,
 ) error {
+	// Absent primary types mean the library's own setting, resolved here and
+	// stored on the subscription: the artist keeps what was chosen when they
+	// were added, even if the library's default moves later.
+	if includePrimaryTypes == nil {
+		if category, ok := a.Categories.CategoryForMediaType(mediaTypeOrMusic(mediaTypes)); ok {
+			types := category.MonitorReleaseTypes
+			includePrimaryTypes = &types
+		}
+	}
+
 	var filtersJSON string
-	if excludeSecondaryTypes != nil {
-		encoded, err := json.Marshal(music.SubscriptionFilters{ExcludeSecondaryTypes: excludeSecondaryTypes})
+	if includePrimaryTypes != nil || excludeSecondaryTypes != nil {
+		encoded, err := json.Marshal(music.SubscriptionFilters{
+			IncludePrimaryTypes: includePrimaryTypes, ExcludeSecondaryTypes: excludeSecondaryTypes,
+		})
 		if err != nil {
 			return fmt.Errorf("adapters: encode subscription filters: %w", err)
 		}
@@ -191,4 +216,16 @@ func (a People) Preview(ctx context.Context, personID int64) (apiserver.Subscrip
 	return apiserver.SubscriptionPreviewRow{
 		ReleaseGroups: rows, DefaultExcludedSecondaryTypes: music.DefaultExcludedSecondaryTypes,
 	}, nil
+}
+
+// mediaTypeOrMusic picks the media type whose library setting a subscription
+// takes its release types from. One subscription can name several; music is
+// the only one with a release-type vocabulary today.
+func mediaTypeOrMusic(mediaTypes []string) string {
+	for _, mediaType := range mediaTypes {
+		if mediaType != "" {
+			return mediaType
+		}
+	}
+	return "music"
 }

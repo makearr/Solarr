@@ -4,6 +4,8 @@ import type { LinkProps } from "@tanstack/react-router";
 import { LayoutGrid, Plus, Rows3 } from "lucide-react";
 
 import { api } from "@/api/client";
+import { albumStatusFill, albumStatusLabel } from "@/lib/albumStatus";
+import { usePreference } from "@/lib/usePreference";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useGridMetrics } from "@/list/useGridMetrics";
 import { PosterGrid } from "@/list/PosterGrid";
@@ -30,6 +32,57 @@ const POSTER_LABEL_HEIGHT = 46;
  *  a person actually looks at (Lidarr's own Artists and Albums), not Tracks,
  *  where a cover per row says nothing a tracklist does not. */
 const POSTER_LEVELS = new Set(["artists", "albums"]);
+
+// What each level can be ordered by, and which way round the API wants it.
+// Title is every level's default; the rest are what the works list already
+// indexes (migration 0016), so no order here costs a sort (2026-09-19).
+type SortKey = "title" | "artist" | "year" | "added";
+
+interface SortEntry {
+  label: string;
+  dir?: "asc" | "desc";
+  // levels absent means every level offers this order.
+  levels?: readonly string[];
+}
+
+const SORTS: Record<SortKey, SortEntry> = {
+  title: { label: "Name" },
+  artist: { label: "Artist", levels: ["albums"] },
+  year: { label: "Year", dir: "desc", levels: ["albums"] },
+  added: { label: "Recently added", dir: "desc", levels: ["albums"] },
+};
+
+function SortPicker({
+  level,
+  sort,
+  onChange,
+}: {
+  level: string | undefined;
+  sort: SortKey;
+  onChange: (sort: SortKey) => void;
+}) {
+  const available = (Object.entries(SORTS) as [SortKey, SortEntry][]).filter(
+    ([, entry]) => entry.levels == null || (level != null && entry.levels.includes(level)),
+  );
+  if (available.length < 2) return null;
+  return (
+    <label className="flex items-center gap-1 text-xs text-ink-muted">
+      Sort
+      <select
+        value={sort}
+        onChange={(event) => onChange(event.target.value as SortKey)}
+        className="rounded-md border border-border-subtle bg-canvas px-1.5 py-1 text-xs text-ink
+                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        {available.map(([key, entry]) => (
+          <option key={key} value={key}>
+            {entry.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 type ViewMode = "poster" | "list";
 const VIEW_STORAGE_KEY = "solarr.level.view";
@@ -91,13 +144,15 @@ export function LibraryLevelList() {
   useRecordLastLevel(categoryId, level ?? "");
 
   const [view, setView] = useViewMode(level);
+  const [sort, setSort] = usePreference<SortKey>(`level.sort.${level ?? ""}`, "title");
+  const [showBars, setShowBars] = usePreference("posters.availabilityBar", true);
   const frameRef = useRef<HTMLDivElement>(null);
   const metrics = useGridMetrics(frameRef, POSTER_MIN_WIDTH, POSTER_GAP, POSTER_PADDING);
   const isPoster = view === "poster";
 
   const list = useLibraryList<LevelItem>(
     {
-      name: `library-level:${categoryId ?? ""}:${level ?? ""}`,
+      name: `library-level:${categoryId ?? ""}:${level ?? ""}:${sort}`,
       rowHeight: isPoster ? metrics.cellWidth + POSTER_LABEL_HEIGHT + POSTER_GAP : ROW_HEIGHT,
       itemsPerRow: isPoster ? metrics.columns : 1,
       idOf: (item) => item.id,
@@ -105,7 +160,7 @@ export function LibraryLevelList() {
         const { data, error } = await api.GET("/libraries/{id}/{level}", {
           params: {
             path: { id: Number(categoryId), level: level ?? "" },
-            query: { cursor, limit: 100 },
+            query: { cursor, limit: 100, sort, dir: SORTS[sort].dir },
           },
           signal,
         });
@@ -120,7 +175,12 @@ export function LibraryLevelList() {
     <div ref={frameRef} className="flex h-full flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-4 py-2">
         <h1 className="text-sm font-semibold capitalize tracking-tight">{level ?? "Library"}</h1>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-2">
+          <label className="flex items-center gap-1 text-xs text-ink-muted">
+            <input type="checkbox" checked={showBars} onChange={(e) => setShowBars(e.target.checked)} />
+            Availability
+          </label>
+          <SortPicker level={level} sort={sort} onChange={setSort} />
           <ViewToggle view={view} onChange={setView} />
           {categoryId && (
             <Link
@@ -158,6 +218,9 @@ export function LibraryLevelList() {
                     subtitle={item.subtitle ?? (item.year != null ? String(item.year) : undefined)}
                     link={linkFor(level, item)}
                     round={level === "artists"}
+                    status={showBars ? item.status : undefined}
+                    presentCount={item.present_count}
+                    requiredCount={item.required_count}
                   />
                 );
               }}
@@ -226,6 +289,13 @@ function CompactList({
                   className={`h-8 w-8 shrink-0 object-cover ${
                     image.subject === "people" ? "rounded-full" : "rounded"
                   }`}
+                />
+              )}
+              {item.status && (
+                <span
+                  aria-label={albumStatusLabel(item.status)}
+                  title={albumStatusLabel(item.status)}
+                  className={`size-2 shrink-0 rounded-full ${albumStatusFill(item.status)}`}
                 />
               )}
               <span className="min-w-0 flex-1 truncate font-medium">{item.title}</span>

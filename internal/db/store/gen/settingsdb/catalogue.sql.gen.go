@@ -76,7 +76,7 @@ const createCategory = `-- name: CreateCategory :one
 INSERT INTO category (media_type, name, priority_rank)
 VALUES (?, ?, ?)
 RETURNING id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
-          monitor_discovered, naming_profile_id
+          monitor_discovered, naming_profile_id, monitor_release_types
 `
 
 type CreateCategoryParams struct {
@@ -97,6 +97,7 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 		&i.LanguageProfileID,
 		&i.MonitorDiscovered,
 		&i.NamingProfileID,
+		&i.MonitorReleaseTypes,
 	)
 	return i, err
 }
@@ -179,7 +180,7 @@ func (q *Queries) DetachRootFolderFromCategory(ctx context.Context, arg DetachRo
 
 const getCategory = `-- name: GetCategory :one
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
-       monitor_discovered, naming_profile_id
+       monitor_discovered, naming_profile_id, monitor_release_types
 FROM category WHERE id = ?
 `
 
@@ -195,6 +196,7 @@ func (q *Queries) GetCategory(ctx context.Context, id int64) (Category, error) {
 		&i.LanguageProfileID,
 		&i.MonitorDiscovered,
 		&i.NamingProfileID,
+		&i.MonitorReleaseTypes,
 	)
 	return i, err
 }
@@ -248,7 +250,7 @@ func (q *Queries) GetRootFolder(ctx context.Context, id int64) (RootFolder, erro
 
 const listCategories = `-- name: ListCategories :many
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
-       monitor_discovered, naming_profile_id
+       monitor_discovered, naming_profile_id, monitor_release_types
 FROM category ORDER BY priority_rank, name
 `
 
@@ -270,6 +272,7 @@ func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 			&i.LanguageProfileID,
 			&i.MonitorDiscovered,
 			&i.NamingProfileID,
+			&i.MonitorReleaseTypes,
 		); err != nil {
 			return nil, err
 		}
@@ -376,6 +379,20 @@ type SetCategoryMonitorDiscoveredParams struct {
 
 func (q *Queries) SetCategoryMonitorDiscovered(ctx context.Context, arg SetCategoryMonitorDiscoveredParams) error {
 	_, err := q.db.ExecContext(ctx, setCategoryMonitorDiscovered, arg.MonitorDiscovered, arg.ID)
+	return err
+}
+
+const setCategoryMonitorReleaseTypes = `-- name: SetCategoryMonitorReleaseTypes :exec
+UPDATE category SET monitor_release_types = ? WHERE id = ?
+`
+
+type SetCategoryMonitorReleaseTypesParams struct {
+	MonitorReleaseTypes string
+	ID                  int64
+}
+
+func (q *Queries) SetCategoryMonitorReleaseTypes(ctx context.Context, arg SetCategoryMonitorReleaseTypesParams) error {
+	_, err := q.db.ExecContext(ctx, setCategoryMonitorReleaseTypes, arg.MonitorReleaseTypes, arg.ID)
 	return err
 }
 

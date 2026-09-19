@@ -1,24 +1,27 @@
 -- name: ListCategories :many
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
-       monitor_discovered, naming_profile_id
+       monitor_discovered, naming_profile_id, monitor_release_types
 FROM category ORDER BY priority_rank, name;
 
 -- name: GetCategory :one
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
-       monitor_discovered, naming_profile_id
+       monitor_discovered, naming_profile_id, monitor_release_types
 FROM category WHERE id = ?;
 
 -- name: CreateCategory :one
 INSERT INTO category (media_type, name, priority_rank)
 VALUES (?, ?, ?)
 RETURNING id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
-          monitor_discovered, naming_profile_id;
+          monitor_discovered, naming_profile_id, monitor_release_types;
 
 -- name: UpdateCategory :exec
 UPDATE category SET name = ?, priority_rank = ? WHERE id = ?;
 
 -- name: SetCategoryMonitorDiscovered :exec
 UPDATE category SET monitor_discovered = ? WHERE id = ?;
+
+-- name: SetCategoryMonitorReleaseTypes :exec
+UPDATE category SET monitor_release_types = ? WHERE id = ?;
 
 -- name: DeleteCategory :exec
 DELETE FROM category WHERE id = ?;

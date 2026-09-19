@@ -79,7 +79,8 @@ func (c *Cache) CreateCategory(ctx context.Context, mediaType, name string, prio
 		return Category{}, fmt.Errorf("settings: create category %q: %w", name, err)
 	}
 	return Category{ID: created.ID, MediaType: created.MediaType, Name: created.Name,
-		PriorityRank: created.PriorityRank, MonitorDiscovered: created.MonitorDiscovered}, nil
+		PriorityRank: created.PriorityRank, MonitorDiscovered: created.MonitorDiscovered,
+		MonitorReleaseTypes: decodeReleaseTypes(created.MonitorReleaseTypes)}, nil
 }
 
 // UpdateCategory renames a category, changes its priority rank, and sets its
@@ -920,5 +921,27 @@ func (c *Cache) SetUserPreference(ctx context.Context, userID int64, key, valueJ
 		return queries.SetPreference(ctx, settingsdb.SetPreferenceParams{
 			UserID: userID, Key: key, ValueJson: valueJSON,
 		})
+	})
+}
+
+// SetCategoryMonitorReleaseTypes chooses which release types a monitored
+// artist in this library brings in (2026-09-19). A subscription that names
+// its own types overrides this for that one artist.
+func (c *Cache) SetCategoryMonitorReleaseTypes(ctx context.Context, id int64, types []string) error {
+	if _, found := c.Snapshot().Category(id); !found {
+		return fmt.Errorf("%w: category %d", ErrNotFound, id)
+	}
+	if len(types) == 0 {
+		return config.Problems{{
+			Path: "monitor_release_types", Expectation: "at least one release type",
+		}}
+	}
+	encoded, err := json.Marshal(types)
+	if err != nil {
+		return err
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetCategoryMonitorReleaseTypes(ctx,
+			settingsdb.SetCategoryMonitorReleaseTypesParams{MonitorReleaseTypes: string(encoded), ID: id})
 	})
 }

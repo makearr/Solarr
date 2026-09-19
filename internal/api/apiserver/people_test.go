@@ -50,6 +50,7 @@ type fakePeopleSubscriber struct {
 	lastMediaTypes         []string
 	lastRoles              []string
 	lastMonitorBack        bool
+	lastIncludePrimaries   *[]string
 	lastExcludeSecondaries *[]string
 
 	removeCalled   bool
@@ -65,9 +66,10 @@ func (f *fakePeopleSubscriber) Remove(_ context.Context, personID, userID int64)
 
 func (f *fakePeopleSubscriber) Subscribe(
 	_ context.Context, personID, userID int64, mediaTypes, roles []string,
-	monitorBackCatalogue bool, excludeSecondaryTypes *[]string,
+	monitorBackCatalogue bool, includePrimaryTypes, excludeSecondaryTypes *[]string,
 ) error {
 	f.called = true
+	f.lastIncludePrimaries = includePrimaryTypes
 	f.lastPersonID = personID
 	f.lastUserID = userID
 	f.lastMediaTypes = mediaTypes
@@ -466,5 +468,33 @@ func TestRemovePerson_MissingPersonIsNotFound(t *testing.T) {
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/999/remove", ""))
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+// The per-artist override the user asked for (2026-09-19): naming types on
+// the request reaches the subscriber, and naming none leaves it to resolve
+// the library's own setting.
+func TestSubscribePerson_CarriesThePrimaryTypeOverride(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	request := authedPost(t, cookies, "/api/v1/people/7/subscribe",
+		`{"media_types":["music"],"include_primary_types":["Album"]}`)
+	if recorder := fixture.do(request); recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	got := fixture.subscriber.lastIncludePrimaries
+	if got == nil || len(*got) != 1 || (*got)[0] != "Album" {
+		t.Errorf("lastIncludePrimaries = %v, want [Album]", got)
+	}
+
+	request = authedPost(t, cookies, "/api/v1/people/7/subscribe", `{"media_types":["music"]}`)
+	if recorder := fixture.do(request); recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if fixture.subscriber.lastIncludePrimaries != nil {
+		t.Errorf("lastIncludePrimaries = %v, want nil so the library's own setting is used",
+			*fixture.subscriber.lastIncludePrimaries)
 	}
 }

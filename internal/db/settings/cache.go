@@ -186,13 +186,14 @@ func convertCategories(rows []settingsdb.Category) []Category {
 	categories := make([]Category, 0, len(rows))
 	for _, row := range rows {
 		categories = append(categories, Category{
-			ID:                row.ID,
-			MediaType:         row.MediaType,
-			Name:              row.Name,
-			PriorityRank:      row.PriorityRank,
-			QualityProfileID:  nullInt64Ptr(row.QualityProfileID),
-			LanguageProfileID: nullInt64Ptr(row.LanguageProfileID),
-			MonitorDiscovered: row.MonitorDiscovered,
+			ID:                  row.ID,
+			MediaType:           row.MediaType,
+			Name:                row.Name,
+			PriorityRank:        row.PriorityRank,
+			QualityProfileID:    nullInt64Ptr(row.QualityProfileID),
+			LanguageProfileID:   nullInt64Ptr(row.LanguageProfileID),
+			MonitorDiscovered:   row.MonitorDiscovered,
+			MonitorReleaseTypes: decodeReleaseTypes(row.MonitorReleaseTypes),
 		})
 	}
 	return categories
@@ -345,4 +346,15 @@ func (c *Cache) backupIfEnabled(ctx context.Context) {
 	if _, err := c.store.PruneBackups(c.backupOnChange.dir, c.backupOnChange.keep); err != nil {
 		c.logger.Error("settings backup rotation failed", slog.Any("error", err))
 	}
+}
+
+// decodeReleaseTypes reads category.monitor_release_types, falling back to
+// the default for anything unreadable -- a library that monitors nothing
+// because of a bad row would look like a bug in the subscription instead.
+func decodeReleaseTypes(raw string) []string {
+	var types []string
+	if err := json.Unmarshal([]byte(raw), &types); err != nil || len(types) == 0 {
+		return DefaultMonitorReleaseTypes
+	}
+	return types
 }

@@ -59,6 +59,18 @@ func (a Works) ListWorks(
 		if row.WantedState.Valid {
 			view.WantedState = &row.WantedState.String
 		}
+		if row.PresentCount.Valid {
+			view.PresentCount = &row.PresentCount.Int64
+		}
+		if row.RequiredCount.Valid {
+			view.RequiredCount = &row.RequiredCount.Int64
+		}
+		if row.AvailableFrom.Valid {
+			at := time.Unix(row.AvailableFrom.Int64, 0).UTC()
+			view.AvailableFrom = &at
+		}
+		view.Downloading = row.Downloading
+		view.OnDisk = row.OnDisk
 		views[index] = view
 	}
 	return views, nil

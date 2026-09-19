@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import type { LinkProps } from "@tanstack/react-router";
 
+import { AvailabilityBar, type AlbumStatus } from "@/lib/albumStatus";
+
 import { CoverArt } from "./CoverArt";
 
 /** One tile on the poster wall: a square cover with its name beneath, the
@@ -16,6 +18,9 @@ export function Poster({
   badge,
   link,
   round = false,
+  status,
+  presentCount,
+  requiredCount,
 }: {
   subject: "works" | "people";
   imageId: number | null;
@@ -24,6 +29,11 @@ export function Poster({
   badge?: React.ReactNode;
   link: LinkProps | null;
   round?: boolean;
+  // status absent means this tile has nothing to report, and carries no bar
+  // whatever the preference says.
+  status?: AlbumStatus;
+  presentCount?: number;
+  requiredCount?: number;
 }) {
   const shape = round ? "rounded-full" : "rounded-lg";
   const body = (
@@ -48,6 +58,14 @@ export function Poster({
         )}
         {badge && <span className="absolute right-1.5 top-1.5">{badge}</span>}
       </span>
+      {status && (
+        <AvailabilityBar
+          status={status}
+          present={presentCount}
+          required={requiredCount}
+          className="mt-1.5"
+        />
+      )}
       <span className="mt-2 block truncate text-sm font-medium group-hover:text-accent">{title}</span>
       {subtitle && <span className="block truncate text-xs text-ink-muted">{subtitle}</span>}
     </>
