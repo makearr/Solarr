@@ -38,10 +38,17 @@ test("a library can be created at the default tier", async ({ page }) => {
   await page.goto("/libraries");
 
   await expect(page.getByRole("heading", { name: "Libraries" })).toBeVisible();
-  await page.getByLabel(/name/i).first().fill("Music");
+
+  // TV, not Music: the wizard has already made a Music library, so adding
+  // one here would be refused as a duplicate and a Music assertion would
+  // pass on the wizard's own library whatever this page did. The name is
+  // left blank on purpose -- a library with no name of its own is named
+  // after its media type (2026-09-19).
+  await page.getByLabel(/media type/i).first().selectOption("tv");
   await page.getByRole("button", { name: /add librar/i }).click();
 
-  await expect(page.getByText("Music", { exact: true }).first()).toBeVisible();
+  // Scoped to the tree: the media-type picker also holds the word TV.
+  await expect(page.getByRole("navigation").getByText("TV", { exact: true })).toBeVisible();
 });
 
 // What the 2026-09-13 correction was about: the tree a default install actually
