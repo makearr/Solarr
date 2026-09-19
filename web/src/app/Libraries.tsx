@@ -5,7 +5,6 @@ import { Plus } from "lucide-react";
 
 import { api } from "@/api/client";
 import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
-import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
 import { MEDIA_TYPES } from "./Categories";
@@ -19,7 +18,6 @@ type MediaType = components["schemas"]["MediaType"];
  *  as a card, and the only place a new one can be created from the interface.
  *  A library is a category (ADR-54), so creating one is POST /categories. */
 export function Libraries() {
-  const tier = useTier();
   const libraries = useQuery({
     queryKey: ["libraries"],
     queryFn: async () => {
@@ -40,12 +38,7 @@ export function Libraries() {
       {libraries.error != null && <p className="text-sm text-danger">The libraries could not be read.</p>}
 
       {libraries.data && libraries.data.length === 0 && (
-        <p className="text-sm text-ink-muted">
-          No libraries yet.{" "}
-          {isTierVisible(tier, "advanced")
-            ? "Add one below to get started."
-            : "Switch to the advanced level in Settings → User to add one."}
-        </p>
+        <p className="text-sm text-ink-muted">No libraries yet. Add one below to get started.</p>
       )}
 
       {libraries.data && libraries.data.length > 0 && (
@@ -56,7 +49,7 @@ export function Libraries() {
         </ul>
       )}
 
-      {isTierVisible(tier, "advanced") && <AddLibrary />}
+      <AddLibrary />
     </div>
   );
 }
