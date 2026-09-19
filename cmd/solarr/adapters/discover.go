@@ -171,8 +171,13 @@ func (a Discover) addArtist(
 	// no subscription is created and nothing expands.
 	var subscriptionID int64
 	if monitored {
+		filtersJSON, err := monitorFiltersFor(category)
+		if err != nil {
+			return apiserver.DiscoverAddResult{}, err
+		}
 		subscriptionID, err = a.People.Subscribe(ctx, now, personID, userID, library.SubscriptionRequest{
 			MediaTypes: []string{"music"}, MonitorBackCatalogue: true,
+			CategoryID: category.ID, FiltersJSON: filtersJSON,
 		})
 		if err != nil {
 			return apiserver.DiscoverAddResult{}, fmt.Errorf("subscribe: %w", err)

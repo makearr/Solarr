@@ -399,13 +399,18 @@ type SubscriptionRequest struct {
 	// Empty means "use that media type's own default" -- never written as an
 	// empty JSON object, so a caller that never sets this changes nothing.
 	FiltersJSON string
+	// CategoryID is the library this artist was added to, so the expansion
+	// puts their albums there rather than in whichever library of that media
+	// type happens to come first (2026-09-19). 0 leaves it unset, which the
+	// expansion reads as "the media type's own first library", the behaviour
+	// every subscription made before this had.
+	CategoryID int64
 }
 
 // Subscribe records a subscription and marks the person monitored, in one
 // transaction -- ADR-32: "adding a performer monitors their scenes regardless
-// of studio". CategoryID and ProfileID are deliberately left unset: both are
-// acquisition-planner concerns (which category's profile decides what to
-// grab), and there is no acquisition planner for music yet.
+// of studio". CategoryID records which library the artist was added to;
+// ProfileID stays unset, resolved from that category when the expansion runs.
 //
 // Idempotent on (person, user): a second call for the same pair returns the
 // existing subscription's id rather than erroring on the UNIQUE(subject_type,
@@ -455,6 +460,7 @@ func (p People) Subscribe(
 		}
 		subscription, err := queries.CreateSubscription(ctx, librarydb.CreateSubscriptionParams{
 			SubjectType: "person", SubjectID: personID,
+			CategoryID:     sql.NullInt64{Int64: request.CategoryID, Valid: request.CategoryID != 0},
 			MediaTypesJson: string(mediaTypesJSON), RolesJson: rolesJSON,
 			FiltersJson:          sql.NullString{String: request.FiltersJSON, Valid: request.FiltersJSON != ""},
 			MonitorBackCatalogue: monitorBackCatalogue, Enabled: 1,

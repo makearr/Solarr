@@ -8,6 +8,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -162,11 +163,10 @@ func (a People) Subscribe(
 	// Absent primary types mean the library's own setting, resolved here and
 	// stored on the subscription: the artist keeps what was chosen when they
 	// were added, even if the library's default moves later.
-	if includePrimaryTypes == nil {
-		if category, ok := a.Categories.CategoryForMediaType(mediaTypeOrMusic(mediaTypes)); ok {
-			types := category.MonitorReleaseTypes
-			includePrimaryTypes = &types
-		}
+	category, haveCategory := a.Categories.CategoryForMediaType(mediaTypeOrMusic(mediaTypes))
+	if includePrimaryTypes == nil && haveCategory {
+		types := category.MonitorReleaseTypes
+		includePrimaryTypes = &types
 	}
 
 	var filtersJSON string
@@ -179,11 +179,27 @@ func (a People) Subscribe(
 		}
 		filtersJSON = string(encoded)
 	}
-	_, err := a.People.Subscribe(ctx, a.Clock.Now(), personID, userID, library.SubscriptionRequest{
+	request := library.SubscriptionRequest{
 		MediaTypes: mediaTypes, Roles: roles, MonitorBackCatalogue: monitorBackCatalogue,
 		FiltersJSON: filtersJSON,
-	})
+	}
+	if haveCategory {
+		request.CategoryID = category.ID
+	}
+	_, err := a.People.Subscribe(ctx, a.Clock.Now(), personID, userID, request)
 	return err
+}
+
+// monitorFiltersFor encodes a library's own release-type default onto a
+// subscription, so what an artist brings in is fixed when they are added
+// rather than moving with the library's setting afterwards.
+func monitorFiltersFor(category settings.Category) (string, error) {
+	types := category.MonitorReleaseTypes
+	encoded, err := json.Marshal(music.SubscriptionFilters{IncludePrimaryTypes: &types})
+	if err != nil {
+		return "", fmt.Errorf("adapters: encode subscription filters: %w", err)
+	}
+	return string(encoded), nil
 }
 
 // Preview answers an artist's discography unfiltered (todo 4.4), the same

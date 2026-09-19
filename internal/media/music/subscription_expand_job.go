@@ -123,7 +123,13 @@ func (j *SubscriptionExpandJob) expandOne(
 		return 0, 0, fmt.Errorf("person %d has no %s external id yet", subscription.SubjectID, ProviderArtist)
 	}
 
-	category, ok := j.categories.CategoryForMediaType("music")
+	// The library the artist was added to, so a second music library does
+	// not receive everything (2026-09-19). A subscription predating that
+	// being recorded falls back to the media type's own first library.
+	category, ok := j.categories.Category(subscription.CategoryID)
+	if !ok {
+		category, ok = j.categories.CategoryForMediaType("music")
+	}
 	if !ok {
 		return 0, 0, fmt.Errorf("no category configured for music")
 	}

@@ -50,7 +50,21 @@ func (f fixedCategory) CategoryForMediaType(mediaType string) (settings.Category
 	return settings.Category(f), true
 }
 
+func (f fixedCategory) Category(id int64) (settings.Category, bool) {
+	if id != f.ID {
+		return settings.Category{}, false
+	}
+	return settings.Category(f), true
+}
+
 func newSubscriptionExpandJob(t *testing.T, source musicbrainz.Source) (
+	*music.SubscriptionExpandJob, *store.Store, *librarydb.Queries,
+) {
+	t.Helper()
+	return newSubscriptionExpandJobIn(t, source, fixedCategory{ID: 1, MediaType: "music"})
+}
+
+func newSubscriptionExpandJobIn(t *testing.T, source musicbrainz.Source, categories music.CategoryFinder) (
 	*music.SubscriptionExpandJob, *store.Store, *librarydb.Queries,
 ) {
 	t.Helper()
@@ -101,7 +115,7 @@ func newSubscriptionExpandJob(t *testing.T, source musicbrainz.Source) (
 	job := music.NewSubscriptionExpandJob(music.SubscriptionExpandConfig{
 		Subscriptions: library.NewSubscriptions(libraryStore), People: library.NewPeople(libraryStore),
 		Identity: library.NewIdentity(libraryStore), Desired: &desired,
-		Categories:       fixedCategory{ID: 1, MediaType: "music"},
+		Categories:       categories,
 		Provider:         provider,
 		DefaultProfileID: 99, Clock: fake, Logger: slog.New(slog.DiscardHandler),
 	})
@@ -230,5 +244,68 @@ func TestSubscriptionExpandJob_SkipsASubscriptionWithNoArtistExternalID(t *testi
 	}
 	if source.calls != 0 {
 		t.Errorf("discography calls = %d, want 0 -- there is no artist id to browse with", source.calls)
+	}
+}
+
+// twoCategories answers two music libraries, so a test can tell "the
+// subscription's own library" apart from "the first music library".
+type twoCategories struct{ first, second settings.Category }
+
+func (c twoCategories) CategoryForMediaType(mediaType string) (settings.Category, bool) {
+	if mediaType != "music" {
+		return settings.Category{}, false
+	}
+	return c.first, true
+}
+
+func (c twoCategories) Category(id int64) (settings.Category, bool) {
+	switch id {
+	case c.first.ID:
+		return c.first, true
+	case c.second.ID:
+		return c.second, true
+	default:
+		return settings.Category{}, false
+	}
+}
+
+// An artist added to the second music library expands into that one, not
+// into whichever library of that media type comes first (2026-09-19).
+func TestSubscriptionExpandJob_ExpandsIntoTheLibraryTheArtistWasAddedTo(t *testing.T) {
+	source := &fakeDiscographySource{groups: []musicbrainz.ReleaseGroup{{MBID: "rg-album", Title: "KI Pecezinu"}}}
+	job, opened, queries := newSubscriptionExpandJobIn(t, source, twoCategories{
+		first:  settings.Category{ID: 1, MediaType: "music", Name: "Music"},
+		second: settings.Category{ID: 2, MediaType: "music", Name: "Vinyl rips"},
+	})
+
+	people := library.NewPeople(opened)
+	personID, err := people.ResolvePerson(t.Context(), clock.NewFakeAtEpoch().Now(), library.PersonLink{
+		Provider: music.ProviderArtist, ExternalID: "katupoken-mbid",
+		Person: library.PersonIdentity{Name: "Katupoken", SortName: "Katupoken"},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePerson: %v", err)
+	}
+	if _, err := people.Subscribe(t.Context(), clock.NewFakeAtEpoch().Now(), personID, 1,
+		library.SubscriptionRequest{MediaTypes: []string{"music"}, CategoryID: 2}); err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.SubscriptionExpandJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: "musicbrainz:release-group", ExternalID: "rg-album",
+	})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v", err)
+	}
+	items, err := queries.ListDesiredItemsForWork(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("ListDesiredItemsForWork: %v", err)
+	}
+	if len(items) != 1 || items[0].CategoryID != 2 {
+		t.Fatalf("want one item in library 2, got %+v", items)
 	}
 }

@@ -24,6 +24,9 @@ type Subscription struct {
 	Roles                []string
 	MonitorBackCatalogue bool
 	FiltersJSON          string
+	// CategoryID is the library the subscription was created in, 0 when it
+	// predates that being recorded.
+	CategoryID int64
 }
 
 // Subscriptions is subscription CRUD's read side -- People.Subscribe already
@@ -60,6 +63,7 @@ func subscriptionFrom(row librarydb.Subscription) Subscription {
 		MediaTypes: mediaTypes, Roles: roles,
 		MonitorBackCatalogue: row.MonitorBackCatalogue == 1,
 		FiltersJSON:          row.FiltersJson.String,
+		CategoryID:           row.CategoryID.Int64,
 	}
 }
 
