@@ -217,7 +217,8 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 // and resumes it, or starts a new one; one found CANCELLING is reported as such rather than resumed.
 func (j *Job) resumeOrCreate(ctx context.Context, payload Payload) (sessionID int64, cursor string, cancelling bool, err error) {
 	for _, state := range []string{library.ImportInspecting, library.ImportCancelling} {
-		existing, err := j.sessions.List(ctx, state)
+		// Dismissal is a display concern, so resume looks past it.
+		existing, err := j.sessions.List(ctx, state, true)
 		if err != nil {
 			return 0, "", false, fmt.Errorf("importjob: list %s sessions: %w", state, err)
 		}

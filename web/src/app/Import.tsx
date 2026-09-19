@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Ban, HelpCircle, Undo2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Ban, HelpCircle, Undo2, X } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
 import { IdentificationCandidates } from "./IdentificationCandidates";
+import { PathPicker, useRecentPaths } from "./PathPicker";
 
 type ImportSession = components["schemas"]["ImportSession"];
 type ImportUnit = components["schemas"]["ImportUnit"];
@@ -86,6 +87,7 @@ export function Import() {
         <InspectForm />
         <ThresholdControl />
         <TransferLadderControl />
+        <RenameOnImportControl />
       </div>
 
       <div className="flex min-h-0 flex-1 gap-4">
@@ -97,6 +99,59 @@ export function Import() {
         {selectedSessionId !== null && <UnitList sessionId={selectedSessionId} />}
       </div>
     </div>
+  );
+}
+
+/** Lidarr's own "rename tracks" switch, at the import boundary: on, a file
+ *  is named by the library's template; off, it keeps the name it arrived
+ *  with. The folder structure comes from the template either way. */
+function RenameOnImportControl() {
+  const queryClient = useQueryClient();
+  const settings = useQuery({
+    queryKey: ["import-settings"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/import/settings");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const update = useMutation({
+    mutationFn: async (rename: boolean) => {
+      const { error } = await api.PATCH("/import/settings", {
+        body: {
+          auto_commit_confidence: settings.data?.auto_commit_confidence ?? 0.9,
+          rename_on_import: rename,
+        },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["import-settings"] }),
+  });
+
+  if (!settings.data) return null;
+  const rename = settings.data.rename_on_import ?? true;
+
+  return (
+    <fieldset className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
+      <legend className="px-1 text-ink-muted">Naming</legend>
+      <label className="flex items-start gap-2">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={rename}
+          disabled={update.isPending}
+          onChange={(event) => update.mutate(event.target.checked)}
+        />
+        <span className="flex flex-col">
+          <span className="text-ink">Rename on import</span>
+          <span className="text-[0.6875rem] text-ink-muted">
+            Off keeps each file's own name; the folders still follow the template.
+          </span>
+        </span>
+      </label>
+      {update.isError && <p className="text-danger">That could not be changed.</p>}
+    </fieldset>
   );
 }
 
@@ -409,6 +464,7 @@ function InspectForm() {
   // the caller pick what they just navigated from.
   const { categoryId: routeCategoryId } = useParams({ strict: false }) as { categoryId?: string };
   const [sourcePath, setSourcePath] = useState("");
+  const [recentPaths, rememberPath] = useRecentPaths();
   const [origin, setOrigin] = useState<ImportOrigin>("manual");
   const [categoryId, setCategoryId] = useState<number | "">(
     routeCategoryId ? Number(routeCategoryId) : "",
@@ -429,6 +485,7 @@ function InspectForm() {
       if (error) throw error;
     },
     onSuccess: () => {
+      rememberPath(sourcePath);
       setSourcePath("");
       queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
     },
@@ -442,16 +499,12 @@ function InspectForm() {
         inspect.mutate();
       }}
     >
-      <label className="flex min-w-64 flex-1 flex-col gap-1 text-xs text-ink-muted">
-        Source path
-        <input
-          className={inputStyle}
-          value={sourcePath}
-          placeholder="/downloads/incoming/Artist - Album"
-          autoComplete="off"
-          onChange={(event) => setSourcePath(event.target.value)}
-        />
-      </label>
+      <PathPicker
+        value={sourcePath}
+        onChange={setSourcePath}
+        recent={recentPaths}
+        placeholder="/downloads/incoming/Artist - Album"
+      />
       <label className="flex flex-col gap-1 text-xs text-ink-muted">
         Origin
         <select
@@ -625,6 +678,14 @@ function SessionRow({
     },
   });
 
+  const dismiss = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST("/import/sessions/{id}/dismiss", { params: { path: { id: session.id } } });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
   const commitHeld = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/import/sessions/{id}/commit", {
@@ -685,6 +746,18 @@ function SessionRow({
                        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             <Ban aria-hidden className="size-3.5" />
+          </button>
+        )}
+        {session.state !== "INSPECTING" && session.state !== "CANCELLING" && (
+          <button
+            type="button"
+            onClick={() => dismiss.mutate()}
+            disabled={dismiss.isPending}
+            title="Dismiss this session -- it stays on record, it just leaves this list"
+            className="shrink-0 rounded-md p-1 text-ink-muted hover:text-ink disabled:opacity-50
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <X aria-hidden className="size-3.5" />
           </button>
         )}
         {FINISHED_STATES.has(session.state) && session.units_committed > 0 && (
@@ -805,6 +878,11 @@ function UnitList({ sessionId }: { sessionId: number }) {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border-subtle bg-surface">
+      {units.data && units.data.length > 0 && (
+        <p className="border-b border-border-subtle px-3 py-2 text-xs text-ink-muted">
+          {describeSessionTransfers(units.data)}
+        </p>
+      )}
       {units.isLoading && <Message>Loading units…</Message>}
       {units.error !== null && <Message>Units could not be read.</Message>}
       {units.data && units.data.length === 0 && <Message>Nothing found under this path.</Message>}
@@ -829,6 +907,23 @@ const TRANSFER_PAST: Record<TransferMethod, string> = {
   copy: "copied",
   symlink: "symlinked",
 };
+
+/** How this session's files actually got into the library, counted across
+ *  every unit -- a reflink and a copy are indistinguishable on disk, so the
+ *  commit overview has to say which one placed them (2026-09-19 review).
+ *  Units committed before the method was recorded carry none, and are
+ *  reported as such rather than guessed at. */
+function describeSessionTransfers(units: ImportUnit[]): string {
+  const files = new Map<TransferMethod, number>();
+  for (const unit of units) {
+    for (const entry of unit.transfer_methods ?? []) {
+      files.set(entry.method, (files.get(entry.method) ?? 0) + entry.files);
+    }
+  }
+  if (files.size === 0) return "Nothing placed yet, so no import method to report.";
+  const parts = [...files].map(([method, count]) => `${count} ${TRANSFER_PAST[method]}`);
+  return `Imported by: ${parts.join(", ")}`;
+}
 
 function describeTransfer(methods: { method: TransferMethod; files: number }[]): string {
   if (methods.length === 1) return TRANSFER_PAST[methods[0]!.method];

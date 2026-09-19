@@ -18,7 +18,9 @@ network, cache, priority — ADR-21, ADR-26) as one flat, always-populated group
 It is optional on import: a document that omits it changes nothing about those settings, so
 a hand-edited file need not repeat them all just to add a category. `import_transfer_ladder`
 follows the same rule one level down -- absent means "leave the stored order alone", since an
-empty list would otherwise be indistinguishable from "place nothing". When present, a
+empty list would otherwise be indistinguishable from "place nothing". `import_rename_on_import`
+is always written on export, like every other flag in the block; absent on import it keeps
+whatever is stored. When present, a
 non-empty `network_allow_cidrs` is checked against the importing request's own remote
 address the same way `PATCH /network` already is (Invariant 89) — an import with no real
 caller address to check (anything but the HTTP endpoint) refuses conservatively rather than

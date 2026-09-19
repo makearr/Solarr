@@ -175,6 +175,11 @@ type Querier interface {
 	DetachFile(ctx context.Context, arg DetachFileParams) error
 	// Removes one part's coverage, for a file that turned out to cover less than claimed.
 	DetachFilePart(ctx context.Context, arg DetachFilePartParams) error
+	// Hides a finished session from the Import screen without deleting anything:
+	// the row is still what a revert reads. Only from a state that has stopped,
+	// so a run in progress cannot be dismissed out from under itself. :execrows
+	// distinguishes "no such session, or still running" from "now hidden".
+	DismissImportSession(ctx context.Context, arg DismissImportSessionParams) (int64, error)
 	// Primed so something dispatches the instant a slot frees (section 10.5).
 	EnqueueReady(ctx context.Context, arg EnqueueReadyParams) error
 	// The import gate's own check (section 10.3 step 3, ADR-53): exact hashes

@@ -783,6 +783,38 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /storage/browse:
+    get:
+      operationId: browsePath
+      tags: [setup]
+      summary: List a directory, for picking a path by hand. Administrator only.
+      description: >-
+        Reads one directory live, non-recursively, so a path can be browsed
+        rather than typed from memory (2026-09-19 review). A path that is
+        not itself a directory lists the nearest real directory above it and
+        keeps only the entries whose names start with what was typed, which
+        is what makes this serve as typeahead as well as a browser. An
+        absent or empty path lists the filesystem root. Administrator only:
+        it reports what exists on the host, the same trust boundary adding a
+        root folder already carries.
+      parameters:
+        - name: path
+          in: query
+          schema: { type: string }
+        - name: dirs_only
+          in: query
+          description: Leave out plain files. Default false.
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: The directory's own entries.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PathListing" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /schedules:
     get:
       operationId: listSchedules
@@ -3025,6 +3057,10 @@ paths:
           schema:
             type: string
             enum: [INSPECTING, IMPORTING, CANCELLING, DONE, FAILED, REVERTED, CANCELLED]
+        - name: include_dismissed
+          in: query
+          description: Include sessions hidden from the screen. Default false.
+          schema: { type: boolean }
       responses:
         "200":
           description: The sessions.
@@ -3131,6 +3167,30 @@ paths:
         "409":
           $ref: "#/components/responses/Problem"
           description: The session is not running.
+
+  /import/sessions/{id}/dismiss:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: dismissImportSession
+      tags: [library]
+      summary: Hide a finished session from the Import screen. Administrator only.
+      description: >-
+        Hides, never deletes (2026-09-19 review): the row stays as the
+        record of what the session placed, and revert still reaches it by
+        id. Only a session that has stopped may be dismissed, so a run in
+        progress cannot be hidden out from under itself.
+      responses:
+        "204": { description: Hidden. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          $ref: "#/components/responses/Problem"
+          description: The session has not finished.
 
   /import/sessions/{id}/commit:
     parameters:
@@ -4284,6 +4344,34 @@ components:
       required: [name, is_dir]
       properties:
         name: { type: string }
+        is_dir: { type: boolean }
+
+    PathListing:
+      type: object
+      description: >-
+        One directory read live for the path picker: what was actually
+        listed, its parent, and its own entries. The listed directory is
+        not always the path asked for -- a partial path lists the nearest
+        real directory above it, filtered by what has been typed so far.
+      required: [path, entries]
+      properties:
+        path: { type: string, description: The directory that was listed. }
+        parent:
+          type: string
+          description: The directory above it, absent at the filesystem root.
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/PathEntry" }
+        truncated:
+          type: boolean
+          description: True when the directory held more entries than were returned.
+
+    PathEntry:
+      type: object
+      required: [name, path, is_dir]
+      properties:
+        name: { type: string }
+        path: { type: string }
         is_dir: { type: boolean }
 
     Schedule:
@@ -5869,6 +5957,13 @@ components:
             leaves the stored order alone. Default
             reflink, hardlink, move, copy, symlink.
           items: { $ref: "#/components/schemas/TransferMethod" }
+        rename_on_import:
+          type: boolean
+          description: >-
+            Whether a committed file is named by the library's own template
+            (on, the default) or keeps the name it arrived with. The folder
+            structure comes from the template either way. Omitted on a PATCH
+            leaves the stored value alone.
 
     TransferMethod:
       type: string
@@ -6014,6 +6109,13 @@ components:
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time }
         error: { type: string }
+        dismissed_at:
+          type: string
+          format: date-time
+          description: >-
+            When this finished session was hidden from the Import screen.
+            Absent while it is still shown. Dismissal hides, never deletes:
+            the session is still what a revert reads.
 
     ImportEvidenceSignal:
       type: object

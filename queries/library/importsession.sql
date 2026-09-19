@@ -8,12 +8,12 @@ VALUES (sqlc.arg(source_path), sqlc.arg(origin), sqlc.arg(acquisition_id),
         sqlc.arg(category_id), 'INSPECTING', sqlc.arg(threshold), sqlc.arg(started_at))
 RETURNING id, source_path, origin, acquisition_id, category_id, state, threshold,
           units_total, units_committed, units_queued, bytes_imported, extract_dir,
-          started_at, finished_at, error, units_skipped, units_failed, units_estimated;
+          started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at;
 
 -- name: GetImportSession :one
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error, units_skipped, units_failed, units_estimated
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at
 FROM import_session WHERE id = ?;
 
 -- Small, operator-facing list -- session counts never approach library scale
@@ -25,10 +25,20 @@ FROM import_session WHERE id = ?;
 -- name: ListImportSessions :many
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error, units_skipped, units_failed, units_estimated
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at
 FROM import_session
-WHERE sqlc.arg(filter_by_state) = 0 OR state = sqlc.arg(state)
+WHERE (sqlc.arg(filter_by_state) = 0 OR state = sqlc.arg(state))
+  AND (sqlc.arg(include_dismissed) = 1 OR dismissed_at IS NULL)
 ORDER BY started_at DESC;
+
+-- Hides a finished session from the Import screen without deleting anything:
+-- the row is still what a revert reads. Only from a state that has stopped,
+-- so a run in progress cannot be dismissed out from under itself. :execrows
+-- distinguishes "no such session, or still running" from "now hidden".
+-- name: DismissImportSession :execrows
+UPDATE import_session SET dismissed_at = sqlc.arg(dismissed_at)
+WHERE id = sqlc.arg(id) AND dismissed_at IS NULL
+  AND state IN ('DONE', 'FAILED', 'CANCELLED', 'REVERTED');
 
 -- name: SetImportSessionExtractDir :exec
 UPDATE import_session SET extract_dir = ? WHERE id = ?;

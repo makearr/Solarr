@@ -245,7 +245,7 @@ func TestImportSessions_ListFiltersByState(t *testing.T) {
 		t.Fatalf("Finish: %v", err)
 	}
 
-	all, err := sessions.List(ctx, "")
+	all, err := sessions.List(ctx, "", false)
 	if err != nil {
 		t.Fatalf("List(\"\"): %v", err)
 	}
@@ -257,7 +257,7 @@ func TestImportSessions_ListFiltersByState(t *testing.T) {
 		t.Errorf("order = [%d, %d], want [%d, %d] (newest first)", all[0].ID, all[1].ID, failed, inspecting)
 	}
 
-	onlyFailed, err := sessions.List(ctx, library.ImportFailed)
+	onlyFailed, err := sessions.List(ctx, library.ImportFailed, false)
 	if err != nil {
 		t.Fatalf("List(FAILED): %v", err)
 	}
@@ -422,5 +422,61 @@ func TestImportSessions_SetCategoryRefusesADifferentCategory(t *testing.T) {
 	}
 	if got.CategoryID == nil || *got.CategoryID != 7 {
 		t.Errorf("CategoryID = %v, want unchanged at 7", got.CategoryID)
+	}
+}
+
+func TestImportSessions_DismissHidesAFinishedSessionOnly(t *testing.T) {
+	opened, _ := newLibrary(t)
+	sessions := library.NewImportSessions(opened)
+	ctx := t.Context()
+
+	running, err := sessions.Create(ctx, library.NewSession{
+		SourcePath: "/downloads/a", Origin: library.ImportOriginManual, Threshold: 0.9, StartedAt: 100,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	done, err := sessions.Create(ctx, library.NewSession{
+		SourcePath: "/downloads/b", Origin: library.ImportOriginManual, Threshold: 0.9, StartedAt: 200,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := sessions.Finish(ctx, done, library.ImportDone, 300, ""); err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+
+	if err := sessions.Dismiss(ctx, running, 400); !errors.Is(err, library.ErrSessionNotDismissable) {
+		t.Errorf("Dismiss(running) = %v, want ErrSessionNotDismissable", err)
+	}
+	if err := sessions.Dismiss(ctx, done, 400); err != nil {
+		t.Fatalf("Dismiss: %v", err)
+	}
+	if err := sessions.Dismiss(ctx, done, 500); !errors.Is(err, library.ErrSessionNotDismissable) {
+		t.Errorf("Dismiss twice = %v, want ErrSessionNotDismissable", err)
+	}
+
+	shown, err := sessions.List(ctx, "", false)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(shown) != 1 || shown[0].ID != running {
+		t.Errorf("List = %+v, want only the still-running session %d", shown, running)
+	}
+
+	all, err := sessions.List(ctx, "", true)
+	if err != nil {
+		t.Fatalf("List(include dismissed): %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("len(all) = %d, want both sessions", len(all))
+	}
+	// The row is hidden, never deleted: a revert still reaches it by id.
+	dismissed, err := sessions.Get(ctx, done)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if dismissed.DismissedAt == nil || *dismissed.DismissedAt != 400 {
+		t.Errorf("DismissedAt = %v, want 400", dismissed.DismissedAt)
 	}
 }

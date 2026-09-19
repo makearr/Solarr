@@ -174,6 +174,13 @@ func NewDefaultRegistry() *Registry {
 			"the library depending on it.",
 		Default: `["reflink","hardlink","move","copy","symlink"]`,
 	})
+	registry.MustRegister(SettingDef{
+		Key: KeyImportRenameOnImport, Kind: KindBool, Tier: TierNormal,
+		Name: "Rename on import",
+		HelpText: "On, an imported file is named by the library's own template; " +
+			"off, it keeps the name it arrived with.",
+		Default: "true",
+	})
 
 	// Network (ADR-58): self-hosted networking, tuned by someone running
 	// this behind a reverse proxy or restricting it to a LAN -- advanced,

@@ -64,6 +64,7 @@ type Committer struct {
 	clock            clock.Clock
 	defaultProfileID int64
 	transferLadder   TransferLadder
+	renameOnImport   RenameOnImport
 }
 
 // TransferLadder answers the ordered transfer methods import should try, read
@@ -71,6 +72,11 @@ type Committer struct {
 // without a restart -- the same live-read shape the egress proxy already uses.
 // A nil func or an empty result means mover.DefaultLadder.
 type TransferLadder func() []mover.PlaceMethod
+
+// RenameOnImport answers whether a committed file is named by the template
+// or keeps the name it arrived with, read per commit for the same reason
+// TransferLadder is. A nil func means renaming, the shipped default.
+type RenameOnImport func() bool
 
 // BlockedContent is the ADR-53 part 2 check CommitUnit's import gate needs
 // (todo 4.15) -- library.BlockedContentStore's own shape, narrowed to an
@@ -95,6 +101,7 @@ type CommitterConfig struct {
 	Clock            clock.Clock
 	DefaultProfileID int64
 	TransferLadder   TransferLadder
+	RenameOnImport   RenameOnImport
 }
 
 // NewCommitter builds one.
@@ -104,6 +111,7 @@ func NewCommitter(config CommitterConfig) Committer {
 		identity: config.Identity, desired: config.Desired, categories: config.Categories,
 		blockedContent: config.BlockedContent, clock: config.Clock,
 		defaultProfileID: config.DefaultProfileID, transferLadder: config.TransferLadder,
+		renameOnImport: config.RenameOnImport,
 	}
 }
 
@@ -325,6 +333,8 @@ func (c Committer) CommitMatchedUnit(
 		}
 	}
 
+	renaming := c.renameOnImport == nil || c.renameOnImport()
+
 	files := make([]library.PhysicalFile, len(unit.Media))
 	trackFiles := make([]TrackFile, len(unit.Media))
 	pathWarnings := make([][]string, len(unit.Media))
@@ -338,6 +348,9 @@ func (c Committer) CommitMatchedUnit(
 		destRelPath, warnings, err := importRelPath(work, artist, year, track, discCount, path.Ext(media.RelPath))
 		if err != nil {
 			return Placed{}, fmt.Errorf("music: commit unit %q: %w", unit.Directory, err)
+		}
+		if !renaming {
+			destRelPath = keptFileName(destRelPath, media.RelPath)
 		}
 		pathWarnings[index] = warnings
 
@@ -529,4 +542,16 @@ func importRelPath(
 		messages = append(messages, w.Message)
 	}
 	return rendered, messages, nil
+}
+
+// keptFileName is "rename on import" turned off: the template still decides
+// which folders a file lands in, and the file itself keeps the name it
+// arrived with, sanitised for the destination filesystem the way every
+// rendered component already is.
+func keptFileName(renderedRelPath, sourceRelPath string) string {
+	kept := fsx.SanitiseComponent(strings.TrimSpace(path.Base(sourceRelPath)))
+	if kept == "" {
+		return renderedRelPath
+	}
+	return path.Join(path.Dir(renderedRelPath), kept)
 }

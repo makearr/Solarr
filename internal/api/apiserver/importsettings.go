@@ -38,7 +38,8 @@ func (s *Server) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.auth.Registry.LookupAll(settings.KeyImportAutoCommitConfidence, settings.KeyImportTransferLadder); err != nil {
+	if err := s.auth.Registry.LookupAll(settings.KeyImportAutoCommitConfidence, settings.KeyImportTransferLadder,
+		settings.KeyImportRenameOnImport); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
@@ -54,6 +55,14 @@ func (s *Server) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
 			ladder = append(ladder, string(method))
 		}
 		if err := s.auth.Settings.SetImportTransferLadder(r.Context(), clock.NewSystem(), ladder); err != nil {
+			s.writeImportSettingsError(w, err)
+			return
+		}
+	}
+	// Absent means "say nothing about renaming", the same shape the ladder
+	// above keeps.
+	if body.RenameOnImport != nil {
+		if err := s.auth.Settings.SetImportRenameOnImport(r.Context(), clock.NewSystem(), *body.RenameOnImport); err != nil {
 			s.writeImportSettingsError(w, err)
 			return
 		}
@@ -80,8 +89,10 @@ func (s *Server) importSettingsView() gen.ImportSettings {
 	for _, method := range stored {
 		ladder = append(ladder, gen.TransferMethod(method))
 	}
+	rename := snapshot.ImportRenameOnImport()
 	return gen.ImportSettings{
 		AutoCommitConfidence: float32(snapshot.ImportAutoCommitConfidence()),
 		TransferLadder:       &ladder,
+		RenameOnImport:       &rename,
 	}
 }
