@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronUp, Clock, Folder, FolderOpen } from "lucide-react";
 
@@ -42,6 +42,7 @@ export function PathPicker({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const fieldID = useId();
   const container = useRef<HTMLDivElement>(null);
   const debounced = useDebouncedValue(value, 250);
 
@@ -80,9 +81,10 @@ export function PathPicker({
 
   return (
     <div ref={container} className="relative flex min-w-64 flex-1 flex-col gap-1 text-xs text-ink-muted">
-      <span>{label}</span>
+      <label htmlFor={fieldID}>{label}</label>
       <div className="flex items-center gap-1">
         <input
+          id={fieldID}
           className={`${inputStyle} min-w-0 flex-1`}
           value={value}
           placeholder={placeholder}

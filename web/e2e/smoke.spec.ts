@@ -71,7 +71,7 @@ test("a folder previews, commits and reverts", async ({ page }) => {
 
   await page.getByLabel("Source path").fill(DOWNLOAD_FIXTURE);
   await page.getByText("Preview first").click();
-  await page.getByRole("button", { name: "Inspect" }).click();
+  await page.getByRole("button", { name: "Import", exact: true }).click();
 
   const held = page.getByRole("button", { name: /commit all \d+ held/i });
   await expect(held).toBeVisible({ timeout: 90_000 });
@@ -84,6 +84,26 @@ test("a folder previews, commits and reverts", async ({ page }) => {
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByTitle("Revert this session").click();
   await expect(page.getByText("REVERTED").first()).toBeVisible({ timeout: 60_000 });
+});
+
+// The path picker and dismissal, both from the 2026-09-19 review: a folder is
+// reached by browsing rather than remembering, and a finished session can be
+// put away again.
+test("a source path can be browsed, and a finished session dismissed", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/library/1/import");
+
+  const field = page.getByLabel("Source path");
+  await field.fill("/media/down");
+  await expect(page.getByRole("button", { name: "download", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "download", exact: true }).click();
+  await expect(field).toHaveValue("/media/download/");
+
+  const dismiss = page.getByTitle(/Dismiss this session/);
+  const before = await dismiss.count();
+  expect(before).toBeGreaterThan(0);
+  await dismiss.first().click();
+  await expect(dismiss).toHaveCount(before - 1);
 });
 
 async function signIn(page: Page) {
