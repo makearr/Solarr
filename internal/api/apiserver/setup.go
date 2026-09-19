@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -144,22 +145,36 @@ func (s *Server) AddRootFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Capacity is recorded now rather than left to the six-hourly sweep: placement refuses a
-	// root whose free space is unknown, so an import right after adding a root found no root
-	// at all (found 2026-09-17).
-	if total, free, usageErr := s.roots.Usage(path); usageErr != nil {
-		s.logger.Warn("root folder capacity could not be read", "path", path, "error", usageErr)
-	} else if err := s.auth.Settings.SetRootFolderCapacity(r.Context(), created.ID, settings.RootFolderCapacity{
-		Writable: writable, TotalBytes: total, FreeBytes: free, CheckedAt: clock.NewSystem().Now().Unix(),
-	}); err != nil {
-		s.logger.Warn("root folder capacity could not be recorded", "path", path, "error", err)
-	} else if refreshed, found := s.auth.Settings.Snapshot().RootFolder(created.ID); found {
-		created = refreshed
+	if s.recordRootCapacity(r.Context(), created.ID, path, writable) {
+		if refreshed, found := s.auth.Settings.Snapshot().RootFolder(created.ID); found {
+			created = refreshed
+		}
 	}
 
 	view := s.rootFolderView(created)
 	view.Writable = &writable
 	writeJSON(w, s.logger, http.StatusCreated, view)
+}
+
+// recordRootCapacity probes and stores one root's free space now rather than
+// leaving it to the six-hourly sweep: placement refuses a root whose free space
+// is unknown, so an import right after configuring one found no root at all
+// (found 2026-09-17 when a root was added, and again 2026-09-19 when a whole
+// document was imported). Reported, never fatal -- a root that cannot be
+// measured is still a root.
+func (s *Server) recordRootCapacity(ctx context.Context, id int64, path string, writable bool) bool {
+	total, free, err := s.roots.Usage(path)
+	if err != nil {
+		s.logger.Warn("root folder capacity could not be read", "path", path, "error", err)
+		return false
+	}
+	if err := s.auth.Settings.SetRootFolderCapacity(ctx, id, settings.RootFolderCapacity{
+		Writable: writable, TotalBytes: total, FreeBytes: free, CheckedAt: clock.NewSystem().Now().Unix(),
+	}); err != nil {
+		s.logger.Warn("root folder capacity could not be recorded", "path", path, "error", err)
+		return false
+	}
+	return true
 }
 
 // rootFolderView renders one root folder for the API, including its own

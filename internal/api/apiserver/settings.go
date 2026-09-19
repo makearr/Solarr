@@ -72,6 +72,19 @@ func (s *Server) ImportSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Same reason AddRootFolder records it inline: a root the document just
+	// created has no free space recorded, and placement refuses such a root
+	// entirely, so a restored configuration could import nothing at all until
+	// the six-hourly sweep happened to run.
+	if s.roots != nil {
+		for _, root := range s.auth.Settings.Snapshot().RootFolders() {
+			if root.FreeBytes != nil {
+				continue
+			}
+			s.recordRootCapacity(r.Context(), root.ID, root.Path, s.roots.Writable(root.Path) == nil)
+		}
+	}
+
 	s.logger.Info("settings imported",
 		"categories", len(document.Categories), "root_folders", len(document.Roots))
 	w.WriteHeader(http.StatusNoContent)

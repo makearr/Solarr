@@ -467,3 +467,41 @@ func TestAddRootFolder_RecordsCapacityImmediately(t *testing.T) {
 		t.Errorf("free/total = %v/%v, want the capacity probed at creation", body.FreeBytes, body.TotalBytes)
 	}
 }
+
+// The same defect one path over: a root folder created by importing a whole
+// configuration document had no free space recorded either, so a restored
+// install could place nothing at all until the six-hourly sweep ran.
+func TestImportSettings_RecordsCapacityForTheRootsItCreates(t *testing.T) {
+	fixture := newSetupFixture(t, stubRoots{freeBytes: 900 << 30})
+	claim := fixture.post(t, "/api/v1/setup/admin", `{"username":"avs","password":"correct horse battery"}`)
+	if claim.Code != http.StatusCreated {
+		t.Fatalf("claim: %d", claim.Code)
+	}
+	cookies := claim.Result().Cookies()
+
+	document := "version: 1\nroot_folders:\n  - path: /library\n    accepts_new: true\n"
+	imported := fixture.authed(t, http.MethodPost, "/api/v1/settings/import", document, cookies)
+	if imported.Code != http.StatusNoContent {
+		t.Fatalf("import: %d (%s)", imported.Code, imported.Body)
+	}
+
+	listed := fixture.authed(t, http.MethodGet, "/api/v1/rootfolders", "", cookies)
+	if listed.Code != http.StatusOK {
+		t.Fatalf("list: %d (%s)", listed.Code, listed.Body)
+	}
+	var roots []struct {
+		Path       string `json:"path"`
+		FreeBytes  *int64 `json:"free_bytes"`
+		TotalBytes *int64 `json:"total_bytes"`
+	}
+	if err := json.Unmarshal(listed.Body.Bytes(), &roots); err != nil {
+		t.Fatalf("body: %v", err)
+	}
+	if len(roots) != 1 {
+		t.Fatalf("got %d roots, want 1: %s", len(roots), listed.Body)
+	}
+	if roots[0].FreeBytes == nil || *roots[0].FreeBytes != 900<<30 || roots[0].TotalBytes == nil {
+		t.Errorf("free/total = %v/%v, want the capacity probed during the import",
+			roots[0].FreeBytes, roots[0].TotalBytes)
+	}
+}
