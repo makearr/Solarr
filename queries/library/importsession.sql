@@ -198,3 +198,16 @@ ORDER BY iuf.unit_id, iuf.transfer_method;
 -- A download folder imports each entry once: any session, finished or dismissed, counts.
 -- name: CountImportSessionsForSource :one
 SELECT CAST(COUNT(*) AS INTEGER) FROM import_session WHERE source_path = ?;
+
+-- name: InsertImportUnitExtra :exec
+INSERT INTO import_unit_extra (unit_id, root_folder_id, rel_path) VALUES (?, ?, ?);
+
+-- name: ListImportUnitExtrasForSession :many
+SELECT iue.id, iue.unit_id, iue.root_folder_id, iue.rel_path
+FROM import_unit_extra iue
+JOIN import_unit iu ON iu.id = iue.unit_id
+WHERE iu.session_id = ?
+ORDER BY iue.id;
+
+-- name: DeleteImportUnitExtras :exec
+DELETE FROM import_unit_extra WHERE unit_id = ?;

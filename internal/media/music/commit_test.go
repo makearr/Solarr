@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -122,6 +123,13 @@ func newCommitter(t *testing.T, accepts bool) (music.Committer, *store.Store, *f
 func newCommitterRenaming(
 	t *testing.T, accepts bool, rename music.RenameOnImport,
 ) (music.Committer, *store.Store, *fsx.Mem) {
+	return newCommitterWith(t, accepts, func(config *music.CommitterConfig) { config.RenameOnImport = rename })
+}
+
+// newCommitterWith is newCommitter with configure applied to the config before it is built.
+func newCommitterWith(
+	t *testing.T, accepts bool, configure func(*music.CommitterConfig),
+) (music.Committer, *store.Store, *fsx.Mem) {
 	t.Helper()
 	opened, fsys, fake := newCommitterEnv(t)
 
@@ -139,16 +147,17 @@ func newCommitterRenaming(
 		roots.categoryRoots = []settings.CategoryRoot{{CategoryID: commitCategoryID, RootFolderID: commitDestRootID, AcceptsNew: true}}
 	}
 
-	committer := music.NewCommitter(music.CommitterConfig{
+	config := music.CommitterConfig{
 		FS: fsys, Roots: roots, Affinity: newFakePlacementAffinity(),
 		Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened),
 		Desired: &desired,
 		Categories: fakeCategories{
 			commitCategoryID: {ID: commitCategoryID, MonitorDiscovered: settings.MonitorDiscoveredMonitored},
 		},
-		Clock: fake, DefaultProfileID: 42, RenameOnImport: rename,
-	})
-	return committer, opened, fsys
+		Clock: fake, DefaultProfileID: 42,
+	}
+	configure(&config)
+	return music.NewCommitter(config), opened, fsys
 }
 
 // newCommitterTwoRoots builds a Committer with two destination roots
@@ -716,5 +725,54 @@ func TestCommitUnit_KeepsTheSourceFileNameWhenRenamingIsOff(t *testing.T) {
 	want := "Katupoken/KI Pecezinu (1997)/eac-01_airbag.flac"
 	if paths[0].RelPath != want {
 		t.Errorf("RelPath = %q, want %q", paths[0].RelPath, want)
+	}
+}
+
+// Lidarr's "Import Extra Files": a sidecar named like a track follows the track's new name, an
+// album-wide one keeps its name in the album folder, and nothing already there is overwritten.
+func TestCommitUnit_BringsListedExtraFilesAlong(t *testing.T) {
+	committer, _, fsys := newCommitterWith(t, true, func(config *music.CommitterConfig) {
+		config.ExtraFiles = func() []string { return []string{"lrc", "cue"} }
+	})
+
+	track := []byte("airbag bytes")
+	writeCommitSourceFile(t, fsys, "KI Pecezinu/01 Sesoge.flac", track)
+	writeCommitSourceFile(t, fsys, "KI Pecezinu/01 Sesoge.LRC", []byte("[00:01]lyrics"))
+	writeCommitSourceFile(t, fsys, "KI Pecezinu/KI Pecezinu.cue", []byte("FILE"))
+	writeCommitSourceFile(t, fsys, "KI Pecezinu/rip.log", []byte("log"))
+	writeCommitSourceFile(t, fsys, "KI Pecezinu/folder.jpg", []byte("jpg"))
+	existing := path.Join(commitDestRoot, "Katupoken/KI Pecezinu (1997)/KI Pecezinu.cue")
+	writeCommitSourceFile(t, fsys, "../../"+strings.TrimPrefix(existing, "/"), []byte("already here"))
+
+	unit := testUnit("KI Pecezinu", []inspect.File{{RelPath: "KI Pecezinu/01 Sesoge.flac", SizeBytes: int64(len(track))}})
+	for _, relPath := range []string{"KI Pecezinu/01 Sesoge.LRC", "KI Pecezinu/KI Pecezinu.cue", "KI Pecezinu/rip.log", "KI Pecezinu/folder.jpg"} {
+		unit.Other = append(unit.Other, inspect.File{RelPath: relPath, SizeBytes: 3})
+	}
+	probes := []mediatool.Probe{{
+		Path: path.Join(commitSourceRoot, "KI Pecezinu/01 Sesoge.flac"),
+		Tags: mediatool.Tags{"album": "KI Pecezinu", "albumartist": "Katupoken", "date": "1997", "tracknumber": "1", "title": "Sesoge"},
+	}}
+	best := model.Identification{
+		Strategy: "embedded-tag", Confidence: 0.95,
+		ExternalID: &model.ExternalID{Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 0.95},
+	}
+
+	placed, err := committer.CommitUnit(t.Context(), commitSourceRoot, unit, best,
+		music.UnitTagSourceFor(commitSourceRoot, probes), commitCategoryID)
+	if err != nil {
+		t.Fatalf("CommitUnit: %v", err)
+	}
+	wantPlaced := []string{"Katupoken/KI Pecezinu (1997)/Katupoken - 01 - Sesoge.lrc"}
+	if !reflect.DeepEqual(placed.Extras, wantPlaced) || placed.RootFolderID != commitDestRootID {
+		t.Errorf("Extras = %v on root %d, want %v on %d", placed.Extras, placed.RootFolderID, wantPlaced, commitDestRootID)
+	}
+	if len(placed.ExtrasSkipped) != 1 || !strings.Contains(placed.ExtrasSkipped[0], "already exists") {
+		t.Errorf("ExtrasSkipped = %v, want the existing cue sheet", placed.ExtrasSkipped)
+	}
+	if got := readAt(t, fsys, path.Join(commitDestRoot, wantPlaced[0])); got != "[00:01]lyrics" {
+		t.Errorf("lyrics = %q", got)
+	}
+	if got := readAt(t, fsys, existing); got != "already here" {
+		t.Errorf("existing cue sheet = %q, want it untouched", got)
 	}
 }

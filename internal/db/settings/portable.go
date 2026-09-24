@@ -42,23 +42,26 @@ type ScalarSettingsEntry struct {
 	ImportAutoCommitConfidence float64  `yaml:"import_auto_commit_confidence"`
 	ImportTransferLadder       []string `yaml:"import_transfer_ladder,omitempty"`
 	ImportRenameOnImport       bool     `yaml:"import_rename_on_import"`
-	NetworkPort                int      `yaml:"network_port,omitempty"`
-	NetworkProxyEnabled        bool     `yaml:"network_proxy_enabled"`
-	NetworkProxyURL            string   `yaml:"network_proxy_url,omitempty"`
-	NetworkProxyBypass         []string `yaml:"network_proxy_bypass,omitempty"`
-	NetworkAllowCIDRsEnabled   bool     `yaml:"network_allow_cidrs_enabled"`
-	NetworkAllowCIDRs          []string `yaml:"network_allow_cidrs,omitempty"`
-	CacheMaxBytes              int64    `yaml:"cache_max_bytes,omitempty"`
-	CacheMaxAgeDays            int64    `yaml:"cache_max_age_days,omitempty"`
-	CacheImagesSharePercent    int64    `yaml:"cache_images_share_percent,omitempty"`
-	CacheMetadataSharePercent  int64    `yaml:"cache_metadata_share_percent,omitempty"`
-	PriorityUserRequestWeight  int64    `yaml:"priority_user_request_weight,omitempty"`
-	PriorityNewReleaseWeight   int64    `yaml:"priority_new_release_weight,omitempty"`
-	PriorityGapWeight          int64    `yaml:"priority_gap_weight,omitempty"`
-	PriorityUpgradeWeight      int64    `yaml:"priority_upgrade_weight,omitempty"`
-	PriorityNewReleaseDays     int64    `yaml:"priority_new_release_days,omitempty"`
-	BrainzMashUserAgent        string   `yaml:"brainzmash_user_agent,omitempty"`
-	MetadataSourceOrder        []string `yaml:"metadata_source_order,omitempty"`
+	// ImportExtraFiles and its extensions; absent keeps what is stored.
+	ImportExtraFiles          *bool    `yaml:"import_extra_files,omitempty"`
+	ImportExtraFileExtensions []string `yaml:"import_extra_file_extensions,omitempty"`
+	NetworkPort               int      `yaml:"network_port,omitempty"`
+	NetworkProxyEnabled       bool     `yaml:"network_proxy_enabled"`
+	NetworkProxyURL           string   `yaml:"network_proxy_url,omitempty"`
+	NetworkProxyBypass        []string `yaml:"network_proxy_bypass,omitempty"`
+	NetworkAllowCIDRsEnabled  bool     `yaml:"network_allow_cidrs_enabled"`
+	NetworkAllowCIDRs         []string `yaml:"network_allow_cidrs,omitempty"`
+	CacheMaxBytes             int64    `yaml:"cache_max_bytes,omitempty"`
+	CacheMaxAgeDays           int64    `yaml:"cache_max_age_days,omitempty"`
+	CacheImagesSharePercent   int64    `yaml:"cache_images_share_percent,omitempty"`
+	CacheMetadataSharePercent int64    `yaml:"cache_metadata_share_percent,omitempty"`
+	PriorityUserRequestWeight int64    `yaml:"priority_user_request_weight,omitempty"`
+	PriorityNewReleaseWeight  int64    `yaml:"priority_new_release_weight,omitempty"`
+	PriorityGapWeight         int64    `yaml:"priority_gap_weight,omitempty"`
+	PriorityUpgradeWeight     int64    `yaml:"priority_upgrade_weight,omitempty"`
+	PriorityNewReleaseDays    int64    `yaml:"priority_new_release_days,omitempty"`
+	BrainzMashUserAgent       string   `yaml:"brainzmash_user_agent,omitempty"`
+	MetadataSourceOrder       []string `yaml:"metadata_source_order,omitempty"`
 	// Pointers, so "all cover sources off" and "switched off" survive a round trip; absent keeps
 	// the stored value.
 	MetadataCoverSources *[]string `yaml:"metadata_cover_sources,omitempty"`
@@ -186,11 +189,14 @@ func (c *Cache) Export() Document {
 	cacheBudget := snapshot.CacheBudget()
 	priority := snapshot.PrioritySettings()
 	metadata := snapshot.MetadataSettings()
+	extras := snapshot.ImportExtraFiles()
 	settingsEntry := ScalarSettingsEntry{
 		AuthRequired:               snapshot.AuthRequired(),
 		ImportAutoCommitConfidence: snapshot.ImportAutoCommitConfidence(),
 		ImportTransferLadder:       snapshot.ImportTransferLadder(),
 		ImportRenameOnImport:       snapshot.ImportRenameOnImport(),
+		ImportExtraFiles:           &extras.Enabled,
+		ImportExtraFileExtensions:  extras.Extensions,
 		NetworkPort:                network.Port,
 		NetworkProxyEnabled:        network.ProxyEnabled,
 		NetworkProxyURL:            network.ProxyURL,
@@ -406,6 +412,10 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 				BrainzMashUserAgent: DefaultBrainzMashUserAgent, CoverSources: *covers}) {
 				problems = append(problems, prefixed("settings", problem))
 			}
+		}
+		for _, problem := range validateImportExtraFileExtensions(
+			NormaliseExtraFileExtensions(d.Settings.ImportExtraFileExtensions)) {
+			problems = append(problems, prefixed("settings", problem))
 		}
 		if d.Settings.BackupRetention != "" {
 			for _, problem := range validateBackupRetention(BackupRetention{Mode: d.Settings.BackupRetention,
@@ -882,6 +892,16 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 	}
 	if entry.MetadataAcoustID != nil {
 		values[KeyMetadataAcoustID] = strconv.FormatBool(*entry.MetadataAcoustID)
+	}
+	if entry.ImportExtraFiles != nil {
+		values[KeyImportExtraFiles] = strconv.FormatBool(*entry.ImportExtraFiles)
+	}
+	if len(entry.ImportExtraFileExtensions) > 0 {
+		encoded, err := json.Marshal(NormaliseExtraFileExtensions(entry.ImportExtraFileExtensions))
+		if err != nil {
+			return fmt.Errorf("settings.import_extra_file_extensions: %w", err)
+		}
+		values[KeyImportExtraFileExtensions] = string(encoded)
 	}
 	if entry.BackupRetention != "" {
 		values[KeyBackupRetention] = string(entry.BackupRetention)

@@ -139,6 +139,15 @@ func (q *Queries) CreateImportSession(ctx context.Context, arg CreateImportSessi
 	return i, err
 }
 
+const deleteImportUnitExtras = `-- name: DeleteImportUnitExtras :exec
+DELETE FROM import_unit_extra WHERE unit_id = ?
+`
+
+func (q *Queries) DeleteImportUnitExtras(ctx context.Context, unitID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteImportUnitExtras, unitID)
+	return err
+}
+
 const dismissImportSession = `-- name: DismissImportSession :execrows
 UPDATE import_session SET dismissed_at = ?1
 WHERE id = ?2 AND dismissed_at IS NULL
@@ -316,6 +325,21 @@ func (q *Queries) InsertImportUnit(ctx context.Context, arg InsertImportUnitPara
 	return i, err
 }
 
+const insertImportUnitExtra = `-- name: InsertImportUnitExtra :exec
+INSERT INTO import_unit_extra (unit_id, root_folder_id, rel_path) VALUES (?, ?, ?)
+`
+
+type InsertImportUnitExtraParams struct {
+	UnitID       int64
+	RootFolderID int64
+	RelPath      string
+}
+
+func (q *Queries) InsertImportUnitExtra(ctx context.Context, arg InsertImportUnitExtraParams) error {
+	_, err := q.db.ExecContext(ctx, insertImportUnitExtra, arg.UnitID, arg.RootFolderID, arg.RelPath)
+	return err
+}
+
 const insertImportUnitFile = `-- name: InsertImportUnitFile :exec
 INSERT INTO import_unit_file (unit_id, media_object_id, library_path_id, transfer_method)
 VALUES (?, ?, ?, ?)
@@ -392,6 +416,42 @@ func (q *Queries) ListImportSessions(ctx context.Context, arg ListImportSessions
 			&i.UnitsEstimated,
 			&i.DismissedAt,
 			&i.Preview,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listImportUnitExtrasForSession = `-- name: ListImportUnitExtrasForSession :many
+SELECT iue.id, iue.unit_id, iue.root_folder_id, iue.rel_path
+FROM import_unit_extra iue
+JOIN import_unit iu ON iu.id = iue.unit_id
+WHERE iu.session_id = ?
+ORDER BY iue.id
+`
+
+func (q *Queries) ListImportUnitExtrasForSession(ctx context.Context, sessionID int64) ([]ImportUnitExtra, error) {
+	rows, err := q.db.QueryContext(ctx, listImportUnitExtrasForSession, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ImportUnitExtra{}
+	for rows.Next() {
+		var i ImportUnitExtra
+		if err := rows.Scan(
+			&i.ID,
+			&i.UnitID,
+			&i.RootFolderID,
+			&i.RelPath,
 		); err != nil {
 			return nil, err
 		}

@@ -1516,6 +1516,12 @@ type ImportSettings struct {
 	// AutoCommitConfidence 0.75-0.95, the section 11.4 table's five named levels. Default 0.90.
 	AutoCommitConfidence float32 `json:"auto_commit_confidence"`
 
+	// ExtraFileExtensions Extensions without the dot, such as lrc, cue, log, nfo (the default). A file named like a track follows the track's new name; any other keeps its own name in the album folder. Omitted leaves the list alone.
+	ExtraFileExtensions *[]string `json:"extra_file_extensions,omitempty"`
+
+	// ExtraFiles Lidarr's "Import Extra Files": bring files with the listed extensions along with the tracks. Off by default. Omitted leaves it alone.
+	ExtraFiles *bool `json:"extra_files,omitempty"`
+
 	// RenameOnImport Whether a committed file is named by the library's own template (on, the default) or keeps the name it arrived with. The folder structure comes from the template either way. Omitted on a PATCH leaves the stored value alone.
 	RenameOnImport *bool `json:"rename_on_import,omitempty"`
 

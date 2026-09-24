@@ -631,13 +631,25 @@ func (j *Job) placeCommitted(
 			WorkID: placed.WorkID, WorkCreated: placed.WorkCreated,
 			EditionID: placed.EditionID, EditionCreated: placed.EditionCreated,
 			MediaObjectIDs: placed.MediaObjectIDs, LibraryPathIDs: placed.LibraryPathIDs,
-			TransferMethods: placed.TransferMethodNames(),
+			TransferMethods: placed.TransferMethodNames(), Extras: placedExtras(placed),
 		}); err != nil {
 			j.logger.Warn("import commit: could not record placement",
 				slog.Int64("unit_id", ids[i]), slog.Any("error", err))
 		}
 		logPathWarnings(j.logger, ids[i], placed.PathWarnings)
+		for _, skipped := range placed.ExtrasSkipped {
+			j.logger.Warn("import commit: extra file not placed", slog.Int64("unit_id", ids[i]), slog.String("reason", skipped))
+		}
 	}
+}
+
+// placedExtras is the placement's extra files in the form RecordPlacement keeps for revert.
+func placedExtras(placed music.Placed) []library.UnitExtra {
+	extras := make([]library.UnitExtra, len(placed.Extras))
+	for i, relPath := range placed.Extras {
+		extras[i] = library.UnitExtra{RootFolderID: placed.RootFolderID, RelPath: relPath}
+	}
+	return extras
 }
 
 // logPathWarnings surfaces naming.RenderPath's own non-fatal notices (today:

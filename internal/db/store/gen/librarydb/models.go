@@ -359,6 +359,13 @@ type ImportUnit struct {
 	PackID         sql.NullInt64
 }
 
+type ImportUnitExtra struct {
+	ID           int64
+	UnitID       int64
+	RootFolderID int64
+	RelPath      string
+}
+
 type ImportUnitFile struct {
 	ID             int64
 	UnitID         int64

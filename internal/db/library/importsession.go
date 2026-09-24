@@ -257,6 +257,14 @@ type Placement struct {
 	// TransferMethods is parallel to MediaObjectIDs too: which ladder rung
 	// placed each file, left nil by a caller that does not know.
 	TransferMethods []string
+	// Extras are the extra files placed beside the media, so revert can find them.
+	Extras []UnitExtra
+}
+
+// UnitExtra is one extra file an import placed, by root folder and path under it.
+type UnitExtra struct {
+	RootFolderID int64
+	RelPath      string
 }
 
 // RecordPlacement writes one unit's placement, in one transaction: the
@@ -290,8 +298,39 @@ func (s ImportSessions) RecordPlacement(ctx context.Context, unitID int64, place
 				return fmt.Errorf("insert unit %d file %d: %w", unitID, mediaObjectID, err)
 			}
 		}
+		for _, extra := range placement.Extras {
+			if err := queries.InsertImportUnitExtra(ctx, librarydb.InsertImportUnitExtraParams{
+				UnitID: unitID, RootFolderID: extra.RootFolderID, RelPath: extra.RelPath,
+			}); err != nil {
+				return fmt.Errorf("insert unit %d extra %q: %w", unitID, extra.RelPath, err)
+			}
+		}
 		return nil
 	})
+}
+
+// UnitExtras maps every unit in a session to the extra files its placement brought along.
+func (s ImportSessions) UnitExtras(ctx context.Context, sessionID int64) (map[int64][]UnitExtra, error) {
+	rows, err := librarydb.New(s.store.Read()).ListImportUnitExtrasForSession(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("library: list unit extras for session %d: %w", sessionID, err)
+	}
+	byUnit := make(map[int64][]UnitExtra, len(rows))
+	for _, row := range rows {
+		byUnit[row.UnitID] = append(byUnit[row.UnitID], UnitExtra{RootFolderID: row.RootFolderID, RelPath: row.RelPath})
+	}
+	return byUnit, nil
+}
+
+// DeleteUnitExtras forgets a unit's extra files once revert has quarantined them.
+func (s ImportSessions) DeleteUnitExtras(ctx context.Context, unitID int64) error {
+	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).DeleteImportUnitExtras(ctx, unitID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: delete unit %d extras: %w", unitID, err)
+	}
+	return nil
 }
 
 // ClearUnitPlacement is revert's own first step for one unit: work_id/
