@@ -529,3 +529,60 @@ func TestSearchCategoryJob_OneItemFailingDoesNotStopTheRest(t *testing.T) {
 		t.Errorf("%d decisions for the working item, want 1 despite the sibling's own failure", len(decisions))
 	}
 }
+
+// Blocklisting a decided release keeps it out of every later search, before it is decided again.
+func TestSearchItem_ABlocklistedReleaseIsNeverDecidedAgain(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	searcher := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+		return []indexer.RawItem{
+			rawItem("guid-1", "Nosi Zada-Discovery-2001-FLAC-GROUP"),
+			rawItem("guid-2", "Nosi Zada-Discovery-2001-MP3-OTHER"),
+		}, nil
+	}}
+	blocklist := library.NewBlocklistStore(env.library)
+	search := env.search()
+	search.Blocklist = &blocklist
+	conns := []music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}
+
+	first, err := search.SearchItem(t.Context(), item.ID, conns, env.clock.Now())
+	if err != nil || len(first.Decisions) != 2 {
+		t.Fatalf("first search: %d decisions, %v; want 2", len(first.Decisions), err)
+	}
+	var blocked int64
+	for _, detail := range first.Decisions {
+		if detail.ReleaseCandidate.GUID == "guid-1" {
+			blocked = detail.Decision.ID
+		}
+	}
+	if err := search.BlocklistRelease(t.Context(), item.ID, blocked, env.clock.Now()); err != nil {
+		t.Fatalf("BlocklistRelease: %v", err)
+	}
+
+	second, err := search.SearchItem(t.Context(), item.ID, conns, env.clock.Now())
+	if err != nil || len(second.Decisions) != 1 || second.Decisions[0].ReleaseCandidate.GUID != "guid-2" {
+		t.Errorf("second search = %+v, %v; want only guid-2", second.Decisions, err)
+	}
+}
+
+// "Search with different terms" searches exactly those terms, and a release named by them matches.
+func TestSearchItemWithTerms_SearchesThePersonsOwnTerms(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	searcher := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+		return []indexer.RawItem{rawItem("guid-1", "Dekotu Bangalter-Trax on da Rocks-1995-FLAC-GROUP")}, nil
+	}}
+
+	result, err := env.search().SearchItemWithTerms(t.Context(), item.ID,
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, env.clock.Now(),
+		&music.SearchTerms{Artist: "Dekotu Bangalter", Album: "Trax on da Rocks"})
+	if err != nil {
+		t.Fatalf("SearchItemWithTerms: %v", err)
+	}
+	if len(searcher.requests) != 1 || searcher.requests[0].Extra["album"] != "Trax on da Rocks" {
+		t.Errorf("requests = %+v, want one search for the typed album", searcher.requests)
+	}
+	if len(result.Decisions) != 1 {
+		t.Errorf("%d decisions, want the release matching the typed terms", len(result.Decisions))
+	}
+}

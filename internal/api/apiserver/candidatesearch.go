@@ -3,9 +3,11 @@ package apiserver
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -66,6 +68,14 @@ type CandidateDecision struct {
 	DownloadURL     string
 	Source          string
 	DecidedAt       time.Time
+	// IndexerName is empty when the indexer has since been removed.
+	IndexerName string
+	Blocklisted bool
+}
+
+// SearchTerms are a person's own artist and album, searched instead of the work's own.
+type SearchTerms struct {
+	Artist, Album string
 }
 
 // IndexerSearchError records one indexer's own search failure within a run.
@@ -96,7 +106,8 @@ type Acquisition struct {
 // CandidateSearcher is stage 5's own candidate pipeline, exposed to the web
 // interface (todo 5.2's "manual search, per-item and per-category").
 type CandidateSearcher interface {
-	SearchWork(ctx context.Context, workID int64) (SearchItemResult, error)
+	// SearchWork searches the work's own terms, or terms when a person gave different ones.
+	SearchWork(ctx context.Context, workID int64, terms *SearchTerms) (SearchItemResult, error)
 	// SearchTrack searches for one track on its own, wanting it first if
 	// nothing did.
 	SearchTrack(ctx context.Context, workID, partID int64) (SearchItemResult, error)
@@ -107,6 +118,8 @@ type CandidateSearcher interface {
 	// SendCandidate is ADR-57's own acquire.send: dispatch decisionID (which
 	// must belong to workID and be ACCEPT) to a matching downloader.
 	SendCandidate(ctx context.Context, workID, decisionID int64) (Acquisition, error)
+	// BlocklistCandidate never offers decisionID's release again (section 10.11).
+	BlocklistCandidate(ctx context.Context, workID, decisionID int64) error
 }
 
 // routeSearchWork parses the id path parameter.
@@ -126,7 +139,18 @@ func (s *Server) SearchWork(w http.ResponseWriter, r *http.Request, id int64) {
 		writeError(w, s.logger, err)
 		return
 	}
-	result, err := s.candidateSearcher.SearchWork(r.Context(), id)
+	var terms *SearchTerms
+	if r.ContentLength != 0 {
+		var body gen.SearchWorkJSONRequestBody
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil ||
+			strings.TrimSpace(body.Artist) == "" || strings.TrimSpace(body.Album) == "" {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "different terms need both an artist and an album")
+			return
+		}
+		terms = &SearchTerms{Artist: strings.TrimSpace(body.Artist), Album: strings.TrimSpace(body.Album)}
+	}
+	result, err := s.candidateSearcher.SearchWork(r.Context(), id, terms)
 	if err != nil {
 		writeCandidateSearchError(w, s, err)
 		return
@@ -222,6 +246,30 @@ func (s *Server) SendCandidate(w http.ResponseWriter, r *http.Request, id, decis
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, acquisitionView(acquisition))
+}
+
+func (s *Server) routeBlocklistCandidate(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathID(w, s, r, "id", "a work id must be a number")
+	if err != nil {
+		return
+	}
+	decisionID, err := parsePathID(w, s, r, "decisionId", "a decision id must be a number")
+	if err != nil {
+		return
+	}
+	s.BlocklistCandidate(w, r, id, decisionID)
+}
+
+// BlocklistCandidate never offers one release again. Administrator only, like the Blocklists page.
+func (s *Server) BlocklistCandidate(w http.ResponseWriter, r *http.Request, id, decisionID int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if err := s.candidateSearcher.BlocklistCandidate(r.Context(), id, decisionID); err != nil {
+		writeCandidateSearchError(w, s, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // routeSearchCategory parses the id path parameter.
@@ -336,6 +384,7 @@ func candidateDecisionView(decision CandidateDecision) gen.CandidateDecision {
 		IndexerId: decision.IndexerID, Guid: decision.GUID, Title: decision.Title,
 		Protocol: gen.CandidateDecisionProtocol(decision.Protocol), DownloadUrl: decision.DownloadURL,
 		Source: gen.CandidateDecisionSource(decision.Source), DecidedAt: decision.DecidedAt,
+		IndexerName: &decision.IndexerName, Blocklisted: &decision.Blocklisted,
 	}
 	if decision.MatchConfidence != nil {
 		confidence := float32(*decision.MatchConfidence)

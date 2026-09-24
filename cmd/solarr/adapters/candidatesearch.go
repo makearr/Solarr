@@ -31,7 +31,9 @@ type CandidateSearch struct {
 
 // SearchWork resolves workID to its own album-level wanted item and runs
 // the pipeline against it.
-func (c CandidateSearch) SearchWork(ctx context.Context, workID int64) (apiserver.SearchItemResult, error) {
+func (c CandidateSearch) SearchWork(
+	ctx context.Context, workID int64, terms *apiserver.SearchTerms,
+) (apiserver.SearchItemResult, error) {
 	detail, err := c.Works.Detail(ctx, workID)
 	if err != nil {
 		return apiserver.SearchItemResult{}, err
@@ -48,11 +50,27 @@ func (c CandidateSearch) SearchWork(ctx context.Context, workID int64) (apiserve
 		return apiserver.SearchItemResult{}, apiserver.ErrNoIndexersConfigured
 	}
 
-	result, err := c.Search.SearchItem(ctx, detail.Wanted.ID, indexers, c.Clock.Now())
+	var custom *music.SearchTerms
+	if terms != nil {
+		custom = &music.SearchTerms{Artist: terms.Artist, Album: terms.Album}
+	}
+	result, err := c.Search.SearchItemWithTerms(ctx, detail.Wanted.ID, indexers, c.Clock.Now(), custom)
 	if err != nil {
 		return apiserver.SearchItemResult{}, err
 	}
-	return searchItemResultView(result), nil
+	return c.searchItemResultView(ctx, result), nil
+}
+
+// BlocklistCandidate blocklists the release one of workID's decisions recorded.
+func (c CandidateSearch) BlocklistCandidate(ctx context.Context, workID, decisionID int64) error {
+	detail, err := c.Works.Detail(ctx, workID)
+	if err != nil {
+		return err
+	}
+	if detail.Wanted == nil {
+		return apiserver.ErrCandidateDecisionNotFound
+	}
+	return translateDispatchError(c.Search.BlocklistRelease(ctx, detail.Wanted.ID, decisionID, c.Clock.Now()))
 }
 
 // SearchTrack runs the pipeline against one track's own SINGLE item,
@@ -76,7 +94,7 @@ func (c CandidateSearch) SearchTrack(ctx context.Context, workID, partID int64) 
 	if err != nil {
 		return apiserver.SearchItemResult{}, err
 	}
-	return searchItemResultView(result), nil
+	return c.searchItemResultView(ctx, result), nil
 }
 
 // ListWorkCandidates answers every decision recorded against workID's own
@@ -94,11 +112,7 @@ func (c CandidateSearch) ListWorkCandidates(ctx context.Context, workID int64) (
 	if err != nil {
 		return nil, err
 	}
-	views := make([]apiserver.CandidateDecision, len(details))
-	for index, detail := range details {
-		views[index] = candidateDecisionView(detail)
-	}
-	return views, nil
+	return c.decisionViews(ctx, details), nil
 }
 
 // candidateHistoryLimit bounds how much of one item's own search history a
@@ -160,11 +174,33 @@ func (c CandidateSearch) SearchCategory(ctx context.Context, categoryID int64) (
 	return result.Duplicate, nil
 }
 
-func searchItemResultView(result music.ItemSearchResult) apiserver.SearchItemResult {
-	decisions := make([]apiserver.CandidateDecision, len(result.Decisions))
-	for index, detail := range result.Decisions {
-		decisions[index] = candidateDecisionView(detail)
+// decisionViews adds what a row shows beyond the decision: its indexer's name, and whether the
+// release has been blocklisted since.
+func (c CandidateSearch) decisionViews(ctx context.Context, details []library.DecisionDetail) []apiserver.CandidateDecision {
+	names := map[int64]string{}
+	if c.Search.Settings != nil {
+		if indexers, err := c.Search.Settings.Indexers(ctx); err == nil {
+			for _, found := range indexers {
+				names[found.ID] = found.Name
+			}
+		}
 	}
+	now := c.Clock.Now().Unix()
+	views := make([]apiserver.CandidateDecision, len(details))
+	for index, detail := range details {
+		views[index] = candidateDecisionView(detail)
+		views[index].IndexerName = names[detail.ReleaseCandidate.IndexerID]
+		if c.Search.Blocklist != nil {
+			indexerID := detail.ReleaseCandidate.IndexerID
+			blocked, err := c.Search.Blocklist.IsBlocked(ctx, &indexerID, detail.ReleaseCandidate.GUID, "", now)
+			views[index].Blocklisted = err == nil && blocked
+		}
+	}
+	return views
+}
+
+func (c CandidateSearch) searchItemResultView(ctx context.Context, result music.ItemSearchResult) apiserver.SearchItemResult {
+	decisions := c.decisionViews(ctx, result.Decisions)
 	indexerErrors := make([]apiserver.IndexerSearchError, len(result.IndexerErrors))
 	for index, indexerError := range result.IndexerErrors {
 		indexerErrors[index] = apiserver.IndexerSearchError{IndexerID: indexerError.IndexerID, Error: indexerError.Error}

@@ -107,6 +107,14 @@ type Search struct {
 	Candidates library.Candidates
 	Settings   *settings.Cache
 	Clock      clock.Clock
+	// Blocklist, when set, keeps a blocklisted release out before it is evaluated (section 10.11).
+	Blocklist *library.BlocklistStore
+}
+
+// SearchTerms are a person's own artist and album for "search with different terms".
+type SearchTerms struct {
+	Artist string
+	Album  string
 }
 
 // searchTerms is one query's own artist/album/year parameters -- Newznab's
@@ -124,6 +132,14 @@ type searchTerms struct {
 // widening). Every accepted match is scored and persisted regardless of its
 // quality outcome -- REJECT and DEFER are recorded findings, not silence.
 func (s Search) SearchItem(ctx context.Context, itemID int64, indexers []IndexerConn, at time.Time) (ItemSearchResult, error) {
+	return s.SearchItemWithTerms(ctx, itemID, indexers, at, nil)
+}
+
+// SearchItemWithTerms is SearchItem searching a person's own terms instead of the work's tiers; a
+// release matching them is accepted as matching the work.
+func (s Search) SearchItemWithTerms(
+	ctx context.Context, itemID int64, indexers []IndexerConn, at time.Time, custom *SearchTerms,
+) (ItemSearchResult, error) {
 	item, err := s.Desired.Get(ctx, itemID)
 	if err != nil {
 		return ItemSearchResult{}, fmt.Errorf("music: search item %d: %w", itemID, err)
@@ -155,6 +171,13 @@ func (s Search) SearchItem(ctx context.Context, itemID int64, indexers []Indexer
 	artistName := primaryArtistName(detail)
 	target := targetIdentity(detail, item, artistName, aliases)
 	tiers := buildSearchTiers(artistName, detail.Work, aliases)
+	if custom != nil {
+		tiers = [][]searchTerms{{{Extra: map[string]string{"artist": custom.Artist, "album": custom.Album}}}}
+		// The typed terms are the identity now; the work's year and ids would judge them against the old name.
+		target.Identity = match.Identity{
+			Title: combinedTitle(custom.Artist, custom.Album), AlternateTitles: []string{target.Title},
+		}
+	}
 
 	result := ItemSearchResult{}
 	for tierIndex, terms := range tiers {
@@ -168,6 +191,10 @@ func (s Search) SearchItem(ctx context.Context, itemID int64, indexers []Indexer
 					result.IndexerErrors = append(result.IndexerErrors,
 						IndexerSearchError{IndexerID: conn.ID, Error: searchErr.Error()})
 					continue
+				}
+				raws, err = s.withoutBlocklisted(ctx, conn.ID, raws, at)
+				if err != nil {
+					return result, fmt.Errorf("music: search item %d: %w", itemID, err)
 				}
 				accepted = append(accepted, evaluateRawItems(raws, conn, target, rules, languagePolicy, preferPropers)...)
 			}
@@ -187,6 +214,50 @@ func (s Search) SearchItem(ctx context.Context, itemID int64, indexers []Indexer
 		return result, nil
 	}
 	return result, nil
+}
+
+// withoutBlocklisted drops a release blocklisted by guid on this indexer before it is evaluated
+// (section 10.11), so it is neither decided nor offered again.
+func (s Search) withoutBlocklisted(ctx context.Context, indexerID int64, raws []indexer.RawItem, at time.Time) ([]indexer.RawItem, error) {
+	if s.Blocklist == nil {
+		return raws, nil
+	}
+	kept := raws[:0:0]
+	for _, raw := range raws {
+		blocked, err := s.Blocklist.IsBlocked(ctx, &indexerID, raw.GUID, "", at.Unix())
+		if err != nil {
+			return nil, err
+		}
+		if !blocked {
+			kept = append(kept, raw)
+		}
+	}
+	return kept, nil
+}
+
+// BlocklistRelease blocklists the release a decision recorded against itemID, permanently and
+// as the user's choice (section 10.11: only automatic entries expire).
+func (s Search) BlocklistRelease(ctx context.Context, itemID, decisionID int64, at time.Time) error {
+	if s.Blocklist == nil {
+		return errors.New("music: blocklist is not available")
+	}
+	details, err := s.Candidates.ListDecisionsForItem(ctx, itemID, dispatchDecisionLookupLimit)
+	if err != nil {
+		return fmt.Errorf("music: blocklist release: %w", err)
+	}
+	for _, detail := range details {
+		if detail.Decision.ID != decisionID {
+			continue
+		}
+		indexerID := detail.ReleaseCandidate.IndexerID
+		_, err := s.Blocklist.Create(ctx, library.NewBlocklistEntry{
+			IndexerID: &indexerID, GUID: detail.ReleaseCandidate.GUID, Title: detail.ReleaseCandidate.Title,
+			DesiredItemID: &itemID, Reason: library.BlocklistManual, Source: library.BlocklistSourceUser,
+			CreatedAt: at.Unix(),
+		})
+		return err
+	}
+	return ErrDecisionNotFound
 }
 
 // acceptedFind is one raw item that cleared the match-distance gate against
