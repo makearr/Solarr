@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/netip"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -740,5 +741,50 @@ func TestSetCategoryFileManagement_RefusesAModeThatLocksSolarrOut(t *testing.T) 
 	var problems config.Problems
 	if !errors.As(err, &problems) || len(problems) != 1 || problems[0].Path != "chmod_folder" {
 		t.Fatalf("SetCategoryFileManagement(555) = %v, want one chmod_folder problem", err)
+	}
+}
+
+// A hand-written block keeps every key it leaves out; an absent auth_required must not switch
+// sign-in off (found 2026-09-24).
+func TestImport_AHandWrittenSettingsBlockChangesOnlyWhatItNames(t *testing.T) {
+	cache, fake := newCache(t)
+	budgetBefore := cache.Snapshot().CacheBudget()
+	document := settings.Document{Version: settings.DocumentVersion,
+		Settings: &settings.ScalarSettingsEntry{ImportAutoCommitConfidence: 0.85}}
+	document.NameSettings([]string{"import_auto_commit_confidence"})
+
+	if err := cache.Import(t.Context(), fake, netip.Addr{}, document); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	snapshot := cache.Snapshot()
+	if !snapshot.AuthRequired() || snapshot.ImportAutoCommitConfidence() != 0.85 || snapshot.CacheBudget() != budgetBefore {
+		t.Errorf("auth %v confidence %v budget %+v; want sign-in kept, 0.85, budget %+v",
+			snapshot.AuthRequired(), snapshot.ImportAutoCommitConfidence(), snapshot.CacheBudget(), budgetBefore)
+	}
+}
+
+// Keys that only mean something together are asked for by name, not refused as zeros.
+func TestImport_NamesTheKeysAGroupIsMissing(t *testing.T) {
+	cache, fake := newCache(t)
+	document := settings.Document{Version: settings.DocumentVersion,
+		Settings: &settings.ScalarSettingsEntry{CacheMaxBytes: 1 << 30, CacheMaxAgeDays: 30}}
+	document.NameSettings([]string{"cache_max_bytes", "cache_max_age_days"})
+
+	err := cache.Import(t.Context(), fake, netip.Addr{}, document)
+	var problems config.Problems
+	if !errors.As(err, &problems) {
+		t.Fatalf("Import = %v, want problems", err)
+	}
+	var missing []string
+	for _, problem := range problems {
+		if problem.Value == "(missing)" {
+			missing = append(missing, problem.Path)
+		}
+	}
+	if want := []string{"settings.cache_images_share_percent", "settings.cache_metadata_share_percent"}; !slices.Equal(missing, want) {
+		t.Errorf("missing = %v, want %v (all problems: %v)", missing, want, problems)
+	}
+	if len(problems) != len(missing) {
+		t.Errorf("problems = %v, want only the missing keys", problems)
 	}
 }

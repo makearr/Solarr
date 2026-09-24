@@ -64,6 +64,7 @@ func (s *Server) ImportSettings(w http.ResponseWriter, r *http.Request) {
 	var generic any
 	_ = yaml.Unmarshal(body, &generic)
 	unknown := config.UnknownKeysIn(generic, reflect.TypeOf(settings.Document{}))
+	document.NameSettings(settingsKeysIn(generic))
 
 	caller := s.resolvedClientAddress(r)
 	if err := s.auth.Settings.Import(r.Context(), s.wall, caller, document); err != nil {
@@ -119,4 +120,21 @@ func (s *Server) requireAdministrator(w http.ResponseWriter, r *http.Request) bo
 		return false
 	}
 	return true
+}
+
+// settingsKeysIn is the keys the document's settings block names, so an absent one keeps its value.
+func settingsKeysIn(generic any) []string {
+	root, ok := generic.(map[string]any)
+	if !ok {
+		return nil
+	}
+	block, ok := root["settings"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	keys := make([]string, 0, len(block))
+	for key := range block {
+		keys = append(keys, key)
+	}
+	return keys
 }

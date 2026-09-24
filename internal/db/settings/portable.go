@@ -73,6 +73,78 @@ type ScalarSettingsEntry struct {
 	BackupRetention BackupRetentionMode `yaml:"backup_retention,omitempty"`
 	BackupKeepCount int64               `yaml:"backup_keep_count,omitempty"`
 	BackupKeepDays  int64               `yaml:"backup_keep_days,omitempty"`
+
+	// present is the keys a parsed document named (NameSettings); nil means every one, as in an
+	// export or a document built in Go.
+	present map[string]bool
+}
+
+// settingsGroups are keys that only mean something together: naming one asks for the others.
+var settingsGroups = [][]string{
+	{"network_proxy_enabled", "network_allow_cidrs_enabled"},
+	{"cache_max_bytes", "cache_max_age_days", "cache_images_share_percent", "cache_metadata_share_percent"},
+	{"priority_user_request_weight", "priority_new_release_weight", "priority_gap_weight",
+		"priority_upgrade_weight", "priority_new_release_days"},
+}
+
+// networkGroupKeys are every network key; any of them brings in the whole network group.
+var networkGroupKeys = []string{"network_port", "network_proxy_enabled", "network_proxy_url",
+	"network_proxy_bypass", "network_allow_cidrs_enabled", "network_allow_cidrs"}
+
+// NameSettings records which keys a hand-written settings block names, so a key it leaves out
+// keeps the stored value rather than reading as false or zero (found 2026-09-24: an absent
+// auth_required would have switched sign-in off).
+func (d *Document) NameSettings(keys []string) {
+	if d.Settings == nil {
+		return
+	}
+	d.Settings.present = make(map[string]bool, len(keys))
+	for _, key := range keys {
+		d.Settings.present[key] = true
+	}
+}
+
+func (e ScalarSettingsEntry) has(key string) bool { return e.present == nil || e.present[key] }
+
+// hasAll is whether a group is complete; its values are judged only then, the missing keys first.
+func (e ScalarSettingsEntry) hasAll(keys []string) bool {
+	for _, key := range keys {
+		if !e.has(key) {
+			return false
+		}
+	}
+	return true
+}
+
+func (e ScalarSettingsEntry) hasAny(keys []string) bool {
+	for _, key := range keys {
+		if e.has(key) {
+			return true
+		}
+	}
+	return false
+}
+
+// missingFromGroups names every key a named group lacks.
+func (e ScalarSettingsEntry) missingFromGroups() config.Problems {
+	var problems config.Problems
+	for _, group := range settingsGroups {
+		keys := group
+		if group[0] == "network_proxy_enabled" {
+			keys = networkGroupKeys
+		}
+		if !e.hasAny(keys) {
+			continue
+		}
+		for _, key := range group {
+			if !e.has(key) {
+				problems = append(problems, config.Problem{Path: "settings." + key, Value: "(missing)",
+					Expectation: "present: it goes with the other " + strings.SplitN(key, "_", 2)[0] +
+						" keys; copy them together from an export"})
+			}
+		}
+	}
+	return problems
 }
 
 // CategoryEntry is one category and the roots attached to it.
@@ -385,8 +457,11 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 	problems = append(problems, validateScheduleEntries(d.Schedules)...)
 
 	if d.Settings != nil {
-		for _, problem := range validateImportAutoCommitConfidence(d.Settings.ImportAutoCommitConfidence) {
-			problems = append(problems, prefixed("settings", problem))
+		problems = append(problems, d.Settings.missingFromGroups()...)
+		if d.Settings.has("import_auto_commit_confidence") {
+			for _, problem := range validateImportAutoCommitConfidence(d.Settings.ImportAutoCommitConfidence) {
+				problems = append(problems, prefixed("settings", problem))
+			}
 		}
 		// Absent means "say nothing about it", unlike the API setter where an
 		// empty ladder is a user clearing every method and is refused.
@@ -400,23 +475,29 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 			ProxyURL: d.Settings.NetworkProxyURL, ProxyBypass: d.Settings.NetworkProxyBypass,
 			AllowCIDRsEnabled: d.Settings.NetworkAllowCIDRsEnabled, AllowCIDRs: d.Settings.NetworkAllowCIDRs,
 		}
-		for _, problem := range validateNetworkSettings(network, callerAddress) {
-			problems = append(problems, prefixed("settings", problem))
+		if d.Settings.hasAny(networkGroupKeys) && d.Settings.hasAll(settingsGroups[0]) {
+			for _, problem := range validateNetworkSettings(network, callerAddress) {
+				problems = append(problems, prefixed("settings", problem))
+			}
 		}
 		cacheBudget := CacheBudget{
 			MaxBytes: d.Settings.CacheMaxBytes, MaxAgeDays: d.Settings.CacheMaxAgeDays,
 			ImagesSharePercent: d.Settings.CacheImagesSharePercent, MetadataSharePercent: d.Settings.CacheMetadataSharePercent,
 		}
-		for _, problem := range validateCacheBudget(cacheBudget) {
-			problems = append(problems, prefixed("settings", problem))
+		if d.Settings.hasAll(settingsGroups[1]) {
+			for _, problem := range validateCacheBudget(cacheBudget) {
+				problems = append(problems, prefixed("settings", problem))
+			}
 		}
 		priority := PrioritySettings{
 			UserRequestWeight: d.Settings.PriorityUserRequestWeight, NewReleaseWeight: d.Settings.PriorityNewReleaseWeight,
 			GapWeight: d.Settings.PriorityGapWeight, UpgradeWeight: d.Settings.PriorityUpgradeWeight,
 			NewReleaseDays: d.Settings.PriorityNewReleaseDays,
 		}
-		for _, problem := range validatePrioritySettings(priority) {
-			problems = append(problems, prefixed("settings", problem))
+		if d.Settings.hasAll(settingsGroups[2]) {
+			for _, problem := range validatePrioritySettings(priority) {
+				problems = append(problems, prefixed("settings", problem))
+			}
 		}
 		// Absent means the document predates the setting, so the stored agent is kept.
 		if d.Settings.BrainzMashUserAgent != "" {
@@ -885,26 +966,39 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 		return fmt.Errorf("settings.import_transfer_ladder: %w", err)
 	}
 
-	values := map[string]string{
-		KeyAuthRequired:               strconv.FormatBool(entry.AuthRequired),
-		KeyImportTransferLadder:       string(transferLadder),
-		KeyImportAutoCommitConfidence: strconv.FormatFloat(entry.ImportAutoCommitConfidence, 'f', -1, 64),
-		KeyImportRenameOnImport:       strconv.FormatBool(entry.ImportRenameOnImport),
-		KeyNetworkPort:                strconv.Itoa(entry.NetworkPort),
-		KeyNetworkProxyEnabled:        strconv.FormatBool(entry.NetworkProxyEnabled),
-		KeyNetworkProxyURL:            entry.NetworkProxyURL,
-		KeyNetworkProxyBypass:         string(proxyBypass),
-		KeyNetworkAllowCIDRsEnabled:   strconv.FormatBool(entry.NetworkAllowCIDRsEnabled),
-		KeyNetworkAllowCIDRs:          string(allowCIDRs),
-		KeyCacheMaxBytes:              strconv.FormatInt(entry.CacheMaxBytes, 10),
-		KeyCacheMaxAgeDays:            strconv.FormatInt(entry.CacheMaxAgeDays, 10),
-		KeyCacheImagesShare:           strconv.FormatInt(entry.CacheImagesSharePercent, 10),
-		KeyCacheMetadataShare:         strconv.FormatInt(entry.CacheMetadataSharePercent, 10),
-		KeyPriorityUserRequestWeight:  strconv.FormatInt(entry.PriorityUserRequestWeight, 10),
-		KeyPriorityNewReleaseWeight:   strconv.FormatInt(entry.PriorityNewReleaseWeight, 10),
-		KeyPriorityGapWeight:          strconv.FormatInt(entry.PriorityGapWeight, 10),
-		KeyPriorityUpgradeWeight:      strconv.FormatInt(entry.PriorityUpgradeWeight, 10),
-		KeyPriorityNewReleaseDays:     strconv.FormatInt(entry.PriorityNewReleaseDays, 10),
+	values := map[string]string{}
+	if entry.has("auth_required") {
+		values[KeyAuthRequired] = strconv.FormatBool(entry.AuthRequired)
+	}
+	if entry.present == nil || len(entry.ImportTransferLadder) > 0 {
+		values[KeyImportTransferLadder] = string(transferLadder)
+	}
+	if entry.has("import_auto_commit_confidence") {
+		values[KeyImportAutoCommitConfidence] = strconv.FormatFloat(entry.ImportAutoCommitConfidence, 'f', -1, 64)
+	}
+	if entry.has("import_rename_on_import") {
+		values[KeyImportRenameOnImport] = strconv.FormatBool(entry.ImportRenameOnImport)
+	}
+	if entry.hasAny(networkGroupKeys) {
+		values[KeyNetworkPort] = strconv.Itoa(entry.NetworkPort)
+		values[KeyNetworkProxyEnabled] = strconv.FormatBool(entry.NetworkProxyEnabled)
+		values[KeyNetworkProxyURL] = entry.NetworkProxyURL
+		values[KeyNetworkProxyBypass] = string(proxyBypass)
+		values[KeyNetworkAllowCIDRsEnabled] = strconv.FormatBool(entry.NetworkAllowCIDRsEnabled)
+		values[KeyNetworkAllowCIDRs] = string(allowCIDRs)
+	}
+	if entry.hasAny(settingsGroups[1]) {
+		values[KeyCacheMaxBytes] = strconv.FormatInt(entry.CacheMaxBytes, 10)
+		values[KeyCacheMaxAgeDays] = strconv.FormatInt(entry.CacheMaxAgeDays, 10)
+		values[KeyCacheImagesShare] = strconv.FormatInt(entry.CacheImagesSharePercent, 10)
+		values[KeyCacheMetadataShare] = strconv.FormatInt(entry.CacheMetadataSharePercent, 10)
+	}
+	if entry.hasAny(settingsGroups[2]) {
+		values[KeyPriorityUserRequestWeight] = strconv.FormatInt(entry.PriorityUserRequestWeight, 10)
+		values[KeyPriorityNewReleaseWeight] = strconv.FormatInt(entry.PriorityNewReleaseWeight, 10)
+		values[KeyPriorityGapWeight] = strconv.FormatInt(entry.PriorityGapWeight, 10)
+		values[KeyPriorityUpgradeWeight] = strconv.FormatInt(entry.PriorityUpgradeWeight, 10)
+		values[KeyPriorityNewReleaseDays] = strconv.FormatInt(entry.PriorityNewReleaseDays, 10)
 	}
 	if len(entry.MetadataSourceOrder) > 0 {
 		encodedOrder, err := json.Marshal(entry.MetadataSourceOrder)
