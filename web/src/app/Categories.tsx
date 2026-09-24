@@ -75,7 +75,7 @@ export function Categories() {
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Categories</h2>
+      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Libraries</h2>
 
       {categories.data && categories.data.length > 0 ? (
         <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
@@ -157,7 +157,7 @@ function Row({
             type="button"
             onClick={onSearch}
             disabled={searchPending}
-            title="Search every monitored, incomplete album in this category (stage 5)"
+            title="Search every monitored, incomplete album in this library"
             className="rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted
                        hover:text-ink disabled:opacity-50 focus-visible:outline-2
                        focus-visible:outline-offset-2 focus-visible:outline-accent"
@@ -228,7 +228,7 @@ export function EditCategoryForm({
 
   if (detail.isLoading) return <p className="text-xs text-ink-muted">Loading…</p>;
   if (detail.error !== null || !detail.data) {
-    return <p className="text-xs text-danger">This category could not be read.</p>;
+    return <p className="text-xs text-danger">This library could not be read.</p>;
   }
 
   return (
@@ -364,7 +364,7 @@ function EditCategoryFields({
       </div>
       {save.isError && (
         <p className="text-xs text-danger">
-          {(save.error as { detail?: string }).detail ?? "That category could not be saved."}
+          {(save.error as { detail?: string }).detail ?? "That library could not be saved."}
         </p>
       )}
       <div className="flex gap-2">
@@ -446,7 +446,7 @@ function AddCategory({ onAdded }: { onAdded: () => void }) {
         className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
                    focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
-        {create.isPending ? "Adding…" : "Add category"}
+        {create.isPending ? "Adding…" : "Add library"}
       </button>
       {create.isError && (
         <p className="w-full text-xs text-danger">

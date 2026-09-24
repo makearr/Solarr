@@ -1,83 +1,58 @@
-import { Link } from "@tanstack/react-router";
-
+import { Blocklist } from "./Blocklist";
 import { Categories } from "./Categories";
 import { MetadataSettings } from "./MetadataSettings";
 import { Network } from "./Network";
 import { Priority } from "./Priority";
 import { UnwantedFiles } from "./UnwantedFiles";
+import { isTierVisible, useTier } from "@/lib/useTier";
 
-/** Settings sections in the order they matter to someone setting the thing up.
- *  `stage` names what has to exist before a section can do anything, so the
- *  scaffolding is honest about being scaffolding rather than looking broken.
- *  Storage moved out to its own sidebar section (todo 4.18) -- configuration
- *  lives where the thing it configures lives, and root folders are no
- *  longer just-a-list here. */
-const SECTIONS = [
-  { id: "profiles", title: "Quality profiles", blurb: "Hard gates, tier order and scoring.", stage: 4 },
-  { id: "indexers", title: "Indexers", blurb: "Newznab and Torznab sources, and their egress.", stage: 5 },
-  { id: "downloaders", title: "Download clients", blurb: "Usenet, torrent and direct downloads.", stage: 5 },
-] as const;
-
-export function GeneralSettings() {
+/** Settings -> General, split apart on the 2026-09-19 review: Libraries, Blocklists, Network,
+ *  Metadata. Quality profiles, indexers and download clients live where they are configured. */
+function SettingsPage({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-        <header className="flex flex-col gap-1">
-          <h1 className="text-base font-semibold">General</h1>
-          <p className="text-xs text-ink-muted">
-            Every setting is normal, advanced or expert (ADR-26). The tier selector arrives with
-            the forms themselves.
-          </p>
-        </header>
-
-        <Categories />
-
-        <UnwantedFiles />
-
-        <Network />
-
-        <Priority />
-
-        <MetadataSettings />
-
-        <section className="flex flex-col gap-2">
-          <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Import</h2>
-          <Link
-            to="/settings/arr"
-            className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface
-                       px-3 py-2.5 hover:border-accent focus-visible:outline-2
-                       focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            <span className="text-sm font-medium">*Arr import</span>
-            <span className="text-xs text-ink-muted">
-              Bring in what Lidarr (and, once their own stage ships, Sonarr/Radarr/Readarr/
-              Whisparr) already monitors, as intent -- todo 4.13.
-            </span>
-          </Link>
-        </section>
-
-        <section className="flex flex-col gap-2">
-          <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Sections</h2>
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {SECTIONS.map((section) => (
-              <li
-                key={section.id}
-                className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface
-                           px-3 py-2.5"
-              >
-                <span className="flex items-baseline gap-2">
-                  <span className="text-sm font-medium">{section.title}</span>
-                  <span className="ml-auto shrink-0 rounded-full border border-border-subtle
-                                   px-1.5 py-px text-[0.6875rem] text-ink-muted">
-                    stage {section.stage}
-                  </span>
-                </span>
-                <span className="text-xs text-ink-muted">{section.blurb}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <h1 className="text-base font-semibold">{title}</h1>
+        {children}
       </div>
     </div>
+  );
+}
+
+/** Every library, and how new content is prioritised across them. */
+export function LibrariesSettings() {
+  return (
+    <SettingsPage title="Libraries">
+      <Categories />
+      <Priority />
+    </SettingsPage>
+  );
+}
+
+/** What is never imported or grabbed: file patterns and blocked content, and failed releases. */
+export function BlocklistsSettings() {
+  const tier = useTier();
+  return (
+    <SettingsPage title="Blocklists">
+      <UnwantedFiles />
+      {/* Failed releases stay advanced (answered 2026-09-24): empty until acquisition runs. */}
+      {isTierVisible(tier, "advanced") && <Blocklist />}
+    </SettingsPage>
+  );
+}
+
+export function NetworkSettings() {
+  return (
+    <SettingsPage title="Network">
+      <Network />
+    </SettingsPage>
+  );
+}
+
+export function MetadataSettingsPage() {
+  return (
+    <SettingsPage title="Metadata">
+      <MetadataSettings />
+    </SettingsPage>
   );
 }

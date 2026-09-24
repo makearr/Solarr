@@ -31,9 +31,8 @@ import { People } from "./People";
 import { PersonDetail } from "./PersonDetail";
 import { QualityProfiles } from "./QualityProfiles";
 import { RootFolders } from "./RootFolders";
-import { GeneralSettings } from "./Settings";
+import { BlocklistsSettings, LibrariesSettings, MetadataSettingsPage, NetworkSettings } from "./Settings";
 import { Backups } from "./Backups";
-import { Blocklist } from "./Blocklist";
 import { Calendar } from "./Calendar";
 import { Logs } from "./Logs";
 import { SchedulerPage } from "./Scheduler";
@@ -192,6 +191,7 @@ const routes = [
   // selectable per library yet either.
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/indexers", component: Indexers }),
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/downloaders", component: Downloaders }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/connections/arr", component: ArrImport }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity", component: Activity }),
   // Settings split into General/User/Scheduler/Cache 2026-09-11 (asked for
   // twice before this) -- /settings itself now just redirects to the first
@@ -200,17 +200,32 @@ const routes = [
     getParentRoute: () => rootRoute,
     path: "/settings",
     beforeLoad: () => {
-      throw redirect({ to: "/settings/general" });
+      throw redirect({ to: "/settings/libraries" });
     },
   }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/settings/general", component: GeneralSettings }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/settings/blocklist", component: Blocklist }),
+  // General was split on the 2026-09-19 review; old links land on the part they meant.
+  ...[
+    ["/settings/general", "/settings/libraries"],
+    ["/settings/blocklist", "/settings/blocklists"],
+    ["/settings/arr", "/connections/arr"],
+  ].map(([from, to]) =>
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: from!,
+      beforeLoad: () => {
+        throw redirect({ to: to! });
+      },
+    }),
+  ),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/libraries", component: LibrariesSettings }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/blocklists", component: BlocklistsSettings }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/network", component: NetworkSettings }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/metadata", component: MetadataSettingsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/backups", component: Backups }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/logs", component: Logs }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/user", component: UserSettings }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/scheduler", component: SchedulerPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/cache", component: CacheSettingsPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/settings/arr", component: ArrImport }),
 ];
 
 export const router = createRouter({
