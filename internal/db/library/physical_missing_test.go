@@ -170,3 +170,39 @@ func TestRegisterBatch_ReobservingAMissingPathClearsMissingSince(t *testing.T) {
 		t.Errorf("row = %+v, want missing_since cleared after reobservation", rows[0])
 	}
 }
+
+// "Unmonitor Deleted Tracks": only this library's items holding a file this sweep found gone.
+func TestUnmonitorItemsLosingFiles_UnmonitorsOnlyThisSweepsLosses(t *testing.T) {
+	opened, queries := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	cutoff := time.Unix(1_700_100_000, 0).UTC()
+	files := []library.PhysicalFile{
+		{RelPath: "gone.flac", SizeBytes: 1, QuickHash: "gone", FirstSeenAt: cutoff.Add(-time.Hour)},
+		{RelPath: "here.flac", SizeBytes: 1, QuickHash: "here", FirstSeenAt: cutoff.Add(time.Hour)},
+	}
+	ids, err := physical.RegisterBatch(t.Context(), 1, files)
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	lost := createDesiredInCategory(t, opened, createWork(t, opened, "music", "Lost").ID, 1)
+	kept := createDesiredInCategory(t, opened, createWork(t, opened, "music", "Kept").ID, 1)
+	otherLibrary := createDesiredInCategory(t, opened, createWork(t, opened, "music", "Elsewhere").ID, 2)
+	attach(t, opened, lost.ID, ids[0].MediaObjectID, "primary", "disc1:track1")
+	attach(t, opened, kept.ID, ids[1].MediaObjectID, "primary", "disc1:track1")
+	attach(t, opened, otherLibrary.ID, ids[0].MediaObjectID, "primary", "disc1:track1")
+	if _, err := physical.MarkMissing(t.Context(), 1, cutoff); err != nil {
+		t.Fatalf("MarkMissing: %v", err)
+	}
+
+	desired := library.NewDesired(opened)
+	unmonitored, err := desired.UnmonitorItemsLosingFiles(t.Context(), 1, 1, cutoff.Unix())
+	if err != nil || unmonitored != 1 {
+		t.Fatalf("UnmonitorItemsLosingFiles = %d, %v; want 1", unmonitored, err)
+	}
+	for item, want := range map[int64]int64{lost.ID: 0, kept.ID: 1, otherLibrary.ID: 1} {
+		row, err := queries.GetDesiredItem(t.Context(), item)
+		if err != nil || row.Monitored != want {
+			t.Errorf("item %d monitored = %d, %v; want %d", item, row.Monitored, err, want)
+		}
+	}
+}

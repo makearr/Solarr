@@ -94,10 +94,12 @@ func newEnrichJobWithBiographer(
 // fakeRealigner records every batch of works it is asked to realign.
 type fakeRealigner struct {
 	batches [][]int64
+	manual  []bool
 }
 
-func (f *fakeRealigner) RealignWorks(_ context.Context, workIDs []int64) error {
+func (f *fakeRealigner) RealignWorks(_ context.Context, workIDs []int64, manual bool) error {
 	f.batches = append(f.batches, slices.Clone(workIDs))
+	f.manual = append(f.manual, manual)
 	return nil
 }
 
@@ -899,8 +901,12 @@ func TestEnrichJob_HandsRefinedWorksBackToBeRealigned(t *testing.T) {
 	job, opened, queries := newEnrichJobRealigning(t, source, nil, realigner, nil)
 	createPlaceholder(t, opened, "rg-1", "rel-1")
 
-	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+	// "Run now" says so, for a library's "Only After Manual Refresh".
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType, Payload: []byte(`{"manual":true}`)}); err != nil {
 		t.Fatalf("Run: %v", err)
+	}
+	if !slices.Equal(realigner.manual, []bool{true}) {
+		t.Errorf("realigned as manual %v, want [true]", realigner.manual)
 	}
 
 	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{

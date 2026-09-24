@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+	"time"
 )
 
 // World-readable on purpose: a media server reads imported files as another
@@ -68,10 +69,15 @@ func (OS) MkdirAll(path string, perm fs.FileMode) error { return os.MkdirAll(pat
 
 // Chown is os.Chown, here so the forbidigo choke point stays absolute.
 func (OS) Chown(path string, uid, gid int) error { return os.Chown(path, uid, gid) }
-func (OS) Rename(oldPath, newPath string) error  { return os.Rename(oldPath, newPath) }
-func (OS) Remove(path string) error              { return os.Remove(path) }
-func (OS) Link(oldPath, newPath string) error    { return os.Link(oldPath, newPath) }
-func (OS) Symlink(oldPath, newPath string) error { return os.Symlink(oldPath, newPath) }
+
+func (OS) Chmod(path string, mode fs.FileMode) error { return os.Chmod(path, mode) }
+
+// Chtimes leaves the access time at the modification time; nothing reads it.
+func (OS) Chtimes(path string, modTime time.Time) error { return os.Chtimes(path, modTime, modTime) }
+func (OS) Rename(oldPath, newPath string) error         { return os.Rename(oldPath, newPath) }
+func (OS) Remove(path string) error                     { return os.Remove(path) }
+func (OS) Link(oldPath, newPath string) error           { return os.Link(oldPath, newPath) }
+func (OS) Symlink(oldPath, newPath string) error        { return os.Symlink(oldPath, newPath) }
 
 func (OS) ReadDir(path string) ([]DirEntry, error) {
 	return retryStale(func() ([]DirEntry, error) {

@@ -72,6 +72,19 @@ type Roots interface {
 	RootFolder(id int64) (settings.RootFolder, bool)
 }
 
+// Housekeeping is a library's File Management at disk scan (Sonarr's), implemented by the media
+// type (ADR-23). It is best effort: a failure is logged and never fails the scan.
+type Housekeeping interface {
+	AfterSweep(ctx context.Context, root settings.RootFolder, categoryID int64, outcome SweepOutcome) error
+}
+
+// SweepOutcome is what a finished sweep hands to Housekeeping.
+type SweepOutcome struct {
+	// MissingSince is when a full sweep marked its missing paths; zero after an incremental one.
+	MissingSince     time.Time
+	EmptyDirectories []string
+}
+
 // Job sweeps one root folder per run: the first job handler in the codebase.
 type Job struct {
 	sweeper  Sweeper
@@ -82,6 +95,8 @@ type Job struct {
 	physical library.Physical
 	clock    clock.Clock
 	logger   *slog.Logger
+	// housekeeping is optional.
+	housekeeping Housekeeping
 
 	// include decides which files are worth probing. Nil takes everything.
 	include func(relPath string) bool
@@ -98,6 +113,8 @@ type Config struct {
 	Clock    clock.Clock
 	Logger   *slog.Logger
 	Include  func(relPath string) bool
+	// Housekeeping is optional.
+	Housekeeping Housekeeping
 }
 
 // NewJob builds the handler.
@@ -116,6 +133,8 @@ func NewJob(config Config) *Job {
 		clock:    config.Clock,
 		logger:   logger,
 		include:  config.Include,
+
+		housekeeping: config.Housekeeping,
 	}
 }
 
@@ -184,8 +203,15 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	// that a path it did not re-observe is actually gone (section 10.4). An
 	// incremental sweep skips directories whose mtime did not move and would
 	// wrongly mark their contents missing.
+	outcome := SweepOutcome{EmptyDirectories: result.EmptyDirectories}
 	if payload.Full {
 		j.markMissing(ctx, root, result.State.SweptThrough)
+		outcome.MissingSince = result.State.SweptThrough
+	}
+	if j.housekeeping != nil {
+		if err := j.housekeeping.AfterSweep(ctx, root, payload.CategoryID, outcome); err != nil {
+			j.logger.Warn("scan housekeeping failed", slog.Int64("root_folder_id", root.ID), slog.Any("error", err))
+		}
 	}
 	return nil
 }

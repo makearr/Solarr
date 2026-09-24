@@ -7,6 +7,7 @@ import (
 	"path"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
@@ -15,7 +16,9 @@ import (
 // now exists. One scoped scan per root, never a rescan of the whole library.
 type realigner struct{ p *process }
 
-func (r realigner) RealignWorks(ctx context.Context, workIDs []int64) error {
+// RealignWorks honours each library's "Rescan Artist Folder after Refresh" (Sonarr's): always,
+// only after a manual refresh, or never.
+func (r realigner) RealignWorks(ctx context.Context, workIDs []int64, manual bool) error {
 	locations, err := library.NewIdentity(r.p.library).WorkFileLocations(ctx, workIDs)
 	if err != nil {
 		return err
@@ -29,7 +32,7 @@ func (r realigner) RealignWorks(ctx context.Context, workIDs []int64) error {
 	var errs []error
 	for rootFolderID, directories := range directoriesByRoot {
 		categoryID, found := r.p.musicCategoryFor(rootFolderID)
-		if !found {
+		if !found || !rescanAfterRefresh(r.p.cache.Snapshot(), categoryID, manual) {
 			continue
 		}
 		if _, err := scan.EnqueueDirectories(ctx, r.p.queue, rootFolderID, categoryID, directories); err != nil {
@@ -40,6 +43,25 @@ func (r realigner) RealignWorks(ctx context.Context, workIDs []int64) error {
 			slog.Int64("root_folder_id", rootFolderID), slog.Int("directories", len(directories)))
 	}
 	return errors.Join(errs...)
+}
+
+func rescanAfterRefresh(snapshot *settings.Snapshot, categoryID int64, manual bool) bool {
+	category, found := snapshot.Category(categoryID)
+	if !found {
+		return true
+	}
+	return rescanAfterRefreshChoice(category.FileManagement.RescanAfterRefresh, manual)
+}
+
+func rescanAfterRefreshChoice(choice settings.RescanAfterRefresh, manual bool) bool {
+	switch choice {
+	case settings.RescanNever:
+		return false
+	case settings.RescanAfterManual:
+		return manual
+	default:
+		return true
+	}
 }
 
 // musicCategoryFor is the music category a root belongs to, the same one an

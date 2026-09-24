@@ -61,7 +61,7 @@ func TestImportRevert_UndoesAPlacedUnitAndDeletesTheWorkItCreated(t *testing.T) 
 		sessions, library.NewPhysical(opened), library.NewIdentity(opened),
 		library.NewQuarantine(opened, fsys, fake), rootPathLookup(map[int64]string{1: "/media/root"}),
 	)
-	result, err := revert.Revert(ctx, sessionID, 168*time.Hour, 200)
+	result, err := revert.Revert(ctx, sessionID, library.Recycling{Retain: 168 * time.Hour}, 200)
 	if err != nil {
 		t.Fatalf("Revert: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestImportRevert_UndoesAPlacedUnitAndDeletesTheWorkItCreated(t *testing.T) 
 	}
 
 	// A second revert must refuse -- there is nothing left to undo.
-	if _, err := revert.Revert(ctx, sessionID, 168*time.Hour, 300); !errors.Is(err, library.ErrSessionNotRevertible) {
+	if _, err := revert.Revert(ctx, sessionID, library.Recycling{Retain: 168 * time.Hour}, 300); !errors.Is(err, library.ErrSessionNotRevertible) {
 		t.Errorf("second Revert = %v, want ErrSessionNotRevertible", err)
 	}
 }
@@ -177,7 +177,7 @@ func TestImportRevert_SharedObjectFromAnUnrelatedCommitSurvives(t *testing.T) {
 		sessions, library.NewPhysical(opened), library.NewIdentity(opened),
 		library.NewQuarantine(opened, fsys, fake), rootPathLookup(map[int64]string{1: "/media/root"}),
 	)
-	result, err := revert.Revert(ctx, sessionID, 168*time.Hour, 200)
+	result, err := revert.Revert(ctx, sessionID, library.Recycling{Retain: 168 * time.Hour}, 200)
 	if err != nil {
 		t.Fatalf("Revert: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestImportRevert_AmbiguousSharedObjectWithoutALibraryPathIDIsSkipped(t *tes
 		sessions, library.NewPhysical(opened), library.NewIdentity(opened),
 		library.NewQuarantine(opened, fsys, fake), rootPathLookup(map[int64]string{1: "/media/root"}),
 	)
-	result, err := revert.Revert(ctx, sessionID, 168*time.Hour, 200)
+	result, err := revert.Revert(ctx, sessionID, library.Recycling{Retain: 168 * time.Hour}, 200)
 	if err != nil {
 		t.Fatalf("Revert: %v", err)
 	}
@@ -347,7 +347,7 @@ func TestImportRevert_TwoUnitsSharingAWorkDeletesItExactlyOnce(t *testing.T) {
 		sessions, library.NewPhysical(opened), library.NewIdentity(opened),
 		library.NewQuarantine(opened, fsys, fake), rootPathLookup(map[int64]string{1: "/media/root"}),
 	)
-	result, err := revert.Revert(ctx, sessionID, 168*time.Hour, 200)
+	result, err := revert.Revert(ctx, sessionID, library.Recycling{Retain: 168 * time.Hour}, 200)
 	if err != nil {
 		t.Fatalf("Revert: %v", err)
 	}

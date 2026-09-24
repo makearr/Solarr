@@ -63,6 +63,20 @@ type Category struct {
 	QualityCutoffProfileID sql.NullInt64
 }
 
+type CategoryFileManagement struct {
+	CategoryID               int64
+	PropersRepacks           string
+	RescanAfterRefresh       string
+	ChangeFileDate           string
+	RecycleRetentionDays     int64
+	DeleteEmptyFolders       int64
+	CreateEmptyArtistFolders int64
+	UnmonitorDeleted         int64
+	SetPermissions           int64
+	ChmodFolder              string
+	ChownGroup               string
+}
+
 type CategoryQualityProfile struct {
 	CategoryID       int64
 	QualityProfileID int64

@@ -4,7 +4,9 @@ import (
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/moving/drainjob"
+	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/moving/moverjob"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
@@ -25,8 +27,18 @@ func (p *process) registerMoverJob(registry *jobs.Registry, executor *jobs.Execu
 		DrainCompletion: drainjob.Completer{
 			Roots: adapters.DrainRoots{Cache: p.cache}, Files: library.NewPhysical(p.library),
 		},
-		Clock: clock.NewSystem(), Logger: p.logger,
+		Permissions: p.libraryPermissions, Clock: clock.NewSystem(), Logger: p.logger,
 	})
 	executor.Handle(moverjob.JobType, job)
 	return nil
+}
+
+// libraryPermissions is a library's Set Permissions for the move engine; ok is false when it is off.
+func (p *process) libraryPermissions(categoryID int64) (mover.Permissions, bool, error) {
+	category, found := p.cache.Snapshot().Category(categoryID)
+	if !found || !category.FileManagement.SetPermissions {
+		return mover.Permissions{}, false, nil
+	}
+	permissions, err := music.PermissionsFor(category.FileManagement, lookupGroupID)
+	return permissions, err == nil, err
 }

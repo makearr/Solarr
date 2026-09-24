@@ -147,6 +147,10 @@ func (s Search) SearchItem(ctx context.Context, itemID int64, indexers []Indexer
 		return ItemSearchResult{}, fmt.Errorf("music: search item %d: %w", itemID, err)
 	}
 	languagePolicy := languagePolicyFor(snapshot, item.CategoryID)
+	preferPropers := true
+	if category, found := snapshot.Category(item.CategoryID); found {
+		preferPropers = category.FileManagement.PropersRepacks != settings.PropersDoNotPrefer
+	}
 
 	artistName := primaryArtistName(detail)
 	target := targetIdentity(detail, item, artistName, aliases)
@@ -165,7 +169,7 @@ func (s Search) SearchItem(ctx context.Context, itemID int64, indexers []Indexer
 						IndexerSearchError{IndexerID: conn.ID, Error: searchErr.Error()})
 					continue
 				}
-				accepted = append(accepted, evaluateRawItems(raws, conn, target, rules, languagePolicy)...)
+				accepted = append(accepted, evaluateRawItems(raws, conn, target, rules, languagePolicy, preferPropers)...)
 			}
 		}
 		if len(accepted) == 0 {
@@ -202,7 +206,7 @@ type acceptedFind struct {
 // items).
 func evaluateRawItems(
 	raws []indexer.RawItem, conn IndexerConn, target match.Candidate,
-	rules []rankedProfile, languagePolicy *score.LanguagePolicy,
+	rules []rankedProfile, languagePolicy *score.LanguagePolicy, preferPropers bool,
 ) []acceptedFind {
 	var accepted []acceptedFind
 	for _, raw := range raws {
@@ -217,7 +221,7 @@ func evaluateRawItems(
 		}
 
 		facts := factsFromRelease(parsed, raw, conn.Impl)
-		decision := evaluateInOrder(rules, facts, languagePolicy)
+		decision := withRevision(evaluateInOrder(rules, facts, languagePolicy), facts.File.ProperRepack, preferPropers)
 		accepted = append(accepted, acceptedFind{conn: conn, raw: raw, parsed: parsed, distance: distance, decision: decision})
 	}
 	return accepted
@@ -389,6 +393,7 @@ func factsFromRelease(parsed parse.Result, raw indexer.RawItem, impl string) sco
 		File: score.FileFacts{
 			AudioCodec: parsed.Attributes.Format, Lossless: parsed.Attributes.Lossless,
 			Source: parsed.Attributes.Source, ReleaseGroup: parsed.Attributes.ReleaseGroup,
+			ProperRepack: parsed.Attributes.ProperRepack,
 		},
 	}
 	if parsed.Attributes.BitrateKbps > 0 {
@@ -457,6 +462,20 @@ func evaluateInOrder(profiles []rankedProfile, facts score.Facts, languagePolicy
 		return rankedBy(fallback, len(profiles)+fallbackIndex, profiles[fallbackIndex].name, "accepted, fits none")
 	}
 	return evaluate(profiles[0].rules)
+}
+
+// withRevision appends Sonarr's revision after the quality tiers when the library prefers propers:
+// a proper or repack beats the same quality, never a better one, and before any additive score.
+func withRevision(decision model.Decision, proper, prefer bool) model.Decision {
+	if !prefer {
+		return decision
+	}
+	tier := model.TierValue{Dimension: "revision", Rank: 1, Label: "original"}
+	if proper {
+		tier.Rank, tier.Label = 0, "proper or repack"
+	}
+	decision.Quality.Tiers = append(decision.Quality.Tiers, tier)
+	return decision
 }
 
 func rankedBy(decision model.Decision, rank int, name, how string) model.Decision {

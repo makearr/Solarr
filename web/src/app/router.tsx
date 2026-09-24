@@ -16,6 +16,7 @@ import { DownloadFolders } from "./DownloadFolders";
 import { Downloaders } from "./Downloaders";
 import { Indexers } from "./Indexers";
 import { Import } from "./Import";
+import { LibraryFileManagement } from "./LibraryFileManagement";
 import { ImportLists } from "./ImportLists";
 import { CacheSettingsPage } from "./CacheSettings";
 import { Library } from "./Library";
@@ -116,6 +117,11 @@ const routes = [
     getParentRoute: () => rootRoute,
     path: "/library/$categoryId/config/naming",
     component: LibraryNaming,
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/library/$categoryId/config/file-management",
+    component: LibraryFileManagement,
   }),
   createRoute({
     getParentRoute: () => rootRoute,

@@ -72,6 +72,12 @@ type FS interface {
 	// Chown changes ownership; -1 leaves that half alone, as chown(2) does.
 	Chown(path string, uid, gid int) error
 
+	// Chmod sets the permission bits, for a library's "Set Permissions" (Sonarr's).
+	Chmod(path string, mode fs.FileMode) error
+
+	// Chtimes sets the modification time, for a library's "Change File Date".
+	Chtimes(path string, modTime time.Time) error
+
 	// Link creates a hardlink. Preferred for both import and cross-entry linking
 	// (ADR-11); fails with ErrUnsupported across filesystems.
 	Link(oldPath, newPath string) error

@@ -58,6 +58,11 @@ func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, 
 		Clock:    clock.NewSystem(),
 		Logger:   p.logger,
 		Include:  scan.IsAudio,
+		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
+			FS: p.fsys, Categories: adapters.Categories{Cache: p.cache}, Roots: adapters.DrainRoots{Cache: p.cache},
+			Affinity: p.cache, Desired: &desired, Subscriptions: library.NewSubscriptions(p.library),
+			People: library.NewPeople(p.library), GroupID: lookupGroupID,
+		}),
 	})
 	executor.Handle(scan.JobType, job)
 	return nil

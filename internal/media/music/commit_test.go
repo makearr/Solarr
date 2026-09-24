@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -774,5 +775,98 @@ func TestCommitUnit_BringsListedExtraFilesAlong(t *testing.T) {
 	}
 	if got := readAt(t, fsys, existing); got != "already here" {
 		t.Errorf("existing cue sheet = %q, want it untouched", got)
+	}
+}
+
+// Sonarr's Change File Date and Set Permissions reach the placed track and its folders.
+func TestCommitUnit_AppliesTheLibrarysFileDateAndPermissions(t *testing.T) {
+	fileManagement := settings.DefaultFileManagement
+	fileManagement.ChangeFileDate = settings.FileDateReleaseDate
+	fileManagement.SetPermissions = true
+	fileManagement.ChmodFolder = "775"
+	fileManagement.ChownGroup = "media"
+	committer, opened, fsys := newCommitterWith(t, true, func(config *music.CommitterConfig) {
+		config.Categories = fakeCategories{commitCategoryID: {
+			ID: commitCategoryID, MonitorDiscovered: settings.MonitorDiscoveredMonitored, FileManagement: fileManagement,
+		}}
+		config.GroupID = func(name string) (int, error) {
+			if name != "media" {
+				return 0, errors.New("no such group")
+			}
+			return 1001, nil
+		}
+	})
+	track := []byte("airbag bytes")
+	writeCommitSourceFile(t, fsys, "KI Pecezinu/01 Sesoge.flac", track)
+	unit := testUnit("KI Pecezinu", []inspect.File{{RelPath: "KI Pecezinu/01 Sesoge.flac", SizeBytes: int64(len(track))}})
+	probes := []mediatool.Probe{{
+		Path: path.Join(commitSourceRoot, "KI Pecezinu/01 Sesoge.flac"),
+		Tags: mediatool.Tags{"album": "KI Pecezinu", "albumartist": "Katupoken", "date": "1997-06-16", "tracknumber": "1", "title": "Sesoge"},
+	}}
+	best := model.Identification{
+		Strategy: "embedded-tag", Confidence: 0.95,
+		ExternalID: &model.ExternalID{Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 0.95},
+	}
+
+	placed, err := committer.CommitUnit(t.Context(), commitSourceRoot, unit, best,
+		music.UnitTagSourceFor(commitSourceRoot, probes), commitCategoryID)
+	if err != nil {
+		t.Fatalf("CommitUnit: %v", err)
+	}
+	if len(placed.PathWarnings) != 0 {
+		t.Errorf("PathWarnings = %v, want none", placed.PathWarnings)
+	}
+	paths, err := library.NewPhysical(opened).PathsForObject(t.Context(), placed.MediaObjectIDs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	fileAbs := path.Join(commitDestRoot, paths[0].RelPath)
+	info, err := fsys.Stat(fileAbs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	released := time.Date(1997, time.June, 16, 0, 0, 0, 0, time.UTC)
+	if !info.ModTime.Equal(released) || info.Mode.Perm() != 0o664 || info.GID != 1001 {
+		t.Errorf("track: modified %v mode %04o group %d, want %v 0664 1001", info.ModTime, info.Mode.Perm(), info.GID, released)
+	}
+	folder, err := fsys.Stat(path.Dir(fileAbs))
+	if err != nil || folder.Mode.Perm() != 0o775 || folder.GID != 1001 {
+		t.Errorf("album folder = %+v, %v; want mode 0775 group 1001", folder, err)
+	}
+	root, err := fsys.Stat(commitDestRoot)
+	if err != nil || root.GID == 1001 {
+		t.Errorf("root = %+v, %v; want the host's root left alone", root, err)
+	}
+}
+
+// A group that does not resolve is reported, and the album still imports.
+func TestCommitUnit_ReportsAPermissionFailureWithoutFailingTheImport(t *testing.T) {
+	fileManagement := settings.DefaultFileManagement
+	fileManagement.SetPermissions = true
+	fileManagement.ChownGroup = "nosuchgroup"
+	committer, _, fsys := newCommitterWith(t, true, func(config *music.CommitterConfig) {
+		config.Categories = fakeCategories{commitCategoryID: {
+			ID: commitCategoryID, MonitorDiscovered: settings.MonitorDiscoveredMonitored, FileManagement: fileManagement,
+		}}
+	})
+	track := []byte("airbag bytes")
+	writeCommitSourceFile(t, fsys, "KI Pecezinu/01 Sesoge.flac", track)
+	unit := testUnit("KI Pecezinu", []inspect.File{{RelPath: "KI Pecezinu/01 Sesoge.flac", SizeBytes: int64(len(track))}})
+	probes := []mediatool.Probe{{
+		Path: path.Join(commitSourceRoot, "KI Pecezinu/01 Sesoge.flac"),
+		Tags: mediatool.Tags{"album": "KI Pecezinu", "albumartist": "Katupoken", "tracknumber": "1", "title": "Sesoge"},
+	}}
+	best := model.Identification{
+		Strategy: "embedded-tag", Confidence: 0.95,
+		ExternalID: &model.ExternalID{Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 0.95},
+	}
+	placed, err := committer.CommitUnit(t.Context(), commitSourceRoot, unit, best,
+		music.UnitTagSourceFor(commitSourceRoot, probes), commitCategoryID)
+	if err != nil {
+		t.Fatalf("CommitUnit: %v", err)
+	}
+	warnings := placed.PathWarnings[placed.MediaObjectIDs[0]]
+	if len(warnings) != 1 || !strings.Contains(warnings[0], `group "nosuchgroup"`) {
+		t.Errorf("warnings = %v, want the group named", warnings)
 	}
 }

@@ -1,6 +1,9 @@
 package app
 
 import (
+	"os/user"
+	"strconv"
+
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/importing/importjob"
@@ -76,6 +79,7 @@ func (p *process) importCommitter() music.Committer {
 		TransferLadder:   p.transferLadder,
 		RenameOnImport:   p.renameOnImport,
 		ExtraFiles:       p.extraFileExtensions,
+		GroupID:          lookupGroupID,
 	})
 }
 
@@ -102,6 +106,15 @@ func (p *process) extraFileExtensions() []string {
 		return extras.Extensions
 	}
 	return nil
+}
+
+// lookupGroupID resolves a library's "chown group" name in this container's own group database.
+func lookupGroupID(name string) (int, error) {
+	group, err := user.LookupGroup(name)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(group.Gid)
 }
 
 // mediaTool builds the ffprobe reader every import path needs -- the same

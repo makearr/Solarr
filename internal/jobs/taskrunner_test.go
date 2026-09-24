@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -435,6 +436,33 @@ func TestTaskRunner_StartupFiresOnlyWhenOfferedOnAndEnabled(t *testing.T) {
 		jobs.NewTaskRunner(task, source, states, fake, quietLogger()).Startup(t.Context())
 	}
 	if want := []string{"default_on", "switched_on"}; !reflect.DeepEqual(fired, want) {
+		t.Errorf("fired %v, want %v", fired, want)
+	}
+}
+
+// "Run now" is a person asking, so it fires EnqueueManual; a startup run is not, so it fires Enqueue.
+func TestTaskRunner_RunNowFiresEnqueueManualAndStartupDoesNot(t *testing.T) {
+	states, fake := newScheduleStates(t)
+	source := newFakeScheduleSource()
+	var fired []string
+	task := jobs.Task{
+		Key: "enrichment", DefaultCadence: "* * * * *", Startup: jobs.StartupOn,
+		Enqueue: func(context.Context) (jobs.EnqueueResult, error) {
+			fired = append(fired, "scheduled")
+			return jobs.EnqueueResult{}, nil
+		},
+		EnqueueManual: func(context.Context) (jobs.EnqueueResult, error) {
+			fired = append(fired, "manual")
+			return jobs.EnqueueResult{}, nil
+		},
+	}
+	runner := jobs.NewTaskRunner(task, source, states, fake, quietLogger())
+
+	runner.Startup(t.Context())
+	if err := runner.RunNow(t.Context()); err != nil {
+		t.Fatalf("RunNow: %v", err)
+	}
+	if want := []string{"scheduled", "manual"}; !slices.Equal(fired, want) {
 		t.Errorf("fired %v, want %v", fired, want)
 	}
 }

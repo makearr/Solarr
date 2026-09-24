@@ -262,6 +262,31 @@ func (m *Mem) Chown(path string, uid, gid int) error {
 	return nil
 }
 
+// Chmod records the permission bits.
+func (m *Mem) Chmod(path string, mode fs.FileMode) error {
+	return m.updateNode("chmod", path, func(node *memNode) { node.mode = node.mode.Type() | mode.Perm() })
+}
+
+// Chtimes records the modification time.
+func (m *Mem) Chtimes(path string, modTime time.Time) error {
+	return m.updateNode("chtimes", path, func(node *memNode) { node.modTime = modTime })
+}
+
+func (m *Mem) updateNode(op, path string, update func(*memNode)) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	resolved, err := m.resolveLocked(path, 0)
+	if err != nil {
+		return pathError(op, path, err)
+	}
+	node, ok := m.nodes[resolved]
+	if !ok {
+		return pathError(op, path, fs.ErrNotExist)
+	}
+	update(node)
+	return nil
+}
+
 func (m *Mem) MkdirAll(path string, perm fs.FileMode) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

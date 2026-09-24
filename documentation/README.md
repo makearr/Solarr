@@ -16,6 +16,7 @@ named file, linked from the code by path.
 | [configuration-export.md](configuration-export.md) | F9 export and import |
 | [library-quality.md](library-quality.md) | A library's ordered quality profiles, cutoff and target, and what "fits" means |
 | [naming.md](naming.md) | How a library names files: slots, tokens, character replacement, apply to library |
+| [file-management.md](file-management.md) | A library's Sonarr-style folders, recycling bin, file dates and permissions |
 | [music-identification.md](music-identification.md) | How a music file is identified: the passes, album matching, what was measured |
 | [media-tools.md](media-tools.md) | ADR-30's ffprobe, fpcalc and tagging helper: what Alpine has, what it costs |
 | [benchmarks.md](benchmarks.md) | The 500k corpus, the ADR-28 targets as tests, the ADR-5 driver switch |

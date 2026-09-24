@@ -357,6 +357,15 @@ type PersonDetail struct {
 	Discography []DiscographyRow
 }
 
+// Person reads one person's own row, without Detail's discography.
+func (p People) Person(ctx context.Context, id int64) (librarydb.Person, error) {
+	person, err := librarydb.New(p.store.Read()).GetPerson(ctx, id)
+	if err != nil {
+		return librarydb.Person{}, fmt.Errorf("library: person %d: %w", id, err)
+	}
+	return person, nil
+}
+
 // Detail composes one person's full detail. A missing id surfaces
 // sql.ErrNoRows through GetPerson, wrapped: callers use errors.Is to detect it.
 func (p People) Detail(ctx context.Context, id int64) (PersonDetail, error) {

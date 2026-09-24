@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
@@ -72,7 +73,12 @@ type Result struct {
 	DirectoriesVisited int
 	DirectoriesRead    int
 	FilesFound         int
+	// EmptyDirectories are the directories below the root the walk found with nothing in them,
+	// capped at maxEmptyDirectories; a library's "Delete empty folders" acts on them.
+	EmptyDirectories []string
 }
+
+const maxEmptyDirectories = 10000
 
 // Options tune one sweep.
 type Options struct {
@@ -134,6 +140,7 @@ func (s Sweeper) Sweep(
 		DirectoriesVisited: walk.visited,
 		DirectoriesRead:    walk.read,
 		FilesFound:         walk.files,
+		EmptyDirectories:   walk.empty,
 	}
 	if err != nil {
 		return result, err
@@ -166,6 +173,7 @@ type sweep struct {
 	visited int
 	read    int
 	files   int
+	empty   []string
 }
 
 func (w *sweep) directory(ctx context.Context, relative string) error {
@@ -199,12 +207,19 @@ func (w *sweep) directory(ctx context.Context, relative string) error {
 	// Lexical order is what makes Cursor enough to resume: the walk has to visit
 	// directories in the same order every time.
 	slices.SortFunc(entries, func(a, b fsx.DirEntry) int { return strings.Compare(a.Name, b.Name) })
+	if len(entries) == 0 && relative != "" && len(w.empty) < maxEmptyDirectories {
+		w.empty = append(w.empty, relative)
+	}
 
 	if err := w.filesIn(ctx, relative, absolute, info, entries); err != nil {
 		return err
 	}
 	for _, entry := range entries {
 		if !entry.IsDir {
+			continue
+		}
+		// Quarantined files have left the library; walking them would bring them back.
+		if relative == "" && entry.Name == library.QuarantineDirectory {
 			continue
 		}
 		if err := w.directory(ctx, path.Join(relative, entry.Name)); err != nil {

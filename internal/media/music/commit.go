@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -64,6 +66,7 @@ type Committer struct {
 	transferLadder   TransferLadder
 	renameOnImport   RenameOnImport
 	extraFiles       ExtraFiles
+	groupID          GroupID
 }
 
 // TransferLadder answers the ordered transfer methods import should try, read
@@ -80,6 +83,9 @@ type RenameOnImport func() bool
 // ExtraFiles answers the extensions to bring along with the tracks (Lidarr's "Import Extra
 // Files"), read per commit; nil or empty means none.
 type ExtraFiles func() []string
+
+// GroupID resolves a group name for a library's "chown group"; nil accepts only numbers.
+type GroupID func(name string) (int, error)
 
 // BlockedContent is the ADR-53 part 2 check CommitUnit's import gate needs
 // (todo 4.15) -- library.BlockedContentStore's own shape, narrowed to an
@@ -106,6 +112,7 @@ type CommitterConfig struct {
 	TransferLadder   TransferLadder
 	RenameOnImport   RenameOnImport
 	ExtraFiles       ExtraFiles
+	GroupID          GroupID
 }
 
 // NewCommitter builds one.
@@ -115,7 +122,7 @@ func NewCommitter(config CommitterConfig) Committer {
 		identity: config.Identity, desired: config.Desired, categories: config.Categories,
 		blockedContent: config.BlockedContent, clock: config.Clock,
 		defaultProfileID: config.DefaultProfileID, transferLadder: config.TransferLadder,
-		renameOnImport: config.RenameOnImport, extraFiles: config.ExtraFiles,
+		renameOnImport: config.RenameOnImport, extraFiles: config.ExtraFiles, groupID: config.GroupID,
 	}
 }
 
@@ -351,8 +358,10 @@ func (c Committer) CommitMatchedUnit(
 	}
 
 	names := NamingFor(nil)
+	fileManagement := settings.DefaultFileManagement
 	if category, found := c.categories.Category(categoryID); found {
 		names = NamingFor(category.Naming)
+		fileManagement = category.FileManagement
 	}
 	// The Import screen's "rename" checkbox can only turn renaming off, never override the library.
 	if c.renameOnImport != nil && !c.renameOnImport() {
@@ -381,6 +390,10 @@ func (c Committer) CommitMatchedUnit(
 		method, err := mover.PlaceOne(c.fsys, sourceAbs, destAbs, media.SizeBytes, methods)
 		if err != nil {
 			return Placed{}, fmt.Errorf("music: place %q: %w", media.RelPath, err)
+		}
+		if method != mover.PlaceSymlink {
+			// A symlink's bytes are the source's; a hardlink's are shared, as in Sonarr.
+			pathWarnings[index] = append(pathWarnings[index], c.finishFile(destRoot.Path, destAbs, fileManagement, fileTags)...)
 		}
 		transferMethods[index] = method
 		destRelPaths[index] = destRelPath
@@ -494,6 +507,69 @@ func (c Committer) placeExtras(
 	return placed, skipped
 }
 
+// finishFile applies the library's Change File Date and Set Permissions to one placed track.
+// Neither is worth failing an import over, so a failure comes back as a warning.
+func (c Committer) finishFile(
+	rootPath, fileAbs string, fileManagement settings.FileManagement, tags mediatool.Tags,
+) []string {
+	var warnings []string
+	if fileManagement.ChangeFileDate == settings.FileDateReleaseDate {
+		if released, ok := parseReleaseDate(tags.First("date", "originaldate", "year")); ok {
+			if err := c.fsys.Chtimes(fileAbs, released); err != nil {
+				warnings = append(warnings, "file date not changed: "+err.Error())
+			}
+		}
+	}
+	if fileManagement.SetPermissions {
+		permissions, err := c.permissions(fileManagement)
+		if err == nil {
+			err = mover.ApplyPermissions(c.fsys, rootPath, fileAbs, permissions)
+		}
+		if err != nil {
+			warnings = append(warnings, "permissions not set: "+err.Error())
+		}
+	}
+	return warnings
+}
+
+func (c Committer) permissions(fileManagement settings.FileManagement) (mover.Permissions, error) {
+	return PermissionsFor(fileManagement, c.groupID)
+}
+
+// PermissionsFor turns a library's settings into modes and a group id, -1 when no group is set.
+func PermissionsFor(fileManagement settings.FileManagement, groupID GroupID) (mover.Permissions, error) {
+	permissions := mover.Permissions{FolderMode: fileManagement.FolderMode(), FileMode: fileManagement.FileMode(), GID: -1}
+	group := fileManagement.ChownGroup
+	if group == "" {
+		return permissions, nil
+	}
+	if gid, err := strconv.Atoi(group); err == nil {
+		permissions.GID = gid
+		return permissions, nil
+	}
+	if groupID == nil {
+		return permissions, fmt.Errorf("group %q cannot be looked up here", group)
+	}
+	gid, err := groupID(group)
+	if err != nil {
+		return permissions, fmt.Errorf("group %q: %w", group, err)
+	}
+	permissions.GID = gid
+	return permissions, nil
+}
+
+// parseReleaseDate reads a tag's 1997, 1997-06 or 1997-06-16 as midnight UTC on that day.
+func parseReleaseDate(value string) (time.Time, bool) {
+	for _, layout := range []string{"2006-01-02", "2006-01", "2006"} {
+		if len(value) >= len(layout) {
+			if parsed, err := time.Parse(layout, value[:len(layout)]); err == nil {
+				return parsed, true
+			}
+		}
+	}
+	return time.Time{}, false
+}
+
 // pathStem is a path without its extension, compared case-insensitively.
 func pathStem(relPath string) string {
 	return strings.ToLower(strings.TrimSuffix(relPath, path.Ext(relPath)))
@@ -506,10 +582,14 @@ func pathStem(relPath string) string {
 // packages must not import each other (both sit beside, not above, the
 // other in architecture §2's graph).
 func (c Committer) rootCandidates(categoryID int64) []placement.RootCandidate {
+	return rootCandidates(c.roots, categoryID)
+}
+
+func rootCandidates(roots PlacementRoots, categoryID int64) []placement.RootCandidate {
 	acceptsNew := map[int64]bool{}
 	var order []int64
 	seen := map[int64]bool{}
-	for _, attachment := range c.roots.CategoryRoots() {
+	for _, attachment := range roots.CategoryRoots() {
 		if attachment.CategoryID != categoryID {
 			continue
 		}
@@ -524,7 +604,7 @@ func (c Committer) rootCandidates(categoryID int64) []placement.RootCandidate {
 
 	candidates := make([]placement.RootCandidate, 0, len(order))
 	for _, id := range order {
-		root, ok := c.roots.RootFolder(id)
+		root, ok := roots.RootFolder(id)
 		if !ok {
 			continue
 		}

@@ -3990,6 +3990,45 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /categories/{id}/file-management:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getLibraryFileManagement
+      tags: [settings]
+      summary: A library's File Management and Permissions (Sonarr's). Administrator only.
+      responses:
+        "200":
+          description: The library's settings, Sonarr's defaults when never saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FileManagement" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setLibraryFileManagement
+      tags: [settings]
+      summary: Save a library's File Management and Permissions. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FileManagement" }
+      responses:
+        "200":
+          description: The saved settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FileManagement" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/naming/examples:
     parameters:
       - name: id
@@ -6624,6 +6663,39 @@ components:
             saying whether one exists is all a screen asking for one needs,
             and decrypting it to render would be gratuitous (ADR-14).
 
+    FileManagement:
+      type: object
+      description: >-
+        Sonarr's File Management and Permissions for one library. The recycling
+        bin is Solarr's quarantine: nothing is deleted directly, so only how long
+        it keeps what this library removes is set here.
+      required: [propers_repacks, rescan_after_refresh, change_file_date, recycle_retention_days,
+                 delete_empty_folders, create_empty_artist_folders, unmonitor_deleted,
+                 set_permissions, chmod_folder, chown_group]
+      properties:
+        propers_repacks:
+          type: string
+          enum: [prefer_and_upgrade, do_not_upgrade, do_not_prefer]
+        rescan_after_refresh:
+          type: string
+          enum: [always, after_manual, never]
+        change_file_date:
+          type: string
+          enum: [none, release_date]
+        recycle_retention_days: { type: integer, format: int64, minimum: 1, maximum: 365 }
+        delete_empty_folders: { type: boolean }
+        create_empty_artist_folders: { type: boolean }
+        unmonitor_deleted:
+          type: boolean
+          description: Lidarr's "Ignore Deleted Tracks" -- an album losing a file is unmonitored.
+        set_permissions: { type: boolean }
+        chmod_folder:
+          type: string
+          description: Octal, such as 755; files get the same without the execute bits.
+        chown_group:
+          type: string
+          description: A group name or number; empty leaves the group alone.
+
     ImportSettings:
       type: object
       description: >-
@@ -6731,7 +6803,9 @@ components:
       properties:
         quarantine_retain_hours:
           type: integer
-          description: Defaults to 168 (one week), the same default RemoveAndBlockRequest uses.
+          description: >-
+            Defaults to the session's library's recycling bin retention (its File
+            Management), one week unless changed.
 
     ImportPlacementResult:
       type: object

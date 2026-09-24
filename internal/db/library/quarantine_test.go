@@ -308,3 +308,32 @@ func TestQuarantineSweep_EvictsOverPerRootPercentBudget(t *testing.T) {
 		t.Error("entry survived a per-root-budget sweep")
 	}
 }
+
+// A library's "Delete empty folders": the album folder goes, the artist folder that still holds
+// another album stays, and so does the root.
+func TestQuarantinePut_RemovesTheFoldersItEmptied(t *testing.T) {
+	opened, _ := newLibrary(t)
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	q := library.NewQuarantine(opened, fsys, fake)
+	putTestFile(t, fsys, "/media/root/Heka/Watermark/03.flac", []byte("audio"))
+	putTestFile(t, fsys, "/media/root/Heka/Detisisu Binip/01.flac", []byte("audio"))
+	putTestFile(t, fsys, "/media/root/Solo/Only/01.flac", []byte("audio"))
+
+	for _, original := range []string{"/media/root/Heka/Watermark/03.flac", "/media/root/Solo/Only/01.flac"} {
+		if _, err := q.Put(t.Context(), library.PutRequest{
+			RootPath: "/media/root", OriginalPath: original, Reason: library.ReasonUserDelete,
+			Retain: time.Hour, RemoveEmptyFolders: true,
+		}); err != nil {
+			t.Fatalf("Put(%s): %v", original, err)
+		}
+	}
+	for folder, wantExists := range map[string]bool{
+		"/media/root/Heka/Watermark": false, "/media/root/Heka": true, "/media/root/Solo": false, "/media/root": true,
+	} {
+		_, err := fsys.Stat(folder)
+		if exists := err == nil; exists != wantExists {
+			t.Errorf("%s exists = %v, want %v", folder, exists, wantExists)
+		}
+	}
+}

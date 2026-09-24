@@ -31,6 +31,8 @@ type RemoveAndBlockRequest struct {
 	Quarantine       bool
 	QuarantineReason Reason
 	QuarantineRetain time.Duration
+	// RemoveEmptyFolders is the library's "Delete empty folders" for what quarantine leaves behind.
+	RemoveEmptyFolders bool
 
 	// Block is step 2: block the file's own hashes so the bytes never enter
 	// the library again (blocked_content).
@@ -171,7 +173,7 @@ func (r RemoveAndBlock) doQuarantine(ctx context.Context, req RemoveAndBlockRequ
 		entry, err := r.quarantine.Put(ctx, PutRequest{
 			RootPath: rootPath, OriginalPath: path.Join(rootPath, p.RelPath),
 			RootFolderID: &rootFolderID, MediaObjectID: &objectID,
-			Reason: req.QuarantineReason, Retain: req.QuarantineRetain,
+			Reason: req.QuarantineReason, Retain: req.QuarantineRetain, RemoveEmptyFolders: req.RemoveEmptyFolders,
 		})
 		if err != nil {
 			if errors.Is(err, ErrCrossDevice) {

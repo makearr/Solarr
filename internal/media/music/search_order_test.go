@@ -3,6 +3,7 @@ package music
 import (
 	"testing"
 
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/score"
 )
 
@@ -50,6 +51,36 @@ func TestEvaluateInOrder_TheEarliestFittingProfileRanksFirst(t *testing.T) {
 		if decision.Score() != score.Evaluate(profiles[0].rules, tc.facts, nil).Score() &&
 			decision.Score() != score.Evaluate(profiles[1].rules, tc.facts, nil).Score() {
 			t.Errorf("%s: the priority component changed the score to %v", tc.name, decision.Score())
+		}
+	}
+}
+
+// Sonarr's "Propers and Repacks": a proper of the same quality wins, a proper of worse quality
+// does not, and with "Do not Prefer" the revision decides nothing.
+func TestWithRevision_APreferredProperBreaksOnlyASameQualityTie(t *testing.T) {
+	rules, err := score.Parse([]byte(lossy320Rules))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profiles := []rankedProfile{{name: "Lossy 320", rules: rules}}
+	release := func(kbps int64, proper, prefer bool) model.QualityVector {
+		facts := score.Facts{File: score.FileFacts{
+			AudioCodec: "mp3", AudioBitrate: kbps * 1000, OverallBitrate: kbps * 1000, ProperRepack: proper,
+		}}
+		return withRevision(evaluateInOrder(profiles, facts, nil), proper, prefer).Quality
+	}
+
+	for _, tc := range []struct {
+		name       string
+		a, b       model.QualityVector
+		wantWinner int
+	}{
+		{"proper beats original", release(320, true, true), release(320, false, true), -1},
+		{"better quality beats proper", release(256, true, true), release(320, false, true), 1},
+		{"not preferred: a tie", release(320, true, false), release(320, false, false), 0},
+	} {
+		if winner, _ := model.Compare(tc.a, tc.b); winner != tc.wantWinner {
+			t.Errorf("%s: winner %d, want %d", tc.name, winner, tc.wantWinner)
 		}
 	}
 }

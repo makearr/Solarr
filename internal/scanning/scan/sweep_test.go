@@ -442,3 +442,28 @@ func TestSweep_TreatsAnAbsentRootAsNothingFoundRatherThanAFailure(t *testing.T) 
 		t.Errorf("visited %d directories under an absent root", result.DirectoriesVisited)
 	}
 }
+
+// Even an incremental sweep reports a folder emptied since the last one, for "Delete empty folders".
+func TestSweep_ReportsEmptyDirectoriesOnAnIncrementalPass(t *testing.T) {
+	lib := newTree(t, "Nick Cave/Tender Prey/01.flac", "Nick Cave/Murder Ballads/01.flac")
+	first, _ := sweep(t, lib, scan.State{}, scan.Options{Full: true})
+	if len(first.EmptyDirectories) != 0 {
+		t.Fatalf("first pass reported %v empty", first.EmptyDirectories)
+	}
+
+	lib.remove(t, "Nick Cave/Tender Prey/01.flac")
+	second, _ := sweep(t, lib, first.State, scan.Options{})
+	if want := []string{"Nick Cave/Tender Prey"}; !slices.Equal(second.EmptyDirectories, want) {
+		t.Errorf("EmptyDirectories = %v, want %v", second.EmptyDirectories, want)
+	}
+}
+
+// Quarantined files have left the library: a sweep that found them would register them again,
+// bringing back what a revert or a delete removed.
+func TestSweep_NeverWalksTheRootsQuarantine(t *testing.T) {
+	lib := newTree(t, "Nick Cave/Tender Prey/01.flac", "quarantine/2026-09-24/02.flac", "Artist/quarantine/03.flac")
+	_, collected := sweep(t, lib, scan.State{}, scan.Options{Full: true})
+	if want := []string{"Artist/quarantine/03.flac", "Nick Cave/Tender Prey/01.flac"}; !slices.Equal(collected.sorted(), want) {
+		t.Errorf("found %v, want %v", collected.sorted(), want)
+	}
+}

@@ -99,11 +99,18 @@ func (r *TaskRunner) Run(ctx context.Context) {
 // scheduled scan can still be run from the interface once. Refuses rather
 // than double-queues when a fire is already in flight.
 func (r *TaskRunner) RunNow(ctx context.Context) error {
+	if r.task.EnqueueManual != nil {
+		return r.runOnce(ctx, r.task.EnqueueManual)
+	}
+	return r.runOnce(ctx, r.task.Enqueue)
+}
+
+func (r *TaskRunner) runOnce(ctx context.Context, enqueue func(context.Context) (EnqueueResult, error)) error {
 	if !r.running.TryLock() {
 		return ErrAlreadyRunning
 	}
 	defer r.running.Unlock()
-	r.fireAndRecord(ctx, r.task.Enqueue)
+	r.fireAndRecord(ctx, enqueue)
 	return nil
 }
 
@@ -132,7 +139,7 @@ func (r *TaskRunner) Startup(ctx context.Context) {
 	if !r.source.RunAtStartup(r.task.Key, r.task.Startup == StartupOn) {
 		return
 	}
-	if err := r.RunNow(ctx); err != nil {
+	if err := r.runOnce(ctx, r.task.Enqueue); err != nil {
 		r.logger.Debug("startup run skipped", slog.String("task", r.task.Key), slog.Any("error", err))
 	}
 }

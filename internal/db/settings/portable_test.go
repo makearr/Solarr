@@ -687,3 +687,58 @@ func TestImport_RefusesAScheduleThatNeverFires(t *testing.T) {
 		t.Fatalf("Import = %v, want one problem under schedules.backup", err)
 	}
 }
+
+// A library's File Management travels with it; one on the defaults exports nothing.
+func TestDocument_RoundTrips_IncludesFileManagement(t *testing.T) {
+	cache, _ := newCache(t)
+	music := mustCategory(t, cache, "music", "Music", 10)
+	mustCategory(t, cache, "music", "Untouched", 20)
+	wanted := settings.FileManagement{
+		PropersRepacks: settings.PropersDoNotPrefer, RescanAfterRefresh: settings.RescanNever,
+		ChangeFileDate: settings.FileDateReleaseDate, RecycleRetentionDays: 30, DeleteEmptyFolders: true,
+		CreateEmptyArtistFolders: true, UnmonitorDeleted: true, SetPermissions: true, ChmodFolder: "775", ChownGroup: "media",
+	}
+	if err := cache.SetCategoryFileManagement(t.Context(), music.ID, wanted); err != nil {
+		t.Fatalf("SetCategoryFileManagement: %v", err)
+	}
+
+	exported := cache.Export()
+	for _, category := range exported.Categories {
+		if (category.Name == "Untouched") != (category.FileManagement == nil) {
+			t.Errorf("%s exported file management %+v", category.Name, category.FileManagement)
+		}
+	}
+	encoded, err := yaml.Marshal(exported)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded settings.Document
+	if err := yaml.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	fresh, freshClock := newCache(t)
+	if err := fresh.Import(t.Context(), freshClock, netip.Addr{}, decoded); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	for _, category := range fresh.Snapshot().Categories() {
+		want := settings.DefaultFileManagement
+		if category.Name == "Music" {
+			want = wanted
+		}
+		if category.FileManagement != want {
+			t.Errorf("%s after restore = %+v, want %+v", category.Name, category.FileManagement, want)
+		}
+	}
+}
+
+func TestSetCategoryFileManagement_RefusesAModeThatLocksSolarrOut(t *testing.T) {
+	cache, _ := newCache(t)
+	music := mustCategory(t, cache, "music", "Music", 10)
+	settingsWith := settings.DefaultFileManagement
+	settingsWith.ChmodFolder = "555"
+	err := cache.SetCategoryFileManagement(t.Context(), music.ID, settingsWith)
+	var problems config.Problems
+	if !errors.As(err, &problems) || len(problems) != 1 || problems[0].Path != "chmod_folder" {
+		t.Fatalf("SetCategoryFileManagement(555) = %v, want one chmod_folder problem", err)
+	}
+}

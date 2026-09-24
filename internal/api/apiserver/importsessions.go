@@ -475,7 +475,8 @@ func (s *Server) RevertImportSession(w http.ResponseWriter, r *http.Request, id 
 			return
 		}
 	}
-	retainHours := derefOr(body.QuarantineRetainHours, 168)
+	// Absent means the library's own recycling bin retention.
+	retainHours := derefOr(body.QuarantineRetainHours, 0)
 
 	result, err := s.importSessions.RevertImportSession(r.Context(), id, retainHours)
 	switch {

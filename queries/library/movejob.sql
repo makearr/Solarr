@@ -2,22 +2,22 @@
 -- reusing models.
 
 -- name: CreateMoveJob :one
-INSERT INTO move_job (reason, source_root_id, state, files_total, bytes_total, plan_json, created_at)
+INSERT INTO move_job (reason, source_root_id, state, files_total, bytes_total, plan_json, created_at, category_id)
 VALUES (sqlc.arg(reason), sqlc.arg(source_root_id), 'PLANNED', sqlc.arg(files_total),
-        sqlc.arg(bytes_total), sqlc.arg(plan_json), sqlc.arg(created_at))
+        sqlc.arg(bytes_total), sqlc.arg(plan_json), sqlc.arg(created_at), sqlc.arg(category_id))
 RETURNING id, reason, source_root_id, state, files_total, files_done, bytes_total, bytes_done,
-          plan_json, created_at, finished_at, error;
+          plan_json, created_at, finished_at, error, category_id;
 
 -- name: GetMoveJob :one
 SELECT id, reason, source_root_id, state, files_total, files_done, bytes_total, bytes_done,
-       plan_json, created_at, finished_at, error
+       plan_json, created_at, finished_at, error, category_id
 FROM move_job WHERE id = ?;
 
 -- Small, operator-facing list -- move counts never approach library scale,
 -- the same reasoning ListImportSessions' own comment already gives.
 -- name: ListMoveJobs :many
 SELECT id, reason, source_root_id, state, files_total, files_done, bytes_total, bytes_done,
-       plan_json, created_at, finished_at, error
+       plan_json, created_at, finished_at, error, category_id
 FROM move_job
 WHERE sqlc.arg(filter_by_state) = 0 OR state = sqlc.arg(state)
 ORDER BY created_at DESC;

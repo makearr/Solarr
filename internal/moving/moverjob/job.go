@@ -79,6 +79,9 @@ type DrainCompletion interface {
 	CompleteDrainIfEmpty(ctx context.Context, rootFolderID, moveJobID int64) error
 }
 
+// Permissions answers a library's Set Permissions; ok is false when it is off.
+type Permissions func(categoryID int64) (permissions mover.Permissions, ok bool, err error)
+
 // Job runs one move.apply execution: claim the next pending item, apply it,
 // record and unlink, repeat until the job's items are all terminal.
 type Job struct {
@@ -87,6 +90,7 @@ type Job struct {
 	physical        library.Physical
 	roots           RootFolders
 	drainCompletion DrainCompletion
+	permissions     Permissions
 	clock           clock.Clock
 	logger          *slog.Logger
 }
@@ -99,8 +103,10 @@ type Config struct {
 	Physical        library.Physical
 	Roots           RootFolders
 	DrainCompletion DrainCompletion
-	Clock           clock.Clock
-	Logger          *slog.Logger
+	// Permissions is optional; a rename run for one library applies it to what it moves.
+	Permissions Permissions
+	Clock       clock.Clock
+	Logger      *slog.Logger
 }
 
 // NewJob builds the handler.
@@ -111,7 +117,8 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		fsys: config.FS, moveJobs: config.MoveJobs, physical: config.Physical,
-		roots: config.Roots, drainCompletion: config.DrainCompletion, clock: config.Clock, logger: logger,
+		roots: config.Roots, drainCompletion: config.DrainCompletion, permissions: config.Permissions,
+		clock: config.Clock, logger: logger,
 	}
 }
 
@@ -138,6 +145,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		}
 	}
 
+	permissions := j.permissionsFor(moveJob)
 	for {
 		item, err := j.moveJobs.NextPendingItem(ctx, moveJob.ID)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -147,7 +155,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 			return fmt.Errorf("moverjob: next pending item for job %d: %w", moveJob.ID, err)
 		}
 
-		if err := j.applyItem(ctx, item); err != nil {
+		if err := j.applyItem(ctx, item, permissions); err != nil {
 			j.logger.Warn("move item failed",
 				slog.Int64("move_job_id", moveJob.ID), slog.Int64("media_object_id", item.MediaObjectID),
 				slog.String("error", err.Error()))
@@ -182,7 +190,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 // one, then TIDY now-empty source directories -- ADR-51's own
 // copy-verify-repoint-unlink order (Invariant 77), repoint and unlink both
 // the caller's job since ApplyOne imports no store.
-func (j *Job) applyItem(ctx context.Context, item library.Item) error {
+func (j *Job) applyItem(ctx context.Context, item library.Item, permissions *mover.Permissions) error {
 	paths, err := j.physical.PathsForObject(ctx, item.MediaObjectID)
 	if err != nil {
 		return fmt.Errorf("paths for media object %d: %w", item.MediaObjectID, err)
@@ -222,6 +230,12 @@ func (j *Job) applyItem(ctx context.Context, item library.Item) error {
 	if err := mover.ApplyOne(j.fsys, move, rootPath); err != nil {
 		return fmt.Errorf("apply: %w", err)
 	}
+	if permissions != nil {
+		destAbs := path.Join(destRoot.Path, item.DestRelPath)
+		if err := mover.ApplyPermissions(j.fsys, destRoot.Path, destAbs, *permissions); err != nil {
+			j.logger.Warn("permissions not set", slog.String("path", destAbs), slog.Any("error", err))
+		}
+	}
 	if err := j.moveJobs.SetItemState(ctx, item.MoveJobID, item.MediaObjectID, library.MoveItemVerified, ""); err != nil {
 		return fmt.Errorf("record verified: %w", err)
 	}
@@ -242,6 +256,22 @@ func (j *Job) applyItem(ctx context.Context, item library.Item) error {
 	j.tidy(path.Dir(sourceAbs), sourceRoot.Path)
 
 	return j.moveJobs.SetItemState(ctx, item.MoveJobID, item.MediaObjectID, library.MoveItemDone, "")
+}
+
+// permissionsFor is the job's library's Set Permissions, or nil when it has none or it is off.
+func (j *Job) permissionsFor(moveJob library.Job) *mover.Permissions {
+	if j.permissions == nil || moveJob.CategoryID == nil {
+		return nil
+	}
+	permissions, ok, err := j.permissions(*moveJob.CategoryID)
+	if err != nil {
+		j.logger.Warn("permissions not resolved", slog.Int64("move_job_id", moveJob.ID), slog.Any("error", err))
+		return nil
+	}
+	if !ok {
+		return nil
+	}
+	return &permissions
 }
 
 // tidy removes now-empty directories from dir up to (never including)

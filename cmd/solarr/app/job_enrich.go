@@ -58,7 +58,16 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 // internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
 // schedule, not only once at startup.
 func (p *process) enqueueEnrichment(ctx context.Context) (jobs.EnqueueResult, error) {
-	result, err := music.EnqueueEnrichment(ctx, p.queue)
+	return p.enqueueEnrichmentRun(ctx, false)
+}
+
+// enqueueManualEnrichment is the scheduler's "Run now": a manual refresh.
+func (p *process) enqueueManualEnrichment(ctx context.Context) (jobs.EnqueueResult, error) {
+	return p.enqueueEnrichmentRun(ctx, true)
+}
+
+func (p *process) enqueueEnrichmentRun(ctx context.Context, manual bool) (jobs.EnqueueResult, error) {
+	result, err := music.EnqueueEnrichment(ctx, p.queue, manual)
 	if err != nil {
 		p.logger.Warn("enqueue music enrichment", slog.Any("error", err))
 	}

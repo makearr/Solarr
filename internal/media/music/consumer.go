@@ -183,6 +183,7 @@ func (c Consumer) Observe(
 	if err := c.recordClaimedAttributes(ctx, readable, mediaObjectIDs); err != nil {
 		return fmt.Errorf("music: %w", err)
 	}
+	c.changeFileDates(root, categoryID, readable)
 
 	tags := tagSourceFor(root, readable)
 	passes := passIdentifiers{embedded: []model.Identifier{NewMBIDIdentifier(tags)}}
@@ -901,5 +902,27 @@ func newEditionLink(observed scan.Observed) *library.EditionLink {
 	return &library.EditionLink{
 		Provider: ProviderRelease, ExternalID: release, Confidence: 1.0,
 		Edition: library.EditionIdentity{Kind: "unknown", Label: release},
+	}
+}
+
+// changeFileDates is a library's "Change File Date" at rescan (Sonarr's): each file's date becomes
+// its release date. Never on a root Solarr may not write to (Invariant 69); a failure is logged.
+func (c Consumer) changeFileDates(root settings.RootFolder, categoryID int64, batch []scan.Observed) {
+	if root.ReadOnly || !root.Writable || c.categories == nil {
+		return
+	}
+	category, found := c.categories.Category(categoryID)
+	if !found || category.FileManagement.ChangeFileDate != settings.FileDateReleaseDate {
+		return
+	}
+	for _, observed := range batch {
+		released, ok := parseReleaseDate(observed.Probe.Tags.First("date", "originaldate", "year"))
+		if !ok || observed.File.ModTime.Equal(released) {
+			continue
+		}
+		absolute := path.Join(root.Path, observed.File.RelPath)
+		if err := c.fsys.Chtimes(absolute, released); err != nil {
+			c.logger.Warn("file date not changed", slog.String("path", absolute), slog.Any("error", err))
+		}
 	}
 }

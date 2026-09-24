@@ -39,6 +39,9 @@ type Task struct {
 	// payload every task would have to grow a case for -- scan is still the
 	// only task that needs one.
 	RunFull func(context.Context) (EnqueueResult, error)
+	// EnqueueManual, when set, is what "Run now" fires instead of Enqueue, for a task that
+	// behaves differently when a person asks (a library's "Only After Manual Refresh").
+	EnqueueManual func(context.Context) (EnqueueResult, error)
 	// Category groups the task on the scheduler screen.
 	Category TaskCategory
 	// Startup says whether "run at startup" is offered, and its default.

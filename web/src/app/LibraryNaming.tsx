@@ -239,7 +239,7 @@ export function LibraryNaming() {
   );
 }
 
-function Toggle({
+export function Toggle({
   label,
   help,
   checked,
@@ -493,10 +493,10 @@ function ApplyToLibrary({ categoryId, unsaved }: { categoryId: number; unsaved: 
   );
 }
 
-function Message({ children }: { children: React.ReactNode }) {
+export function Message({ children }: { children: React.ReactNode }) {
   return <p className="p-6 text-sm text-ink-muted">{children}</p>;
 }
 
-const inputStyle =
+export const inputStyle =
   "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

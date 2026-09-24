@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -45,6 +46,7 @@ func TestConformance(t *testing.T) {
 		{"WriteAtomicLeavesNoTemporaryOnFailure", conformWriteAtomicFailure},
 		{"CreateSecretIsNotReadableByOthers", conformCreateSecretMode},
 		{"WriteAtomicSecretLandsRestricted", conformWriteAtomicSecretMode},
+		{"ChmodAndChtimesStick", conformChmodAndChtimes},
 	}
 
 	for _, implementation := range implementations {
@@ -471,5 +473,33 @@ func conformWriteAtomicSecretMode(t *testing.T, fsys fsx.FS, root string) {
 	}
 	if permissions := info.Mode.Perm(); permissions != 0o600 {
 		t.Errorf("destination mode %04o, want 0600", permissions)
+	}
+}
+
+func conformChmodAndChtimes(t *testing.T, fsys fsx.FS, root string) {
+	directory := filepath.Join(root, "album")
+	if err := fsys.MkdirAll(directory, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	path := filepath.Join(directory, "track.flac")
+	writeFile(t, fsys, path, "audio")
+	released := time.Date(1997, time.June, 16, 0, 0, 0, 0, time.UTC)
+
+	if err := fsys.Chmod(directory, 0o775); err != nil {
+		t.Fatalf("Chmod directory: %v", err)
+	}
+	if err := fsys.Chmod(path, 0o664); err != nil {
+		t.Fatalf("Chmod file: %v", err)
+	}
+	if err := fsys.Chtimes(path, released); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
+	directoryInfo, err := fsys.Stat(directory)
+	if err != nil || !directoryInfo.IsDir || directoryInfo.Mode.Perm() != 0o775 {
+		t.Errorf("directory = %+v, %v; want a directory with mode 0775", directoryInfo, err)
+	}
+	fileInfo, err := fsys.Stat(path)
+	if err != nil || fileInfo.Mode.Perm() != 0o664 || !fileInfo.ModTime.Equal(released) {
+		t.Errorf("file = %+v, %v; want mode 0664 modified %v", fileInfo, err, released)
 	}
 }
