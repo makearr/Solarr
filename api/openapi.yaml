@@ -203,6 +203,95 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /calendar/dates:
+    get:
+      operationId: listCalendarDates
+      tags: [library]
+      summary: How many releases fall on each date of a window, for the year view.
+      description: >-
+        The same releases listCalendar answers, counted per date so a busy
+        year is never cut off by a page size. A date is as precise as the
+        provider gave it: "2024", "2024-03" or "2024-03-01".
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: One row per date that has a release.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CalendarDate" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /me/calendar-feed:
+    get:
+      operationId: getMyCalendarFeed
+      tags: [auth]
+      summary: The caller's calendar feed token, if one exists.
+      responses:
+        "200":
+          description: The token, or none.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CalendarFeed" }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createMyCalendarFeed
+      tags: [auth]
+      summary: Give the caller a new calendar feed token, revoking the previous one.
+      responses:
+        "200":
+          description: The new token.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CalendarFeed" }
+        "401": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteMyCalendarFeed
+      tags: [auth]
+      summary: Revoke the caller's calendar feed; the link stops working at once.
+      responses:
+        "204": { description: Revoked. }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /calendar/feed.ics:
+    get:
+      operationId: getCalendarFeedICS
+      tags: [library]
+      summary: The calendar as iCalendar, for a calendar client. Authenticated by the token alone.
+      description: >-
+        Calendar clients cannot log in, so the per-user token in the URL is
+        the credential (2026-09-19). It shows only the libraries its user
+        can see, and only releases with a full date.
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema: { type: string }
+        - name: past_days
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 3650, default: 30 }
+        - name: future_days
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 3650, default: 365 }
+      responses:
+        "200":
+          description: An iCalendar document.
+          content:
+            text/calendar:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /system/logs:
     get:
       operationId: listLogs
@@ -5227,6 +5316,20 @@ components:
           type: integer
           format: int64
           description: How many files delete_files moved out of the library; 0 or 1.
+
+    CalendarDate:
+      type: object
+      required: [date, releases]
+      properties:
+        date: { type: string }
+        releases: { type: integer, format: int64 }
+
+    CalendarFeed:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Absent when the caller has no feed.
 
     CalendarEntry:
       type: object

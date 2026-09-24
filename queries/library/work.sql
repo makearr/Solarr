@@ -310,20 +310,51 @@ SELECT media_object_id FROM work_file WHERE work_id = ? ORDER BY media_object_id
 -- either something wants the work, or an artist credited on it is monitored.
 -- A work with several dates of the same kind in different regions would repeat,
 -- so the earliest per work is taken -- a calendar shows one entry per release.
+-- Only libraries the caller can see: a wanted work through its desired_item, a followed artist's
+-- release through the subscription that follows them.
 -- name: ListCalendarEntries :many
 SELECT w.id, w.canonical_title, w.sort_title, w.primary_type,
-       COALESCE(w.primary_artist_sort_name, '') AS artist_sort,
+       COALESCE(pa.name, '') AS artist_name,
        MIN(wd.date) AS release_date,
        EXISTS (SELECT 1 FROM work_file wf WHERE wf.work_id = w.id) AS on_disk
 FROM work_date wd
 JOIN work w ON w.id = wd.work_id
+LEFT JOIN person pa ON pa.id = w.primary_artist_id
 WHERE wd.kind = sqlc.arg(kind)
   AND wd.date >= sqlc.arg(from_date) AND wd.date <= sqlc.arg(to_date)
   AND (
-    EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = w.id AND di.monitored = 1)
-    OR EXISTS (SELECT 1 FROM credit c JOIN person p ON p.id = c.person_id
-               WHERE c.work_id = w.id AND c.role = 'artist' AND p.monitored = 1)
+    EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = w.id AND di.monitored = 1
+            AND di.category_id IN (SELECT value FROM json_each(sqlc.arg(category_ids))))
+    OR EXISTS (SELECT 1 FROM credit c
+               JOIN person p ON p.id = c.person_id
+               JOIN subscription s ON s.subject_type = 'person' AND s.subject_id = p.id AND s.enabled = 1
+               WHERE c.work_id = w.id AND c.role = 'artist' AND p.monitored = 1
+                 AND s.category_id IN (SELECT value FROM json_each(sqlc.arg(category_ids))))
   )
 GROUP BY w.id
 ORDER BY release_date, w.sort_title, w.id
 LIMIT sqlc.arg(page_size);
+
+-- How many releases fall on each date of a window, for the calendar's year view: the same works
+-- ListCalendarEntries answers, counted rather than listed, so a busy year is never truncated.
+-- name: CountCalendarDates :many
+SELECT release_date, CAST(COUNT(*) AS INTEGER) AS releases
+FROM (
+  SELECT MIN(wd.date) AS release_date
+  FROM work_date wd
+  JOIN work w ON w.id = wd.work_id
+  WHERE wd.kind = sqlc.arg(kind)
+    AND wd.date >= sqlc.arg(from_date) AND wd.date <= sqlc.arg(to_date)
+    AND (
+      EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = w.id AND di.monitored = 1
+              AND di.category_id IN (SELECT value FROM json_each(sqlc.arg(category_ids))))
+      OR EXISTS (SELECT 1 FROM credit c
+                 JOIN person p ON p.id = c.person_id
+                 JOIN subscription s ON s.subject_type = 'person' AND s.subject_id = p.id AND s.enabled = 1
+                 WHERE c.work_id = w.id AND c.role = 'artist' AND p.monitored = 1
+                   AND s.category_id IN (SELECT value FROM json_each(sqlc.arg(category_ids))))
+    )
+  GROUP BY w.id
+)
+GROUP BY release_date
+ORDER BY release_date;

@@ -12,8 +12,10 @@ type Calendar struct {
 	Calendar library.Calendar
 }
 
-func (a Calendar) Entries(ctx context.Context, from, to string, limit int) ([]apiserver.CalendarRow, error) {
-	entries, err := a.Calendar.Entries(ctx, from, to, limit)
+func (a Calendar) Entries(
+	ctx context.Context, from, to string, categoryIDs []int64, limit int,
+) ([]apiserver.CalendarRow, error) {
+	entries, err := a.Calendar.Entries(ctx, from, to, categoryIDs, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -23,6 +25,19 @@ func (a Calendar) Entries(ctx context.Context, from, to string, limit int) ([]ap
 			WorkID: entry.WorkID, Title: entry.Title, Artist: entry.Artist,
 			PrimaryType: entry.PrimaryType, ReleaseDate: entry.ReleaseDate, OnDisk: entry.OnDisk,
 		}
+	}
+	return rows, nil
+}
+
+// Dates satisfies apiserver.CalendarReader's per-date count.
+func (a Calendar) Dates(ctx context.Context, from, to string, categoryIDs []int64) ([]apiserver.CalendarDate, error) {
+	dates, err := a.Calendar.Dates(ctx, from, to, categoryIDs)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]apiserver.CalendarDate, len(dates))
+	for i, date := range dates {
+		rows[i] = apiserver.CalendarDate{Date: date.Date, Releases: date.Releases}
 	}
 	return rows, nil
 }

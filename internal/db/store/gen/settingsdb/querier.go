@@ -49,6 +49,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (AppUser, error)
 	DeleteAPIKey(ctx context.Context, id int64) error
 	DeleteArrInstance(ctx context.Context, id int64) error
+	DeleteCalendarFeed(ctx context.Context, userID int64) error
 	DeleteCategory(ctx context.Context, id int64) error
 	DeleteDiscoveryJob(ctx context.Context, id int64) error
 	DeleteDownloadFolder(ctx context.Context, id int64) error
@@ -66,6 +67,8 @@ type Querier interface {
 	DetachRootFolderFromCategory(ctx context.Context, arg DetachRootFolderFromCategoryParams) error
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetArrInstance(ctx context.Context, id int64) (ArrInstance, error)
+	GetCalendarFeed(ctx context.Context, userID int64) (CalendarFeed, error)
+	GetCalendarFeedByHash(ctx context.Context, tokenHash string) (CalendarFeed, error)
 	GetCategory(ctx context.Context, id int64) (Category, error)
 	GetDiscoveryJob(ctx context.Context, id int64) (DiscoveryJob, error)
 	GetDownloadFolder(ctx context.Context, id int64) (DownloadFolder, error)
@@ -164,6 +167,7 @@ type Querier interface {
 	UpdateLanguageProfile(ctx context.Context, arg UpdateLanguageProfileParams) error
 	UpdateNamingProfile(ctx context.Context, arg UpdateNamingProfileParams) error
 	UpdateQualityProfile(ctx context.Context, arg UpdateQualityProfileParams) error
+	UpsertCalendarFeed(ctx context.Context, arg UpsertCalendarFeedParams) error
 }
 
 var _ Querier = (*Queries)(nil)

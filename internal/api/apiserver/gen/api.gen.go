@@ -864,6 +864,12 @@ type CacheReport struct {
 	MetadataSharePercent int64  `json:"metadata_share_percent"`
 }
 
+// CalendarDate defines model for CalendarDate.
+type CalendarDate struct {
+	Date     string `json:"date"`
+	Releases int64  `json:"releases"`
+}
+
 // CalendarEntry One release in the calendar window.
 type CalendarEntry struct {
 	Artist *string `json:"artist,omitempty"`
@@ -878,6 +884,12 @@ type CalendarEntry struct {
 	ReleaseDate string `json:"release_date"`
 	Title       string `json:"title"`
 	WorkId      int64  `json:"work_id"`
+}
+
+// CalendarFeed defines model for CalendarFeed.
+type CalendarFeed struct {
+	// Token Absent when the caller has no feed.
+	Token *string `json:"token,omitempty"`
 }
 
 // CandidateDecision One release an indexer answered, decided against a specific desired item (section 10.1/12). components/rejections/deferrals are the same shape Decision itself carries -- quality is omitted here since a candidate is compared against a profile, not against another candidate (no ADR-40 tiered comparison to show).
@@ -2636,6 +2648,19 @@ type ListCalendarParams struct {
 	Limit *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListCalendarDatesParams defines parameters for ListCalendarDates.
+type ListCalendarDatesParams struct {
+	From string `form:"from" json:"from"`
+	To   string `form:"to" json:"to"`
+}
+
+// GetCalendarFeedICSParams defines parameters for GetCalendarFeedICS.
+type GetCalendarFeedICSParams struct {
+	Token      string `form:"token" json:"token"`
+	PastDays   *int   `form:"past_days,omitempty" json:"past_days,omitempty"`
+	FutureDays *int   `form:"future_days,omitempty" json:"future_days,omitempty"`
+}
+
 // CreateCategoryJSONBody defines parameters for CreateCategory.
 type CreateCategoryJSONBody struct {
 	MediaType    string `json:"media_type"`
@@ -3281,6 +3306,12 @@ type ServerInterface interface {
 	// Releases in a date window, earliest first.
 	// (GET /calendar)
 	ListCalendar(w http.ResponseWriter, r *http.Request, params ListCalendarParams)
+	// How many releases fall on each date of a window, for the year view.
+	// (GET /calendar/dates)
+	ListCalendarDates(w http.ResponseWriter, r *http.Request, params ListCalendarDatesParams)
+	// The calendar as iCalendar, for a calendar client. Authenticated by the token alone.
+	// (GET /calendar/feed.ics)
+	GetCalendarFeedICS(w http.ResponseWriter, r *http.Request, params GetCalendarFeedICSParams)
 	// Every category the caller may read (ADR-27).
 	// (GET /categories)
 	ListCategories(w http.ResponseWriter, r *http.Request)
@@ -3491,6 +3522,15 @@ type ServerInterface interface {
 	// Revoke one of the caller's own keys. Refused (404, indistinguishable from missing, Invariant 37) for a key belonging to someone else -- never even reveals that a different user's key by that id exists.
 	// (DELETE /me/apikeys/{id})
 	DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, id int64)
+	// Revoke the caller's calendar feed; the link stops working at once.
+	// (DELETE /me/calendar-feed)
+	DeleteMyCalendarFeed(w http.ResponseWriter, r *http.Request)
+	// The caller's calendar feed token, if one exists.
+	// (GET /me/calendar-feed)
+	GetMyCalendarFeed(w http.ResponseWriter, r *http.Request)
+	// Give the caller a new calendar feed token, revoking the previous one.
+	// (POST /me/calendar-feed)
+	CreateMyCalendarFeed(w http.ResponseWriter, r *http.Request)
 	// The caller's own interface state -- sort order, chosen columns and the like. Self-service and per user: none of it changes behaviour, only what this one person sees.
 	// (GET /me/preferences)
 	GetMyPreferences(w http.ResponseWriter, r *http.Request)
@@ -3836,6 +3876,18 @@ func (_ Unimplemented) ClearCache(w http.ResponseWriter, r *http.Request) {
 // Releases in a date window, earliest first.
 // (GET /calendar)
 func (_ Unimplemented) ListCalendar(w http.ResponseWriter, r *http.Request, params ListCalendarParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// How many releases fall on each date of a window, for the year view.
+// (GET /calendar/dates)
+func (_ Unimplemented) ListCalendarDates(w http.ResponseWriter, r *http.Request, params ListCalendarDatesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The calendar as iCalendar, for a calendar client. Authenticated by the token alone.
+// (GET /calendar/feed.ics)
+func (_ Unimplemented) GetCalendarFeedICS(w http.ResponseWriter, r *http.Request, params GetCalendarFeedICSParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4256,6 +4308,24 @@ func (_ Unimplemented) CreateMyAPIKey(w http.ResponseWriter, r *http.Request) {
 // Revoke one of the caller's own keys. Refused (404, indistinguishable from missing, Invariant 37) for a key belonging to someone else -- never even reveals that a different user's key by that id exists.
 // (DELETE /me/apikeys/{id})
 func (_ Unimplemented) DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Revoke the caller's calendar feed; the link stops working at once.
+// (DELETE /me/calendar-feed)
+func (_ Unimplemented) DeleteMyCalendarFeed(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The caller's calendar feed token, if one exists.
+// (GET /me/calendar-feed)
+func (_ Unimplemented) GetMyCalendarFeed(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Give the caller a new calendar feed token, revoking the previous one.
+// (POST /me/calendar-feed)
+func (_ Unimplemented) CreateMyCalendarFeed(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5337,6 +5407,113 @@ func (siw *ServerInterfaceWrapper) ListCalendar(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListCalendar(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCalendarDates operation middleware
+func (siw *ServerInterfaceWrapper) ListCalendarDates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCalendarDatesParams
+
+	// ------------- Required query parameter "from" -------------
+
+	if paramValue := r.URL.Query().Get("from"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "from", r.URL.Query(), &params.From)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "to" -------------
+
+	if paramValue := r.URL.Query().Get("to"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "to", r.URL.Query(), &params.To)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCalendarDates(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCalendarFeedICS operation middleware
+func (siw *ServerInterfaceWrapper) GetCalendarFeedICS(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetCalendarFeedICSParams
+
+	// ------------- Required query parameter "token" -------------
+
+	if paramValue := r.URL.Query().Get("token"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "token"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "token", r.URL.Query(), &params.Token)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "past_days" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "past_days", r.URL.Query(), &params.PastDays)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "past_days", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "future_days" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "future_days", r.URL.Query(), &params.FutureDays)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "future_days", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCalendarFeedICS(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7584,6 +7761,72 @@ func (siw *ServerInterfaceWrapper) DeleteMyAPIKey(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteMyAPIKey(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMyCalendarFeed operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMyCalendarFeed(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMyCalendarFeed(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMyCalendarFeed operation middleware
+func (siw *ServerInterfaceWrapper) GetMyCalendarFeed(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMyCalendarFeed(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateMyCalendarFeed operation middleware
+func (siw *ServerInterfaceWrapper) CreateMyCalendarFeed(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMyCalendarFeed(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9885,6 +10128,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/calendar", wrapper.ListCalendar)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/calendar/dates", wrapper.ListCalendarDates)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/calendar/feed.ics", wrapper.GetCalendarFeedICS)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories", wrapper.ListCategories)
 	})
 	r.Group(func(r chi.Router) {
@@ -10093,6 +10342,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/me/apikeys/{id}", wrapper.DeleteMyAPIKey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/me/calendar-feed", wrapper.DeleteMyCalendarFeed)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/calendar-feed", wrapper.GetMyCalendarFeed)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/me/calendar-feed", wrapper.CreateMyCalendarFeed)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/me/preferences", wrapper.GetMyPreferences)

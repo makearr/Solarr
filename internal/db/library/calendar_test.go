@@ -1,6 +1,7 @@
 package library_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -27,7 +28,7 @@ func TestCalendar_OnlyShowsWorksTheLibraryCaresAbout(t *testing.T) {
 	setDate(t, queries, ignored.ID, "2026-03-16")
 	createDesired(t, opened, wanted.ID, "SET", 1)
 
-	entries, err := library.NewCalendar(opened).Entries(t.Context(), "2026-01-01", "2026-12-31", 50)
+	entries, err := library.NewCalendar(opened).Entries(t.Context(), "2026-01-01", "2026-12-31", []int64{1}, 50)
 	if err != nil {
 		t.Fatalf("Entries: %v", err)
 	}
@@ -58,7 +59,7 @@ func TestCalendar_IncludesAMonitoredArtistsRelease(t *testing.T) {
 		t.Fatalf("AddCredit: %v", err)
 	}
 
-	before, err := library.NewCalendar(opened).Entries(t.Context(), "2026-01-01", "2026-12-31", 50)
+	before, err := library.NewCalendar(opened).Entries(t.Context(), "2026-01-01", "2026-12-31", []int64{1}, 50)
 	if err != nil {
 		t.Fatalf("Entries: %v", err)
 	}
@@ -67,11 +68,11 @@ func TestCalendar_IncludesAMonitoredArtistsRelease(t *testing.T) {
 	}
 
 	if _, err := people.Subscribe(t.Context(), firstSeen, personID, 1, library.SubscriptionRequest{
-		MediaTypes: []string{"music"},
+		MediaTypes: []string{"music"}, CategoryID: 1,
 	}); err != nil {
 		t.Fatalf("Subscribe: %v", err)
 	}
-	after, err := library.NewCalendar(opened).Entries(t.Context(), "2026-01-01", "2026-12-31", 50)
+	after, err := library.NewCalendar(opened).Entries(t.Context(), "2026-01-01", "2026-12-31", []int64{1}, 50)
 	if err != nil {
 		t.Fatalf("Entries: %v", err)
 	}
@@ -94,7 +95,7 @@ func TestCalendar_WindowIsInclusiveAndAcceptsPartialDates(t *testing.T) {
 		createDesired(t, opened, work, "SET", 1)
 	}
 
-	entries, err := library.NewCalendar(opened).Entries(t.Context(), "2026-03-01", "2026-12-31", 50)
+	entries, err := library.NewCalendar(opened).Entries(t.Context(), "2026-03-01", "2026-12-31", []int64{1}, 50)
 	if err != nil {
 		t.Fatalf("Entries: %v", err)
 	}
@@ -103,5 +104,71 @@ func TestCalendar_WindowIsInclusiveAndAcceptsPartialDates(t *testing.T) {
 	}
 	if entries[0].ReleaseDate != "2026-03-01" || entries[1].ReleaseDate != "2026-04" {
 		t.Errorf("entries = %+v, want them earliest first with the partial date as given", entries)
+	}
+}
+
+// A calendar shows only libraries the caller can see (2026-09-19 review): a wanted album through
+// its desired item's library, a followed artist's release through the subscription's.
+func TestCalendar_OnlyShowsTheCallersLibraries(t *testing.T) {
+	opened, queries := newLibrary(t)
+	wanted := createWork(t, opened, "music", "Wanted In Library 2")
+	followed := createWork(t, opened, "music", "Followed In Library 2")
+	setDate(t, queries, wanted.ID, "2026-05-01")
+	setDate(t, queries, followed.ID, "2026-05-02")
+	createDesiredInCategory(t, opened, wanted.ID, 2)
+
+	people := library.NewPeople(opened)
+	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
+		Provider: "musicbrainz:artist", ExternalID: "artist-2",
+		Person: library.PersonIdentity{Name: "Someone Else", SortName: "Someone Else"},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePerson: %v", err)
+	}
+	if err := people.AddCredit(t.Context(), followed.ID, personID, "artist", 0); err != nil {
+		t.Fatalf("AddCredit: %v", err)
+	}
+	if _, err := people.Subscribe(t.Context(), firstSeen, personID, 1, library.SubscriptionRequest{
+		MediaTypes: []string{"music"}, CategoryID: 2,
+	}); err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	calendar := library.NewCalendar(opened)
+	hidden, err := calendar.Entries(t.Context(), "2026-01-01", "2026-12-31", []int64{1}, 50)
+	if err != nil {
+		t.Fatalf("Entries: %v", err)
+	}
+	if len(hidden) != 0 {
+		t.Errorf("a caller seeing only library 1 got %+v", hidden)
+	}
+	visible, err := calendar.Entries(t.Context(), "2026-01-01", "2026-12-31", []int64{1, 2}, 50)
+	if err != nil {
+		t.Fatalf("Entries: %v", err)
+	}
+	if len(visible) != 2 {
+		t.Errorf("a caller seeing library 2 got %+v, want both releases", visible)
+	}
+}
+
+// The year view needs a count per date, with the same filter the list applies.
+func TestCalendar_DatesCountTheSameReleases(t *testing.T) {
+	opened, queries := newLibrary(t)
+	for _, date := range []string{"2026-06-01", "2026-06-01", "2026-06"} {
+		work := createWork(t, opened, "music", "Album "+date)
+		setDate(t, queries, work.ID, date)
+		createDesired(t, opened, work.ID, "SET", 1)
+	}
+	other := createWork(t, opened, "music", "Elsewhere")
+	setDate(t, queries, other.ID, "2026-06-02")
+	createDesiredInCategory(t, opened, other.ID, 2)
+
+	dates, err := library.NewCalendar(opened).Dates(t.Context(), "2026-01-01", "2026-12-31", []int64{1})
+	if err != nil {
+		t.Fatalf("Dates: %v", err)
+	}
+	want := []library.CalendarDate{{Date: "2026-06", Releases: 1}, {Date: "2026-06-01", Releases: 2}}
+	if !reflect.DeepEqual(dates, want) {
+		t.Errorf("dates = %+v, want %+v", dates, want)
 	}
 }

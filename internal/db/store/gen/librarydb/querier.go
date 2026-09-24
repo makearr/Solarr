@@ -55,6 +55,9 @@ type Querier interface {
 	// role counts as a level's "primary person" waits for a second media type that
 	// needs a different one.
 	CountArtistCreditsVisibleToCategory(ctx context.Context, arg CountArtistCreditsVisibleToCategoryParams) (int64, error)
+	// How many releases fall on each date of a window, for the calendar's year view: the same works
+	// ListCalendarEntries answers, counted rather than listed, so a busy year is never truncated.
+	CountCalendarDates(ctx context.Context, arg CountCalendarDatesParams) ([]CountCalendarDatesRow, error)
 	// library.db references settings.db by id with no foreign key (ADR-25), so only the
 	// application can find a reference a restore has orphaned. The count is what makes
 	// the report worth reading.
@@ -325,6 +328,8 @@ type Querier interface {
 	// either something wants the work, or an artist credited on it is monitored.
 	// A work with several dates of the same kind in different regions would repeat,
 	// so the earliest per work is taken -- a calendar shows one entry per release.
+	// Only libraries the caller can see: a wanted work through its desired_item, a followed artist's
+	// release through the subscription that follows them.
 	ListCalendarEntries(ctx context.Context, arg ListCalendarEntriesParams) ([]ListCalendarEntriesRow, error)
 	ListCollectionMembers(ctx context.Context, collectionID int64) ([]CollectionMember, error)
 	ListCollectionsForWork(ctx context.Context, workID int64) ([]Collection, error)
