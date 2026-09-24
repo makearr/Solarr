@@ -337,6 +337,7 @@ type ImportSession struct {
 	UnitsFailed    int64
 	UnitsEstimated sql.NullInt64
 	DismissedAt    sql.NullInt64
+	Preview        int64
 }
 
 type ImportUnit struct {

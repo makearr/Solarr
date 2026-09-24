@@ -90,6 +90,8 @@ type Session struct {
 	// DismissedAt is nil while the session is still shown on the Import
 	// screen. Dismissal hides the row, it never deletes it.
 	DismissedAt *int64
+	// Preview holds every unit for review; a resumed run keeps it, as it keeps Threshold.
+	Preview bool
 }
 
 // NewSession is what Create needs to start one run.
@@ -100,6 +102,7 @@ type NewSession struct {
 	CategoryID    *int64
 	Threshold     float64
 	StartedAt     int64
+	Preview       bool
 }
 
 // Unit is one import_unit row -- inspect.Unit's own persisted counterpart, plus
@@ -150,7 +153,7 @@ func (s ImportSessions) Create(ctx context.Context, params NewSession) (int64, e
 		row, err := librarydb.New(tx).CreateImportSession(ctx, librarydb.CreateImportSessionParams{
 			SourcePath: params.SourcePath, Origin: params.Origin,
 			AcquisitionID: nullInt64(params.AcquisitionID), CategoryID: nullInt64(params.CategoryID),
-			Threshold: params.Threshold, StartedAt: params.StartedAt,
+			Threshold: params.Threshold, StartedAt: params.StartedAt, Preview: boolToInt(params.Preview),
 		})
 		if err != nil {
 			return err
@@ -597,6 +600,7 @@ func sessionFromRow(row librarydb.ImportSession) Session {
 		BytesImported: row.BytesImported, ExtractDir: row.ExtractDir.String,
 		StartedAt: row.StartedAt, FinishedAt: int64Ptr(row.FinishedAt), Error: row.Error.String,
 		UnitsEstimated: int64Ptr(row.UnitsEstimated), DismissedAt: int64Ptr(row.DismissedAt),
+		Preview: row.Preview != 0,
 	}
 }
 
