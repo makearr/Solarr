@@ -942,7 +942,7 @@ export interface paths {
         put?: never;
         /**
          * Apply a configuration document, entirely or not at all.
-         * @description The document is validated whole and every problem is reported at once, because an import is arbitrary input and reporting one error per attempt turns a five-mistake file into five round trips. Nothing is written unless all of it is valid -- a partial import leaves settings in a state the user never chose. Merges on natural keys, so applying the same document twice changes nothing the second time.
+         * @description The document is validated whole and every problem is reported at once, because an import is arbitrary input and reporting one error per attempt turns a five-mistake file into five round trips. Nothing is written unless all of it is valid -- a partial import leaves settings in a state the user never chose. Merges on natural keys, so applying the same document twice changes nothing the second time. A key the document format does not have is not an error: what is known is applied, and every unknown key comes back as a warning with the nearest valid one.
          */
         post: operations["importSettings"];
         delete?: never;
@@ -3477,6 +3477,14 @@ export interface components {
         CalendarFeed: {
             /** @description Absent when the caller has no feed. */
             token?: string;
+        };
+        SettingsImportResult: {
+            warnings: components["schemas"]["SettingsImportWarning"][];
+        };
+        SettingsImportWarning: {
+            path: string;
+            message: string;
+            suggestion?: string;
         };
         /** @description One release in the calendar window. */
         CalendarEntry: {
@@ -6332,11 +6340,13 @@ export interface operations {
         };
         responses: {
             /** @description Applied. */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SettingsImportResult"];
+                };
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];

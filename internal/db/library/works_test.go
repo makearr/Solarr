@@ -576,3 +576,42 @@ func TestListWorks_StateIsTheAlbumsNotAnEarlierTracks(t *testing.T) {
 		t.Errorf("works = %+v, want the album's COMPLETE", page)
 	}
 }
+
+// Import revert deletes only the works a session created, so the flag must be exact: an existing
+// work is matched, a new one created once, and the same key again in one batch reuses it.
+func TestResolveWorksDetailed_CreatedOnlyForTheFirstLinkOfANewWork(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	link := func(id string) library.WorkLink {
+		return library.WorkLink{Provider: "test", ExternalID: id, Confidence: 1,
+			Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: id, SortTitle: id}}
+	}
+	if _, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{link("old")}); err != nil {
+		t.Fatal(err)
+	}
+
+	resolutions, err := identity.ResolveWorksDetailed(t.Context(), firstSeen,
+		[]library.WorkLink{link("new"), link("old"), link("new"), link("other")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var created []bool
+	for _, r := range resolutions {
+		created = append(created, r.WorkCreated)
+	}
+	if want := []bool{true, false, false, true}; !slices.Equal(created, want) {
+		t.Errorf("created = %v, want %v", created, want)
+	}
+	if resolutions[0].WorkID != resolutions[2].WorkID || resolutions[0].WorkID == resolutions[3].WorkID {
+		t.Errorf("ids = %+v: a repeated key must share its work and different keys must not", resolutions)
+	}
+	for _, r := range resolutions {
+		work, err := library.NewWorks(opened).Detail(t.Context(), r.WorkID)
+		if err != nil {
+			t.Fatalf("work %d was not written: %v", r.WorkID, err)
+		}
+		if len(work.ExternalIDs) != 1 {
+			t.Errorf("work %d has external ids %+v, want its own one", r.WorkID, work.ExternalIDs)
+		}
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -87,16 +88,19 @@ func (i Identity) ResolveWorks(ctx context.Context, at time.Time, links []WorkLi
 	if len(links) == 0 {
 		return nil, nil
 	}
-	workIDs := make([]int64, len(links))
+	var workIDs []int64
 	err := i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
+		ids, _, err := findOrCreateWorks(ctx, tx, queries, at, links)
+		if err != nil {
+			return err
+		}
 		for index, link := range links {
-			workID, _, err := resolveWork(ctx, queries, at, link)
-			if err != nil {
+			if err := linkResolvedWork(ctx, queries, at, ids[index], link); err != nil {
 				return fmt.Errorf("library: resolve work %s:%s: %w", link.Provider, link.ExternalID, err)
 			}
-			workIDs[index] = workID
 		}
+		workIDs = ids
 		return nil
 	})
 	if err != nil {
@@ -132,12 +136,13 @@ func (i Identity) ResolveWorksDetailed(ctx context.Context, at time.Time, links 
 	resolutions := make([]WorkResolution, len(links))
 	err := i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
+		ids, created, err := findOrCreateWorks(ctx, tx, queries, at, links)
+		if err != nil {
+			return err
+		}
 		for index, link := range links {
-			workID, workCreated, err := findOrCreateWork(ctx, queries, at, link)
-			if err != nil {
-				return fmt.Errorf("library: resolve work %s:%s: %w", link.Provider, link.ExternalID, err)
-			}
-			resolution := WorkResolution{WorkID: workID, WorkCreated: workCreated}
+			workID := ids[index]
+			resolution := WorkResolution{WorkID: workID, WorkCreated: created[index]}
 			if link.Edition != nil {
 				editionID, editionCreated, err := resolveEdition(ctx, queries, workID, *link.Edition)
 				if err != nil {
@@ -197,29 +202,22 @@ func (i Identity) DeleteEdition(ctx context.Context, editionID int64) error {
 	return nil
 }
 
-func resolveWork(
-	ctx context.Context, queries *librarydb.Queries, at time.Time, link WorkLink,
-) (workID int64, created bool, err error) {
-	workID, created, err = findOrCreateWork(ctx, queries, at, link)
-	if err != nil {
-		return 0, false, err
-	}
+// linkResolvedWork records what else a link says about its resolved work: its edition, root
+// folder and file.
+func linkResolvedWork(ctx context.Context, queries *librarydb.Queries, at time.Time, workID int64, link WorkLink) error {
 	if link.Edition != nil {
 		if _, _, err := resolveEdition(ctx, queries, workID, *link.Edition); err != nil {
-			return 0, false, fmt.Errorf("edition: %w", err)
+			return fmt.Errorf("edition: %w", err)
 		}
 	}
 	if link.RootFolderID != 0 {
 		if err := queries.LinkWorkRootFolder(ctx, librarydb.LinkWorkRootFolderParams{
 			WorkID: workID, RootFolderID: link.RootFolderID, FirstSeenAt: at.Unix(),
 		}); err != nil {
-			return 0, false, fmt.Errorf("root folder: %w", err)
+			return fmt.Errorf("root folder: %w", err)
 		}
 	}
-	if err := linkWorkFile(ctx, queries, at, workID, link); err != nil {
-		return 0, false, err
-	}
-	return workID, created, nil
+	return linkWorkFile(ctx, queries, at, workID, link)
 }
 
 // WorkFileLocation is one path of the file recorded for a work.
@@ -264,35 +262,79 @@ func linkWorkFile(ctx context.Context, queries *librarydb.Queries, at time.Time,
 	return nil
 }
 
-func findOrCreateWork(
-	ctx context.Context, queries *librarydb.Queries, at time.Time, link WorkLink,
-) (workID int64, created bool, err error) {
-	existing, err := queries.GetWorkByExternalID(ctx, librarydb.GetWorkByExternalIDParams{
-		Provider: link.Provider, ExternalID: link.ExternalID,
-	})
-	if err == nil {
-		return existing.ID, false, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return 0, false, fmt.Errorf("look up: %w", err)
+// findOrCreateWorks resolves every link's (Provider, ExternalID) to a work: one lookup per
+// distinct key, then every new work in one multi-row INSERT and their external ids in another
+// -- per-row inserts were 81% of a scan batch, and one statement is 3.9x faster (notes 8.19).
+// A key repeated in the batch reuses its work; only its first link counts as having created it.
+func findOrCreateWorks(
+	ctx context.Context, tx *sql.Tx, queries *librarydb.Queries, at time.Time, links []WorkLink,
+) (ids []int64, created []bool, err error) {
+	type key struct{ provider, externalID string }
+	ids = make([]int64, len(links))
+	created = make([]bool, len(links))
+	resolved := make(map[key]int64, len(links))
+	var fresh []int // index of the first link of each key not yet in the library
+	for index, link := range links {
+		k := key{link.Provider, link.ExternalID}
+		if _, seen := resolved[k]; seen {
+			continue
+		}
+		existing, err := queries.GetWorkByExternalID(ctx, librarydb.GetWorkByExternalIDParams{
+			Provider: link.Provider, ExternalID: link.ExternalID,
+		})
+		switch {
+		case err == nil:
+			resolved[k] = existing.ID
+		case errors.Is(err, sql.ErrNoRows):
+			resolved[k] = 0
+			fresh = append(fresh, index)
+		default:
+			return nil, nil, fmt.Errorf("library: look up work %s:%s: %w", link.Provider, link.ExternalID, err)
+		}
 	}
 
-	work, err := queries.CreateWork(ctx, librarydb.CreateWorkParams{
-		MediaType: link.Work.MediaType, CanonicalTitle: link.Work.CanonicalTitle,
-		SortTitle: link.Work.SortTitle, AddedAt: at.Unix(), UpdatedAt: at.Unix(),
-		PrimaryType: nullString(link.Work.PrimaryType),
-	})
-	if err != nil {
-		return 0, false, fmt.Errorf("create work: %w", err)
+	if len(fresh) > 0 {
+		// One writer per database (ADR-3): inside this transaction nothing else can take these ids,
+		// and explicit ids keep links and rows paired, which RETURNING's order does not promise.
+		var maxID int64
+		if err := tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(id), 0) FROM work").Scan(&maxID); err != nil {
+			return nil, nil, fmt.Errorf("library: next work id: %w", err)
+		}
+		for start := 0; start < len(fresh); start += insertChunk {
+			chunk := fresh[start:min(start+insertChunk, len(fresh))]
+			works := make([]string, len(chunk))
+			externals := make([]string, len(chunk))
+			var workArgs, externalArgs []any
+			for position, index := range chunk {
+				link := links[index]
+				id := maxID + int64(start+position) + 1
+				resolved[key{link.Provider, link.ExternalID}] = id
+				created[index] = true
+				works[position] = "(?, ?, ?, ?, ?, ?, ?)"
+				workArgs = append(workArgs, id, link.Work.MediaType, link.Work.CanonicalTitle, link.Work.SortTitle,
+					at.Unix(), at.Unix(), nullString(link.Work.PrimaryType))
+				externals[position] = "(?, ?, ?, ?, ?)"
+				externalArgs = append(externalArgs, link.Provider, link.ExternalID, id, link.Confidence, at.Unix())
+			}
+			if _, err := tx.ExecContext(ctx, "INSERT INTO work (id, media_type, canonical_title, sort_title,"+
+				" added_at, updated_at, primary_type) VALUES "+strings.Join(works, ", "), workArgs...); err != nil {
+				return nil, nil, fmt.Errorf("library: create works: %w", err)
+			}
+			if _, err := tx.ExecContext(ctx, "INSERT INTO work_external_id (provider, external_id, work_id,"+
+				" confidence, first_seen_at) VALUES "+strings.Join(externals, ", "), externalArgs...); err != nil {
+				return nil, nil, fmt.Errorf("library: link work external ids: %w", err)
+			}
+		}
 	}
-	if err := queries.LinkWorkExternalID(ctx, librarydb.LinkWorkExternalIDParams{
-		Provider: link.Provider, ExternalID: link.ExternalID, WorkID: work.ID,
-		Confidence: link.Confidence, FirstSeenAt: at.Unix(),
-	}); err != nil {
-		return 0, false, fmt.Errorf("link external id: %w", err)
+
+	for index, link := range links {
+		ids[index] = resolved[key{link.Provider, link.ExternalID}]
 	}
-	return work.ID, true, nil
+	return ids, created, nil
 }
+
+// insertChunk keeps one multi-row INSERT at ADR-3's 200-row bulk size.
+const insertChunk = 200
 
 // resolveEdition finds or creates the edition behind link's (Provider, ExternalID),
 // scoped to workID -- the same find-then-create shape as findOrCreateWork, one level
