@@ -3864,6 +3864,9 @@ type ServerInterface interface {
 	// Monitor every album of this artist's discography. Administrator only.
 	// (POST /people/{id}/monitor-all)
 	MonitorPersonAll(w http.ResponseWriter, r *http.Request, id int64)
+	// Fetch the artist's details, image and albums again, past the metadata cache, then rescan their folders as each library's "Rescan after refresh" says. Background; a second request while one runs is folded in.
+	// (POST /people/{id}/refresh)
+	RefreshPerson(w http.ResponseWriter, r *http.Request, id int64)
 	// Stop following an artist and forget them. Administrator only.
 	// (POST /people/{id}/remove)
 	RemovePerson(w http.ResponseWriter, r *http.Request, id int64)
@@ -4761,6 +4764,12 @@ func (_ Unimplemented) GetPersonArtwork(w http.ResponseWriter, r *http.Request, 
 // Monitor every album of this artist's discography. Administrator only.
 // (POST /people/{id}/monitor-all)
 func (_ Unimplemented) MonitorPersonAll(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Fetch the artist's details, image and albums again, past the metadata cache, then rescan their folders as each library's "Rescan after refresh" says. Background; a second request while one runs is folded in.
+// (POST /people/{id}/refresh)
+func (_ Unimplemented) RefreshPerson(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8896,6 +8905,39 @@ func (siw *ServerInterfaceWrapper) MonitorPersonAll(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// RefreshPerson operation middleware
+func (siw *ServerInterfaceWrapper) RefreshPerson(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefreshPerson(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RemovePerson operation middleware
 func (siw *ServerInterfaceWrapper) RemovePerson(w http.ResponseWriter, r *http.Request) {
 
@@ -11195,6 +11237,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/people/{id}/monitor-all", wrapper.MonitorPersonAll)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/people/{id}/refresh", wrapper.RefreshPerson)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/people/{id}/remove", wrapper.RemovePerson)

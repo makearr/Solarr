@@ -51,6 +51,10 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 		Logger:          p.logger,
 	})
 	executor.Handle(music.EnrichJobType, job)
+	if err := registry.Register(music.RefreshArtistDefinition); err != nil {
+		return err
+	}
+	executor.Handle(music.RefreshArtistJobType, music.RefreshArtistJob{Enrich: job})
 	return nil
 }
 

@@ -2794,6 +2794,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/people/{id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fetch the artist's details, image and albums again, past the metadata cache, then rescan their folders as each library's "Rescan after refresh" says. Background; a second request while one runs is folded in. */
+        post: operations["refreshPerson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/people/{id}/monitor-all": {
         parameters: {
             query?: never;
@@ -9644,6 +9663,29 @@ export interface operations {
         };
     };
     searchPersonMissing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Enqueued (or already running -- duplicate says which). */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategorySearchEnqueued"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    refreshPerson: {
         parameters: {
             query?: never;
             header?: never;

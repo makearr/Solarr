@@ -28,6 +28,18 @@ func (a ArtistActions) SearchMissing(ctx context.Context, personID int64) (bool,
 	return result.Duplicate, nil
 }
 
+// Refresh enqueues the artist's refresh.
+func (a ArtistActions) Refresh(ctx context.Context, personID int64) (bool, error) {
+	if _, err := a.People.Person(ctx, personID); err != nil {
+		return false, err
+	}
+	result, err := music.EnqueueRefreshArtist(ctx, a.Queue, personID)
+	if err != nil {
+		return false, err
+	}
+	return result.Duplicate, nil
+}
+
 // MonitorAll monitors every album the artist is credited on as artist.
 func (a ArtistActions) MonitorAll(ctx context.Context, personID int64) (int64, error) {
 	if _, err := a.People.Person(ctx, personID); err != nil {

@@ -15,6 +15,8 @@ import (
 type ArtistActions interface {
 	// SearchMissing searches the artist's monitored, incomplete albums in the background.
 	SearchMissing(ctx context.Context, personID int64) (duplicate bool, err error)
+	// Refresh fetches the artist's metadata again in the background.
+	Refresh(ctx context.Context, personID int64) (duplicate bool, err error)
 	// MonitorAll monitors every album of the artist's discography and answers how many.
 	MonitorAll(ctx context.Context, personID int64) (albums int64, err error)
 }
@@ -23,6 +25,29 @@ func (s *Server) routeSearchPersonMissing(w http.ResponseWriter, r *http.Request
 	if id, err := parsePathID(w, s, r, "id", "a person id must be a number"); err == nil {
 		s.SearchPersonMissing(w, r, id)
 	}
+}
+
+func (s *Server) routeRefreshPerson(w http.ResponseWriter, r *http.Request) {
+	if id, err := parsePathID(w, s, r, "id", "a person id must be a number"); err == nil {
+		s.RefreshPerson(w, r, id)
+	}
+}
+
+// RefreshPerson is the artist page's "Refresh metadata"; any signed-in user, like a search.
+func (s *Server) RefreshPerson(w http.ResponseWriter, r *http.Request, id int64) {
+	if _, err := authz.FromContext(r.Context()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if !s.artistActionsAvailable(w) {
+		return
+	}
+	duplicate, err := s.artistActions.Refresh(r.Context(), id)
+	if err != nil {
+		s.writeArtistActionError(w, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusAccepted, gen.CategorySearchEnqueued{Duplicate: duplicate})
 }
 
 func (s *Server) routeMonitorPersonAll(w http.ResponseWriter, r *http.Request) {

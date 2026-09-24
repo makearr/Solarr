@@ -385,6 +385,9 @@ func (p Provider) ArtistReleaseGroups(ctx context.Context, priority Priority, ar
 }
 
 func (p Provider) cachedDiscography(ctx context.Context, artistMBID string) ([]ReleaseGroup, bool) {
+	if wantsFresh(ctx) {
+		return nil, false
+	}
 	entry, err := p.cache.Get(ctx, cacheKindDiscography, artistMBID)
 	if err != nil || p.stale(entry) {
 		return nil, false
@@ -408,6 +411,9 @@ func (p Provider) rememberDiscography(ctx context.Context, source, artistMBID st
 }
 
 func (p Provider) cachedArtist(ctx context.Context, mbid string) (Artist, bool) {
+	if wantsFresh(ctx) {
+		return Artist{}, false
+	}
 	entry, err := p.cache.Get(ctx, cacheKindArtist, mbid)
 	if err != nil || p.stale(entry) {
 		return Artist{}, false
@@ -446,6 +452,9 @@ func queryCacheKey(query string, limit int) string {
 }
 
 func (p Provider) cachedSearch(ctx context.Context, key string) ([]ReleaseGroupMatch, bool) {
+	if wantsFresh(ctx) {
+		return nil, false
+	}
 	entry, err := p.cache.Get(ctx, cacheKindSearch, key)
 	if err != nil || p.stale(entry) {
 		return nil, false
@@ -469,6 +478,9 @@ func (p Provider) rememberSearch(ctx context.Context, source, key string, matche
 }
 
 func (p Provider) cached(ctx context.Context, releaseGroupMBID, releaseMBID string) (ReleaseGroup, Release, bool) {
+	if wantsFresh(ctx) {
+		return ReleaseGroup{}, Release{}, false
+	}
 	rgEntry, err := p.cache.Get(ctx, cacheKindReleaseGroup, releaseGroupMBID)
 	if err != nil || p.stale(rgEntry) {
 		return ReleaseGroup{}, Release{}, false
@@ -486,6 +498,17 @@ func (p Provider) cached(ctx context.Context, releaseGroupMBID, releaseMBID stri
 		return ReleaseGroup{}, Release{}, false
 	}
 	return rg, release, true
+}
+
+type freshKey struct{}
+
+// WithFresh makes every lookup under ctx skip the cache and ask a source, then cache that answer:
+// what a person's "refresh metadata" means, as opposed to RefreshAfter's staleness policy.
+func WithFresh(ctx context.Context) context.Context { return context.WithValue(ctx, freshKey{}, true) }
+
+func wantsFresh(ctx context.Context) bool {
+	fresh, _ := ctx.Value(freshKey{}).(bool)
+	return fresh
 }
 
 // stale reports whether entry is old enough to force a re-fetch. RefreshAfter
