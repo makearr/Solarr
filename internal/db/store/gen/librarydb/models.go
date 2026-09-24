@@ -543,6 +543,11 @@ type PersonExternalID struct {
 	PersonID   int64
 }
 
+type PersonRefresh struct {
+	PersonID    int64
+	RefreshedAt int64
+}
+
 type Quarantine struct {
 	ID             int64
 	OriginalPath   string

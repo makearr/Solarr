@@ -255,3 +255,15 @@ FROM relationship WHERE from_type = ? AND from_id = ? ORDER BY kind, to_id;
 
 -- name: DeletePerson :exec
 DELETE FROM person WHERE id = ?;
+
+-- name: RecordPersonRefresh :exec
+INSERT INTO person_refresh (person_id, refreshed_at) VALUES (?, ?)
+ON CONFLICT (person_id) DO UPDATE SET refreshed_at = excluded.refreshed_at;
+
+-- The monitored artists to refresh next: never refreshed first, then the stalest.
+-- name: ListArtistsDueRefresh :many
+SELECT p.id FROM person p
+LEFT JOIN person_refresh r ON r.person_id = p.id
+WHERE p.monitored = 1 AND (r.refreshed_at IS NULL OR r.refreshed_at < sqlc.arg(before))
+ORDER BY COALESCE(r.refreshed_at, 0), p.id
+LIMIT sqlc.arg(page_size);

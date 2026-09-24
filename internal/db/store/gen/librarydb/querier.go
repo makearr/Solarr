@@ -315,6 +315,8 @@ type Querier interface {
 	// created something for, the only rows a revert is allowed to touch.
 	ListArrImportItemsCreatedByRun(ctx context.Context, importID int64) ([]ArrImportItem, error)
 	ListArrImportsForInstance(ctx context.Context, instanceID int64) ([]ArrImport, error)
+	// The monitored artists to refresh next: never refreshed first, then the stalest.
+	ListArtistsDueRefresh(ctx context.Context, arg ListArtistsDueRefreshParams) ([]int64, error)
 	ListArtworkForSubject(ctx context.Context, arg ListArtworkForSubjectParams) ([]Artwork, error)
 	ListBlockedContent(ctx context.Context, arg ListBlockedContentParams) ([]BlockedContent, error)
 	// Invariant 83 (todo 4.15/4.8): "a blocked hash found later by a scan is
@@ -598,6 +600,7 @@ type Querier interface {
 	RecordGroupObservation(ctx context.Context, arg RecordGroupObservationParams) error
 	RecordImportDecision(ctx context.Context, arg RecordImportDecisionParams) (ImportDecision, error)
 	RecordManualIdentification(ctx context.Context, arg RecordManualIdentificationParams) error
+	RecordPersonRefresh(ctx context.Context, arg RecordPersonRefreshParams) error
 	// ADR-51's own RECORD step: media_object never changes (Invariant 70), only
 	// where it lives. Matched by the old (root_folder_id, rel_path) rather than
 	// by id, since that pair is what Apply already has in hand from its own

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -296,5 +297,32 @@ func TestSubscribe_SecondCallForTheSamePersonIsIdempotent(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("subscription rows for person %d = %d, want exactly 1", personID, count)
+	}
+}
+
+// The scheduled refresh takes monitored artists never refreshed first, then the stalest, and skips
+// both the recently refreshed and the unmonitored.
+func TestArtistsDueRefresh_StalestMonitoredFirst(t *testing.T) {
+	opened, queries := newLibrary(t)
+	people := library.NewPeople(opened)
+	never := resolvePersonNamed(t, people, "a1", "Never", "Never")
+	stale := resolvePersonNamed(t, people, "a2", "Stale", "Stale")
+	recent := resolvePersonNamed(t, people, "a3", "Recent", "Recent")
+	resolvePersonNamed(t, people, "a4", "Unmonitored", "Unmonitored")
+	for _, id := range []int64{never, stale, recent} {
+		if err := queries.SetPersonMonitored(t.Context(), librarydb.SetPersonMonitoredParams{Monitored: 1, ID: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := people.RecordRefresh(t.Context(), stale, 100); err != nil {
+		t.Fatal(err)
+	}
+	if err := people.RecordRefresh(t.Context(), recent, 900); err != nil {
+		t.Fatal(err)
+	}
+
+	due, err := people.ArtistsDueRefresh(t.Context(), 500, 10)
+	if want := []int64{never, stale}; err != nil || !slices.Equal(due, want) {
+		t.Errorf("due = %v, %v; want %v", due, err, want)
 	}
 }

@@ -1,7 +1,8 @@
 # File management
 
 Sonarr's *Media Management → Folders, File Management, Permissions*, per library (asked for
-2026-09-19, answered 2026-09-24). Library → Configuration → **File management** (advanced),
+2026-09-19, answered 2026-09-24). Library → Configuration → **File management** (normal level; Propers, Rescan,
+Change file date and Permissions from advanced),
 `GET/PUT /categories/{id}/file-management`, table `category_file_management` in `settings.db`. A
 library that never saved keeps Sonarr's defaults. Exported with the library in the settings
 document (`categories[].file_management`).
@@ -12,7 +13,7 @@ document (`categories[].file_management`).
 | Delete Empty Folders | off | every disk scan, from the empty folders the sweep met; and when files are deleted (remove album/track, import revert) | `music.Housekeeping`, `library.Quarantine.Put` |
 | Unmonitor Deleted Tracks | off | a **full** scan: an album holding a file the scan found missing is unmonitored. Only a full scan is evidence of absence (section 10.4) | `library.Desired.UnmonitorItemsLosingFiles` |
 | Propers and Repacks | Prefer and Upgrade | search: a proper or repack ranks after quality, before the additive score. *Upgrade* vs *Do not Upgrade Automatically* differ only once upgrades are evaluated (stage 6); today both prefer | `music.withRevision` |
-| Rescan Artist Folder after Refresh | Always | after enrichment refines an album, its folders are rescanned so files match the new tracklist: always, only when the task was started with Run now, or never | `app.realigner` |
+| Rescan Artist Folder after Refresh | Always | after an artist refresh (the artist page's Refresh is manual; the weekly *Refresh artists* task is not) and after enrichment refines an album, its folders are rescanned: always, only after a manual refresh, or never | `app.realigner` |
 | Change File Date | None | import, and every scan of a writable root: a file's date becomes its release date (the `date` tag). Never on a read-only root (Invariant 69) | `music.Committer`, `music.Consumer` |
 | Recycling Bin Cleanup | 7 days | how long quarantine keeps what this library removes; the *Clean recycling bin* task (daily 02:30) purges what is past it | `adapters.recyclingFor`, `library.Quarantine.Sweep` |
 | Set Permissions, chmod Folder, chown Group | off, 755, unchanged | import and library rename: the file gets the folder mode without execute bits, every folder between it and the root gets the folder mode, both the group | `mover.ApplyPermissions` |

@@ -719,6 +719,43 @@ func (q *Queries) ListAllCreditsUnderWork(ctx context.Context, workID int64) ([]
 	return items, nil
 }
 
+const listArtistsDueRefresh = `-- name: ListArtistsDueRefresh :many
+SELECT p.id FROM person p
+LEFT JOIN person_refresh r ON r.person_id = p.id
+WHERE p.monitored = 1 AND (r.refreshed_at IS NULL OR r.refreshed_at < ?1)
+ORDER BY COALESCE(r.refreshed_at, 0), p.id
+LIMIT ?2
+`
+
+type ListArtistsDueRefreshParams struct {
+	Before   int64
+	PageSize int64
+}
+
+// The monitored artists to refresh next: never refreshed first, then the stalest.
+func (q *Queries) ListArtistsDueRefresh(ctx context.Context, arg ListArtistsDueRefreshParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listArtistsDueRefresh, arg.Before, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCreditsForEdition = `-- name: ListCreditsForEdition :many
 SELECT person_id, work_id, edition_id, part_id, role, character, ord
 FROM credit WHERE edition_id = ? ORDER BY role, ord, person_id
@@ -1222,6 +1259,21 @@ func (q *Queries) ListTagsForSubjectWithName(ctx context.Context, arg ListTagsFo
 		return nil, err
 	}
 	return items, nil
+}
+
+const recordPersonRefresh = `-- name: RecordPersonRefresh :exec
+INSERT INTO person_refresh (person_id, refreshed_at) VALUES (?, ?)
+ON CONFLICT (person_id) DO UPDATE SET refreshed_at = excluded.refreshed_at
+`
+
+type RecordPersonRefreshParams struct {
+	PersonID    int64
+	RefreshedAt int64
+}
+
+func (q *Queries) RecordPersonRefresh(ctx context.Context, arg RecordPersonRefreshParams) error {
+	_, err := q.db.ExecContext(ctx, recordPersonRefresh, arg.PersonID, arg.RefreshedAt)
+	return err
 }
 
 const setPersonMonitored = `-- name: SetPersonMonitored :exec

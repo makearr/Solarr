@@ -357,6 +357,24 @@ type PersonDetail struct {
 	Discography []DiscographyRow
 }
 
+// RecordRefresh remembers when an artist's metadata was last refreshed.
+func (p People) RecordRefresh(ctx context.Context, personID, at int64) error {
+	return p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).RecordPersonRefresh(ctx, librarydb.RecordPersonRefreshParams{PersonID: personID, RefreshedAt: at})
+	})
+}
+
+// ArtistsDueRefresh answers up to limit monitored artists not refreshed since before, stalest first.
+func (p People) ArtistsDueRefresh(ctx context.Context, before, limit int64) ([]int64, error) {
+	ids, err := librarydb.New(p.store.Read()).ListArtistsDueRefresh(ctx, librarydb.ListArtistsDueRefreshParams{
+		Before: before, PageSize: limit,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: artists due refresh: %w", err)
+	}
+	return ids, nil
+}
+
 // Person reads one person's own row, without Detail's discography.
 func (p People) Person(ctx context.Context, id int64) (librarydb.Person, error) {
 	person, err := librarydb.New(p.store.Read()).GetPerson(ctx, id)

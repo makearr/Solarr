@@ -1161,7 +1161,7 @@ func TestEnrichJob_RefreshArtistFetchesAgainAndRescans(t *testing.T) {
 
 	source.rg.Genres = []musicbrainz.Genre{{Name: "art rock", Count: 30}}
 	artistCallsBefore := source.artistCalls
-	if err := job.RefreshArtist(t.Context(), person.ID); err != nil {
+	if err := job.RefreshArtist(t.Context(), person.ID, true); err != nil {
 		t.Fatalf("RefreshArtist: %v", err)
 	}
 	if source.artistCalls == artistCallsBefore {
