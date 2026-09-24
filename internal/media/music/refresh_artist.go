@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -44,12 +45,49 @@ func (j RefreshArtistJob) Run(ctx context.Context, job jobs.Job) error {
 	if err := json.Unmarshal(job.Payload, &payload); err != nil {
 		return jobs.Terminalf("refresh_artist.payload", string(job.Type), err)
 	}
-	return j.Enrich.RefreshArtist(ctx, payload.PersonID)
+	return j.Enrich.RefreshArtist(ctx, payload.PersonID, true)
+}
+
+// RefreshArtistsJobType is the scheduled refresh of monitored artists (answered 2026-09-24).
+const RefreshArtistsJobType = jobs.Type("music.refresh_artists")
+
+// RefreshArtistsDefinition is background work on the refresh lane.
+var RefreshArtistsDefinition = jobs.Definition{
+	Type: RefreshArtistsJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 1,
+}
+
+// Each run refreshes at most this many artists, those not refreshed for refreshArtistsAge first,
+// so a large library is covered over several runs without one run holding the lane for hours.
+const (
+	refreshArtistsBatch = 100
+	refreshArtistsAge   = 6 * 24 * time.Hour
+)
+
+// RefreshArtistsJob is Sonarr's periodic "Refresh Series" for music: a scheduled, not manual,
+// refresh, so each library's "Rescan after refresh" applies as Sonarr's does.
+type RefreshArtistsJob struct{ Enrich *EnrichJob }
+
+func (j RefreshArtistsJob) Run(ctx context.Context, _ jobs.Job) error {
+	due, err := j.Enrich.people.ArtistsDueRefresh(ctx, j.Enrich.clock.Now().Add(-refreshArtistsAge).Unix(), refreshArtistsBatch)
+	if err != nil {
+		return err
+	}
+	for _, personID := range due {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err := j.Enrich.RefreshArtist(ctx, personID, false); err != nil {
+			j.Enrich.logger.WarnContext(ctx, "scheduled artist refresh failed", slog.Int64("person_id", personID), slog.Any("error", err))
+		}
+	}
+	j.Enrich.logger.Info("scheduled artist refresh finished", slog.Int("artists", len(due)))
+	return nil
 }
 
 // RefreshArtist fetches one artist's details, image and albums again, past the metadata cache,
-// then has their folders rescanned as the library's "Rescan after refresh" says (a manual refresh).
-func (j *EnrichJob) RefreshArtist(ctx context.Context, personID int64) error {
+// then has their folders rescanned as the library's "Rescan after refresh" says for a manual or
+// a scheduled refresh.
+func (j *EnrichJob) RefreshArtist(ctx context.Context, personID int64, manual bool) error {
 	artistMBID, found, err := j.people.ExternalIDFor(ctx, personID, ProviderArtist)
 	if err != nil {
 		return fmt.Errorf("music: refresh artist %d: %w", personID, err)
@@ -89,9 +127,12 @@ func (j *EnrichJob) RefreshArtist(ctx context.Context, personID int64) error {
 	}
 
 	if j.realigner != nil && len(refreshed) > 0 {
-		if err := j.realigner.RealignWorks(ctx, refreshed, true); err != nil {
+		if err := j.realigner.RealignWorks(ctx, refreshed, manual); err != nil {
 			j.logger.WarnContext(ctx, "artist refresh: rescan failed", slog.Int64("person_id", personID), slog.Any("error", err))
 		}
+	}
+	if err := j.people.RecordRefresh(ctx, personID, j.clock.Now().Unix()); err != nil {
+		return fmt.Errorf("music: refresh artist %d: %w", personID, err)
 	}
 	j.logger.Info("artist refreshed", slog.Int64("person_id", personID), slog.Int("albums", len(refreshed)))
 	return nil

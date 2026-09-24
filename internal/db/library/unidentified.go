@@ -147,6 +147,35 @@ func (u Unidentified) MarkNotMedia(ctx context.Context, mediaObjectID, at int64)
 	})
 }
 
+// RecordManual remembers that a person identified this file, so no scan identifies it again.
+func (u Unidentified) RecordManual(ctx context.Context, mediaObjectID, workID, at int64) error {
+	return u.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).RecordManualIdentification(ctx, librarydb.RecordManualIdentificationParams{
+			MediaObjectID: mediaObjectID, WorkID: workID, DecidedAt: at,
+		})
+	})
+}
+
+// ManuallyIdentified answers which of ids a person identified by hand.
+func (u Unidentified) ManuallyIdentified(ctx context.Context, ids []int64) (map[int64]bool, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	encoded, err := json.Marshal(ids)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := librarydb.New(u.store.Read()).ListManuallyIdentified(ctx, string(encoded))
+	if err != nil {
+		return nil, fmt.Errorf("library: manually identified: %w", err)
+	}
+	manual := make(map[int64]bool, len(rows))
+	for _, id := range rows {
+		manual[id] = true
+	}
+	return manual, nil
+}
+
 // InFolder answers the queued files directly in the folder relPath sits in, relPath's own included.
 func (u Unidentified) InFolder(ctx context.Context, rootFolderID int64, relPath string) ([]int64, error) {
 	prefix := ""

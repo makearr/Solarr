@@ -27,6 +27,7 @@ const (
 	backupScheduleCron             = "0 1 * * *"     // daily at 01:00
 	backupCleanupScheduleCron      = "30 1 * * *"    // daily at 01:30, after the backup
 	recycleBinCleanupScheduleCron  = "30 2 * * *"    // daily at 02:30
+	refreshArtistsScheduleCron     = "0 5 * * 0"     // Sundays at 05:00, after database maintenance
 )
 
 // buildTaskRegistry declares every periodic action this process has (ADR-59), in the order a
@@ -43,6 +44,10 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		EnqueueManual: p.enqueueManualEnrichment,
 		Tier:          string(settings.TierNormal), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueEnrichment,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "refresh_artists", Name: "Refresh artists", DefaultCadence: refreshArtistsScheduleCron,
+		Tier: string(settings.TierNormal), Category: jobs.CategoryMetadata, Enqueue: p.enqueueRefreshArtists,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "subscription_expand", Name: "Subscription expand", DefaultCadence: subscriptionExpandScheduleCron,

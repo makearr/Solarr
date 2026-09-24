@@ -55,6 +55,10 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 		return err
 	}
 	executor.Handle(music.RefreshArtistJobType, music.RefreshArtistJob{Enrich: job})
+	if err := registry.Register(music.RefreshArtistsDefinition); err != nil {
+		return err
+	}
+	executor.Handle(music.RefreshArtistsJobType, music.RefreshArtistsJob{Enrich: job})
 	return nil
 }
 
@@ -63,6 +67,14 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 // schedule, not only once at startup.
 func (p *process) enqueueEnrichment(ctx context.Context) (jobs.EnqueueResult, error) {
 	return p.enqueueEnrichmentRun(ctx, false)
+}
+
+// enqueueRefreshArtists starts the scheduled refresh of monitored artists.
+func (p *process) enqueueRefreshArtists(ctx context.Context) (jobs.EnqueueResult, error) {
+	return p.queue.Enqueue(ctx, jobs.Request{
+		Type: music.RefreshArtistsJobType, ActionKey: string(music.RefreshArtistsJobType),
+		Priority: jobs.PriorityLow, Payload: []byte("{}"),
+	})
 }
 
 // enqueueManualEnrichment is the scheduler's "Run now": a manual refresh.

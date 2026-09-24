@@ -386,6 +386,12 @@ type LibraryPath struct {
 	MissingSince  sql.NullInt64
 }
 
+type ManualIdentification struct {
+	MediaObjectID int64
+	WorkID        int64
+	DecidedAt     int64
+}
+
 type MediaAttribute struct {
 	ID            int64
 	AttrHash      string
@@ -535,6 +541,11 @@ type PersonExternalID struct {
 	Provider   string
 	ExternalID string
 	PersonID   int64
+}
+
+type PersonRefresh struct {
+	PersonID    int64
+	RefreshedAt int64
 }
 
 type Quarantine struct {

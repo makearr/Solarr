@@ -185,6 +185,15 @@ func (c Consumer) Observe(
 	}
 	c.changeFileDates(root, categoryID, readable)
 
+	// A person's identification always wins: those files are registered, never identified again.
+	readable, mediaObjectIDs, err = c.withoutManual(ctx, readable, mediaObjectIDs)
+	if err != nil {
+		return fmt.Errorf("music: %w", err)
+	}
+	if len(readable) == 0 {
+		return nil
+	}
+
 	tags := tagSourceFor(root, readable)
 	passes := passIdentifiers{embedded: []model.Identifier{NewMBIDIdentifier(tags)}}
 	if c.search != nil {
@@ -903,6 +912,24 @@ func newEditionLink(observed scan.Observed) *library.EditionLink {
 		Provider: ProviderRelease, ExternalID: release, Confidence: 1.0,
 		Edition: library.EditionIdentity{Kind: "unknown", Label: release},
 	}
+}
+
+func (c Consumer) withoutManual(
+	ctx context.Context, observed []scan.Observed, mediaObjectIDs []int64,
+) ([]scan.Observed, []int64, error) {
+	manual, err := c.unidentified.ManuallyIdentified(ctx, mediaObjectIDs)
+	if err != nil || len(manual) == 0 {
+		return observed, mediaObjectIDs, err
+	}
+	keptObserved := make([]scan.Observed, 0, len(observed))
+	keptIDs := make([]int64, 0, len(mediaObjectIDs))
+	for index, id := range mediaObjectIDs {
+		if !manual[id] {
+			keptObserved = append(keptObserved, observed[index])
+			keptIDs = append(keptIDs, id)
+		}
+	}
+	return keptObserved, keptIDs, nil
 }
 
 // changeFileDates is a library's "Change File Date" at rescan (Sonarr's): each file's date becomes

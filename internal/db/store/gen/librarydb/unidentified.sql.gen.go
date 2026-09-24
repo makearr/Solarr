@@ -63,6 +63,36 @@ func (q *Queries) GetUnidentified(ctx context.Context, mediaObjectID int64) (Ide
 	return i, err
 }
 
+const listManuallyIdentified = `-- name: ListManuallyIdentified :many
+SELECT media_object_id FROM manual_identification
+WHERE media_object_id IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
+ORDER BY media_object_id
+`
+
+// Which of a batch's files a person already identified; ids is a JSON array.
+func (q *Queries) ListManuallyIdentified(ctx context.Context, mediaObjectIds string) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listManuallyIdentified, mediaObjectIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var media_object_id int64
+		if err := rows.Scan(&media_object_id); err != nil {
+			return nil, err
+		}
+		items = append(items, media_object_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUnidentified = `-- name: ListUnidentified :many
 SELECT media_object_id, root_folder_id, rel_path, candidates_json, first_seen_at, last_seen_at
 FROM identification_queue
@@ -170,6 +200,22 @@ type MarkNotMediaParams struct {
 
 func (q *Queries) MarkNotMedia(ctx context.Context, arg MarkNotMediaParams) error {
 	_, err := q.db.ExecContext(ctx, markNotMedia, arg.MediaObjectID, arg.MarkedAt)
+	return err
+}
+
+const recordManualIdentification = `-- name: RecordManualIdentification :exec
+INSERT INTO manual_identification (media_object_id, work_id, decided_at) VALUES (?, ?, ?)
+ON CONFLICT (media_object_id) DO UPDATE SET work_id = excluded.work_id, decided_at = excluded.decided_at
+`
+
+type RecordManualIdentificationParams struct {
+	MediaObjectID int64
+	WorkID        int64
+	DecidedAt     int64
+}
+
+func (q *Queries) RecordManualIdentification(ctx context.Context, arg RecordManualIdentificationParams) error {
+	_, err := q.db.ExecContext(ctx, recordManualIdentification, arg.MediaObjectID, arg.WorkID, arg.DecidedAt)
 	return err
 }
 
