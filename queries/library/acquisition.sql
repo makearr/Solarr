@@ -234,3 +234,7 @@ SELECT a.id, a.desired_item_id, a.candidate_guid, a.candidate_title, a.search_te
 FROM acquisition a
 JOIN acquisition_file f ON f.acquisition_id = a.id
 WHERE f.media_object_id = ? ORDER BY a.created_at DESC;
+
+-- The client's own name and size, recorded when first seen (section 10.9's fingerprint).
+-- name: SetAcquisitionFingerprint :exec
+UPDATE acquisition SET client_fingerprint = ?, updated_at = ? WHERE id = ?;

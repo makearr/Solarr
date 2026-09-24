@@ -509,6 +509,17 @@ func (s ImportSessions) SetExtractDir(ctx context.Context, sessionID int64, dir 
 }
 
 // Get answers one session by id. A missing id surfaces sql.ErrNoRows, wrapped.
+// LatestForAcquisition answers the newest import started for a download; sql.ErrNoRows, wrapped,
+// when there is none.
+func (s ImportSessions) LatestForAcquisition(ctx context.Context, acquisitionID int64) (Session, error) {
+	row, err := librarydb.New(s.store.Read()).GetLatestImportSessionForAcquisition(ctx,
+		sql.NullInt64{Int64: acquisitionID, Valid: true})
+	if err != nil {
+		return Session{}, fmt.Errorf("library: import for acquisition %d: %w", acquisitionID, err)
+	}
+	return sessionFromRow(row), nil
+}
+
 func (s ImportSessions) Get(ctx context.Context, id int64) (Session, error) {
 	row, err := librarydb.New(s.store.Read()).GetImportSession(ctx, id)
 	if err != nil {

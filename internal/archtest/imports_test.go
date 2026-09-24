@@ -24,7 +24,7 @@ var allowedInternalImports = map[string][]string{
 		"migrations",
 	},
 	"cmd/solarr/app": {
-		"cmd/solarr/adapters", "internal/acquiring/indexer", "internal/acquiring/sabnzbd",
+		"cmd/solarr/adapters", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
 		"internal/api/webui", "internal/db/library", "internal/db/recovery", "internal/db/settings",
 		"internal/db/store", "internal/importing/arrimport", "internal/importing/downloadwatch",
@@ -163,7 +163,13 @@ var allowedInternalImports = map[string][]string{
 	// Downloader interface yet since only one implementation exists.
 	// The download-client seam (ADR-46): types only, every client implements it.
 	"internal/acquiring/download": {},
-	"internal/acquiring/sabnzbd":  {"internal/platform/httpx", "internal/acquiring/download"},
+	// Follows sent downloads to imported and cleaned (section 10.9); importing and searching are
+	// supplied by the caller, so no media type is imported here.
+	"internal/acquiring/poll": {
+		"internal/acquiring/download", "internal/db/library", "internal/jobs", "internal/platform/clock",
+		"internal/platform/fsx",
+	},
+	"internal/acquiring/sabnzbd": {"internal/platform/httpx", "internal/acquiring/download"},
 	// ADR-36's composite acquisition priority: pure arithmetic over
 	// caller-supplied facts, no I/O and no database of its own -- the same
 	// separation internal/identify/score and internal/moving/placement keep from their own

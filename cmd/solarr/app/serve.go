@@ -387,6 +387,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerCategoryCountsJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerPollJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerMaintenanceJobs(registry, executor); err != nil {
 		return err
 	}

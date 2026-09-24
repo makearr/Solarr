@@ -260,6 +260,42 @@ func (q *Queries) GetImportUnit(ctx context.Context, id int64) (ImportUnit, erro
 	return i, err
 }
 
+const getLatestImportSessionForAcquisition = `-- name: GetLatestImportSessionForAcquisition :one
+SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
+       units_total, units_committed, units_queued, bytes_imported, extract_dir,
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
+FROM import_session WHERE acquisition_id = ? ORDER BY id DESC LIMIT 1
+`
+
+// The newest import a download's poll started, to follow it to IMPORTED.
+func (q *Queries) GetLatestImportSessionForAcquisition(ctx context.Context, acquisitionID sql.NullInt64) (ImportSession, error) {
+	row := q.db.QueryRowContext(ctx, getLatestImportSessionForAcquisition, acquisitionID)
+	var i ImportSession
+	err := row.Scan(
+		&i.ID,
+		&i.SourcePath,
+		&i.Origin,
+		&i.AcquisitionID,
+		&i.CategoryID,
+		&i.State,
+		&i.Threshold,
+		&i.UnitsTotal,
+		&i.UnitsCommitted,
+		&i.UnitsQueued,
+		&i.BytesImported,
+		&i.ExtractDir,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.Error,
+		&i.UnitsSkipped,
+		&i.UnitsFailed,
+		&i.UnitsEstimated,
+		&i.DismissedAt,
+		&i.Preview,
+	)
+	return i, err
+}
+
 const insertImportUnit = `-- name: InsertImportUnit :one
 INSERT INTO import_unit (session_id, rel_path, shape, file_count, bytes, confidence,
                           decision, work_id, edition_id, evidence_json, candidates_json,
