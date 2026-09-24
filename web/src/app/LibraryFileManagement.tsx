@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
+import { isTierVisible, useTier } from "@/lib/useTier";
+
 import { Message, Toggle, inputStyle } from "./LibraryNaming";
 
 type FileManagement = components["schemas"]["FileManagement"];
@@ -14,6 +16,8 @@ export function LibraryFileManagement() {
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
   const id = categoryId ? Number(categoryId) : undefined;
   const queryClient = useQueryClient();
+  // Sonarr's basic view: folders, deleted tracks and the recycling bin; the rest is advanced.
+  const advanced = isTierVisible(useTier(), "advanced");
 
   const saved = useQuery({
     queryKey: ["libraryFileManagement", id],
@@ -81,6 +85,8 @@ export function LibraryFileManagement() {
           checked={draft.unmonitor_deleted}
           onChange={(checked) => set({ unmonitor_deleted: checked })}
         />
+        {advanced && (
+        <>
         <Choice
           label="Propers and Repacks"
           help="Whether to automatically upgrade to a proper or repack of the same quality."
@@ -117,6 +123,8 @@ export function LibraryFileManagement() {
           ]}
           onChange={(value) => set({ change_file_date: value as FileManagement["change_file_date"] })}
         />
+        </>
+        )}
         <label className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
           <span className="w-48 shrink-0">Recycling Bin Cleanup</span>
           <input
@@ -134,6 +142,7 @@ export function LibraryFileManagement() {
         </label>
       </section>
 
+      {advanced && (
       <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">Permissions</h2>
         <Toggle
@@ -166,6 +175,7 @@ export function LibraryFileManagement() {
           </>
         )}
       </section>
+      )}
 
       <div className="flex items-center gap-2">
         <button
