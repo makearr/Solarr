@@ -10,12 +10,18 @@ import (
 )
 
 const countArtistCreditsVisibleToCategory = `-- name: CountArtistCreditsVisibleToCategory :one
-SELECT CAST(COUNT(DISTINCT person_id) AS INTEGER) AS total FROM credit
-WHERE role = 'artist' AND work_id IN (
-  SELECT work_id FROM work_root_folder
-  WHERE root_folder_id IN (SELECT value FROM json_each(?1))
+SELECT CAST(COUNT(DISTINCT person_id) AS INTEGER) AS total FROM (
+  SELECT person_id FROM credit
+  WHERE role = 'artist' AND work_id IN (
+    SELECT work_id FROM work_root_folder
+    WHERE root_folder_id IN (SELECT value FROM json_each(?1))
+    UNION
+    SELECT di.work_id FROM desired_item di WHERE di.category_id = ?2
+  )
   UNION
-  SELECT work_id FROM desired_item WHERE category_id = ?2
+  SELECT s.subject_id AS person_id FROM subscription s JOIN person p ON p.id = s.subject_id
+  WHERE s.subject_type = 'person' AND s.enabled = 1 AND p.monitored = 1
+    AND s.category_id = ?2
 )
 `
 
@@ -30,6 +36,8 @@ type CountArtistCreditsVisibleToCategoryParams struct {
 // workArtistColumn already does (internal/db/library/works.go) -- generalising which
 // role counts as a level's "primary person" waits for a second media type that
 // needs a different one.
+// An artist monitored in this library counts at once, before enrichment has credited any work
+// to them (answered 2026-09-24: "Artists 0" right after adding one read as broken).
 func (q *Queries) CountArtistCreditsVisibleToCategory(ctx context.Context, arg CountArtistCreditsVisibleToCategoryParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countArtistCreditsVisibleToCategory, arg.RootFolderIds, arg.CategoryID)
 	var total int64
