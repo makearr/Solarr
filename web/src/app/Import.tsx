@@ -158,12 +158,13 @@ function RenameOnImportControl() {
 /** The section 11.4 table's own five named levels for
  *  import.auto_commit_confidence -- a fixed vocabulary, not derived from
  *  anything the API returns. */
+// What clears each level on the calibrated scale (documentation/music-identification.md).
 const THRESHOLD_LEVELS: readonly { value: number; label: string; description: string }[] = [
-  { value: 0.95, label: "Only what was proven", description: "Embedded MBID, exact hash or acoustic fingerprint" },
-  { value: 0.9, label: "Confident", description: "The above, plus tags and path and provider all agreeing" },
-  { value: 0.85, label: "Balanced", description: "Strong agreement with one weak signal" },
-  { value: 0.8, label: "Trusting", description: "Good path evidence and a clean parse, no provider corroboration" },
-  { value: 0.75, label: "Permissive", description: "A parsed name and one plausible match" },
+  { value: 0.97, label: "Only what the files say", description: "Release and release-group IDs in the tags" },
+  { value: 0.95, label: "Near-certain", description: "The above, plus an almost perfect tracklist or title match" },
+  { value: 0.9, label: "Confident", description: "The above, plus close tracklist and title matches" },
+  { value: 0.85, label: "Balanced", description: "Every accepted tracklist match, and fairly close titles" },
+  { value: 0.8, label: "Trusting", description: "The above, plus files tagged only with a recording ID" },
 ];
 
 function ThresholdControl() {
@@ -192,7 +193,7 @@ function ThresholdControl() {
 
   return (
     <fieldset className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
-      <legend className="px-1 text-ink-muted">Commit line</legend>
+      <legend className="px-1 text-ink-muted">Identification confidence</legend>
       {THRESHOLD_LEVELS.map((level) => (
         <label key={level.value} className="flex items-start gap-2">
           <input
