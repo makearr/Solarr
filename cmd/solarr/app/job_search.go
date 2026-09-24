@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
@@ -84,7 +85,28 @@ func (p *process) musicDispatch() music.Dispatch {
 	return music.Dispatch{
 		Candidates: library.NewCandidates(p.library), Acquisitions: library.NewAcquisitions(p.library),
 		Desired: library.NewDesired(p.library), Settings: p.cache, Downloaders: p.downloaderConns,
+		Fetch: p.fetchRelease,
 	}
+}
+
+// fetchRelease downloads a release's NZB through the indexer that listed it, disabled or not:
+// the release was chosen while it was enabled.
+func (p *process) fetchRelease(ctx context.Context, indexerID int64, link string) ([]byte, error) {
+	configured, err := p.cache.Indexers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, found := range configured {
+		if found.ID != indexerID {
+			continue
+		}
+		apiKey, err := p.cache.DecryptedIndexerAPIKey(ctx, found.ID)
+		if err != nil {
+			return nil, err
+		}
+		return p.indexerClientFactory()(found.ID, found.BaseURL, apiKey.Reveal(), found.Egress()).Fetch(ctx, link)
+	}
+	return nil, fmt.Errorf("indexer %d is no longer configured", indexerID)
 }
 
 // registerSearchCategoryJob wires the per-category candidate search (todo

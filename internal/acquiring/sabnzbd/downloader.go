@@ -18,7 +18,7 @@ var _ download.Client = Downloader{}
 
 // Add sends one NZB by URL.
 func (d Downloader) Add(ctx context.Context, request download.AddRequest) (string, error) {
-	return d.Client.AddURL(ctx, AddURLRequest{NZBURL: request.URL, Category: request.Category})
+	return d.Client.AddFile(ctx, AddFileRequest{Name: request.Name, NZB: request.File, Category: request.Category})
 }
 
 // Downloads answers the queue and the recent history in category.

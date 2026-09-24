@@ -33,9 +33,10 @@ type Download struct {
 	Error string
 }
 
-// AddRequest is one release sent to a client.
+// AddRequest is one release sent to a client: the file Solarr fetched from the indexer, named.
 type AddRequest struct {
-	URL      string
+	Name     string
+	File     []byte
 	Category string
 }
 

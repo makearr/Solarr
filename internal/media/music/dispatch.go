@@ -34,6 +34,9 @@ type DownloaderConn struct {
 	Client   download.Client
 }
 
+// ReleaseFetcher downloads a release's file (an NZB) from the indexer that listed it.
+type ReleaseFetcher func(ctx context.Context, indexerID int64, link string) ([]byte, error)
+
 // DownloaderSource resolves the currently configured, enabled downloaders
 // fresh on every dispatch -- the same "ask, don't cache" discipline
 // IndexerSource already follows.
@@ -50,6 +53,7 @@ type Dispatch struct {
 	Desired      library.Desired
 	Settings     *settings.Cache
 	Downloaders  DownloaderSource
+	Fetch        ReleaseFetcher
 }
 
 // Send dispatches one decision, previously recorded against itemID by
@@ -83,8 +87,12 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 		category = found.Name
 	}
 
+	file, err := d.Fetch(ctx, detail.ReleaseCandidate.IndexerID, detail.ReleaseCandidate.DownloadURL)
+	if err != nil {
+		return library.Acquisition{}, fmt.Errorf("music: dispatch: fetch release: %w", err)
+	}
 	clientRef, err := downloader.Client.Add(ctx, download.AddRequest{
-		URL: detail.ReleaseCandidate.DownloadURL, Category: category,
+		Name: detail.ReleaseCandidate.Title, File: file, Category: category,
 	})
 	if err != nil {
 		return library.Acquisition{}, fmt.Errorf("music: dispatch: %w", err)

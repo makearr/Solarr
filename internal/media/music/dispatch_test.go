@@ -3,6 +3,8 @@ package music_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
@@ -30,6 +32,9 @@ func (env *searchTestEnv) dispatch(downloaders []music.DownloaderConn) music.Dis
 		Settings: env.settings,
 		Downloaders: func(context.Context) ([]music.DownloaderConn, error) {
 			return downloaders, nil
+		},
+		Fetch: func(_ context.Context, indexerID int64, link string) ([]byte, error) {
+			return []byte(fmt.Sprintf("nzb from indexer %d at %s", indexerID, link)), nil
 		},
 	}
 }
@@ -76,8 +81,13 @@ func TestDispatch_SendCreatesAQueuedAcquisition(t *testing.T) {
 	if acquisition.DownloaderID != 5 {
 		t.Errorf("DownloaderID = %d, want 5", acquisition.DownloaderID)
 	}
-	if len(sender.requests) != 1 || sender.requests[0].URL != detail.ReleaseCandidate.DownloadURL {
-		t.Errorf("sender.requests = %+v, want one request for %s", sender.requests, detail.ReleaseCandidate.DownloadURL)
+	// The NZB is fetched from the listing indexer and sent under the release's own name.
+	want := []download.AddRequest{{
+		Name: "Nosi Zada-Discovery-2001-FLAC-GROUP", File: []byte("nzb from indexer 1 at https://indexer.example/nzb/1"),
+		Category: "Discovery-category",
+	}}
+	if !reflect.DeepEqual(sender.requests, want) {
+		t.Errorf("sender.requests = %+v, want %+v", sender.requests, want)
 	}
 }
 
@@ -94,7 +104,7 @@ func TestDispatch_RefusesANonAcceptDecision(t *testing.T) {
 		t.Errorf("err = %v, want ErrDecisionNotAccepted", err)
 	}
 	if len(sender.requests) != 0 {
-		t.Error("AddURL was called for a REJECTed decision -- it must never be")
+		t.Error("Add was called for a REJECTed decision -- it must never be")
 	}
 }
 
@@ -141,7 +151,7 @@ func TestDispatch_RefusesASecondSendWhileTheFirstIsInFlight(t *testing.T) {
 	}
 }
 
-func TestDispatch_DoesNotRecordAnAcquisitionWhenAddURLFails(t *testing.T) {
+func TestDispatch_DoesNotRecordAnAcquisitionWhenAddFails(t *testing.T) {
 	env := newSearchTestEnv(t)
 	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
 	detail := env.recordDecision(t, item.ID, "ACCEPT")
@@ -151,7 +161,7 @@ func TestDispatch_DoesNotRecordAnAcquisitionWhenAddURLFails(t *testing.T) {
 		{ID: 5, Protocol: "usenet", Client: sender},
 	}).Send(t.Context(), item.ID, detail.Decision.ID, env.clock.Now())
 	if err == nil {
-		t.Fatal("Send succeeded despite AddURL failing")
+		t.Fatal("Send succeeded despite Add failing")
 	}
 
 	active, err := env.acquisitions.ListActive(t.Context())
@@ -160,5 +170,26 @@ func TestDispatch_DoesNotRecordAnAcquisitionWhenAddURLFails(t *testing.T) {
 	}
 	if len(active) != 0 {
 		t.Errorf("active acquisitions = %+v, want none recorded when the client refused the job", active)
+	}
+}
+
+// An NZB that cannot be fetched is never sent, and nothing is recorded as acquired.
+func TestDispatch_SendsNothingWhenTheReleaseCannotBeFetched(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	detail := env.recordDecision(t, item.ID, "ACCEPT")
+	sender := &fakeSabnzbdSender{clientRef: "nzo-123"}
+	dispatch := env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: sender}})
+	dispatch.Fetch = func(context.Context, int64, string) ([]byte, error) { return nil, errors.New("410 gone") }
+
+	if _, err := dispatch.Send(t.Context(), item.ID, detail.Decision.ID, env.clock.Now()); err == nil {
+		t.Fatal("Send succeeded without the release file")
+	}
+	active, err := env.acquisitions.ListActive(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sender.requests) != 0 || len(active) != 0 {
+		t.Errorf("sent %d, recorded %d; want nothing sent and nothing recorded", len(sender.requests), len(active))
 	}
 }
