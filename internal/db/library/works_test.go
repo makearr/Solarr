@@ -552,3 +552,27 @@ func TestListWorks_DescendingPaginationWalksEveryRowExactlyOnce(t *testing.T) {
 		}
 	}
 }
+
+// A track wanted on its own before its album was monitored made a complete album read MISSING:
+// the list took the oldest item. The album's own SET is its state (2026-09-18 finding).
+func TestListWorks_StateIsTheAlbumsNotAnEarlierTracks(t *testing.T) {
+	opened, _ := newLibrary(t)
+	work := createWork(t, opened, "music", "complete album")
+	createDesired(t, opened, work.ID, "SINGLE", 1)
+	album := createDesired(t, opened, work.ID, "SET", 12)
+	err := opened.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "UPDATE desired_item SET state = 'COMPLETE', present_count = 12 WHERE id = ?", album.ID)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	page, err := library.NewWorks(opened).List(t.Context(), library.WorkFilter{}, library.WorkCursor{}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page) != 1 || !page[0].WantedState.Valid || page[0].WantedState.String != "COMPLETE" {
+		t.Errorf("works = %+v, want the album's COMPLETE", page)
+	}
+}

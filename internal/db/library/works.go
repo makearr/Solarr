@@ -28,15 +28,12 @@ const workArtistColumn = `primary_artist.name AS artist`
 const workArtistJoin = `
 LEFT JOIN person primary_artist ON primary_artist.id = work.primary_artist_id`
 
-// workStateColumn reports one monitored desired_item's own state for the
-// work (NULL when it has none) -- a scalar subquery rather than a join, so a
-// work with more than one desired_item (rare: an edition-specific SET
-// alongside the album-level one) still yields exactly one row here, matching
-// every other column. ORDER BY id makes the pick deterministic rather than
-// SQLite's own arbitrary one.
+// workStateColumn is the work's album-level state: its monitored SET item first, a track's own
+// SINGLE only when there is no SET -- the oldest item was once taken, so a track wanted before
+// its album made a complete album read MISSING. A scalar subquery keeps one row per work.
 const workStateColumn = `(SELECT di.state FROM desired_item di
       WHERE di.work_id = work.id AND di.monitored = 1
-      ORDER BY di.id LIMIT 1) AS wanted_state`
+      ORDER BY di.satisfaction_kind = 'SET' DESC, di.id LIMIT 1) AS wanted_state`
 
 // WorkSort selects which column the list is ordered by. The zero value sorts
 // by title, matching every caller that does not set it.

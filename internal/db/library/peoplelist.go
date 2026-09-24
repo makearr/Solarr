@@ -16,13 +16,13 @@ const personColumns = `id, name, sort_name, disambiguation, kind, gender, countr
 // personCoverageColumns are the counts the availability bar under an
 // artist's picture is drawn from (2026-09-19): how many of the albums
 // credited to them are wanted, how many of those are complete, and whether
-// anything of theirs is downloading right now. Correlated subqueries for
-// workStateColumn's own reason -- a join would multiply the person row.
+// anything of theirs is downloading right now. Albums only: a track's own SINGLE item is not an
+// album. Correlated subqueries for workStateColumn's reason -- a join would multiply the row.
 const personCoverageColumns = `CAST((SELECT COUNT(*) FROM credit c
-      JOIN desired_item di ON di.work_id = c.work_id AND di.monitored = 1
+      JOIN desired_item di ON di.work_id = c.work_id AND di.monitored = 1 AND di.satisfaction_kind = 'SET'
       WHERE c.person_id = person.id) AS INTEGER) AS albums_wanted,
    CAST((SELECT COUNT(*) FROM credit c
-      JOIN desired_item di ON di.work_id = c.work_id AND di.monitored = 1
+      JOIN desired_item di ON di.work_id = c.work_id AND di.monitored = 1 AND di.satisfaction_kind = 'SET'
       WHERE c.person_id = person.id AND di.state = 'COMPLETE') AS INTEGER) AS albums_complete,
    EXISTS (SELECT 1 FROM credit c
       JOIN desired_item di ON di.work_id = c.work_id
