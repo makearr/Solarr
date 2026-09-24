@@ -201,12 +201,7 @@ func (p *process) arrClientFactory() adapters.LidarrClientFactory {
 	agent := httpx.UserAgent(p.build.Version)
 
 	return func(baseURL, apiKey string) arrimport.LidarrClient {
-		var allowedHosts []string
-		if parsed, err := url.Parse(baseURL); err == nil && parsed.Hostname() != "" {
-			allowedHosts = []string{parsed.Hostname()}
-		}
-		guard := httpx.NewGuard(nil, nil, allowedHosts)
-		client := httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
+		client := httpx.NewClient(wall, connectionGuard(baseURL), limiter, breaker, httpx.ClientConfig{
 			Provider: "arr", UserAgent: agent, Proxy: p.liveProxyPolicy(), Timeout: 60 * time.Second,
 		})
 		return arrimport.NewLidarrClient(client, baseURL, apiKey)
@@ -245,10 +240,9 @@ func (p *process) indexerClientFactory() adapters.IndexerClientFactory {
 	}, nil)
 	breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
 	agent := httpx.UserAgent(p.build.Version)
-	guard := httpx.NewGuard(nil, nil, nil)
 
 	return func(indexerID int64, baseURL, apiKey string, egress settings.IndexerEgress) indexer.Client {
-		client := httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
+		client := httpx.NewClient(wall, connectionGuard(baseURL), limiter, breaker, httpx.ClientConfig{
 			Provider: "indexer:" + strconv.FormatInt(indexerID, 10), UserAgent: agent,
 			Proxy: p.indexerLiveProxyPolicy(egress),
 		})
@@ -267,15 +261,25 @@ func (p *process) downloaderClientFactory() adapters.DownloaderClientFactory {
 	}, nil)
 	breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
 	agent := httpx.UserAgent(p.build.Version)
-	guard := httpx.NewGuard(nil, nil, nil)
 
 	return func(downloaderID int64, baseURL, credentials string) sabnzbd.Client {
-		client := httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
+		client := httpx.NewClient(wall, connectionGuard(baseURL), limiter, breaker, httpx.ClientConfig{
 			Provider: "downloader:" + strconv.FormatInt(downloaderID, 10), UserAgent: agent,
 			Proxy: p.liveProxyPolicy(),
 		})
 		return sabnzbd.NewClient(client, baseURL, credentials)
 	}
+}
+
+// connectionGuard is the SSRF guard for a connection an administrator configured: its own host may
+// be on the LAN (Prowlarr, SABnzbd, Lidarr usually are), every other destination -- a redirect
+// included -- is still classified. The *Arr sync needed this first; indexers and clients never had it.
+func connectionGuard(baseURL string) *httpx.Guard {
+	var allowedHosts []string
+	if parsed, err := url.Parse(baseURL); err == nil && parsed.Hostname() != "" {
+		allowedHosts = []string{parsed.Hostname()}
+	}
+	return httpx.NewGuard(nil, nil, allowedHosts)
 }
 
 // publicIPClient is the one outbound client the process builds for itself. Every
