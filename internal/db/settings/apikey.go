@@ -30,14 +30,8 @@ func (c *Cache) UserByAPIKeyHash(ctx context.Context, keyHash string) (Authentic
 	}
 
 	return Authenticated{
-		User: User{
-			ID:          row.ID,
-			Username:    row.Username,
-			HasPassword: row.PasswordHash.Valid && row.PasswordHash.String != "",
-			Role:        Role(row.Role),
-			CreatedAt:   time.Unix(row.CreatedAt, 0).UTC(),
-			Tier:        Tier(row.UiTier),
-		},
+		User: userFromRow(row.ID, row.Username, row.PasswordHash, row.Role, row.CreatedAt,
+			row.UiTier, row.UiTierDefault, row.UiTierMax, row.NewLibraryPermission),
 		APIKeyID: row.KeyID,
 	}, nil
 }

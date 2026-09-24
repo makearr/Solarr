@@ -11,6 +11,18 @@ type UserAccount = components["schemas"]["UserAccount"];
 type Role = components["schemas"]["Role"];
 type Tier = components["schemas"]["Me"]["tier"];
 type APIKey = components["schemas"]["APIKey"];
+type Permission = components["schemas"]["Permission"];
+type UserLimits = components["schemas"]["UserLimits"];
+type CategoryGrant = components["schemas"]["CategoryGrant"];
+
+const TIER_RANK: Record<Tier, number> = { normal: 0, advanced: 1, expert: 2 };
+
+const PERMISSIONS: readonly { id: Permission; label: string }[] = [
+  { id: "none", label: "No access" },
+  { id: "read", label: "Read" },
+  { id: "request", label: "Request" },
+  { id: "manage", label: "Manage" },
+];
 
 const TIERS: readonly { id: Tier; label: string; blurb: string }[] = [
   { id: "normal", label: "Normal", blurb: "Browsing, wanting and adding. Everything a working library needs." },
@@ -38,9 +50,10 @@ export function UserSettings() {
           <h1 className="text-base font-semibold">User</h1>
         </header>
 
-        {me.data && <MyTierSection tier={me.data.tier} />}
+        {me.data && <MyTierSection tier={me.data.tier} tierMax={me.data.tier_max} />}
         <APIKeysSection />
-        <AccessSection />
+        {/* Only an administrator may change it; the server refuses anyone else. */}
+        {me.data?.role === "admin" && <AccessSection />}
 
         {me.data && <Users currentUserId={me.data.user_id} />}
       </div>
@@ -51,7 +64,7 @@ export function UserSettings() {
 /** ADR-26's own self-service switch: any authenticated user, not just an
  *  administrator, may change how much of the settings surface they see.
  *  Raising or lowering it never changes behaviour, only what is displayed. */
-function MyTierSection({ tier }: { tier: Tier }) {
+function MyTierSection({ tier, tierMax }: { tier: Tier; tierMax: Tier }) {
   const setTier = useSetMyTier();
 
   return (
@@ -70,7 +83,7 @@ function MyTierSection({ tier }: { tier: Tier }) {
               key={option.id}
               type="button"
               title={option.blurb}
-              disabled={setTier.isPending}
+              disabled={setTier.isPending || TIER_RANK[option.id] > TIER_RANK[tierMax]}
               aria-pressed={tier === option.id}
               onClick={() => setTier.mutate(option.id)}
               className={`rounded-md border px-2.5 py-1 text-xs disabled:opacity-50 ${
@@ -83,6 +96,12 @@ function MyTierSection({ tier }: { tier: Tier }) {
             </button>
           ))}
         </div>
+        {tierMax !== "expert" && (
+          <p className="text-xs text-ink-muted">
+            An administrator allows this account up to{" "}
+            {TIERS.find((option) => option.id === tierMax)?.label}.
+          </p>
+        )}
         {setTier.isError && <p className="text-xs text-danger">That could not be saved.</p>}
       </div>
     </section>
@@ -352,8 +371,8 @@ const ROLES: readonly { id: Role; label: string; blurb: string }[] = [
   { id: "readonly", label: "Read only", blurb: "Looks, and requests where allowed." },
 ];
 
-/** Accounts and what they may do. Per-category grants are the other half
- *  (ADR-27) and appear once categories exist to grant on. */
+/** Accounts and what they may do: role, the libraries each may use, and the interface levels an
+ *  administrator allows. Only administrators reach any of it. */
 export function Users({ currentUserId }: { currentUserId: number }) {
   const queryClient = useQueryClient();
   const users = useQuery({
@@ -364,17 +383,36 @@ export function Users({ currentUserId }: { currentUserId: number }) {
       return data;
     },
   });
+  const categories = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/categories");
+      if (error) throw error;
+      return data;
+    },
+  });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["users"] });
 
   const update = useMutation({
-    mutationFn: async (change: { id: number; role?: Role; password?: string }) => {
+    mutationFn: async (change: { id: number; role?: Role; password?: string; limits?: UserLimits }) => {
       const { data, error } = await api.PATCH("/users/{id}", {
         params: { path: { id: change.id } },
-        body: { role: change.role, password: change.password },
+        body: { role: change.role, password: change.password, limits: change.limits },
       });
       if (error) throw error;
       return data;
+    },
+    onSuccess: invalidate,
+  });
+
+  const grant = useMutation({
+    mutationFn: async (change: { id: number; categoryId: number; permission: Permission }) => {
+      const { error } = await api.PUT("/users/{id}/access", {
+        params: { path: { id: change.id } },
+        body: { category_id: change.categoryId, permission: change.permission },
+      });
+      if (error) throw error;
     },
     onSuccess: invalidate,
   });
@@ -390,6 +428,7 @@ export function Users({ currentUserId }: { currentUserId: number }) {
   // Only administrators can read this list at all, so a 403 means the viewer is
   // not one rather than that something broke.
   if (users.error !== null) return null;
+  const libraries = categories.data ?? [];
 
   return (
     <section className="flex flex-col gap-2">
@@ -400,43 +439,253 @@ export function Users({ currentUserId }: { currentUserId: number }) {
           <Row
             key={user.id}
             user={user}
+            libraries={libraries}
             isSelf={user.id === currentUserId}
             onRole={(role) => update.mutate({ id: user.id, role })}
             onPassword={(password) => update.mutate({ id: user.id, password })}
+            onLimits={(limits) => update.mutate({ id: user.id, limits })}
+            onGrant={(categoryId, permission) => grant.mutate({ id: user.id, categoryId, permission })}
             onRemove={() => remove.mutate(user.id)}
-            busy={update.isPending || remove.isPending}
+            busy={update.isPending || remove.isPending || grant.isPending}
           />
         ))}
       </ul>
 
-      {(update.isError || remove.isError) && (
+      {(update.isError || remove.isError || grant.isError) && (
         <p className="text-xs text-danger">
-          That change was refused. The last administrator cannot be removed or demoted.
+          That change was refused. The last administrator cannot be removed or demoted, and an
+          account cannot start above its maximum level.
         </p>
       )}
 
-      <AddUser onAdded={invalidate} />
+      <AddUser libraries={libraries} onAdded={invalidate} />
+      <NewLibraryDefault />
     </section>
+  );
+}
+
+type Library = { id: number; name: string; media_type: string };
+
+/** What a new account is offered for libraries created after it. */
+function NewLibraryDefault() {
+  const queryClient = useQueryClient();
+  const defaults = useQuery({
+    queryKey: ["user-defaults"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/settings/users");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const save = useMutation({
+    mutationFn: async (permission: Permission) => {
+      const { error } = await api.PUT("/settings/users", { body: { new_library_permission: permission } });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["user-defaults"] }),
+  });
+  if (!defaults.data) return null;
+
+  return (
+    <label className="flex flex-wrap items-center gap-2 rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">
+      <span className="flex-1">
+        New accounts get this on libraries created later. Each account can be changed on its own.
+      </span>
+      <PermissionSelect
+        label="Default for new libraries"
+        value={defaults.data.new_library_permission}
+        disabled={save.isPending}
+        onChange={(permission) => save.mutate(permission)}
+      />
+    </label>
+  );
+}
+
+function PermissionSelect({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: Permission;
+  disabled?: boolean;
+  onChange: (permission: Permission) => void;
+}) {
+  return (
+    <select
+      aria-label={label}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value as Permission)}
+      className="rounded-md border border-border-subtle bg-canvas px-1.5 py-0.5 text-xs disabled:opacity-60"
+    >
+      {PERMISSIONS.map((permission) => (
+        <option key={permission.id} value={permission.id}>
+          {permission.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function TierSelect({
+  label,
+  value,
+  max,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: Tier;
+  max?: Tier;
+  disabled?: boolean;
+  onChange: (tier: Tier) => void;
+}) {
+  return (
+    <select
+      aria-label={label}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value as Tier)}
+      className="rounded-md border border-border-subtle bg-canvas px-1.5 py-0.5 text-xs"
+    >
+      {TIERS.filter((tier) => max === undefined || TIER_RANK[tier.id] <= TIER_RANK[max]).map((tier) => (
+        <option key={tier.id} value={tier.id}>
+          {tier.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** Starts at, at most, and what later libraries grant: the three things an administrator decides. */
+function LimitsFields({
+  who,
+  limits,
+  isAdmin,
+  disabled,
+  onChange,
+}: {
+  who: string;
+  limits: UserLimits;
+  isAdmin: boolean;
+  disabled?: boolean;
+  onChange: (limits: UserLimits) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-muted">
+      <span className="flex items-center gap-1.5">
+        Starts at
+        <TierSelect
+          label={`Starting interface level for ${who}`}
+          value={limits.tier_default}
+          max={limits.tier_max}
+          disabled={disabled}
+          onChange={(tier) => onChange({ ...limits, tier_default: tier })}
+        />
+      </span>
+      <span className="flex items-center gap-1.5">
+        at most
+        <TierSelect
+          label={`Highest interface level for ${who}`}
+          value={limits.tier_max}
+          disabled={disabled}
+          onChange={(tier) =>
+            onChange({
+              ...limits,
+              tier_max: tier,
+              tier_default: TIER_RANK[limits.tier_default] > TIER_RANK[tier] ? tier : limits.tier_default,
+            })
+          }
+        />
+      </span>
+      <span className="flex items-center gap-1.5">
+        New libraries
+        {isAdmin ? (
+          <span className="text-ink">managed</span>
+        ) : (
+          <PermissionSelect
+            label={`Access for ${who} to new libraries`}
+            value={limits.new_library_permission}
+            disabled={disabled}
+            onChange={(permission) => onChange({ ...limits, new_library_permission: permission })}
+          />
+        )}
+      </span>
+    </div>
+  );
+}
+
+/** Every library and what this account may do in it; an administrator manages them all. */
+function AccessGrid({
+  who,
+  libraries,
+  grants,
+  isAdmin,
+  disabled,
+  onChange,
+}: {
+  who: string;
+  libraries: readonly Library[];
+  grants: readonly CategoryGrant[];
+  isAdmin: boolean;
+  disabled?: boolean;
+  onChange: (categoryId: number, permission: Permission) => void;
+}) {
+  if (libraries.length === 0) {
+    return <p className="text-xs text-ink-muted">No libraries yet.</p>;
+  }
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 text-xs">
+      {libraries.map((library) => {
+        const permission = grants.find((entry) => entry.category_id === library.id)?.permission ?? "none";
+        return (
+          <label key={library.id} className="contents">
+            <span className={permission === "none" && !isAdmin ? "text-ink-muted" : "text-ink"}>
+              {library.name}
+            </span>
+            <PermissionSelect
+              label={`${who}: ${library.name}`}
+              value={isAdmin ? "manage" : permission}
+              disabled={disabled || isAdmin}
+              onChange={(next) => onChange(library.id, next)}
+            />
+          </label>
+        );
+      })}
+    </div>
   );
 }
 
 function Row({
   user,
+  libraries,
   isSelf,
   onRole,
   onPassword,
+  onLimits,
+  onGrant,
   onRemove,
   busy,
 }: {
   user: UserAccount;
+  libraries: readonly Library[];
   isSelf: boolean;
   onRole: (role: Role) => void;
   onPassword: (password: string) => void;
+  onLimits: (limits: UserLimits) => void;
+  onGrant: (categoryId: number, permission: Permission) => void;
   onRemove: () => void;
   busy: boolean;
 }) {
   const [password, setPassword] = useState("");
   const [resetting, setResetting] = useState(false);
+  const [open, setOpen] = useState(false);
+  const isAdmin = user.role === "admin";
+  const granted = libraries.filter((library) =>
+    user.access.some((entry) => entry.category_id === library.id),
+  );
 
   return (
     <li className="flex flex-col gap-2 px-3 py-2.5">
@@ -465,6 +714,17 @@ function Row({
 
         <button
           type="button"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className="rounded-md border border-border-subtle px-2 py-0.5 text-xs text-ink-muted
+                     hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2
+                     focus-visible:outline-accent"
+        >
+          Access
+        </button>
+
+        <button
+          type="button"
           onClick={() => setResetting(!resetting)}
           className="rounded-md border border-border-subtle px-2 py-0.5 text-xs text-ink-muted
                      hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2
@@ -485,6 +745,43 @@ function Row({
           <Trash2 aria-hidden className="size-3.5" />
         </button>
       </div>
+
+      <p className="text-xs text-ink-muted">
+        {isAdmin
+          ? "Manages every library."
+          : granted.length === 0
+            ? "No libraries: this account sees nothing yet."
+            : granted
+                .map((library) => {
+                  const permission = user.access.find((entry) => entry.category_id === library.id)?.permission;
+                  return `${library.name} (${PERMISSIONS.find((entry) => entry.id === permission)?.label.toLowerCase()})`;
+                })
+                .join(" · ")}
+        {" · "}
+        {TIERS.find((tier) => tier.id === user.tier)?.label} interface
+        {user.limits.tier_max !== "expert" &&
+          `, at most ${TIERS.find((tier) => tier.id === user.limits.tier_max)?.label}`}
+      </p>
+
+      {open && (
+        <div className="flex flex-col gap-3 rounded-md border border-border-subtle bg-canvas p-2.5">
+          <AccessGrid
+            who={user.username}
+            libraries={libraries}
+            grants={user.access}
+            isAdmin={isAdmin}
+            disabled={busy}
+            onChange={onGrant}
+          />
+          <LimitsFields
+            who={user.username}
+            limits={user.limits}
+            isAdmin={isAdmin}
+            disabled={busy}
+            onChange={onLimits}
+          />
+        </div>
+      )}
 
       {resetting && (
         <form
@@ -522,15 +819,30 @@ function Row({
   );
 }
 
-function AddUser({ onAdded }: { onAdded: () => void }) {
+function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdded: () => void }) {
+  const defaults = useQuery({
+    queryKey: ["user-defaults"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/settings/users");
+      if (error) throw error;
+      return data;
+    },
+  });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("readonly");
+  const [grants, setGrants] = useState<CategoryGrant[]>([]);
+  const [limits, setLimits] = useState<UserLimits | null>(null);
+  const shownLimits: UserLimits = limits ?? {
+    tier_default: "normal",
+    tier_max: "expert",
+    new_library_permission: defaults.data?.new_library_permission ?? "none",
+  };
 
   const create = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/users", {
-        body: { username, password, role },
+        body: { username, password, role, access: grants, limits: shownLimits },
       });
       if (error) throw error;
       return data;
@@ -538,64 +850,94 @@ function AddUser({ onAdded }: { onAdded: () => void }) {
     onSuccess: () => {
       setUsername("");
       setPassword("");
+      setGrants([]);
+      setLimits(null);
       onAdded();
     },
   });
 
   return (
     <form
-      className="flex flex-wrap items-end gap-2 rounded-lg border border-border-subtle bg-surface p-3"
+      className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3"
       onSubmit={(event) => {
         event.preventDefault();
         create.mutate();
       }}
     >
-      <label className="flex min-w-32 flex-1 flex-col gap-1 text-xs text-ink-muted">
-        Username
-        <input
-          className={inputStyle}
-          value={username}
-          autoComplete="off"
-          onChange={(event) => setUsername(event.target.value)}
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex min-w-32 flex-1 flex-col gap-1 text-xs text-ink-muted">
+          Username
+          <input
+            className={inputStyle}
+            value={username}
+            autoComplete="off"
+            onChange={(event) => setUsername(event.target.value)}
+          />
+        </label>
+        <label className="flex min-w-32 flex-1 flex-col gap-1 text-xs text-ink-muted">
+          Password
+          <input
+            className={inputStyle}
+            type="password"
+            value={password}
+            autoComplete="new-password"
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          Role
+          <select
+            className={inputStyle}
+            value={role}
+            onChange={(event) => setRole(event.target.value as Role)}
+          >
+            {ROLES.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs text-ink-muted">Libraries</span>
+        <AccessGrid
+          who="the new account"
+          libraries={libraries}
+          grants={grants}
+          isAdmin={role === "admin"}
+          onChange={(categoryId, permission) =>
+            setGrants([
+              ...grants.filter((entry) => entry.category_id !== categoryId),
+              ...(permission === "none" ? [] : [{ category_id: categoryId, permission }]),
+            ])
+          }
         />
-      </label>
-      <label className="flex min-w-32 flex-1 flex-col gap-1 text-xs text-ink-muted">
-        Password
-        <input
-          className={inputStyle}
-          type="password"
-          value={password}
-          autoComplete="new-password"
-          onChange={(event) => setPassword(event.target.value)}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-ink-muted">
-        Role
-        <select
-          className={inputStyle}
-          value={role}
-          onChange={(event) => setRole(event.target.value as Role)}
+      </div>
+
+      <LimitsFields
+        who="the new account"
+        limits={shownLimits}
+        isAdmin={role === "admin"}
+        onChange={setLimits}
+      />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="submit"
+          disabled={!username.trim() || password === "" || create.isPending}
+          className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
+                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
-          {ROLES.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button
-        type="submit"
-        disabled={!username.trim() || password === "" || create.isPending}
-        className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-      >
-        {create.isPending ? "Adding…" : "Add user"}
-      </button>
-      {create.isError && (
-        <p className="w-full text-xs text-danger">
-          That account could not be created. The username may already be taken.
-        </p>
-      )}
+          {create.isPending ? "Adding…" : "Add user"}
+        </button>
+        {create.isError && (
+          <p className="text-xs text-danger">
+            That account could not be created. The username may already be taken.
+          </p>
+        )}
+      </div>
     </form>
   );
 }

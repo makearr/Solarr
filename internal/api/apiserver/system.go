@@ -127,10 +127,15 @@ func (s *Server) GetMe(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	tierMax := settings.TierExpert
+	if user, found := s.auth.Settings.Snapshot().User(access.UserID()); found {
+		tierMax = user.Limits.TierMax
+	}
 	writeJSON(w, s.logger, http.StatusOK, meView{
 		UserID:     access.UserID(),
 		Role:       string(access.Role()),
 		Tier:       string(access.Tier()),
+		TierMax:    string(tierMax),
 		Categories: categories,
 	})
 }
@@ -185,7 +190,8 @@ func (s *Server) SetMyTier(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, meView{
-		UserID: access.UserID(), Role: string(access.Role()), Tier: string(user.Tier), Categories: categories,
+		UserID: access.UserID(), Role: string(access.Role()), Tier: string(user.Tier),
+		TierMax: string(user.Limits.TierMax), Categories: categories,
 	})
 }
 
@@ -193,6 +199,7 @@ type meView struct {
 	UserID     int64          `json:"user_id"`
 	Role       string         `json:"role"`
 	Tier       string         `json:"tier"`
+	TierMax    string         `json:"tier_max"`
 	Categories []categoryView `json:"categories"`
 }
 

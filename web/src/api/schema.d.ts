@@ -416,7 +416,7 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Change a role or set a password.
+         * Change a role, set a password, or change the account's limits.
          * @description Demoting or deleting the only administrator is refused: nothing else can restore the role, so the interface would be locked out of its own settings (ADR-44).
          */
         patch: operations["updateUser"];
@@ -437,6 +437,24 @@ export interface paths {
          * @description An absent grant denies, so a new category is private until shared. Sending "none" revokes rather than storing a denial.
          */
         put: operations["setUserAccess"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What a new account starts with. Administrator only. */
+        get: operations["getUserDefaults"];
+        /** Change what a new account starts with. Administrator only. */
+        put: operations["setUserDefaults"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2834,6 +2852,19 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             access: components["schemas"]["CategoryGrant"][];
+            tier: components["schemas"]["Tier"];
+            limits: components["schemas"]["UserLimits"];
+        };
+        /** @enum {string} */
+        Tier: "normal" | "advanced" | "expert";
+        /** @description What an administrator decides for an account beyond its role and grants. */
+        UserLimits: {
+            tier_default: components["schemas"]["Tier"];
+            tier_max: components["schemas"]["Tier"];
+            new_library_permission: components["schemas"]["Permission"];
+        };
+        UserDefaults: {
+            new_library_permission: components["schemas"]["Permission"];
         };
         AuthPolicy: {
             /** @description Whether a caller must present a credential. False serves every request as the administrator. */
@@ -3213,6 +3244,7 @@ export interface components {
             /** Format: int64 */
             user_id: number;
             role: components["schemas"]["Role"];
+            tier_max: components["schemas"]["Tier"];
             /**
              * @description How much of the settings surface this caller is shown (ADR-26). Self-service via PATCH /me/tier -- raising or lowering it never changes behaviour, only what is displayed.
              * @enum {string}
@@ -5316,6 +5348,9 @@ export interface operations {
                     /** Format: password */
                     password: string;
                     role: components["schemas"]["Role"];
+                    /** @description The libraries the account may use. An administrator manages every one regardless. */
+                    access?: components["schemas"]["CategoryGrant"][];
+                    limits?: components["schemas"]["UserLimits"];
                 };
             };
         };
@@ -5372,6 +5407,7 @@ export interface operations {
                     role?: components["schemas"]["Role"];
                     /** Format: password */
                     password?: string;
+                    limits?: components["schemas"]["UserLimits"];
                 };
             };
         };
@@ -5421,6 +5457,55 @@ export interface operations {
             400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getUserDefaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The defaults. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDefaults"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    setUserDefaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserDefaults"];
+            };
+        };
+        responses: {
+            /** @description The defaults now in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDefaults"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     getAuthPolicy: {

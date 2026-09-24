@@ -452,6 +452,13 @@ const (
 	SettingDefinitionTierNormal   SettingDefinitionTier = "normal"
 )
 
+// Defines values for Tier.
+const (
+	TierAdvanced Tier = "advanced"
+	TierExpert   Tier = "expert"
+	TierNormal   Tier = "normal"
+)
+
 // Defines values for TransferMethod.
 const (
 	TransferMethodCopy     TransferMethod = "copy"
@@ -1814,8 +1821,9 @@ type Me struct {
 	Role       Role       `json:"role"`
 
 	// Tier How much of the settings surface this caller is shown (ADR-26). Self-service via PATCH /me/tier -- raising or lowering it never changes behaviour, only what is displayed.
-	Tier   MeTier `json:"tier"`
-	UserId int64  `json:"user_id"`
+	Tier    MeTier `json:"tier"`
+	TierMax Tier   `json:"tier_max"`
+	UserId  int64  `json:"user_id"`
 }
 
 // MeTier How much of the settings surface this caller is shown (ADR-26). Self-service via PATCH /me/tier -- raising or lowering it never changes behaviour, only what is displayed.
@@ -2503,6 +2511,9 @@ type SubscriptionPreview struct {
 	ReleaseGroups                 []PreviewReleaseGroup `json:"release_groups"`
 }
 
+// Tier defines model for Tier.
+type Tier string
+
 // TierValue One compare-list dimension's position (ADR-40 stage 2). Equal rank between two candidates means this dimension did not decide.
 type TierValue struct {
 	Detail    string `json:"detail"`
@@ -2592,10 +2603,28 @@ type UserAccount struct {
 	CreatedAt time.Time       `json:"created_at"`
 
 	// HasPassword False for an account that authenticates by proxy header or API key, or the passwordless one an open-access install creates.
-	HasPassword bool   `json:"has_password"`
-	Id          int64  `json:"id"`
-	Role        Role   `json:"role"`
-	Username    string `json:"username"`
+	HasPassword bool  `json:"has_password"`
+	Id          int64 `json:"id"`
+
+	// Limits What an administrator decides for an account beyond its role and grants.
+	Limits   UserLimits `json:"limits"`
+	Role     Role       `json:"role"`
+	Tier     Tier       `json:"tier"`
+	Username string     `json:"username"`
+}
+
+// UserDefaults defines model for UserDefaults.
+type UserDefaults struct {
+	// NewLibraryPermission `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.
+	NewLibraryPermission Permission `json:"new_library_permission"`
+}
+
+// UserLimits What an administrator decides for an account beyond its role and grants.
+type UserLimits struct {
+	// NewLibraryPermission `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.
+	NewLibraryPermission Permission `json:"new_library_permission"`
+	TierDefault          Tier       `json:"tier_default"`
+	TierMax              Tier       `json:"tier_max"`
 }
 
 // Wanted The work's own album-level SET desired_item (section 19.6) -- what makes "9 of 12 tracks" a fact rather than on_disk's coarse badge.
@@ -3066,15 +3095,22 @@ type ListLogsParamsLevel string
 
 // CreateUserJSONBody defines parameters for CreateUser.
 type CreateUserJSONBody struct {
-	Password string `json:"password"`
-	Role     Role   `json:"role"`
-	Username string `json:"username"`
+	// Access The libraries the account may use. An administrator manages every one regardless.
+	Access *[]CategoryGrant `json:"access,omitempty"`
+
+	// Limits What an administrator decides for an account beyond its role and grants.
+	Limits   *UserLimits `json:"limits,omitempty"`
+	Password string      `json:"password"`
+	Role     Role        `json:"role"`
+	Username string      `json:"username"`
 }
 
 // UpdateUserJSONBody defines parameters for UpdateUser.
 type UpdateUserJSONBody struct {
-	Password *string `json:"password,omitempty"`
-	Role     *Role   `json:"role,omitempty"`
+	// Limits What an administrator decides for an account beyond its role and grants.
+	Limits   *UserLimits `json:"limits,omitempty"`
+	Password *string     `json:"password,omitempty"`
+	Role     *Role       `json:"role,omitempty"`
 }
 
 // SetUserAccessJSONBody defines parameters for SetUserAccess.
@@ -3315,6 +3351,9 @@ type SimulateScoreJSONRequestBody SimulateScoreJSONBody
 
 // SetAuthPolicyJSONRequestBody defines body for SetAuthPolicy for application/json ContentType.
 type SetAuthPolicyJSONRequestBody SetAuthPolicyJSONBody
+
+// SetUserDefaultsJSONRequestBody defines body for SetUserDefaults for application/json ContentType.
+type SetUserDefaultsJSONRequestBody = UserDefaults
 
 // CreateFirstAdministratorJSONRequestBody defines body for CreateFirstAdministrator for application/json ContentType.
 type CreateFirstAdministratorJSONRequestBody CreateFirstAdministratorJSONBody
@@ -3777,6 +3816,12 @@ type ServerInterface interface {
 	// Every registered scalar setting (ADR-26) -- its tier, kind, default and help text.
 	// (GET /settings/registry)
 	ListSettingDefinitions(w http.ResponseWriter, r *http.Request)
+	// What a new account starts with. Administrator only.
+	// (GET /settings/users)
+	GetUserDefaults(w http.ResponseWriter, r *http.Request)
+	// Change what a new account starts with. Administrator only.
+	// (PUT /settings/users)
+	SetUserDefaults(w http.ResponseWriter, r *http.Request)
 	// What the first-run wizard still has to do.
 	// (GET /setup)
 	GetSetupStatus(w http.ResponseWriter, r *http.Request)
@@ -3810,7 +3855,7 @@ type ServerInterface interface {
 	// Remove an account.
 	// (DELETE /users/{id})
 	DeleteUser(w http.ResponseWriter, r *http.Request, id int64)
-	// Change a role or set a password.
+	// Change a role, set a password, or change the account's limits.
 	// (PATCH /users/{id})
 	UpdateUser(w http.ResponseWriter, r *http.Request, id int64)
 	// Grant or change access to one category.
@@ -4719,6 +4764,18 @@ func (_ Unimplemented) ListSettingDefinitions(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// What a new account starts with. Administrator only.
+// (GET /settings/users)
+func (_ Unimplemented) GetUserDefaults(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change what a new account starts with. Administrator only.
+// (PUT /settings/users)
+func (_ Unimplemented) SetUserDefaults(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // What the first-run wizard still has to do.
 // (GET /setup)
 func (_ Unimplemented) GetSetupStatus(w http.ResponseWriter, r *http.Request) {
@@ -4785,7 +4842,7 @@ func (_ Unimplemented) DeleteUser(w http.ResponseWriter, r *http.Request, id int
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Change a role or set a password.
+// Change a role, set a password, or change the account's limits.
 // (PATCH /users/{id})
 func (_ Unimplemented) UpdateUser(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -9305,6 +9362,50 @@ func (siw *ServerInterfaceWrapper) ListSettingDefinitions(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// GetUserDefaults operation middleware
+func (siw *ServerInterfaceWrapper) GetUserDefaults(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUserDefaults(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetUserDefaults operation middleware
+func (siw *ServerInterfaceWrapper) SetUserDefaults(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetUserDefaults(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSetupStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetSetupStatus(w http.ResponseWriter, r *http.Request) {
 
@@ -10723,6 +10824,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/registry", wrapper.ListSettingDefinitions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/settings/users", wrapper.GetUserDefaults)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/settings/users", wrapper.SetUserDefaults)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/setup", wrapper.GetSetupStatus)

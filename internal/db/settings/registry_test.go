@@ -99,6 +99,7 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 
 	known := []string{
 		settings.KeyAuthRequired,
+		settings.KeyUsersNewLibraryPermission,
 		settings.KeyImportAutoCommitConfidence, settings.KeyImportTransferLadder,
 		settings.KeyImportRenameOnImport,
 		settings.KeyNetworkPort, settings.KeyNetworkProxyEnabled, settings.KeyNetworkProxyURL,

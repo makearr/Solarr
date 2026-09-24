@@ -62,6 +62,8 @@ type ScalarSettingsEntry struct {
 	MetadataCoverSources *[]string `yaml:"metadata_cover_sources,omitempty"`
 	MetadataWikidata     *bool     `yaml:"metadata_wikidata,omitempty"`
 	MetadataAcoustID     *bool     `yaml:"metadata_acoustid,omitempty"`
+	// UsersNewLibraryPermission is what new accounts are granted on later libraries; empty keeps it.
+	UsersNewLibraryPermission Permission `yaml:"users_new_library_permission,omitempty"`
 }
 
 // CategoryEntry is one category and the roots attached to it.
@@ -202,6 +204,7 @@ func (c *Cache) Export() Document {
 		MetadataSourceOrder:        snapshot.MetadataSettings().SourceOrder,
 		MetadataCoverSources:       &metadata.CoverSources,
 		MetadataWikidata:           metadata.Wikidata,
+		UsersNewLibraryPermission:  snapshot.NewLibraryPermission(),
 		MetadataAcoustID:           metadata.AcoustID,
 	}
 
@@ -393,6 +396,10 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 				BrainzMashUserAgent: DefaultBrainzMashUserAgent, CoverSources: *covers}) {
 				problems = append(problems, prefixed("settings", problem))
 			}
+		}
+		if permission := d.Settings.UsersNewLibraryPermission; permission != "" && !permission.valid() {
+			problems = append(problems, config.Problem{Path: "settings.users_new_library_permission",
+				Value: string(permission), Expectation: "none, read, request or manage"})
 		}
 	}
 
@@ -856,6 +863,9 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 	}
 	if entry.MetadataAcoustID != nil {
 		values[KeyMetadataAcoustID] = strconv.FormatBool(*entry.MetadataAcoustID)
+	}
+	if entry.UsersNewLibraryPermission != "" {
+		values[KeyUsersNewLibraryPermission] = string(entry.UsersNewLibraryPermission)
 	}
 	at := cl.Now().Unix()
 	for key, value := range values {

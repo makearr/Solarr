@@ -2,21 +2,26 @@
 -- silently reshape an existing result (documentation/sql-and-sqlc.md).
 
 -- name: GetUserByID :one
-SELECT id, username, password_hash, role, created_at, ui_tier
+SELECT id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
+  new_library_permission
 FROM app_user WHERE id = ?;
 
 -- name: GetUserByUsername :one
-SELECT id, username, password_hash, role, created_at, ui_tier
+SELECT id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
+  new_library_permission
 FROM app_user WHERE username = ?;
 
 -- name: ListUsers :many
-SELECT id, username, password_hash, role, created_at, ui_tier
+SELECT id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
+  new_library_permission
 FROM app_user ORDER BY username;
 
 -- name: CreateUser :one
-INSERT INTO app_user (username, password_hash, role, created_at, ui_tier)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, username, password_hash, role, created_at, ui_tier;
+INSERT INTO app_user (username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
+  new_library_permission)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
+  new_library_permission;
 
 -- name: SetUserPasswordHash :exec
 UPDATE app_user SET password_hash = ? WHERE id = ?;
@@ -26,6 +31,9 @@ UPDATE app_user SET role = ? WHERE id = ?;
 
 -- name: SetUserTier :exec
 UPDATE app_user SET ui_tier = ? WHERE id = ?;
+
+-- name: SetUserLimits :exec
+UPDATE app_user SET ui_tier_default = ?, ui_tier_max = ?, new_library_permission = ? WHERE id = ?;
 
 -- name: DeleteUser :exec
 DELETE FROM app_user WHERE id = ?;
@@ -81,6 +89,7 @@ UPDATE api_key SET last_used_at = ? WHERE id = ?;
 DELETE FROM api_key WHERE id = ?;
 
 -- name: GetUserByAPIKeyHash :one
-SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.ui_tier, k.id AS key_id
+SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.ui_tier, u.ui_tier_default,
+  u.ui_tier_max, u.new_library_permission, k.id AS key_id
 FROM api_key k JOIN app_user u ON u.id = k.user_id
 WHERE k.key_hash = ?;

@@ -160,6 +160,12 @@ func NewDefaultRegistry() *Registry {
 		Default:  "true",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyUsersNewLibraryPermission, Kind: KindString, Tier: TierNormal,
+		Name:     "New libraries",
+		HelpText: "What a new account is granted on libraries created after it: none, read, request or manage.",
+		Default:  string(PermissionNone),
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyImportAutoCommitConfidence, Kind: KindFloat, Tier: TierNormal,
 		Name: "Identification confidence",
 		HelpText: "How likely an identification must be to be right before a scan or an import " +

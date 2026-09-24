@@ -160,6 +160,7 @@ type Querier interface {
 	// Invariant 69); min_free_bytes is their reserve. Kept separate from
 	// SetRootFolderCapacity below, which only the capacity job ever calls.
 	SetRootFolderPolicy(ctx context.Context, arg SetRootFolderPolicyParams) error
+	SetUserLimits(ctx context.Context, arg SetUserLimitsParams) error
 	SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) error
 	SetUserRole(ctx context.Context, arg SetUserRoleParams) error
 	SetUserTier(ctx context.Context, arg SetUserTierParams) error
