@@ -4,9 +4,11 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"reflect"
 
 	"github.com/goccy/go-yaml"
 
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/config"
@@ -57,6 +59,11 @@ func (s *Server) ImportSettings(w http.ResponseWriter, r *http.Request) {
 			"That is not a configuration document", err.Error())
 		return
 	}
+	// Warn, never refuse (answered 2026-09-24): a key this format does not have is ignored, and
+	// said so -- a silent 204 once left a restored library with no root folder.
+	var generic any
+	_ = yaml.Unmarshal(body, &generic)
+	unknown := config.UnknownKeysIn(generic, reflect.TypeOf(settings.Document{}))
 
 	caller := s.resolvedClientAddress(r)
 	if err := s.auth.Settings.Import(r.Context(), s.wall, caller, document); err != nil {
@@ -86,8 +93,17 @@ func (s *Server) ImportSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logger.Info("settings imported",
-		"categories", len(document.Categories), "root_folders", len(document.Roots))
-	w.WriteHeader(http.StatusNoContent)
+		"categories", len(document.Categories), "root_folders", len(document.Roots), "unknown_keys", len(unknown))
+	result := gen.SettingsImportResult{Warnings: []gen.SettingsImportWarning{}}
+	for _, problem := range unknown {
+		warning := gen.SettingsImportWarning{Path: problem.Path, Message: "unknown key, ignored"}
+		if problem.Suggestion != "" {
+			suggestion := problem.Suggestion
+			warning.Suggestion = &suggestion
+		}
+		result.Warnings = append(result.Warnings, warning)
+	}
+	writeJSON(w, s.logger, http.StatusOK, result)
 }
 
 // requireAdministrator answers the request itself when the caller is not one.

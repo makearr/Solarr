@@ -481,7 +481,7 @@ func TestImportSettings_RecordsCapacityForTheRootsItCreates(t *testing.T) {
 
 	document := "version: 1\nroot_folders:\n  - path: /library\n    accepts_new: true\n"
 	imported := fixture.authed(t, http.MethodPost, "/api/v1/settings/import", document, cookies)
-	if imported.Code != http.StatusNoContent {
+	if imported.Code != http.StatusOK {
 		t.Fatalf("import: %d (%s)", imported.Code, imported.Body)
 	}
 
@@ -503,5 +503,38 @@ func TestImportSettings_RecordsCapacityForTheRootsItCreates(t *testing.T) {
 	if roots[0].FreeBytes == nil || *roots[0].FreeBytes != 900<<30 || roots[0].TotalBytes == nil {
 		t.Errorf("free/total = %v/%v, want the capacity probed during the import",
 			roots[0].FreeBytes, roots[0].TotalBytes)
+	}
+}
+
+// The 2026-09-19 finding: root_folders nested under a category imported with 204 and attached
+// nothing. Warn, never refuse (answered 2026-09-24): the rest applies, the key is named.
+func TestImportSettings_WarnsAboutKeysItDoesNotKnow(t *testing.T) {
+	fixture := newSetupFixture(t, stubRoots{freeBytes: 900 << 30})
+	claim := fixture.post(t, "/api/v1/setup/admin", `{"username":"avs","password":"correct horse battery"}`)
+	if claim.Code != http.StatusCreated {
+		t.Fatalf("claim: %d", claim.Code)
+	}
+	cookies := claim.Result().Cookies()
+
+	document := "version: 1\nroot_folders:\n  - path: /library\n" +
+		"categories:\n  - media_type: music\n    name: Music\n    priority_rank: 1\n" +
+		"    root_folders:\n      - path: /library\n"
+	imported := fixture.authed(t, http.MethodPost, "/api/v1/settings/import", document, cookies)
+	if imported.Code != http.StatusOK {
+		t.Fatalf("import: %d (%s)", imported.Code, imported.Body)
+	}
+	var result struct {
+		Warnings []struct {
+			Path string `json:"path"`
+		} `json:"warnings"`
+	}
+	if err := json.Unmarshal(imported.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Warnings) != 1 || result.Warnings[0].Path != "categories[0].root_folders" {
+		t.Errorf("warnings = %+v, want the nested root_folders named", result.Warnings)
+	}
+	if len(fixture.cache.Snapshot().Categories()) != 1 {
+		t.Error("the known part of the document was not applied")
 	}
 }
