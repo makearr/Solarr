@@ -95,8 +95,12 @@ func (a DrainRoots) SetRootFolderDrainState(ctx context.Context, id int64, state
 // takes effect on the task's own next tick, no restart needed.
 type ScheduleSource struct{ Cache *settings.Cache }
 
-func (c ScheduleSource) Cadence(taskKey, defaultCadence string) string {
-	return c.Cache.Snapshot().ScheduleCadence(taskKey, defaultCadence)
+func (c ScheduleSource) Cadences(taskKey, defaultCadence string) []string {
+	return c.Cache.Snapshot().ScheduleCadences(taskKey, defaultCadence)
+}
+
+func (c ScheduleSource) RunAtStartup(taskKey string, fallback bool) bool {
+	return c.Cache.Snapshot().ScheduleRunAtStartup(taskKey, fallback)
 }
 
 func (c ScheduleSource) Enabled(taskKey string) bool {

@@ -26,13 +26,16 @@ type Scheduler interface {
 	// State answers one task's own persisted run-state. found is false for
 	// a task that has never ticked yet.
 	State(ctx context.Context, key string) (jobs.ScheduleRun, bool, error)
-	// EffectiveCadence resolves a task's live cadence: a stored override, or
-	// defaultCadence.
-	EffectiveCadence(key, defaultCadence string) string
+	// EffectiveCadences resolves a task's live cadences: a stored override, or [defaultCadence].
+	EffectiveCadences(key, defaultCadence string) []string
 	// Enabled resolves a task's live enabled flag.
 	Enabled(key string) bool
-	// SetCadence overrides one task's cadence (ADR-44: validated on write).
-	SetCadence(ctx context.Context, key, cadence string) error
+	// RunAtStartup resolves whether a task runs once at startup; fallback is its default.
+	RunAtStartup(key string, fallback bool) bool
+	// SetCadences overrides one task's cadences (ADR-44: validated on write).
+	SetCadences(ctx context.Context, key string, cadences []string) error
+	// SetRunAtStartup sets whether a task runs once at startup.
+	SetRunAtStartup(ctx context.Context, key string, run bool) error
 	// SetEnabled enables or disables one task.
 	SetEnabled(ctx context.Context, key string, enabled bool) error
 	// RunNow fires a task immediately. full requests the task's own RunFull
@@ -91,7 +94,7 @@ func (s *Server) UpdateSchedule(w http.ResponseWriter, r *http.Request, key stri
 	var body gen.UpdateScheduleJSONRequestBody
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with cadence and/or enabled")
+			"Bad request", "expected a JSON object with cadences, enabled and/or run_at_startup")
 		return
 	}
 
@@ -101,14 +104,25 @@ func (s *Server) UpdateSchedule(w http.ResponseWriter, r *http.Request, key stri
 		return
 	}
 
-	if body.Cadence != nil {
-		if err := s.scheduler.SetCadence(r.Context(), key, *body.Cadence); err != nil {
+	if body.RunAtStartup != nil && task.Startup == jobs.StartupNotOffered {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "this task does not run at startup")
+		return
+	}
+	if body.Cadences != nil {
+		if err := s.scheduler.SetCadences(r.Context(), key, *body.Cadences); err != nil {
 			var problems config.Problems
 			if errors.As(err, &problems) {
 				writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-					"The cadence has problems", problems.Report("the schedule", "Nothing was changed."))
+					"The schedule has problems", problems.Report("the schedule", "Nothing was changed."))
 				return
 			}
+			writeError(w, s.logger, err)
+			return
+		}
+	}
+	if body.RunAtStartup != nil {
+		if err := s.scheduler.SetRunAtStartup(r.Context(), key, *body.RunAtStartup); err != nil {
 			writeError(w, s.logger, err)
 			return
 		}
@@ -183,12 +197,16 @@ func (s *Server) scheduleView(ctx context.Context, task jobs.Task) (gen.Schedule
 		return gen.Schedule{}, err
 	}
 
+	offered := task.Startup != jobs.StartupNotOffered
 	view := gen.Schedule{
 		Key: task.Key, Name: task.Name, Tier: gen.ScheduleTier(task.Tier),
+		Category:       gen.ScheduleCategory(task.Category),
 		DefaultCadence: task.DefaultCadence,
-		Cadence:        s.scheduler.EffectiveCadence(task.Key, task.DefaultCadence),
+		Cadences:       s.scheduler.EffectiveCadences(task.Key, task.DefaultCadence),
 		Enabled:        s.scheduler.Enabled(task.Key),
 		SupportsFull:   task.RunFull != nil,
+		StartupOffered: offered,
+		RunAtStartup:   offered && s.scheduler.RunAtStartup(task.Key, task.Startup == jobs.StartupOn),
 		LastDurationMs: state.LastDurationMs, LastRunAt: state.LastRunAt, NextRunAt: state.NextRunAt,
 	}
 	if state.LastOutcome != "" {

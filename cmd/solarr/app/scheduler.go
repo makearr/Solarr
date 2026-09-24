@@ -10,73 +10,74 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// Default cadences for every registered task (ADR-59), the starting point a
-// stored settings.db override replaces. Named here rather than buried in
-// buildTaskRegistry, so a reader can see every task's own default in one
-// place.
+// Default cadences for every registered task (ADR-59), gentler since 2026-09-24 and offset so
+// no two land on the same minute; a stored settings.db override replaces them.
 const (
-	scanScheduleCron               = "*/30 * * * *" // every 30 minutes
-	enrichmentScheduleCron         = "*/15 * * * *" // every 15 minutes
-	subscriptionExpandScheduleCron = "0 */6 * * *"  // every 6 hours
-	artworkScheduleCron            = "*/30 * * * *" // every 30 minutes
-	categoryCountsScheduleCron     = "*/15 * * * *" // every 15 minutes
-	freshCountsScheduleCron        = "*/15 * * * *" // every 15 minutes
-	probeScheduleCron              = "0 * * * *"    // every hour
-	capacityScheduleCron           = "0 */6 * * *"  // every 6 hours
-	cacheMaintenanceScheduleCron   = "0 3 * * *"    // once a day, at 03:00
-	downloadWatchScheduleCron      = "*/5 * * * *"  // every 5 minutes
+	scanScheduleCron               = "0 */6 * * *"   // every 6 hours
+	enrichmentScheduleCron         = "20 * * * *"    // every hour
+	subscriptionExpandScheduleCron = "10 */12 * * *" // every 12 hours
+	artworkScheduleCron            = "30 */6 * * *"  // every 6 hours
+	categoryCountsScheduleCron     = "30 5 * * *"    // daily, after database maintenance; only corrects drift
+	freshCountsScheduleCron        = "40 * * * *"    // every hour
+	probeScheduleCron              = "0 2 * * *"     // daily at 02:00
+	capacityScheduleCron           = "50 */6 * * *"  // every 6 hours
+	cacheMaintenanceScheduleCron   = "0 3 * * *"     // daily at 03:00
+	downloadWatchScheduleCron      = "*/5 * * * *"   // every 5 minutes
 )
 
-// buildTaskRegistry declares every periodic action this process has (ADR-59).
-// Every enqueueX function used to be "enqueued once at startup, waits for a
-// restart" (section 21.14's own words for the gap this closes) -- each is
-// now one Task, registered once, that also fires on its own schedule.
+// buildTaskRegistry declares every periodic action this process has (ADR-59), in the order a
+// startup run enqueues them.
 func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry := jobs.NewTaskRegistry()
 	registry.MustRegister(jobs.Task{
 		Key: "scan", Name: "Library scan", DefaultCadence: scanScheduleCron,
-		Tier: string(settings.TierNormal), Enqueue: p.enqueueLibraryScans,
-		// Full rescan (private/questions.md): manual only, deliberately scan's
-		// alone -- see Task.RunFull's own doc comment for why this stays
-		// narrow rather than a generic options payload every task would grow
-		// a case for.
-		RunFull: p.enqueueFullLibraryScans,
+		Tier: string(settings.TierNormal), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueLibraryScans, RunFull: p.enqueueFullLibraryScans,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "enrichment", Name: "Music enrichment", DefaultCadence: enrichmentScheduleCron,
-		Tier: string(settings.TierNormal), Enqueue: p.enqueueEnrichment,
+		Tier: string(settings.TierNormal), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueEnrichment,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "subscription_expand", Name: "Subscription expand", DefaultCadence: subscriptionExpandScheduleCron,
-		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueSubscriptionExpand,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueSubscriptionExpand,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "artwork", Name: "Cover art sweep", DefaultCadence: artworkScheduleCron,
-		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueArtwork,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueArtwork,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "category_counts", Name: "Category counters", DefaultCadence: categoryCountsScheduleCron,
-		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueCategoryCounts,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryStatistics, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueCategoryCounts,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "fresh_counts", Name: "Fresh works counter", DefaultCadence: freshCountsScheduleCron,
-		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueFreshCounts,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryStatistics, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueFreshCounts,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "probe", Name: "Attribute probe", DefaultCadence: probeScheduleCron,
-		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueProbe,
+		Tier: string(settings.TierNormal), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueProbe,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "capacity", Name: "Root folder capacity", DefaultCadence: capacityScheduleCron,
-		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueCapacity,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryStatistics, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueCapacity,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "cache_maintenance", Name: "Cache maintenance", DefaultCadence: cacheMaintenanceScheduleCron,
-		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueCacheMaintenance,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMaintenance, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueCacheMaintenance,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "download_watch", Name: "Download folder watch", DefaultCadence: downloadWatchScheduleCron,
-		Tier: string(settings.TierNormal), Enqueue: p.enqueueDownloadWatch,
+		Tier: string(settings.TierNormal), Category: jobs.CategoryDownloads, Startup: jobs.StartupOff,
+		Enqueue: p.enqueueDownloadWatch,
 	})
 	return registry
 }
@@ -93,9 +94,10 @@ func (p *process) startSchedulers(ctx context.Context) {
 	p.scheduleStates = jobs.NewScheduleStates(p.jobs)
 	p.taskRunners = make(map[string]*jobs.TaskRunner)
 
-	for _, task := range p.taskRegistry.All() {
+	for _, task := range p.taskRegistry.InRegistrationOrder() {
 		runner := jobs.NewTaskRunner(task, source, p.scheduleStates, wall, p.logger)
 		p.taskRunners[task.Key] = runner
+		runner.Startup(ctx)
 		go runner.Run(ctx)
 	}
 	p.logger.Info("schedulers started", slog.Int("tasks", len(p.taskRunners)))

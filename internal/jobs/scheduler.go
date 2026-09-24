@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/robfig/cron/v3"
 
@@ -33,9 +34,11 @@ var ErrNoFullMode = errors.New("jobs: this task has no full-run mode")
 // Implemented by a cmd/solarr adapter over internal/db/settings.Cache --
 // this package never imports internal/db/settings (architecture §2).
 type ScheduleSource interface {
-	// Cadence returns the task's effective cron expression: an override if
-	// one is stored, defaultCadence otherwise.
-	Cadence(taskKey, defaultCadence string) string
+	// Cadences returns the task's effective cron expressions: an override if one is stored,
+	// defaultCadence otherwise. The task fires at the earliest of them.
+	Cadences(taskKey, defaultCadence string) []string
+	// RunAtStartup reports whether the task fires once at startup; fallback is its default.
+	RunAtStartup(taskKey string, fallback bool) bool
 	// Enabled reports whether the task should fire at all. A disabled task
 	// still has its next-run time recomputed and shown -- it is skipped,
 	// not un-scheduled.
@@ -120,23 +123,56 @@ func (r *TaskRunner) RunNowFull(ctx context.Context) error {
 	return nil
 }
 
-// resolveSchedule parses the task's live cadence, falling back to its
-// already-validated DefaultCadence if an override is now unparseable --
-// write-time validation (SetScheduleCadence) is what should have caught
-// this, but a scheduler must never wedge on a bad value it did not itself
-// just accept.
-func (r *TaskRunner) resolveSchedule() cron.Schedule {
-	cadence := r.source.Cadence(r.task.Key, r.task.DefaultCadence)
-	parsed, err := cronParser.Parse(cadence)
-	if err == nil {
-		return parsed
+// Startup fires the task once if it runs at startup and is enabled. It returns once the fire is
+// recorded, so callers can start tasks in the order they depend on each other.
+func (r *TaskRunner) Startup(ctx context.Context) {
+	if r.task.Startup == StartupNotOffered || !r.source.Enabled(r.task.Key) {
+		return
 	}
-	r.logger.Error("schedule override is invalid, falling back to the default",
-		slog.String("task", r.task.Key), slog.String("cadence", cadence), slog.Any("error", err))
-	// DefaultCadence was already validated at TaskRegistry.Register, so this
-	// cannot itself fail.
-	fallback, _ := cronParser.Parse(r.task.DefaultCadence)
-	return fallback
+	if !r.source.RunAtStartup(r.task.Key, r.task.Startup == StartupOn) {
+		return
+	}
+	if err := r.RunNow(ctx); err != nil {
+		r.logger.Debug("startup run skipped", slog.String("task", r.task.Key), slog.Any("error", err))
+	}
+}
+
+// resolveSchedule parses the task's live cadences, dropping any now unparseable -- write-time
+// validation should have caught it, but a scheduler must never wedge on a bad value -- and falls
+// back to the already-validated DefaultCadence when none is left.
+func (r *TaskRunner) resolveSchedule() cron.Schedule {
+	var schedules earliest
+	for _, cadence := range r.source.Cadences(r.task.Key, r.task.DefaultCadence) {
+		parsed, err := cronParser.Parse(cadence)
+		if err != nil {
+			r.logger.Error("schedule override is invalid, ignoring it",
+				slog.String("task", r.task.Key), slog.String("cadence", cadence), slog.Any("error", err))
+			continue
+		}
+		schedules = append(schedules, parsed)
+	}
+	if len(schedules) == 0 {
+		fallback, _ := cronParser.Parse(r.task.DefaultCadence)
+		return fallback
+	}
+	return schedules
+}
+
+// earliest fires at the soonest of several schedules.
+type earliest []cron.Schedule
+
+func (e earliest) Next(after time.Time) time.Time {
+	var next time.Time
+	for _, schedule := range e {
+		candidate := schedule.Next(after)
+		if candidate.IsZero() {
+			continue
+		}
+		if next.IsZero() || candidate.Before(next) {
+			next = candidate
+		}
+	}
+	return next
 }
 
 func (r *TaskRunner) fireAndRecord(ctx context.Context, enqueue func(context.Context) (EnqueueResult, error)) {

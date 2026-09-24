@@ -668,8 +668,8 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Override a task's cadence and/or enabled flag. Administrator only.
-         * @description cadence and enabled are independent -- omitting either leaves it unchanged. cadence is validated on write (ADR-44): a five-field cron expression that can actually fire, not merely one that parses (a nonexistent calendar date is rejected the same as a syntax error).
+         * Override a task's schedules, enabled flag or startup run. Administrator only.
+         * @description Each field is independent -- omitting one leaves it unchanged. cadences are validated on write (ADR-44): 1-12 distinct five-field cron expressions that can each actually fire; the task runs at the earliest. run_at_startup is refused for a task that does not offer it.
          */
         patch: operations["updateSchedule"];
         trace?: never;
@@ -2974,11 +2974,20 @@ export interface components {
              * @enum {string}
              */
             tier: "normal" | "advanced" | "expert";
+            /**
+             * @description The group the scheduler screen shows the task under.
+             * @enum {string}
+             */
+            category: "library" | "metadata" | "downloads" | "statistics" | "maintenance";
             /** @description The registry's own fallback cadence. */
             default_cadence: string;
-            /** @description Effective cadence -- a stored override if one exists, default_cadence otherwise. */
-            cadence: string;
+            /** @description Effective cadences -- a stored override if one exists, [default_cadence] otherwise. */
+            cadences: string[];
             enabled: boolean;
+            /** @description Whether running once at startup makes sense for this task. */
+            startup_offered: boolean;
+            /** @description Whether it runs once when Solarr starts; always false when not offered. */
+            run_at_startup: boolean;
             /** @description Whether POST /schedules/{key}/run?full=true does something different from an ordinary run for this task -- library scan's full rescan is the only one today (private/questions.md). */
             supports_full: boolean;
             /** Format: date-time */
@@ -5910,8 +5919,9 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": {
-                    cadence?: string;
+                    cadences?: string[];
                     enabled?: boolean;
+                    run_at_startup?: boolean;
                 };
             };
         };

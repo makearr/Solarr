@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -16,8 +17,9 @@ import (
 type fakeScheduler struct {
 	tasks    []jobs.Task
 	states   map[string]jobs.ScheduleRun
-	cadences map[string]string
+	cadences map[string][]string
 	disabled map[string]bool
+	startup  map[string]bool
 
 	setCadenceErr error
 	runNowErr     error
@@ -32,23 +34,38 @@ func (f *fakeScheduler) State(_ context.Context, key string) (jobs.ScheduleRun, 
 	return run, found, nil
 }
 
-func (f *fakeScheduler) EffectiveCadence(key, defaultCadence string) string {
+func (f *fakeScheduler) EffectiveCadences(key, defaultCadence string) []string {
 	if override, found := f.cadences[key]; found {
 		return override
 	}
-	return defaultCadence
+	return []string{defaultCadence}
+}
+
+func (f *fakeScheduler) RunAtStartup(key string, fallback bool) bool {
+	if run, found := f.startup[key]; found {
+		return run
+	}
+	return fallback
+}
+
+func (f *fakeScheduler) SetRunAtStartup(_ context.Context, key string, run bool) error {
+	if f.startup == nil {
+		f.startup = map[string]bool{}
+	}
+	f.startup[key] = run
+	return nil
 }
 
 func (f *fakeScheduler) Enabled(key string) bool { return !f.disabled[key] }
 
-func (f *fakeScheduler) SetCadence(_ context.Context, key, cadence string) error {
+func (f *fakeScheduler) SetCadences(_ context.Context, key string, cadences []string) error {
 	if f.setCadenceErr != nil {
 		return f.setCadenceErr
 	}
 	if f.cadences == nil {
-		f.cadences = map[string]string{}
+		f.cadences = map[string][]string{}
 	}
-	f.cadences[key] = cadence
+	f.cadences[key] = cadences
 	return nil
 }
 
@@ -79,14 +96,17 @@ func containsTask(tasks []jobs.Task, key string) bool {
 }
 
 type scheduleBody struct {
-	Key            string `json:"key"`
-	Name           string `json:"name"`
-	Tier           string `json:"tier"`
-	DefaultCadence string `json:"default_cadence"`
-	Cadence        string `json:"cadence"`
-	Enabled        bool   `json:"enabled"`
-	SupportsFull   bool   `json:"supports_full"`
-	LastOutcome    string `json:"last_outcome"`
+	Key            string   `json:"key"`
+	Name           string   `json:"name"`
+	Tier           string   `json:"tier"`
+	DefaultCadence string   `json:"default_cadence"`
+	Cadences       []string `json:"cadences"`
+	Enabled        bool     `json:"enabled"`
+	SupportsFull   bool     `json:"supports_full"`
+	LastOutcome    string   `json:"last_outcome"`
+	Category       string   `json:"category"`
+	StartupOffered bool     `json:"startup_offered"`
+	RunAtStartup   bool     `json:"run_at_startup"`
 }
 
 func TestListSchedules_ReturnsEveryTaskWithItsEffectiveSettings(t *testing.T) {
@@ -106,7 +126,7 @@ func TestListSchedules_ReturnsEveryTaskWithItsEffectiveSettings(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &schedules); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(schedules) != 1 || schedules[0].Key != "scan" || schedules[0].Cadence != "*/30 * * * *" ||
+	if len(schedules) != 1 || schedules[0].Key != "scan" || !reflect.DeepEqual(schedules[0].Cadences, []string{"*/30 * * * *"}) ||
 		!schedules[0].Enabled || schedules[0].LastOutcome != "enqueued" {
 		t.Errorf("schedules = %+v", schedules)
 	}
@@ -161,7 +181,7 @@ func TestUpdateSchedule_OverridesCadenceAndEnabledIndependently(t *testing.T) {
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
 
-	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/schedules/scan", `{"cadence":"0 * * * *"}`))
+	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/schedules/scan", `{"cadences":["0 11 * * *","0 23 * * *"]}`))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
 	}
@@ -169,7 +189,7 @@ func TestUpdateSchedule_OverridesCadenceAndEnabledIndependently(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &updated); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if updated.Cadence != "0 * * * *" || !updated.Enabled {
+	if !reflect.DeepEqual(updated.Cadences, []string{"0 11 * * *", "0 23 * * *"}) || !updated.Enabled {
 		t.Errorf("updated = %+v, want cadence overridden and enabled left alone", updated)
 	}
 
@@ -180,7 +200,7 @@ func TestUpdateSchedule_OverridesCadenceAndEnabledIndependently(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &updated); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if updated.Enabled || updated.Cadence != "0 * * * *" {
+	if updated.Enabled || len(updated.Cadences) != 2 {
 		t.Errorf("updated = %+v, want disabled with the cadence override still in place", updated)
 	}
 }
@@ -215,7 +235,7 @@ func TestUpdateSchedule_MapsAnInvalidCadenceTo400(t *testing.T) {
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
 
-	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/schedules/scan", `{"cadence":"nonsense"}`))
+	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/schedules/scan", `{"cadences":["nonsense"]}`))
 	if recorder.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400 (%s)", recorder.Code, recorder.Body)
 	}
@@ -317,5 +337,32 @@ func TestRunSchedule_MapsNoFullModeTo400(t *testing.T) {
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/schedules/enrichment/run?full=true", ``))
 	if recorder.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+// Run at startup is set only where offered, and reported off where it is not.
+func TestUpdateSchedule_RunAtStartupOnlyWhereOffered(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.scheduler.tasks = []jobs.Task{
+		{Key: "scan", DefaultCadence: "*/30 * * * *", Category: jobs.CategoryLibrary, Startup: jobs.StartupOn},
+		{Key: "backup", DefaultCadence: "0 1 * * *", Category: jobs.CategoryMaintenance},
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/schedules/scan", `{"run_at_startup":false}`))
+	var updated scheduleBody
+	if err := json.Unmarshal(recorder.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("unmarshal: %v (%s)", err, recorder.Body)
+	}
+	want := scheduleBody{Key: "scan", DefaultCadence: "*/30 * * * *", Cadences: []string{"*/30 * * * *"},
+		Enabled: true, Category: "library", StartupOffered: true, RunAtStartup: false}
+	if !reflect.DeepEqual(updated, want) {
+		t.Errorf("updated = %+v\nwant      %+v", updated, want)
+	}
+
+	recorder = fixture.do(authedPatch(t, cookies, "/api/v1/schedules/backup", `{"run_at_startup":true}`))
+	if recorder.Code != http.StatusBadRequest {
+		t.Errorf("run_at_startup on a task that does not offer it: status %d, want 400", recorder.Code)
 	}
 }

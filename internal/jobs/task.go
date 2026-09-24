@@ -39,7 +39,35 @@ type Task struct {
 	// payload every task would have to grow a case for -- scan is still the
 	// only task that needs one.
 	RunFull func(context.Context) (EnqueueResult, error)
+	// Category groups the task on the scheduler screen.
+	Category TaskCategory
+	// Startup says whether "run at startup" is offered, and its default.
+	Startup Startup
 }
+
+// TaskCategory groups tasks on the scheduler screen.
+type TaskCategory string
+
+// The scheduler screen's groups, in the order it shows them.
+const (
+	CategoryLibrary     TaskCategory = "library"
+	CategoryMetadata    TaskCategory = "metadata"
+	CategoryDownloads   TaskCategory = "downloads"
+	CategoryStatistics  TaskCategory = "statistics"
+	CategoryMaintenance TaskCategory = "maintenance"
+)
+
+// Startup is whether a task may fire once when the process starts.
+type Startup string
+
+const (
+	// StartupNotOffered is a task for which running at startup makes no sense, such as a backup.
+	StartupNotOffered Startup = ""
+	// StartupOn runs at startup unless the user switches it off.
+	StartupOn Startup = "on"
+	// StartupOff is offered but off unless the user switches it on.
+	StartupOff Startup = "off"
+)
 
 // TaskRegistry holds every registered periodic action. One instance for the
 // whole process, built once at startup -- the same MustRegister-at-init
@@ -47,6 +75,7 @@ type Task struct {
 type TaskRegistry struct {
 	mu    sync.RWMutex
 	tasks map[string]Task
+	order []string
 }
 
 // NewTaskRegistry returns an empty registry.
@@ -62,6 +91,11 @@ func (r *TaskRegistry) Register(task Task) error {
 	if task.Enqueue == nil {
 		return fmt.Errorf("jobs: task %s has no Enqueue function", task.Key)
 	}
+	switch task.Category {
+	case CategoryLibrary, CategoryMetadata, CategoryDownloads, CategoryStatistics, CategoryMaintenance:
+	default:
+		return fmt.Errorf("jobs: task %s has no valid category: %q", task.Key, task.Category)
+	}
 	if _, err := cronParser.Parse(task.DefaultCadence); err != nil {
 		return fmt.Errorf("jobs: task %s default cadence %q: %w", task.Key, task.DefaultCadence, err)
 	}
@@ -72,6 +106,7 @@ func (r *TaskRegistry) Register(task Task) error {
 		return fmt.Errorf("jobs: task %s is already registered", task.Key)
 	}
 	r.tasks[task.Key] = task
+	r.order = append(r.order, task.Key)
 	return nil
 }
 
@@ -103,5 +138,17 @@ func (r *TaskRegistry) All() []Task {
 		tasks = append(tasks, task)
 	}
 	sort.Slice(tasks, func(i, j int) bool { return tasks[i].Key < tasks[j].Key })
+	return tasks
+}
+
+// InRegistrationOrder lists every task in the order it was registered, which is the order a
+// startup run enqueues them in.
+func (r *TaskRegistry) InRegistrationOrder() []Task {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	tasks := make([]Task, 0, len(r.order))
+	for _, key := range r.order {
+		tasks = append(tasks, r.tasks[key])
+	}
 	return tasks
 }

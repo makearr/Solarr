@@ -1,41 +1,52 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Play } from "lucide-react";
+import { Play, Plus, X } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { isTierVisible, useTier } from "@/lib/useTier";
 
 type Schedule = components["schemas"]["Schedule"];
 
-/** A cadence expressed the way a person thinks about it, not as a five-field
- *  cron string -- asked for 2026-09-11 (Jellyfin's own Scheduled Tasks
- *  trigger editor was the reference). Only the three shapes every registered
- *  task in this codebase actually uses are given friendly editors; anything
- *  else (a real cron expression with steps, ranges or a day-of-week/month
- *  restriction) falls back to "Advanced" so it stays editable rather than
- *  becoming unrepresentable. */
+/** A cadence expressed the way a person thinks about it, not as a five-field cron string (asked
+ *  for 2026-09-11, Jellyfin's trigger editor as the reference; weekly and monthly 2026-09-19).
+ *  Anything else stays editable as "Advanced" rather than becoming unrepresentable. */
 type Trigger =
   | { mode: "minutes"; minutes: number }
-  | { mode: "hours"; hours: number }
+  | { mode: "hours"; hours: number; minute: number }
   | { mode: "daily"; hour: number; minute: number }
+  | { mode: "weekly"; weekday: number; hour: number; minute: number }
+  | { mode: "monthly"; day: number; hour: number; minute: number }
   | { mode: "advanced"; cadence: string };
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const number = /^\d+$/;
 
 function parseCadence(cadence: string): Trigger {
   const fields = cadence.trim().split(/\s+/);
   if (fields.length !== 5) return { mode: "advanced", cadence };
   const [minute, hour, dayOfMonth, month, dayOfWeek] = fields as [string, string, string, string, string];
-  if (dayOfMonth !== "*" || month !== "*" || dayOfWeek !== "*") return { mode: "advanced", cadence };
+  if (month !== "*") return { mode: "advanced", cadence };
 
   const everyMinutes = /^\*\/(\d+)$/.exec(minute);
-  if (everyMinutes && hour === "*") {
+  if (everyMinutes && hour === "*" && dayOfMonth === "*" && dayOfWeek === "*") {
     return { mode: "minutes", minutes: Number(everyMinutes[1]) };
   }
-  const everyHours = /^\*\/(\d+)$/.exec(hour);
-  if (everyHours && /^\d+$/.test(minute)) {
-    return { mode: "hours", hours: Number(everyHours[1]) };
+  if (!number.test(minute)) return { mode: "advanced", cadence };
+  const at = { minute: Number(minute) };
+  if (dayOfMonth === "*" && dayOfWeek === "*") {
+    if (hour === "*") return { mode: "hours", hours: 1, ...at };
+    const everyHours = /^\*\/(\d+)$/.exec(hour);
+    if (everyHours) return { mode: "hours", hours: Number(everyHours[1]), ...at };
+    if (number.test(hour)) return { mode: "daily", hour: Number(hour), ...at };
   }
-  if (/^\d+$/.test(minute) && /^\d+$/.test(hour)) {
-    return { mode: "daily", hour: Number(hour), minute: Number(minute) };
+  if (!number.test(hour)) return { mode: "advanced", cadence };
+  if (dayOfMonth === "*" && /^[0-6]$/.test(dayOfWeek)) {
+    return { mode: "weekly", weekday: Number(dayOfWeek), hour: Number(hour), ...at };
+  }
+  if (dayOfWeek === "*" && number.test(dayOfMonth)) {
+    return { mode: "monthly", day: Number(dayOfMonth), hour: Number(hour), ...at };
   }
   return { mode: "advanced", cadence };
 }
@@ -45,26 +56,47 @@ function cadenceOf(trigger: Trigger): string {
     case "minutes":
       return `*/${trigger.minutes} * * * *`;
     case "hours":
-      return `0 */${trigger.hours} * * *`;
+      return trigger.hours === 1 ? `${trigger.minute} * * * *` : `${trigger.minute} */${trigger.hours} * * *`;
     case "daily":
       return `${trigger.minute} ${trigger.hour} * * *`;
+    case "weekly":
+      return `${trigger.minute} ${trigger.hour} * * ${trigger.weekday}`;
+    case "monthly":
+      return `${trigger.minute} ${trigger.hour} ${trigger.day} * *`;
     case "advanced":
       return trigger.cadence;
   }
 }
 
+const clock = (hour: number, minute: number) =>
+  `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+
 function describeTrigger(trigger: Trigger): string {
   switch (trigger.mode) {
     case "minutes":
       return trigger.minutes === 1 ? "Every minute" : `Every ${trigger.minutes} minutes`;
-    case "hours":
-      return trigger.hours === 1 ? "Every hour" : `Every ${trigger.hours} hours`;
+    case "hours": {
+      const past = trigger.minute === 0 ? "on the hour" : `at :${String(trigger.minute).padStart(2, "0")}`;
+      return trigger.hours === 1 ? `Every hour, ${past}` : `Every ${trigger.hours} hours, ${past}`;
+    }
     case "daily":
-      return `Daily at ${String(trigger.hour).padStart(2, "0")}:${String(trigger.minute).padStart(2, "0")}`;
+      return `Daily at ${clock(trigger.hour, trigger.minute)}`;
+    case "weekly":
+      return `${WEEKDAYS[trigger.weekday]}s at ${clock(trigger.hour, trigger.minute)}`;
+    case "monthly":
+      return `Day ${trigger.day} of each month at ${clock(trigger.hour, trigger.minute)}`;
     case "advanced":
       return trigger.cadence;
   }
 }
+
+const CATEGORIES: readonly { id: Schedule["category"]; label: string }[] = [
+  { id: "library", label: "Library" },
+  { id: "metadata", label: "Metadata" },
+  { id: "downloads", label: "Downloads" },
+  { id: "statistics", label: "Statistics" },
+  { id: "maintenance", label: "Maintenance" },
+];
 
 /** todo 4.19, ADR-59: every periodic action this process runs, made visible
  *  and runnable from the interface -- seven schedules existed with no
@@ -85,6 +117,7 @@ export function SchedulerPage() {
 
 export function Scheduler() {
   const queryClient = useQueryClient();
+  const tier = useTier();
   const schedules = useQuery({
     queryKey: ["schedules"],
     queryFn: async () => {
@@ -98,10 +131,10 @@ export function Scheduler() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["schedules"] });
 
   const update = useMutation({
-    mutationFn: async (args: { key: string; cadence?: string; enabled?: boolean }) => {
+    mutationFn: async (args: { key: string; cadences?: string[]; enabled?: boolean; runAtStartup?: boolean }) => {
       const { error } = await api.PATCH("/schedules/{key}", {
         params: { path: { key: args.key } },
-        body: { cadence: args.cadence, enabled: args.enabled },
+        body: { cadences: args.cadences, enabled: args.enabled, run_at_startup: args.runAtStartup },
       });
       if (error) throw error;
     },
@@ -119,34 +152,46 @@ export function Scheduler() {
   });
 
   if (schedules.error !== null) return null;
+  const visible = (schedules.data ?? []).filter((schedule) => isTierVisible(tier, schedule.tier));
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Scheduler</h2>
+    <section className="flex flex-col gap-4">
       <p className="text-xs text-ink-muted">
-        Every periodic action this process runs. Cadence is a five-field cron expression; Run now
-        fires immediately and is refused, not double-queued, while a fire is already in flight.
+        Every periodic action Solarr runs. A task can run at several times; Run now fires at once and
+        is refused, not queued twice, while it is already running.
       </p>
 
-      {schedules.data && schedules.data.length > 0 ? (
-        <ul className="flex flex-col gap-2">
-          {schedules.data.map((schedule) => (
-            <ScheduleRow
-              key={schedule.key}
-              schedule={schedule}
-              onSaveCadence={(cadence) => update.mutate({ key: schedule.key, cadence })}
-              onToggleEnabled={() => update.mutate({ key: schedule.key, enabled: !schedule.enabled })}
-              onRunNow={() => run.mutate({ key: schedule.key })}
-              onRunFull={() => run.mutate({ key: schedule.key, full: true })}
-              busy={update.isPending || run.isPending}
-            />
-          ))}
-        </ul>
-      ) : (
+      {visible.length === 0 && (
         <p className="rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">
           No task is registered.
         </p>
       )}
+
+      {CATEGORIES.map((category) => {
+        const tasks = visible.filter((schedule) => schedule.category === category.id);
+        if (tasks.length === 0) return null;
+        return (
+          <div key={category.id} className="flex flex-col gap-2">
+            <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">{category.label}</h2>
+            <ul className="flex flex-col gap-2">
+              {tasks.map((schedule) => (
+                <ScheduleRow
+                  key={`${schedule.key}:${schedule.cadences.join("|")}`}
+                  schedule={schedule}
+                  onSaveCadences={(cadences) => update.mutate({ key: schedule.key, cadences })}
+                  onToggleEnabled={() => update.mutate({ key: schedule.key, enabled: !schedule.enabled })}
+                  onToggleStartup={() =>
+                    update.mutate({ key: schedule.key, runAtStartup: !schedule.run_at_startup })
+                  }
+                  onRunNow={() => run.mutate({ key: schedule.key })}
+                  onRunFull={() => run.mutate({ key: schedule.key, full: true })}
+                  busy={update.isPending || run.isPending}
+                />
+              ))}
+            </ul>
+          </div>
+        );
+      })}
 
       {(update.isError || run.isError) && (
         <p className="text-xs text-danger">That change was refused.</p>
@@ -157,22 +202,24 @@ export function Scheduler() {
 
 function ScheduleRow({
   schedule,
-  onSaveCadence,
+  onSaveCadences,
   onToggleEnabled,
+  onToggleStartup,
   onRunNow,
   onRunFull,
   busy,
 }: {
   schedule: Schedule;
-  onSaveCadence: (cadence: string) => void;
+  onSaveCadences: (cadences: string[]) => void;
   onToggleEnabled: () => void;
+  onToggleStartup: () => void;
   onRunNow: () => void;
   onRunFull: () => void;
   busy: boolean;
 }) {
-  const [trigger, setTrigger] = useState<Trigger>(() => parseCadence(schedule.cadence));
-  const cadence = cadenceOf(trigger);
-  const dirty = cadence !== schedule.cadence;
+  const [triggers, setTriggers] = useState<Trigger[]>(() => schedule.cadences.map(parseCadence));
+  const cadences = triggers.map(cadenceOf);
+  const dirty = cadences.join("|") !== schedule.cadences.join("|");
 
   return (
     <li className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
@@ -234,17 +281,17 @@ function ScheduleRow({
           enabled
         </label>
 
-        <TriggerEditor trigger={trigger} onChange={setTrigger} busy={busy} />
-        {dirty && (
-          <button
-            type="button"
-            onClick={() => onSaveCadence(cadence)}
-            disabled={busy}
-            className="rounded-md bg-accent px-2 py-1 text-accent-ink disabled:opacity-50
-                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            Save
-          </button>
+        {schedule.startup_offered && (
+          <label className="flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={schedule.run_at_startup}
+              disabled={busy}
+              onChange={onToggleStartup}
+              className="size-3.5"
+            />
+            run at startup
+          </label>
         )}
 
         <span className="ml-auto">
@@ -253,6 +300,73 @@ function ScheduleRow({
               (schedule.last_duration_ms !== undefined ? ` (${schedule.last_duration_ms}ms)` : "")
             : "never run"}
           {schedule.next_run_at && ` · next ${new Date(schedule.next_run_at).toLocaleString()}`}
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-1.5 text-xs text-ink-muted">
+        {triggers.map((trigger, index) => (
+          <span key={index} className="flex flex-wrap items-center gap-1.5">
+            <TriggerEditor
+              trigger={trigger}
+              busy={busy}
+              onChange={(next) => setTriggers(triggers.map((entry, at) => (at === index ? next : entry)))}
+            />
+            {triggers.length > 1 && (
+              <button
+                type="button"
+                aria-label={`Remove schedule ${describeTrigger(trigger)}`}
+                disabled={busy}
+                onClick={() => setTriggers(triggers.filter((_, at) => at !== index))}
+                className="rounded p-0.5 text-ink-muted hover:text-danger disabled:opacity-50"
+              >
+                <X aria-hidden className="size-3.5" />
+              </button>
+            )}
+          </span>
+        ))}
+        <span className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={busy || triggers.length >= 12}
+            onClick={() => setTriggers([...triggers, { mode: "daily", hour: 12, minute: 0 }])}
+            className="flex w-fit items-center gap-1 rounded-md border border-border-subtle px-2 py-0.5
+                       hover:text-ink disabled:opacity-50"
+          >
+            <Plus aria-hidden className="size-3.5" />
+            Add a time
+          </button>
+          {dirty && (
+            <>
+              <button
+                type="button"
+                onClick={() => onSaveCadences(cadences)}
+                disabled={busy}
+                className="rounded-md bg-accent px-2 py-0.5 text-accent-ink disabled:opacity-50
+                           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setTriggers(schedule.cadences.map(parseCadence))}
+                disabled={busy}
+                className="rounded-md border border-border-subtle px-2 py-0.5 hover:text-ink"
+              >
+                Undo
+              </button>
+            </>
+          )}
+          {schedule.cadences.join("|") !== schedule.default_cadence && !dirty && (
+            <button
+              type="button"
+              onClick={() => onSaveCadences([schedule.default_cadence])}
+              disabled={busy}
+              title={describeTrigger(parseCadence(schedule.default_cadence))}
+              className="rounded-md border border-border-subtle px-2 py-0.5 hover:text-ink"
+            >
+              Reset to default
+            </button>
+          )}
         </span>
       </div>
 
@@ -267,13 +381,7 @@ const triggerInputStyle =
   "rounded-md border border-border-subtle bg-canvas px-1.5 py-1 text-xs text-ink " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
-/** The friendly editor for the three cadence shapes this codebase's own
- *  registered tasks actually use (Jellyfin 12's Scheduled Tasks trigger
- *  editor is the reference, asked for by name 2026-09-11): every N minutes,
- *  every N hours, or daily at a time. "Advanced" edits the raw cron
- *  expression directly -- reached automatically for any cadence that does
- *  not match one of the three friendly shapes, so nothing already configured
- *  becomes silently unrepresentable. */
+/** One trigger's editor; "Advanced" edits the raw cron expression for any shape the others cannot show. */
 function TriggerEditor({
   trigger,
   onChange,
@@ -295,10 +403,16 @@ function TriggerEditor({
               onChange({ mode, minutes: 15 });
               break;
             case "hours":
-              onChange({ mode, hours: 1 });
+              onChange({ mode, hours: 1, minute: 0 });
               break;
             case "daily":
               onChange({ mode, hour: 3, minute: 0 });
+              break;
+            case "weekly":
+              onChange({ mode, weekday: 0, hour: 3, minute: 0 });
+              break;
+            case "monthly":
+              onChange({ mode, day: 1, hour: 3, minute: 0 });
               break;
             case "advanced":
               onChange({ mode, cadence: cadenceOf(trigger) });
@@ -310,6 +424,8 @@ function TriggerEditor({
         <option value="minutes">Every (minutes)</option>
         <option value="hours">Every (hours)</option>
         <option value="daily">Daily at</option>
+        <option value="weekly">Weekly on</option>
+        <option value="monthly">Monthly on day</option>
         <option value="advanced">Advanced (cron)</option>
       </select>
 
@@ -325,24 +441,69 @@ function TriggerEditor({
         />
       )}
       {trigger.mode === "hours" && (
+        <>
+          <input
+            type="number"
+            min={1}
+            max={23}
+            aria-label="Hours between runs"
+            value={trigger.hours}
+            disabled={busy}
+            onChange={(event) => onChange({ ...trigger, hours: Number(event.target.value) || 1 })}
+            className={`${triggerInputStyle} w-16`}
+          />
+          at minute
+          <input
+            type="number"
+            min={0}
+            max={59}
+            aria-label="Minute past the hour"
+            value={trigger.minute}
+            disabled={busy}
+            onChange={(event) => onChange({ ...trigger, minute: Math.min(59, Number(event.target.value) || 0) })}
+            className={`${triggerInputStyle} w-16`}
+          />
+        </>
+      )}
+      {trigger.mode === "weekly" && (
+        <select
+          aria-label="Day of the week"
+          value={trigger.weekday}
+          disabled={busy}
+          onChange={(event) => onChange({ ...trigger, weekday: Number(event.target.value) })}
+          className={triggerInputStyle}
+        >
+          {WEEKDAYS.map((day, index) => (
+            <option key={day} value={index}>
+              {day}
+            </option>
+          ))}
+        </select>
+      )}
+      {trigger.mode === "monthly" && (
         <input
           type="number"
           min={1}
-          max={23}
-          value={trigger.hours}
+          max={28}
+          aria-label="Day of the month"
+          title="Up to the 28th, so it runs every month"
+          value={trigger.day}
           disabled={busy}
-          onChange={(event) => onChange({ mode: "hours", hours: Number(event.target.value) || 1 })}
+          onChange={(event) =>
+            onChange({ ...trigger, day: Math.min(28, Math.max(1, Number(event.target.value) || 1)) })
+          }
           className={`${triggerInputStyle} w-16`}
         />
       )}
-      {trigger.mode === "daily" && (
+      {(trigger.mode === "daily" || trigger.mode === "weekly" || trigger.mode === "monthly") && (
         <input
           type="time"
-          value={`${String(trigger.hour).padStart(2, "0")}:${String(trigger.minute).padStart(2, "0")}`}
+          aria-label="Time of day"
+          value={clock(trigger.hour, trigger.minute)}
           disabled={busy}
           onChange={(event) => {
             const [hour, minute] = event.target.value.split(":").map(Number);
-            onChange({ mode: "daily", hour: hour || 0, minute: minute || 0 });
+            onChange({ ...trigger, hour: hour || 0, minute: minute || 0 });
           }}
           className={triggerInputStyle}
         />

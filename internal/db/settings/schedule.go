@@ -2,7 +2,10 @@ package settings
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -27,15 +30,32 @@ var scheduleCronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cro
 func scheduleCadenceKey(taskKey string) string { return "schedule." + taskKey + ".cadence" }
 func scheduleEnabledKey(taskKey string) string { return "schedule." + taskKey + ".enabled" }
 
-// ScheduleCadence answers a task's effective cron expression: a stored
-// override if one exists, defaultCadence otherwise. An absent override means
-// "use the registry's own default", not "invalid" -- the same reasoning
-// ImportAutoCommitConfidence's own doc comment gives.
-func (s *Snapshot) ScheduleCadence(taskKey, defaultCadence string) string {
-	if value, found := s.policy[scheduleCadenceKey(taskKey)]; found {
-		return value
+// maxScheduleCadences bounds how many times of day one task may be given.
+const maxScheduleCadences = 12
+
+func scheduleStartupKey(taskKey string) string { return "schedule." + taskKey + ".run_at_startup" }
+
+// ScheduleCadences answers a task's effective cron expressions: the stored override, or the
+// default. A value stored before several were allowed is one bare expression.
+func (s *Snapshot) ScheduleCadences(taskKey, defaultCadence string) []string {
+	value, found := s.policy[scheduleCadenceKey(taskKey)]
+	if !found || value == "" {
+		return []string{defaultCadence}
 	}
-	return defaultCadence
+	if !strings.HasPrefix(value, "[") {
+		return []string{value}
+	}
+	var cadences []string
+	if err := json.Unmarshal([]byte(value), &cadences); err != nil || len(cadences) == 0 {
+		return []string{defaultCadence}
+	}
+	return cadences
+}
+
+// ScheduleRunAtStartup answers whether a task fires once when Solarr starts; fallback is the
+// task's own default.
+func (s *Snapshot) ScheduleRunAtStartup(taskKey string, fallback bool) bool {
+	return s.policyBool(scheduleStartupKey(taskKey), fallback)
 }
 
 // ScheduleEnabled answers whether a task should fire. Absent means true: a
@@ -48,21 +68,45 @@ func (s *Snapshot) ScheduleEnabled(taskKey string) bool {
 	return value != "false"
 }
 
-// SetScheduleCadence overrides one task's cadence (ADR-59, ADR-44: validated
-// on write). Rejects both a cron expression that fails to parse and one
-// that parses but can never fire -- a nonexistent calendar date like the
-// 30du of February -- since either would otherwise be accepted and then
-// silently never run.
-func (c *Cache) SetScheduleCadence(ctx context.Context, cl clock.Clock, taskKey, cadence string) error {
-	if problems := validateScheduleCadence(cadence, cl.Now()); len(problems) > 0 {
+// SetScheduleCadences overrides one task's cron expressions (ADR-59, ADR-44: validated on
+// write); the task fires at the earliest of them.
+func (c *Cache) SetScheduleCadences(ctx context.Context, cl clock.Clock, taskKey string, cadences []string) error {
+	if problems := validateScheduleCadences(cadences, cl.Now()); len(problems) > 0 {
 		return problems
 	}
-	return c.setPolicy(ctx, cl, scheduleCadenceKey(taskKey), cadence)
+	encoded, err := json.Marshal(cadences)
+	if err != nil {
+		return err
+	}
+	return c.setPolicy(ctx, cl, scheduleCadenceKey(taskKey), string(encoded))
+}
+
+// SetScheduleRunAtStartup sets whether a task fires once when Solarr starts.
+func (c *Cache) SetScheduleRunAtStartup(ctx context.Context, cl clock.Clock, taskKey string, run bool) error {
+	return c.setPolicy(ctx, cl, scheduleStartupKey(taskKey), strconv.FormatBool(run))
 }
 
 // SetScheduleEnabled enables or disables one task.
 func (c *Cache) SetScheduleEnabled(ctx context.Context, cl clock.Clock, taskKey string, enabled bool) error {
 	return c.setPolicy(ctx, cl, scheduleEnabledKey(taskKey), strconv.FormatBool(enabled))
+}
+
+func validateScheduleCadences(cadences []string, now time.Time) config.Problems {
+	if len(cadences) == 0 || len(cadences) > maxScheduleCadences {
+		return config.Problems{{Path: "cadences", Value: strconv.Itoa(len(cadences)),
+			Expectation: fmt.Sprintf("between 1 and %d schedules", maxScheduleCadences)}}
+	}
+	var problems config.Problems
+	seen := make(map[string]bool, len(cadences))
+	for _, cadence := range cadences {
+		if seen[cadence] {
+			problems = append(problems, config.Problem{Path: "cadences", Value: cadence, Expectation: "each schedule once"})
+			continue
+		}
+		seen[cadence] = true
+		problems = append(problems, validateScheduleCadence(cadence, now)...)
+	}
+	return problems
 }
 
 func validateScheduleCadence(cadence string, now time.Time) config.Problems {

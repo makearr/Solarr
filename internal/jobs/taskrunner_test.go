@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -17,19 +18,27 @@ import (
 // fakeScheduleSource is a settings.Cache stand-in: an in-memory override map
 // plus a disabled set, matching ScheduleSource's own contract.
 type fakeScheduleSource struct {
-	cadence  map[string]string
+	cadence  map[string][]string
 	disabled map[string]bool
+	startup  map[string]bool
 }
 
 func newFakeScheduleSource() *fakeScheduleSource {
-	return &fakeScheduleSource{cadence: map[string]string{}, disabled: map[string]bool{}}
+	return &fakeScheduleSource{cadence: map[string][]string{}, disabled: map[string]bool{}, startup: map[string]bool{}}
 }
 
-func (f *fakeScheduleSource) Cadence(taskKey, defaultCadence string) string {
+func (f *fakeScheduleSource) Cadences(taskKey, defaultCadence string) []string {
 	if override, found := f.cadence[taskKey]; found {
 		return override
 	}
-	return defaultCadence
+	return []string{defaultCadence}
+}
+
+func (f *fakeScheduleSource) RunAtStartup(taskKey string, fallback bool) bool {
+	if run, found := f.startup[taskKey]; found {
+		return run
+	}
+	return fallback
 }
 
 func (f *fakeScheduleSource) Enabled(taskKey string) bool { return !f.disabled[taskKey] }
@@ -207,7 +216,7 @@ func TestTaskRunner_DisabledTaskTicksWithoutFiring(t *testing.T) {
 func TestTaskRunner_UsesTheOverriddenCadence(t *testing.T) {
 	states, fake := newScheduleStates(t)
 	source := newFakeScheduleSource()
-	source.cadence["scan"] = "*/2 * * * *" // every two minutes, not every one
+	source.cadence["scan"] = []string{"*/2 * * * *"} // every two minutes, not every one
 	fired := make(chan struct{}, 10)
 	task := jobs.Task{Key: "scan", DefaultCadence: "* * * * *", Enqueue: func(context.Context) (jobs.EnqueueResult, error) {
 		fired <- struct{}{}
@@ -370,5 +379,62 @@ func TestTaskRunner_StopsWhenContextEnds(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("Run did not return after its context ended")
+	}
+}
+
+// Several schedules fire at whichever comes first ("11:00 and 23:00", 2026-09-19 review).
+func TestTaskRunner_FiresAtTheEarliestOfSeveralCadences(t *testing.T) {
+	states, fake := newScheduleStates(t)
+	source := newFakeScheduleSource()
+	source.cadence["scan"] = []string{"0 23 * * *", "0 11 * * *"}
+	fired := make(chan struct{}, 10)
+	task := jobs.Task{Key: "scan", DefaultCadence: "* * * * *", Enqueue: func(context.Context) (jobs.EnqueueResult, error) {
+		fired <- struct{}{}
+		return jobs.EnqueueResult{}, nil
+	}}
+	runner := jobs.NewTaskRunner(task, source, states, fake, quietLogger())
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runner.Run(ctx)
+	}()
+	fake.BlockUntilWaiters(1)
+	fake.Advance(11 * time.Hour)
+	select {
+	case <-fired:
+	case <-time.After(5 * time.Second):
+		t.Fatal("did not fire at 11:00, the earlier of the two schedules")
+	}
+	cancel()
+	<-done
+}
+
+// Startup fires only a task that offers it, has it on, and is enabled.
+func TestTaskRunner_StartupFiresOnlyWhenOfferedOnAndEnabled(t *testing.T) {
+	states, fake := newScheduleStates(t)
+	source := newFakeScheduleSource()
+	source.startup["switched_on"] = true
+	source.startup["not_offered"] = true
+	source.disabled["disabled"] = true
+
+	var fired []string
+	for _, task := range []jobs.Task{
+		{Key: "default_on", Startup: jobs.StartupOn},
+		{Key: "default_off", Startup: jobs.StartupOff},
+		{Key: "switched_on", Startup: jobs.StartupOff},
+		{Key: "not_offered", Startup: jobs.StartupNotOffered},
+		{Key: "disabled", Startup: jobs.StartupOn},
+	} {
+		task.DefaultCadence = "0 0 1 1 *"
+		task.Enqueue = func(context.Context) (jobs.EnqueueResult, error) {
+			fired = append(fired, task.Key)
+			return jobs.EnqueueResult{}, nil
+		}
+		jobs.NewTaskRunner(task, source, states, fake, quietLogger()).Startup(t.Context())
+	}
+	if want := []string{"default_on", "switched_on"}; !reflect.DeepEqual(fired, want) {
+		t.Errorf("fired %v, want %v", fired, want)
 	}
 }
