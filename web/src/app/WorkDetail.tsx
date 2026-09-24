@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { useNavigate, useParams, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search as SearchIcon } from "lucide-react";
+import { Search as SearchIcon, Trash2 as TrashIcon } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -112,6 +113,21 @@ export function WorkDetail() {
       if (error) throw error;
     },
     onSuccess: invalidate,
+  });
+
+  const removeTrack = useMutation({
+    mutationFn: async ({ partId, deleteFiles }: { partId: number; deleteFiles: boolean }) => {
+      if (id === undefined) return;
+      const { error } = await api.POST("/works/{id}/parts/{partId}/remove", {
+        params: { path: { id, partId } },
+        body: { delete_files: deleteFiles },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidate();
+      void queryClient.invalidateQueries({ queryKey: ["works"] });
+    },
   });
 
   const searchTrack = useMutation({
@@ -284,6 +300,8 @@ export function WorkDetail() {
             }
             searchPending={searchTrack.isPending ? searchTrack.variables : undefined}
             onSearch={(partId) => searchTrack.mutate(partId)}
+            removePending={removeTrack.isPending ? removeTrack.variables.partId : undefined}
+            onRemove={(partId, deleteFiles) => removeTrack.mutate({ partId, deleteFiles })}
           />
         )}
 
@@ -422,6 +440,8 @@ function PartsSection({
   onToggleMonitored,
   searchPending,
   onSearch,
+  removePending,
+  onRemove,
 }: {
   parts: readonly WorkPart[];
   discCount: number;
@@ -429,6 +449,8 @@ function PartsSection({
   onToggleMonitored: (partId: number, monitored: boolean) => void;
   searchPending: number | undefined;
   onSearch: (partId: number) => void;
+  removePending: number | undefined;
+  onRemove: (partId: number, deleteFiles: boolean) => void;
 }) {
   const [columns, setColumns] = usePreference<ColumnKey[]>("album.columns", []);
   const present = parts.filter((part) => part.file != null).length;
@@ -462,6 +484,8 @@ function PartsSection({
             onToggleMonitored={(monitored) => onToggleMonitored(part.id, monitored)}
             searching={searchPending === part.id}
             onSearch={() => onSearch(part.id)}
+            removing={removePending === part.id}
+            onRemove={(deleteFiles) => onRemove(part.id, deleteFiles)}
           />
         ))}
       </ul>
@@ -477,6 +501,8 @@ function PartRow({
   onToggleMonitored,
   searching,
   onSearch,
+  removing,
+  onRemove,
 }: {
   part: WorkPart;
   discCount: number;
@@ -485,65 +511,119 @@ function PartRow({
   onToggleMonitored: (monitored: boolean) => void;
   searching: boolean;
   onSearch: () => void;
+  removing: boolean;
+  onRemove: (deleteFiles: boolean) => void;
 }) {
   const file = part.file;
+  const title = part.title ?? part.media_ref;
+  const [confirming, setConfirming] = useState(false);
+  const [deleteFiles, setDeleteFiles] = useState(false);
   return (
-    <li className="flex items-center gap-3 px-3 py-2 text-sm">
-      <button
-        type="button"
-        role="switch"
-        aria-checked={part.monitored}
-        aria-label={part.monitored ? "Unmonitor this track" : "Monitor this track"}
-        disabled={pending}
-        onClick={() => onToggleMonitored(!part.monitored)}
-        className={`h-3.5 w-3.5 shrink-0 rounded-sm border disabled:cursor-default ${
-          part.monitored
-            ? "border-accent bg-accent"
-            : "border-border-subtle bg-transparent"
-        }`}
-      />
-      <span
-        aria-label={file ? "In the library" : "Missing"}
-        title={file ? "In the library" : "Missing"}
-        className={`size-2 shrink-0 rounded-full ${file ? "bg-ok" : "bg-danger"}`}
-      />
-      <span className="w-10 shrink-0 text-right font-mono text-xs tabular-nums text-ink-muted">
-        {formatTrackNumber(part.media_ref, part.sort_key, discCount)}
-      </span>
-      <span className="truncate">{part.title ?? part.media_ref}</span>
-      {part.runtime_ms != null && (
-        <span className="shrink-0 font-mono text-xs text-ink-muted">
-          {formatDuration(part.runtime_ms)}
+    <li className="flex flex-col">
+      <div className="flex items-center gap-3 px-3 py-2 text-sm">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={part.monitored}
+          aria-label={part.monitored ? "Unmonitor this track" : "Monitor this track"}
+          disabled={pending}
+          onClick={() => onToggleMonitored(!part.monitored)}
+          className={`h-3.5 w-3.5 shrink-0 rounded-sm border disabled:cursor-default ${
+            part.monitored
+              ? "border-accent bg-accent"
+              : "border-border-subtle bg-transparent"
+          }`}
+        />
+        <span
+          aria-label={file ? "In the library" : "Missing"}
+          title={file ? "In the library" : "Missing"}
+          className={`size-2 shrink-0 rounded-full ${file ? "bg-ok" : "bg-danger"}`}
+        />
+        <span className="w-10 shrink-0 text-right font-mono text-xs tabular-nums text-ink-muted">
+          {formatTrackNumber(part.media_ref, part.sort_key, discCount)}
         </span>
-      )}
-
-      <span className="ml-auto flex shrink-0 items-center gap-3 font-mono text-[0.6875rem] text-ink-muted">
-        {columns.includes("released") && <span className="w-20 text-right">{part.date ?? "--"}</span>}
-        {columns.includes("searched") && (
-          <span className="w-20 text-right">{formatLastSearched(part.wanted?.last_searched_at)}</span>
-        )}
-        {columns.includes("codec") && (
-          <span className="w-16 text-right">{file?.audio_codec ?? file?.video_codec ?? "--"}</span>
-        )}
-        {columns.includes("bitrate") && (
-          <span className="w-20 text-right">
-            {file && file.bitrate_kbps > 0 ? `${file.bitrate_kbps} kbps` : "--"}
+        <span className="truncate">{title}</span>
+        {part.runtime_ms != null && (
+          <span className="shrink-0 font-mono text-xs text-ink-muted">
+            {formatDuration(part.runtime_ms)}
           </span>
         )}
-      </span>
 
-      <button
-        type="button"
-        aria-label={`Search for ${part.title ?? part.media_ref}`}
-        title="Want this track on its own and search every indexer for it"
-        disabled={searching}
-        onClick={onSearch}
-        className="flex shrink-0 items-center gap-1 rounded-full border border-border-subtle px-1.5 py-0.5
-                   text-[0.6875rem] text-ink-muted hover:text-ink disabled:opacity-50"
-      >
-        <SearchIcon aria-hidden className="size-3" />
-        {searching ? "Searching…" : "Search"}
-      </button>
+        <span className="ml-auto flex shrink-0 items-center gap-3 font-mono text-[0.6875rem] text-ink-muted">
+          {columns.includes("released") && <span className="w-20 text-right">{part.date ?? "--"}</span>}
+          {columns.includes("searched") && (
+            <span className="w-20 text-right">{formatLastSearched(part.wanted?.last_searched_at)}</span>
+          )}
+          {columns.includes("codec") && (
+            <span className="w-16 text-right">{file?.audio_codec ?? file?.video_codec ?? "--"}</span>
+          )}
+          {columns.includes("bitrate") && (
+            <span className="w-20 text-right">
+              {file && file.bitrate_kbps > 0 ? `${file.bitrate_kbps} kbps` : "--"}
+            </span>
+          )}
+        </span>
+
+        <button
+          type="button"
+          aria-label={`Search for ${part.title ?? part.media_ref}`}
+          title="Want this track on its own and search every indexer for it"
+          disabled={searching}
+          onClick={onSearch}
+          className="flex shrink-0 items-center gap-1 rounded-full border border-border-subtle px-1.5 py-0.5
+                     text-[0.6875rem] text-ink-muted hover:text-ink disabled:opacity-50"
+        >
+          <SearchIcon aria-hidden className="size-3" />
+          {searching ? "Searching…" : "Search"}
+        </button>
+        <button
+          type="button"
+          aria-label={`Delete ${title}`}
+          title="Delete this track"
+          aria-expanded={confirming}
+          onClick={() => setConfirming(!confirming)}
+          className="shrink-0 rounded p-0.5 text-ink-muted hover:text-danger"
+        >
+          <TrashIcon aria-hidden className="size-3.5" />
+        </button>
+      </div>
+      {confirming && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border-subtle bg-canvas px-3 py-2 text-xs">
+          <span>Stop wanting {title}?</span>
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={deleteFiles}
+              disabled={!file}
+              onChange={(event) => setDeleteFiles(event.target.checked)}
+            />
+            Also delete the file on disk
+            <span className="text-ink-muted">
+              {file ? "(it goes to quarantine and can be restored)" : "(there is none)"}
+            </span>
+          </label>
+          <span className="ml-auto flex gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="rounded-md border border-border-subtle px-2 py-0.5 text-ink-muted hover:text-ink"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={removing}
+              onClick={() => {
+                onRemove(deleteFiles && file != null);
+                setConfirming(false);
+              }}
+              className="rounded-md border border-danger px-2 py-0.5 text-danger disabled:opacity-50"
+            >
+              {removing ? "Deleting…" : "Delete"}
+            </button>
+          </span>
+        </div>
+      )}
     </li>
   );
 }

@@ -270,3 +270,41 @@ func (a WorksMonitor) RemoveWork(
 		FilesQuarantined: quarantined,
 	}, nil
 }
+
+// RemovePart stops wanting one track: the file goes to quarantine first, so the
+// album is recomputed without it, then the part is unmonitored and unwanted.
+func (a WorksMonitor) RemovePart(
+	ctx context.Context, workID, partID int64, deleteFiles bool,
+) (apiserver.RemovePartResult, error) {
+	detail, err := a.Works.Detail(ctx, workID)
+	if err != nil {
+		return apiserver.RemovePartResult{}, err
+	}
+	var part *library.PartDetail
+	for i := range detail.Parts {
+		if detail.Parts[i].Part.ID == partID {
+			part = &detail.Parts[i]
+			break
+		}
+	}
+	if part == nil {
+		return apiserver.RemovePartResult{}, fmt.Errorf("part %d of work %d: %w", partID, workID, sql.ErrNoRows)
+	}
+
+	var result apiserver.RemovePartResult
+	if deleteFiles && part.File != nil {
+		if err := a.Remover.QuarantineFile(ctx, part.File.MediaObjectID); err != nil {
+			return apiserver.RemovePartResult{}, err
+		}
+		result.FilesQuarantined = 1
+	}
+	if err := a.Desired.SetPartMonitored(ctx, workID, partID, false); err != nil {
+		return apiserver.RemovePartResult{}, err
+	}
+	if part.Wanted != nil && part.Wanted.Monitored {
+		if err := a.Desired.SetItemMonitored(ctx, part.Wanted.ID, false); err != nil {
+			return apiserver.RemovePartResult{}, err
+		}
+	}
+	return result, nil
+}

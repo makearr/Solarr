@@ -2123,6 +2123,12 @@ type RemoveAndBlockResult struct {
 	ReopenedItems []int64 `json:"reopened_items"`
 }
 
+// RemovePartResult What removing a track actually did.
+type RemovePartResult struct {
+	// FilesQuarantined How many files delete_files moved out of the library; 0 or 1.
+	FilesQuarantined int64 `json:"files_quarantined"`
+}
+
 // RemoveWorkResult What removing an album actually did.
 type RemoveWorkResult struct {
 	// FilesKept How many files the library still holds for this work.
@@ -2902,6 +2908,12 @@ type SetPartMonitoredJSONBody struct {
 	Monitored bool `json:"monitored"`
 }
 
+// RemovePartJSONBody defines parameters for RemovePart.
+type RemovePartJSONBody struct {
+	// DeleteFiles Also move this track's file into quarantine.
+	DeleteFiles *bool `json:"delete_files,omitempty"`
+}
+
 // SetTrackWantedJSONBody defines parameters for SetTrackWanted.
 type SetTrackWantedJSONBody struct {
 	Wanted bool `json:"wanted"`
@@ -3077,6 +3089,9 @@ type SetWorkMonitoredJSONRequestBody SetWorkMonitoredJSONBody
 
 // SetPartMonitoredJSONRequestBody defines body for SetPartMonitored for application/json ContentType.
 type SetPartMonitoredJSONRequestBody SetPartMonitoredJSONBody
+
+// RemovePartJSONRequestBody defines body for RemovePart for application/json ContentType.
+type RemovePartJSONRequestBody RemovePartJSONBody
 
 // SetTrackWantedJSONRequestBody defines body for SetTrackWanted for application/json ContentType.
 type SetTrackWantedJSONRequestBody SetTrackWantedJSONBody
@@ -3542,6 +3557,9 @@ type ServerInterface interface {
 	// Monitor or unmonitor a single part (track) of a work.
 	// (POST /works/{id}/parts/{partId}/monitor)
 	SetPartMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64)
+	// Stop wanting one track, and optionally delete its file. Administrator only.
+	// (POST /works/{id}/parts/{partId}/remove)
+	RemovePart(w http.ResponseWriter, r *http.Request, id int64, partId int64)
 	// Search every configured indexer for this one track.
 	// (POST /works/{id}/parts/{partId}/search)
 	SearchTrack(w http.ResponseWriter, r *http.Request, id int64, partId int64)
@@ -4469,6 +4487,12 @@ func (_ Unimplemented) SetWorkMonitored(w http.ResponseWriter, r *http.Request, 
 // Monitor or unmonitor a single part (track) of a work.
 // (POST /works/{id}/parts/{partId}/monitor)
 func (_ Unimplemented) SetPartMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Stop wanting one track, and optionally delete its file. Administrator only.
+// (POST /works/{id}/parts/{partId}/remove)
+func (_ Unimplemented) RemovePart(w http.ResponseWriter, r *http.Request, id int64, partId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9207,6 +9231,48 @@ func (siw *ServerInterfaceWrapper) SetPartMonitored(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// RemovePart operation middleware
+func (siw *ServerInterfaceWrapper) RemovePart(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "partId" -------------
+	var partId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "partId", chi.URLParam(r, "partId"), &partId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "partId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemovePart(w, r, id, partId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SearchTrack operation middleware
 func (siw *ServerInterfaceWrapper) SearchTrack(w http.ResponseWriter, r *http.Request) {
 
@@ -9925,6 +9991,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/monitor", wrapper.SetPartMonitored)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/remove", wrapper.RemovePart)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/search", wrapper.SearchTrack)
