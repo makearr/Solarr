@@ -63,6 +63,7 @@ func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, 
 			Affinity: p.cache, Desired: &desired, Subscriptions: library.NewSubscriptions(p.library),
 			People: library.NewPeople(p.library), GroupID: lookupGroupID,
 		}),
+		OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 	})
 	executor.Handle(scan.JobType, job)
 	return nil

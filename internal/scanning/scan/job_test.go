@@ -283,6 +283,25 @@ func TestJob_SweepsProbesAndRecordsTheWatermark(t *testing.T) {
 	}
 }
 
+// A finished sweep says so, so the library's counts catch up without waiting for their daily task.
+func TestJob_TellsOnSweptAfterASweep(t *testing.T) {
+	fixture := newJobFixture(t, "Nick Cave/Tender Prey/01.flac")
+	told := 0
+	handler := scan.NewJob(scan.Config{
+		FS: fixture.fsys, Scans: library.NewScans(fixture.store), Roots: fixture.roots,
+		Tool: fixture.tool, Consumer: fixture.recorder, Physical: library.NewPhysical(fixture.store),
+		Clock: fixture.clock, Logger: slog.New(slog.DiscardHandler), Include: scan.IsAudio,
+		OnSwept: func(context.Context) { told++ },
+	})
+
+	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, Full: true}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if told != 1 {
+		t.Errorf("OnSwept called %d times, want 1", told)
+	}
+}
+
 // The category a scan is scoped to travels through to the consumer, batch by
 // batch -- todo 4.4's desired-item discovery needs it to know which policy
 // (category.monitor_discovered) governs what it finds.

@@ -318,6 +318,33 @@ func TestJob_PoisonsAUnitCarryingARefusedFile(t *testing.T) {
 	}
 }
 
+// A session that committed a unit says so, so the vap edition's tracklist is fetched at once.
+func TestJob_TellsOnCommittedOnlyWhenAUnitCommitted(t *testing.T) {
+	for _, tagged := range []bool{true, false} {
+		fx := newFixture(t, "Artist/Album/01.flac")
+		if tagged {
+			fx.tool.byPath[filepath.Join(root, "Artist/Album/01.flac")] =
+				mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+		}
+		told := 0
+		job := importjob.NewJob(importjob.Config{
+			FS: fx.fsys, Sessions: library.NewImportSessions(fx.store), Policy: fixedPolicy(0.90),
+			Tool: fx.tool, Packs: library.NewPacks(fx.store), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+			OnCommitted: func(context.Context) { told++ },
+		})
+		if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		want := 0
+		if tagged {
+			want = 1
+		}
+		if told != want {
+			t.Errorf("tagged=%v: OnCommitted called %d times, want %d", tagged, told, want)
+		}
+	}
+}
+
 // No embedded identity at all: the unit queues rather than guessing.
 func TestJob_QueuesAnUnidentifiedUnit(t *testing.T) {
 	fx := newFixture(t, "Artist/Album/01.flac")

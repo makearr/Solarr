@@ -749,6 +749,15 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 		}
 		params.Fresh = &fresh
 	}
+	if raw := query.Get("wanted"); raw != "" {
+		wanted, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "wanted must be a boolean")
+			return
+		}
+		params.Wanted = &wanted
+	}
 
 	s.ListWorks(w, r, params)
 }

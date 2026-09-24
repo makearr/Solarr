@@ -122,25 +122,28 @@ type Job struct {
 	// events is optional: nil means no progress is published, the same as
 	// every other optional dependency in this codebase.
 	events *events.Bus
-	clock  clock.Clock
-	logger *slog.Logger
+	// onCommitted is optional: told when a finished session placed anything, so new editions enrich now.
+	onCommitted func(context.Context)
+	clock       clock.Clock
+	logger      *slog.Logger
 }
 
 // Config is what a Job needs. Every field is required except Search,
-// Committer, Events and Logger.
+// Committer, Events, OnCommitted and Logger.
 type Config struct {
-	FS        fsx.FS
-	Sessions  library.ImportSessions
-	Policy    Policy
-	Tool      mediatool.Tool
-	Search    music.Searcher
-	Albums    music.AlbumLookup
-	AcoustID  music.AcoustIDLookup
-	Committer Committer
-	Packs     library.Packs
-	Events    *events.Bus
-	Clock     clock.Clock
-	Logger    *slog.Logger
+	FS          fsx.FS
+	Sessions    library.ImportSessions
+	Policy      Policy
+	Tool        mediatool.Tool
+	Search      music.Searcher
+	Albums      music.AlbumLookup
+	AcoustID    music.AcoustIDLookup
+	Committer   Committer
+	Packs       library.Packs
+	Events      *events.Bus
+	OnCommitted func(context.Context)
+	Clock       clock.Clock
+	Logger      *slog.Logger
 }
 
 // NewJob builds the handler.
@@ -153,7 +156,7 @@ func NewJob(config Config) *Job {
 		fsys: config.FS, sessions: config.Sessions, policy: config.Policy,
 		tool: config.Tool, search: config.Search, albums: config.Albums, acoustID: config.AcoustID,
 		committer: config.Committer, packs: config.Packs,
-		events: config.Events, clock: config.Clock, logger: logger,
+		events: config.Events, onCommitted: config.OnCommitted, clock: config.Clock, logger: logger,
 	}
 }
 
@@ -213,7 +216,22 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		return err
 	}
 	j.publishProgress(ctx, sessionID, importPhaseDone, "")
+	j.notifyCommitted(ctx, sessionID)
 	return nil
+}
+
+func (j *Job) notifyCommitted(ctx context.Context, sessionID int64) {
+	if j.onCommitted == nil {
+		return
+	}
+	session, err := j.sessions.Get(ctx, sessionID)
+	if err != nil {
+		j.logger.Debug("could not read session after import", slog.Any("error", err))
+		return
+	}
+	if session.UnitsCommitted > 0 {
+		j.onCommitted(ctx)
+	}
 }
 
 // resumeOrCreate finds a not-yet-finished session for this exact source path and resumes it with

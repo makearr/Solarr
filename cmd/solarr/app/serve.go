@@ -526,6 +526,8 @@ func (p *process) startServer(ctx context.Context) error {
 			Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),
 			Categories:       adapters.Categories{Cache: p.cache},
 			DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(),
+			// A failed enqueue is logged by enqueueEnrichment; the hourly sweep still picks the album up.
+			Enrich: func(ctx context.Context) { _, _ = p.enqueueEnrichment(ctx) },
 		},
 		ArrSync: adapters.ArrSync{
 			Cache: p.cache, Identity: library.NewIdentity(p.library), People: library.NewPeople(p.library),

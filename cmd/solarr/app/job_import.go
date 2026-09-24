@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"os/user"
 	"strconv"
 
@@ -50,8 +51,13 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		Committer: p.importCommitter(),
 		Packs:     library.NewPacks(p.library),
 		Events:    p.bus,
-		Clock:     clock.NewSystem(),
-		Logger:    p.logger,
+		// A new edition's tracklist is what lets the placed files count towards the album.
+		OnCommitted: func(ctx context.Context) {
+			_, _ = p.enqueueEnrichment(ctx)
+			_, _ = p.enqueueCategoryCounts(ctx)
+		},
+		Clock:  clock.NewSystem(),
+		Logger: p.logger,
 	})
 	executor.Handle(importjob.JobType, job)
 	return nil

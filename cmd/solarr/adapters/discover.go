@@ -27,6 +27,8 @@ type Discover struct {
 	Categories       Categories
 	DefaultProfileID int64
 	Clock            clock.Clock
+	// Enrich starts fetching an added album's tracklist now rather than at the next hourly sweep.
+	Enrich func(context.Context)
 }
 
 // Search resolves categoryID to its media type and, for music, runs a
@@ -133,6 +135,9 @@ func (a Discover) Add(
 	score := priority.Compute(priority.DefaultWeights(), priority.Input{
 		Trigger: priority.TriggerUserRequest, CategoryRank: category.PriorityRank, QueuedSince: now,
 	}, now)
+	if a.Enrich != nil {
+		a.Enrich(ctx)
+	}
 	return apiserver.DiscoverAddResult{
 		Kind: apiserver.DiscoverAlbum, WorkID: workIDs[0], DesiredItemID: item.ID, Priority: score,
 	}, nil
