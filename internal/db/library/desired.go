@@ -511,11 +511,11 @@ func (d Desired) CountIncomplete(ctx context.Context, categoryID int64) (int64, 
 	return total, nil
 }
 
-// IncompleteItems pages through every monitored MISSING/PARTIAL item,
-// oldest id first. categoryID zero means every category.
-func (d Desired) IncompleteItems(ctx context.Context, categoryID, afterID int64, pageSize int64) ([]IncompleteItem, error) {
+// IncompleteItems pages through every monitored MISSING/PARTIAL item, oldest id first. A zero
+// categoryID means every category, a zero personID every artist.
+func (d Desired) IncompleteItems(ctx context.Context, categoryID, personID, afterID int64, pageSize int64) ([]IncompleteItem, error) {
 	rows, err := librarydb.New(d.store.Read()).ListIncompleteDesiredItems(ctx, librarydb.ListIncompleteDesiredItemsParams{
-		CategoryID: categoryID, AfterID: afterID, PageSize: pageSize,
+		CategoryID: categoryID, PersonID: personID, AfterID: afterID, PageSize: pageSize,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: list incomplete desired items: %w", err)

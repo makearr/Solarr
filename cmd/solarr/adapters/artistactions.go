@@ -1,0 +1,48 @@
+package adapters
+
+import (
+	"context"
+
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media/music"
+)
+
+// ArtistActions implements the artist page's bulk verbs over the people store, the works monitor
+// and the job queue.
+type ArtistActions struct {
+	People  library.People
+	Monitor WorksMonitor
+	Queue   *jobs.Queue
+}
+
+// SearchMissing searches the artist's missing albums in every library.
+func (a ArtistActions) SearchMissing(ctx context.Context, personID int64) (bool, error) {
+	if _, err := a.People.Person(ctx, personID); err != nil {
+		return false, err
+	}
+	result, err := music.EnqueueSearchArtist(ctx, a.Queue, 0, personID)
+	if err != nil {
+		return false, err
+	}
+	return result.Duplicate, nil
+}
+
+// MonitorAll monitors every album the artist is credited on as artist.
+func (a ArtistActions) MonitorAll(ctx context.Context, personID int64) (int64, error) {
+	if _, err := a.People.Person(ctx, personID); err != nil {
+		return 0, err
+	}
+	works, err := a.People.Discography(ctx, personID, "artist")
+	if err != nil {
+		return 0, err
+	}
+	var monitored int64
+	for _, work := range works {
+		if _, err := a.Monitor.SetWorkMonitored(ctx, work.ID, true); err != nil {
+			return monitored, err
+		}
+		monitored++
+	}
+	return monitored, nil
+}

@@ -2775,6 +2775,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/people/{id}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search every monitored, incomplete album of this artist, in the background (the artist page's "Search all missing"). */
+        post: operations["searchPersonMissing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/{id}/monitor-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Monitor every album of this artist's discography. Administrator only. */
+        post: operations["monitorPersonAll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/people/{id}/remove": {
         parameters: {
             query?: never;
@@ -9601,6 +9639,56 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    searchPersonMissing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Enqueued (or already running -- duplicate says which). */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategorySearchEnqueued"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    monitorPersonAll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many albums are now monitored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        albums: number;
+                    };
+                };
+            };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };

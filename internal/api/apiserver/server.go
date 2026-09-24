@@ -98,6 +98,8 @@ type Config struct {
 	// PeopleSubscriber subscribes a caller to a person. Optional: without it,
 	// SubscribePerson answers 503.
 	PeopleSubscriber PeopleSubscriber
+	// ArtistActions are the artist page's bulk verbs. Optional: nil answers 503.
+	ArtistActions ArtistActions
 	// SubscriptionPreviewer answers an artist's discography, unfiltered, for
 	// the subscribe screen's filter preview (todo 4.4). Optional: without
 	// it, PreviewSubscription answers 503.
@@ -220,6 +222,7 @@ type Server struct {
 	configPath            string
 	people                PeopleReader
 	peopleSubscriber      PeopleSubscriber
+	artistActions         ArtistActions
 	subscriptionPreviewer SubscriptionPreviewer
 	blockedContent        BlockedContentLister
 	packs                 PackLister
@@ -303,6 +306,7 @@ func New(config Config) (*Server, error) {
 		configPath:            config.ConfigPath,
 		people:                config.People,
 		peopleSubscriber:      config.PeopleSubscriber,
+		artistActions:         config.ArtistActions,
 		subscriptionPreviewer: config.SubscriptionPreviewer,
 		blockedContent:        config.BlockedContent,
 		packs:                 config.Packs,
@@ -462,6 +466,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/people/{id}/artwork", server.routeGetPersonArtwork)
 			secured.Post("/people/{id}/subscribe", server.routeSubscribePerson)
 			secured.Post("/people/{id}/remove", server.routeRemovePerson)
+			secured.Post("/people/{id}/search", server.routeSearchPersonMissing)
+			secured.Post("/people/{id}/monitor-all", server.routeMonitorPersonAll)
 			secured.Get("/people/{id}/subscription-preview", server.routePreviewSubscription)
 			secured.Get("/exclusions", server.ListExclusionPatterns)
 			secured.Post("/exclusions", server.CreateExclusionPattern)

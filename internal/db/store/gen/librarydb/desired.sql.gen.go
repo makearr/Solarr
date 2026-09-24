@@ -665,13 +665,16 @@ FROM desired_item d
 JOIN work w ON w.id = d.work_id
 WHERE d.monitored = 1 AND d.state IN ('MISSING', 'PARTIAL')
   AND (CAST(?1 AS INTEGER) = 0 OR d.category_id = ?1)
-  AND d.id > ?2
+  AND (CAST(?2 AS INTEGER) = 0 OR EXISTS (
+    SELECT 1 FROM credit c WHERE c.work_id = d.work_id AND c.person_id = ?2))
+  AND d.id > ?3
 ORDER BY d.id
-LIMIT ?3
+LIMIT ?4
 `
 
 type ListIncompleteDesiredItemsParams struct {
 	CategoryID int64
+	PersonID   int64
 	AfterID    int64
 	PageSize   int64
 }
@@ -692,7 +695,12 @@ type ListIncompleteDesiredItemsRow struct {
 // that item already has everything it needs, just not at the quality
 // wanted, a different report from "missing" entirely.
 func (q *Queries) ListIncompleteDesiredItems(ctx context.Context, arg ListIncompleteDesiredItemsParams) ([]ListIncompleteDesiredItemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listIncompleteDesiredItems, arg.CategoryID, arg.AfterID, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, listIncompleteDesiredItems,
+		arg.CategoryID,
+		arg.PersonID,
+		arg.AfterID,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}

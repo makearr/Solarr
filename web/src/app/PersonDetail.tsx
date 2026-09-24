@@ -4,6 +4,7 @@ import { useNavigate, useParams, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
+import { useIsAdministrator } from "@/lib/useAdministrator";
 import type { components } from "@/api/schema";
 import { albumStatusLabel, albumStatusText } from "@/lib/albumStatus";
 import { discCountOf, formatTrackNumber } from "@/lib/trackNumber";
@@ -100,6 +101,26 @@ export function PersonDetail() {
       void queryClient.invalidateQueries({ queryKey: ["people"] });
     },
   });
+
+  const searchMissing = useMutation({
+    mutationFn: async () => {
+      if (id === undefined) return undefined;
+      const { data, error } = await api.POST("/people/{id}/search", { params: { path: { id } } });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const monitorAll = useMutation({
+    mutationFn: async () => {
+      if (id === undefined) return undefined;
+      const { data, error } = await api.POST("/people/{id}/monitor-all", { params: { path: { id } } });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["person", id] }),
+  });
+  const administrator = useIsAdministrator();
 
   const remove = useMutation({
     mutationFn: async () => {
@@ -201,6 +222,41 @@ export function PersonDetail() {
             </button>
           </div>
         </header>
+
+        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+          <button
+            type="button"
+            disabled={searchMissing.isPending}
+            onClick={() => searchMissing.mutate()}
+            className="flex items-center gap-1 rounded-md border border-border-subtle px-2 py-1 hover:text-ink disabled:opacity-50"
+          >
+            Search all missing
+          </button>
+          {administrator && (
+            <button
+              type="button"
+              disabled={monitorAll.isPending}
+              onClick={() => {
+                if (window.confirm(`Monitor every album of ${person.name}?`)) monitorAll.mutate();
+              }}
+              className="rounded-md border border-border-subtle px-2 py-1 hover:text-ink disabled:opacity-50"
+            >
+              Monitor all
+            </button>
+          )}
+          {searchMissing.isSuccess && (
+            <span>
+              {searchMissing.data?.duplicate ? "A search for this artist is already running." : "Searching in the background."}
+            </span>
+          )}
+          {searchMissing.isError && <span className="text-danger">The search could not start.</span>}
+          {monitorAll.isSuccess && (
+            <span>
+              {monitorAll.data?.albums === 1 ? "1 album" : `${monitorAll.data?.albums ?? 0} albums`} monitored.
+            </span>
+          )}
+          {monitorAll.isError && <span className="text-danger">The albums could not be monitored.</span>}
+        </div>
 
         {subscribing && id !== undefined && (
           <SubscribePanel
