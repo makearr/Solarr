@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -16,6 +17,8 @@ export function UnidentifiedReview() {
   const mediaObjectId = raw !== undefined ? Number(raw) : undefined;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [wholeFolder, setWholeFolder] = useState(false);
+  const [confirmingNotMedia, setConfirmingNotMedia] = useState(false);
 
   const review = useQuery({
     queryKey: ["unidentified", mediaObjectId, "attempts"],
@@ -34,7 +37,20 @@ export function UnidentifiedReview() {
       if (candidate.provider === undefined || candidate.external_id === undefined) return;
       const { error } = await api.POST("/library/unidentified/{mediaObjectId}/resolve", {
         params: { path: { mediaObjectId: mediaObjectId as number } },
-        body: { provider: candidate.provider, external_id: candidate.external_id },
+        body: { provider: candidate.provider, external_id: candidate.external_id, whole_folder: wholeFolder },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["unidentified"] });
+      void navigate({ to: "/unidentified" });
+    },
+  });
+
+  const notMedia = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST("/library/unidentified/{mediaObjectId}/not-media", {
+        params: { path: { mediaObjectId: mediaObjectId as number } },
       });
       if (error) throw error;
     },
@@ -50,6 +66,9 @@ export function UnidentifiedReview() {
   }
 
   const [latest, ...older] = review.data.items;
+  const anyChoice = latest?.passes.some((pass) =>
+    pass.candidates.some((candidate) => candidate.provider === "musicbrainz:release-group"),
+  );
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-6xl flex-col gap-5 p-6">
@@ -64,7 +83,48 @@ export function UnidentifiedReview() {
           </p>
         </header>
 
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          {anyChoice && (
+            <label className="flex items-center gap-1.5 text-ink">
+              <input type="checkbox" checked={wholeFolder} onChange={(event) => setWholeFolder(event.target.checked)} />
+              Use the album I pick for every file waiting in this folder
+            </label>
+          )}
+          <span className="ml-auto flex items-center gap-1.5">
+            {confirmingNotMedia ? (
+              <>
+                <span className="text-ink-muted">Never ask about this file again?</span>
+                <button
+                  type="button"
+                  disabled={notMedia.isPending}
+                  onClick={() => notMedia.mutate()}
+                  className="rounded-md bg-accent px-2 py-0.5 text-accent-ink disabled:opacity-50"
+                >
+                  Not media
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingNotMedia(false)}
+                  className="rounded-md border border-border-subtle px-2 py-0.5 text-ink-muted hover:text-ink"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmingNotMedia(true)}
+                title="A cover scan, a booklet, a sample: nothing to identify. The file stays where it is."
+                className="rounded-md border border-border-subtle px-2 py-0.5 text-ink-muted hover:text-ink"
+              >
+                This is not media
+              </button>
+            )}
+          </span>
+        </div>
+
         {choose.isError && <p className="text-xs text-danger">That album could not be applied.</p>}
+        {notMedia.isError && <p className="text-xs text-danger">The file could not be marked.</p>}
 
         {latest === undefined ? (
           <p className="text-xs text-ink-muted">

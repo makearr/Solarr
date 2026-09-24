@@ -465,6 +465,11 @@ type MoveJob struct {
 	CategoryID   sql.NullInt64
 }
 
+type NotMedium struct {
+	MediaObjectID int64
+	MarkedAt      int64
+}
+
 type Organisation struct {
 	ID         int64
 	Name       string

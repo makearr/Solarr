@@ -485,6 +485,8 @@ type Querier interface {
 	// empty when the caller can see nothing -- same ADR-27 shape as search.sql's
 	// SearchWorks, json_each passing a Go slice as a JSON array.
 	ListUnidentified(ctx context.Context, arg ListUnidentifiedParams) ([]IdentificationQueue, error)
+	// The queued files directly in one folder, for "identify the whole folder as".
+	ListUnidentifiedInFolder(ctx context.Context, arg ListUnidentifiedInFolderParams) ([]int64, error)
 	// The measured half of ADR-39 is the lowest-priority background work, resumable
 	// the same way fingerprinting is (todo 4.2): a cursor on media_object.id rather
 	// than re-deriving "unmeasured" from scratch, so a file that fails its probe
@@ -543,6 +545,7 @@ type Querier interface {
 	// Bounded per Invariant 2: the caller loops this until a pass affects zero rows,
 	// never one UPDATE over the whole root.
 	MarkLibraryPathsMissing(ctx context.Context, arg MarkLibraryPathsMissingParams) (int64, error)
+	MarkNotMedia(ctx context.Context, arg MarkNotMediaParams) error
 	// :execrows so a caller can tell "already restored" (0 rows) from "restored
 	// just now" (1 row) without a separate read first -- nothing calls this yet,
 	// so tightening it here does not touch a working caller.
@@ -721,6 +724,8 @@ type Querier interface {
 	UpsertHuntQueueEntry(ctx context.Context, arg UpsertHuntQueueEntryParams) error
 	// F29: the manual identification queue (migration 0014). Column lists follow table
 	// order, or sqlc stops reusing models.
+	// A file marked "not media" is never queued again, nor one that already belongs to a work: a
+	// person's resolve survives a full rescan the chain still cannot decide (found 2026-09-24).
 	UpsertUnidentified(ctx context.Context, arg UpsertUnidentifiedParams) error
 }
 

@@ -3018,6 +3018,9 @@ type ResolveUnidentifiedJSONBody struct {
 
 	// Provider Only musicbrainz:release-group is supported today.
 	Provider string `json:"provider"`
+
+	// WholeFolder Also resolve every other queued file directly in the same folder to this album ("identify the whole folder as").
+	WholeFolder *bool `json:"whole_folder,omitempty"`
 }
 
 // CreateMyAPIKeyJSONBody defines parameters for CreateMyAPIKey.
@@ -3775,6 +3778,9 @@ type ServerInterface interface {
 	// How identification of a queued file went, newest run first.
 	// (GET /library/unidentified/{mediaObjectId}/attempts)
 	ListIdentificationAttempts(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
+	// Take a queued file out of the queue for good ("not media", F29).
+	// (POST /library/unidentified/{mediaObjectId}/not-media)
+	MarkUnidentifiedNotMedia(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
 	// Confirm a candidate for a queued file (section 21.3's manual-resolve action).
 	// (POST /library/unidentified/{mediaObjectId}/resolve)
 	ResolveUnidentified(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
@@ -4588,6 +4594,12 @@ func (_ Unimplemented) ListUnidentified(w http.ResponseWriter, r *http.Request, 
 // How identification of a queued file went, newest run first.
 // (GET /library/unidentified/{mediaObjectId}/attempts)
 func (_ Unimplemented) ListIdentificationAttempts(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Take a queued file out of the queue for good ("not media", F29).
+// (POST /library/unidentified/{mediaObjectId}/not-media)
+func (_ Unimplemented) MarkUnidentifiedNotMedia(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8137,6 +8149,39 @@ func (siw *ServerInterfaceWrapper) ListIdentificationAttempts(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
+// MarkUnidentifiedNotMedia operation middleware
+func (siw *ServerInterfaceWrapper) MarkUnidentifiedNotMedia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "mediaObjectId" -------------
+	var mediaObjectId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "mediaObjectId", chi.URLParam(r, "mediaObjectId"), &mediaObjectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mediaObjectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MarkUnidentifiedNotMedia(w, r, mediaObjectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ResolveUnidentified operation middleware
 func (siw *ServerInterfaceWrapper) ResolveUnidentified(w http.ResponseWriter, r *http.Request) {
 
@@ -10929,6 +10974,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/library/unidentified/{mediaObjectId}/attempts", wrapper.ListIdentificationAttempts)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/library/unidentified/{mediaObjectId}/not-media", wrapper.MarkUnidentifiedNotMedia)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/library/unidentified/{mediaObjectId}/resolve", wrapper.ResolveUnidentified)

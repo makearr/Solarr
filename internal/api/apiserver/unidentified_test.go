@@ -48,7 +48,9 @@ type fakeUnidentifiedResolver struct {
 	lastMediaObjectID int64
 	lastProvider      string
 	lastExternalID    string
+	lastWholeFolder   bool
 	resolveCalls      int
+	notMedia          []int64
 
 	attempts     []apiserver.IdentificationAttempt
 	attemptCalls int
@@ -70,16 +72,25 @@ func (f *fakeUnidentifiedResolver) GetUnidentified(
 }
 
 func (f *fakeUnidentifiedResolver) ResolveUnidentified(
-	_ context.Context, mediaObjectID int64, provider, externalID string,
-) (int64, error) {
+	_ context.Context, mediaObjectID int64, provider, externalID string, wholeFolder bool,
+) (int64, int64, error) {
 	f.resolveCalls++
 	f.lastMediaObjectID = mediaObjectID
 	f.lastProvider = provider
 	f.lastExternalID = externalID
+	f.lastWholeFolder = wholeFolder
 	if f.resolveErr != nil {
-		return 0, f.resolveErr
+		return 0, 0, f.resolveErr
 	}
-	return f.workID, nil
+	if wholeFolder {
+		return f.workID, 3, nil
+	}
+	return f.workID, 1, nil
+}
+
+func (f *fakeUnidentifiedResolver) MarkNotMedia(_ context.Context, mediaObjectID int64) error {
+	f.notMedia = append(f.notMedia, mediaObjectID)
+	return nil
 }
 
 // ResolveUnidentified confirms a candidate for a queued file the caller may
@@ -342,5 +353,52 @@ func TestListIdentificationAttempts_UnreadableRootFolderAnswers404(t *testing.T)
 	}
 	if fixture.unidentifiedResolver.attemptCalls != 0 {
 		t.Error("the attempts of an unreadable file must not even be read")
+	}
+}
+
+// "Identify the whole folder as" reaches the resolver, and the answer says how many it resolved.
+func TestResolveUnidentified_WholeFolderIsForwardedAndCounted(t *testing.T) {
+	fixture := newWorksFixture(t)
+	_, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.unidentifiedResolver.entry = apiserver.UnidentifiedRow{RootFolderID: root.ID}
+	fixture.unidentifiedResolver.workID = 42
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/library/unidentified/1/resolve",
+		`{"provider":"musicbrainz:release-group","external_id":"rg-1","whole_folder":true}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	var body struct {
+		WorkID   int64 `json:"work_id"`
+		Resolved int64 `json:"resolved"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.WorkID != 42 || body.Resolved != 3 || !fixture.unidentifiedResolver.lastWholeFolder {
+		t.Errorf("answer %+v, whole folder forwarded %v; want 42, 3, true", body, fixture.unidentifiedResolver.lastWholeFolder)
+	}
+}
+
+// "Not media" honours the same visibility as resolving: a hidden root is 404 and marks nothing.
+func TestMarkUnidentifiedNotMedia_OnlyForAVisibleFile(t *testing.T) {
+	fixture := newWorksFixture(t)
+	_, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	_, hidden := fixture.createCategoryWithRoot(t, "Private Stash", "/media/private")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+
+	fixture.unidentifiedResolver.entry = apiserver.UnidentifiedRow{RootFolderID: hidden.ID}
+	recorder := fixture.do(authedPost(t, fixture.signIn(t, "listener"), "/api/v1/library/unidentified/7/not-media", ""))
+	if recorder.Code != http.StatusNotFound || len(fixture.unidentifiedResolver.notMedia) != 0 {
+		t.Fatalf("hidden: status %d, marked %v; want 404 and nothing", recorder.Code, fixture.unidentifiedResolver.notMedia)
+	}
+
+	fixture.unidentifiedResolver.entry = apiserver.UnidentifiedRow{RootFolderID: root.ID}
+	recorder = fixture.do(authedPost(t, fixture.signIn(t, "admin"), "/api/v1/library/unidentified/7/not-media", ""))
+	if recorder.Code != http.StatusNoContent || !slices.Equal(fixture.unidentifiedResolver.notMedia, []int64{7}) {
+		t.Errorf("visible: status %d, marked %v; want 204 and [7]", recorder.Code, fixture.unidentifiedResolver.notMedia)
 	}
 }

@@ -90,8 +90,13 @@ type UnidentifiedResolver interface {
 	// before resolving it. A missing id wraps sql.ErrNoRows.
 	GetUnidentified(ctx context.Context, mediaObjectID int64) (UnidentifiedRow, error)
 	// ResolveUnidentified fetches the candidate's real title, resolves or
-	// creates the work, links the root folder and clears the queue entry.
-	ResolveUnidentified(ctx context.Context, mediaObjectID int64, provider, externalID string) (workID int64, err error)
+	// creates the work, links the root folder and clears the queue entry;
+	// wholeFolder does the same for every file queued beside it.
+	ResolveUnidentified(
+		ctx context.Context, mediaObjectID int64, provider, externalID string, wholeFolder bool,
+	) (workID, resolved int64, err error)
+	// MarkNotMedia takes a queued file out of the queue for good.
+	MarkNotMedia(ctx context.Context, mediaObjectID int64) error
 	// IdentificationAttempts answers a file's recorded identification runs, newest first.
 	IdentificationAttempts(ctx context.Context, mediaObjectID int64) ([]IdentificationAttempt, error)
 }
@@ -142,17 +147,9 @@ func (s *Server) routeResolveUnidentified(w http.ResponseWriter, r *http.Request
 // A file under a root folder the caller cannot read answers 404, the same as
 // missing (Invariant 37).
 func (s *Server) ResolveUnidentified(w http.ResponseWriter, r *http.Request, mediaObjectID int64) {
-	access, err := authz.FromContext(r.Context())
-	if err != nil {
-		writeError(w, s.logger, err)
+	if !s.queuedFileVisible(w, r, mediaObjectID) {
 		return
 	}
-	if s.unidentifiedResolver == nil {
-		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
-			"Unavailable", "manual resolution is not available")
-		return
-	}
-
 	var body gen.ResolveUnidentifiedJSONRequestBody
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
@@ -160,28 +157,9 @@ func (s *Server) ResolveUnidentified(w http.ResponseWriter, r *http.Request, med
 		return
 	}
 
-	entry, err := s.unidentifiedResolver.GetUnidentified(r.Context(), mediaObjectID)
-	if errors.Is(err, sql.ErrNoRows) {
-		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such queued file")
-		return
-	}
-	if err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-	// Root-folder-only, the same reasoning ListUnidentified's own comment
-	// gives: a queued file is by definition physical.
-	rootFolderIDs, _, err := s.visibility(access, nil)
-	if err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-	if !sharesAnID(rootFolderIDs, []int64{entry.RootFolderID}) {
-		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such queued file")
-		return
-	}
-
-	workID, err := s.unidentifiedResolver.ResolveUnidentified(r.Context(), mediaObjectID, body.Provider, body.ExternalId)
+	wholeFolder := body.WholeFolder != nil && *body.WholeFolder
+	workID, resolved, err := s.unidentifiedResolver.ResolveUnidentified(
+		r.Context(), mediaObjectID, body.Provider, body.ExternalId, wholeFolder)
 	if err != nil {
 		if errors.Is(err, ErrUnsupportedProvider) {
 			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
@@ -190,7 +168,63 @@ func (s *Server) ResolveUnidentified(w http.ResponseWriter, r *http.Request, med
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, map[string]int64{"work_id": workID})
+	writeJSON(w, s.logger, http.StatusOK, map[string]int64{"work_id": workID, "resolved": resolved})
+}
+
+func (s *Server) routeMarkUnidentifiedNotMedia(w http.ResponseWriter, r *http.Request) {
+	mediaObjectID, err := strconv.ParseInt(chi.URLParam(r, "mediaObjectId"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a media object id must be a number")
+		return
+	}
+	s.MarkUnidentifiedNotMedia(w, r, mediaObjectID)
+}
+
+// MarkUnidentifiedNotMedia takes a queued file out of the queue for good (F29's "not media").
+func (s *Server) MarkUnidentifiedNotMedia(w http.ResponseWriter, r *http.Request, mediaObjectID int64) {
+	if !s.queuedFileVisible(w, r, mediaObjectID) {
+		return
+	}
+	if err := s.unidentifiedResolver.MarkNotMedia(r.Context(), mediaObjectID); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// queuedFileVisible answers 404 for a file that is not queued or sits under a root folder the
+// caller cannot read (Invariant 37); a queued file is by definition physical, so root folders decide.
+func (s *Server) queuedFileVisible(w http.ResponseWriter, r *http.Request, mediaObjectID int64) bool {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return false
+	}
+	if s.unidentifiedResolver == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "manual resolution is not available")
+		return false
+	}
+	entry, err := s.unidentifiedResolver.GetUnidentified(r.Context(), mediaObjectID)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such queued file")
+		return false
+	}
+	if err != nil {
+		writeError(w, s.logger, err)
+		return false
+	}
+	rootFolderIDs, _, err := s.visibility(access, nil)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return false
+	}
+	if !sharesAnID(rootFolderIDs, []int64{entry.RootFolderID}) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such queued file")
+		return false
+	}
+	return true
 }
 
 func buildUnidentifiedPage(rows []UnidentifiedRow, limit int) gen.UnidentifiedPage {

@@ -59,14 +59,32 @@ func (a UnidentifiedResolver) GetUnidentified(
 }
 
 func (a UnidentifiedResolver) ResolveUnidentified(
-	ctx context.Context, mediaObjectID int64, provider, externalID string,
-) (int64, error) {
-	workID, err := music.ResolveUnidentified(ctx, a.Clock, a.Provider, a.Identity, a.Unidentified,
-		mediaObjectID, provider, externalID)
-	if err != nil {
-		return 0, translateResolveError(err)
+	ctx context.Context, mediaObjectID int64, provider, externalID string, wholeFolder bool,
+) (workID, resolved int64, err error) {
+	ids := []int64{mediaObjectID}
+	if wholeFolder {
+		entry, err := a.Unidentified.Get(ctx, mediaObjectID)
+		if err != nil {
+			return 0, 0, err
+		}
+		if ids, err = a.Unidentified.InFolder(ctx, entry.RootFolderID, entry.RelPath); err != nil {
+			return 0, 0, err
+		}
 	}
-	return workID, nil
+	for _, id := range ids {
+		resolvedWorkID, err := music.ResolveUnidentified(ctx, a.Clock, a.Provider, a.Identity, a.Unidentified,
+			id, provider, externalID)
+		if err != nil {
+			return workID, resolved, translateResolveError(err)
+		}
+		workID = resolvedWorkID
+		resolved++
+	}
+	return workID, resolved, nil
+}
+
+func (a UnidentifiedResolver) MarkNotMedia(ctx context.Context, mediaObjectID int64) error {
+	return a.Unidentified.MarkNotMedia(ctx, mediaObjectID, a.Clock.Now().Unix())
 }
 
 func (a UnidentifiedResolver) IdentificationAttempts(

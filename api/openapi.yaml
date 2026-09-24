@@ -2863,6 +2863,11 @@ paths:
                   type: string
                   description: Only musicbrainz:release-group is supported today.
                 external_id: { type: string }
+                whole_folder:
+                  type: boolean
+                  description: >-
+                    Also resolve every other queued file directly in the same
+                    folder to this album ("identify the whole folder as").
       responses:
         "200":
           description: Resolved.
@@ -2870,10 +2875,35 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [work_id]
+                required: [work_id, resolved]
                 properties:
                   work_id: { type: integer, format: int64 }
+                  resolved:
+                    type: integer
+                    format: int64
+                    description: How many queued files were resolved, this one included.
         "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404":
+          $ref: "#/components/responses/Problem"
+          description: No such queued file, or the caller cannot read its root folder.
+
+  /library/unidentified/{mediaObjectId}/not-media:
+    parameters:
+      - name: mediaObjectId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: markUnidentifiedNotMedia
+      tags: [library]
+      summary: Take a queued file out of the queue for good ("not media", F29).
+      description: >-
+        Keyed on the file's bytes, never its name (ADR-53): a later scan finds
+        it and asks nothing; changed bytes are judged afresh. Nothing is moved
+        or deleted.
+      responses:
+        "204": { description: Marked. }
         "401": { $ref: "#/components/responses/Problem" }
         "404":
           $ref: "#/components/responses/Problem"
