@@ -1130,3 +1130,57 @@ func TestEnrichJob_ChoosesTheBestFittingEditionForAnAlbumWithoutOne(t *testing.T
 		t.Errorf("realigned %v, want work %d handed on to have its files matched", realigner.batches, workIDs[0])
 	}
 }
+
+// "Refresh metadata" asks the source again past the cache, rewrites the album's genres, and has
+// the artist's folders rescanned as a manual refresh.
+func TestEnrichJob_RefreshArtistFetchesAgainAndRescans(t *testing.T) {
+	source := &fakeArtistSource{
+		fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{
+				MBID: "rg-1", Title: "KI Pecezinu", PrimaryType: "Album",
+				ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "artist-1", Name: "Katupoken"}},
+				Genres:       []musicbrainz.Genre{{Name: "alternative rock", Count: 25}},
+			},
+			release: musicbrainz.Release{MBID: "rel-1", Title: "KI Pecezinu", Status: "official",
+				Media: []musicbrainz.Medium{{Position: 1, Tracks: []musicbrainz.Track{{Position: 1, Title: "Sesoge"}}}}},
+		},
+		artists: map[string]musicbrainz.Artist{"artist-1": {MBID: "artist-1", Name: "Katupoken", SortName: "Katupoken"}},
+	}
+	realigner := &fakeRealigner{}
+	job, opened, queries := newEnrichJobRealigning(t, source, nil, realigner, nil)
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	person, err := queries.GetPersonByExternalID(t.Context(), librarydb.GetPersonByExternalIDParams{
+		Provider: music.ProviderArtist, ExternalID: "artist-1",
+	})
+	if err != nil {
+		t.Fatalf("GetPersonByExternalID: %v", err)
+	}
+
+	source.rg.Genres = []musicbrainz.Genre{{Name: "art rock", Count: 30}}
+	artistCallsBefore := source.artistCalls
+	if err := job.RefreshArtist(t.Context(), person.ID); err != nil {
+		t.Fatalf("RefreshArtist: %v", err)
+	}
+	if source.artistCalls == artistCallsBefore {
+		t.Error("the artist was answered from the cache; a refresh must ask the source")
+	}
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail, err := library.NewWorks(opened).Detail(t.Context(), work.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(detail.Genres, "art rock") {
+		t.Errorf("genres = %v, want the refreshed one", detail.Genres)
+	}
+	if n := len(realigner.manual); n == 0 || !realigner.manual[n-1] || !slices.Equal(realigner.batches[n-1], []int64{work.ID}) {
+		t.Errorf("rescans = %v (manual %v), want the album rescanned as a manual refresh", realigner.batches, realigner.manual)
+	}
+}

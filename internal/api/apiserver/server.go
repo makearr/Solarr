@@ -468,6 +468,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/people/{id}/remove", server.routeRemovePerson)
 			secured.Post("/people/{id}/search", server.routeSearchPersonMissing)
 			secured.Post("/people/{id}/monitor-all", server.routeMonitorPersonAll)
+			secured.Post("/people/{id}/refresh", server.routeRefreshPerson)
 			secured.Get("/people/{id}/subscription-preview", server.routePreviewSubscription)
 			secured.Get("/exclusions", server.ListExclusionPatterns)
 			secured.Post("/exclusions", server.CreateExclusionPattern)

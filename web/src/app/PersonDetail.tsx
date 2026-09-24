@@ -111,6 +111,15 @@ export function PersonDetail() {
     },
   });
 
+  const refresh = useMutation({
+    mutationFn: async () => {
+      if (id === undefined) return undefined;
+      const { data, error } = await api.POST("/people/{id}/refresh", { params: { path: { id } } });
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const monitorAll = useMutation({
     mutationFn: async () => {
       if (id === undefined) return undefined;
@@ -232,6 +241,15 @@ export function PersonDetail() {
           >
             Search all missing
           </button>
+          <button
+            type="button"
+            disabled={refresh.isPending}
+            onClick={() => refresh.mutate()}
+            title="Fetch this artist's details, picture and albums again, then rescan their folders"
+            className="rounded-md border border-border-subtle px-2 py-1 hover:text-ink disabled:opacity-50"
+          >
+            Refresh
+          </button>
           {administrator && (
             <button
               type="button"
@@ -250,6 +268,10 @@ export function PersonDetail() {
             </span>
           )}
           {searchMissing.isError && <span className="text-danger">The search could not start.</span>}
+          {refresh.isSuccess && (
+            <span>{refresh.data?.duplicate ? "A refresh is already running." : "Refreshing in the background."}</span>
+          )}
+          {refresh.isError && <span className="text-danger">The refresh could not start.</span>}
           {monitorAll.isSuccess && (
             <span>
               {monitorAll.data?.albums === 1 ? "1 album" : `${monitorAll.data?.albums ?? 0} albums`} monitored.

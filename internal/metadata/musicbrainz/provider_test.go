@@ -798,3 +798,23 @@ func TestProvider_DirectMusicBrainzIsAlwaysReachable(t *testing.T) {
 		t.Errorf("MBID = %q, want direct MusicBrainz to answer anyway", group.MBID)
 	}
 }
+
+// "Refresh metadata" asks the source again even with a fresh cache entry, and caches the new answer.
+func TestProvider_WithFreshSkipsTheCacheAndRewritesIt(t *testing.T) {
+	direct := &fakeSource{name: "direct", rg: musicbrainz.ReleaseGroup{MBID: "rg1", Title: "KI Pecezinu"},
+		rel: musicbrainz.Release{MBID: "rel1", Title: "KI Pecezinu"}}
+	provider := newProvider(t, direct)
+	if _, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "rg1", "rel1"); err != nil {
+		t.Fatalf("first Album: %v", err)
+	}
+
+	direct.rg.Title = "KI Pecezinu OKNOTOK"
+	rg, _, err := provider.Album(musicbrainz.WithFresh(t.Context()), musicbrainz.PriorityRefresh, "rg1", "rel1")
+	if err != nil || rg.Title != "KI Pecezinu OKNOTOK" || direct.calls != 2 {
+		t.Fatalf("fresh Album = %q, %v after %d calls; want the source's new title from a second call", rg.Title, err, direct.calls)
+	}
+	rg, _, _ = provider.Album(t.Context(), musicbrainz.PriorityEnrich, "rg1", "rel1")
+	if rg.Title != "KI Pecezinu OKNOTOK" || direct.calls != 2 {
+		t.Errorf("later cached Album = %q after %d calls; want the refreshed answer from the cache", rg.Title, direct.calls)
+	}
+}
