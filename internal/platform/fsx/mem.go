@@ -103,6 +103,9 @@ func (m *Mem) DiskUsage(string) (totalBytes, freeBytes int64, err error) {
 	return m.diskTotalBytes, m.diskFreeBytes, nil
 }
 
+// FilesystemID is one id for the whole in-memory filesystem.
+func (m *Mem) FilesystemID(string) (string, error) { return "mem", nil }
+
 // SetHardlinkSupported switches hardlinking on or off, standing in for two paths
 // on different filesystems — separate ZFS datasets in one pool, or two NFS exports.
 func (m *Mem) SetHardlinkSupported(supported bool) {

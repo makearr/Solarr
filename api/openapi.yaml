@@ -4613,6 +4613,11 @@ components:
           type: string
           format: date-time
           description: Absent until the capacity job has run once for this root.
+        filesystem_id:
+          type: string
+          description: >-
+            Roots with the same id share one filesystem's space. Absent until the capacity job
+            has run. Separate ZFS datasets of one pool have different ids yet share free space.
         categories:
           type: array
           items: { $ref: "#/components/schemas/RootFolderCategory" }

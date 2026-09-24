@@ -2322,9 +2322,12 @@ type RootFolder struct {
 
 	// DrainState ADR-51's own drain state machine.
 	DrainState *RootFolderDrainState `json:"drain_state,omitempty"`
-	FreeBytes  *int64                `json:"free_bytes,omitempty"`
-	Id         int64                 `json:"id"`
-	Label      *string               `json:"label,omitempty"`
+
+	// FilesystemId Roots with the same id share one filesystem's space. Absent until the capacity job has run. Separate ZFS datasets of one pool have different ids yet share free space.
+	FilesystemId *string `json:"filesystem_id,omitempty"`
+	FreeBytes    *int64  `json:"free_bytes,omitempty"`
+	Id           int64   `json:"id"`
+	Label        *string `json:"label,omitempty"`
 
 	// MinFreeBytes The user's own reserve; placement refuses to dip below it.
 	MinFreeBytes *int64 `json:"min_free_bytes,omitempty"`

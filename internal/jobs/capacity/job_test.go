@@ -74,6 +74,10 @@ func TestJob_RunRefreshesAWritableRoot(t *testing.T) {
 	if !updated.Writable {
 		t.Errorf("Writable = false, want true (the probe file wrote and removed cleanly)")
 	}
+	// Recorded so roots sharing a filesystem are recognised (it was never written before).
+	if updated.FSID != "mem" {
+		t.Errorf("FSID = %q, want the filesystem's id", updated.FSID)
+	}
 	if updated.TotalBytes == nil || *updated.TotalBytes != 2_000_000_000_000 {
 		t.Errorf("TotalBytes = %v, want 2_000_000_000_000", updated.TotalBytes)
 	}

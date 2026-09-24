@@ -180,6 +180,18 @@ export function RootFolders() {
   );
 }
 
+// Two roots on one filesystem share its space; count it once. Separate ZFS datasets of one pool
+// have their own ids and may still overlap -- the note under the totals says so.
+function oneRootPerFilesystem(roots: RootFolder[]): RootFolder[] {
+  const seen = new Set<string>();
+  return roots.filter((root) => {
+    if (!root.filesystem_id) return true;
+    if (seen.has(root.filesystem_id)) return false;
+    seen.add(root.filesystem_id);
+    return true;
+  });
+}
+
 /** Section 11.7/10.4: an offline root's own stale bytes are not free space,
  *  so a category's total is summed only across its own online, measured
  *  roots -- a root sharing two categories counts fully in each, since each
@@ -195,7 +207,9 @@ function CapacityByCategory({
   const rows = categories
     .map((category) => {
       const attached = roots.filter((root) => (root.categories ?? []).some((c) => c.id === category.id));
-      const online = attached.filter((root) => root.online && (root.total_bytes ?? 0) > 0);
+      const online = oneRootPerFilesystem(
+        attached.filter((root) => root.online && (root.total_bytes ?? 0) > 0),
+      );
       return {
         category,
         rootCount: attached.length,
@@ -230,6 +244,10 @@ function CapacityByCategory({
           </li>
         ))}
       </ul>
+      <p className="text-[0.6875rem] text-ink-muted">
+        Roots on the same filesystem are counted once. Separate ZFS datasets of one pool share free
+        space but cannot be told apart, so their totals may overlap.
+      </p>
     </div>
   );
 }
