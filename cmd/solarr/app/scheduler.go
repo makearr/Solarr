@@ -26,6 +26,7 @@ const (
 	databaseMaintenanceCron        = "0 4 * * 0"     // Sundays at 04:00, clear of the other nightly tasks
 	backupScheduleCron             = "0 1 * * *"     // daily at 01:00
 	backupCleanupScheduleCron      = "30 1 * * *"    // daily at 01:30, after the backup
+	recycleBinCleanupScheduleCron  = "30 2 * * *"    // daily at 02:30
 )
 
 // buildTaskRegistry declares every periodic action this process has (ADR-59), in the order a
@@ -39,7 +40,8 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "enrichment", Name: "Music enrichment", DefaultCadence: enrichmentScheduleCron,
-		Tier: string(settings.TierNormal), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
+		EnqueueManual: p.enqueueManualEnrichment,
+		Tier:          string(settings.TierNormal), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueEnrichment,
 	})
 	registry.MustRegister(jobs.Task{
@@ -89,6 +91,10 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(jobs.Task{
 		Key: "backup", Name: "Backup", DefaultCadence: backupScheduleCron,
 		Tier: string(settings.TierNormal), Category: jobs.CategoryMaintenance, Enqueue: p.enqueueBackup,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "recycle_bin_cleanup", Name: "Clean recycling bin", DefaultCadence: recycleBinCleanupScheduleCron,
+		Tier: string(settings.TierNormal), Category: jobs.CategoryMaintenance, Enqueue: p.enqueueRecycleBinCleanup,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "backup_cleanup", Name: "Clean old backups", DefaultCadence: backupCleanupScheduleCron,

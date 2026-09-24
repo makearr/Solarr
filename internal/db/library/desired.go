@@ -182,6 +182,31 @@ func (d Desired) SetItemMonitored(ctx context.Context, itemID int64, monitored b
 	return nil
 }
 
+// UnmonitorItemsLosingFiles unmonitors categoryID's items that hold a file on rootFolderID marked
+// missing at missingSince (a library's "Unmonitor Deleted Tracks"), in batches; answers how many.
+func (d Desired) UnmonitorItemsLosingFiles(ctx context.Context, categoryID, rootFolderID, missingSince int64) (int, error) {
+	total := 0
+	for {
+		var changed int64
+		err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			var batchErr error
+			changed, batchErr = librarydb.New(tx).UnmonitorDesiredItemsWithMissingFiles(ctx,
+				librarydb.UnmonitorDesiredItemsWithMissingFilesParams{
+					CategoryID: categoryID, RootFolderID: rootFolderID,
+					MissingSince: sql.NullInt64{Int64: missingSince, Valid: true}, Limit: dirtyBatchSize,
+				})
+			return batchErr
+		})
+		if err != nil {
+			return total, fmt.Errorf("library: unmonitor items losing files: %w", err)
+		}
+		if changed == 0 {
+			return total, nil
+		}
+		total += int(changed)
+	}
+}
+
 // SetPartMonitored toggles one work_part's monitored flag, then recomputes
 // every album-level SET item for that work: unmonitoring a bonus track must
 // shrink the album's required_count rather than holding it PARTIAL forever

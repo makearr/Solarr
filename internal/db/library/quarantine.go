@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -78,6 +79,9 @@ type PutRequest struct {
 	// caller's own config.yaml quarantine.retain (section 10.8), passed in
 	// rather than read from settings.db by this type.
 	Retain time.Duration
+	// RemoveEmptyFolders removes the folders the move left empty, up to the root (a library's
+	// "Delete empty folders", Sonarr's).
+	RemoveEmptyFolders bool
 }
 
 // maxQuarantineDisambiguation caps the search for an unused quarantine path,
@@ -132,6 +136,10 @@ func (q Quarantine) Put(ctx context.Context, req PutRequest) (Entry, error) {
 		return Entry{}, fmt.Errorf("quarantine: move %q to %q: %w", req.OriginalPath, quarantinePath, err)
 	}
 
+	if req.RemoveEmptyFolders {
+		q.removeEmptyFolders(filepath.Dir(req.OriginalPath), req.RootPath)
+	}
+
 	now := q.clock.Now()
 	var row librarydb.Quarantine
 	err = q.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
@@ -155,13 +163,28 @@ func (q Quarantine) Put(ctx context.Context, req PutRequest) (Entry, error) {
 	return quarantineEntryFromRow(row), nil
 }
 
+// removeEmptyFolders removes folder and its emptied parents, never rootPath itself. Removing a
+// folder that still holds anything fails, which is what stops it.
+func (q Quarantine) removeEmptyFolders(folder, rootPath string) {
+	root := filepath.Clean(rootPath)
+	for folder != root && strings.HasPrefix(folder, root+string(filepath.Separator)) {
+		if err := q.fsys.Remove(folder); err != nil {
+			return
+		}
+		folder = filepath.Dir(folder)
+	}
+}
+
+// QuarantineDirectory is where each root keeps its quarantine; a scan never treats it as library.
+const QuarantineDirectory = "quarantine"
+
 // reserveQuarantinePath finds an unused path under rootPath's own quarantine
 // directory, dated today -- the same stat-and-retry shape
 // store.unusedBackupPath already uses for an identical problem (an unused
 // name, not an unused id).
 func (q Quarantine) reserveQuarantinePath(rootPath, originalPath string) (string, error) {
 	day := q.clock.Now().UTC().Format("2006-01-02")
-	dir := filepath.Join(rootPath, "quarantine", day)
+	dir := filepath.Join(rootPath, QuarantineDirectory, day)
 	if err := q.fsys.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("quarantine: create %q: %w", dir, err)
 	}

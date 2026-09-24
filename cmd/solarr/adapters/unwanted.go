@@ -107,10 +107,11 @@ func (a RemoveAndBlock) RemoveAndBlockFile(
 // leave the library and stay recoverable, nothing is blocked, and every
 // desired_item that file satisfied is reopened so the album reports what it
 // really has.
-func (a RemoveAndBlock) QuarantineFile(ctx context.Context, mediaObjectID int64) error {
+func (a RemoveAndBlock) QuarantineFile(ctx context.Context, mediaObjectID int64, recycling library.Recycling) error {
 	_, err := a.Action.Do(ctx, library.RemoveAndBlockRequest{
 		MediaObjectID: mediaObjectID, Quarantine: true,
 		QuarantineReason: library.ReasonUserDelete, Reopen: true,
+		QuarantineRetain: recycling.Retain, RemoveEmptyFolders: recycling.RemoveEmptyFolders,
 		At: a.Clock.Now().Unix(),
 	})
 	return err

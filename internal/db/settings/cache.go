@@ -160,6 +160,11 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 		return nil, fmt.Errorf("settings: list naming formats: %w", err)
 	}
 
+	fileManagement, err := c.queries.ListCategoryFileManagement(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list category file management: %w", err)
+	}
+
 	stored, err := c.queries.ListInstanceSettings(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("settings: list instance settings: %w", err)
@@ -184,8 +189,8 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 
 	return newSnapshot(
 		convertUsers(users),
-		withQuality(convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
-			qualityLists, qualityTargets),
+		withFileManagement(withQuality(convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
+			qualityLists, qualityTargets), fileManagement),
 		convertRootFolders(rootFolders),
 		convertAttachments(attachments),
 		access,

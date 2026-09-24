@@ -103,6 +103,8 @@ type Category struct {
 	QualityCutoffID *int64
 	// QualityTarget is the one exact quality the library aims for; nil when none is set.
 	QualityTarget *QualityTarget
+	// FileManagement is Sonarr's File Management and Permissions; the defaults when never saved.
+	FileManagement FileManagement
 }
 
 // QualityTarget is a library's aimed-for quality. BitrateKbps is nil for a lossless codec;

@@ -21,7 +21,7 @@ const schedulerDir = "cmd/solarr/app"
 // build." A (*process) method matching Task.Enqueue's own exact shape --
 // func(context.Context) (jobs.EnqueueResult, error) -- is a periodic action
 // by construction (that shape has no other caller in this codebase); it
-// must appear as some Task's Enqueue *or* RunFull field in buildTaskRegistry,
+// must appear as some Task's Enqueue, RunFull or EnqueueManual field in buildTaskRegistry,
 // or this fails. RunFull shares the exact same shape (todo 4.2's full-rescan
 // trigger, library scan's own second entry point) and is just as real a
 // registration as Enqueue -- a method reachable only through it must not
@@ -76,7 +76,7 @@ func declaredEnqueueMethods(t *testing.T, dir string) []string {
 }
 
 // registeredTaskEnqueueFuncs finds every `Enqueue: p.enqueueX` or
-// `RunFull: p.enqueueX` field inside a jobs.Task{...} composite literal,
+// `RunFull:` or `EnqueueManual: p.enqueueX` field inside a jobs.Task{...} composite literal,
 // anywhere in dir -- deliberately not limited to one file, so the
 // registration can live wherever it is clearest.
 func registeredTaskEnqueueFuncs(t *testing.T, dir string) []string {
@@ -94,7 +94,7 @@ func registeredTaskEnqueueFuncs(t *testing.T, dir string) []string {
 					continue
 				}
 				key, ok := kv.Key.(*ast.Ident)
-				if !ok || (key.Name != "Enqueue" && key.Name != "RunFull") {
+				if !ok || (key.Name != "Enqueue" && key.Name != "RunFull" && key.Name != "EnqueueManual") {
 					continue
 				}
 				selector, ok := kv.Value.(*ast.SelectorExpr)

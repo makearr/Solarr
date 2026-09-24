@@ -496,3 +496,42 @@ func TestActionKeyFor_DiffersPerMoveJob(t *testing.T) {
 		t.Error("ActionKeyFor does not distinguish different move jobs")
 	}
 }
+
+// A rename run for one library applies its Set Permissions; a move that is no library's does not.
+func TestJob_AppliesTheLibrarysPermissionsToARename(t *testing.T) {
+	for _, categoryID := range []*int64{nil, new(int64)} {
+		fx := newFixture(t)
+		fx.writeFile(t, "/root1/Old/track.flac", "bytes")
+		objectID := fx.registerObject(t, 1, "Old/track.flac", "bytes")
+		moveJobs := library.NewMoveJobs(fx.store)
+		jobID, err := moveJobs.Create(t.Context(), library.NewMoveJob{
+			Reason: string(mover.ReasonRename), FilesTotal: 1, BytesTotal: 5,
+			PlanJSON: "{}", CreatedAt: fx.clock.Now().Unix(), CategoryID: categoryID,
+		})
+		if err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+		if err := moveJobs.AddItems(t.Context(), jobID, []library.NewMoveItem{{
+			MediaObjectID: objectID, DestRootID: 1, DestRelPath: "Artist/New/track.flac", Bytes: 5,
+		}}); err != nil {
+			t.Fatalf("AddItems: %v", err)
+		}
+		job := moverjob.NewJob(moverjob.Config{
+			FS: fx.fsys, MoveJobs: moveJobs, Physical: library.NewPhysical(fx.store),
+			Roots: fakeRoots{1: {Path: "/root1", FSID: "fs-a"}}, Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+			Permissions: func(int64) (mover.Permissions, bool, error) {
+				return mover.Permissions{FolderMode: 0o770, FileMode: 0o660, GID: -1}, true, nil
+			},
+		})
+		if err := fx.run(t, job, jobID); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		info, err := fx.fsys.Stat("/root1/Artist/New/track.flac")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if changed := info.Mode.Perm() == 0o660; changed != (categoryID != nil) {
+			t.Errorf("library %v: file mode %04o", categoryID, info.Mode.Perm())
+		}
+	}
+}

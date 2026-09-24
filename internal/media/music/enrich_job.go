@@ -2,6 +2,7 @@ package music
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -112,7 +113,7 @@ const maxEditionChoiceFiles = 200
 // and on a fresh library the tracklist arrives afterwards, so without this
 // every album on disk stayed wanted with no files present (found 2026-09-17).
 type Realigner interface {
-	RealignWorks(ctx context.Context, workIDs []int64) error
+	RealignWorks(ctx context.Context, workIDs []int64, manual bool) error
 }
 
 // EnrichJobConfig is what an EnrichJob needs. Every field is required except
@@ -161,7 +162,12 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 // refined edition's kind moves off 'unknown', so PlaceholderEditions' own result
 // set shrinks as work succeeds -- a restart simply asks the same question again
 // and gets whatever is left (library.PlaceholderEditions's doc comment).
-func (j *EnrichJob) Run(ctx context.Context, _ jobs.Job) error {
+func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
+	var payload EnrichPayload
+	if len(job.Payload) > 0 {
+		// An unreadable payload is an ordinary scheduled run, as every run was before it had one.
+		_ = json.Unmarshal(job.Payload, &payload)
+	}
 	if j.fs != nil && j.imagesDir != "" {
 		if err := j.fs.MkdirAll(j.imagesDir, 0o755); err != nil {
 			return fmt.Errorf("music: enrich: create %s: %w", j.imagesDir, err)
@@ -205,7 +211,7 @@ func (j *EnrichJob) Run(ctx context.Context, _ jobs.Job) error {
 	refinedWorkIDs = append(refinedWorkIDs, j.enrichEditionless(ctx)...)
 
 	if j.realigner != nil && len(refinedWorkIDs) > 0 {
-		if err := j.realigner.RealignWorks(ctx, refinedWorkIDs); err != nil {
+		if err := j.realigner.RealignWorks(ctx, refinedWorkIDs, payload.Manual); err != nil {
 			j.logger.WarnContext(ctx, "realign refined works failed",
 				slog.Int("works", len(refinedWorkIDs)), slog.Any("error", err))
 		}
@@ -718,9 +724,18 @@ const (
 )
 
 // EnqueueEnrichment submits one sweep, deduplicated by EnrichActionKey.
-func EnqueueEnrichment(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error) {
+func EnqueueEnrichment(ctx context.Context, queue *jobs.Queue, manual bool) (jobs.EnqueueResult, error) {
+	payload, err := json.Marshal(EnrichPayload{Manual: manual})
+	if err != nil {
+		return jobs.EnqueueResult{}, err
+	}
 	return queue.Enqueue(ctx, jobs.Request{
-		Type: EnrichJobType, ActionKey: EnrichActionKey, Priority: jobs.PriorityLow,
-		Payload: []byte("{}"),
+		Type: EnrichJobType, ActionKey: EnrichActionKey, Priority: jobs.PriorityLow, Payload: payload,
 	})
+}
+
+// EnrichPayload says whether a person asked for this run ("Run now"), which a library's
+// "Rescan Artist Folder after Refresh: Only After Manual Refresh" depends on.
+type EnrichPayload struct {
+	Manual bool `json:"manual,omitempty"`
 }

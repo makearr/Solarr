@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -18,12 +19,35 @@ const (
 	databaseMaintenanceJobType = jobs.Type("database.maintenance")
 	backupJobType              = jobs.Type("database.backup")
 	backupCleanupJobType       = jobs.Type("database.backup_cleanup")
+	recycleBinCleanupJobType   = jobs.Type("library.recycle_bin_cleanup")
 )
 
 var maintenanceDefinitions = []jobs.Definition{
 	{Type: databaseMaintenanceJobType, Pool: jobs.PoolMaintenance, Mutating: false, MaxAttempts: 1},
 	{Type: backupJobType, Pool: jobs.PoolMaintenance, Mutating: false, MaxAttempts: 3},
 	{Type: backupCleanupJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3},
+	{Type: recycleBinCleanupJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3},
+}
+
+// recycleBinCleanupJob purges quarantine entries past the retention their library gave them
+// (section 10.8; Sonarr's recycling bin cleanup).
+type recycleBinCleanupJob struct {
+	quarantine library.Quarantine
+	logger     *slog.Logger
+}
+
+func (j recycleBinCleanupJob) Run(ctx context.Context, _ jobs.Job) error {
+	result, err := j.quarantine.Sweep(ctx, library.QuarantineConfig{}, nil, nil)
+	if err != nil {
+		return err
+	}
+	for _, failure := range result.Errors {
+		j.logger.Warn("recycling bin: could not purge an entry", slog.Any("error", failure))
+	}
+	if result.Purged > 0 {
+		j.logger.Info("recycling bin cleaned", slog.Int("purged", result.Purged), slog.Int64("bytes_freed", result.BytesFreed))
+	}
+	return nil
 }
 
 // databaseMaintenanceJob runs Store.Maintain on every database in turn, so only one is paused at
@@ -109,6 +133,9 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 	executor.Handle(databaseMaintenanceJobType, databaseMaintenanceJob{
 		stores: []*store.Store{p.settings, p.jobs, p.library, p.metadata}, logger: p.logger,
 	})
+	executor.Handle(recycleBinCleanupJobType, recycleBinCleanupJob{
+		quarantine: library.NewQuarantine(p.library, p.fsys, clock.NewSystem()), logger: p.logger,
+	})
 	executor.Handle(backupJobType, backupJob{stores: backedUp, directory: p.config.Paths.BackupDir, logger: p.logger})
 	executor.Handle(backupCleanupJobType, backupCleanupJob{
 		stores: backedUp, directory: p.config.Paths.BackupDir, cache: p.cache, clock: clock.NewSystem(), logger: p.logger,
@@ -132,6 +159,10 @@ func (p *process) enqueueDatabaseMaintenance(ctx context.Context) (jobs.EnqueueR
 
 func (p *process) enqueueBackup(ctx context.Context) (jobs.EnqueueResult, error) {
 	return p.enqueueMaintenanceJob(ctx, backupJobType)
+}
+
+func (p *process) enqueueRecycleBinCleanup(ctx context.Context) (jobs.EnqueueResult, error) {
+	return p.enqueueMaintenanceJob(ctx, recycleBinCleanupJobType)
 }
 
 func (p *process) enqueueBackupCleanup(ctx context.Context) (jobs.EnqueueResult, error) {

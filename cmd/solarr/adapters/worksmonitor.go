@@ -22,8 +22,10 @@ type WorksMonitor struct {
 	Identity library.Identity
 	Desired  library.Desired
 	// Remover quarantines the files of an album being deleted with them.
-	Remover          FileRemover
-	Categories       music.CategoryFinder
+	Remover    FileRemover
+	Categories music.CategoryFinder
+	// Libraries gives a removal its library's recycling bin.
+	Libraries        LibraryLookup
 	DefaultProfileID int64
 	Logger           *slog.Logger
 }
@@ -32,7 +34,7 @@ type WorksMonitor struct {
 // album's files is quarantine and nothing else -- no blocking, no blocklist
 // (section 10.8, ADR-53's steps are separate choices).
 type FileRemover interface {
-	QuarantineFile(ctx context.Context, mediaObjectID int64) error
+	QuarantineFile(ctx context.Context, mediaObjectID int64, recycling library.Recycling) error
 }
 
 // SetWorkMonitored always ensures the album item exists, monitored or not:
@@ -240,7 +242,8 @@ func boolToInt64(value bool) int64 {
 func (a WorksMonitor) RemoveWork(
 	ctx context.Context, workID int64, deleteFiles bool,
 ) (apiserver.RemoveWorkResult, error) {
-	if _, err := a.Works.Detail(ctx, workID); err != nil {
+	detail, err := a.Works.Detail(ctx, workID)
+	if err != nil {
 		return apiserver.RemoveWorkResult{}, err
 	}
 
@@ -253,8 +256,9 @@ func (a WorksMonitor) RemoveWork(
 		// Quarantine, never delete: section 10.8 -- the bytes stay
 		// recoverable for the retention window, and a mistaken delete of a
 		// whole album is exactly what that window is for.
+		recycling := recyclingFor(a.Libraries, detail.CategoryIDs)
 		for _, mediaObjectID := range files {
-			if err := a.Remover.QuarantineFile(ctx, mediaObjectID); err != nil {
+			if err := a.Remover.QuarantineFile(ctx, mediaObjectID, recycling); err != nil {
 				return apiserver.RemoveWorkResult{}, err
 			}
 			quarantined++
@@ -293,7 +297,8 @@ func (a WorksMonitor) RemovePart(
 
 	var result apiserver.RemovePartResult
 	if deleteFiles && part.File != nil {
-		if err := a.Remover.QuarantineFile(ctx, part.File.MediaObjectID); err != nil {
+		recycling := recyclingFor(a.Libraries, detail.CategoryIDs)
+		if err := a.Remover.QuarantineFile(ctx, part.File.MediaObjectID, recycling); err != nil {
 			return apiserver.RemovePartResult{}, err
 		}
 		result.FilesQuarantined = 1

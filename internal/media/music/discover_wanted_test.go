@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"log/slog"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -32,6 +34,11 @@ func (f fakeCategories) Category(id int64) (settings.Category, bool) {
 }
 
 func newConsumerWithDiscovery(t *testing.T, monitorDiscovered string) (music.Consumer, *store.Store, *fsx.Mem) {
+	return newConsumerForCategory(t, settings.Category{ID: discoveryCategoryID, MonitorDiscovered: monitorDiscovered})
+}
+
+// newConsumerForCategory is newConsumerWithDiscovery with the whole library under a test's control.
+func newConsumerForCategory(t *testing.T, category settings.Category) (music.Consumer, *store.Store, *fsx.Mem) {
 	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
@@ -67,10 +74,8 @@ func newConsumerWithDiscovery(t *testing.T, monitorDiscovered string) (music.Con
 		FS: fsys, Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened),
 		Unidentified: library.NewUnidentified(opened),
 		Clock:        fake, Logger: slog.New(slog.DiscardHandler),
-		Desired: &desired,
-		Categories: fakeCategories{
-			discoveryCategoryID: {ID: discoveryCategoryID, MonitorDiscovered: monitorDiscovered},
-		},
+		Desired:          &desired,
+		Categories:       fakeCategories{category.ID: category},
 		DefaultProfileID: 99,
 	})
 	return consumer, opened, fsys
@@ -224,5 +229,33 @@ func TestDiscoverWanted_ASecondSweepAfterEnrichmentBackfillsRealTrackCoverage(t 
 	}
 	if len(files) != 2 {
 		t.Fatalf("want two desired_item_file rows, got %d", len(files))
+	}
+}
+
+// "Change File Date" at rescan sets a file's date to its release date, and never on a read-only root.
+func TestObserve_ChangesFileDatesWhereTheLibraryAsks(t *testing.T) {
+	for _, readOnly := range []bool{false, true} {
+		fileManagement := settings.DefaultFileManagement
+		fileManagement.ChangeFileDate = settings.FileDateReleaseDate
+		consumer, _, fsys := newConsumerForCategory(t, settings.Category{
+			ID: discoveryCategoryID, MonitorDiscovered: settings.MonitorDiscoveredNone, FileManagement: fileManagement,
+		})
+		content := []byte("heka - watermark - 03")
+		writeMusicFile(t, fsys, "Heka/Watermark/03.flac", content)
+		root := settings.RootFolder{ID: 1, Path: testRoot, Online: true, Writable: true, ReadOnly: readOnly}
+		batch := []scan.Observed{observedFile("Heka/Watermark/03.flac", int64(len(content)), mediatool.Tags{
+			"album": "Watermark", "date": "1988-09-19", "tracknumber": "3",
+		})}
+		if err := consumer.Observe(t.Context(), root, discoveryCategoryID, batch); err != nil {
+			t.Fatalf("Observe: %v", err)
+		}
+		info, err := fsys.Stat(path.Join(testRoot, "Heka/Watermark/03.flac"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		released := time.Date(1988, time.September, 19, 0, 0, 0, 0, time.UTC)
+		if changed := info.ModTime.Equal(released); changed == readOnly {
+			t.Errorf("read-only %v: modified %v", readOnly, info.ModTime)
+		}
 	}
 }

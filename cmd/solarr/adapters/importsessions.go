@@ -24,6 +24,8 @@ type ImportSessions struct {
 	Revert   library.ImportRevert
 	Manual   importjob.ManualCommitter
 	Clock    clock.Clock
+	// Libraries gives a revert its library's recycling bin.
+	Libraries LibraryLookup
 }
 
 func (a ImportSessions) ListImportSessions(
@@ -77,7 +79,19 @@ func (a ImportSessions) DismissImportSession(ctx context.Context, id int64) erro
 // apiserver.ErrImportSessionNotRevertible, the same translation
 // CancelImportSession already does for library.ErrSessionNotCancellable.
 func (a ImportSessions) RevertImportSession(ctx context.Context, id int64, retainHours int) (apiserver.ImportRevertResult, error) {
-	result, err := a.Revert.Revert(ctx, id, time.Duration(retainHours)*time.Hour, a.Clock.Now().Unix())
+	session, err := a.Sessions.Get(ctx, id)
+	if err != nil {
+		return apiserver.ImportRevertResult{}, err
+	}
+	var categoryIDs []int64
+	if session.CategoryID != nil {
+		categoryIDs = []int64{*session.CategoryID}
+	}
+	recycling := recyclingFor(a.Libraries, categoryIDs)
+	if retainHours > 0 {
+		recycling.Retain = time.Duration(retainHours) * time.Hour
+	}
+	result, err := a.Revert.Revert(ctx, id, recycling, a.Clock.Now().Unix())
 	if errors.Is(err, library.ErrSessionNotRevertible) {
 		return apiserver.ImportRevertResult{}, apiserver.ErrImportSessionNotRevertible
 	}

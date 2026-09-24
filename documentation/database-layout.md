@@ -126,6 +126,7 @@ Both are scheduler tasks (Settings -> Scheduler, Maintenance), since 2026-09-24:
 | Database maintenance | Sundays 04:00 | Per database in turn: `integrity_check`, `optimize`, `VACUUM`, `wal_checkpoint(TRUNCATE)` |
 | Backup | daily 01:00 | A rotation backup of `library.db` and `jobs.db` |
 | Clean old backups | daily 01:30 | Keeps the newest N (default 7) or the last N days; never fewer than 3 |
+| Clean recycling bin | daily 02:30 | Purges quarantine entries past their library's retention ([file-management.md](file-management.md)) |
 
 **Maintenance holds the writer exclusively** (`store.Maintain`), so every write to that database
 waits until it finishes; the others keep working. A failed integrity check stops that database's

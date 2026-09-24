@@ -162,6 +162,26 @@ const (
 	ExclusionPatternWriteActionRefuse ExclusionPatternWriteAction = "refuse"
 )
 
+// Defines values for FileManagementChangeFileDate.
+const (
+	FileManagementChangeFileDateNone        FileManagementChangeFileDate = "none"
+	FileManagementChangeFileDateReleaseDate FileManagementChangeFileDate = "release_date"
+)
+
+// Defines values for FileManagementPropersRepacks.
+const (
+	FileManagementPropersRepacksDoNotPrefer      FileManagementPropersRepacks = "do_not_prefer"
+	FileManagementPropersRepacksDoNotUpgrade     FileManagementPropersRepacks = "do_not_upgrade"
+	FileManagementPropersRepacksPreferAndUpgrade FileManagementPropersRepacks = "prefer_and_upgrade"
+)
+
+// Defines values for FileManagementRescanAfterRefresh.
+const (
+	FileManagementRescanAfterRefreshAfterManual FileManagementRescanAfterRefresh = "after_manual"
+	FileManagementRescanAfterRefreshAlways      FileManagementRescanAfterRefresh = "always"
+	FileManagementRescanAfterRefreshNever       FileManagementRescanAfterRefresh = "never"
+)
+
 // Defines values for HealthCheckSeverity.
 const (
 	HealthCheckSeverityError   HealthCheckSeverity = "error"
@@ -1287,6 +1307,35 @@ type ExternalID struct {
 	Provider   string `json:"provider"`
 }
 
+// FileManagement Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's quarantine: nothing is deleted directly, so only how long it keeps what this library removes is set here.
+type FileManagement struct {
+	ChangeFileDate FileManagementChangeFileDate `json:"change_file_date"`
+
+	// ChmodFolder Octal, such as 755; files get the same without the execute bits.
+	ChmodFolder string `json:"chmod_folder"`
+
+	// ChownGroup A group name or number; empty leaves the group alone.
+	ChownGroup               string                           `json:"chown_group"`
+	CreateEmptyArtistFolders bool                             `json:"create_empty_artist_folders"`
+	DeleteEmptyFolders       bool                             `json:"delete_empty_folders"`
+	PropersRepacks           FileManagementPropersRepacks     `json:"propers_repacks"`
+	RecycleRetentionDays     int64                            `json:"recycle_retention_days"`
+	RescanAfterRefresh       FileManagementRescanAfterRefresh `json:"rescan_after_refresh"`
+	SetPermissions           bool                             `json:"set_permissions"`
+
+	// UnmonitorDeleted Lidarr's "Ignore Deleted Tracks" -- an album losing a file is unmonitored.
+	UnmonitorDeleted bool `json:"unmonitor_deleted"`
+}
+
+// FileManagementChangeFileDate defines model for FileManagement.ChangeFileDate.
+type FileManagementChangeFileDate string
+
+// FileManagementPropersRepacks defines model for FileManagement.PropersRepacks.
+type FileManagementPropersRepacks string
+
+// FileManagementRescanAfterRefresh defines model for FileManagement.RescanAfterRefresh.
+type FileManagementRescanAfterRefresh string
+
 // GateResult A hard requirement, evaluated before any comparison (ADR-40 stage 1).
 type GateResult struct {
 	Gate   string `json:"gate"`
@@ -1463,7 +1512,7 @@ type ImportPlacementResult struct {
 
 // ImportRevertRequest defines model for ImportRevertRequest.
 type ImportRevertRequest struct {
-	// QuarantineRetainHours Defaults to 168 (one week), the same default RemoveAndBlockRequest uses.
+	// QuarantineRetainHours Defaults to the session's library's recycling bin retention (its File Management), one week unless changed.
 	QuarantineRetainHours *int `json:"quarantine_retain_hours,omitempty"`
 }
 
@@ -3262,6 +3311,9 @@ type CreateCategoryJSONRequestBody CreateCategoryJSONBody
 // UpdateCategoryJSONRequestBody defines body for UpdateCategory for application/json ContentType.
 type UpdateCategoryJSONRequestBody = CategoryWrite
 
+// SetLibraryFileManagementJSONRequestBody defines body for SetLibraryFileManagement for application/json ContentType.
+type SetLibraryFileManagementJSONRequestBody = FileManagement
+
 // SetLibraryNamingJSONRequestBody defines body for SetLibraryNaming for application/json ContentType.
 type SetLibraryNamingJSONRequestBody = NamingSettings
 
@@ -3528,6 +3580,12 @@ type ServerInterface interface {
 	// Rename a category, reprioritise it, or change its default quality/ language profile or monitor-discovered policy. Administrator only. `media_type` never changes -- it is identity, not policy.
 	// (PATCH /categories/{id})
 	UpdateCategory(w http.ResponseWriter, r *http.Request, id int64)
+	// A library's File Management and Permissions (Sonarr's). Administrator only.
+	// (GET /categories/{id}/file-management)
+	GetLibraryFileManagement(w http.ResponseWriter, r *http.Request, id int64)
+	// Save a library's File Management and Permissions. Administrator only.
+	// (PUT /categories/{id}/file-management)
+	SetLibraryFileManagement(w http.ResponseWriter, r *http.Request, id int64)
 	// A library's naming, its media type's naming scheme, and rendered examples. Administrator only.
 	// (GET /categories/{id}/naming)
 	GetLibraryNaming(w http.ResponseWriter, r *http.Request, id int64)
@@ -4140,6 +4198,18 @@ func (_ Unimplemented) GetCategory(w http.ResponseWriter, r *http.Request, id in
 // Rename a category, reprioritise it, or change its default quality/ language profile or monitor-discovered policy. Administrator only. `media_type` never changes -- it is identity, not policy.
 // (PATCH /categories/{id})
 func (_ Unimplemented) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A library's File Management and Permissions (Sonarr's). Administrator only.
+// (GET /categories/{id}/file-management)
+func (_ Unimplemented) GetLibraryFileManagement(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Save a library's File Management and Permissions. Administrator only.
+// (PUT /categories/{id}/file-management)
+func (_ Unimplemented) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5921,6 +5991,72 @@ func (siw *ServerInterfaceWrapper) UpdateCategory(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetLibraryFileManagement operation middleware
+func (siw *ServerInterfaceWrapper) GetLibraryFileManagement(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLibraryFileManagement(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetLibraryFileManagement operation middleware
+func (siw *ServerInterfaceWrapper) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetLibraryFileManagement(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10598,6 +10734,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/categories/{id}", wrapper.UpdateCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/file-management", wrapper.GetLibraryFileManagement)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/categories/{id}/file-management", wrapper.SetLibraryFileManagement)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories/{id}/naming", wrapper.GetLibraryNaming)

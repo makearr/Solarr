@@ -54,6 +54,8 @@ type Job struct {
 	CreatedAt    int64
 	FinishedAt   *int64
 	Error        string
+	// CategoryID is the library a rename ran for; nil for a move that is not one library's.
+	CategoryID *int64
 }
 
 // NewMoveJob is what Create needs to start one job.
@@ -64,6 +66,7 @@ type NewMoveJob struct {
 	BytesTotal   int64
 	PlanJSON     string
 	CreatedAt    int64
+	CategoryID   *int64
 }
 
 // Item is one move_item row.
@@ -94,7 +97,7 @@ func (m MoveJobs) Create(ctx context.Context, params NewMoveJob) (int64, error) 
 		row, err := librarydb.New(tx).CreateMoveJob(ctx, librarydb.CreateMoveJobParams{
 			Reason: params.Reason, SourceRootID: nullInt64(params.SourceRootID),
 			FilesTotal: params.FilesTotal, BytesTotal: params.BytesTotal,
-			PlanJson: params.PlanJSON, CreatedAt: params.CreatedAt,
+			PlanJson: params.PlanJSON, CreatedAt: params.CreatedAt, CategoryID: nullInt64(params.CategoryID),
 		})
 		if err != nil {
 			return err
@@ -238,6 +241,7 @@ func jobFromRow(row librarydb.MoveJob) Job {
 		State: row.State, FilesTotal: row.FilesTotal, FilesDone: row.FilesDone,
 		BytesTotal: row.BytesTotal, BytesDone: row.BytesDone, PlanJSON: row.PlanJson,
 		CreatedAt: row.CreatedAt, FinishedAt: int64Ptr(row.FinishedAt), Error: row.Error.String,
+		CategoryID: int64Ptr(row.CategoryID),
 	}
 }
 

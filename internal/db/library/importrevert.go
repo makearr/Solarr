@@ -18,6 +18,13 @@ import (
 // CANCELLED has nothing left.
 var ErrSessionNotRevertible = errors.New("library: import session cannot be reverted from its current state")
 
+// Recycling is where a library's removed files go: how long quarantine keeps them (Sonarr's
+// recycling bin cleanup) and whether folders they leave empty are removed.
+type Recycling struct {
+	Retain             time.Duration
+	RemoveEmptyFolders bool
+}
+
 // RevertResult is what one session's revert actually did.
 type RevertResult struct {
 	QuarantinedPaths []Entry
@@ -73,7 +80,7 @@ func NewImportRevert(
 // import_unit row still pointed at it -- clearing every unit's reference
 // first, before any row is deleted, is what makes deletion order not
 // matter.
-func (r ImportRevert) Revert(ctx context.Context, sessionID int64, retain time.Duration, at int64) (RevertResult, error) {
+func (r ImportRevert) Revert(ctx context.Context, sessionID int64, recycling Recycling, at int64) (RevertResult, error) {
 	session, err := r.sessions.Get(ctx, sessionID)
 	if err != nil {
 		return RevertResult{}, fmt.Errorf("library: revert session %d: %w", sessionID, err)
@@ -104,12 +111,12 @@ func (r ImportRevert) Revert(ctx context.Context, sessionID int64, retain time.D
 		placed = append(placed, unit)
 
 		for _, file := range unitFiles[unit.ID] {
-			if err := r.quarantineObject(ctx, file, retain, &result); err != nil {
+			if err := r.quarantineObject(ctx, file, recycling, &result); err != nil {
 				return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
 			}
 		}
 		for _, extra := range unitExtras[unit.ID] {
-			if err := r.quarantineExtra(ctx, extra, retain, &result); err != nil {
+			if err := r.quarantineExtra(ctx, extra, recycling, &result); err != nil {
 				return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
 			}
 		}
@@ -155,7 +162,7 @@ func (r ImportRevert) Revert(ctx context.Context, sessionID int64, retain time.D
 // session's own row; when it is nil (data from before that migration) or PathsForObject
 // no longer contains it, this refuses to guess among more than one candidate rather
 // than repeat the bug (Invariant 92), and records the skip instead.
-func (r ImportRevert) quarantineObject(ctx context.Context, file UnitFile, retain time.Duration, result *RevertResult) error {
+func (r ImportRevert) quarantineObject(ctx context.Context, file UnitFile, recycling Recycling, result *RevertResult) error {
 	paths, err := r.physical.PathsForObject(ctx, file.MediaObjectID)
 	if err != nil {
 		return fmt.Errorf("paths for object %d: %w", file.MediaObjectID, err)
@@ -175,7 +182,7 @@ func (r ImportRevert) quarantineObject(ctx context.Context, file UnitFile, retai
 	entry, err := r.quarantine.Put(ctx, PutRequest{
 		RootPath: rootPath, OriginalPath: path.Join(rootPath, target.RelPath),
 		RootFolderID: &rootFolderID, MediaObjectID: &mediaObjectID,
-		Reason: ReasonFailedImport, Retain: retain,
+		Reason: ReasonFailedImport, Retain: recycling.Retain, RemoveEmptyFolders: recycling.RemoveEmptyFolders,
 	})
 	if err != nil {
 		if !errors.Is(err, ErrCrossDevice) {
@@ -195,7 +202,7 @@ func (r ImportRevert) quarantineObject(ctx context.Context, file UnitFile, retai
 }
 
 // quarantineExtra moves one extra file the unit placed into quarantine; one already gone is skipped.
-func (r ImportRevert) quarantineExtra(ctx context.Context, extra UnitExtra, retain time.Duration, result *RevertResult) error {
+func (r ImportRevert) quarantineExtra(ctx context.Context, extra UnitExtra, recycling Recycling, result *RevertResult) error {
 	rootPath, ok := r.rootPath(extra.RootFolderID)
 	if !ok {
 		return fmt.Errorf("no known path for root folder %d", extra.RootFolderID)
@@ -203,7 +210,7 @@ func (r ImportRevert) quarantineExtra(ctx context.Context, extra UnitExtra, reta
 	rootFolderID := extra.RootFolderID
 	entry, err := r.quarantine.Put(ctx, PutRequest{
 		RootPath: rootPath, OriginalPath: path.Join(rootPath, extra.RelPath), RootFolderID: &rootFolderID,
-		Reason: ReasonFailedImport, Retain: retain,
+		Reason: ReasonFailedImport, Retain: recycling.Retain, RemoveEmptyFolders: recycling.RemoveEmptyFolders,
 	})
 	switch {
 	case err == nil:

@@ -95,6 +95,26 @@ type CategoryEntry struct {
 	MonitorDiscovered string `yaml:"monitor_discovered,omitempty"`
 	// Naming is absent for a library still on its media type's default.
 	Naming *NamingEntry `yaml:"naming,omitempty"`
+	// FileManagement is absent for a library still on Sonarr's defaults.
+	FileManagement *FileManagementEntry `yaml:"file_management,omitempty"`
+}
+
+// FileManagementEntry is one library's File Management and Permissions.
+type FileManagementEntry struct {
+	PropersRepacks           PropersRepacks     `yaml:"propers_repacks"`
+	RescanAfterRefresh       RescanAfterRefresh `yaml:"rescan_after_refresh"`
+	ChangeFileDate           ChangeFileDate     `yaml:"change_file_date"`
+	RecycleRetentionDays     int64              `yaml:"recycle_retention_days"`
+	DeleteEmptyFolders       bool               `yaml:"delete_empty_folders"`
+	CreateEmptyArtistFolders bool               `yaml:"create_empty_artist_folders"`
+	UnmonitorDeleted         bool               `yaml:"unmonitor_deleted"`
+	SetPermissions           bool               `yaml:"set_permissions"`
+	ChmodFolder              string             `yaml:"chmod_folder"`
+	ChownGroup               string             `yaml:"chown_group,omitempty"`
+}
+
+func (e FileManagementEntry) fileManagement() FileManagement {
+	return FileManagement(e)
 }
 
 // QualityTargetEntry is a library's aimed-for quality.
@@ -288,6 +308,10 @@ func (c *Cache) Export() Document {
 				RenameFiles: category.Naming.RenameFiles, ReplaceIllegalCharacters: category.Naming.ReplaceIllegalCharacters,
 				ColonReplacement: category.Naming.ColonReplacement, Formats: category.Naming.Formats,
 			}
+		}
+		if category.FileManagement != DefaultFileManagement {
+			entry.FileManagement = &FileManagementEntry{}
+			*entry.FileManagement = FileManagementEntry(category.FileManagement)
 		}
 		for _, attachment := range attachments {
 			if attachment.CategoryID != category.ID {
@@ -508,6 +532,13 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 			})
 		}
 		seenCategories[key] = true
+
+		if category.FileManagement != nil {
+			for _, problem := range validateFileManagement(category.FileManagement.fileManagement()) {
+				problem.Path = where + ".file_management." + problem.Path
+				problems = append(problems, problem)
+			}
+		}
 
 		for rootIndex, attached := range category.Roots {
 			// Or the category imports with a silently missing disc.
@@ -788,6 +819,11 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 			if category.Naming != nil {
 				if err := writeCategoryNaming(ctx, queries, id, category.Naming.profile()); err != nil {
 					return fmt.Errorf("category %q naming: %w", key, err)
+				}
+			}
+			if category.FileManagement != nil {
+				if err := writeCategoryFileManagement(ctx, queries, id, category.FileManagement.fileManagement()); err != nil {
+					return fmt.Errorf("category %q file management: %w", key, err)
 				}
 			}
 		}

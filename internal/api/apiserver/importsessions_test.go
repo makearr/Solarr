@@ -387,7 +387,7 @@ func TestRevertImportSession_RequiresAdministrator(t *testing.T) {
 	}
 }
 
-func TestRevertImportSession_DefaultsRetainToOneWeek(t *testing.T) {
+func TestRevertImportSession_LeavesRetainToTheLibraryWhenAbsent(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.importSessions.revertResult = apiserver.ImportRevertResult{
 		UnitsReverted: 2, WorksDeleted: 1, EditionsDeleted: 1, QuarantinedPaths: []string{"/q/1", "/q/2"},
@@ -402,8 +402,8 @@ func TestRevertImportSession_DefaultsRetainToOneWeek(t *testing.T) {
 	if fixture.importSessions.reverted != 42 {
 		t.Errorf("reverted = %d, want 42", fixture.importSessions.reverted)
 	}
-	if fixture.importSessions.lastRetainHours != 168 {
-		t.Errorf("lastRetainHours = %d, want 168 (the default, no body given)", fixture.importSessions.lastRetainHours)
+	if fixture.importSessions.lastRetainHours != 0 {
+		t.Errorf("lastRetainHours = %d, want 0: the library's recycling bin decides", fixture.importSessions.lastRetainHours)
 	}
 	var body map[string]any
 	if err := json.NewDecoder(recorder.Body).Decode(&body); err != nil {

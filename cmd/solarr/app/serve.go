@@ -576,8 +576,8 @@ func (p *process) startServer(ctx context.Context) error {
 				library.NewImportSessions(p.library), library.NewPhysical(p.library), library.NewIdentity(p.library),
 				library.NewQuarantine(p.library, p.fsys, clock.NewSystem()), adapters.RootFolderPath(p.cache),
 			),
-			Manual: p.manualCommitter(),
-			Clock:  clock.NewSystem(),
+			Manual: p.manualCommitter(), Libraries: adapters.Categories{Cache: p.cache},
+			Clock: clock.NewSystem(),
 		},
 		ImportInspector:    adapters.ImportInspector{Queue: p.queue},
 		FingerprintRetrier: fingerprintRetrier{p: p},
@@ -726,7 +726,7 @@ func (p *process) worksMonitor() adapters.WorksMonitor {
 	return adapters.WorksMonitor{
 		Identity: library.NewIdentity(p.library), Works: library.NewWorks(p.library),
 		Desired: library.NewDesired(p.library), Categories: adapters.Categories{Cache: p.cache},
-		Remover:          p.fileRemover(),
+		Libraries: adapters.Categories{Cache: p.cache}, Remover: p.fileRemover(),
 		DefaultProfileID: p.defaultQualityProfileID, Logger: p.logger,
 	}
 }

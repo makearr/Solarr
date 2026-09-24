@@ -12,11 +12,11 @@ import (
 
 const createMoveJob = `-- name: CreateMoveJob :one
 
-INSERT INTO move_job (reason, source_root_id, state, files_total, bytes_total, plan_json, created_at)
+INSERT INTO move_job (reason, source_root_id, state, files_total, bytes_total, plan_json, created_at, category_id)
 VALUES (?1, ?2, 'PLANNED', ?3,
-        ?4, ?5, ?6)
+        ?4, ?5, ?6, ?7)
 RETURNING id, reason, source_root_id, state, files_total, files_done, bytes_total, bytes_done,
-          plan_json, created_at, finished_at, error
+          plan_json, created_at, finished_at, error, category_id
 `
 
 type CreateMoveJobParams struct {
@@ -26,6 +26,7 @@ type CreateMoveJobParams struct {
 	BytesTotal   int64
 	PlanJson     string
 	CreatedAt    int64
+	CategoryID   sql.NullInt64
 }
 
 // ADR-51 (migration 0020). Column lists follow table order, or sqlc stops
@@ -38,6 +39,7 @@ func (q *Queries) CreateMoveJob(ctx context.Context, arg CreateMoveJobParams) (M
 		arg.BytesTotal,
 		arg.PlanJson,
 		arg.CreatedAt,
+		arg.CategoryID,
 	)
 	var i MoveJob
 	err := row.Scan(
@@ -53,6 +55,7 @@ func (q *Queries) CreateMoveJob(ctx context.Context, arg CreateMoveJobParams) (M
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.Error,
+		&i.CategoryID,
 	)
 	return i, err
 }
@@ -81,7 +84,7 @@ func (q *Queries) FinishMoveJob(ctx context.Context, arg FinishMoveJobParams) er
 
 const getMoveJob = `-- name: GetMoveJob :one
 SELECT id, reason, source_root_id, state, files_total, files_done, bytes_total, bytes_done,
-       plan_json, created_at, finished_at, error
+       plan_json, created_at, finished_at, error, category_id
 FROM move_job WHERE id = ?
 `
 
@@ -101,6 +104,7 @@ func (q *Queries) GetMoveJob(ctx context.Context, id int64) (MoveJob, error) {
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.Error,
+		&i.CategoryID,
 	)
 	return i, err
 }
@@ -175,7 +179,7 @@ func (q *Queries) ListMoveItems(ctx context.Context, moveJobID int64) ([]MoveIte
 
 const listMoveJobs = `-- name: ListMoveJobs :many
 SELECT id, reason, source_root_id, state, files_total, files_done, bytes_total, bytes_done,
-       plan_json, created_at, finished_at, error
+       plan_json, created_at, finished_at, error, category_id
 FROM move_job
 WHERE ?1 = 0 OR state = ?2
 ORDER BY created_at DESC
@@ -210,6 +214,7 @@ func (q *Queries) ListMoveJobs(ctx context.Context, arg ListMoveJobsParams) ([]M
 			&i.CreatedAt,
 			&i.FinishedAt,
 			&i.Error,
+			&i.CategoryID,
 		); err != nil {
 			return nil, err
 		}

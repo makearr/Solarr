@@ -1084,6 +1084,39 @@ func (q *Queries) SetDesiredItemState(ctx context.Context, arg SetDesiredItemSta
 	return err
 }
 
+const unmonitorDesiredItemsWithMissingFiles = `-- name: UnmonitorDesiredItemsWithMissingFiles :execrows
+UPDATE desired_item SET monitored = 0, dirty = 1
+WHERE id IN (
+  SELECT di.id FROM desired_item di
+  JOIN desired_item_file dif ON dif.desired_item_id = di.id
+  JOIN library_path p ON p.media_object_id = dif.media_object_id
+  WHERE di.monitored = 1 AND di.category_id = ? AND p.root_folder_id = ? AND p.missing_since = ?
+  ORDER BY di.id
+  LIMIT ?
+)
+`
+
+type UnmonitorDesiredItemsWithMissingFilesParams struct {
+	CategoryID   int64
+	RootFolderID int64
+	MissingSince sql.NullInt64
+	Limit        int64
+}
+
+// A library's "Unmonitor Deleted Tracks": items holding a file a full scan just found gone.
+func (q *Queries) UnmonitorDesiredItemsWithMissingFiles(ctx context.Context, arg UnmonitorDesiredItemsWithMissingFilesParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, unmonitorDesiredItemsWithMissingFiles,
+		arg.CategoryID,
+		arg.RootFolderID,
+		arg.MissingSince,
+		arg.Limit,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const upsertHuntQueueEntry = `-- name: UpsertHuntQueueEntry :exec
 INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at,
                         release_date, eligible_after, search_count)

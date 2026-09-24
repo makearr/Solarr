@@ -400,6 +400,8 @@ func New(config Config) (*Server, error) {
 			secured.Put("/categories/{id}/quality", server.routeSetLibraryQuality)
 			secured.Get("/categories/{id}/naming", server.routeGetLibraryNaming)
 			secured.Put("/categories/{id}/naming", server.routeSetLibraryNaming)
+			secured.Get("/categories/{id}/file-management", server.routeGetLibraryFileManagement)
+			secured.Put("/categories/{id}/file-management", server.routeSetLibraryFileManagement)
 			secured.Post("/categories/{id}/naming/examples", server.routePreviewLibraryNaming)
 			secured.Post("/categories/{id}/rename", server.routeRenameLibrary)
 			secured.Post("/works/{id}/parts/{partId}/monitor", server.routeSetPartMonitored)

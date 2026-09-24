@@ -2467,6 +2467,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/file-management": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** A library's File Management and Permissions (Sonarr's). Administrator only. */
+        get: operations["getLibraryFileManagement"];
+        /** Save a library's File Management and Permissions. Administrator only. */
+        put: operations["setLibraryFileManagement"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/naming/examples": {
         parameters: {
             query?: never;
@@ -4316,6 +4336,26 @@ export interface components {
             /** @description Whether an AcoustID application key is stored. Read-only here and ignored on a PATCH; it is written through POST /metadata/acoustid/apikey. Never returned, not even masked -- saying whether one exists is all a screen asking for one needs, and decrypting it to render would be gratuitous (ADR-14). */
             acoustid_api_key?: components["schemas"]["SecretMask"];
         };
+        /** @description Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's quarantine: nothing is deleted directly, so only how long it keeps what this library removes is set here. */
+        FileManagement: {
+            /** @enum {string} */
+            propers_repacks: "prefer_and_upgrade" | "do_not_upgrade" | "do_not_prefer";
+            /** @enum {string} */
+            rescan_after_refresh: "always" | "after_manual" | "never";
+            /** @enum {string} */
+            change_file_date: "none" | "release_date";
+            /** Format: int64 */
+            recycle_retention_days: number;
+            delete_empty_folders: boolean;
+            create_empty_artist_folders: boolean;
+            /** @description Lidarr's "Ignore Deleted Tracks" -- an album losing a file is unmonitored. */
+            unmonitor_deleted: boolean;
+            set_permissions: boolean;
+            /** @description Octal, such as 755; files get the same without the execute bits. */
+            chmod_folder: string;
+            /** @description A group name or number; empty leaves the group alone. */
+            chown_group: string;
+        };
         /** @description ADR-48's commit-line knob (import.auto_commit_confidence) and the transfer ladder import walks when it places a file. */
         ImportSettings: {
             /**
@@ -4368,7 +4408,7 @@ export interface components {
             errors: string[];
         };
         ImportRevertRequest: {
-            /** @description Defaults to 168 (one week), the same default RemoveAndBlockRequest uses. */
+            /** @description Defaults to the session's library's recycling bin retention (its File Management), one week unless changed. */
             quarantine_retain_hours?: number;
         };
         /** @description POST .../category's own outcome: every unit the session had already decided COMMIT but not yet placed, placed best-effort. */
@@ -9038,6 +9078,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LibraryNaming"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getLibraryFileManagement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The library's settings, Sonarr's defaults when never saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileManagement"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setLibraryFileManagement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileManagement"];
+            };
+        };
+        responses: {
+            /** @description The saved settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileManagement"];
                 };
             };
             400: components["responses"]["Problem"];

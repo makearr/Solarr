@@ -336,6 +336,7 @@ function ExpandToggle({ label, isOpen, onToggle }: { label: string; isOpen: bool
 // generic per-library config, each with the tier that may see it.
 const CONFIG_SECTIONS: readonly { key: string; label: string; tier: Tier }[] = [
   { key: "naming", label: "Naming", tier: "advanced" },
+  { key: "file-management", label: "File management", tier: "advanced" },
   { key: "import-lists", label: "Import lists", tier: "advanced" },
   { key: "quality", label: "Quality", tier: "normal" },
   { key: "language", label: "Language", tier: "expert" },

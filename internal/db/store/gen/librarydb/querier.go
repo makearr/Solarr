@@ -701,6 +701,8 @@ type Querier interface {
 	// missing mark (section 10.4): a file coming back is exactly the case this exists
 	// for.
 	TouchLibraryPath(ctx context.Context, arg TouchLibraryPathParams) error
+	// A library's "Unmonitor Deleted Tracks": items holding a file a full scan just found gone.
+	UnmonitorDesiredItemsWithMissingFiles(ctx context.Context, arg UnmonitorDesiredItemsWithMissingFilesParams) (int64, error)
 	UpdateEdition(ctx context.Context, arg UpdateEditionParams) error
 	// Same "enrichment fills a gap, never overwrites" rule as year: a work
 	// created before this column existed, or from a source with no MusicBrainz

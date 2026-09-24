@@ -97,6 +97,7 @@ type Querier interface {
 	ListArrInstances(ctx context.Context) ([]ArrInstance, error)
 	ListCategories(ctx context.Context) ([]Category, error)
 	ListCategoryAccessForUser(ctx context.Context, userID int64) ([]UserCategoryAccess, error)
+	ListCategoryFileManagement(ctx context.Context) ([]CategoryFileManagement, error)
 	ListCategoryQualityProfiles(ctx context.Context) ([]CategoryQualityProfile, error)
 	ListCategoryQualityTargets(ctx context.Context) ([]CategoryQualityTarget, error)
 	ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFolder, error)
@@ -177,6 +178,7 @@ type Querier interface {
 	UpdateNamingProfile(ctx context.Context, arg UpdateNamingProfileParams) error
 	UpdateQualityProfile(ctx context.Context, arg UpdateQualityProfileParams) error
 	UpsertCalendarFeed(ctx context.Context, arg UpsertCalendarFeedParams) error
+	UpsertCategoryFileManagement(ctx context.Context, arg UpsertCategoryFileManagementParams) error
 	UpsertCategoryQualityTarget(ctx context.Context, arg UpsertCategoryQualityTargetParams) error
 }
 

@@ -243,3 +243,15 @@ LIMIT sqlc.arg(page_size);
 -- widened the key). Removing an album is removing the intent to have it.
 -- name: DeleteDesiredItemsForWork :exec
 DELETE FROM desired_item WHERE work_id = ?;
+
+-- A library's "Unmonitor Deleted Tracks": items holding a file a full scan just found gone.
+-- name: UnmonitorDesiredItemsWithMissingFiles :execrows
+UPDATE desired_item SET monitored = 0, dirty = 1
+WHERE id IN (
+  SELECT di.id FROM desired_item di
+  JOIN desired_item_file dif ON dif.desired_item_id = di.id
+  JOIN library_path p ON p.media_object_id = dif.media_object_id
+  WHERE di.monitored = 1 AND di.category_id = ? AND p.root_folder_id = ? AND p.missing_since = ?
+  ORDER BY di.id
+  LIMIT ?
+);

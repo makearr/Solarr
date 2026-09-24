@@ -162,6 +162,16 @@ func (n Naming) RenderTrack(track TrackNaming, discCount int, originalRelPath st
 	return rendered, warnings, nil
 }
 
+// RenderArtistFolder renders the artist folder alone, for creating an empty one.
+func (n Naming) RenderArtistFolder(artistName string) (string, error) {
+	segments, err := naming.Compile(n.Formats[SlotArtistFolder])
+	if err != nil {
+		return "", fmt.Errorf("music: naming %s: %w", SlotArtistFolder, err)
+	}
+	rendered, _, err := naming.RenderPath(segments, TrackNaming{ArtistName: artistName}.Context(), n.Options, "")
+	return rendered, err
+}
+
 // TrackNaming is every fact a track's name can draw on; a zero field renders as absent.
 type TrackNaming struct {
 	ArtistName       string

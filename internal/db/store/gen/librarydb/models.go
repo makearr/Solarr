@@ -462,6 +462,7 @@ type MoveJob struct {
 	CreatedAt    int64
 	FinishedAt   sql.NullInt64
 	Error        sql.NullString
+	CategoryID   sql.NullInt64
 }
 
 type Organisation struct {

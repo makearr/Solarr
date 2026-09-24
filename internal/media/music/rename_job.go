@@ -196,7 +196,7 @@ func RenameStart(
 	}
 	jobID, err := cfg.MoveJobs.Create(ctx, library.NewMoveJob{
 		Reason: string(mover.ReasonRename), FilesTotal: int64(len(items)), BytesTotal: bytesTotal,
-		PlanJSON: string(planJSON), CreatedAt: cl.Now().Unix(),
+		PlanJSON: string(planJSON), CreatedAt: cl.Now().Unix(), CategoryID: onlyCategoryID,
 	})
 	if err != nil {
 		return mover.MovePlan{}, 0, nil, fmt.Errorf("music: create move job for root %d: %w", rootFolderID, err)
