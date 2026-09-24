@@ -291,13 +291,13 @@ type DiscographyRow struct {
 // picks, for the same reason it is a subquery rather than a join.
 const discographyStatusColumns = `(SELECT di.present_count FROM desired_item di
       WHERE di.work_id = work.id AND di.monitored = 1
-      ORDER BY di.id LIMIT 1) AS present_count,
+      ORDER BY di.satisfaction_kind = 'SET' DESC, di.id LIMIT 1) AS present_count,
    (SELECT di.required_count FROM desired_item di
       WHERE di.work_id = work.id AND di.monitored = 1
-      ORDER BY di.id LIMIT 1) AS required_count,
+      ORDER BY di.satisfaction_kind = 'SET' DESC, di.id LIMIT 1) AS required_count,
    (SELECT di.available_from FROM desired_item di
       WHERE di.work_id = work.id AND di.monitored = 1
-      ORDER BY di.id LIMIT 1) AS available_from,
+      ORDER BY di.satisfaction_kind = 'SET' DESC, di.id LIMIT 1) AS available_from,
    EXISTS (SELECT 1 FROM acquisition a JOIN desired_item di ON di.id = a.desired_item_id
       WHERE di.work_id = work.id
         AND a.state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')) AS downloading`
