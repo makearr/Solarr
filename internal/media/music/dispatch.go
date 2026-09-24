@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
+	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 )
@@ -25,21 +25,13 @@ var ErrDecisionNotAccepted = errors.New("music: dispatch: decision is not ACCEPT
 // configured, for instance.
 var ErrNoDownloaderForProtocol = errors.New("music: dispatch: no enabled downloader for this candidate's protocol")
 
-// SabnzbdSender is what Dispatch needs from a downloader connection --
-// AddURL's own signature (internal/acquiring/sabnzbd.Client already
-// satisfies it), ADR-57's acquire.send and the one call in this whole
-// pipeline with a real, irreversible side effect on a real download client.
-type SabnzbdSender interface {
-	AddURL(ctx context.Context, request sabnzbd.AddURLRequest) (string, error)
-}
-
 // DownloaderConn is one configured, enabled download client ready to
 // dispatch to -- building the client (credentials, protocol) is the
 // caller's own job, the same split IndexerConn already keeps for indexers.
 type DownloaderConn struct {
 	ID       int64
 	Protocol string // "usenet" | "torrent" | "ddl" (ADR-46) -- only usenet has a sender today
-	Client   SabnzbdSender
+	Client   download.Client
 }
 
 // DownloaderSource resolves the currently configured, enabled downloaders
@@ -91,8 +83,8 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 		category = found.Name
 	}
 
-	clientRef, err := downloader.Client.AddURL(ctx, sabnzbd.AddURLRequest{
-		NZBURL: detail.ReleaseCandidate.DownloadURL, Category: category,
+	clientRef, err := downloader.Client.Add(ctx, download.AddRequest{
+		URL: detail.ReleaseCandidate.DownloadURL, Category: category,
 	})
 	if err != nil {
 		return library.Acquisition{}, fmt.Errorf("music: dispatch: %w", err)

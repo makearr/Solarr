@@ -161,7 +161,9 @@ var allowedInternalImports = map[string][]string{
 	// Stage 5's own SABnzbd downloader client (ADR-46/57): the same "just a
 	// client" shape as internal/acquiring/indexer, one dependency, no
 	// Downloader interface yet since only one implementation exists.
-	"internal/acquiring/sabnzbd": {"internal/platform/httpx"},
+	// The download-client seam (ADR-46): types only, every client implements it.
+	"internal/acquiring/download": {},
+	"internal/acquiring/sabnzbd":  {"internal/platform/httpx", "internal/acquiring/download"},
 	// ADR-36's composite acquisition priority: pure arithmetic over
 	// caller-supplied facts, no I/O and no database of its own -- the same
 	// separation internal/identify/score and internal/moving/placement keep from their own
@@ -191,7 +193,7 @@ var allowedInternalImports = map[string][]string{
 	// The enrichment job adds musicbrainz (ADR-29) and jobs (its own handler,
 	// mirroring scan.Job).
 	"internal/media/music": {
-		"internal/acquiring/indexer", "internal/acquiring/sabnzbd",
+		"internal/acquiring/indexer", "internal/acquiring/download",
 		"internal/platform/artwork", "internal/platform/clock", "internal/platform/fsx",
 		"internal/platform/httpx", "internal/importing/inspect", "internal/jobs", "internal/db/library",
 		"internal/db/store/gen/librarydb", "internal/identify/match", "internal/platform/mediatool",

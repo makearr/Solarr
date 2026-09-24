@@ -3,10 +3,7 @@
 // circuit breaking or egress proxying -- the caller supplies an already-
 // configured httpx.Client, the same split internal/acquiring/indexer and
 // internal/importing/arrimport's own LidarrClient already use for a
-// per-connection external service. Only one implementation exists today, so
-// there is no Downloader interface here yet (ADR-46 names qBittorrent as a
-// later stage's own work) -- generalising before a second implementation
-// exists would just be a guess at its shape.
+// per-connection external service. Downloader puts it behind download.Client (ADR-46).
 package sabnzbd
 
 import (

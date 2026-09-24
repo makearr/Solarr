@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
+	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
@@ -71,7 +72,7 @@ func (p *process) downloaderConns(ctx context.Context) ([]music.DownloaderConn, 
 		}
 		conns = append(conns, music.DownloaderConn{
 			ID: downloader.ID, Protocol: downloader.Protocol,
-			Client: factory(downloader.ID, downloader.BaseURL, credentials.Reveal()),
+			Client: sabnzbd.Downloader{Client: factory(downloader.ID, downloader.BaseURL, credentials.Reveal())},
 		})
 	}
 	return conns, nil

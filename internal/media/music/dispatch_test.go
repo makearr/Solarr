@@ -5,20 +5,21 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
+	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/media/music"
 )
 
-// fakeSabnzbdSender answers a canned client ref (or error) to every AddURL
-// call, recording what it was asked to submit.
+// fakeSabnzbdSender answers a canned client ref (or error) to every Add, recording what it was
+// asked to send; the rest of download.Client is not needed here.
 type fakeSabnzbdSender struct {
+	download.Client
 	clientRef string
 	err       error
-	requests  []sabnzbd.AddURLRequest
+	requests  []download.AddRequest
 }
 
-func (f *fakeSabnzbdSender) AddURL(_ context.Context, request sabnzbd.AddURLRequest) (string, error) {
+func (f *fakeSabnzbdSender) Add(_ context.Context, request download.AddRequest) (string, error) {
 	f.requests = append(f.requests, request)
 	return f.clientRef, f.err
 }
@@ -75,7 +76,7 @@ func TestDispatch_SendCreatesAQueuedAcquisition(t *testing.T) {
 	if acquisition.DownloaderID != 5 {
 		t.Errorf("DownloaderID = %d, want 5", acquisition.DownloaderID)
 	}
-	if len(sender.requests) != 1 || sender.requests[0].NZBURL != detail.ReleaseCandidate.DownloadURL {
+	if len(sender.requests) != 1 || sender.requests[0].URL != detail.ReleaseCandidate.DownloadURL {
 		t.Errorf("sender.requests = %+v, want one request for %s", sender.requests, detail.ReleaseCandidate.DownloadURL)
 	}
 }
