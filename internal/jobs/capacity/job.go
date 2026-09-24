@@ -100,10 +100,12 @@ func (j *Job) refreshOne(ctx context.Context, root settings.RootFolder) error {
 		totalBytes, freeBytes = 0, 0
 	}
 
+	// Empty when unreadable: an unknown filesystem must never look like a shared one.
+	fsID, _ := j.fsys.FilesystemID(root.Path)
 	return j.cache.SetRootFolderCapacity(ctx, root.ID, settings.RootFolderCapacity{
 		Writable: writable, WritableReason: reason,
 		TotalBytes: totalBytes, FreeBytes: freeBytes,
-		CheckedAt: j.clock.Now().Unix(),
+		CheckedAt: j.clock.Now().Unix(), FSID: fsID,
 	})
 }
 

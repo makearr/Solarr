@@ -93,4 +93,8 @@ type FS interface {
 	// actually available to this process, not raw free blocks -- root's
 	// reserved blocks are not this process's to place into.
 	DiskUsage(path string) (totalBytes, freeBytes int64, err error)
+
+	// FilesystemID names the filesystem holding path: two paths with the same id share its
+	// space and can hardlink. On ZFS each dataset has its own, though a pool's share free space.
+	FilesystemID(path string) (string, error)
 }

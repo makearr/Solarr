@@ -2880,6 +2880,8 @@ export interface components {
              * @description Absent until the capacity job has run once for this root.
              */
             capacity_checked_at?: string;
+            /** @description Roots with the same id share one filesystem's space. Absent until the capacity job has run. Separate ZFS datasets of one pool have different ids yet share free space. */
+            filesystem_id?: string;
             categories?: components["schemas"]["RootFolderCategory"][];
             /**
              * @description ADR-51's own drain state machine.

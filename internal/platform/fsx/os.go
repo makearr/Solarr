@@ -104,6 +104,15 @@ func (OS) DiskUsage(path string) (totalBytes, freeBytes int64, err error) {
 	return int64(stat.Blocks) * blockSize, int64(stat.Bavail) * blockSize, nil
 }
 
+// FilesystemID is stat(2)'s device number.
+func (OS) FilesystemID(path string) (string, error) {
+	var stat syscall.Stat_t
+	if err := syscall.Stat(path, &stat); err != nil {
+		return "", fmt.Errorf("fsx: filesystem of %s: %w", path, err)
+	}
+	return fmt.Sprintf("dev:%d", uint64(stat.Dev)), nil //nolint:unconvert // Dev's width differs by platform
+}
+
 func resolveExisting(path string) (string, error) {
 	cleaned := filepath.Clean(path)
 	resolved, err := filepath.EvalSymlinks(cleaned)

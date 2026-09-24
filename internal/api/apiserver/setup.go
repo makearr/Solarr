@@ -205,6 +205,10 @@ func (s *Server) rootFolderView(folder settings.RootFolder) gen.RootFolder {
 	if folder.DrainJobID != nil {
 		view.DrainJobId = folder.DrainJobID
 	}
+	if folder.FSID != "" {
+		fsID := folder.FSID
+		view.FilesystemId = &fsID
+	}
 
 	snapshot := s.auth.Settings.Snapshot()
 	var categories []gen.RootFolderCategory
