@@ -4463,6 +4463,49 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /people/{id}/search:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: searchPersonMissing
+      tags: [acquisition]
+      summary: >-
+        Search every monitored, incomplete album of this artist, in the
+        background (the artist page's "Search all missing").
+      responses:
+        "202":
+          description: Enqueued (or already running -- duplicate says which).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategorySearchEnqueued" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /people/{id}/monitor-all:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: monitorPersonAll
+      tags: [library]
+      summary: Monitor every album of this artist's discography. Administrator only.
+      responses:
+        "200":
+          description: How many albums are now monitored.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [albums]
+                properties:
+                  albums: { type: integer, format: int64 }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /people/{id}/remove:
     post:
       operationId: removePerson

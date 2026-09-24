@@ -3861,9 +3861,15 @@ type ServerInterface interface {
 	// A person's cached Wikidata image, if one was found.
 	// (GET /people/{id}/artwork)
 	GetPersonArtwork(w http.ResponseWriter, r *http.Request, id int64, params GetPersonArtworkParams)
+	// Monitor every album of this artist's discography. Administrator only.
+	// (POST /people/{id}/monitor-all)
+	MonitorPersonAll(w http.ResponseWriter, r *http.Request, id int64)
 	// Stop following an artist and forget them. Administrator only.
 	// (POST /people/{id}/remove)
 	RemovePerson(w http.ResponseWriter, r *http.Request, id int64)
+	// Search every monitored, incomplete album of this artist, in the background (the artist page's "Search all missing").
+	// (POST /people/{id}/search)
+	SearchPersonMissing(w http.ResponseWriter, r *http.Request, id int64)
 	// Subscribe to a person (ADR-32) -- media types x roles x filters.
 	// (POST /people/{id}/subscribe)
 	SubscribePerson(w http.ResponseWriter, r *http.Request, id int64)
@@ -4752,9 +4758,21 @@ func (_ Unimplemented) GetPersonArtwork(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Monitor every album of this artist's discography. Administrator only.
+// (POST /people/{id}/monitor-all)
+func (_ Unimplemented) MonitorPersonAll(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Stop following an artist and forget them. Administrator only.
 // (POST /people/{id}/remove)
 func (_ Unimplemented) RemovePerson(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Search every monitored, incomplete album of this artist, in the background (the artist page's "Search all missing").
+// (POST /people/{id}/search)
+func (_ Unimplemented) SearchPersonMissing(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8845,6 +8863,39 @@ func (siw *ServerInterfaceWrapper) GetPersonArtwork(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// MonitorPersonAll operation middleware
+func (siw *ServerInterfaceWrapper) MonitorPersonAll(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MonitorPersonAll(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RemovePerson operation middleware
 func (siw *ServerInterfaceWrapper) RemovePerson(w http.ResponseWriter, r *http.Request) {
 
@@ -8869,6 +8920,39 @@ func (siw *ServerInterfaceWrapper) RemovePerson(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RemovePerson(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchPersonMissing operation middleware
+func (siw *ServerInterfaceWrapper) SearchPersonMissing(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchPersonMissing(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11110,7 +11194,13 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/people/{id}/artwork", wrapper.GetPersonArtwork)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/people/{id}/monitor-all", wrapper.MonitorPersonAll)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/people/{id}/remove", wrapper.RemovePerson)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/people/{id}/search", wrapper.SearchPersonMissing)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/people/{id}/subscribe", wrapper.SubscribePerson)

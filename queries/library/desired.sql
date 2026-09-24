@@ -235,6 +235,8 @@ FROM desired_item d
 JOIN work w ON w.id = d.work_id
 WHERE d.monitored = 1 AND d.state IN ('MISSING', 'PARTIAL')
   AND (CAST(sqlc.arg(category_id) AS INTEGER) = 0 OR d.category_id = sqlc.arg(category_id))
+  AND (CAST(sqlc.arg(person_id) AS INTEGER) = 0 OR EXISTS (
+    SELECT 1 FROM credit c WHERE c.work_id = d.work_id AND c.person_id = sqlc.arg(person_id)))
   AND d.id > sqlc.arg(after_id)
 ORDER BY d.id
 LIMIT sqlc.arg(page_size);

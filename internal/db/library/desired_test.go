@@ -252,7 +252,7 @@ func TestDesired_CountIncompleteAndIncompleteItems(t *testing.T) {
 		t.Errorf("CountIncomplete = %d, want 2 (missing + partial, not complete or unmonitored)", count)
 	}
 
-	items, err := desired.IncompleteItems(t.Context(), 0, 0, 10)
+	items, err := desired.IncompleteItems(t.Context(), 0, 0, 0, 10)
 	if err != nil {
 		t.Fatalf("IncompleteItems: %v", err)
 	}
@@ -488,5 +488,28 @@ func TestDesiredItem_KeyAdmitsTwoProfilesForTheSameWork(t *testing.T) {
 	})
 	if err == nil {
 		t.Error("a true duplicate (same work, edition, media_ref and profile) was accepted")
+	}
+}
+
+// The artist page's "Search all missing": only albums the artist is credited on.
+func TestDesired_IncompleteItemsForOnePerson(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	heka := resolvePersonNamed(t, people, "artist-1", "Heka", "Heka")
+	hers := createWork(t, opened, "music", "Watermark")
+	other := createWork(t, opened, "music", "Zor A")
+	if err := people.AddCredit(t.Context(), hers.ID, heka, "artist", 0); err != nil {
+		t.Fatalf("AddCredit: %v", err)
+	}
+	for _, work := range []librarydb.Work{hers, other} {
+		item := createDesired(t, opened, work.ID, "SET", 10)
+		write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+			return q.SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{ID: item.ID, State: "MISSING"})
+		})
+	}
+
+	items, err := library.NewDesired(opened).IncompleteItems(t.Context(), 0, heka, 0, 10)
+	if err != nil || len(items) != 1 || items[0].WorkID != hers.ID {
+		t.Errorf("IncompleteItems(Heka) = %+v, %v; want only Watermark", items, err)
 	}
 }

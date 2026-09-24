@@ -32,20 +32,32 @@ func SearchCategoryActionKey(categoryID int64) string {
 	return fmt.Sprintf("%s:%d", SearchCategoryJobType, categoryID)
 }
 
-// SearchCategoryPayload is what one run carries: which category to search.
+// SearchCategoryPayload is what one run carries: which category to search, and optionally which
+// artist in it (the artist page's "search all missing").
 type SearchCategoryPayload struct {
 	CategoryID int64 `json:"category_id"`
+	PersonID   int64 `json:"person_id,omitempty"`
 }
 
 // EnqueueSearchCategory submits one category's own search run.
 func EnqueueSearchCategory(ctx context.Context, queue *jobs.Queue, categoryID int64) (jobs.EnqueueResult, error) {
-	data, err := json.Marshal(SearchCategoryPayload{CategoryID: categoryID})
+	return enqueueSearch(ctx, queue, SearchCategoryPayload{CategoryID: categoryID}, SearchCategoryActionKey(categoryID))
+}
+
+// EnqueueSearchArtist searches one artist's missing albums; zero categoryID means every library.
+func EnqueueSearchArtist(ctx context.Context, queue *jobs.Queue, categoryID, personID int64) (jobs.EnqueueResult, error) {
+	return enqueueSearch(ctx, queue, SearchCategoryPayload{CategoryID: categoryID, PersonID: personID},
+		fmt.Sprintf("%s:%d:person:%d", SearchCategoryJobType, categoryID, personID))
+}
+
+func enqueueSearch(ctx context.Context, queue *jobs.Queue, payload SearchCategoryPayload, actionKey string) (jobs.EnqueueResult, error) {
+	data, err := json.Marshal(payload)
 	if err != nil {
 		return jobs.EnqueueResult{}, fmt.Errorf("music: encode search category payload: %w", err)
 	}
 	return queue.Enqueue(ctx, jobs.Request{
-		Type: SearchCategoryJobType, ActionKey: SearchCategoryActionKey(categoryID),
-		Priority: jobs.PriorityLow, Payload: data, CategoryID: categoryID,
+		Type: SearchCategoryJobType, ActionKey: actionKey,
+		Priority: jobs.PriorityLow, Payload: data, CategoryID: payload.CategoryID,
 	})
 }
 
@@ -115,7 +127,7 @@ func (j *SearchCategoryJob) Run(ctx context.Context, job jobs.Job) error {
 	var searched, found, skipped, failed int
 	afterID := int64(0)
 	for {
-		items, err := j.search.Desired.IncompleteItems(ctx, payload.CategoryID, afterID, searchCategoryPageSize)
+		items, err := j.search.Desired.IncompleteItems(ctx, payload.CategoryID, payload.PersonID, afterID, searchCategoryPageSize)
 		if err != nil {
 			return fmt.Errorf("music: search category %d: list items: %w", payload.CategoryID, err)
 		}

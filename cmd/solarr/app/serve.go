@@ -560,6 +560,9 @@ func (p *process) startServer(ctx context.Context) error {
 		ImagesDir:  filepath.Join(p.config.Paths.CacheDir, "images"),
 		ConfigPath: p.configPath,
 		People:     adapters.People{People: library.NewPeople(p.library)},
+		ArtistActions: adapters.ArtistActions{
+			People: library.NewPeople(p.library), Monitor: p.worksMonitor(), Queue: p.queue,
+		},
 		PeopleSubscriber: adapters.People{Subscriptions: library.NewSubscriptions(p.library),
 			People: library.NewPeople(p.library), Categories: adapters.Categories{Cache: p.cache},
 			Clock: clock.NewSystem(),
