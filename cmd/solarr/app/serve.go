@@ -396,6 +396,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerCapacityJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerDownloadWatchJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerSubscriptionExpandJob(registry, executor); err != nil {
 		return err
 	}

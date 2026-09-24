@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -73,9 +74,15 @@ func (s *Server) AddDownloadFolder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	request := settings.DownloadFolderRequest{Path: body.Path, Readable: readable, ReadableReason: reason, CategoryID: body.CategoryId}
+	request := settings.DownloadFolderRequest{
+		Path: body.Path, Readable: readable, ReadableReason: reason, CategoryID: body.CategoryId,
+		Watch: body.Watch == nil || *body.Watch,
+	}
 	if body.Label != nil {
 		request.Label = *body.Label
+	}
+	if body.TransferLadder != nil {
+		request.TransferLadder = *body.TransferLadder
 	}
 
 	created, err := s.auth.Settings.CreateDownloadFolder(r.Context(), request)
@@ -94,6 +101,49 @@ func (s *Server) AddDownloadFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, s.logger, http.StatusCreated, downloadFolderView(created))
+}
+
+func (s *Server) routeUpdateDownloadFolder(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a download folder id must be a number")
+		return
+	}
+	s.UpdateDownloadFolder(w, r, id)
+}
+
+// UpdateDownloadFolder changes a folder's label, library hint, watching and transfer order.
+func (s *Server) UpdateDownloadFolder(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	var body gen.UpdateDownloadFolderJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+		return
+	}
+	update := settings.DownloadFolderUpdate{CategoryID: body.CategoryId, Watch: body.Watch}
+	if body.Label != nil {
+		update.Label = *body.Label
+	}
+	if body.TransferLadder != nil {
+		update.TransferLadder = *body.TransferLadder
+	}
+	updated, err := s.auth.Settings.UpdateDownloadFolder(r.Context(), id, update)
+	if err != nil {
+		var problems config.Problems
+		switch {
+		case errors.As(err, &problems):
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"The download folder has problems", problems.Report("the download folder", "Nothing was changed."))
+		case errors.Is(err, sql.ErrNoRows), errors.Is(err, settings.ErrNotFound):
+			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such download folder or library")
+		default:
+			writeError(w, s.logger, err)
+		}
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, downloadFolderView(updated))
 }
 
 // routeDeleteDownloadFolder parses the id path parameter, mirroring routeDrainRootFolder.
@@ -163,6 +213,11 @@ func (s *Server) ListDownloadFolderContents(w http.ResponseWriter, r *http.Reque
 func downloadFolderView(folder settings.DownloadFolder) gen.DownloadFolder {
 	view := gen.DownloadFolder{
 		Id: folder.ID, Path: folder.Path, CategoryId: folder.CategoryID, Readable: folder.Readable,
+		Watch: folder.Watch,
+	}
+	if folder.TransferLadder != nil {
+		ladder := folder.TransferLadder
+		view.TransferLadder = &ladder
 	}
 	if folder.Label != "" {
 		label := folder.Label

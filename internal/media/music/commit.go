@@ -225,14 +225,15 @@ func (p *AlbumPlacement) trackOf(relPath string, tags mediatool.Tags) (TrackFile
 func (c Committer) CommitUnit(
 	ctx context.Context, sourceRoot string, unit inspect.Unit, best model.Identification, tags Resolved, categoryID int64,
 ) (Placed, error) {
-	return c.CommitMatchedUnit(ctx, sourceRoot, unit, best, tags, categoryID, nil)
+	return c.CommitMatchedUnit(ctx, sourceRoot, unit, best, tags, categoryID, nil, nil)
 }
 
 // CommitMatchedUnit is CommitUnit knowing what album matching decided: the release to record as
 // the edition, and which track each file is (placement nil falls back to each file's own tags).
+// ladder overrides the configured transfer order for this unit; nil keeps it.
 func (c Committer) CommitMatchedUnit(
 	ctx context.Context, sourceRoot string, unit inspect.Unit, best model.Identification, tags Resolved,
-	categoryID int64, matched *AlbumPlacement,
+	categoryID int64, matched *AlbumPlacement, ladder []string,
 ) (Placed, error) {
 	if best.ExternalID == nil {
 		return Placed{}, fmt.Errorf("music: commit unit %q: %w", unit.Directory, errNoExternalID)
@@ -324,10 +325,16 @@ func (c Committer) CommitMatchedUnit(
 		}
 	}
 
-	ladder := mover.DefaultLadder
+	methods := mover.DefaultLadder
 	if c.transferLadder != nil {
 		if configured := c.transferLadder(); len(configured) > 0 {
-			ladder = configured
+			methods = configured
+		}
+	}
+	if len(ladder) > 0 {
+		methods = make([]mover.PlaceMethod, len(ladder))
+		for i, method := range ladder {
+			methods[i] = mover.PlaceMethod(method)
 		}
 	}
 
@@ -358,7 +365,7 @@ func (c Committer) CommitMatchedUnit(
 
 		sourceAbs := path.Join(sourceRoot, media.RelPath)
 		destAbs := path.Join(destRoot.Path, destRelPath)
-		method, err := mover.PlaceOne(c.fsys, sourceAbs, destAbs, media.SizeBytes, ladder)
+		method, err := mover.PlaceOne(c.fsys, sourceAbs, destAbs, media.SizeBytes, methods)
 		if err != nil {
 			return Placed{}, fmt.Errorf("music: place %q: %w", media.RelPath, err)
 		}

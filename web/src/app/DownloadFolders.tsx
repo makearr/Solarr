@@ -5,12 +5,13 @@ import { ChevronDown, ChevronRight, Download, File, Folder, Trash2 } from "lucid
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
-type DownloadFolder = components["schemas"]["DownloadFolder"];
+import { TransferLadderEditor, type TransferMethod } from "./Import";
 
-/** todo 4.18, section 5.1: the folders upstream download clients write to.
- *  A registry only -- nothing acts on what lands here until stage 5, and
- *  Contents below is a live, uncached listing, never a comparison against
- *  what Solarr has already imported. */
+type DownloadFolder = components["schemas"]["DownloadFolder"];
+type LibraryCategory = components["schemas"]["LibraryCategory"];
+
+/** The folders upstream download clients write to (todo 4.18). Watched: every entry that has
+ *  settled for ten minutes is imported once, into the folder's library, by its transfer order. */
 export function DownloadFolders() {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -48,8 +49,9 @@ export function DownloadFolders() {
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold">Download folders</h1>
         <p className="text-sm leading-relaxed text-ink-muted">
-          Folders upstream download clients write to, watched from here -- never written to by
-          Solarr. What acts on what lands here is stage 5; this is the registry alone.
+          Folders your download clients write to. A watched folder is checked every five minutes:
+          anything in it that has not changed for ten minutes is imported once, and shows up under
+          Import like any other import. Solarr only reads here, unless a transfer order lets it Move.
         </p>
       </header>
 
@@ -62,7 +64,7 @@ export function DownloadFolders() {
             <DownloadFolderCard
               key={folder.id}
               folder={folder}
-              categoryName={categories.data?.find((category) => category.id === folder.category_id)?.name}
+              libraries={categories.data ?? []}
               expanded={expanded === folder.id}
               onToggleExpanded={() => setExpanded(expanded === folder.id ? null : folder.id)}
               onRemove={() => remove.mutate(folder.id)}
@@ -87,19 +89,44 @@ export function DownloadFolders() {
 
 function DownloadFolderCard({
   folder,
-  categoryName,
+  libraries,
   expanded,
   onToggleExpanded,
   onRemove,
   busy,
 }: {
   folder: DownloadFolder;
-  categoryName: string | undefined;
+  libraries: LibraryCategory[];
   expanded: boolean;
   onToggleExpanded: () => void;
   onRemove: () => void;
   busy: boolean;
 }) {
+  const queryClient = useQueryClient();
+  const importSettings = useQuery({
+    queryKey: ["import-settings"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/import/settings");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const update = useMutation({
+    mutationFn: async (change: Partial<Pick<DownloadFolder, "category_id" | "watch" | "transfer_ladder">>) => {
+      const next = { ...folder, ...change };
+      const { error } = await api.PATCH("/downloadfolders/{id}", {
+        params: { path: { id: folder.id } },
+        body: {
+          label: next.label, category_id: next.category_id ?? undefined, watch: next.watch,
+          transfer_ladder: next.transfer_ladder ?? undefined,
+        },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["downloadfolders"] }),
+  });
+  const ownLadder = folder.transfer_ladder != null;
+
   const contents = useQuery({
     queryKey: ["downloadfolders", folder.id, "contents"],
     enabled: expanded,
@@ -127,11 +154,6 @@ function DownloadFolderCard({
         <Download aria-hidden className="size-4 shrink-0 text-ink-muted" />
         <span className="font-medium">{folder.label || folder.path}</span>
         <span className="truncate font-mono text-xs text-ink-muted">{folder.path}</span>
-        {categoryName && (
-          <span className="rounded-full border border-border-subtle px-1.5 py-px text-[0.6875rem] text-ink-muted">
-            {categoryName}
-          </span>
-        )}
         {!folder.readable && (
           <span
             className="rounded-full border border-warn px-1.5 py-px text-[0.6875rem] text-warn"
@@ -152,6 +174,61 @@ function DownloadFolderCard({
           <Trash2 aria-hidden className="size-3.5" />
         </button>
       </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={folder.watch}
+            disabled={update.isPending}
+            onChange={(event) => update.mutate({ watch: event.target.checked })}
+          />
+          Watch for imports
+        </label>
+        <label className="flex items-center gap-1.5 text-ink-muted">
+          Library
+          <select
+            value={folder.category_id ?? ""}
+            disabled={update.isPending}
+            onChange={(event) =>
+              update.mutate({ category_id: event.target.value === "" ? undefined : Number(event.target.value) })
+            }
+            className={inputStyle}
+          >
+            <option value="">All libraries</option>
+            {libraries.map((library) => (
+              <option key={library.id} value={library.id}>
+                {library.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={ownLadder}
+            disabled={update.isPending || !importSettings.data}
+            onChange={(event) =>
+              update.mutate({
+                transfer_ladder: event.target.checked
+                  ? ((importSettings.data?.transfer_ladder ?? []) as TransferMethod[])
+                  : undefined,
+              })
+            }
+          />
+          Own transfer order
+          {!ownLadder && <span className="text-ink-muted">(uses the Import screen's)</span>}
+        </label>
+      </div>
+      {ownLadder && (
+        <TransferLadderEditor
+          ladder={folder.transfer_ladder as TransferMethod[]}
+          busy={update.isPending}
+          failed={update.isError}
+          onChange={(ladder) => update.mutate({ transfer_ladder: ladder })}
+        />
+      )}
+      {update.isError && !ownLadder && <p className="text-xs text-danger">That could not be changed.</p>}
 
       {expanded && (
         <div className="border-t border-border-subtle pt-2">
@@ -239,9 +316,9 @@ function AddDownloadFolder({
         />
       </label>
       <label className="flex flex-col gap-1 text-xs text-ink-muted">
-        Category hint
+        Library
         <select className={inputStyle} value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
-          <option value="">None</option>
+          <option value="">All libraries</option>
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
               {category.name}

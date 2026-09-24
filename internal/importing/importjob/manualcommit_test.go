@@ -23,6 +23,7 @@ import (
 // seedWork.
 type fakeCommitter struct {
 	lastPlacement *music.AlbumPlacement
+	lastLadder    []string
 	workID        int64
 	// placed, keyed by sourceRoot, overrides workID for one call's own answer.
 	// errFor, keyed the same way, makes one call fail instead.
@@ -49,9 +50,10 @@ type fakeCommitterCall struct {
 
 func (f *fakeCommitter) CommitMatchedUnit(
 	_ context.Context, sourceRoot string, unit inspect.Unit, best model.Identification, _ music.Resolved,
-	categoryID int64, matched *music.AlbumPlacement,
+	categoryID int64, matched *music.AlbumPlacement, ladder []string,
 ) (music.Placed, error) {
 	f.lastPlacement = matched
+	f.lastLadder = ladder
 	key := sourceRoot
 	mediaPaths := make([]string, len(unit.Media))
 	for i, m := range unit.Media {

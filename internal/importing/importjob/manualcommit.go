@@ -322,7 +322,7 @@ func (m ManualCommitter) place(
 
 	// No album placement: a manual commit re-reads the unit from disk, where what album
 	// matching decided during IDENTIFY is no longer in memory (the candidates are, in the row).
-	placed, err := m.committer.CommitMatchedUnit(ctx, root, reconstructed, best, tags, *session.CategoryID, nil)
+	placed, err := m.committer.CommitMatchedUnit(ctx, root, reconstructed, best, tags, *session.CategoryID, nil, nil)
 	if err != nil {
 		return music.Placed{}, fmt.Errorf("importjob: commit unit %d: %w", unit.ID, err)
 	}

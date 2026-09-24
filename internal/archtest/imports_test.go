@@ -27,7 +27,8 @@ var allowedInternalImports = map[string][]string{
 		"cmd/solarr/adapters", "internal/acquiring/indexer", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
 		"internal/api/webui", "internal/db/library", "internal/db/recovery", "internal/db/settings",
-		"internal/db/store", "internal/importing/arrimport", "internal/importing/importjob", "internal/jobs",
+		"internal/db/store", "internal/importing/arrimport", "internal/importing/downloadwatch",
+		"internal/importing/importjob", "internal/jobs",
 		"internal/jobs/cachebudget", "internal/jobs/capacity", "internal/media/music", "internal/metadata/metacache",
 		"internal/metadata/acoustid", "internal/metadata/musicbrainz", "internal/metadata/wikidata",
 		"internal/moving/drainjob",
@@ -134,6 +135,11 @@ var allowedInternalImports = map[string][]string{
 	// imports internal/platform/mediatool, internal/identify/parse or internal/media/music. fsx is
 	// the one dependency, for the walk itself.
 	"internal/importing/inspect": {"internal/platform/fsx"},
+	// Watches download folders: lists, checks an entry has settled, enqueues an import.
+	"internal/importing/downloadwatch": {
+		"internal/db/library", "internal/db/settings", "internal/importing/importjob", "internal/jobs",
+		"internal/platform/clock", "internal/platform/fsx",
+	},
 	// ADR-50's own detection (todo 4.11): pure grouping over caller-supplied
 	// candidates, the same "no I/O, no database" separation
 	// internal/moving/placement and internal/identify/priority keep. The one

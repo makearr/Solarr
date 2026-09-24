@@ -571,7 +571,8 @@ export interface paths {
         delete: operations["deleteDownloadFolder"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Change a download folder's label, library hint, watching and transfer order. Administrator only. */
+        patch: operations["updateDownloadFolder"];
         trace?: never;
     };
     "/downloadfolders/{id}/contents": {
@@ -2893,14 +2894,20 @@ export interface components {
             id: number;
             name: string;
         };
-        /** @description One watched upstream-download destination (todo 4.18, section 5.1). Registry only -- nothing acts on what lands here until stage 5. */
+        /** @description One upstream-download destination (todo 4.18). Watched: each entry is imported once it has settled, once only. */
         DownloadFolder: {
             /** Format: int64 */
             id: number;
             path: string;
             label?: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description The library hint; absent means any library.
+             */
             category_id?: number;
+            watch: boolean;
+            /** @description This folder's own transfer order; absent means the Import screen's. */
+            transfer_ladder?: string[];
             /** @description Probed once, at creation. Nothing refreshes it after -- the same gap root_folder.writable had before the capacity job existed. */
             readable: boolean;
             readable_reason?: string;
@@ -5627,8 +5634,15 @@ export interface operations {
                 "application/json": {
                     path: string;
                     label?: string;
-                    /** Format: int64 */
+                    /**
+                     * Format: int64
+                     * @description The library hint; absent means any library.
+                     */
                     category_id?: number;
+                    /** @default true */
+                    watch?: boolean;
+                    /** @description This folder's own transfer order; absent means the Import screen's. */
+                    transfer_ladder?: string[];
                 };
             };
         };
@@ -5669,6 +5683,46 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    updateDownloadFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    label?: string;
+                    /**
+                     * Format: int64
+                     * @description The library hint; absent means any library.
+                     */
+                    category_id?: number;
+                    watch: boolean;
+                    /** @description Absent means the Import screen's order. */
+                    transfer_ladder?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadFolder"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     listDownloadFolderContents: {

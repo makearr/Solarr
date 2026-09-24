@@ -422,6 +422,15 @@ func (s ImportSessions) RequestCancel(ctx context.Context, sessionID int64) erro
 // is nothing settled to hide, or that it is already hidden.
 var ErrSessionNotDismissable = errors.New("library: import session has not finished")
 
+// HasSessionFor reports whether sourcePath was ever imported, finished or dismissed alike.
+func (s ImportSessions) HasSessionFor(ctx context.Context, sourcePath string) (bool, error) {
+	count, err := librarydb.New(s.store.Read()).CountImportSessionsForSource(ctx, sourcePath)
+	if err != nil {
+		return false, fmt.Errorf("library: sessions for %q: %w", sourcePath, err)
+	}
+	return count > 0, nil
+}
+
 // Dismiss hides a finished session from the Import screen. The row stays: it
 // is still the record of what the session placed, and a revert still reaches
 // it by id.

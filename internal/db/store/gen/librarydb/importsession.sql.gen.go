@@ -26,6 +26,18 @@ func (q *Queries) ClearImportUnitPlacement(ctx context.Context, id int64) error 
 	return err
 }
 
+const countImportSessionsForSource = `-- name: CountImportSessionsForSource :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM import_session WHERE source_path = ?
+`
+
+// A download folder imports each entry once: any session, finished or dismissed, counts.
+func (q *Queries) CountImportSessionsForSource(ctx context.Context, sourcePath string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countImportSessionsForSource, sourcePath)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countImportUnitTransferMethodsForSession = `-- name: CountImportUnitTransferMethodsForSession :many
 SELECT iuf.unit_id, iuf.transfer_method, CAST(COUNT(*) AS INTEGER) AS file_count
 FROM import_unit_file iuf

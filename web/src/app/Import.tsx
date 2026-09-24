@@ -216,7 +216,7 @@ function ThresholdControl() {
   );
 }
 
-type TransferMethod = components["schemas"]["TransferMethod"];
+export type TransferMethod = components["schemas"]["TransferMethod"];
 
 /** What each transfer method actually does on disk, in the terms someone
  *  choosing between them needs: whether it costs disk space, whether the
@@ -286,7 +286,6 @@ const TRANSFER_METHODS: readonly {
  *  invisible on disk, so the choice has to be stated here. */
 export function TransferLadderControl() {
   const queryClient = useQueryClient();
-  const [explaining, setExplaining] = useState(false);
 
   const settings = useQuery({
     queryKey: ["import-settings"],
@@ -311,7 +310,29 @@ export function TransferLadderControl() {
   });
 
   if (!settings.data) return null;
-  const ladder = (settings.data.transfer_ladder ?? []) as TransferMethod[];
+  return (
+    <TransferLadderEditor
+      ladder={(settings.data.transfer_ladder ?? []) as TransferMethod[]}
+      busy={update.isPending}
+      failed={update.isError}
+      onChange={(ladder) => update.mutate(ladder)}
+    />
+  );
+}
+
+/** Edits one transfer order; the Import screen's and each download folder's use it. */
+export function TransferLadderEditor({
+  ladder,
+  busy,
+  failed,
+  onChange,
+}: {
+  ladder: TransferMethod[];
+  busy: boolean;
+  failed: boolean;
+  onChange: (ladder: TransferMethod[]) => void;
+}) {
+  const [explaining, setExplaining] = useState(false);
   const disabled = TRANSFER_METHODS.filter((method) => !ladder.includes(method.id));
 
   const move = (index: number, delta: number) => {
@@ -322,7 +343,7 @@ export function TransferLadderControl() {
     const next = [...ladder];
     next[index] = displaced;
     next[target] = moving;
-    update.mutate(next);
+    onChange(next);
   };
 
   const label = (id: TransferMethod) =>
@@ -347,16 +368,16 @@ export function TransferLadderControl() {
           <input
             type="checkbox"
             checked
-            disabled={update.isPending || ladder.length === 1}
+            disabled={busy || ladder.length === 1}
             aria-label={`Use ${label(id)}`}
-            onChange={() => update.mutate(ladder.filter((entry) => entry !== id))}
+            onChange={() => onChange(ladder.filter((entry) => entry !== id))}
           />
           <span className="w-4 text-ink-muted">{index + 1}.</span>
           <span className="flex-1 text-ink">{label(id)}</span>
           <button
             type="button"
             className="rounded p-0.5 text-ink-muted hover:text-ink disabled:opacity-30"
-            disabled={index === 0 || update.isPending}
+            disabled={index === 0 || busy}
             aria-label={`Move ${label(id)} up`}
             onClick={() => move(index, -1)}
           >
@@ -365,7 +386,7 @@ export function TransferLadderControl() {
           <button
             type="button"
             className="rounded p-0.5 text-ink-muted hover:text-ink disabled:opacity-30"
-            disabled={index === ladder.length - 1 || update.isPending}
+            disabled={index === ladder.length - 1 || busy}
             aria-label={`Move ${label(id)} down`}
             onClick={() => move(index, 1)}
           >
@@ -381,9 +402,9 @@ export function TransferLadderControl() {
               <input
                 type="checkbox"
                 checked={false}
-                disabled={update.isPending}
+                disabled={busy}
                 aria-label={`Use ${method.label}`}
-                onChange={() => update.mutate([...ladder, method.id])}
+                onChange={() => onChange([...ladder, method.id])}
               />
               <span className="w-4" />
               <span className="flex-1 text-ink-muted">{method.label}</span>
@@ -392,7 +413,7 @@ export function TransferLadderControl() {
         </div>
       )}
 
-      {update.isError && <p className="text-danger">That could not be changed.</p>}
+      {failed && <p className="text-danger">That could not be changed.</p>}
       {explaining && <TransferMethodHelp onClose={() => setExplaining(false)} />}
     </fieldset>
   );

@@ -194,3 +194,7 @@ JOIN import_unit iu ON iu.id = iuf.unit_id
 WHERE iu.session_id = ? AND iuf.transfer_method IS NOT NULL
 GROUP BY iuf.unit_id, iuf.transfer_method
 ORDER BY iuf.unit_id, iuf.transfer_method;
+
+-- A download folder imports each entry once: any session, finished or dismissed, counts.
+-- name: CountImportSessionsForSource :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM import_session WHERE source_path = ?;

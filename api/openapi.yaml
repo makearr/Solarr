@@ -818,7 +818,15 @@ paths:
               properties:
                 path: { type: string, minLength: 1 }
                 label: { type: string }
-                category_id: { type: integer, format: int64 }
+                category_id:
+                  type: integer
+                  format: int64
+                  description: The library hint; absent means any library.
+                watch: { type: boolean, default: true }
+                transfer_ladder:
+                  type: array
+                  description: This folder's own transfer order; absent means the Import screen's.
+                  items: { type: string }
       responses:
         "201":
           description: Added.
@@ -838,6 +846,38 @@ paths:
         in: path
         required: true
         schema: { type: integer, format: int64 }
+    patch:
+      operationId: updateDownloadFolder
+      tags: [setup]
+      summary: Change a download folder's label, library hint, watching and transfer order. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [watch]
+              properties:
+                label: { type: string }
+                category_id:
+                  type: integer
+                  format: int64
+                  description: The library hint; absent means any library.
+                watch: { type: boolean }
+                transfer_ladder:
+                  type: array
+                  description: Absent means the Import screen's order.
+                  items: { type: string }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DownloadFolder" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
     delete:
       operationId: deleteDownloadFolder
       tags: [setup]
@@ -4592,14 +4632,22 @@ components:
     DownloadFolder:
       type: object
       description: >-
-        One watched upstream-download destination (todo 4.18, section 5.1).
-        Registry only -- nothing acts on what lands here until stage 5.
-      required: [id, path, readable]
+        One upstream-download destination (todo 4.18). Watched: each entry is
+        imported once it has settled, once only.
+      required: [id, path, readable, watch]
       properties:
         id: { type: integer, format: int64 }
         path: { type: string }
         label: { type: string }
-        category_id: { type: integer, format: int64 }
+        category_id:
+          type: integer
+          format: int64
+          description: The library hint; absent means any library.
+        watch: { type: boolean }
+        transfer_ladder:
+          type: array
+          description: This folder's own transfer order; absent means the Import screen's.
+          items: { type: string }
         readable:
           type: boolean
           description: >-

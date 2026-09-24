@@ -19,6 +19,7 @@ import (
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
@@ -647,9 +648,16 @@ func TestCommitMatchedUnit_UsesTheMatchedReleaseAndDiscPrefixedNames(t *testing.
 		},
 	}
 
-	placed, err := committer.CommitMatchedUnit(t.Context(), commitSourceRoot, unit, best, tags, commitCategoryID, matched)
+	// A download folder's own order overrides the configured one for this unit.
+	placed, err := committer.CommitMatchedUnit(t.Context(), commitSourceRoot, unit, best, tags, commitCategoryID,
+		matched, []string{"copy"})
 	if err != nil {
 		t.Fatalf("CommitMatchedUnit: %v", err)
+	}
+	for _, method := range placed.TransferMethods {
+		if method != mover.PlaceCopy {
+			t.Errorf("placed by %q, want copy from the given ladder", method)
+		}
 	}
 	if placed.EditionID == nil {
 		t.Fatal("EditionID = nil, want the matched release recorded as the edition")
