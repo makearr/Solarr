@@ -113,7 +113,7 @@ func TestRenamePreview_ListsChangedFilesOnly(t *testing.T) {
 		Works: fakeRenameWorks{1: renameWorkDetailFixture()},
 	}
 
-	targets, err := music.RenamePreview(t.Context(), cfg, 1)
+	targets, err := music.RenamePreview(t.Context(), cfg, 1, nil)
 	if err != nil {
 		t.Fatalf("RenamePreview: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestRenamePreview_SkipsFilesWithNoIdentity(t *testing.T) {
 		Works:      fakeRenameWorks{},
 	}
 
-	targets, err := music.RenamePreview(t.Context(), cfg, 1)
+	targets, err := music.RenamePreview(t.Context(), cfg, 1, nil)
 	if err != nil {
 		t.Fatalf("RenamePreview: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestRenameStart_PersistsAndEnqueuesWhenSomethingChanged(t *testing.T) {
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, false)
+	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, nil, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestRenameStart_PreviewComputesThePlanWithoutPersistingAnything(t *testing.
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, true)
+	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, nil, true)
 	if err != nil {
 		t.Fatalf("RenameStart: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestRenameStart_ReturnsPathWarningsKeyedByMediaObjectID(t *testing.T) {
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	_, _, warnings, err := music.RenameStart(t.Context(), cfg, 1, true)
+	_, _, warnings, err := music.RenameStart(t.Context(), cfg, 1, nil, true)
 	if err != nil {
 		t.Fatalf("RenameStart: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestRenameStart_DoesNothingWhenNothingChanged(t *testing.T) {
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, false)
+	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, nil, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}
@@ -273,7 +273,7 @@ func TestRenameStart_DoesNothingForAnUnknownRootWithNothingToRename(t *testing.T
 		Works:      fakeRenameWorks{1: renameWorkDetailFixture()},
 	}
 
-	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 99, false)
+	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 99, nil, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestRenameStart_RefusesOnAReadOnlyRootWithoutAllowRename(t *testing.T) {
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, false)
+	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, nil, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}

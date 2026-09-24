@@ -131,6 +131,9 @@ type Config struct {
 	// RenameStarter applies section 11.8's naming template to a root.
 	// Optional: without it, RenameRootFolder answers 503.
 	RenameStarter RenameStarter
+	// NamingSchemes answers each media type's naming declaration. Optional: without it, the
+	// naming endpoints answer 503.
+	NamingSchemes NamingSchemes
 	// Navigation resolves ADR-54's declared levels per media type. Optional:
 	// without it, ListLibraries reports every library with no levels rather
 	// than failing.
@@ -227,6 +230,7 @@ type Server struct {
 	drainStarter          DrainStarter
 	moveJobs              MoveJobLister
 	renameStarter         RenameStarter
+	namingSchemes         NamingSchemes
 	navigation            NavigationProvider
 	libraryTracks         LibraryTracksReader
 	libraryArtists        LibraryArtistsReader
@@ -309,6 +313,7 @@ func New(config Config) (*Server, error) {
 		drainStarter:          config.DrainStarter,
 		moveJobs:              config.MoveJobs,
 		renameStarter:         config.RenameStarter,
+		namingSchemes:         config.NamingSchemes,
 		navigation:            config.Navigation,
 		libraryTracks:         config.LibraryTracks,
 		libraryArtists:        config.LibraryArtists,
@@ -385,6 +390,10 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/monitor", server.routeSetWorkMonitored)
 			secured.Post("/works/{id}/remove", server.routeRemoveWork)
 			secured.Post("/works/{id}/parts/{partId}/remove", server.routeRemovePart)
+			secured.Get("/categories/{id}/naming", server.routeGetLibraryNaming)
+			secured.Put("/categories/{id}/naming", server.routeSetLibraryNaming)
+			secured.Post("/categories/{id}/naming/examples", server.routePreviewLibraryNaming)
+			secured.Post("/categories/{id}/rename", server.routeRenameLibrary)
 			secured.Post("/works/{id}/parts/{partId}/monitor", server.routeSetPartMonitored)
 			secured.Post("/works/{id}/parts/{partId}/wanted", server.routeSetTrackWanted)
 			secured.Get("/works/{id}/artwork", server.routeGetWorkArtwork)

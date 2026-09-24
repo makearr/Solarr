@@ -26,7 +26,21 @@ type Segment struct {
 	padWidth int       // 0 means no zero-padding requested
 	maxChars int       // 0 means no truncation requested
 	children []Segment // only set for segConditional
+	// wordSeparator and letterCase are Lidarr's spelling variants: {Artist.Name}, {ARTIST NAME}.
+	wordSeparator rune
+	letterCase    letterCase
 }
+
+type letterCase int
+
+const (
+	caseAsIs letterCase = iota
+	caseUpper
+	caseLower
+)
+
+// tokenWordSeparators are the characters Lidarr accepts in place of a token name's spaces.
+const tokenWordSeparators = "._-"
 
 // Compile parses one template line (a folder or file spec) into segments.
 // An unknown escape, an unclosed brace or bracket, or an unrecognised spec
@@ -51,7 +65,7 @@ func ValidateTokens(segments []Segment, known map[string]bool) error {
 			switch seg.kind {
 			case segToken:
 				for _, name := range seg.names {
-					if !known[name] {
+					if !knownFold(known, name) {
 						unknown = append(unknown, name)
 					}
 				}
@@ -65,6 +79,19 @@ func ValidateTokens(segments []Segment, known map[string]bool) error {
 		return fmt.Errorf("naming: unknown token(s): %s", strings.Join(unknown, ", "))
 	}
 	return nil
+}
+
+// knownFold is a case-insensitive lookup: {ARTIST NAME} names the same token as {Artist Name}.
+func knownFold(known map[string]bool, name string) bool {
+	if known[name] {
+		return true
+	}
+	for candidate := range known {
+		if strings.EqualFold(candidate, name) {
+			return true
+		}
+	}
+	return false
 }
 
 func parse(runes []rune, insideConditional bool) ([]Segment, error) {
@@ -149,14 +176,19 @@ func parseToken(body string) (Segment, error) {
 	namesPart, spec, hasSpec := strings.Cut(body, ":")
 
 	var names []string
+	var wordSeparator rune
 	for _, name := range strings.Split(namesPart, "|") {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			return Segment{}, fmt.Errorf("naming: empty token name in %q", body)
 		}
+		if separator, ok := spelledWordSeparator(name); ok {
+			wordSeparator = separator
+			name = strings.ReplaceAll(name, string(separator), " ")
+		}
 		names = append(names, name)
 	}
-	seg := Segment{kind: segToken, names: names}
+	seg := Segment{kind: segToken, names: names, wordSeparator: wordSeparator, letterCase: spelledCase(namesPart)}
 	if !hasSpec || spec == "" {
 		return seg, nil
 	}
@@ -186,4 +218,32 @@ func isAllDigits(s string) bool {
 		}
 	}
 	return true
+}
+
+// spelledWordSeparator finds the one separator a name uses instead of spaces, as in {Artist.Name}.
+func spelledWordSeparator(name string) (rune, bool) {
+	if strings.ContainsRune(name, ' ') {
+		return 0, false
+	}
+	for _, separator := range tokenWordSeparators {
+		if strings.ContainsRune(name, separator) {
+			return separator, true
+		}
+	}
+	return 0, false
+}
+
+// spelledCase is upper for {ARTIST NAME} and lower for {artist name}; a one-word name
+// such as {track} is Lidarr's canonical spelling, never a request for lower case.
+func spelledCase(name string) letterCase {
+	if strings.ToUpper(name) == strings.ToLower(name) {
+		return caseAsIs
+	}
+	if name == strings.ToUpper(name) {
+		return caseUpper
+	}
+	if name == strings.ToLower(name) && strings.ContainsAny(name, " "+tokenWordSeparators) {
+		return caseLower
+	}
+	return caseAsIs
 }

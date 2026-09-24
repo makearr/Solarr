@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -52,6 +53,8 @@ type RenameMoveJobs interface {
 // RenameConfig is what RenamePreview and RenameStart need. Every field is
 // required except Clock, which is optional and defaults to the real clock.
 type RenameConfig struct {
+	// Categories answers each library's naming; a work in none uses the scheme's default.
+	Categories Categories
 	Roots      RenameRoots
 	Files      RenameFiles
 	Identities RenameIdentities
@@ -69,7 +72,9 @@ type RenameConfig struct {
 // same "one bad file does not fail the batch" reasoning ADR-48/ADR-51
 // already apply elsewhere. A work's own WorkDetail is fetched at most once
 // per call, since every track on an album shares it.
-func RenamePreview(ctx context.Context, cfg RenameConfig, rootFolderID int64) ([]RenameTarget, error) {
+func RenamePreview(
+	ctx context.Context, cfg RenameConfig, rootFolderID int64, onlyCategoryID *int64,
+) ([]RenameTarget, error) {
 	files, err := cfg.Files.PathsForRoot(ctx, rootFolderID)
 	if err != nil {
 		return nil, fmt.Errorf("music: list files on root %d: %w", rootFolderID, err)
@@ -93,7 +98,11 @@ func RenamePreview(ctx context.Context, cfg RenameConfig, rootFolderID int64) ([
 			}
 			details[identity.WorkID] = detail
 		}
-		target, err := RenameTargetFor(detail, identity, f.MediaObjectID, f.SizeBytes, f.RelPath)
+		names, inScope := cfg.namingFor(detail.CategoryIDs, onlyCategoryID)
+		if !inScope {
+			continue
+		}
+		target, err := RenameTargetFor(names, detail, identity, f.MediaObjectID, f.SizeBytes, f.RelPath)
 		if err != nil {
 			continue
 		}
@@ -116,8 +125,10 @@ func RenamePreview(ctx context.Context, cfg RenameConfig, rootFolderID int64) ([
 // through -- mover.Plan is generic across every move reason and does not
 // know what a naming warning is (ADR-23), so this stays a separate return
 // rather than a new field on mover.Move.
-func RenameStart(ctx context.Context, cfg RenameConfig, rootFolderID int64, preview bool) (mover.MovePlan, int64, map[int64][]string, error) {
-	targets, err := RenamePreview(ctx, cfg, rootFolderID)
+func RenameStart(
+	ctx context.Context, cfg RenameConfig, rootFolderID int64, onlyCategoryID *int64, preview bool,
+) (mover.MovePlan, int64, map[int64][]string, error) {
+	targets, err := RenamePreview(ctx, cfg, rootFolderID, onlyCategoryID)
 	if err != nil {
 		return mover.MovePlan{}, 0, nil, err
 	}
@@ -212,4 +223,23 @@ func renameRootCandidate(rootFolderID int64, root settings.RootFolder) placement
 		RootFolderID: rootFolderID, FSID: root.FSID, Online: root.Online, Writable: root.Writable,
 		ReadOnly: root.ReadOnly, FreeBytes: freeBytes, TotalBytes: totalBytes, MinFreeBytes: root.MinFreeBytes,
 	}
+}
+
+// namingFor is the naming of the work's library -- onlyCategoryID when given, which also
+// scopes the rename to that library's works; otherwise the first library that has one.
+func (cfg RenameConfig) namingFor(categoryIDs []int64, onlyCategoryID *int64) (Naming, bool) {
+	if onlyCategoryID != nil {
+		if !slices.Contains(categoryIDs, *onlyCategoryID) {
+			return Naming{}, false
+		}
+		categoryIDs = []int64{*onlyCategoryID}
+	}
+	if cfg.Categories != nil {
+		for _, id := range categoryIDs {
+			if category, found := cfg.Categories.Category(id); found {
+				return NamingFor(category.Naming), true
+			}
+		}
+	}
+	return NamingFor(nil), true
 }

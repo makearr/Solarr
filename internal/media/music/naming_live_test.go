@@ -4,93 +4,64 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/media/music"
-	"github.com/makearr/Solarr/internal/moving/naming"
 )
 
-// realMusicLibrary is where the user's actual, curated library is mounted
-// read-only in this sandbox (never written to, never in the test's own
-// control) -- absent in an ordinary CI environment, so this test skips
-// rather than fails there, the same convention internal/platform/mediatool's own
-// ffprobe-dependent tests already use.
-const realMusicLibrary = "/mnt/media/music"
+// The default naming must reproduce the test library byte for byte (Invariant 73): every
+// "Artist/Album (Year)/Artist - NN - Title" file, fed back in as facts, renders to itself.
+// Skipped where the library is not mounted; run it by mounting /storage/media/music.
+func TestDefaultNaming_ReproducesTheTestLibrary(t *testing.T) {
+	root := os.Getenv("SOLARR_TEST_MUSIC_LIBRARY")
+	if root == "" {
+		root = "/storage/media/music"
+	}
+	if _, err := os.Stat(root); err != nil {
+		t.Skipf("test library not mounted at %s", root)
+	}
 
-// TestDefaultFolderTemplate_ReproducesTheRealLibrary is todo 4.5's own
-// acceptance criterion, run against the whole real library rather than a
-// fixture: every real "Artist/Album (Year)" folder pair is fed into
-// DefaultFolderTemplate as a Context, and the rendered path must match the
-// folder that is actually there -- proof that adopting the default proposes
-// zero renames. There is no media_object-to-work_part link yet
-// (private/notes.md's own recorded gap), so this deliberately does not
-// route through library.WorkDetail; it verifies the template against real
-// on-disk names directly, which is what "zero renames" actually means.
-func TestDefaultFolderTemplate_ReproducesTheRealLibrary(t *testing.T) {
-	artists, err := os.ReadDir(realMusicLibrary)
+	names := music.NamingFor(nil)
+	total, skipped := 0, 0
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		rel, _ := filepath.Rel(root, path)
+		facts, ok := factsFromPath(rel)
+		if !ok {
+			skipped++
+			return nil
+		}
+		total++
+		got, _, renderErr := names.RenderTrack(facts, 1, rel)
+		if renderErr != nil || got != rel {
+			t.Errorf("%s renders as %q (%v)", rel, got, renderErr)
+		}
+		return nil
+	})
 	if err != nil {
-		t.Skipf("real music library not mounted at %s: %v", realMusicLibrary, err)
+		t.Fatal(err)
 	}
-
-	folder, err := naming.Compile(music.DefaultFolderTemplate)
-	if err != nil {
-		t.Fatalf("Compile(DefaultFolderTemplate): %v", err)
-	}
-
-	total, mismatched, skippedShape := 0, 0, 0
-	for _, artistEntry := range artists {
-		if !artistEntry.IsDir() {
-			continue
-		}
-		artistName := artistEntry.Name()
-		albums, err := os.ReadDir(filepath.Join(realMusicLibrary, artistName))
-		if err != nil {
-			continue
-		}
-		for _, albumEntry := range albums {
-			if !albumEntry.IsDir() {
-				continue
-			}
-			albumFolder := albumEntry.Name()
-			album, year, ok := splitAlbumYear(albumFolder)
-			if !ok {
-				// A folder not shaped "Album (Year)" is not this template's
-				// problem to reproduce -- it never claimed to cover every
-				// shape a library might contain, only its own default.
-				skippedShape++
-				continue
-			}
-			total++
-
-			ctx := naming.Context{
-				music.TokenArtistName:  artistName,
-				music.TokenAlbumTitle:  album,
-				music.TokenReleaseYear: year,
-			}
-			rendered, _ := naming.Render(folder, ctx, naming.DefaultSeparator)
-			want := artistName + "/" + albumFolder
-			if rendered != want {
-				mismatched++
-				t.Logf("mismatch: rendered %q, want %q", rendered, want)
-			}
-		}
-	}
-
 	if total == 0 {
-		t.Skip("no \"Artist/Album (Year)\"-shaped folders found in the real library")
+		t.Skip("no file in the library has the default shape")
 	}
-	if mismatched > 0 {
-		t.Errorf("%d of %d real album folders did not round-trip through DefaultFolderTemplate", mismatched, total)
-	}
-	t.Logf("verified %d real album folders reproduce byte-for-byte (%d others were not \"Album (Year)\"-shaped)", total, skippedShape)
+	t.Logf("%d files reproduce byte for byte; %d are not the default shape", total, skipped)
 }
 
-var albumYearPattern = regexp.MustCompile(`^(.*) \(((?:19|20)\d{2})\)$`)
+var defaultShape = regexp.MustCompile(`^([^/]+)/(.+) \(((?:19|20)\d{2})\)/([^/]+) - (\d{2}) - ([^/]+)\.[^./]+$`)
 
-func splitAlbumYear(folder string) (album, year string, ok bool) {
-	match := albumYearPattern.FindStringSubmatch(folder)
-	if match == nil {
-		return "", "", false
+func factsFromPath(rel string) (music.TrackNaming, bool) {
+	match := defaultShape.FindStringSubmatch(rel)
+	if match == nil || match[1] != match[4] {
+		return music.TrackNaming{}, false
 	}
-	return match[1], match[2], true
+	year, _ := strconv.Atoi(match[3])
+	track, _ := strconv.Atoi(match[5])
+	return music.TrackNaming{
+		ArtistName: match[1], AlbumTitle: match[2], ReleaseYear: year,
+		Track: track, TrackTitle: strings.TrimSpace(match[6]),
+	}, true
 }

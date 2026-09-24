@@ -20,7 +20,8 @@ import { ImportLists } from "./ImportLists";
 import { CacheSettingsPage } from "./CacheSettings";
 import { Library } from "./Library";
 import { LanguageProfiles } from "./LanguageProfiles";
-import { LibraryConfigPlaceholder } from "./LibraryConfigPlaceholder";
+import { LibraryNaming } from "./LibraryNaming";
+import { UnknownConfigSection } from "./UnknownConfigSection";
 import { LibraryHealth } from "./LibraryHealth";
 import { LibraryLevelList } from "./LibraryLevelList";
 import { Moves } from "./Moves";
@@ -114,8 +115,13 @@ const routes = [
   }),
   createRoute({
     getParentRoute: () => rootRoute,
+    path: "/library/$categoryId/config/naming",
+    component: LibraryNaming,
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
     path: "/library/$categoryId/config/$section",
-    component: LibraryConfigPlaceholder,
+    component: UnknownConfigSection,
   }),
   // Registered ahead of the $level catch-all below, or these would each
   // resolve as an (invalid) level key instead of their own screen.

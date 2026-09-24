@@ -3,6 +3,7 @@ package settings_test
 import (
 	"errors"
 	"net/netip"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -562,5 +563,68 @@ func TestImport_AppliesTheSameRulesAsTheAPI(t *testing.T) {
 	}
 	if categories := cache.Snapshot().Categories(); len(categories) != 0 {
 		t.Errorf("%d categories survived a rejected import", len(categories))
+	}
+}
+
+func TestDocument_RoundTrips_IncludesNaming(t *testing.T) {
+	cache, _ := newCache(t)
+	music := mustCategory(t, cache, "music", "Music", 10)
+	mustCategory(t, cache, "music", "Soundtracks", 20)
+	naming := settings.NamingProfile{
+		RenameFiles: true, ReplaceIllegalCharacters: false, ColonReplacement: "dash",
+		Formats: map[string]string{"artist_folder": "{Artist Name}", "standard_track": "{track:00} {Track Title}"},
+	}
+	if err := cache.SetCategoryNaming(t.Context(), music.ID, naming); err != nil {
+		t.Fatalf("SetCategoryNaming: %v", err)
+	}
+
+	exported := cache.Export()
+	encoded, err := yaml.Marshal(exported)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded settings.Document
+	if err := yaml.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	fresh, freshClock := newCache(t)
+	if err := fresh.Import(t.Context(), freshClock, netip.Addr{}, decoded); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if got := fresh.Export(); !equalDocuments(got, exported) {
+		t.Errorf("round trip changed the configuration:\n got %+v\nwant %+v", got, exported)
+	}
+	for _, category := range fresh.Snapshot().Categories() {
+		switch category.Name {
+		case "Music":
+			if category.Naming == nil || !reflect.DeepEqual(*category.Naming, naming) {
+				t.Errorf("Music naming = %+v, want %+v", category.Naming, naming)
+			}
+		case "Soundtracks":
+			if category.Naming != nil {
+				t.Errorf("a library on the default gained naming %+v", category.Naming)
+			}
+		}
+	}
+}
+
+// A restore is validated the same way a save is; a bad template names its library and saves nothing.
+func TestImport_RefusesNamingTheMediaTypeRejects(t *testing.T) {
+	cache, cl := newCache(t)
+	cache.EnableNamingValidation(func(string, settings.NamingProfile) error {
+		return errors.New("Standard Track Format: unknown token(s): Episode Title")
+	})
+	document := settings.Document{Version: settings.DocumentVersion, Categories: []settings.CategoryEntry{{
+		MediaType: "music", Name: "Music", PriorityRank: 10,
+		Naming: &settings.NamingEntry{ColonReplacement: "smart", Formats: map[string]string{"standard_track": "{Episode Title}"}},
+	}}}
+
+	err := cache.Import(t.Context(), cl, netip.Addr{}, document)
+	var problems config.Problems
+	if !errors.As(err, &problems) || len(problems) != 1 || problems[0].Path != "categories[0].naming" {
+		t.Fatalf("err = %v, want one problem at categories[0].naming", err)
+	}
+	if len(cache.Snapshot().Categories()) != 0 {
+		t.Error("a refused import created the library anyway")
 	}
 }

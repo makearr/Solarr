@@ -7,16 +7,101 @@ package settingsdb
 
 import (
 	"context"
+	"database/sql"
 )
+
+const createNamingProfile = `-- name: CreateNamingProfile :one
+INSERT INTO naming_profile (name, rename_files, replace_illegal_characters, colon_replacement)
+VALUES (?, ?, ?, ?)
+RETURNING id
+`
+
+type CreateNamingProfileParams struct {
+	Name                     string
+	RenameFiles              int64
+	ReplaceIllegalCharacters int64
+	ColonReplacement         string
+}
+
+func (q *Queries) CreateNamingProfile(ctx context.Context, arg CreateNamingProfileParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, createNamingProfile,
+		arg.Name,
+		arg.RenameFiles,
+		arg.ReplaceIllegalCharacters,
+		arg.ColonReplacement,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const deleteNamingFormats = `-- name: DeleteNamingFormats :exec
+DELETE FROM naming_format WHERE naming_profile_id = ?
+`
+
+func (q *Queries) DeleteNamingFormats(ctx context.Context, namingProfileID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteNamingFormats, namingProfileID)
+	return err
+}
+
+const deleteNamingProfile = `-- name: DeleteNamingProfile :exec
+DELETE FROM naming_profile WHERE id = ?
+`
+
+func (q *Queries) DeleteNamingProfile(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteNamingProfile, id)
+	return err
+}
+
+const insertNamingFormat = `-- name: InsertNamingFormat :exec
+INSERT INTO naming_format (naming_profile_id, slot, template) VALUES (?, ?, ?)
+`
+
+type InsertNamingFormatParams struct {
+	NamingProfileID int64
+	Slot            string
+	Template        string
+}
+
+func (q *Queries) InsertNamingFormat(ctx context.Context, arg InsertNamingFormatParams) error {
+	_, err := q.db.ExecContext(ctx, insertNamingFormat, arg.NamingProfileID, arg.Slot, arg.Template)
+	return err
+}
+
+const listNamingFormats = `-- name: ListNamingFormats :many
+SELECT naming_profile_id, slot, template FROM naming_format ORDER BY naming_profile_id, slot
+`
+
+func (q *Queries) ListNamingFormats(ctx context.Context) ([]NamingFormat, error) {
+	rows, err := q.db.QueryContext(ctx, listNamingFormats)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NamingFormat{}
+	for rows.Next() {
+		var i NamingFormat
+		if err := rows.Scan(&i.NamingProfileID, &i.Slot, &i.Template); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const listNamingProfiles = `-- name: ListNamingProfiles :many
 
-SELECT id, name, folder_template, file_template FROM naming_profile ORDER BY name
+SELECT id, name, rename_files, replace_illegal_characters, colon_replacement
+FROM naming_profile ORDER BY id
 `
 
-// Section 11.8, todo 4.5's own remaining schema step (migration 0013). Read-only for now:
-// nothing writes a second naming_profile row yet, so there is no Create/Update/Delete pass
-// here -- only enough to prove the shipped default seeded correctly.
+// One naming profile per library (category.naming_profile_id), its templates per slot.
 func (q *Queries) ListNamingProfiles(ctx context.Context) ([]NamingProfile, error) {
 	rows, err := q.db.QueryContext(ctx, listNamingProfiles)
 	if err != nil {
@@ -29,8 +114,9 @@ func (q *Queries) ListNamingProfiles(ctx context.Context) ([]NamingProfile, erro
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.FolderTemplate,
-			&i.FileTemplate,
+			&i.RenameFiles,
+			&i.ReplaceIllegalCharacters,
+			&i.ColonReplacement,
 		); err != nil {
 			return nil, err
 		}
@@ -43,4 +129,40 @@ func (q *Queries) ListNamingProfiles(ctx context.Context) ([]NamingProfile, erro
 		return nil, err
 	}
 	return items, nil
+}
+
+const setCategoryNamingProfile = `-- name: SetCategoryNamingProfile :exec
+UPDATE category SET naming_profile_id = ? WHERE id = ?
+`
+
+type SetCategoryNamingProfileParams struct {
+	NamingProfileID sql.NullInt64
+	ID              int64
+}
+
+func (q *Queries) SetCategoryNamingProfile(ctx context.Context, arg SetCategoryNamingProfileParams) error {
+	_, err := q.db.ExecContext(ctx, setCategoryNamingProfile, arg.NamingProfileID, arg.ID)
+	return err
+}
+
+const updateNamingProfile = `-- name: UpdateNamingProfile :exec
+UPDATE naming_profile SET rename_files = ?, replace_illegal_characters = ?, colon_replacement = ?
+WHERE id = ?
+`
+
+type UpdateNamingProfileParams struct {
+	RenameFiles              int64
+	ReplaceIllegalCharacters int64
+	ColonReplacement         string
+	ID                       int64
+}
+
+func (q *Queries) UpdateNamingProfile(ctx context.Context, arg UpdateNamingProfileParams) error {
+	_, err := q.db.ExecContext(ctx, updateNamingProfile,
+		arg.RenameFiles,
+		arg.ReplaceIllegalCharacters,
+		arg.ColonReplacement,
+		arg.ID,
+	)
+	return err
 }

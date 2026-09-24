@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"path"
-	"strconv"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -13,7 +12,6 @@ import (
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/moving/mover"
-	"github.com/makearr/Solarr/internal/moving/naming"
 	"github.com/makearr/Solarr/internal/moving/placement"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -333,7 +331,14 @@ func (c Committer) CommitMatchedUnit(
 		}
 	}
 
-	renaming := c.renameOnImport == nil || c.renameOnImport()
+	names := NamingFor(nil)
+	if category, found := c.categories.Category(categoryID); found {
+		names = NamingFor(category.Naming)
+	}
+	// The Import screen's "rename" checkbox can only turn renaming off, never override the library.
+	if c.renameOnImport != nil && !c.renameOnImport() {
+		names.RenameFiles = false
+	}
 
 	files := make([]library.PhysicalFile, len(unit.Media))
 	trackFiles := make([]TrackFile, len(unit.Media))
@@ -345,12 +350,9 @@ func (c Committer) CommitMatchedUnit(
 			return Placed{}, fmt.Errorf("music: commit unit %q: %w", unit.Directory, err)
 		}
 		track, discCount := matched.trackOf(media.RelPath, fileTags)
-		destRelPath, warnings, err := importRelPath(work, artist, year, track, discCount, path.Ext(media.RelPath))
+		destRelPath, warnings, err := importRelPath(names, work, artist, year, track, discCount, media.RelPath)
 		if err != nil {
 			return Placed{}, fmt.Errorf("music: commit unit %q: %w", unit.Directory, err)
-		}
-		if !renaming {
-			destRelPath = keptFileName(destRelPath, media.RelPath)
 		}
 		pathWarnings[index] = warnings
 
@@ -505,35 +507,21 @@ func unitEditionLink(tags mediatool.Tags) *library.EditionLink {
 	}
 }
 
-// importRelPath renders one file's destination path under the shipped
-// default template, from claimed tags directly rather than a DB WorkDetail
-// (music.NamingContext's own input) -- a work created this instant has no
-// WorkDetail worth reading yet (its parts, and any real artist credit, are
-// EnrichJob's job, not this one's), the same accepted gap a scan-discovered
-// work's own rename preview already carries (notes.md §5: "{Artist Name}
-// renders empty"). Once enrichment lands a canonical artist name that
-// differs from the tag's raw string, this file's own rename preview will
-// show a diff -- expected, not a bug, the same way any scan-discovered
-// work's does today. No edition/Format token: a freshly resolved edition is
-// the "unknown" placeholder (unitEditionLink), which carries no format.
+// importRelPath renders one file's destination from its claimed tags: a work created this
+// instant has no WorkDetail yet, so enrichment's canonical names show up later as a rename diff.
 func importRelPath(
-	work library.WorkIdentity, artist string, year *int64, track TrackFile, discCount int, extension string,
+	names Naming, work library.WorkIdentity, artist string, year *int64, track TrackFile, discCount int,
+	sourceRelPath string,
 ) (string, []string, error) {
-	ctx := naming.Context{TokenAlbumTitle: work.CanonicalTitle}
-	if artist != "" {
-		ctx[TokenArtistName] = artist
+	facts := TrackNaming{
+		ArtistName: artist, AlbumTitle: work.CanonicalTitle, Medium: track.Disc, Track: track.Track,
+		TrackTitle:       track.Title,
+		OriginalFilename: strings.TrimSuffix(path.Base(sourceRelPath), path.Ext(sourceRelPath)),
 	}
 	if year != nil {
-		ctx[TokenReleaseYear] = strconv.FormatInt(*year, 10)
+		facts.ReleaseYear = int(*year)
 	}
-	if track.Title != "" {
-		ctx[TokenTrackTitle] = track.Title
-	}
-	ctx[TokenDisc] = strconv.Itoa(track.Disc)
-	ctx[TokenTrack] = strconv.Itoa(track.Track)
-	ctx[TokenTrackPosition] = TrackPosition(track.Disc, track.Track, discCount)
-
-	rendered, warnings, err := naming.RenderPath(compiledDefaultFolder, compiledDefaultFile, ctx, naming.DefaultSeparator, extension)
+	rendered, warnings, err := names.RenderTrack(facts, discCount, sourceRelPath)
 	if err != nil {
 		return "", nil, fmt.Errorf("render path: %w", err)
 	}

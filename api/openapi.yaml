@@ -3695,6 +3695,106 @@ paths:
           $ref: "#/components/responses/Problem"
           description: Still referenced; the detail names what by.
 
+  /categories/{id}/naming:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getLibraryNaming
+      tags: [settings]
+      summary: A library's naming, its media type's naming scheme, and rendered examples. Administrator only.
+      responses:
+        "200":
+          description: The library's naming.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryNaming" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setLibraryNaming
+      tags: [settings]
+      summary: Save a library's naming. Administrator only.
+      description: >-
+        Validated on write against the media type's naming scheme: every
+        slot present, every template compiling, every token declared. All
+        problems are reported at once and nothing is saved.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NamingSettings" }
+      responses:
+        "200":
+          description: The saved naming.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryNaming" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /categories/{id}/naming/examples:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: previewLibraryNaming
+      tags: [settings]
+      summary: Render examples for unsaved naming, as the screen is edited. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NamingSettings" }
+      responses:
+        "200":
+          description: The examples, or why they cannot be rendered.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NamingPreview" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /categories/{id}/rename:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: renameLibrary
+      tags: [library]
+      summary: Preview or apply the library's naming to its files, on every root it uses. Administrator only.
+      description: >-
+        Lidarr's "apply to library". One rename per root folder, each
+        through the move engine (ADR-51), so read-only roots refuse unless
+        they allow renaming. Only works in this library are touched.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preview: { type: boolean, default: false }
+      responses:
+        "200":
+          description: One plan per root folder.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryRenamePlan" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/rootfolders:
     parameters:
       - name: id
@@ -4547,6 +4647,114 @@ components:
         proxy_bypass: { type: array, items: { type: string } }
         allow_cidrs_enabled: { type: boolean }
         allow_cidrs: { type: array, items: { type: string } }
+
+    NamingSettings:
+      type: object
+      description: One library's naming, Lidarr's shape.
+      required: [rename_files, replace_illegal_characters, colon_replacement, formats]
+      properties:
+        rename_files:
+          type: boolean
+          description: Lidarr's "Rename Tracks". Off, a file keeps the name it arrived with.
+        replace_illegal_characters:
+          type: boolean
+          description: Replace characters some filesystems refuse; off, they are removed.
+        colon_replacement:
+          type: string
+          enum: [delete, dash, space_dash, space_dash_space, smart]
+        formats:
+          type: object
+          description: A template per slot key the media type declares.
+          additionalProperties: { type: string }
+
+    NamingSlot:
+      type: object
+      required: [key, label, help]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        help: { type: string }
+
+    NamingToken:
+      type: object
+      required: [spelling, group, example, help]
+      properties:
+        spelling: { type: string, description: 'As typed, e.g. "{Artist Name}".' }
+        group: { type: string }
+        example: { type: string }
+        help: { type: string }
+
+    NamingPreset:
+      type: object
+      required: [name, formats]
+      properties:
+        name: { type: string }
+        formats:
+          type: object
+          additionalProperties: { type: string }
+
+    NamingScheme:
+      type: object
+      description: What a media type declares about naming.
+      required: [slots, tokens, presets]
+      properties:
+        slots:
+          type: array
+          items: { $ref: "#/components/schemas/NamingSlot" }
+        tokens:
+          type: array
+          items: { $ref: "#/components/schemas/NamingToken" }
+        presets:
+          type: array
+          description: The first is the media type's default.
+          items: { $ref: "#/components/schemas/NamingPreset" }
+
+    NamingExample:
+      type: object
+      required: [label, path]
+      properties:
+        label: { type: string }
+        path: { type: string }
+
+    LibraryNaming:
+      type: object
+      required: [naming, is_default, scheme, examples]
+      properties:
+        naming: { $ref: "#/components/schemas/NamingSettings" }
+        is_default:
+          type: boolean
+          description: True until the library's naming is first saved.
+        scheme: { $ref: "#/components/schemas/NamingScheme" }
+        examples:
+          type: array
+          items: { $ref: "#/components/schemas/NamingExample" }
+
+    NamingPreview:
+      type: object
+      required: [examples, problems]
+      properties:
+        examples:
+          type: array
+          items: { $ref: "#/components/schemas/NamingExample" }
+        problems:
+          type: array
+          description: Why the settings would be refused on save; empty when they would not.
+          items: { type: string }
+
+    LibraryRenamePlan:
+      type: object
+      required: [roots]
+      properties:
+        roots:
+          type: array
+          items: { $ref: "#/components/schemas/RootRenamePlan" }
+
+    RootRenamePlan:
+      type: object
+      required: [root_folder_id, plan]
+      properties:
+        root_folder_id: { type: integer, format: int64 }
+        plan: { $ref: "#/components/schemas/DrainPlan" }
 
     DrainPlan:
       type: object
