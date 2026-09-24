@@ -562,6 +562,12 @@ function PartRow({
               {file && file.bitrate_kbps > 0 ? `${file.bitrate_kbps} kbps` : "--"}
             </span>
           )}
+          {file?.meets_target != null && (
+            <QualityMark label="target" met={file.meets_target} what="the library's target quality" />
+          )}
+          {file?.meets_cutoff != null && (
+            <QualityMark label="cutoff" met={file.meets_cutoff} what="the cutoff, so it will not be upgraded" />
+          )}
         </span>
 
         <button
@@ -625,6 +631,20 @@ function PartRow({
         </div>
       )}
     </li>
+  );
+}
+
+// Whether a file meets its library's target or cutoff (2026-09-19 review).
+function QualityMark({ label, met, what }: { label: string; met: boolean; what: string }) {
+  return (
+    <span
+      title={met ? `Meets ${what}` : `Does not meet ${what}`}
+      className={`rounded-full px-1.5 py-px font-sans ${
+        met ? "bg-ok/15 text-ok" : "border border-border-subtle text-ink-muted line-through"
+      }`}
+    >
+      {label}
+    </span>
   );
 }
 

@@ -336,7 +336,7 @@ function ExpandToggle({ label, isOpen, onToggle }: { label: string; isOpen: bool
 const CONFIG_SECTIONS: readonly { key: string; label: string; tier: Tier }[] = [
   { key: "naming", label: "Naming", tier: "advanced" },
   { key: "import-lists", label: "Import lists", tier: "advanced" },
-  { key: "quality", label: "Quality profiles", tier: "expert" },
+  { key: "quality", label: "Quality", tier: "normal" },
   { key: "language", label: "Language", tier: "expert" },
 ];
 

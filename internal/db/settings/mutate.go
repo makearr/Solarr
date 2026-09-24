@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
@@ -141,9 +142,8 @@ func (c *Cache) UpdateCategory(
 		}); err != nil {
 			return err
 		}
-		if err := queries.SetCategoryQualityProfile(ctx, settingsdb.SetCategoryQualityProfileParams{
-			QualityProfileID: int64PtrToNull(qualityProfileID), ID: id,
-		}); err != nil {
+		if err := writeQualityList(ctx, queries, id, withFirst(existing.QualityProfileIDs, qualityProfileID),
+			existing.QualityCutoffID); err != nil {
 			return err
 		}
 		if err := queries.SetCategoryLanguageProfile(ctx, settingsdb.SetCategoryLanguageProfileParams{
@@ -278,7 +278,7 @@ func (c *Cache) DeleteQualityProfile(ctx context.Context, id int64) error {
 	if _, found := c.Snapshot().QualityProfile(id); !found {
 		return fmt.Errorf("%w: quality profile %d", ErrNotFound, id)
 	}
-	categories, err := c.queries.CountCategoriesUsingQualityProfile(ctx, sql.NullInt64{Int64: id, Valid: true})
+	categories, err := c.queries.CountCategoryListsUsingQualityProfile(ctx, id)
 	if err != nil {
 		return fmt.Errorf("settings: count categories for quality profile %d: %w", id, err)
 	}
@@ -405,10 +405,127 @@ func (c *Cache) SetCategoryQualityProfile(ctx context.Context, categoryID int64,
 			return fmt.Errorf("%w: quality profile %d", ErrNotFound, *profileID)
 		}
 	}
+	category, _ := snapshot.Category(categoryID)
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
-		return queries.SetCategoryQualityProfile(ctx, settingsdb.SetCategoryQualityProfileParams{
-			QualityProfileID: int64PtrToNull(profileID), ID: categoryID,
+		return writeQualityList(ctx, queries, categoryID, withFirst(category.QualityProfileIDs, profileID),
+			category.QualityCutoffID)
+	})
+}
+
+// SetCategoryQuality saves a library's quality: the profiles it accepts in priority order, the
+// cutoff (one of them), and the target, nil for none. Every problem is reported at once.
+func (c *Cache) SetCategoryQuality(
+	ctx context.Context, categoryID int64, profileIDs []int64, cutoffID *int64, target *QualityTarget,
+) error {
+	snapshot := c.Snapshot()
+	if _, found := snapshot.Category(categoryID); !found {
+		return fmt.Errorf("%w: category %d", ErrNotFound, categoryID)
+	}
+	var problems config.Problems
+	seen := make(map[int64]bool, len(profileIDs))
+	for index, id := range profileIDs {
+		where := fmt.Sprintf("profiles[%d]", index)
+		if _, found := snapshot.QualityProfile(id); !found {
+			problems = append(problems, config.Problem{Path: where, Value: strconv.FormatInt(id, 10),
+				Expectation: "an existing quality profile"})
+		}
+		if seen[id] {
+			problems = append(problems, config.Problem{Path: where, Value: strconv.FormatInt(id, 10),
+				Expectation: "a profile listed once"})
+		}
+		seen[id] = true
+	}
+	if cutoffID != nil && !seen[*cutoffID] {
+		problems = append(problems, config.Problem{Path: "cutoff", Value: strconv.FormatInt(*cutoffID, 10),
+			Expectation: "one of the library's own profiles"})
+	}
+	problems = append(problems, validateQualityTarget(target)...)
+	if len(problems) > 0 {
+		return problems
+	}
+
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		if err := writeQualityList(ctx, queries, categoryID, profileIDs, cutoffID); err != nil {
+			return err
+		}
+		if target == nil {
+			return queries.DeleteCategoryQualityTarget(ctx, categoryID)
+		}
+		return queries.UpsertCategoryQualityTarget(ctx, settingsdb.UpsertCategoryQualityTargetParams{
+			CategoryID: categoryID, AudioCodec: target.AudioCodec, Container: target.Container,
+			BitrateKbps: int64PtrToNull(target.BitrateKbps), TolerancePct: target.TolerancePct,
 		})
+	})
+}
+
+// maxTargetTolerancePct keeps "fuzzy" a range around the bitrate rather than any bitrate at all.
+const maxTargetTolerancePct = 50
+
+func validateQualityTarget(target *QualityTarget) config.Problems {
+	if target == nil {
+		return nil
+	}
+	var problems config.Problems
+	if strings.TrimSpace(target.AudioCodec) == "" {
+		problems = append(problems, config.Problem{Path: "target.audio_codec", Expectation: "a codec, e.g. aac"})
+	}
+	if strings.TrimSpace(target.Container) == "" {
+		problems = append(problems, config.Problem{Path: "target.container", Expectation: "a file type, e.g. m4a"})
+	}
+	if target.BitrateKbps != nil && *target.BitrateKbps <= 0 {
+		problems = append(problems, config.Problem{Path: "target.bitrate_kbps",
+			Value: strconv.FormatInt(*target.BitrateKbps, 10), Expectation: "a bitrate above 0, or none for lossless"})
+	}
+	if target.TolerancePct < 0 || target.TolerancePct > maxTargetTolerancePct {
+		problems = append(problems, config.Problem{Path: "target.tolerance_pct",
+			Value: strconv.FormatInt(target.TolerancePct, 10), Expectation: "0 to 50 percent"})
+	}
+	return problems
+}
+
+// withFirst puts profileID at the head of the list, keeping the rest in order; nil clears it.
+func withFirst(list []int64, profileID *int64) []int64 {
+	if profileID == nil {
+		return nil
+	}
+	ordered := []int64{*profileID}
+	for _, id := range list {
+		if id != *profileID {
+			ordered = append(ordered, id)
+		}
+	}
+	return ordered
+}
+
+// writeQualityList replaces a library's ordered profiles, keeping category.quality_profile_id
+// equal to the first and dropping a cutoff that is no longer in the list.
+func writeQualityList(
+	ctx context.Context, queries *settingsdb.Queries, categoryID int64, profileIDs []int64, cutoffID *int64,
+) error {
+	if err := queries.DeleteCategoryQualityProfiles(ctx, categoryID); err != nil {
+		return fmt.Errorf("settings: clear quality profiles of category %d: %w", categoryID, err)
+	}
+	for ord, id := range profileIDs {
+		if err := queries.InsertCategoryQualityProfile(ctx, settingsdb.InsertCategoryQualityProfileParams{
+			CategoryID: categoryID, QualityProfileID: id, Ord: int64(ord),
+		}); err != nil {
+			return fmt.Errorf("settings: add quality profile %d to category %d: %w", id, categoryID, err)
+		}
+	}
+	var first *int64
+	if len(profileIDs) > 0 {
+		first = &profileIDs[0]
+	}
+	if err := queries.SetCategoryQualityProfile(ctx, settingsdb.SetCategoryQualityProfileParams{
+		QualityProfileID: int64PtrToNull(first), ID: categoryID,
+	}); err != nil {
+		return err
+	}
+	if cutoffID != nil && !slices.Contains(profileIDs, *cutoffID) {
+		cutoffID = nil
+	}
+	return queries.SetCategoryQualityCutoff(ctx, settingsdb.SetCategoryQualityCutoffParams{
+		QualityCutoffProfileID: int64PtrToNull(cutoffID), ID: categoryID,
 	})
 }
 

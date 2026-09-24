@@ -2384,6 +2384,29 @@ export interface paths {
         patch: operations["updateCategory"];
         trace?: never;
     };
+    "/categories/{id}/quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** A library's quality profiles in priority order, its cutoff and target. Administrator only. */
+        get: operations["getLibraryQuality"];
+        /**
+         * Save a library's quality. Administrator only.
+         * @description The profiles the library accepts, earlier preferred and later ones fallbacks (2026-09-24); the cutoff is one of them; the target is the one exact quality aimed for, its bitrate a range of plus or minus tolerance_pct. Every problem is reported at once.
+         */
+        put: operations["setLibraryQuality"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/naming": {
         parameters: {
             query?: never;
@@ -2996,6 +3019,42 @@ export interface components {
             proxy_bypass: string[];
             allow_cidrs_enabled: boolean;
             allow_cidrs: string[];
+        };
+        QualityTarget: {
+            /** @description As ffprobe names it: aac, mp3, flac, opus. */
+            audio_codec: string;
+            /** @description The file type: m4a, mp3, flac. */
+            container: string;
+            /**
+             * Format: int64
+             * @description Absent for a lossless codec.
+             */
+            bitrate_kbps?: number;
+            /** Format: int64 */
+            tolerance_pct: number;
+        };
+        LibraryQualityWrite: {
+            /** @description The profiles the library accepts, earlier preferred. */
+            profile_ids: number[];
+            /** Format: int64 */
+            cutoff_profile_id?: number;
+            target?: components["schemas"]["QualityTarget"];
+        };
+        QualityProfileRef: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+        };
+        LibraryQuality: {
+            /** @description The library's own list, earlier preferred. Empty means the instance default. */
+            profiles: components["schemas"]["QualityProfileRef"][];
+            /** @description Every profile, in the suggested order. */
+            available: components["schemas"]["QualityProfileRef"][];
+            /** Format: int64 */
+            cutoff_profile_id?: number;
+            target?: components["schemas"]["QualityTarget"];
+            /** @description Plain-language notices, e.g. a target the first profile would refuse. */
+            warnings: string[];
         };
         /** @description One library's naming, Lidarr's shape. */
         NamingSettings: {
@@ -3824,12 +3883,18 @@ export interface components {
             audio_codec?: string;
             video_codec?: string;
             container?: string;
+            /** @description The file's own type, "m4a" -- container is ffprobe's demuxer list. */
+            extension?: string;
             /**
              * Format: int64
              * @description 0 when the attribute probe has not measured this file yet.
              */
             bitrate_kbps: number;
             lossless: boolean;
+            /** @description Codec, file type and bitrate match the library's target. Absent when it sets none. */
+            meets_target?: boolean;
+            /** @description Good enough that upgrades stop. Absent when the library sets neither target nor cutoff. */
+            meets_cutoff?: boolean;
         };
         /** @description One work-level credit (ADR-32) -- the person's own name, so a client never needs a second round-trip just to display it. */
         Credit: {
@@ -8611,6 +8676,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CategorySettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getLibraryQuality: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The library's quality. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryQuality"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setLibraryQuality: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryQualityWrite"];
+            };
+        };
+        responses: {
+            /** @description The saved quality. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryQuality"];
                 };
             };
             400: components["responses"]["Problem"];

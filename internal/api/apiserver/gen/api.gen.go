@@ -1752,6 +1752,29 @@ type LibraryNaming struct {
 	Scheme NamingScheme `json:"scheme"`
 }
 
+// LibraryQuality defines model for LibraryQuality.
+type LibraryQuality struct {
+	// Available Every profile, in the suggested order.
+	Available       []QualityProfileRef `json:"available"`
+	CutoffProfileId *int64              `json:"cutoff_profile_id,omitempty"`
+
+	// Profiles The library's own list, earlier preferred. Empty means the instance default.
+	Profiles []QualityProfileRef `json:"profiles"`
+	Target   *QualityTarget      `json:"target,omitempty"`
+
+	// Warnings Plain-language notices, e.g. a target the first profile would refuse.
+	Warnings []string `json:"warnings"`
+}
+
+// LibraryQualityWrite defines model for LibraryQualityWrite.
+type LibraryQualityWrite struct {
+	CutoffProfileId *int64 `json:"cutoff_profile_id,omitempty"`
+
+	// ProfileIds The profiles the library accepts, earlier preferred.
+	ProfileIds []int64        `json:"profile_ids"`
+	Target     *QualityTarget `json:"target,omitempty"`
+}
+
 // LibraryRenamePlan defines model for LibraryRenamePlan.
 type LibraryRenamePlan struct {
 	Roots []RootRenamePlan `json:"roots"`
@@ -1992,11 +2015,20 @@ type PartFile struct {
 	AudioCodec *string `json:"audio_codec,omitempty"`
 
 	// BitrateKbps 0 when the attribute probe has not measured this file yet.
-	BitrateKbps   int64   `json:"bitrate_kbps"`
-	Container     *string `json:"container,omitempty"`
+	BitrateKbps int64   `json:"bitrate_kbps"`
+	Container   *string `json:"container,omitempty"`
+
+	// Extension The file's own type, "m4a" -- container is ffprobe's demuxer list.
+	Extension     *string `json:"extension,omitempty"`
 	Lossless      bool    `json:"lossless"`
 	MediaObjectId int64   `json:"media_object_id"`
-	VideoCodec    *string `json:"video_codec,omitempty"`
+
+	// MeetsCutoff Good enough that upgrades stop. Absent when the library sets neither target nor cutoff.
+	MeetsCutoff *bool `json:"meets_cutoff,omitempty"`
+
+	// MeetsTarget Codec, file type and bitrate match the library's target. Absent when it sets none.
+	MeetsTarget *bool   `json:"meets_target,omitempty"`
+	VideoCodec  *string `json:"video_codec,omitempty"`
 }
 
 // PathEntry defines model for PathEntry.
@@ -2155,11 +2187,30 @@ type QualityProfile struct {
 	Upgrade string `json:"upgrade"`
 }
 
+// QualityProfileRef defines model for QualityProfileRef.
+type QualityProfileRef struct {
+	Id   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
 // QualityProfileWrite defines model for QualityProfileWrite.
 type QualityProfileWrite struct {
 	Name    string `json:"name"`
 	Rules   string `json:"rules"`
 	Upgrade string `json:"upgrade"`
+}
+
+// QualityTarget defines model for QualityTarget.
+type QualityTarget struct {
+	// AudioCodec As ffprobe names it: aac, mp3, flac, opus.
+	AudioCodec string `json:"audio_codec"`
+
+	// BitrateKbps Absent for a lossless codec.
+	BitrateKbps *int64 `json:"bitrate_kbps,omitempty"`
+
+	// Container The file type: m4a, mp3, flac.
+	Container    string `json:"container"`
+	TolerancePct int64  `json:"tolerance_pct"`
 }
 
 // ReadyStatus defines model for ReadyStatus.
@@ -3079,6 +3130,9 @@ type SetLibraryNamingJSONRequestBody = NamingSettings
 // PreviewLibraryNamingJSONRequestBody defines body for PreviewLibraryNaming for application/json ContentType.
 type PreviewLibraryNamingJSONRequestBody = NamingSettings
 
+// SetLibraryQualityJSONRequestBody defines body for SetLibraryQuality for application/json ContentType.
+type SetLibraryQualityJSONRequestBody = LibraryQualityWrite
+
 // RenameLibraryJSONRequestBody defines body for RenameLibrary for application/json ContentType.
 type RenameLibraryJSONRequestBody RenameLibraryJSONBody
 
@@ -3336,6 +3390,12 @@ type ServerInterface interface {
 	// Render examples for unsaved naming, as the screen is edited. Administrator only.
 	// (POST /categories/{id}/naming/examples)
 	PreviewLibraryNaming(w http.ResponseWriter, r *http.Request, id int64)
+	// A library's quality profiles in priority order, its cutoff and target. Administrator only.
+	// (GET /categories/{id}/quality)
+	GetLibraryQuality(w http.ResponseWriter, r *http.Request, id int64)
+	// Save a library's quality. Administrator only.
+	// (PUT /categories/{id}/quality)
+	SetLibraryQuality(w http.ResponseWriter, r *http.Request, id int64)
 	// Preview or apply the library's naming to its files, on every root it uses. Administrator only.
 	// (POST /categories/{id}/rename)
 	RenameLibrary(w http.ResponseWriter, r *http.Request, id int64)
@@ -3936,6 +3996,18 @@ func (_ Unimplemented) SetLibraryNaming(w http.ResponseWriter, r *http.Request, 
 // Render examples for unsaved naming, as the screen is edited. Administrator only.
 // (POST /categories/{id}/naming/examples)
 func (_ Unimplemented) PreviewLibraryNaming(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A library's quality profiles in priority order, its cutoff and target. Administrator only.
+// (GET /categories/{id}/quality)
+func (_ Unimplemented) GetLibraryQuality(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Save a library's quality. Administrator only.
+// (PUT /categories/{id}/quality)
+func (_ Unimplemented) SetLibraryQuality(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5756,6 +5828,72 @@ func (siw *ServerInterfaceWrapper) PreviewLibraryNaming(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PreviewLibraryNaming(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetLibraryQuality operation middleware
+func (siw *ServerInterfaceWrapper) GetLibraryQuality(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLibraryQuality(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetLibraryQuality operation middleware
+func (siw *ServerInterfaceWrapper) SetLibraryQuality(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetLibraryQuality(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10156,6 +10294,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/naming/examples", wrapper.PreviewLibraryNaming)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/quality", wrapper.GetLibraryQuality)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/categories/{id}/quality", wrapper.SetLibraryQuality)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/rename", wrapper.RenameLibrary)

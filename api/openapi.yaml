@@ -3784,6 +3784,50 @@ paths:
           $ref: "#/components/responses/Problem"
           description: Still referenced; the detail names what by.
 
+  /categories/{id}/quality:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getLibraryQuality
+      tags: [settings]
+      summary: A library's quality profiles in priority order, its cutoff and target. Administrator only.
+      responses:
+        "200":
+          description: The library's quality.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryQuality" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setLibraryQuality
+      tags: [settings]
+      summary: Save a library's quality. Administrator only.
+      description: >-
+        The profiles the library accepts, earlier preferred and later ones
+        fallbacks (2026-09-24); the cutoff is one of them; the target is the
+        one exact quality aimed for, its bitrate a range of plus or minus
+        tolerance_pct. Every problem is reported at once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryQualityWrite" }
+      responses:
+        "200":
+          description: The saved quality.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryQuality" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/naming:
     parameters:
       - name: id
@@ -4736,6 +4780,55 @@ components:
         proxy_bypass: { type: array, items: { type: string } }
         allow_cidrs_enabled: { type: boolean }
         allow_cidrs: { type: array, items: { type: string } }
+
+    QualityTarget:
+      type: object
+      required: [audio_codec, container, tolerance_pct]
+      properties:
+        audio_codec: { type: string, description: 'As ffprobe names it: aac, mp3, flac, opus.' }
+        container: { type: string, description: 'The file type: m4a, mp3, flac.' }
+        bitrate_kbps:
+          type: integer
+          format: int64
+          description: Absent for a lossless codec.
+        tolerance_pct: { type: integer, format: int64, minimum: 0, maximum: 50 }
+
+    LibraryQualityWrite:
+      type: object
+      required: [profile_ids]
+      properties:
+        profile_ids:
+          type: array
+          description: The profiles the library accepts, earlier preferred.
+          items: { type: integer, format: int64 }
+        cutoff_profile_id: { type: integer, format: int64 }
+        target: { $ref: "#/components/schemas/QualityTarget" }
+
+    QualityProfileRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+
+    LibraryQuality:
+      type: object
+      required: [profiles, available, warnings]
+      properties:
+        profiles:
+          type: array
+          description: The library's own list, earlier preferred. Empty means the instance default.
+          items: { $ref: "#/components/schemas/QualityProfileRef" }
+        available:
+          type: array
+          description: Every profile, in the suggested order.
+          items: { $ref: "#/components/schemas/QualityProfileRef" }
+        cutoff_profile_id: { type: integer, format: int64 }
+        target: { $ref: "#/components/schemas/QualityTarget" }
+        warnings:
+          type: array
+          description: Plain-language notices, e.g. a target the first profile would refuse.
+          items: { type: string }
 
     NamingSettings:
       type: object
@@ -5841,11 +5934,20 @@ components:
         audio_codec: { type: string }
         video_codec: { type: string }
         container: { type: string }
+        extension:
+          type: string
+          description: The file's own type, "m4a" -- container is ffprobe's demuxer list.
         bitrate_kbps:
           type: integer
           format: int64
           description: 0 when the attribute probe has not measured this file yet.
         lossless: { type: boolean }
+        meets_target:
+          type: boolean
+          description: Codec, file type and bitrate match the library's target. Absent when it sets none.
+        meets_cutoff:
+          type: boolean
+          description: Good enough that upgrades stop. Absent when the library sets neither target nor cutoff.
 
     Credit:
       type: object

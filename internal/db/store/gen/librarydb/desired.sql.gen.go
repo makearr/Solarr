@@ -724,7 +724,9 @@ func (q *Queries) ListIncompleteDesiredItems(ctx context.Context, arg ListIncomp
 
 const listPartFilesForWork = `-- name: ListPartFilesForWork :many
 SELECT f.media_ref, f.media_object_id, o.overall_bitrate, o.audio_bitrate,
-       a.audio_codec, a.video_codec, a.container, a.lossless
+       a.audio_codec, a.video_codec, a.container, a.lossless,
+       CAST(COALESCE((SELECT lp.rel_path FROM library_path lp WHERE lp.media_object_id = o.id
+                      ORDER BY lp.is_primary DESC, lp.id LIMIT 1), '') AS TEXT) AS rel_path
 FROM desired_item d
 JOIN desired_item_file f ON f.desired_item_id = d.id
 JOIN media_object o ON o.id = f.media_object_id
@@ -742,6 +744,7 @@ type ListPartFilesForWorkRow struct {
 	VideoCodec     sql.NullString
 	Container      sql.NullString
 	Lossless       sql.NullInt64
+	RelPath        string
 }
 
 // Which part of a work has a file, and what that file measures. The same
@@ -765,6 +768,7 @@ func (q *Queries) ListPartFilesForWork(ctx context.Context, workID int64) ([]Lis
 			&i.VideoCodec,
 			&i.Container,
 			&i.Lossless,
+			&i.RelPath,
 		); err != nil {
 			return nil, err
 		}

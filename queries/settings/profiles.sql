@@ -1,15 +1,15 @@
 -- Quality and language profiles (ADR-40, section 19.8).
 
 -- name: ListQualityProfiles :many
-SELECT id, name, rules_json, upgrade_json FROM quality_profile ORDER BY name;
+SELECT id, name, rules_json, upgrade_json, suggested_rank FROM quality_profile ORDER BY suggested_rank, name;
 
 -- name: GetQualityProfile :one
-SELECT id, name, rules_json, upgrade_json FROM quality_profile WHERE id = ?;
+SELECT id, name, rules_json, upgrade_json, suggested_rank FROM quality_profile WHERE id = ?;
 
 -- name: CreateQualityProfile :one
 INSERT INTO quality_profile (name, rules_json, upgrade_json)
 VALUES (?, ?, ?)
-RETURNING id, name, rules_json, upgrade_json;
+RETURNING id, name, rules_json, upgrade_json, suggested_rank;
 
 -- name: UpdateQualityProfile :exec
 UPDATE quality_profile SET name = ?, rules_json = ?, upgrade_json = ? WHERE id = ?;
@@ -56,3 +56,31 @@ UPDATE category SET quality_profile_id = ? WHERE id = ?;
 
 -- name: SetCategoryLanguageProfile :exec
 UPDATE category SET language_profile_id = ? WHERE id = ?;
+
+-- name: ListCategoryQualityProfiles :many
+SELECT category_id, quality_profile_id, ord FROM category_quality_profile ORDER BY category_id, ord;
+
+-- name: DeleteCategoryQualityProfiles :exec
+DELETE FROM category_quality_profile WHERE category_id = ?;
+
+-- name: InsertCategoryQualityProfile :exec
+INSERT INTO category_quality_profile (category_id, quality_profile_id, ord) VALUES (?, ?, ?);
+
+-- name: SetCategoryQualityCutoff :exec
+UPDATE category SET quality_cutoff_profile_id = ? WHERE id = ?;
+
+-- name: ListCategoryQualityTargets :many
+SELECT category_id, audio_codec, container, bitrate_kbps, tolerance_pct FROM category_quality_target;
+
+-- name: UpsertCategoryQualityTarget :exec
+INSERT INTO category_quality_target (category_id, audio_codec, container, bitrate_kbps, tolerance_pct)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (category_id) DO UPDATE SET
+  audio_codec = excluded.audio_codec, container = excluded.container,
+  bitrate_kbps = excluded.bitrate_kbps, tolerance_pct = excluded.tolerance_pct;
+
+-- name: DeleteCategoryQualityTarget :exec
+DELETE FROM category_quality_target WHERE category_id = ?;
+
+-- name: CountCategoryListsUsingQualityProfile :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM category_quality_profile WHERE quality_profile_id = ?;
