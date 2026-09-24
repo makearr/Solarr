@@ -58,6 +58,9 @@ func ResolveUnidentified(
 		return 0, fmt.Errorf("music: resolve unidentified: %w", err)
 	}
 	workID = workIDs[0]
+	if err := unidentified.RecordManual(ctx, mediaObjectID, workID, cl.Now().Unix()); err != nil {
+		return 0, fmt.Errorf("music: resolve unidentified: %w", err)
+	}
 
 	if err := unidentified.Clear(ctx, []int64{mediaObjectID}); err != nil {
 		return 0, fmt.Errorf("music: resolve unidentified: clear queue entry: %w", err)

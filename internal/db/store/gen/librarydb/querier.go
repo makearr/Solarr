@@ -405,6 +405,8 @@ type Querier interface {
 	// that item already has everything it needs, just not at the quality
 	// wanted, a different report from "missing" entirely.
 	ListIncompleteDesiredItems(ctx context.Context, arg ListIncompleteDesiredItemsParams) ([]ListIncompleteDesiredItemsRow, error)
+	// Which of a batch's files a person already identified; ids is a JSON array.
+	ListManuallyIdentified(ctx context.Context, mediaObjectIds string) ([]int64, error)
 	ListMoveItems(ctx context.Context, moveJobID int64) ([]MoveItem, error)
 	// Small, operator-facing list -- move counts never approach library scale,
 	// the same reasoning ListImportSessions' own comment already gives.
@@ -595,6 +597,7 @@ type Querier interface {
 	// fault, and counting it would make reputation measure the environment (ADR-45).
 	RecordGroupObservation(ctx context.Context, arg RecordGroupObservationParams) error
 	RecordImportDecision(ctx context.Context, arg RecordImportDecisionParams) (ImportDecision, error)
+	RecordManualIdentification(ctx context.Context, arg RecordManualIdentificationParams) error
 	// ADR-51's own RECORD step: media_object never changes (Invariant 70), only
 	// where it lives. Matched by the old (root_folder_id, rel_path) rather than
 	// by id, since that pair is what Apply already has in hand from its own

@@ -259,3 +259,38 @@ func TestObserve_ChangesFileDatesWhereTheLibraryAsks(t *testing.T) {
 		}
 	}
 }
+
+// A person's identification always wins: a rescan whose tags name another album leaves it alone.
+func TestObserve_NeverReidentifiesAManuallyIdentifiedFile(t *testing.T) {
+	consumer, opened, fsys := newConsumerWithDiscovery(t, settings.MonitorDiscoveredNone)
+	content := []byte("heka - watermark - 03")
+	writeMusicFile(t, fsys, "Heka/Watermark/03.flac", content)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+	observe := func(releaseGroup string) {
+		t.Helper()
+		batch := []scan.Observed{observedFile("Heka/Watermark/03.flac", int64(len(content)), mediatool.Tags{
+			"album": "Watermark", "musicbrainz_releasegroupid": releaseGroup, "tracknumber": "3",
+		})}
+		if err := consumer.Observe(t.Context(), root, discoveryCategoryID, batch); err != nil {
+			t.Fatalf("Observe: %v", err)
+		}
+	}
+
+	other := "0d9d973e-aa0e-41b3-8af5-b987785ce133"
+	observe(releaseGroupMBID)
+	chosen := getWorkByExternalID(t, opened, "musicbrainz:release-group", releaseGroupMBID)
+	objects, err := librarydb.New(opened.Read()).ListWorkFiles(t.Context(), chosen.ID)
+	if err != nil || len(objects) != 1 {
+		t.Fatalf("work files = %v, %v; want the one file", objects, err)
+	}
+	if err := library.NewUnidentified(opened).RecordManual(t.Context(), objects[0], chosen.ID, 10); err != nil {
+		t.Fatalf("RecordManual: %v", err)
+	}
+
+	observe(other)
+	if _, err := librarydb.New(opened.Read()).GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: "musicbrainz:release-group", ExternalID: other,
+	}); err == nil {
+		t.Error("the rescan identified a manually identified file as another album")
+	}
+}

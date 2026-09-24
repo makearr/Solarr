@@ -58,3 +58,13 @@ WHERE root_folder_id = sqlc.arg(root_folder_id)
   AND substr(rel_path, 1, length(CAST(sqlc.arg(folder_prefix) AS TEXT))) = CAST(sqlc.arg(folder_prefix) AS TEXT)
   AND instr(substr(rel_path, length(CAST(sqlc.arg(folder_prefix) AS TEXT)) + 1), '/') = 0
 ORDER BY media_object_id;
+
+-- name: RecordManualIdentification :exec
+INSERT INTO manual_identification (media_object_id, work_id, decided_at) VALUES (?, ?, ?)
+ON CONFLICT (media_object_id) DO UPDATE SET work_id = excluded.work_id, decided_at = excluded.decided_at;
+
+-- Which of a batch's files a person already identified; ids is a JSON array.
+-- name: ListManuallyIdentified :many
+SELECT media_object_id FROM manual_identification
+WHERE media_object_id IN (SELECT value FROM json_each(CAST(sqlc.arg(media_object_ids) AS TEXT)))
+ORDER BY media_object_id;

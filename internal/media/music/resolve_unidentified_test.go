@@ -105,6 +105,9 @@ func TestResolveUnidentified_CreatesTheWorkLinksTheRootFolderAndClearsTheQueue(t
 	if workID == 0 {
 		t.Fatal("workID = 0, want a real id")
 	}
+	if manual, err := unidentified.ManuallyIdentified(t.Context(), []int64{mediaObjectID}); err != nil || !manual[mediaObjectID] {
+		t.Errorf("ManuallyIdentified = %v, %v; want the resolved file remembered as a person's choice", manual, err)
+	}
 
 	work := library.NewWorks(opened)
 	detail, err := work.Detail(t.Context(), workID)
