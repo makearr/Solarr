@@ -27,7 +27,7 @@ internal/
 ├── scanning/   scan  probe
 ├── importing/  inspect  importjob
 ├── moving/     mover  moverjob  drainjob  placement  naming
-├── acquiring/  indexer (Newznab/Torznab client)  sabnzbd (download client)
+├── acquiring/  indexer (Newznab/Torznab client)  download (client interface)  sabnzbd  poll
 ├── media/      music
 └── archtest/   layering, access and Invariant-90 checks, as tests
 ```
@@ -43,7 +43,7 @@ internal/
 | `scanning` | The library sweep and the background probe that fills measured attributes |
 | `importing` | Import inspection (WALK to DECIDE) and its resumable job |
 | `moving` | The move engine, its apply job, drain orchestration, root-folder placement, path templates |
-| `acquiring` | Stage 5's own protocol clients: Newznab/Torznab search (ADR-37/43/47), SABnzbd (ADR-46/57). No opinion on rate limiting/breaking/proxying or on what a search result means -- `internal/media/music` owns the candidate pipeline (parse/match/score/decide) that consumes them |
+| `acquiring` | Stage 5's protocol clients: Newznab/Torznab search and release fetch (ADR-37/43/47); `download.Client`, the download-client interface, with SABnzbd behind it (NZB uploaded by `addfile`, as Lidarr does); `poll`, the per-minute follow of every sent download to imported and cleaned (§10.9). What importing and searching mean is supplied by the media type; `internal/media/music` owns the candidate pipeline |
 | `media` | Media types. Direct-wired until stage 9 extracts them as plugins |
 
 `migrations/` holds embedded SQL, one directory per database; `queries/` holds sqlc source.
