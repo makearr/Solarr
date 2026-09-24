@@ -124,30 +124,28 @@ func traumaUnit() (inspect.Unit, map[string]mediatool.Probe, *fakeAlbumLookup) {
 	return unit, probes, lookup
 }
 
-// albumConfidence is capped below an embedded MBID's own certainty on purpose
-// (a network match is a guess, ADR-24), so an album match can never reach the
-// 0.90 import.auto_commit_confidence default. Asserted here because gating one
-// scale with the other looked right and queued every album -- caught only by
-// importing a real folder.
-func TestRefineUnitByAlbum_AnswersOnItsOwnCappedScale(t *testing.T) {
+// One threshold governs album matches too (2026-09-24): a close match is a likely-right answer
+// that commits at the 0.90 default, and the same match under a stricter threshold goes to review.
+// Its precedence, not a squeezed number, keeps it below any embedded tag.
+func TestRefineUnitByAlbum_TheOneThresholdDecides(t *testing.T) {
 	unit, probes, lookup := traumaUnit()
 
-	refined, placement, err := music.RefineUnitByAlbum(t.Context(), lookup, unit, probes, model.ChainResult{})
+	refined, placement, err := music.RefineUnitByAlbum(t.Context(), lookup, unit, probes, model.ChainResult{}, 0.9)
 	if err != nil {
 		t.Fatalf("RefineUnitByAlbum: %v", err)
 	}
-	if refined.Best == nil {
-		t.Fatalf("Best = nil, want the album match (candidates %+v)", refined.Candidates)
+	if refined.Best == nil || refined.Best.ExternalID.ExternalID != "rg-studio" || placement == nil {
+		t.Fatalf("Best = %+v, placement %v; want rg-studio placed", refined.Best, placement)
 	}
-	if refined.Best.ExternalID.ExternalID != "rg-studio" {
-		t.Errorf("Best = %q, want rg-studio", refined.Best.ExternalID.ExternalID)
+	if refined.Best.Confidence < 0.9 || refined.Best.Precedence != model.PrecedenceMatched {
+		t.Errorf("Best = %.2f at precedence %d, want >= 0.90 and matched", refined.Best.Confidence, refined.Best.Precedence)
 	}
-	if placement == nil {
-		t.Error("no placement returned for an identified album")
+
+	strict, placement, err := music.RefineUnitByAlbum(t.Context(), lookup, unit, probes, model.ChainResult{}, 0.999)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if refined.Best.Confidence >= 0.90 {
-		t.Errorf("Confidence = %.2f, want below the 0.90 auto-commit default: an album match "+
-			"is scored on its own capped scale, and comparing the two queues every album",
-			refined.Best.Confidence)
+	if strict.Best != nil || placement != nil || len(strict.Candidates) == 0 {
+		t.Errorf("under 0.999: Best = %+v, want the match held for review as a candidate", strict.Best)
 	}
 }

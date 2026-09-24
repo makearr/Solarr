@@ -25,11 +25,9 @@ const OrderParseSearch = 50
 // is dominated by tail noise.
 const searchResultLimit = 10
 
-// confidenceCeiling keeps a search match strictly below MBIDIdentifier's weakest
-// confidence (confidenceFromRecording, 0.70): a fuzzy text match against a search
-// result is never as trustworthy as a MusicBrainz id the file itself carries, no
-// matter how clean the match.
-const confidenceCeiling = 0.65
+// searchConfidence is a clean text match's likelihood: 105 of 105 right on the test library
+// (2026-09-17); every 0.1 of distance costs 0.05, so only a close match clears 0.90 on its own.
+const searchConfidence = 0.95
 
 // candidateConfidence is the low, never-auto-resolving confidence given to every
 // ranked candidate when match.Rank did not clear both its thresholds -- still
@@ -156,11 +154,12 @@ func identificationsFor(result match.Result) []model.Identification {
 			// scaling only slightly by distance keeps a clean match comfortably
 			// above Consumer's DefaultAmbiguityThreshold rather than scaling it
 			// down toward the same range as every other candidate.
-			confidence = confidenceCeiling - candidate.Distance.Total*0.1
+			confidence = searchConfidence - candidate.Distance.Total*0.5
 		}
 		identifications = append(identifications, model.Identification{
 			Strategy:   StrategyParse,
 			ExternalID: &model.ExternalID{Provider: ProviderReleaseGroup, ExternalID: candidate.ID, Confidence: confidence},
+			Precedence: model.PrecedenceSearched,
 			Confidence: confidence,
 			Evidence:   evidenceForDistance(candidate.Distance),
 		})

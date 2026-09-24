@@ -423,7 +423,7 @@ func identifyUnit(
 type refineUnit func(ctx context.Context, unit inspect.Unit, result model.ChainResult) (model.ChainResult, *music.AlbumPlacement)
 
 // albumRefiner matches units as albums over the cluster's probes, or nil when no lookup is configured.
-func (j *Job) albumRefiner(relPaths []string, probes []mediatool.Probe) refineUnit {
+func (j *Job) albumRefiner(relPaths []string, probes []mediatool.Probe, threshold float64) refineUnit {
 	if j.albums == nil {
 		return nil
 	}
@@ -432,7 +432,7 @@ func (j *Job) albumRefiner(relPaths []string, probes []mediatool.Probe) refineUn
 		byPath[relPaths[i]] = probe
 	}
 	return func(ctx context.Context, unit inspect.Unit, result model.ChainResult) (model.ChainResult, *music.AlbumPlacement) {
-		refined, placement, err := music.RefineUnitByAlbum(ctx, j.albums, unit, byPath, result)
+		refined, placement, err := music.RefineUnitByAlbum(ctx, j.albums, unit, byPath, result, threshold)
 		if err != nil {
 			j.logger.Warn("import album identification failed", slog.String("unit", unit.Directory), slog.Any("error", err))
 		}
@@ -544,7 +544,7 @@ func (j *Job) commitCluster(
 
 	poisonReasons := j.poisonedByExclusion(batch, categoryID)
 
-	decisions, results, placements := identifyCluster(ctx, ids, batch, identifiers, cfg, j.albumRefiner(relPaths, probes))
+	decisions, results, placements := identifyCluster(ctx, ids, batch, identifiers, cfg, j.albumRefiner(relPaths, probes, cfg.AmbiguityThreshold))
 	for i, reason := range poisonReasons {
 		if reason != "" {
 			// Overrides whatever IDENTIFY decided -- ADR-53's refuse action

@@ -40,8 +40,10 @@ func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, 
 		AcoustID:     p.acoustIDLookup(),
 		Clock:        clock.NewSystem(),
 		Logger:       p.logger,
-		Desired:      &desired,
-		Categories:   adapters.Categories{Cache: p.cache},
+		// One identification threshold for scan and import (2026-09-24).
+		Threshold:  func() float64 { return p.cache.Snapshot().ImportAutoCommitConfidence() },
+		Desired:    &desired,
+		Categories: adapters.Categories{Cache: p.cache},
 		// The user's own default when they haven't configured one for the
 		// category yet -- ensureDefaultQualityProfile seeded it at startup.
 		DefaultProfileID: p.defaultQualityProfileID,

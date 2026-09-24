@@ -58,6 +58,7 @@ func UnitTagSourceFor(root string, probes []mediatool.Probe) Resolved {
 // tracklists, replacing a weaker text-search answer. probes are keyed by the unit's RelPath.
 func RefineUnitByAlbum(
 	ctx context.Context, lookup AlbumLookup, unit inspect.Unit, probes map[string]mediatool.Probe, result model.ChainResult,
+	threshold float64,
 ) (model.ChainResult, *AlbumPlacement, error) {
 	if lookup == nil || (result.Best != nil && result.Best.Strategy == StrategyEmbeddedTag) {
 		return result, nil, nil
@@ -74,7 +75,7 @@ func RefineUnitByAlbum(
 	if err != nil {
 		return result, nil, fmt.Errorf("music: identify unit %q as an album: %w", unit.Directory, err)
 	}
-	switch decision.Outcome {
+	switch decision = decision.Within(threshold); decision.Outcome {
 	case AlbumIdentified:
 		best := AlbumCandidates(AlbumDecision{Outcome: decision.Outcome, Scores: []ReleaseScore{*decision.Best}})[0]
 		best.Confidence = albumConfidence(decision.Best.Distance)

@@ -64,6 +64,27 @@ DroppedNeedle also refuses a win when the runner-up leaves some file without a s
 counterpart; its code does the opposite of its own docstring there, so that clause was not
 taken.
 
+## Confidence and precedence
+
+Every identification carries two things (2026-09-24). **Precedence** is what kind of evidence it
+is — asserted (an embedded MBID, a person's choice) > matched (a folder against a tracklist) >
+searched (text or AcoustID lookup) > inferred (a folder sibling) — and alone decides that a
+guess never outranks an assertion. **Confidence** is how likely it is to be right, calibrated on
+the measurements below, and alone is compared with the one threshold,
+`import.auto_commit_confidence` (0.90), for scan and import alike:
+
+| Evidence | Confidence |
+|---|---|
+| Release group MBID / release MBID / recording MBID tag | 0.98 / 0.97 / 0.80 |
+| Album match | 0.99 − 0.5 × distance (0.89 at the 0.20 accept limit) |
+| Clean text search | 0.95 − 0.5 × distance |
+| AcoustID | its own score |
+
+An identified album below the threshold is held for review like an ambiguous one. Before this,
+album matches were squeezed under 0.68 to rank below tags and then bypassed the threshold
+entirely, so the setting did nothing for most imports. Scanning the test library gives the same
+identity for all ~1,100 files before and after.
+
 ## The record, and the manual decision
 
 Every run for a file its embedded MBIDs did not settle is stored (`identification_attempt`,

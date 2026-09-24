@@ -410,3 +410,24 @@ func TestRunChainForFiles_KeepsGenuinelyDisagreeingFilesSeparate(t *testing.T) {
 			len(result.Candidates), result.Candidates)
 	}
 }
+
+// A guess never outranks an assertion, however confident the guess (2026-09-24): precedence is
+// compared first, so confidence can be a calibrated likelihood rather than a ranking device.
+func TestMergeIdentifications_PrecedenceBeforeConfidence(t *testing.T) {
+	guess := model.Identification{Strategy: "album", Precedence: model.PrecedenceMatched, Confidence: 0.99,
+		ExternalID: &model.ExternalID{Provider: "p", ExternalID: "guess"}}
+	tag := model.Identification{Strategy: "tag", Precedence: model.PrecedenceAsserted, Confidence: 0.80,
+		ExternalID: &model.ExternalID{Provider: "p", ExternalID: "tag"}}
+	merged := model.MergeIdentifications([]model.Identification{guess, tag})
+	if merged[0].ExternalID.ExternalID != "tag" {
+		t.Errorf("best = %s, want the assertion", merged[0].ExternalID.ExternalID)
+	}
+
+	// Within one identity the stronger member supplies the specifics.
+	sameTag := tag
+	sameTag.ExternalID = guess.ExternalID
+	one := model.MergeIdentifications([]model.Identification{guess, sameTag})
+	if len(one) != 1 || one[0].Strategy != "tag" {
+		t.Errorf("merged = %+v, want one candidate carried by the assertion", one)
+	}
+}

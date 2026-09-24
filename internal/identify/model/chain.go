@@ -96,7 +96,16 @@ func RunChainForFiles(ctx context.Context, identifiers []Identifier, files []Fil
 // "disagreement between signals lowers confidence; it does not pick a winner
 // silently."
 func strictlyBest(merged []Identification) bool {
-	return len(merged) == 1 || merged[0].Confidence > merged[1].Confidence
+	return len(merged) == 1 || outranks(merged[0], merged[1]) > 0
+}
+
+// outranks orders by precedence, then confidence: a guess never outranks an assertion,
+// however confident the guess (2026-09-24). Positive when a is better.
+func outranks(a, b Identification) int {
+	if c := cmp.Compare(a.Precedence, b.Precedence); c != 0 {
+		return c
+	}
+	return cmp.Compare(a.Confidence, b.Confidence)
 }
 
 // MergeIdentifications merges identifications by identity (external id, falling back
@@ -106,8 +115,8 @@ func strictlyBest(merged []Identification) bool {
 // merge behaviour rather than a second implementation of it.
 func MergeIdentifications(found []Identification) []Identification {
 	merged := mergeByIdentity(found)
-	slices.SortFunc(merged, func(a, b Identification) int {
-		return cmp.Compare(b.Confidence, a.Confidence) // descending: best first
+	slices.SortStableFunc(merged, func(a, b Identification) int {
+		return outranks(b, a) // descending: best first
 	})
 	return merged
 }
@@ -164,15 +173,13 @@ func mergeByIdentity(found []Identification) []Identification {
 	return merged
 }
 
-// mergeGroup combines identifications that already agree on identity. Strategy,
-// WorkID, ExternalID and Confidence come from whichever member had the highest
-// confidence -- the strategy that was most sure is the one worth trusting for the
-// specifics -- but Evidence concatenates every member's, so the explanation shows
-// everything that agreed, not only the winner's reason.
+// mergeGroup combines identifications that already agree on identity. The specifics come from
+// the strongest member (precedence, then confidence); Evidence concatenates every member's,
+// so the explanation shows everything that agreed, not only the winner's reason.
 func mergeGroup(group []Identification) Identification {
 	winner := group[0]
 	for _, id := range group[1:] {
-		if id.Confidence > winner.Confidence {
+		if outranks(id, winner) > 0 {
 			winner = id
 		}
 	}
