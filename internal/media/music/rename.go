@@ -3,37 +3,13 @@ package music
 import (
 	"errors"
 	"fmt"
-	"path"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/moving/naming"
 )
 
-// compiledDefaultFolder and compiledDefaultFile are the shipped default
-// template (DefaultFolderTemplate/DefaultFileTemplate), compiled once --
-// section 11.8's own "compilation is validation": a template that fails to
-// compile is a build-time bug, not a runtime surprise, so a compile error
-// here panics at package init rather than being silently swallowed per
-// call. A naming_profile system (todo 4.5's own later follow-up) would
-// compile per-category templates the same way, cached, instead of this one
-// fixed pair.
-var compiledDefaultFolder, compiledDefaultFile = mustCompileDefaults()
-
-func mustCompileDefaults() ([]naming.Segment, []naming.Segment) {
-	folder, err := naming.Compile(DefaultFolderTemplate)
-	if err != nil {
-		panic(fmt.Sprintf("music: default folder template does not compile: %v", err))
-	}
-	file, err := naming.Compile(DefaultFileTemplate)
-	if err != nil {
-		panic(fmt.Sprintf("music: default file template does not compile: %v", err))
-	}
-	return folder, file
-}
-
-// RenameTarget is one file's current and proposed location under the
-// shipped default naming template -- section 11.8's own "preview as a
-// diff" (Invariant 73), scoped to the one template that exists today.
+// RenameTarget is one file's current and proposed location under its library's naming --
+// section 11.8's "preview as a diff" (Invariant 73).
 // WorkID and SizeBytes carry through what RenamePreview already resolved
 // per file, so a caller building a mover.Request from a []RenameTarget
 // never needs to re-derive either.
@@ -60,15 +36,11 @@ func (t RenameTarget) Changed() bool { return t.ProposedRelPath != t.CurrentRelP
 // passed a mismatched WorkDetail).
 var ErrNoIdentity = errors.New("music: file has no work_part identity")
 
-// RenameTargetFor computes one file's proposed path under the shipped
-// default template, from the identity library.Desired.IdentityForFile
-// already resolved and the WorkDetail it names. identity.EditionID absent
-// (an "any pressing" SET) renders with a zero-value EditionDetail --
-// NamingContext's own releaseYear falls back to the work's year, and
-// Format is simply absent from the rendered path, the same way it already
-// is for any file where the edition does not state one.
+// RenameTargetFor computes one file's proposed path under its library's naming. An absent
+// identity.EditionID renders with a zero EditionDetail: the work's year, no medium format.
 func RenameTargetFor(
-	detail library.WorkDetail, identity library.FileIdentity, mediaObjectID, sizeBytes int64, currentRelPath string,
+	names Naming, detail library.WorkDetail, identity library.FileIdentity,
+	mediaObjectID, sizeBytes int64, currentRelPath string,
 ) (RenameTarget, error) {
 	var edition library.EditionDetail
 	if identity.EditionID != nil {
@@ -94,13 +66,12 @@ func RenameTargetFor(
 			ErrNoIdentity, detail.Work.ID, identity.MediaRef)
 	}
 
-	ctx, err := NamingContext(detail, edition, part)
+	facts, err := NamingContext(detail, edition, part, currentRelPath)
 	if err != nil {
 		return RenameTarget{}, fmt.Errorf("music: naming context for media_object %d: %w", mediaObjectID, err)
 	}
 
-	extension := path.Ext(currentRelPath)
-	proposed, warnings, err := naming.RenderPath(compiledDefaultFolder, compiledDefaultFile, ctx, naming.DefaultSeparator, extension)
+	proposed, warnings, err := names.RenderTrack(facts, DiscCount(detail.Parts), currentRelPath)
 	if err != nil {
 		return RenameTarget{}, fmt.Errorf("music: render path for media_object %d: %w", mediaObjectID, err)
 	}

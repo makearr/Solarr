@@ -30,7 +30,7 @@ Everything else is `library.db`. Applying that test:
 
 **`settings.db`** — `app_user`, `user_category_access`, `user_preference`, `api_key`,
 `root_folder`, `category`, `category_root_folder`, `placement_affinity`, `quality_profile`,
-`naming_profile`, `consumer_profile`, `language_profile`, `indexer`, `downloader`,
+`naming_profile`, `naming_format`, `consumer_profile`, `language_profile`, `indexer`, `downloader`,
 `metadata_provider`, `discovery_job`, `plugin_state`.
 
 **`library.db`** — identity (`work`, `work_part`, `edition`, titles, external ids), files (`media_object`,

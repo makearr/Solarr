@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
@@ -211,8 +213,19 @@ func (c *Cache) DeleteCategory(ctx context.Context, id int64) error {
 		return &InUseError{Entity: "category", ID: id, References: references}
 	}
 
+	current, err := c.queries.GetCategory(ctx, id)
+	if err != nil {
+		return fmt.Errorf("settings: read category %d: %w", id, err)
+	}
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
-		return queries.DeleteCategory(ctx, id)
+		if err := queries.DeleteCategory(ctx, id); err != nil {
+			return err
+		}
+		// A library's naming profile is its own; it goes with the library.
+		if current.NamingProfileID.Valid {
+			return queries.DeleteNamingProfile(ctx, current.NamingProfileID.Int64)
+		}
+		return nil
 	})
 }
 
@@ -414,6 +427,68 @@ func (c *Cache) SetCategoryLanguageProfile(ctx context.Context, categoryID int64
 		return queries.SetCategoryLanguageProfile(ctx, settingsdb.SetCategoryLanguageProfileParams{
 			LanguageProfileID: int64PtrToNull(profileID), ID: categoryID,
 		})
+	})
+}
+
+// SetCategoryNaming saves a library's naming, creating its own profile on first save.
+func (c *Cache) SetCategoryNaming(ctx context.Context, categoryID int64, profile NamingProfile) error {
+	category, found := c.Snapshot().Category(categoryID)
+	if !found {
+		return fmt.Errorf("%w: category %d", ErrNotFound, categoryID)
+	}
+	if c.validateNaming != nil {
+		if err := c.validateNaming(category.MediaType, profile); err != nil {
+			return err
+		}
+	}
+	current, err := c.queries.GetCategory(ctx, categoryID)
+	if err != nil {
+		return fmt.Errorf("settings: read category %d: %w", categoryID, err)
+	}
+
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		profileID := current.NamingProfileID.Int64
+		if current.NamingProfileID.Valid {
+			err := queries.UpdateNamingProfile(ctx, settingsdb.UpdateNamingProfileParams{
+				RenameFiles:              boolToInt(profile.RenameFiles),
+				ReplaceIllegalCharacters: boolToInt(profile.ReplaceIllegalCharacters),
+				ColonReplacement:         profile.ColonReplacement,
+				ID:                       profileID,
+			})
+			if err != nil {
+				return fmt.Errorf("settings: update naming profile %d: %w", profileID, err)
+			}
+		} else {
+			created, err := queries.CreateNamingProfile(ctx, settingsdb.CreateNamingProfileParams{
+				Name:                     fmt.Sprintf("library-%d", categoryID),
+				RenameFiles:              boolToInt(profile.RenameFiles),
+				ReplaceIllegalCharacters: boolToInt(profile.ReplaceIllegalCharacters),
+				ColonReplacement:         profile.ColonReplacement,
+			})
+			if err != nil {
+				return fmt.Errorf("settings: create naming profile for category %d: %w", categoryID, err)
+			}
+			profileID = created
+			err = queries.SetCategoryNamingProfile(ctx, settingsdb.SetCategoryNamingProfileParams{
+				NamingProfileID: sql.NullInt64{Int64: profileID, Valid: true}, ID: categoryID,
+			})
+			if err != nil {
+				return fmt.Errorf("settings: attach naming profile to category %d: %w", categoryID, err)
+			}
+		}
+
+		if err := queries.DeleteNamingFormats(ctx, profileID); err != nil {
+			return fmt.Errorf("settings: clear naming formats %d: %w", profileID, err)
+		}
+		for _, slot := range slices.Sorted(maps.Keys(profile.Formats)) {
+			err := queries.InsertNamingFormat(ctx, settingsdb.InsertNamingFormatParams{
+				NamingProfileID: profileID, Slot: slot, Template: profile.Formats[slot],
+			})
+			if err != nil {
+				return fmt.Errorf("settings: save naming format %s: %w", slot, err)
+			}
+		}
+		return nil
 	})
 }
 

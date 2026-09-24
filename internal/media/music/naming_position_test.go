@@ -2,25 +2,85 @@ package music
 
 import (
 	"database/sql"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
-func TestTrackPosition(t *testing.T) {
+// The default preset keeps the library's own track shapes: "06" on one disc, "1-06" on several
+// (the user's "{medium:0}:{track:00}" through smart colon replacement).
+func TestNamingFor_DefaultTrackShapes(t *testing.T) {
+	track := TrackNaming{ArtistName: "Heka", AlbumTitle: "Memory of Trees", ReleaseYear: 1995, Track: 6, TrackTitle: "Anywhere Is"}
 	for _, tc := range []struct {
-		name                   string
-		disc, track, discCount int
-		want                   string
+		name          string
+		medium, discs int
+		want          string
 	}{
-		{"single disc keeps the library's own shape", 1, 6, 1, "06"},
-		{"multi-disc prefixes the disc", 1, 6, 3, "1-06"},
-		{"multi-disc, later disc", 3, 12, 3, "3-12"},
-		{"unknown disc on a multi-disc release stays bare", 0, 6, 3, "06"},
+		{"single disc", 1, 1, "Heka/Memory of Trees (1995)/Heka - 06 - Anywhere Is.flac"},
+		{"multi-disc", 2, 3, "Heka/Memory of Trees (1995)/Heka - 2-06 - Anywhere Is.flac"},
+		{"no disc tag on a multi-disc release is disc 1", 0, 3, "Heka/Memory of Trees (1995)/Heka - 1-06 - Anywhere Is.flac"},
 	} {
-		if got := TrackPosition(tc.disc, tc.track, tc.discCount); got != tc.want {
-			t.Errorf("%s: TrackPosition(%d,%d,%d) = %q, want %q", tc.name, tc.disc, tc.track, tc.discCount, got, tc.want)
+		track.Medium = tc.medium
+		got, _, err := NamingFor(nil).RenderTrack(track, tc.discs, "source.flac")
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// Rename Tracks off keeps the file's own name inside the rendered folders.
+func TestNamingFor_RenameFilesOffKeepsTheName(t *testing.T) {
+	names := NamingFor(nil)
+	names.RenameFiles = false
+	track := TrackNaming{ArtistName: "Heka", AlbumTitle: "Watermark", ReleaseYear: 1988, Track: 3, TrackTitle: "Milaru Tidasola"}
+	got, _, err := names.RenderTrack(track, 1, "downloads/03-heka-milaru_tidasola.flac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "Heka/Watermark (1988)/03-heka-milaru_tidasola.flac"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestNamingScheme_EveryPresetValidates(t *testing.T) {
+	for _, preset := range NamingScheme.Presets {
+		if err := NamingScheme.Validate(preset.Formats); err != nil {
+			t.Errorf("%s: %v", preset.Name, err)
+		}
+	}
+}
+
+// Every token the screen explains must actually render from a full set of facts.
+func TestNamingScheme_EveryTokenRenders(t *testing.T) {
+	ctx := singleDiscExample.Context()
+	for name := range NamingScheme.Known() {
+		if _, ok := ctx[name]; !ok {
+			t.Errorf("token %q is offered but the example facts never fill it", name)
+		}
+	}
+}
+
+func TestValidateNaming(t *testing.T) {
+	good := settings.NamingProfile{ColonReplacement: "smart", Formats: NamingScheme.Default().Formats}
+	if err := ValidateNaming(good); err != nil {
+		t.Errorf("the default preset: %v", err)
+	}
+	bad := settings.NamingProfile{ColonReplacement: "underscore", Formats: map[string]string{
+		SlotArtistFolder: "{Artist Name}", SlotStandardTrack: "{Episode Title}", "season_folder": "x",
+	}}
+	err := ValidateNaming(bad)
+	if err == nil {
+		t.Fatal("a profile with an unknown token, a missing slot and an unknown slot validated")
+	}
+	for _, want := range []string{"Episode Title", "Multi Disc Track Format is empty", `"season_folder"`, `"underscore"`} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %s", err, want)
 		}
 	}
 }

@@ -251,6 +251,7 @@ func (p *process) openDatabases(ctx context.Context) error {
 		return err
 	}
 	cache.EnableSecrets(cipher)
+	cache.EnableNamingValidation(validateNaming)
 
 	// cache/metadata.db (ADR-2) is disposable -- unlike the three above, a
 	// corrupt copy is the operator's to delete, not OpenChecked's to restore
@@ -600,7 +601,8 @@ func (p *process) startServer(ctx context.Context) error {
 		LibraryTracks:  adapters.Tracks{Tracks: library.NewTrackParts(p.library)},
 		LibraryArtists: adapters.Artists{People: library.NewPeople(p.library)},
 		RenameStarter: adapters.Rename{Config: music.RenameConfig{
-			Roots: adapters.DrainRoots{Cache: p.cache}, Files: library.NewPhysical(p.library),
+			Categories: adapters.Categories{Cache: p.cache},
+			Roots:      adapters.DrainRoots{Cache: p.cache}, Files: library.NewPhysical(p.library),
 			Identities: library.NewDesired(p.library), Works: library.NewWorks(p.library),
 			MoveJobs: library.NewMoveJobs(p.library), Queue: p.queue, Clock: clock.NewSystem(),
 		}},
@@ -750,4 +752,12 @@ func (p *process) fileRemover() adapters.RemoveAndBlock {
 		),
 		Physical: library.NewPhysical(p.library), Clock: clock.NewSystem(),
 	}
+}
+
+// validateNaming dispatches to the one media type with a naming scheme until stage 9's plugins.
+func validateNaming(mediaType string, profile settings.NamingProfile) error {
+	if mediaType != "music" {
+		return fmt.Errorf("naming: %s has no naming scheme yet", mediaType)
+	}
+	return music.ValidateNaming(profile)
 }

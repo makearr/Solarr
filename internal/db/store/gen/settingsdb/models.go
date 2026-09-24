@@ -153,11 +153,18 @@ type LanguageProfile struct {
 	RejectDubbed          int64
 }
 
+type NamingFormat struct {
+	NamingProfileID int64
+	Slot            string
+	Template        string
+}
+
 type NamingProfile struct {
-	ID             int64
-	Name           string
-	FolderTemplate string
-	FileTemplate   string
+	ID                       int64
+	Name                     string
+	RenameFiles              int64
+	ReplaceIllegalCharacters int64
+	ColonReplacement         string
 }
 
 type PlacementAffinity struct {

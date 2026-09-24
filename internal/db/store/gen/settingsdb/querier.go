@@ -43,6 +43,7 @@ type Querier interface {
 	// Indexer connections (stage 5, ADR-37/43/47). Column lists follow table order.
 	CreateIndexer(ctx context.Context, arg CreateIndexerParams) (Indexer, error)
 	CreateLanguageProfile(ctx context.Context, arg CreateLanguageProfileParams) (LanguageProfile, error)
+	CreateNamingProfile(ctx context.Context, arg CreateNamingProfileParams) (int64, error)
 	CreateQualityProfile(ctx context.Context, arg CreateQualityProfileParams) (QualityProfile, error)
 	CreateRootFolder(ctx context.Context, arg CreateRootFolderParams) (RootFolder, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (AppUser, error)
@@ -56,6 +57,8 @@ type Querier interface {
 	DeleteImportList(ctx context.Context, id int64) error
 	DeleteIndexer(ctx context.Context, id int64) error
 	DeleteLanguageProfile(ctx context.Context, id int64) error
+	DeleteNamingFormats(ctx context.Context, namingProfileID int64) error
+	DeleteNamingProfile(ctx context.Context, id int64) error
 	DeletePreference(ctx context.Context, arg DeletePreferenceParams) error
 	DeleteQualityProfile(ctx context.Context, id int64) error
 	DeleteRootFolder(ctx context.Context, id int64) error
@@ -81,6 +84,7 @@ type Querier interface {
 	// silently reshape an existing result (documentation/sql-and-sqlc.md).
 	GetUserByID(ctx context.Context, id int64) (AppUser, error)
 	GetUserByUsername(ctx context.Context, username string) (AppUser, error)
+	InsertNamingFormat(ctx context.Context, arg InsertNamingFormatParams) error
 	ListAPIKeysForUser(ctx context.Context, userID int64) ([]ApiKey, error)
 	ListAllCategoryAccess(ctx context.Context) ([]UserCategoryAccess, error)
 	ListArrInstances(ctx context.Context) ([]ArrInstance, error)
@@ -98,9 +102,8 @@ type Querier interface {
 	// Instance-wide policy, seeded from config.yml and changeable afterwards (ADR-21).
 	ListInstanceSettings(ctx context.Context) ([]InstanceSetting, error)
 	ListLanguageProfiles(ctx context.Context) ([]LanguageProfile, error)
-	// Section 11.8, todo 4.5's own remaining schema step (migration 0013). Read-only for now:
-	// nothing writes a second naming_profile row yet, so there is no Create/Update/Delete pass
-	// here -- only enough to prove the shipped default seeded correctly.
+	ListNamingFormats(ctx context.Context) ([]NamingFormat, error)
+	// One naming profile per library (category.naming_profile_id), its templates per slot.
 	ListNamingProfiles(ctx context.Context) ([]NamingProfile, error)
 	ListPreferencesForUser(ctx context.Context, userID int64) ([]UserPreference, error)
 	// Quality and language profiles (ADR-40, section 19.8).
@@ -119,6 +122,7 @@ type Querier interface {
 	SetCategoryLanguageProfile(ctx context.Context, arg SetCategoryLanguageProfileParams) error
 	SetCategoryMonitorDiscovered(ctx context.Context, arg SetCategoryMonitorDiscoveredParams) error
 	SetCategoryMonitorReleaseTypes(ctx context.Context, arg SetCategoryMonitorReleaseTypesParams) error
+	SetCategoryNamingProfile(ctx context.Context, arg SetCategoryNamingProfileParams) error
 	SetCategoryQualityProfile(ctx context.Context, arg SetCategoryQualityProfileParams) error
 	// The enable transition on its own: this is the "preview before enabling" gate, a
 	// deliberate act distinct from editing a job's policy.
@@ -158,6 +162,7 @@ type Querier interface {
 	UpdateImportList(ctx context.Context, arg UpdateImportListParams) error
 	UpdateIndexer(ctx context.Context, arg UpdateIndexerParams) error
 	UpdateLanguageProfile(ctx context.Context, arg UpdateLanguageProfileParams) error
+	UpdateNamingProfile(ctx context.Context, arg UpdateNamingProfileParams) error
 	UpdateQualityProfile(ctx context.Context, arg UpdateQualityProfileParams) error
 }
 

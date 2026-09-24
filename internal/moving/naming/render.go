@@ -2,6 +2,8 @@ package naming
 
 import (
 	"fmt"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -9,12 +11,36 @@ import (
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
-// DefaultSeparator replaces a literal "/" found inside a rendered token's
-// own value (an artist named "XT/QK"), so it cannot be mistaken for a path
-// boundary the template itself did not declare. "+" is section 11.8's
-// default, reversed from an earlier "_" decision on evidence: the user's
-// real library already writes "XT+QK".
-const DefaultSeparator = '+'
+// Options is Lidarr's character handling, applied to every rendered path component --
+// template literals included, so a literal ":" is replaced like one inside a title.
+type Options struct {
+	ReplaceIllegalCharacters bool
+	ColonReplacement         ColonReplacement
+}
+
+// DefaultOptions is Lidarr's own default: replace, with smart colon replacement.
+var DefaultOptions = Options{ReplaceIllegalCharacters: true, ColonReplacement: ColonSmart}
+
+// ColonReplacement is Lidarr's colon replacement format.
+type ColonReplacement string
+
+// The colon replacement formats, Lidarr's five.
+const (
+	ColonDelete         ColonReplacement = "delete"
+	ColonDash           ColonReplacement = "dash"
+	ColonSpaceDash      ColonReplacement = "space_dash"
+	ColonSpaceDashSpace ColonReplacement = "space_dash_space"
+	// ColonSmart turns "Live: 1986" into "Live - 1986" and "1:05" into "1-05".
+	ColonSmart ColonReplacement = "smart"
+)
+
+// ColonReplacements is every format, in the order the interface lists them.
+var ColonReplacements = []ColonReplacement{ColonDelete, ColonDash, ColonSpaceDash, ColonSpaceDashSpace, ColonSmart}
+
+// Valid reports whether c is one of ColonReplacements.
+func (c ColonReplacement) Valid() bool {
+	return slices.Contains(ColonReplacements, c)
+}
 
 // Context supplies a token's rendered value by name. A name absent from the
 // map, or mapped to "", both mean "not available" -- Render does not
@@ -34,20 +60,20 @@ type Warning struct {
 // them into sanitised components. separator substitutes for a "/" that
 // arrives inside a token's resolved value, never for one in the template's
 // own literal text.
-func Render(segments []Segment, ctx Context, separator rune) (string, []Warning) {
+func Render(segments []Segment, ctx Context, opts Options) (string, []Warning) {
 	var warnings []Warning
-	return renderSegments(segments, ctx, separator, &warnings), warnings
+	return renderSegments(segments, ctx, opts, &warnings), warnings
 }
 
-func renderSegments(segments []Segment, ctx Context, separator rune, warnings *[]Warning) string {
+func renderSegments(segments []Segment, ctx Context, opts Options, warnings *[]Warning) string {
 	var b strings.Builder
 	for _, seg := range segments {
-		b.WriteString(renderOne(seg, ctx, separator, warnings))
+		b.WriteString(renderOne(seg, ctx, opts, warnings))
 	}
 	return b.String()
 }
 
-func renderOne(seg Segment, ctx Context, separator rune, warnings *[]Warning) string {
+func renderOne(seg Segment, ctx Context, opts Options, warnings *[]Warning) string {
 	switch seg.kind {
 	case segLiteral:
 		return seg.literal
@@ -56,12 +82,12 @@ func renderOne(seg Segment, ctx Context, separator rune, warnings *[]Warning) st
 		if !resolved {
 			return ""
 		}
-		return substituteSeparator(value, separator)
+		return substituteSlashes(spell(value, seg), opts)
 	case segConditional:
 		if !allTokensResolve(seg.children, ctx) {
 			return ""
 		}
-		return renderSegments(seg.children, ctx, separator, warnings)
+		return renderSegments(seg.children, ctx, opts, warnings)
 	default:
 		return ""
 	}
@@ -71,11 +97,39 @@ func renderOne(seg Segment, ctx Context, separator rune, warnings *[]Warning) st
 // the first non-empty value it finds.
 func resolveToken(seg Segment, ctx Context, warnings *[]Warning) (string, bool) {
 	for _, name := range seg.names {
-		if value, ok := ctx[name]; ok && value != "" {
+		if value := lookup(ctx, name); value != "" {
 			return formatValue(name, value, seg, warnings), true
 		}
 	}
 	return "", false
+}
+
+// lookup is case-insensitive, so {ARTIST NAME} reads the "Artist Name" value.
+func lookup(ctx Context, name string) string {
+	if value, ok := ctx[name]; ok {
+		return value
+	}
+	for key, value := range ctx {
+		if strings.EqualFold(key, name) {
+			return value
+		}
+	}
+	return ""
+}
+
+// spell applies a token's spelling variant: {Artist.Name} writes "Nick.Cave", {ARTIST NAME} upper case.
+func spell(value string, seg Segment) string {
+	if seg.wordSeparator != 0 {
+		value = strings.ReplaceAll(value, " ", string(seg.wordSeparator))
+	}
+	switch seg.letterCase {
+	case caseUpper:
+		return strings.ToUpper(value)
+	case caseLower:
+		return strings.ToLower(value)
+	default:
+		return value
+	}
 }
 
 func formatValue(name, value string, seg Segment, warnings *[]Warning) string {
@@ -112,22 +166,24 @@ func allTokensResolve(segments []Segment, ctx Context) bool {
 // not format the value or record a padding warning twice.
 func tokenResolves(seg Segment, ctx Context) bool {
 	for _, name := range seg.names {
-		if value, ok := ctx[name]; ok && value != "" {
+		if lookup(ctx, name) != "" {
 			return true
 		}
 	}
 	return false
 }
 
-func substituteSeparator(value string, separator rune) string {
-	if separator == 0 {
-		separator = DefaultSeparator
-	}
+// substituteSlashes keeps a value's own slash from becoming a folder boundary: "XT/QK" is
+// "XT+QK" when replacing, "XTQK" when not -- Lidarr's pair.
+func substituteSlashes(value string, opts Options) string {
 	return strings.Map(func(r rune) rune {
-		if r == '/' || r == '\\' {
-			return separator
+		if r != '/' && r != '\\' {
+			return r
 		}
-		return r
+		if opts.ReplaceIllegalCharacters {
+			return '+'
+		}
+		return -1
 	}, value)
 }
 
@@ -141,55 +197,100 @@ func substituteSeparator(value string, separator rune) string {
 // the placed file's own final path.
 const MaxRecommendedRelPathBytes = 240
 
-// RenderPath renders a folder line and a file line into one sanitised,
-// slash-joined relative path -- the folder line's own literal "/"
-// characters become real path components, each passed through
-// fsx.SanitiseComponent; the file line renders as the final component, with
-// extension appended verbatim (it is not a template token: preserving it
-// through truncation is the point, section 11.8). Returns an error only
-// when nothing renderable survived at all -- a template that resolves to
-// pure noise is a configuration problem, not a warning.
-func RenderPath(folder, file []Segment, ctx Context, separator rune, extension string) (string, []Warning, error) {
+// RenderPath renders one template into a relative path: its literal "/" characters separate
+// folders, and the last component is the file, extension appended verbatim. Every component is
+// cleaned per opts and then fsx.SanitiseComponent. Refused only when nothing renderable survives.
+func RenderPath(template []Segment, ctx Context, opts Options, extension string) (string, []Warning, error) {
 	var warnings []Warning
-	folderText := renderSegments(folder, ctx, separator, &warnings)
-	fileText := renderSegments(file, ctx, separator, &warnings)
+	rendered := renderSegments(template, ctx, opts, &warnings)
 
-	components := splitAndSanitise(folderText)
-	fileComponent := sanitiseOne(fileText)
-	if fileComponent == "" {
-		return "", warnings, fmt.Errorf("naming: file template rendered to nothing for %v", ctx)
+	raw := strings.Split(rendered, "/")
+	file := cleanComponent(raw[len(raw)-1], opts)
+	if file == "" {
+		return "", warnings, fmt.Errorf("naming: the file name rendered to nothing for %v", ctx)
 	}
-	components = append(components, fileComponent+extension)
+	var components []string
+	for _, folder := range raw[:len(raw)-1] {
+		if cleaned := cleanComponent(folder, opts); cleaned != "" {
+			components = append(components, cleaned)
+		}
+	}
+	components = append(components, file+extension)
 
-	if len(components) == 0 {
-		return "", warnings, fmt.Errorf("naming: template rendered to an empty path for %v", ctx)
-	}
-	rendered := strings.Join(components, "/")
-	if len(rendered) > MaxRecommendedRelPathBytes {
+	path := strings.Join(components, "/")
+	if len(path) > MaxRecommendedRelPathBytes {
 		warnings = append(warnings, Warning{
 			Message: fmt.Sprintf(
 				"rendered path is %d bytes, over the %d-byte recommended limit -- combined with a root "+
 					"folder path, this may exceed common filesystem/SMB limits on some platforms",
-				len(rendered), MaxRecommendedRelPathBytes),
+				len(path), MaxRecommendedRelPathBytes),
 		})
 	}
-	return rendered, warnings, nil
+	return path, warnings, nil
 }
 
-func splitAndSanitise(rendered string) []string {
-	var components []string
-	for _, raw := range strings.Split(rendered, "/") {
-		if sanitised := sanitiseOne(raw); sanitised != "" {
-			components = append(components, sanitised)
+// illegalReplacements is Lidarr's table; with ReplaceIllegalCharacters off every key is removed.
+var illegalReplacements = map[rune]string{
+	'\\': "+", '/': "+", '<': "", '>': "", '?': "!", '*': "-", '|': "", '"': "",
+}
+
+// trailingSeparators is Lidarr's cleanup for an empty last token: "Title - " is not a name.
+var trailingSeparators = regexp.MustCompile(`[- ._]+$`)
+
+func cleanComponent(raw string, opts Options) string {
+	cleaned := replaceColons(raw, opts)
+	var b strings.Builder
+	for _, r := range cleaned {
+		replacement, illegal := illegalReplacements[r]
+		switch {
+		case !illegal:
+			b.WriteRune(r)
+		case opts.ReplaceIllegalCharacters:
+			b.WriteString(replacement)
 		}
 	}
-	return components
-}
-
-func sanitiseOne(raw string) string {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
+	cleaned = collapseRepeats(b.String())
+	cleaned = trailingSeparators.ReplaceAllString(strings.TrimSpace(cleaned), "")
+	if cleaned == "" {
 		return ""
 	}
-	return fsx.SanitiseComponent(trimmed)
+	return fsx.SanitiseComponent(cleaned)
+}
+
+// collapseRepeats is Lidarr's `([- ._])(\1)+`: a doubled separator becomes one. Go's regexp
+// has no backreference, so it is done by hand.
+func collapseRepeats(s string) string {
+	runes := []rune(s)
+	var b strings.Builder
+	for i := 0; i < len(runes); i++ {
+		b.WriteRune(runes[i])
+		if !strings.ContainsRune("- ._", runes[i]) {
+			continue
+		}
+		for i+1 < len(runes) && runes[i+1] == runes[i] {
+			i++
+		}
+	}
+	return b.String()
+}
+
+func replaceColons(s string, opts Options) string {
+	if !strings.ContainsRune(s, ':') {
+		return s
+	}
+	if !opts.ReplaceIllegalCharacters {
+		return strings.ReplaceAll(s, ":", "")
+	}
+	switch opts.ColonReplacement {
+	case ColonDash:
+		return strings.ReplaceAll(s, ":", "-")
+	case ColonSpaceDash:
+		return strings.ReplaceAll(s, ":", " -")
+	case ColonSpaceDashSpace:
+		return strings.ReplaceAll(s, ":", " - ")
+	case ColonSmart:
+		return strings.ReplaceAll(strings.ReplaceAll(s, ": ", " - "), ":", "-")
+	default:
+		return strings.ReplaceAll(s, ":", "")
+	}
 }

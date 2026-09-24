@@ -38,7 +38,18 @@ type Cache struct {
 	// own API key can be neither sealed nor opened (ErrSecretsUnavailable),
 	// rather than ever stored in plaintext.
 	cipher *secrets.Cipher
-	logger *slog.Logger
+	// validateNaming is optional (EnableNamingValidation): the media type owns the token
+	// vocabulary, which this package cannot import.
+	validateNaming NamingValidator
+	logger         *slog.Logger
+}
+
+// NamingValidator refuses a naming profile its media type cannot render, naming every problem.
+type NamingValidator func(mediaType string, profile NamingProfile) error
+
+// EnableNamingValidation makes SetCategoryNaming refuse what validate refuses.
+func (c *Cache) EnableNamingValidation(validate NamingValidator) {
+	c.validateNaming = validate
 }
 
 // backupOnChange is config.Backup's settings_on_change policy, in the form Cache
@@ -130,6 +141,15 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 		return nil, fmt.Errorf("settings: list exclusion patterns: %w", err)
 	}
 
+	namingProfiles, err := c.queries.ListNamingProfiles(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list naming profiles: %w", err)
+	}
+	namingFormats, err := c.queries.ListNamingFormats(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list naming formats: %w", err)
+	}
+
 	stored, err := c.queries.ListInstanceSettings(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("settings: list instance settings: %w", err)
@@ -154,7 +174,7 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 
 	return newSnapshot(
 		convertUsers(users),
-		convertCategories(categories),
+		convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
 		convertRootFolders(rootFolders),
 		convertAttachments(attachments),
 		access,
@@ -182,9 +202,33 @@ func convertUsers(rows []settingsdb.AppUser) []User {
 	return users
 }
 
-func convertCategories(rows []settingsdb.Category) []Category {
+func convertNamingProfiles(
+	rows []settingsdb.NamingProfile, formats []settingsdb.NamingFormat,
+) map[int64]*NamingProfile {
+	profiles := make(map[int64]*NamingProfile, len(rows))
+	for _, row := range rows {
+		profiles[row.ID] = &NamingProfile{
+			RenameFiles:              row.RenameFiles != 0,
+			ReplaceIllegalCharacters: row.ReplaceIllegalCharacters != 0,
+			ColonReplacement:         row.ColonReplacement,
+			Formats:                  map[string]string{},
+		}
+	}
+	for _, format := range formats {
+		if profile, ok := profiles[format.NamingProfileID]; ok {
+			profile.Formats[format.Slot] = format.Template
+		}
+	}
+	return profiles
+}
+
+func convertCategories(rows []settingsdb.Category, naming map[int64]*NamingProfile) []Category {
 	categories := make([]Category, 0, len(rows))
 	for _, row := range rows {
+		var profile *NamingProfile
+		if row.NamingProfileID.Valid {
+			profile = naming[row.NamingProfileID.Int64]
+		}
 		categories = append(categories, Category{
 			ID:                  row.ID,
 			MediaType:           row.MediaType,
@@ -194,6 +238,7 @@ func convertCategories(rows []settingsdb.Category) []Category {
 			LanguageProfileID:   nullInt64Ptr(row.LanguageProfileID),
 			MonitorDiscovered:   row.MonitorDiscovered,
 			MonitorReleaseTypes: decodeReleaseTypes(row.MonitorReleaseTypes),
+			Naming:              profile,
 		})
 	}
 	return categories

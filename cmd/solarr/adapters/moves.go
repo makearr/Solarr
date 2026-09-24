@@ -84,7 +84,7 @@ type Rename struct {
 }
 
 func (a Rename) StartRename(ctx context.Context, rootFolderID int64, preview bool) (apiserver.DrainPlanResult, error) {
-	plan, jobID, warnings, err := music.RenameStart(ctx, a.Config, rootFolderID, preview)
+	plan, jobID, warnings, err := music.RenameStart(ctx, a.Config, rootFolderID, nil, preview)
 	if err != nil {
 		return apiserver.DrainPlanResult{}, err
 	}

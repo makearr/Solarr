@@ -92,6 +92,18 @@ type Category struct {
 	// library brings in, overridable per artist by the subscription's own
 	// filters (2026-09-19).
 	MonitorReleaseTypes []string
+	// Naming is nil until the library's naming is first saved; nil means the media type's default.
+	Naming *NamingProfile
+}
+
+// NamingProfile is one library's naming, Lidarr's shape: a template per slot the media type
+// declares, and the character options applied to every rendered component.
+type NamingProfile struct {
+	RenameFiles              bool
+	ReplaceIllegalCharacters bool
+	ColonReplacement         string
+	// Formats maps a slot key ("standard_track") to its template.
+	Formats map[string]string
 }
 
 // DefaultMonitorReleaseTypes is what a library monitors unless told
