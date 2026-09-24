@@ -68,7 +68,9 @@ type User struct {
 	HasPassword bool
 	Role        Role
 	CreatedAt   time.Time
-	Tier        Tier
+	// Tier is the level the account is shown, never above Limits.TierMax.
+	Tier   Tier
+	Limits UserLimits
 }
 
 // Category is the policy boundary for storage, naming, indexers, profiles and

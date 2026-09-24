@@ -18,12 +18,15 @@ type ApiKey struct {
 }
 
 type AppUser struct {
-	ID           int64
-	Username     string
-	PasswordHash sql.NullString
-	Role         string
-	CreatedAt    int64
-	UiTier       string
+	ID                   int64
+	Username             string
+	PasswordHash         sql.NullString
+	Role                 string
+	CreatedAt            int64
+	UiTier               string
+	UiTierDefault        string
+	UiTierMax            string
+	NewLibraryPermission string
 }
 
 type ArrInstance struct {

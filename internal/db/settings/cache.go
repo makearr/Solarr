@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
@@ -200,16 +199,9 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 func convertUsers(rows []settingsdb.AppUser) []User {
 	users := make([]User, 0, len(rows))
 	for _, row := range rows {
-		users = append(users, User{
-			ID:       row.ID,
-			Username: row.Username,
-			// The hash is deliberately not carried into the snapshot: it is
-			// needed only at login, which reads it from the database directly.
-			HasPassword: row.PasswordHash.Valid && row.PasswordHash.String != "",
-			Role:        Role(row.Role),
-			CreatedAt:   time.Unix(row.CreatedAt, 0).UTC(),
-			Tier:        Tier(row.UiTier),
-		})
+		// The hash is deliberately not carried into the snapshot: login reads it from the database.
+		users = append(users, userFromRow(row.ID, row.Username, row.PasswordHash, row.Role, row.CreatedAt,
+			row.UiTier, row.UiTierDefault, row.UiTierMax, row.NewLibraryPermission))
 	}
 	return users
 }

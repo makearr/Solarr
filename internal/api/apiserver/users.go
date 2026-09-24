@@ -12,10 +12,11 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/auth"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
-// maxUserBody bounds what one request may make the server read.
-const maxUserBody = 4 << 10
+// maxUserBody bounds what one request may make the server read; an account's grants list every library.
+const maxUserBody = 64 << 10
 
 func (s *Server) ListUsers(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdministrator(w, r) {
@@ -36,9 +37,11 @@ func (s *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var request struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		Role     string `json:"role"`
+		Username string              `json:"username"`
+		Password string              `json:"password"`
+		Role     string              `json:"role"`
+		Access   []gen.CategoryGrant `json:"access"`
+		Limits   *gen.UserLimits     `json:"limits"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&request); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
@@ -65,9 +68,19 @@ func (s *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := s.auth.Settings.CreateUser(r.Context(), s.auth.Clock, username, hashed, role)
+	account := settings.NewAccount{
+		Username: username, PasswordHash: hashed, Role: role, Limits: s.auth.Settings.DefaultLimits(role),
+		Access: make(map[int64]settings.Permission, len(request.Access)),
+	}
+	if request.Limits != nil {
+		account.Limits = limitsFrom(*request.Limits)
+	}
+	for _, grant := range request.Access {
+		account.Access[grant.CategoryId] = settings.Permission(grant.Permission)
+	}
+	created, err := s.auth.Settings.CreateAccount(r.Context(), s.auth.Clock, account)
 	if err != nil {
-		writeError(w, s.logger, err)
+		s.writeUserError(w, err)
 		return
 	}
 	s.logger.InfoContext(r.Context(), "account created",
@@ -81,8 +94,9 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id int64) {
 	}
 
 	var request struct {
-		Role     *string `json:"role"`
-		Password *string `json:"password"`
+		Role     *string         `json:"role"`
+		Password *string         `json:"password"`
+		Limits   *gen.UserLimits `json:"limits"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&request); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
@@ -98,6 +112,13 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id int64) {
 			return
 		}
 		if err := s.auth.Settings.SetRole(r.Context(), id, role); err != nil {
+			s.writeUserError(w, err)
+			return
+		}
+	}
+
+	if request.Limits != nil {
+		if err := s.auth.Settings.SetUserLimits(r.Context(), id, limitsFrom(*request.Limits)); err != nil {
 			s.writeUserError(w, err)
 			return
 		}
@@ -186,7 +207,11 @@ func (s *Server) SetUserAccess(w http.ResponseWriter, r *http.Request, id int64)
 // writeUserError maps the two refusals a caller can act on, so removing the last
 // administrator reads as a rule rather than as a server fault.
 func (s *Server) writeUserError(w http.ResponseWriter, err error) {
+	var problems config.Problems
 	switch {
+	case errors.As(err, &problems):
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"The account has problems", problems.Report("the account", "Nothing was changed."))
 	case errors.Is(err, settings.ErrLastAdministrator):
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
 			"That would leave no administrator", err.Error())
@@ -217,7 +242,50 @@ func (s *Server) userView(user settings.User) gen.UserAccount {
 		HasPassword: user.HasPassword,
 		CreatedAt:   user.CreatedAt,
 		Access:      grants,
+		Tier:        gen.Tier(user.Tier),
+		Limits: gen.UserLimits{
+			TierDefault: gen.Tier(user.Limits.TierDefault), TierMax: gen.Tier(user.Limits.TierMax),
+			NewLibraryPermission: gen.Permission(user.Limits.NewLibraryPermission),
+		},
 	}
+}
+
+func limitsFrom(limits gen.UserLimits) settings.UserLimits {
+	return settings.UserLimits{
+		TierDefault: settings.Tier(limits.TierDefault), TierMax: settings.Tier(limits.TierMax),
+		NewLibraryPermission: settings.Permission(limits.NewLibraryPermission),
+	}
+}
+
+func (s *Server) GetUserDefaults(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.UserDefaults{
+		NewLibraryPermission: gen.Permission(s.auth.Settings.Snapshot().NewLibraryPermission()),
+	})
+}
+
+func (s *Server) SetUserDefaults(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	var request gen.UserDefaults
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&request); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "expected a JSON object with new_library_permission")
+		return
+	}
+	if err := s.auth.Registry.LookupAll(settings.KeyUsersNewLibraryPermission); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	permission := settings.Permission(request.NewLibraryPermission)
+	if err := s.auth.Settings.SetNewLibraryPermission(r.Context(), s.auth.Clock, permission); err != nil {
+		s.writeUserError(w, err)
+		return
+	}
+	s.GetUserDefaults(w, r)
 }
 
 func parseRole(value string) (settings.Role, bool) {

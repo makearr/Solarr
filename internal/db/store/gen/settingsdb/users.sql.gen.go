@@ -54,17 +54,22 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO app_user (username, password_hash, role, created_at, ui_tier)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, username, password_hash, role, created_at, ui_tier
+INSERT INTO app_user (username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
+  new_library_permission)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
+  new_library_permission
 `
 
 type CreateUserParams struct {
-	Username     string
-	PasswordHash sql.NullString
-	Role         string
-	CreatedAt    int64
-	UiTier       string
+	Username             string
+	PasswordHash         sql.NullString
+	Role                 string
+	CreatedAt            int64
+	UiTier               string
+	UiTierDefault        string
+	UiTierMax            string
+	NewLibraryPermission string
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (AppUser, error) {
@@ -74,6 +79,9 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (AppUser
 		arg.Role,
 		arg.CreatedAt,
 		arg.UiTier,
+		arg.UiTierDefault,
+		arg.UiTierMax,
+		arg.NewLibraryPermission,
 	)
 	var i AppUser
 	err := row.Scan(
@@ -83,6 +91,9 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (AppUser
 		&i.Role,
 		&i.CreatedAt,
 		&i.UiTier,
+		&i.UiTierDefault,
+		&i.UiTierMax,
+		&i.NewLibraryPermission,
 	)
 	return i, err
 }
@@ -155,19 +166,23 @@ func (q *Queries) GetPreference(ctx context.Context, arg GetPreferenceParams) (U
 }
 
 const getUserByAPIKeyHash = `-- name: GetUserByAPIKeyHash :one
-SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.ui_tier, k.id AS key_id
+SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.ui_tier, u.ui_tier_default,
+  u.ui_tier_max, u.new_library_permission, k.id AS key_id
 FROM api_key k JOIN app_user u ON u.id = k.user_id
 WHERE k.key_hash = ?
 `
 
 type GetUserByAPIKeyHashRow struct {
-	ID           int64
-	Username     string
-	PasswordHash sql.NullString
-	Role         string
-	CreatedAt    int64
-	UiTier       string
-	KeyID        int64
+	ID                   int64
+	Username             string
+	PasswordHash         sql.NullString
+	Role                 string
+	CreatedAt            int64
+	UiTier               string
+	UiTierDefault        string
+	UiTierMax            string
+	NewLibraryPermission string
+	KeyID                int64
 }
 
 func (q *Queries) GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetUserByAPIKeyHashRow, error) {
@@ -180,6 +195,9 @@ func (q *Queries) GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetU
 		&i.Role,
 		&i.CreatedAt,
 		&i.UiTier,
+		&i.UiTierDefault,
+		&i.UiTierMax,
+		&i.NewLibraryPermission,
 		&i.KeyID,
 	)
 	return i, err
@@ -187,7 +205,8 @@ func (q *Queries) GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetU
 
 const getUserByID = `-- name: GetUserByID :one
 
-SELECT id, username, password_hash, role, created_at, ui_tier
+SELECT id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
+  new_library_permission
 FROM app_user WHERE id = ?
 `
 
@@ -203,12 +222,16 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (AppUser, error) {
 		&i.Role,
 		&i.CreatedAt,
 		&i.UiTier,
+		&i.UiTierDefault,
+		&i.UiTierMax,
+		&i.NewLibraryPermission,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, role, created_at, ui_tier
+SELECT id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
+  new_library_permission
 FROM app_user WHERE username = ?
 `
 
@@ -222,6 +245,9 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (AppUs
 		&i.Role,
 		&i.CreatedAt,
 		&i.UiTier,
+		&i.UiTierDefault,
+		&i.UiTierMax,
+		&i.NewLibraryPermission,
 	)
 	return i, err
 }
@@ -343,7 +369,8 @@ func (q *Queries) ListPreferencesForUser(ctx context.Context, userID int64) ([]U
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, password_hash, role, created_at, ui_tier
+SELECT id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
+  new_library_permission
 FROM app_user ORDER BY username
 `
 
@@ -363,6 +390,9 @@ func (q *Queries) ListUsers(ctx context.Context) ([]AppUser, error) {
 			&i.Role,
 			&i.CreatedAt,
 			&i.UiTier,
+			&i.UiTierDefault,
+			&i.UiTierMax,
+			&i.NewLibraryPermission,
 		); err != nil {
 			return nil, err
 		}
@@ -422,6 +452,27 @@ type SetPreferenceParams struct {
 
 func (q *Queries) SetPreference(ctx context.Context, arg SetPreferenceParams) error {
 	_, err := q.db.ExecContext(ctx, setPreference, arg.UserID, arg.Key, arg.ValueJson)
+	return err
+}
+
+const setUserLimits = `-- name: SetUserLimits :exec
+UPDATE app_user SET ui_tier_default = ?, ui_tier_max = ?, new_library_permission = ? WHERE id = ?
+`
+
+type SetUserLimitsParams struct {
+	UiTierDefault        string
+	UiTierMax            string
+	NewLibraryPermission string
+	ID                   int64
+}
+
+func (q *Queries) SetUserLimits(ctx context.Context, arg SetUserLimitsParams) error {
+	_, err := q.db.ExecContext(ctx, setUserLimits,
+		arg.UiTierDefault,
+		arg.UiTierMax,
+		arg.NewLibraryPermission,
+		arg.ID,
+	)
 	return err
 }
 

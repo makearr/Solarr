@@ -58,7 +58,7 @@ func (c *Cache) CreateCategory(ctx context.Context, mediaType, name string, prio
 		}
 	}
 
-	administrators := c.administratorIDs()
+	grants := c.newLibraryGrants()
 
 	var created settingsdb.Category
 	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
@@ -69,9 +69,9 @@ func (c *Cache) CreateCategory(ctx context.Context, mediaType, name string, prio
 			return err
 		}
 		created = row
-		for _, administrator := range administrators {
+		for userID, permission := range grants {
 			if err := queries.SetCategoryAccess(ctx, settingsdb.SetCategoryAccessParams{
-				UserID: administrator, CategoryID: row.ID, Permission: string(PermissionManage),
+				UserID: userID, CategoryID: row.ID, Permission: string(permission),
 			}); err != nil {
 				return err
 			}
@@ -860,41 +860,11 @@ func (c *Cache) SetPassword(ctx context.Context, userID int64, passwordHash stri
 	})
 }
 
+// CreateUser adds an account with the default limits and no grants beyond an administrator's.
 func (c *Cache) CreateUser(ctx context.Context, cl clock.Clock, username, passwordHash string, role Role) (User, error) {
-	var categories []int64
-	if role == RoleAdmin {
-		for _, category := range c.Snapshot().Categories() {
-			categories = append(categories, category.ID)
-		}
-	}
-
-	var created settingsdb.AppUser
-	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
-		row, err := queries.CreateUser(ctx, settingsdb.CreateUserParams{
-			Username:     username,
-			PasswordHash: sql.NullString{String: passwordHash, Valid: passwordHash != ""},
-			Role:         string(role),
-			CreatedAt:    cl.Now().Unix(),
-			UiTier:       string(TierNormal),
-		})
-		if err != nil {
-			return err
-		}
-		created = row
-		for _, categoryID := range categories {
-			if err := queries.SetCategoryAccess(ctx, settingsdb.SetCategoryAccessParams{
-				UserID: row.ID, CategoryID: categoryID, Permission: string(PermissionManage),
-			}); err != nil {
-				return err
-			}
-		}
-		return nil
+	return c.CreateAccount(ctx, cl, NewAccount{
+		Username: username, PasswordHash: passwordHash, Role: role, Limits: c.DefaultLimits(role),
 	})
-	if err != nil {
-		return User{}, fmt.Errorf("settings: create user %q: %w", username, err)
-	}
-	user, _ := c.Snapshot().User(created.ID)
-	return user, nil
 }
 
 // DeleteUser removes an account.
@@ -920,8 +890,26 @@ func (c *Cache) SetRole(ctx context.Context, id int64, role Role) error {
 	if err := c.wouldStrandTheInstance(user, role); err != nil {
 		return err
 	}
+	categories := c.Snapshot().Categories()
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
-		return queries.SetUserRole(ctx, settingsdb.SetUserRoleParams{ID: id, Role: string(role)})
+		if err := queries.SetUserRole(ctx, settingsdb.SetUserRoleParams{ID: id, Role: string(role)}); err != nil {
+			return err
+		}
+		if role != RoleAdmin || user.Role == RoleAdmin {
+			return nil
+		}
+		// A promoted administrator manages every library, as one created as administrator does.
+		for _, category := range categories {
+			if err := queries.SetCategoryAccess(ctx, settingsdb.SetCategoryAccessParams{
+				UserID: id, CategoryID: category.ID, Permission: string(PermissionManage),
+			}); err != nil {
+				return err
+			}
+		}
+		return queries.SetUserLimits(ctx, settingsdb.SetUserLimitsParams{
+			ID: id, UiTierDefault: string(user.Limits.TierDefault), UiTierMax: string(user.Limits.TierMax),
+			NewLibraryPermission: string(PermissionManage),
+		})
 	})
 }
 
@@ -934,13 +922,16 @@ func (c *Cache) SetRole(ctx context.Context, id int64, role Role) error {
 // of this caller (migration 0001's own ui_tier column), the same "ready
 // ahead of the consumer" shape several other todo 4.14 pieces already had.
 func (c *Cache) SetUserTier(ctx context.Context, id int64, tier Tier) error {
-	if _, found := c.Snapshot().User(id); !found {
+	user, found := c.Snapshot().User(id)
+	if !found {
 		return fmt.Errorf("%w: user %d", ErrNotFound, id)
 	}
-	switch tier {
-	case TierNormal, TierAdvanced, TierExpert:
-	default:
+	if !tier.valid() {
 		return config.Problems{{Path: "tier", Value: string(tier), Expectation: "normal, advanced or expert"}}
+	}
+	if !user.Limits.TierMax.AtLeast(tier) {
+		return config.Problems{{Path: "tier", Value: string(tier),
+			Expectation: fmt.Sprintf("at most %s, the level an administrator allows this account", user.Limits.TierMax)}}
 	}
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		return queries.SetUserTier(ctx, settingsdb.SetUserTierParams{ID: id, UiTier: string(tier)})
@@ -1076,7 +1067,7 @@ func boolToInt(value bool) int64 {
 	return 0
 }
 
-// administratorIDs lists the accounts that get manage on every category.
+// administratorIDs lists the administrator accounts.
 func (c *Cache) administratorIDs() []int64 {
 	var ids []int64
 	for _, user := range c.Snapshot().Users() {

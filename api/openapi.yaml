@@ -521,6 +521,11 @@ paths:
                 username: { type: string }
                 password: { type: string, format: password }
                 role: { $ref: "#/components/schemas/Role" }
+                access:
+                  type: array
+                  description: The libraries the account may use. An administrator manages every one regardless.
+                  items: { $ref: "#/components/schemas/CategoryGrant" }
+                limits: { $ref: "#/components/schemas/UserLimits" }
       responses:
         "201":
           description: Created.
@@ -540,7 +545,7 @@ paths:
     patch:
       operationId: updateUser
       tags: [settings]
-      summary: Change a role or set a password.
+      summary: Change a role, set a password, or change the account's limits.
       description: >-
         Demoting or deleting the only administrator is refused: nothing else can
         restore the role, so the interface would be locked out of its own
@@ -554,6 +559,7 @@ paths:
               properties:
                 role: { $ref: "#/components/schemas/Role" }
                 password: { type: string, format: password }
+                limits: { $ref: "#/components/schemas/UserLimits" }
       responses:
         "200":
           description: The updated account.
@@ -605,6 +611,38 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+
+  /settings/users:
+    get:
+      operationId: getUserDefaults
+      tags: [settings]
+      summary: What a new account starts with. Administrator only.
+      responses:
+        "200":
+          description: The defaults.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserDefaults" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setUserDefaults
+      tags: [settings]
+      summary: Change what a new account starts with. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserDefaults" }
+      responses:
+        "200":
+          description: The defaults now in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserDefaults" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
 
   /settings/auth:
     get:
@@ -4530,7 +4568,7 @@ components:
 
     UserAccount:
       type: object
-      required: [id, username, role, has_password, created_at, access]
+      required: [id, username, role, has_password, created_at, access, tier, limits]
       properties:
         id: { type: integer, format: int64 }
         username: { type: string }
@@ -4544,6 +4582,32 @@ components:
         access:
           type: array
           items: { $ref: "#/components/schemas/CategoryGrant" }
+        tier:
+          $ref: "#/components/schemas/Tier"
+        limits: { $ref: "#/components/schemas/UserLimits" }
+
+    Tier:
+      type: string
+      enum: [normal, advanced, expert]
+
+    UserLimits:
+      type: object
+      description: What an administrator decides for an account beyond its role and grants.
+      required: [tier_default, tier_max, new_library_permission]
+      properties:
+        tier_default:
+          $ref: "#/components/schemas/Tier"
+        tier_max:
+          $ref: "#/components/schemas/Tier"
+        new_library_permission:
+          $ref: "#/components/schemas/Permission"
+
+    UserDefaults:
+      type: object
+      required: [new_library_permission]
+      properties:
+        new_library_permission:
+          $ref: "#/components/schemas/Permission"
 
     AuthPolicy:
       type: object
@@ -5100,10 +5164,12 @@ components:
 
     Me:
       type: object
-      required: [user_id, role, tier, categories]
+      required: [user_id, role, tier, tier_max, categories]
       properties:
         user_id: { type: integer, format: int64 }
         role: { $ref: "#/components/schemas/Role" }
+        tier_max:
+          $ref: "#/components/schemas/Tier"
         tier:
           type: string
           enum: [normal, advanced, expert]
