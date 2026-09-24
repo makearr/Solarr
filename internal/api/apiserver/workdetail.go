@@ -146,6 +146,14 @@ type WorksMonitor interface {
 	// RemoveWork stops wanting an album. deleteFiles also puts its files
 	// into quarantine (section 10.8 -- never a direct delete).
 	RemoveWork(ctx context.Context, workID int64, deleteFiles bool) (RemoveWorkResult, error)
+	// RemovePart stops wanting one track; deleteFiles also quarantines its file.
+	// Answers a part outside the work with an error wrapping sql.ErrNoRows.
+	RemovePart(ctx context.Context, workID, partID int64, deleteFiles bool) (RemovePartResult, error)
+}
+
+// RemovePartResult is what removing a track did.
+type RemovePartResult struct {
+	FilesQuarantined int64
 }
 
 // RemoveWorkResult is what removing an album did.
@@ -572,4 +580,49 @@ func (s *Server) RemoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 		WorkDeleted: result.WorkDeleted, FilesKept: result.FilesKept,
 		FilesQuarantined: &result.FilesQuarantined,
 	})
+}
+
+func (s *Server) routeRemovePart(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a work id must be a number")
+		return
+	}
+	partID, err := strconv.ParseInt(chi.URLParam(r, "partId"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a part id must be a number")
+		return
+	}
+	s.RemovePart(w, r, id, partID)
+}
+
+// RemovePart stops wanting one track, RemoveWork's shape one level down.
+func (s *Server) RemovePart(w http.ResponseWriter, r *http.Request, id, partID int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.worksMonitor == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "works are not available")
+		return
+	}
+	// An absent body keeps the file, matching RemoveWork.
+	var body gen.RemovePartJSONRequestBody
+	if r.Body != nil {
+		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body)
+	}
+	deleteFiles := body.DeleteFiles != nil && *body.DeleteFiles
+
+	result, err := s.worksMonitor.RemovePart(r.Context(), id, partID, deleteFiles)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such track")
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.RemovePartResult{FilesQuarantined: result.FilesQuarantined})
 }

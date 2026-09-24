@@ -2507,6 +2507,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/parts/{partId}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                partId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop wanting one track, and optionally delete its file. Administrator only.
+         * @description Unmonitors the track, shrinking the album's required_count, and stops wanting it on its own if it was. The file is kept unless delete_files says otherwise, and even then it goes to quarantine (section 10.8).
+         */
+        post: operations["removePart"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/people/{id}/remove": {
         parameters: {
             query?: never;
@@ -3184,6 +3207,14 @@ export interface components {
              * @description How many files delete_files moved out of the library.
              */
             files_quarantined?: number;
+        };
+        /** @description What removing a track actually did. */
+        RemovePartResult: {
+            /**
+             * Format: int64
+             * @description How many files delete_files moved out of the library; 0 or 1.
+             */
+            files_quarantined: number;
         };
         /** @description One release in the calendar window. */
         CalendarEntry: {
@@ -8538,6 +8569,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RemoveWorkResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    removePart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                partId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description Also move this track's file into quarantine.
+                     * @default false
+                     */
+                    delete_files?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description What was removed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemovePartResult"];
                 };
             };
             401: components["responses"]["Problem"];

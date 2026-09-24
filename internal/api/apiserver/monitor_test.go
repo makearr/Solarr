@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -27,6 +28,8 @@ type fakeWorksMonitor struct {
 	removeWorkID      int64
 	removeDeleteFiles bool
 	removeCalls       int
+
+	removePartCall *removePartCall
 
 	lastTrackPartID int64
 	lastTrackWanted *bool
@@ -429,5 +432,76 @@ func TestRemoveWork_OnlyDeletesFilesWhenAsked(t *testing.T) {
 	}
 	if !fixture.worksMonitor.removeDeleteFiles {
 		t.Error("delete_files:true did not reach the monitor")
+	}
+}
+
+type removePartCall struct {
+	workID, partID int64
+	deleteFiles    bool
+}
+
+func (f *fakeWorksMonitor) RemovePart(
+	_ context.Context, workID, partID int64, deleteFiles bool,
+) (apiserver.RemovePartResult, error) {
+	f.removePartCall = &removePartCall{workID: workID, partID: partID, deleteFiles: deleteFiles}
+	if f.err != nil {
+		return apiserver.RemovePartResult{}, f.err
+	}
+	if deleteFiles {
+		return apiserver.RemovePartResult{FilesQuarantined: 1}, nil
+	}
+	return apiserver.RemovePartResult{}, nil
+}
+
+func TestRemovePart_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/3/parts/7/remove", ""))
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", recorder.Code)
+	}
+	if fixture.worksMonitor.removePartCall != nil {
+		t.Error("a non-administrator must not reach the engine")
+	}
+}
+
+// Deleting a track's file is opt-in: an absent body only stops wanting it.
+func TestRemovePart_OnlyDeletesTheFileWhenAsked(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	for _, tc := range []struct {
+		body string
+		want removePartCall
+		json string
+	}{
+		{"", removePartCall{workID: 3, partID: 7}, `{"files_quarantined":0}`},
+		{`{"delete_files":true}`, removePartCall{workID: 3, partID: 7, deleteFiles: true}, `{"files_quarantined":1}`},
+	} {
+		recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/3/parts/7/remove", tc.body))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("body %q: status = %d, %s", tc.body, recorder.Code, recorder.Body)
+		}
+		if got := *fixture.worksMonitor.removePartCall; got != tc.want {
+			t.Errorf("body %q: call = %+v, want %+v", tc.body, got, tc.want)
+		}
+		if got := strings.TrimSpace(recorder.Body.String()); got != tc.json {
+			t.Errorf("body %q: response = %s, want %s", tc.body, got, tc.json)
+		}
+	}
+}
+
+func TestRemovePart_MissingPartIsNotFound(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.worksMonitor.err = sql.ErrNoRows
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/3/parts/999/remove", ""))
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 (%s)", recorder.Code, recorder.Body)
 	}
 }

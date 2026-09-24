@@ -3970,6 +3970,45 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/{id}/parts/{partId}/remove:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: partId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: removePart
+      tags: [library]
+      summary: Stop wanting one track, and optionally delete its file. Administrator only.
+      description: >-
+        Unmonitors the track, shrinking the album's required_count, and stops
+        wanting it on its own if it was. The file is kept unless delete_files
+        says otherwise, and even then it goes to quarantine (section 10.8).
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                delete_files:
+                  type: boolean
+                  default: false
+                  description: Also move this track's file into quarantine.
+      responses:
+        "200":
+          description: What was removed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RemovePartResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /people/{id}/remove:
     post:
       operationId: removePerson
@@ -4970,6 +5009,16 @@ components:
           type: integer
           format: int64
           description: How many files delete_files moved out of the library.
+
+    RemovePartResult:
+      type: object
+      description: What removing a track actually did.
+      required: [files_quarantined]
+      properties:
+        files_quarantined:
+          type: integer
+          format: int64
+          description: How many files delete_files moved out of the library; 0 or 1.
 
     CalendarEntry:
       type: object
