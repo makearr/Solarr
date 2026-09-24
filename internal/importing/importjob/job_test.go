@@ -421,6 +421,39 @@ func TestJob_ResumesRatherThanDuplicatingOnARetry(t *testing.T) {
 	}
 }
 
+// A resumed run keeps what its session was started with (answered 2026-09-24): an interrupted
+// preview retried as a plain import still holds every unit for review.
+func TestJob_AResumedPreviewStaysAPreview(t *testing.T) {
+	fx := newFixture(t, "Artist/Album1/01.flac", "Artist/Album2/01.flac")
+	fx.tool.byPath[filepath.Join(root, "Artist/Album1/01.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+	fx.tool.byPath[filepath.Join(root, "Artist/Album2/01.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+	fx.tool.failBatchOnce = "Album2"
+
+	job := fx.job(t, 0.90)
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual, Preview: true}); err == nil {
+		t.Fatal("first Run succeeded, want the injected failure")
+	}
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+		t.Fatalf("retried Run: %v", err)
+	}
+
+	done, err := fx.sessions().List(t.Context(), library.ImportDone, false)
+	if err != nil || len(done) != 1 {
+		t.Fatalf("List: %v %+v", err, done)
+	}
+	units, err := fx.sessions().ListUnits(t.Context(), done[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, unit := range units {
+		if unit.Decision != library.UnitQueue || unit.Reason != importjob.ReasonPreview {
+			t.Errorf("%s: %s %q, want held for review like the rest of the preview", unit.RelPath, unit.Decision, unit.Reason)
+		}
+	}
+}
+
 // resumeOrCreate must match on source path, not just "any session in
 // progress" -- two different imports interrupted at the same time must each
 // resume their own session, never each other's.

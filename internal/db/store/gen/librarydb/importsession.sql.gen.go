@@ -83,12 +83,12 @@ func (q *Queries) CountImportUnitTransferMethodsForSession(ctx context.Context, 
 const createImportSession = `-- name: CreateImportSession :one
 
 INSERT INTO import_session (source_path, origin, acquisition_id, category_id, state,
-                             threshold, started_at)
+                             threshold, started_at, preview)
 VALUES (?1, ?2, ?3,
-        ?4, 'INSPECTING', ?5, ?6)
+        ?4, 'INSPECTING', ?5, ?6, ?7)
 RETURNING id, source_path, origin, acquisition_id, category_id, state, threshold,
           units_total, units_committed, units_queued, bytes_imported, extract_dir,
-          started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at
+          started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
 `
 
 type CreateImportSessionParams struct {
@@ -98,6 +98,7 @@ type CreateImportSessionParams struct {
 	CategoryID    sql.NullInt64
 	Threshold     float64
 	StartedAt     int64
+	Preview       int64
 }
 
 // ADR-48 (migration 0018). Column lists follow table order, or sqlc stops
@@ -110,6 +111,7 @@ func (q *Queries) CreateImportSession(ctx context.Context, arg CreateImportSessi
 		arg.CategoryID,
 		arg.Threshold,
 		arg.StartedAt,
+		arg.Preview,
 	)
 	var i ImportSession
 	err := row.Scan(
@@ -132,6 +134,7 @@ func (q *Queries) CreateImportSession(ctx context.Context, arg CreateImportSessi
 		&i.UnitsFailed,
 		&i.UnitsEstimated,
 		&i.DismissedAt,
+		&i.Preview,
 	)
 	return i, err
 }
@@ -185,7 +188,7 @@ func (q *Queries) FinishImportSession(ctx context.Context, arg FinishImportSessi
 const getImportSession = `-- name: GetImportSession :one
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
 FROM import_session WHERE id = ?
 `
 
@@ -212,6 +215,7 @@ func (q *Queries) GetImportSession(ctx context.Context, id int64) (ImportSession
 		&i.UnitsFailed,
 		&i.UnitsEstimated,
 		&i.DismissedAt,
+		&i.Preview,
 	)
 	return i, err
 }
@@ -339,7 +343,7 @@ func (q *Queries) InsertImportUnitFile(ctx context.Context, arg InsertImportUnit
 const listImportSessions = `-- name: ListImportSessions :many
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
 FROM import_session
 WHERE (?1 = 0 OR state = ?2)
   AND (?3 = 1 OR dismissed_at IS NULL)
@@ -387,6 +391,7 @@ func (q *Queries) ListImportSessions(ctx context.Context, arg ListImportSessions
 			&i.UnitsFailed,
 			&i.UnitsEstimated,
 			&i.DismissedAt,
+			&i.Preview,
 		); err != nil {
 			return nil, err
 		}

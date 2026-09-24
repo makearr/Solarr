@@ -172,7 +172,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		return jobs.Terminalf("importjob.payload", string(job.Type), err)
 	}
 
-	sessionID, cursor, cancelling, err := j.resumeOrCreate(ctx, payload)
+	sessionID, cursor, threshold, cancelling, err := j.resumeOrCreate(ctx, &payload)
 	if err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	j.publishProgress(ctx, sessionID, importPhaseWalking, "")
 
 	identifyCfg := model.ChainConfig{
-		AcceptThreshold: music.DefaultAcceptThreshold, AmbiguityThreshold: j.policy.ImportAutoCommitConfidence(),
+		AcceptThreshold: music.DefaultAcceptThreshold, AmbiguityThreshold: threshold,
 	}
 	result, err := inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{Cursor: cursor},
 		inspect.WalkOptions{},
@@ -216,42 +216,47 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	return nil
 }
 
-// resumeOrCreate finds a not-yet-finished session for this exact source path
-// and resumes it, or starts a new one; one found CANCELLING is reported as such rather than resumed.
-func (j *Job) resumeOrCreate(ctx context.Context, payload Payload) (sessionID int64, cursor string, cancelling bool, err error) {
+// resumeOrCreate finds a not-yet-finished session for this exact source path and resumes it with
+// the threshold and preview it was started with (answered 2026-09-24), or starts a new one; one
+// found CANCELLING is reported as such rather than resumed.
+func (j *Job) resumeOrCreate(
+	ctx context.Context, payload *Payload,
+) (sessionID int64, cursor string, threshold float64, cancelling bool, err error) {
 	for _, state := range []string{library.ImportInspecting, library.ImportCancelling} {
 		// Dismissal is a display concern, so resume looks past it.
 		existing, err := j.sessions.List(ctx, state, true)
 		if err != nil {
-			return 0, "", false, fmt.Errorf("importjob: list %s sessions: %w", state, err)
+			return 0, "", 0, false, fmt.Errorf("importjob: list %s sessions: %w", state, err)
 		}
 		for _, session := range existing {
 			if session.SourcePath != payload.SourcePath {
 				continue
 			}
 			if state == library.ImportCancelling {
-				return session.ID, "", true, nil
+				return session.ID, "", session.Threshold, true, nil
 			}
 			units, err := j.sessions.ListUnits(ctx, session.ID)
 			if err != nil {
-				return 0, "", false, fmt.Errorf("importjob: list units for session %d: %w", session.ID, err)
+				return 0, "", 0, false, fmt.Errorf("importjob: list units for session %d: %w", session.ID, err)
 			}
 			if len(units) > 0 {
 				cursor = units[len(units)-1].RelPath
 			}
-			return session.ID, cursor, false, nil
+			payload.Preview = session.Preview
+			return session.ID, cursor, session.Threshold, false, nil
 		}
 	}
 
+	threshold = j.policy.ImportAutoCommitConfidence()
 	id, err := j.sessions.Create(ctx, library.NewSession{
 		SourcePath: payload.SourcePath, Origin: payload.Origin,
 		AcquisitionID: payload.AcquisitionID, CategoryID: payload.CategoryID,
-		Threshold: j.policy.ImportAutoCommitConfidence(), StartedAt: j.clock.Now().Unix(),
+		Threshold: threshold, StartedAt: j.clock.Now().Unix(), Preview: payload.Preview,
 	})
 	if err != nil {
-		return 0, "", false, fmt.Errorf("importjob: create session: %w", err)
+		return 0, "", 0, false, fmt.Errorf("importjob: create session: %w", err)
 	}
-	return id, "", false, nil
+	return id, "", threshold, false, nil
 }
 
 // estimateOnce runs inspect.EstimateUnits and persists it, the first time

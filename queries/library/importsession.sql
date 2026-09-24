@@ -3,17 +3,17 @@
 
 -- name: CreateImportSession :one
 INSERT INTO import_session (source_path, origin, acquisition_id, category_id, state,
-                             threshold, started_at)
+                             threshold, started_at, preview)
 VALUES (sqlc.arg(source_path), sqlc.arg(origin), sqlc.arg(acquisition_id),
-        sqlc.arg(category_id), 'INSPECTING', sqlc.arg(threshold), sqlc.arg(started_at))
+        sqlc.arg(category_id), 'INSPECTING', sqlc.arg(threshold), sqlc.arg(started_at), sqlc.arg(preview))
 RETURNING id, source_path, origin, acquisition_id, category_id, state, threshold,
           units_total, units_committed, units_queued, bytes_imported, extract_dir,
-          started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at;
+          started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview;
 
 -- name: GetImportSession :one
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
 FROM import_session WHERE id = ?;
 
 -- Small, operator-facing list -- session counts never approach library scale
@@ -25,7 +25,7 @@ FROM import_session WHERE id = ?;
 -- name: ListImportSessions :many
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
-       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
 FROM import_session
 WHERE (sqlc.arg(filter_by_state) = 0 OR state = sqlc.arg(state))
   AND (sqlc.arg(include_dismissed) = 1 OR dismissed_at IS NULL)
