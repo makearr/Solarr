@@ -107,6 +107,7 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 		settings.KeyPriorityUserRequestWeight, settings.KeyPriorityNewReleaseWeight,
 		settings.KeyPriorityGapWeight, settings.KeyPriorityUpgradeWeight, settings.KeyPriorityNewReleaseDays,
 		settings.KeyBrainzMashUserAgent, settings.KeyMetadataSourceOrder,
+		settings.KeyMetadataCoverSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID,
 		settings.KeyAcoustIDAPIKey,
 		// The non-scalar audit's own KindEntity additions (2026-09-12): each
 		// names a whole settings surface, never an instance_setting row, but

@@ -81,19 +81,20 @@ const (
 // real metadata, and populates the parts (tracks) under it. Direct-wired the way
 // the rest of internal/media/music is until stage 9.
 type EnrichJob struct {
-	identity  library.Identity
-	people    library.People
-	provider  musicbrainz.Provider
-	biography Biographer
-	artworks  library.Artworks
-	realigner Realigner
-	tags      TagReader
-	roots     RootFolders
-	http      *httpx.Client
-	fs        fsx.FS
-	imagesDir string
-	clock     clock.Clock
-	logger    *slog.Logger
+	identity        library.Identity
+	people          library.People
+	provider        musicbrainz.Provider
+	biography       Biographer
+	artworks        library.Artworks
+	realigner       Realigner
+	tags            TagReader
+	roots           RootFolders
+	http            *httpx.Client
+	fs              fsx.FS
+	imagesDir       string
+	clock           clock.Clock
+	logger          *slog.Logger
+	wikidataEnabled func() bool
 }
 
 // TagReader reads the tags a set of files carry -- mediatool.Tool's own
@@ -123,7 +124,9 @@ type EnrichJobConfig struct {
 	People    library.People
 	Provider  musicbrainz.Provider
 	Biography Biographer
-	Artworks  library.Artworks
+	// WikidataEnabled is the configured switch, read per artist; nil is on.
+	WikidataEnabled func() bool
+	Artworks        library.Artworks
 	// Realigner is optional: without one, refined albums wait for the next
 	// scan that happens to revisit their directory.
 	Realigner Realigner
@@ -146,7 +149,8 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 	}
 	return &EnrichJob{
 		identity: config.Identity, people: config.People, provider: config.Provider,
-		biography: config.Biography, artworks: config.Artworks, realigner: config.Realigner,
+		biography: config.Biography, wikidataEnabled: config.WikidataEnabled,
+		artworks: config.Artworks, realigner: config.Realigner,
 		tags: config.Tags, roots: config.Roots, http: config.HTTP,
 		fs: config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
 	}
@@ -342,7 +346,7 @@ func (j *EnrichJob) chooseEdition(ctx context.Context, work library.EditionlessW
 func (j *EnrichJob) backfillPeople(ctx context.Context) {
 	// Without a Wikidata source every artist would look imageless and be
 	// recorded so, permanently.
-	if j.artworks == (library.Artworks{}) || j.biography == nil {
+	if j.artworks == (library.Artworks{}) || !j.wikidataOn() {
 		return
 	}
 
@@ -608,10 +612,15 @@ func (j *EnrichJob) wikidataBiographyFor(ctx context.Context, artist musicbrainz
 // wikidataLookup is wikidataBiographyFor without swallowing the error, for a
 // caller that must not mistake a failed lookup for an artist with no image.
 func (j *EnrichJob) wikidataLookup(ctx context.Context, artist musicbrainz.Artist) (wikidata.Biography, error) {
-	if j.biography == nil || artist.WikidataQID == "" {
+	if !j.wikidataOn() || artist.WikidataQID == "" {
 		return wikidata.Biography{}, nil
 	}
 	return j.biography.Biography(ctx, artist.WikidataQID)
+}
+
+// wikidataOn is whether there is a Wikidata source and the user has not switched it off.
+func (j *EnrichJob) wikidataOn() bool {
+	return j.biography != nil && (j.wikidataEnabled == nil || j.wikidataEnabled())
 }
 
 // biographyText picks the Wikipedia extract when there is one, Wikidata's

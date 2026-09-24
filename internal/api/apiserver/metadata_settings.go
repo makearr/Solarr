@@ -37,12 +37,22 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := s.auth.Registry.LookupAll(settings.KeyBrainzMashUserAgent, settings.KeyMetadataSourceOrder); err != nil {
+	if err := s.auth.Registry.LookupAll(settings.KeyBrainzMashUserAgent, settings.KeyMetadataSourceOrder,
+		settings.KeyMetadataCoverSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
 
-	wanted := settings.MetadataSettings{BrainzMashUserAgent: body.BrainzmashUserAgent}
+	wanted := settings.MetadataSettings{
+		BrainzMashUserAgent: body.BrainzmashUserAgent, Wikidata: body.Wikidata, AcoustID: body.Acoustid,
+	}
+	if body.CoverSources != nil {
+		wanted.CoverSources = make([]string, 0, len(*body.CoverSources))
+		for _, source := range *body.CoverSources {
+			wanted.CoverSources = append(wanted.CoverSources, string(source))
+		}
+	}
+	wasAcoustID := *s.auth.Settings.Snapshot().MetadataSettings().AcoustID
 	// Absent leaves the stored order alone, so a client that only knows about
 	// the agent cannot silently reset it.
 	if body.SourceOrder != nil {
@@ -61,6 +71,13 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 		}
 		writeError(w, s.logger, err)
 		return
+	}
+	// Switched back on with a key in place: what it skipped while off is identified now (D12).
+	if body.Acoustid != nil && *body.Acoustid && !wasAcoustID && s.fingerprintRetrier != nil &&
+		s.auth.Settings.Snapshot().AcoustIDConfigured() {
+		if _, err := s.fingerprintRetrier.RetryFingerprintSkipped(r.Context()); err != nil {
+			s.logger.Warn("could not re-run what AcoustID skipped while switched off", "error", err)
+		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, s.metadataSettingsView())
 }
@@ -122,8 +139,13 @@ func (s *Server) metadataSettingsView() gen.MetadataSettings {
 	}
 	// HasValue alone: whether a key exists is all a screen asking for one
 	// needs, and AcoustIDConfigured answers it without decrypting anything.
+	covers := make([]gen.MetadataSettingsCoverSources, 0, len(stored.CoverSources))
+	for _, source := range stored.CoverSources {
+		covers = append(covers, gen.MetadataSettingsCoverSources(source))
+	}
 	return gen.MetadataSettings{
 		BrainzmashUserAgent: stored.BrainzMashUserAgent, SourceOrder: &order,
+		CoverSources: &covers, Wikidata: stored.Wikidata, Acoustid: stored.AcoustID,
 		AcoustidApiKey: &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().AcoustIDConfigured()},
 	}
 }

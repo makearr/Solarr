@@ -1,11 +1,14 @@
 package settings_test
 
 import (
+	"errors"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 func TestMetadataSettings_DefaultsWhenNothingIsStored(t *testing.T) {
@@ -92,5 +95,36 @@ func TestSetMetadataSettings_KeepsTheChosenOrder(t *testing.T) {
 	}
 	if got := cache.Snapshot().MetadataSettings().SourceOrder; !slices.Equal(got, order) {
 		t.Errorf("SourceOrder = %v, want %v", got, order)
+	}
+}
+
+// The enrichment switches (2026-09-24): nil leaves a value alone, an empty cover list turns every
+// cover source off, and an unknown source is refused.
+func TestSetMetadataSettings_EnrichmentSwitches(t *testing.T) {
+	cache, cl := newCache(t)
+	stored := cache.Snapshot().MetadataSettings()
+	if !reflect.DeepEqual(stored.CoverSources, settings.DefaultCoverSources) || !*stored.Wikidata || !*stored.AcoustID {
+		t.Fatalf("defaults = %+v", stored)
+	}
+
+	off := false
+	err := cache.SetMetadataSettings(t.Context(), cl, settings.MetadataSettings{
+		BrainzMashUserAgent: settings.DefaultBrainzMashUserAgent,
+		CoverSources:        []string{settings.CoverSourceEmbedded}, Wikidata: &off,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored = cache.Snapshot().MetadataSettings()
+	if !reflect.DeepEqual(stored.CoverSources, []string{"embedded"}) || *stored.Wikidata || !*stored.AcoustID {
+		t.Errorf("after the write = %+v, want embedded only, Wikidata off, AcoustID untouched", stored)
+	}
+
+	err = cache.SetMetadataSettings(t.Context(), cl, settings.MetadataSettings{
+		BrainzMashUserAgent: settings.DefaultBrainzMashUserAgent, CoverSources: []string{"fanart"},
+	})
+	var problems config.Problems
+	if !errors.As(err, &problems) {
+		t.Errorf("an unknown cover source: err = %v, want a problem", err)
 	}
 }

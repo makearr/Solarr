@@ -48,6 +48,25 @@ func ValidMetadataSource(name string) bool {
 	}
 }
 
+// Enrichment switches (2026-09-19 review, answered 2026-09-24: per media type, shown per library).
+const (
+	// KeyMetadataCoverSources orders where album covers come from; a source left out is off.
+	KeyMetadataCoverSources = "metadata.cover_sources"
+	// KeyMetadataWikidata turns Wikidata's artist photos and biographies on or off.
+	KeyMetadataWikidata = "metadata.wikidata"
+	// KeyMetadataAcoustID turns fingerprint identification on or off; it still needs its key.
+	KeyMetadataAcoustID = "metadata.acoustid"
+)
+
+// The cover sources, in the artwork job's terms.
+const (
+	CoverSourceArchive  = "coverartarchive"
+	CoverSourceEmbedded = "embedded"
+)
+
+// DefaultCoverSources is the order covers were always taken in: the archive, then the files.
+var DefaultCoverSources = []string{CoverSourceArchive, CoverSourceEmbedded}
+
 // MetadataSettings is the metadata providers' own policy.
 type MetadataSettings struct {
 	BrainzMashUserAgent string
@@ -58,6 +77,12 @@ type MetadataSettings struct {
 	// agent need not restate it -- the same convention SubscriptionFilters
 	// already uses for an unset field.
 	SourceOrder []string
+	// CoverSources is the order covers are taken in; nil on a write leaves it alone, and an empty
+	// non-nil list turns every cover source off.
+	CoverSources []string
+	// Wikidata and AcoustID are on unless switched off; nil on a write leaves them alone.
+	Wikidata *bool
+	AcoustID *bool
 }
 
 // MetadataSettings reads the configured policy; an absent or empty agent is the shipped default.
@@ -70,7 +95,12 @@ func (s *Snapshot) MetadataSettings() MetadataSettings {
 	if len(order) == 0 {
 		order = DefaultMetadataSourceOrder
 	}
-	return MetadataSettings{BrainzMashUserAgent: agent, SourceOrder: order}
+	wikidata, acoustID := s.policyBool(KeyMetadataWikidata, true), s.policyBool(KeyMetadataAcoustID, true)
+	return MetadataSettings{
+		BrainzMashUserAgent: agent, SourceOrder: order,
+		CoverSources: s.policyStringListOr(KeyMetadataCoverSources, DefaultCoverSources),
+		Wikidata:     &wikidata, AcoustID: &acoustID,
+	}
 }
 
 // SetMetadataSettings writes the metadata policy wholesale (ADR-44: validated on write).
@@ -80,6 +110,23 @@ func (c *Cache) SetMetadataSettings(ctx context.Context, cl clock.Clock, ms Meta
 	}
 	if err := c.setPolicy(ctx, cl, KeyBrainzMashUserAgent, ms.BrainzMashUserAgent); err != nil {
 		return err
+	}
+	if ms.CoverSources != nil {
+		encoded, err := json.Marshal(ms.CoverSources)
+		if err != nil {
+			return err
+		}
+		if err := c.setPolicy(ctx, cl, KeyMetadataCoverSources, string(encoded)); err != nil {
+			return err
+		}
+	}
+	for key, value := range map[string]*bool{KeyMetadataWikidata: ms.Wikidata, KeyMetadataAcoustID: ms.AcoustID} {
+		if value == nil {
+			continue
+		}
+		if err := c.setPolicy(ctx, cl, key, strconv.FormatBool(*value)); err != nil {
+			return err
+		}
 	}
 	if len(ms.SourceOrder) == 0 {
 		return nil
@@ -115,6 +162,16 @@ func validateMetadataSettings(ms MetadataSettings) config.Problems {
 			})
 		}
 		seen[name] = true
+	}
+	coverSeen := make(map[string]bool, len(ms.CoverSources))
+	for _, name := range ms.CoverSources {
+		if (name != CoverSourceArchive && name != CoverSourceEmbedded) || coverSeen[name] {
+			problems = append(problems, config.Problem{
+				Path: KeyMetadataCoverSources, Value: name,
+				Expectation: "coverartarchive or embedded, each at most once",
+			})
+		}
+		coverSeen[name] = true
 	}
 	agent := ms.BrainzMashUserAgent
 	valid := agent != "" && len(agent) <= maxUserAgentLength

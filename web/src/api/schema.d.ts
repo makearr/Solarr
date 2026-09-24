@@ -4234,6 +4234,12 @@ export interface components {
             brainzmash_user_agent: string;
             /** @description Which metadata sources are tried, in order. A source left out is not consulted at all, except musicbrainz, which always answers as a last resort. Omitted on a PATCH leaves the stored order alone. */
             source_order?: components["schemas"]["MetadataSource"][];
+            /** @description Where album covers come from, in order; each fills only covers the earlier ones left missing. A source left out is not used. Omitted on a PATCH leaves it alone. */
+            cover_sources?: ("coverartarchive" | "embedded")[];
+            /** @description Artist photos and biographies from Wikidata. Omitted on a PATCH leaves it alone. */
+            wikidata?: boolean;
+            /** @description Fingerprint identification, which also needs an API key. Switching it back on re-runs what it skipped. Omitted on a PATCH leaves it alone. */
+            acoustid?: boolean;
             /** @description Whether an AcoustID application key is stored. Read-only here and ignored on a PATCH; it is written through POST /metadata/acoustid/apikey. Never returned, not even masked -- saying whether one exists is all a screen asking for one needs, and decrypting it to render would be gratuitous (ADR-14). */
             acoustid_api_key?: components["schemas"]["SecretMask"];
         };

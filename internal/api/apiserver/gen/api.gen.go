@@ -286,6 +286,12 @@ const (
 	MediaTypeYoutube   MediaType = "youtube"
 )
 
+// Defines values for MetadataSettingsCoverSources.
+const (
+	MetadataSettingsCoverSourcesCoverartarchive MetadataSettingsCoverSources = "coverartarchive"
+	MetadataSettingsCoverSourcesEmbedded        MetadataSettingsCoverSources = "embedded"
+)
+
 // Defines values for MetadataSource.
 const (
 	MetadataSourceBrainzmash       MetadataSource = "brainzmash"
@@ -1820,15 +1826,27 @@ type MediaType string
 
 // MetadataSettings The metadata providers' own settings.
 type MetadataSettings struct {
+	// Acoustid Fingerprint identification, which also needs an API key. Switching it back on re-runs what it skipped. Omitted on a PATCH leaves it alone.
+	Acoustid *bool `json:"acoustid,omitempty"`
+
 	// AcoustidApiKey Whether an AcoustID application key is stored. Read-only here and ignored on a PATCH; it is written through POST /metadata/acoustid/apikey. Never returned, not even masked -- saying whether one exists is all a screen asking for one needs, and decrypting it to render would be gratuitous (ADR-14).
 	AcoustidApiKey *SecretMask `json:"acoustid_api_key,omitempty"`
 
 	// BrainzmashUserAgent Sent to BrainzMash, whose front door refuses agents not starting "Lidarr/". Printable ASCII, 1-256 characters. Default Lidarr/2.9.6.4552.
 	BrainzmashUserAgent string `json:"brainzmash_user_agent"`
 
+	// CoverSources Where album covers come from, in order; each fills only covers the earlier ones left missing. A source left out is not used. Omitted on a PATCH leaves it alone.
+	CoverSources *[]MetadataSettingsCoverSources `json:"cover_sources,omitempty"`
+
 	// SourceOrder Which metadata sources are tried, in order. A source left out is not consulted at all, except musicbrainz, which always answers as a last resort. Omitted on a PATCH leaves the stored order alone.
 	SourceOrder *[]MetadataSource `json:"source_order,omitempty"`
+
+	// Wikidata Artist photos and biographies from Wikidata. Omitted on a PATCH leaves it alone.
+	Wikidata *bool `json:"wikidata,omitempty"`
 }
+
+// MetadataSettingsCoverSources defines model for MetadataSettings.CoverSources.
+type MetadataSettingsCoverSources string
 
 // MetadataSource A metadata source. brainzmash and musicbrainz-proxy are third-party proxies of musicbrainz; musicbrainz is the direct upstream and cannot be removed from the order, only reordered.
 type MetadataSource string
