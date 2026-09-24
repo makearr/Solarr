@@ -36,8 +36,13 @@ func (d Downloader) Downloads(ctx context.Context, category string) ([]download.
 		if category != "" && !strings.EqualFold(slot.Category, category) {
 			continue
 		}
+		name := slot.Filename
+		if slot.Status == statusGrabbing {
+			// Until the NZB is fetched the filename is "Trying to fetch NZB from <url>", API key and all.
+			name = ""
+		}
 		downloads = append(downloads, download.Download{
-			ClientRef: slot.ClientRef, Name: slot.Filename, Category: slot.Category, State: queueState(slot.Status),
+			ClientRef: slot.ClientRef, Name: name, Category: slot.Category, State: queueState(slot.Status),
 			SizeBytes: slot.SizeBytes, SizeLeftBytes: slot.SizeLeftBytes,
 		})
 	}
@@ -70,6 +75,8 @@ func (d Downloader) QueueStatus(ctx context.Context) (download.QueueStatus, erro
 func (d Downloader) Remove(ctx context.Context, clientRef string, deleteFiles bool) error {
 	return d.Client.Remove(ctx, clientRef, deleteFiles)
 }
+
+const statusGrabbing = "Grabbing"
 
 func queueState(status string) download.State {
 	switch status {

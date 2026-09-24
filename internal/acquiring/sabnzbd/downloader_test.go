@@ -47,3 +47,20 @@ func TestDownloader_MapsQueueAndHistory(t *testing.T) {
 		t.Errorf("failed download = %+v, want its reason", downloads[3])
 	}
 }
+
+// While SABnzbd fetches the NZB the job's filename is the fetch URL, API key included: never a name.
+func TestDownloader_AGrabbingJobHasNoNameYet(t *testing.T) {
+	queue := `{"queue":{"slots":[{"nzo_id":"SABnzbd_nzo_x","filename":"Trying to fetch NZB from http://p/1/download?apikey=secret",
+		"cat":"music","mb":"0","mbleft":"0","percentage":"0","status":"Grabbing"}]}}`
+	client := sabnzbd.NewClient(newTestClient(t, modeTransport{"queue": queue, "history": `{"history":{"slots":[]}}`}),
+		"http://sabnzbd.local:8080", "key")
+
+	downloads, err := sabnzbd.Downloader{Client: client}.Downloads(t.Context(), "music")
+	if err != nil {
+		t.Fatalf("Downloads: %v", err)
+	}
+	want := []download.Download{{ClientRef: "SABnzbd_nzo_x", Category: "music", State: download.StateQueued}}
+	if !reflect.DeepEqual(downloads, want) {
+		t.Errorf("downloads = %+v, want %+v", downloads, want)
+	}
+}

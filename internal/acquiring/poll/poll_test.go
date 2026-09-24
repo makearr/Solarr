@@ -246,6 +246,19 @@ func TestPoll_AReusedReferenceIsNotAdopted(t *testing.T) {
 	}
 }
 
+// SABnzbd names a job only once its NZB is fetched; the fingerprint waits for that name.
+func TestPoll_TheFingerprintWaitsForTheClientsName(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", State: download.StateQueued}}
+	e.run(t)
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Watermark", State: download.StateDownloading}}
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateDownloading || got.ClientFingerprint != "client:Heka-Watermark" {
+		t.Errorf("= %s %q, want DOWNLOADING fingerprinted by the real name", got.State, got.ClientFingerprint)
+	}
+}
+
 // importing starts an import session for the acquisition and finishes it with units decided as given.
 func (e *env) finishImport(t *testing.T, acquisition library.Acquisition, placed bool, decision string) {
 	t.Helper()

@@ -179,6 +179,9 @@ func (j *Job) advance(
 // checkFingerprint records the client's own name and size when a download is first seen; a
 // reference that later names another download is a different download (section 10.9).
 func (j *Job) checkFingerprint(ctx context.Context, acquisition library.Acquisition, entry download.Download) (bool, error) {
+	if entry.Name == "" {
+		return false, nil // the client does not know the name yet
+	}
 	fingerprint := "client:" + entry.Name
 	now := j.config.Clock.Now().Unix()
 	if !strings.HasPrefix(acquisition.ClientFingerprint, "client:") {
