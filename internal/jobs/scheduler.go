@@ -12,7 +12,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// cronParser matches internal/platform/config's own validator and store.BackupSchedule's,
+// cronParser matches internal/platform/config's own validator,
 // so a schedule accepted anywhere in this codebase parses identically everywhere.
 var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 

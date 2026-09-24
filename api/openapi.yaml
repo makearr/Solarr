@@ -346,7 +346,8 @@ paths:
       tags: [system]
       summary: Back up every database now. Administrator only.
       description: >-
-        A routine backup, subject to the same retention as the scheduled ones.
+        A routine backup, which the Clean old backups task later prunes like
+        the scheduled ones.
         Runs synchronously: a backup that has not finished is not one a user
         should be told about.
       responses:
@@ -640,6 +641,38 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/UserDefaults" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /settings/backups:
+    get:
+      operationId: getBackupRetention
+      tags: [settings]
+      summary: How the Clean old backups task decides what to remove. Administrator only.
+      responses:
+        "200":
+          description: The rule in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BackupRetention" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setBackupRetention
+      tags: [settings]
+      summary: Change the backup retention rule. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BackupRetention" }
+      responses:
+        "200":
+          description: The rule now in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BackupRetention" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
@@ -4611,6 +4644,26 @@ components:
       properties:
         new_library_permission:
           $ref: "#/components/schemas/Permission"
+
+    BackupRetention:
+      type: object
+      required: [mode, keep_count, keep_days]
+      properties:
+        mode:
+          type: string
+          enum: [count, days]
+          description: count keeps the newest keep_count backups; days keeps those younger than keep_days.
+        keep_count:
+          type: integer
+          format: int64
+          minimum: 3
+          maximum: 1000
+        keep_days:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 3650
+          description: The newest three backups stay whatever their age (ADR-15).
 
     AuthPolicy:
       type: object

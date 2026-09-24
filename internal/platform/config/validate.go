@@ -13,7 +13,7 @@ import (
 // a corruption discovered late has nothing clean to fall back to.
 const minimumBackupsKept = 3
 
-// cronParser matches what the backup scheduler will use, so a schedule accepted
+// cronParser matches internal/jobs' scheduler, so a schedule accepted
 // at startup cannot be rejected later by the thing that runs it.
 var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 

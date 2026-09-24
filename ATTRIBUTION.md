@@ -144,7 +144,7 @@ a user offered the Corresponding Source should be able to see what the binary li
 |---|---|---|
 | `modernc.org/sqlite` | BSD-3-Clause | Pure-Go SQLite. Keeps `CGO_ENABLED=0` building, which ADR-30 requires so the image can bundle its media tools rather than link them. Provisional pending the ADR-5 benchmark |
 | `github.com/goccy/go-yaml` | MIT | `config.yml` parsing. Go has no stdlib YAML, and ADR-44 needs a parser that reports positions. Chosen over the archived `gopkg.in/yaml.v3` |
-| `github.com/robfig/cron/v3` | MIT | Cron parsing for `backup.schedule`. The same parser validates at startup and schedules later, so a schedule accepted at boot cannot be rejected by the thing that runs it |
+| `github.com/robfig/cron/v3` | MIT | Cron parsing for the scheduler's task cadences. The same parser validates on write and schedules later, so an accepted cadence cannot be rejected by the thing that runs it |
 | `github.com/go-chi/chi/v5` | MIT | HTTP routing. Everything stays an `http.Handler`, so the router owns no part of the code's shape (ADR-31) |
 | `golang.org/x/crypto` | BSD-3-Clause | argon2id password hashing (ADR-14). Not in the standard library, and hand-rolling a password hash is never the right call |
 | `golang.org/x/image` | BSD-3-Clause | High-quality resampling (`draw.CatmullRom`) for section 21.6's artwork pipeline |

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 )
 
@@ -158,6 +159,21 @@ func NewDefaultRegistry() *Registry {
 		Name:     "Require login",
 		HelpText: "Whether a caller must present a credential at all (ADR-14).",
 		Default:  "true",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyBackupRetention, Kind: KindString, Tier: TierNormal,
+		Name: "Keep backups by", HelpText: "count keeps the newest N backups; days keeps those younger than N days.",
+		Default: string(BackupKeepCount),
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyBackupKeepCount, Kind: KindInt, Tier: TierNormal,
+		Name: "Backups to keep", HelpText: "Per database; never fewer than 3.",
+		Default: strconv.Itoa(DefaultBackupKeepCount),
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyBackupKeepDays, Kind: KindInt, Tier: TierNormal,
+		Name: "Days to keep backups", HelpText: "Older backups are removed, but the newest 3 always stay.",
+		Default: strconv.Itoa(DefaultBackupKeepDays),
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyUsersNewLibraryPermission, Kind: KindString, Tier: TierNormal,

@@ -7,6 +7,7 @@ import type { components } from "@/api/schema";
 import { isTierVisible, useTier } from "@/lib/useTier";
 
 type Schedule = components["schemas"]["Schedule"];
+type BackupRetention = components["schemas"]["BackupRetention"];
 
 /** A cadence expressed the way a person thinks about it, not as a five-field cron string (asked
  *  for 2026-09-11, Jellyfin's trigger editor as the reference; weekly and monthly 2026-09-19).
@@ -370,6 +371,8 @@ function ScheduleRow({
         </span>
       </div>
 
+      {schedule.key === "backup_cleanup" && <BackupRetentionEditor />}
+
       {schedule.last_outcome === "error" && schedule.last_error && (
         <p className="text-xs text-danger">{schedule.last_error}</p>
       )}
@@ -519,5 +522,101 @@ function TriggerEditor({
       )}
       <span className="text-ink-muted">{describeTrigger(trigger)}</span>
     </span>
+  );
+}
+
+/** The Clean old backups rule: the newest N, or everything younger than N days (asked for 2026-09-19). */
+function BackupRetentionEditor() {
+  const queryClient = useQueryClient();
+  const saved = useQuery({
+    queryKey: ["settings", "backups"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/settings/backups");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const save = useMutation({
+    mutationFn: async (body: BackupRetention) => {
+      const { error } = await api.PUT("/settings/backups", { body });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings", "backups"] }),
+  });
+  const [draft, setDraft] = useState<BackupRetention | null>(null);
+
+  if (!saved.data) return null;
+  const current = draft ?? saved.data;
+  const dirty =
+    draft !== null &&
+    (draft.mode !== saved.data.mode ||
+      draft.keep_count !== saved.data.keep_count ||
+      draft.keep_days !== saved.data.keep_days);
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
+      Keep
+      <select
+        aria-label="Keep backups by"
+        value={current.mode}
+        disabled={save.isPending}
+        onChange={(event) => setDraft({ ...current, mode: event.target.value as BackupRetention["mode"] })}
+        className={triggerInputStyle}
+      >
+        <option value="count">the last</option>
+        <option value="days">the backups of the last</option>
+      </select>
+      {current.mode === "count" ? (
+        <>
+          <input
+            type="number"
+            min={3}
+            max={1000}
+            aria-label="Backups to keep"
+            value={current.keep_count}
+            disabled={save.isPending}
+            onChange={(event) => setDraft({ ...current, keep_count: Number(event.target.value) || 3 })}
+            className={`${triggerInputStyle} w-16`}
+          />
+          backups of each database
+        </>
+      ) : (
+        <>
+          <input
+            type="number"
+            min={1}
+            max={3650}
+            aria-label="Days to keep backups"
+            value={current.keep_days}
+            disabled={save.isPending}
+            onChange={(event) => setDraft({ ...current, keep_days: Number(event.target.value) || 1 })}
+            className={`${triggerInputStyle} w-16`}
+          />
+          days, and always the newest 3
+        </>
+      )}
+      {dirty && (
+        <>
+          <button
+            type="button"
+            onClick={() => save.mutate(current, { onSuccess: () => setDraft(null) })}
+            disabled={save.isPending}
+            className="rounded-md bg-accent px-2 py-0.5 text-accent-ink disabled:opacity-50
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={() => setDraft(null)}
+            disabled={save.isPending}
+            className="rounded-md border border-border-subtle px-2 py-0.5 hover:text-ink"
+          >
+            Undo
+          </button>
+        </>
+      )}
+      {save.isError && <span className="text-danger">Refused: at least 3 backups, at least 1 day.</span>}
+    </div>
   );
 }

@@ -65,6 +65,12 @@ const (
 	AuthPolicyConfiguredModeProxy      AuthPolicyConfiguredMode = "proxy"
 )
 
+// Defines values for BackupRetentionMode.
+const (
+	BackupRetentionModeCount BackupRetentionMode = "count"
+	BackupRetentionModeDays  BackupRetentionMode = "days"
+)
+
 // Defines values for BlockedContentEntryReason.
 const (
 	BlockedContentEntryReasonCORRUPT     BlockedContentEntryReason = "CORRUPT"
@@ -772,6 +778,20 @@ type BackupFile struct {
 	SizeBytes    int64     `json:"size_bytes"`
 	TakenAt      time.Time `json:"taken_at"`
 }
+
+// BackupRetention defines model for BackupRetention.
+type BackupRetention struct {
+	KeepCount int64 `json:"keep_count"`
+
+	// KeepDays The newest three backups stay whatever their age (ADR-15).
+	KeepDays int64 `json:"keep_days"`
+
+	// Mode count keeps the newest keep_count backups; days keeps those younger than keep_days.
+	Mode BackupRetentionMode `json:"mode"`
+}
+
+// BackupRetentionMode count keeps the newest keep_count backups; days keeps those younger than keep_days.
+type BackupRetentionMode string
 
 // BlockedContentEntry Bytes that never enter the library again (ADR-53 part 2), keyed on content hashes, never on a filename (Invariant 82). At least one of `oshash`/`quick_hash`/`chromaprint`/`phash` is always present.
 type BlockedContentEntry struct {
@@ -3374,6 +3394,9 @@ type SimulateScoreJSONRequestBody SimulateScoreJSONBody
 // SetAuthPolicyJSONRequestBody defines body for SetAuthPolicy for application/json ContentType.
 type SetAuthPolicyJSONRequestBody SetAuthPolicyJSONBody
 
+// SetBackupRetentionJSONRequestBody defines body for SetBackupRetention for application/json ContentType.
+type SetBackupRetentionJSONRequestBody = BackupRetention
+
 // SetUserDefaultsJSONRequestBody defines body for SetUserDefaults for application/json ContentType.
 type SetUserDefaultsJSONRequestBody = UserDefaults
 
@@ -3829,6 +3852,12 @@ type ServerInterface interface {
 	// Require a login, or stop requiring one.
 	// (PUT /settings/auth)
 	SetAuthPolicy(w http.ResponseWriter, r *http.Request)
+	// How the Clean old backups task decides what to remove. Administrator only.
+	// (GET /settings/backups)
+	GetBackupRetention(w http.ResponseWriter, r *http.Request)
+	// Change the backup retention rule. Administrator only.
+	// (PUT /settings/backups)
+	SetBackupRetention(w http.ResponseWriter, r *http.Request)
 	// Configuration as round-tripping YAML (F9).
 	// (GET /settings/export)
 	ExportSettings(w http.ResponseWriter, r *http.Request)
@@ -4765,6 +4794,18 @@ func (_ Unimplemented) GetAuthPolicy(w http.ResponseWriter, r *http.Request) {
 // Require a login, or stop requiring one.
 // (PUT /settings/auth)
 func (_ Unimplemented) SetAuthPolicy(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// How the Clean old backups task decides what to remove. Administrator only.
+// (GET /settings/backups)
+func (_ Unimplemented) GetBackupRetention(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change the backup retention rule. Administrator only.
+// (PUT /settings/backups)
+func (_ Unimplemented) SetBackupRetention(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9318,6 +9359,50 @@ func (siw *ServerInterfaceWrapper) SetAuthPolicy(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// GetBackupRetention operation middleware
+func (siw *ServerInterfaceWrapper) GetBackupRetention(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBackupRetention(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetBackupRetention operation middleware
+func (siw *ServerInterfaceWrapper) SetBackupRetention(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetBackupRetention(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ExportSettings operation middleware
 func (siw *ServerInterfaceWrapper) ExportSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -10837,6 +10922,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/settings/auth", wrapper.SetAuthPolicy)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/settings/backups", wrapper.GetBackupRetention)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/settings/backups", wrapper.SetBackupRetention)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/export", wrapper.ExportSettings)

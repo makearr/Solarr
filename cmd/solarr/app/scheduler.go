@@ -23,6 +23,9 @@ const (
 	capacityScheduleCron           = "50 */6 * * *"  // every 6 hours
 	cacheMaintenanceScheduleCron   = "0 3 * * *"     // daily at 03:00
 	downloadWatchScheduleCron      = "*/5 * * * *"   // every 5 minutes
+	databaseMaintenanceCron        = "0 4 * * 0"     // Sundays at 04:00, clear of the other nightly tasks
+	backupScheduleCron             = "0 1 * * *"     // daily at 01:00
+	backupCleanupScheduleCron      = "30 1 * * *"    // daily at 01:30, after the backup
 )
 
 // buildTaskRegistry declares every periodic action this process has (ADR-59), in the order a
@@ -78,6 +81,18 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Key: "download_watch", Name: "Download folder watch", DefaultCadence: downloadWatchScheduleCron,
 		Tier: string(settings.TierNormal), Category: jobs.CategoryDownloads, Startup: jobs.StartupOff,
 		Enqueue: p.enqueueDownloadWatch,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "database_maintenance", Name: "Database maintenance", DefaultCadence: databaseMaintenanceCron,
+		Tier: string(settings.TierNormal), Category: jobs.CategoryMaintenance, Enqueue: p.enqueueDatabaseMaintenance,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "backup", Name: "Backup", DefaultCadence: backupScheduleCron,
+		Tier: string(settings.TierNormal), Category: jobs.CategoryMaintenance, Enqueue: p.enqueueBackup,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "backup_cleanup", Name: "Clean old backups", DefaultCadence: backupCleanupScheduleCron,
+		Tier: string(settings.TierNormal), Category: jobs.CategoryMaintenance, Enqueue: p.enqueueBackupCleanup,
 	})
 	return registry
 }

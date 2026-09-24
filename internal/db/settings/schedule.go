@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
 
 	"github.com/robfig/cron/v3"
 
@@ -121,6 +124,106 @@ func validateScheduleCadence(cadence string, now time.Time) config.Problems {
 			Path: "cadence", Value: cadence,
 			Expectation: "an expression that can actually fire, not one that parses but never matches (e.g. 30 February)",
 		}}
+	}
+	return nil
+}
+
+// ScheduleEntry is one task's stored overrides in the settings export; a nil field was never changed.
+type ScheduleEntry struct {
+	Cadences     []string `yaml:"cadences,omitempty"`
+	Enabled      *bool    `yaml:"enabled,omitempty"`
+	RunAtStartup *bool    `yaml:"run_at_startup,omitempty"`
+}
+
+var scheduleTaskKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+
+// scheduleOverrides collects every stored schedule.* policy by task; settings.db does not know
+// the registered tasks, so it exports what was changed rather than every task.
+func (s *Snapshot) scheduleOverrides() map[string]ScheduleEntry {
+	overrides := make(map[string]ScheduleEntry)
+	for key := range s.policy {
+		rest, found := strings.CutPrefix(key, "schedule.")
+		if !found {
+			continue
+		}
+		taskKey, field, found := strings.Cut(rest, ".")
+		if !found {
+			continue
+		}
+		entry := overrides[taskKey]
+		switch field {
+		case "cadence":
+			if s.policy[key] == "" {
+				continue
+			}
+			entry.Cadences = s.ScheduleCadences(taskKey, "")
+		case "enabled":
+			enabled := s.ScheduleEnabled(taskKey)
+			entry.Enabled = &enabled
+		case "run_at_startup":
+			run := s.ScheduleRunAtStartup(taskKey, false)
+			entry.RunAtStartup = &run
+		default:
+			continue
+		}
+		overrides[taskKey] = entry
+	}
+	if len(overrides) == 0 {
+		return nil
+	}
+	return overrides
+}
+
+// scheduleReference is a fixed instant to test "does this cadence ever fire" against, since a
+// document is validated without a clock.
+var scheduleReference = time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+func validateScheduleEntries(entries map[string]ScheduleEntry) config.Problems {
+	var problems config.Problems
+	for taskKey, entry := range entries {
+		path := "schedules." + taskKey
+		if !scheduleTaskKeyPattern.MatchString(taskKey) {
+			problems = append(problems, config.Problem{Path: path, Value: taskKey,
+				Expectation: "a task key: lower case letters, digits and underscores"})
+			continue
+		}
+		if entry.Cadences == nil {
+			continue
+		}
+		for _, problem := range validateScheduleCadences(entry.Cadences, scheduleReference) {
+			problem.Path = path + "." + problem.Path
+			problems = append(problems, problem)
+		}
+	}
+	return problems
+}
+
+// importSchedules writes each entry's overrides; a task the document leaves out keeps its own.
+func importSchedules(ctx context.Context, queries *settingsdb.Queries, cl clock.Clock,
+	entries map[string]ScheduleEntry,
+) error {
+	at := cl.Now().Unix()
+	for taskKey, entry := range entries {
+		values := make(map[string]string, 3)
+		if entry.Cadences != nil {
+			encoded, err := json.Marshal(entry.Cadences)
+			if err != nil {
+				return fmt.Errorf("schedules.%s: %w", taskKey, err)
+			}
+			values[scheduleCadenceKey(taskKey)] = string(encoded)
+		}
+		if entry.Enabled != nil {
+			values[scheduleEnabledKey(taskKey)] = strconv.FormatBool(*entry.Enabled)
+		}
+		if entry.RunAtStartup != nil {
+			values[scheduleStartupKey(taskKey)] = strconv.FormatBool(*entry.RunAtStartup)
+		}
+		for key, value := range values {
+			err := queries.SetInstanceSetting(ctx, settingsdb.SetInstanceSettingParams{Key: key, ValueJson: value, UpdatedAt: at})
+			if err != nil {
+				return fmt.Errorf("schedules.%s: %w", taskKey, err)
+			}
+		}
 	}
 	return nil
 }

@@ -2,11 +2,15 @@ package apiserver
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // BackupFileRow is one backup on disk.
@@ -74,4 +78,47 @@ func backupViews(rows []BackupFileRow) []gen.BackupFile {
 		}
 	}
 	return views
+}
+
+// GetBackupRetention answers the Clean old backups task's rule.
+func (s *Server) GetBackupRetention(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	retention := s.auth.Settings.Snapshot().BackupRetention()
+	writeJSON(w, s.logger, http.StatusOK, gen.BackupRetention{
+		Mode: gen.BackupRetentionMode(retention.Mode), KeepCount: retention.KeepCount, KeepDays: retention.KeepDays,
+	})
+}
+
+// SetBackupRetention changes the rule; it takes effect on the task's next run.
+func (s *Server) SetBackupRetention(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	var request gen.BackupRetention
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&request); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "expected a JSON object with mode, keep_count and keep_days")
+		return
+	}
+	err := s.auth.Registry.LookupAll(settings.KeyBackupRetention, settings.KeyBackupKeepCount, settings.KeyBackupKeepDays)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	retention := settings.BackupRetention{
+		Mode: settings.BackupRetentionMode(request.Mode), KeepCount: request.KeepCount, KeepDays: request.KeepDays,
+	}
+	if err := s.auth.Settings.SetBackupRetention(r.Context(), s.auth.Clock, retention); err != nil {
+		var problems config.Problems
+		if errors.As(err, &problems) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"The retention has problems", problems.Report("the backup retention", "Nothing was changed."))
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+	s.GetBackupRetention(w, r)
 }
