@@ -605,7 +605,8 @@ func (p *process) startServer(ctx context.Context) error {
 			Roots:      adapters.DrainRoots{Cache: p.cache}, Files: library.NewPhysical(p.library),
 			Identities: library.NewDesired(p.library), Works: library.NewWorks(p.library),
 			MoveJobs: library.NewMoveJobs(p.library), Queue: p.queue, Clock: clock.NewSystem(),
-		}},
+		}, Settings: p.cache},
+		NamingSchemes: adapters.NamingSchemes{},
 		// time.Local.String() reports "Local"; the name the operator set is the useful one.
 		Timezone: p.timezone,
 		Egress:   adapters.Egress{Prober: prober},

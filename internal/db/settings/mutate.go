@@ -438,58 +438,65 @@ func (c *Cache) SetCategoryNaming(ctx context.Context, categoryID int64, profile
 	}
 	if c.validateNaming != nil {
 		if err := c.validateNaming(category.MediaType, profile); err != nil {
-			return err
+			return fmt.Errorf("%w: %w", ErrInvalidNaming, err)
 		}
 	}
-	current, err := c.queries.GetCategory(ctx, categoryID)
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return writeCategoryNaming(ctx, queries, categoryID, profile)
+	})
+}
+
+// writeCategoryNaming is SetCategoryNaming's write, shared with Import: the library's own
+// profile is updated, or created and attached on first save; its formats are replaced.
+func writeCategoryNaming(
+	ctx context.Context, queries *settingsdb.Queries, categoryID int64, profile NamingProfile,
+) error {
+	current, err := queries.GetCategory(ctx, categoryID)
 	if err != nil {
 		return fmt.Errorf("settings: read category %d: %w", categoryID, err)
 	}
+	profileID := current.NamingProfileID.Int64
+	if current.NamingProfileID.Valid {
+		err := queries.UpdateNamingProfile(ctx, settingsdb.UpdateNamingProfileParams{
+			RenameFiles:              boolToInt(profile.RenameFiles),
+			ReplaceIllegalCharacters: boolToInt(profile.ReplaceIllegalCharacters),
+			ColonReplacement:         profile.ColonReplacement,
+			ID:                       profileID,
+		})
+		if err != nil {
+			return fmt.Errorf("settings: update naming profile %d: %w", profileID, err)
+		}
+	} else {
+		created, err := queries.CreateNamingProfile(ctx, settingsdb.CreateNamingProfileParams{
+			Name:                     fmt.Sprintf("library-%d", categoryID),
+			RenameFiles:              boolToInt(profile.RenameFiles),
+			ReplaceIllegalCharacters: boolToInt(profile.ReplaceIllegalCharacters),
+			ColonReplacement:         profile.ColonReplacement,
+		})
+		if err != nil {
+			return fmt.Errorf("settings: create naming profile for category %d: %w", categoryID, err)
+		}
+		profileID = created
+		err = queries.SetCategoryNamingProfile(ctx, settingsdb.SetCategoryNamingProfileParams{
+			NamingProfileID: sql.NullInt64{Int64: profileID, Valid: true}, ID: categoryID,
+		})
+		if err != nil {
+			return fmt.Errorf("settings: attach naming profile to category %d: %w", categoryID, err)
+		}
+	}
 
-	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
-		profileID := current.NamingProfileID.Int64
-		if current.NamingProfileID.Valid {
-			err := queries.UpdateNamingProfile(ctx, settingsdb.UpdateNamingProfileParams{
-				RenameFiles:              boolToInt(profile.RenameFiles),
-				ReplaceIllegalCharacters: boolToInt(profile.ReplaceIllegalCharacters),
-				ColonReplacement:         profile.ColonReplacement,
-				ID:                       profileID,
-			})
-			if err != nil {
-				return fmt.Errorf("settings: update naming profile %d: %w", profileID, err)
-			}
-		} else {
-			created, err := queries.CreateNamingProfile(ctx, settingsdb.CreateNamingProfileParams{
-				Name:                     fmt.Sprintf("library-%d", categoryID),
-				RenameFiles:              boolToInt(profile.RenameFiles),
-				ReplaceIllegalCharacters: boolToInt(profile.ReplaceIllegalCharacters),
-				ColonReplacement:         profile.ColonReplacement,
-			})
-			if err != nil {
-				return fmt.Errorf("settings: create naming profile for category %d: %w", categoryID, err)
-			}
-			profileID = created
-			err = queries.SetCategoryNamingProfile(ctx, settingsdb.SetCategoryNamingProfileParams{
-				NamingProfileID: sql.NullInt64{Int64: profileID, Valid: true}, ID: categoryID,
-			})
-			if err != nil {
-				return fmt.Errorf("settings: attach naming profile to category %d: %w", categoryID, err)
-			}
+	if err := queries.DeleteNamingFormats(ctx, profileID); err != nil {
+		return fmt.Errorf("settings: clear naming formats %d: %w", profileID, err)
+	}
+	for _, slot := range slices.Sorted(maps.Keys(profile.Formats)) {
+		err := queries.InsertNamingFormat(ctx, settingsdb.InsertNamingFormatParams{
+			NamingProfileID: profileID, Slot: slot, Template: profile.Formats[slot],
+		})
+		if err != nil {
+			return fmt.Errorf("settings: save naming format %s: %w", slot, err)
 		}
-
-		if err := queries.DeleteNamingFormats(ctx, profileID); err != nil {
-			return fmt.Errorf("settings: clear naming formats %d: %w", profileID, err)
-		}
-		for _, slot := range slices.Sorted(maps.Keys(profile.Formats)) {
-			err := queries.InsertNamingFormat(ctx, settingsdb.InsertNamingFormatParams{
-				NamingProfileID: profileID, Slot: slot, Template: profile.Formats[slot],
-			})
-			if err != nil {
-				return fmt.Errorf("settings: save naming format %s: %w", slot, err)
-			}
-		}
-		return nil
-	})
+	}
+	return nil
 }
 
 func int64PtrToNull(id *int64) sql.NullInt64 {

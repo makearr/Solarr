@@ -69,6 +69,20 @@ type CategoryEntry struct {
 	// album it finds that nobody asked for. Empty on import means the
 	// column's own default (monitored) applies.
 	MonitorDiscovered string `yaml:"monitor_discovered,omitempty"`
+	// Naming is absent for a library still on its media type's default.
+	Naming *NamingEntry `yaml:"naming,omitempty"`
+}
+
+// NamingEntry is a library's naming profile.
+type NamingEntry struct {
+	RenameFiles              bool              `yaml:"rename_files"`
+	ReplaceIllegalCharacters bool              `yaml:"replace_illegal_characters"`
+	ColonReplacement         string            `yaml:"colon_replacement"`
+	Formats                  map[string]string `yaml:"formats"`
+}
+
+func (e NamingEntry) profile() NamingProfile {
+	return NamingProfile(e)
 }
 
 // QualityProfileEntry is one ADR-40 profile. Rules and Upgrade stay opaque JSON
@@ -208,6 +222,12 @@ func (c *Cache) Export() Document {
 		}
 		if category.LanguageProfileID != nil {
 			entry.LanguageProfile = languageNameByID[*category.LanguageProfileID]
+		}
+		if category.Naming != nil {
+			entry.Naming = &NamingEntry{
+				RenameFiles: category.Naming.RenameFiles, ReplaceIllegalCharacters: category.Naming.ReplaceIllegalCharacters,
+				ColonReplacement: category.Naming.ColonReplacement, Formats: category.Naming.Formats,
+			}
 		}
 		for _, attachment := range attachments {
 			if attachment.CategoryID != category.ID {
@@ -468,7 +488,21 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 // which conservatively refuses a document setting a non-empty allow_cidrs
 // rather than risk a lockout it cannot verify.
 func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.Addr, document Document) error {
-	if problems := document.Validate(callerAddress); len(problems) > 0 {
+	problems := document.Validate(callerAddress)
+	if c.validateNaming != nil {
+		for index, category := range document.Categories {
+			if category.Naming == nil {
+				continue
+			}
+			if err := c.validateNaming(category.MediaType, category.Naming.profile()); err != nil {
+				problems = append(problems, config.Problem{
+					Path: fmt.Sprintf("categories[%d].naming", index), Value: category.MediaType + "/" + category.Name,
+					Expectation: err.Error(),
+				})
+			}
+		}
+	}
+	if len(problems) > 0 {
 		return problems
 	}
 
@@ -633,6 +667,11 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 					ID:                id,
 				}); err != nil {
 					return fmt.Errorf("category %q language profile: %w", key, err)
+				}
+			}
+			if category.Naming != nil {
+				if err := writeCategoryNaming(ctx, queries, id, category.Naming.profile()); err != nil {
+					return fmt.Errorf("category %q naming: %w", key, err)
 				}
 			}
 		}

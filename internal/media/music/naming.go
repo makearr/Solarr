@@ -122,6 +122,15 @@ func NamingFor(profile *settings.NamingProfile) Naming {
 	}
 }
 
+// DefaultNamingProfile is NamingFor(nil) in stored form: what a never-saved library uses.
+func DefaultNamingProfile() settings.NamingProfile {
+	return settings.NamingProfile{
+		RenameFiles: true, ReplaceIllegalCharacters: naming.DefaultOptions.ReplaceIllegalCharacters,
+		ColonReplacement: string(naming.DefaultOptions.ColonReplacement),
+		Formats:          NamingScheme.Default().Formats,
+	}
+}
+
 // ValidateNaming is settings.NamingValidator for music.
 func ValidateNaming(profile settings.NamingProfile) error {
 	problems := []error{NamingScheme.Validate(profile.Formats)}

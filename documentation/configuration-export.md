@@ -26,6 +26,10 @@ address the same way `PATCH /network` already is (Invariant 89) — an import wi
 caller address to check (anything but the HTTP endpoint) refuses conservatively rather than
 risk a lockout it cannot verify.
 
+A category's `naming` block is present only once the library's naming has been saved; absent,
+the library uses its media type's default. On import it is checked by the media type's own
+naming scheme (every slot, every token), the same check a save through the interface gets.
+
 ## Stable output
 
 Ordering is by natural key, not by id, so exporting twice produces an identical file and a diff

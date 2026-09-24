@@ -42,6 +42,14 @@ type MoveJobLister interface {
 // two shapes actually need to diverge.
 type RenameStarter interface {
 	StartRename(ctx context.Context, rootFolderID int64, preview bool) (DrainPlanResult, error)
+	// StartLibraryRename renames one library's works on every root it uses, one plan per root.
+	StartLibraryRename(ctx context.Context, categoryID int64, preview bool) ([]RootRename, error)
+}
+
+// RootRename is one root's plan within a library rename.
+type RootRename struct {
+	RootFolderID int64
+	Plan         DrainPlanResult
 }
 
 // DrainPlanResult is what one drain computation answered, in apiserver's own

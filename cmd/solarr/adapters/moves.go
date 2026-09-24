@@ -81,6 +81,27 @@ func movePlanResult(plan mover.MovePlan, accepted bool, moveJobID int64) apiserv
 // internal/media/music.RenameStart.
 type Rename struct {
 	Config music.RenameConfig
+	// Settings answers which roots a library uses.
+	Settings *settings.Cache
+}
+
+// StartLibraryRename renames the library's works on each of its roots.
+func (a Rename) StartLibraryRename(
+	ctx context.Context, categoryID int64, preview bool,
+) ([]apiserver.RootRename, error) {
+	var renames []apiserver.RootRename
+	for _, root := range a.Settings.Snapshot().RootFoldersForCategory(categoryID) {
+		plan, jobID, warnings, err := music.RenameStart(ctx, a.Config, root.ID, &categoryID, preview)
+		if err != nil {
+			return nil, err
+		}
+		result := movePlanResult(plan, jobID != 0, jobID)
+		for i, move := range result.Moves {
+			result.Moves[i].Warnings = warnings[move.MediaObjectID]
+		}
+		renames = append(renames, apiserver.RootRename{RootFolderID: root.ID, Plan: result})
+	}
+	return renames, nil
 }
 
 func (a Rename) StartRename(ctx context.Context, rootFolderID int64, preview bool) (apiserver.DrainPlanResult, error) {

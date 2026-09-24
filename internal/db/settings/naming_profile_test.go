@@ -75,8 +75,8 @@ func TestSetCategoryNaming_RefusedByTheValidator(t *testing.T) {
 	})
 
 	err := cache.SetCategoryNaming(t.Context(), category.ID, musicNaming("{Episode Title}"))
-	if !errors.Is(err, refusal) {
-		t.Fatalf("err = %v, want the validator's refusal", err)
+	if !errors.Is(err, refusal) || !errors.Is(err, settings.ErrInvalidNaming) {
+		t.Fatalf("err = %v, want the validator's refusal as ErrInvalidNaming", err)
 	}
 	if sawMediaType != "music" {
 		t.Errorf("validator saw media type %q, want music", sawMediaType)

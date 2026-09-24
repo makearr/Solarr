@@ -310,6 +310,15 @@ const (
 	MoveJobStateRUNNING MoveJobState = "RUNNING"
 )
 
+// Defines values for NamingSettingsColonReplacement.
+const (
+	NamingSettingsColonReplacementDash           NamingSettingsColonReplacement = "dash"
+	NamingSettingsColonReplacementDelete         NamingSettingsColonReplacement = "delete"
+	NamingSettingsColonReplacementSmart          NamingSettingsColonReplacement = "smart"
+	NamingSettingsColonReplacementSpaceDash      NamingSettingsColonReplacement = "space_dash"
+	NamingSettingsColonReplacementSpaceDashSpace NamingSettingsColonReplacement = "space_dash_space"
+)
+
 // Defines values for PackDetectedFrom.
 const (
 	PackDetectedFromStructure        PackDetectedFrom = "structure"
@@ -1717,6 +1726,25 @@ type LibraryLevelPage struct {
 	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
+// LibraryNaming defines model for LibraryNaming.
+type LibraryNaming struct {
+	Examples []NamingExample `json:"examples"`
+
+	// IsDefault True until the library's naming is first saved.
+	IsDefault bool `json:"is_default"`
+
+	// Naming One library's naming, Lidarr's shape.
+	Naming NamingSettings `json:"naming"`
+
+	// Scheme What a media type declares about naming.
+	Scheme NamingScheme `json:"scheme"`
+}
+
+// LibraryRenamePlan defines model for LibraryRenamePlan.
+type LibraryRenamePlan struct {
+	Roots []RootRenamePlan `json:"roots"`
+}
+
 // LogRecord One captured log line.
 type LogRecord struct {
 	// Attrs The record's own attributes, rendered as key=value in the order they were logged.
@@ -1785,6 +1813,68 @@ type MoveJobReason string
 
 // MoveJobState defines model for MoveJob.State.
 type MoveJobState string
+
+// NamingExample defines model for NamingExample.
+type NamingExample struct {
+	Label string `json:"label"`
+	Path  string `json:"path"`
+}
+
+// NamingPreset defines model for NamingPreset.
+type NamingPreset struct {
+	Formats map[string]string `json:"formats"`
+	Name    string            `json:"name"`
+}
+
+// NamingPreview defines model for NamingPreview.
+type NamingPreview struct {
+	Examples []NamingExample `json:"examples"`
+
+	// Problems Why the settings would be refused on save; empty when they would not.
+	Problems []string `json:"problems"`
+}
+
+// NamingScheme What a media type declares about naming.
+type NamingScheme struct {
+	// Presets The first is the media type's default.
+	Presets []NamingPreset `json:"presets"`
+	Slots   []NamingSlot   `json:"slots"`
+	Tokens  []NamingToken  `json:"tokens"`
+}
+
+// NamingSettings One library's naming, Lidarr's shape.
+type NamingSettings struct {
+	ColonReplacement NamingSettingsColonReplacement `json:"colon_replacement"`
+
+	// Formats A template per slot key the media type declares.
+	Formats map[string]string `json:"formats"`
+
+	// RenameFiles Lidarr's "Rename Tracks". Off, a file keeps the name it arrived with.
+	RenameFiles bool `json:"rename_files"`
+
+	// ReplaceIllegalCharacters Replace characters some filesystems refuse; off, they are removed.
+	ReplaceIllegalCharacters bool `json:"replace_illegal_characters"`
+}
+
+// NamingSettingsColonReplacement defines model for NamingSettings.ColonReplacement.
+type NamingSettingsColonReplacement string
+
+// NamingSlot defines model for NamingSlot.
+type NamingSlot struct {
+	Help  string `json:"help"`
+	Key   string `json:"key"`
+	Label string `json:"label"`
+}
+
+// NamingToken defines model for NamingToken.
+type NamingToken struct {
+	Example string `json:"example"`
+	Group   string `json:"group"`
+	Help    string `json:"help"`
+
+	// Spelling As typed, e.g. "{Artist Name}".
+	Spelling string `json:"spelling"`
+}
 
 // NetworkSettings ADR-58's own port resolution, proxy and IP whitelist. The whitelist can only ever deny -- it never authenticates and never grants (Invariant 89) -- and neither it nor the proxy does anything until its own enable flag is on.
 type NetworkSettings struct {
@@ -2200,6 +2290,13 @@ type RootNearReserve struct {
 	RootFolderId int64  `json:"root_folder_id"`
 }
 
+// RootRenamePlan defines model for RootRenamePlan.
+type RootRenamePlan struct {
+	// Plan What one drainRootFolder call computed -- a preview, a refusal, or an accepted and enqueued plan (ADR-51).
+	Plan         DrainPlan `json:"plan"`
+	RootFolderId int64     `json:"root_folder_id"`
+}
+
 // Schedule One registered periodic task (ADR-59), its effective settings and run-state.
 type Schedule struct {
 	// Cadence Effective cadence -- a stored override if one exists, default_cadence otherwise.
@@ -2544,6 +2641,11 @@ type CreateCategoryJSONBody struct {
 	MediaType    string `json:"media_type"`
 	Name         string `json:"name"`
 	PriorityRank *int64 `json:"priority_rank,omitempty"`
+}
+
+// RenameLibraryJSONBody defines parameters for RenameLibrary.
+type RenameLibraryJSONBody struct {
+	Preview *bool `json:"preview,omitempty"`
 }
 
 // AttachRootFolderToCategoryJSONBody defines parameters for AttachRootFolderToCategory.
@@ -2946,6 +3048,15 @@ type CreateCategoryJSONRequestBody CreateCategoryJSONBody
 // UpdateCategoryJSONRequestBody defines body for UpdateCategory for application/json ContentType.
 type UpdateCategoryJSONRequestBody = CategoryWrite
 
+// SetLibraryNamingJSONRequestBody defines body for SetLibraryNaming for application/json ContentType.
+type SetLibraryNamingJSONRequestBody = NamingSettings
+
+// PreviewLibraryNamingJSONRequestBody defines body for PreviewLibraryNaming for application/json ContentType.
+type PreviewLibraryNamingJSONRequestBody = NamingSettings
+
+// RenameLibraryJSONRequestBody defines body for RenameLibrary for application/json ContentType.
+type RenameLibraryJSONRequestBody RenameLibraryJSONBody
+
 // AttachRootFolderToCategoryJSONRequestBody defines body for AttachRootFolderToCategory for application/json ContentType.
 type AttachRootFolderToCategoryJSONRequestBody AttachRootFolderToCategoryJSONBody
 
@@ -3185,6 +3296,18 @@ type ServerInterface interface {
 	// Rename a category, reprioritise it, or change its default quality/ language profile or monitor-discovered policy. Administrator only. `media_type` never changes -- it is identity, not policy.
 	// (PATCH /categories/{id})
 	UpdateCategory(w http.ResponseWriter, r *http.Request, id int64)
+	// A library's naming, its media type's naming scheme, and rendered examples. Administrator only.
+	// (GET /categories/{id}/naming)
+	GetLibraryNaming(w http.ResponseWriter, r *http.Request, id int64)
+	// Save a library's naming. Administrator only.
+	// (PUT /categories/{id}/naming)
+	SetLibraryNaming(w http.ResponseWriter, r *http.Request, id int64)
+	// Render examples for unsaved naming, as the screen is edited. Administrator only.
+	// (POST /categories/{id}/naming/examples)
+	PreviewLibraryNaming(w http.ResponseWriter, r *http.Request, id int64)
+	// Preview or apply the library's naming to its files, on every root it uses. Administrator only.
+	// (POST /categories/{id}/rename)
+	RenameLibrary(w http.ResponseWriter, r *http.Request, id int64)
 	// Put a root folder into a category. Administrator only.
 	// (POST /categories/{id}/rootfolders)
 	AttachRootFolderToCategory(w http.ResponseWriter, r *http.Request, id int64)
@@ -3743,6 +3866,30 @@ func (_ Unimplemented) GetCategory(w http.ResponseWriter, r *http.Request, id in
 // Rename a category, reprioritise it, or change its default quality/ language profile or monitor-discovered policy. Administrator only. `media_type` never changes -- it is identity, not policy.
 // (PATCH /categories/{id})
 func (_ Unimplemented) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A library's naming, its media type's naming scheme, and rendered examples. Administrator only.
+// (GET /categories/{id}/naming)
+func (_ Unimplemented) GetLibraryNaming(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Save a library's naming. Administrator only.
+// (PUT /categories/{id}/naming)
+func (_ Unimplemented) SetLibraryNaming(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Render examples for unsaved naming, as the screen is edited. Administrator only.
+// (POST /categories/{id}/naming/examples)
+func (_ Unimplemented) PreviewLibraryNaming(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Preview or apply the library's naming to its files, on every root it uses. Administrator only.
+// (POST /categories/{id}/rename)
+func (_ Unimplemented) RenameLibrary(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5333,6 +5480,138 @@ func (siw *ServerInterfaceWrapper) UpdateCategory(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetLibraryNaming operation middleware
+func (siw *ServerInterfaceWrapper) GetLibraryNaming(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLibraryNaming(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetLibraryNaming operation middleware
+func (siw *ServerInterfaceWrapper) SetLibraryNaming(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetLibraryNaming(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewLibraryNaming operation middleware
+func (siw *ServerInterfaceWrapper) PreviewLibraryNaming(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewLibraryNaming(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RenameLibrary operation middleware
+func (siw *ServerInterfaceWrapper) RenameLibrary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RenameLibrary(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9619,6 +9898,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/categories/{id}", wrapper.UpdateCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/naming", wrapper.GetLibraryNaming)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/categories/{id}/naming", wrapper.SetLibraryNaming)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/categories/{id}/naming/examples", wrapper.PreviewLibraryNaming)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/categories/{id}/rename", wrapper.RenameLibrary)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/rootfolders", wrapper.AttachRootFolderToCategory)

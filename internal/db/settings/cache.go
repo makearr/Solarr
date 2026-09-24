@@ -19,6 +19,9 @@ import (
 // ErrInUse reports a configuration entity that something still references (Invariant 41).
 var ErrInUse = errors.New("settings: entity is still referenced")
 
+// ErrInvalidNaming wraps a naming profile's media type refusing it.
+var ErrInvalidNaming = errors.New("settings: invalid naming")
+
 // ErrNotFound reports an id that is not in settings.db.
 var ErrNotFound = errors.New("settings: not found")
 

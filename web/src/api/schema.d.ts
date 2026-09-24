@@ -2325,6 +2325,70 @@ export interface paths {
         patch: operations["updateCategory"];
         trace?: never;
     };
+    "/categories/{id}/naming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** A library's naming, its media type's naming scheme, and rendered examples. Administrator only. */
+        get: operations["getLibraryNaming"];
+        /**
+         * Save a library's naming. Administrator only.
+         * @description Validated on write against the media type's naming scheme: every slot present, every template compiling, every token declared. All problems are reported at once and nothing is saved.
+         */
+        put: operations["setLibraryNaming"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{id}/naming/examples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Render examples for unsaved naming, as the screen is edited. Administrator only. */
+        post: operations["previewLibraryNaming"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{id}/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview or apply the library's naming to its files, on every root it uses. Administrator only.
+         * @description Lidarr's "apply to library". One rename per root folder, each through the move engine (ADR-51), so read-only roots refuse unless they allow renaming. Only works in this library are touched.
+         */
+        post: operations["renameLibrary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/rootfolders": {
         parameters: {
             query?: never;
@@ -2873,6 +2937,68 @@ export interface components {
             proxy_bypass: string[];
             allow_cidrs_enabled: boolean;
             allow_cidrs: string[];
+        };
+        /** @description One library's naming, Lidarr's shape. */
+        NamingSettings: {
+            /** @description Lidarr's "Rename Tracks". Off, a file keeps the name it arrived with. */
+            rename_files: boolean;
+            /** @description Replace characters some filesystems refuse; off, they are removed. */
+            replace_illegal_characters: boolean;
+            /** @enum {string} */
+            colon_replacement: "delete" | "dash" | "space_dash" | "space_dash_space" | "smart";
+            /** @description A template per slot key the media type declares. */
+            formats: {
+                [key: string]: string;
+            };
+        };
+        NamingSlot: {
+            key: string;
+            label: string;
+            help: string;
+        };
+        NamingToken: {
+            /** @description As typed, e.g. "{Artist Name}". */
+            spelling: string;
+            group: string;
+            example: string;
+            help: string;
+        };
+        NamingPreset: {
+            name: string;
+            formats: {
+                [key: string]: string;
+            };
+        };
+        /** @description What a media type declares about naming. */
+        NamingScheme: {
+            slots: components["schemas"]["NamingSlot"][];
+            tokens: components["schemas"]["NamingToken"][];
+            /** @description The first is the media type's default. */
+            presets: components["schemas"]["NamingPreset"][];
+        };
+        NamingExample: {
+            label: string;
+            path: string;
+        };
+        LibraryNaming: {
+            naming: components["schemas"]["NamingSettings"];
+            /** @description True until the library's naming is first saved. */
+            is_default: boolean;
+            scheme: components["schemas"]["NamingScheme"];
+            examples: components["schemas"]["NamingExample"][];
+        };
+        NamingPreview: {
+            examples: components["schemas"]["NamingExample"][];
+            /** @description Why the settings would be refused on save; empty when they would not. */
+            problems: string[];
+        };
+        LibraryRenamePlan: {
+            roots: components["schemas"]["RootRenamePlan"][];
+        };
+        RootRenamePlan: {
+            /** Format: int64 */
+            root_folder_id: number;
+            plan: components["schemas"]["DrainPlan"];
         };
         /** @description What one drainRootFolder call computed -- a preview, a refusal, or an accepted and enqueued plan (ADR-51). */
         DrainPlan: {
@@ -8309,6 +8435,122 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getLibraryNaming: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The library's naming. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryNaming"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setLibraryNaming: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NamingSettings"];
+            };
+        };
+        responses: {
+            /** @description The saved naming. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryNaming"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    previewLibraryNaming: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NamingSettings"];
+            };
+        };
+        responses: {
+            /** @description The examples, or why they cannot be rendered. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NamingPreview"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    renameLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @default false */
+                    preview?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description One plan per root folder. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryRenamePlan"];
+                };
+            };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
