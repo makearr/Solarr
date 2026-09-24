@@ -18,17 +18,15 @@ const StrategyEmbeddedTag = "embedded-tag"
 // the cheapest strategy that can identify a file the library has never seen.
 const OrderEmbeddedTag = 20
 
-// Confidence in an embedded MBID. It is high but not certain: the tag says what a
-// tagger believed, and a mis-tagged file is a real thing. Reserving the top of the
-// range keeps a hash match on a file we have already identified strictly better.
+// How likely an embedded MBID is to be right (2026-09-24: confidence is a calibrated likelihood;
+// PrecedenceAsserted, not these numbers, is what puts a tag above any guess). A mis-tag is rare.
 const (
 	// confidenceReleaseGroup is a work identified directly by its own MBID.
-	confidenceReleaseGroup = 0.95
-	// confidenceFromRelease is a work inferred from the edition's MBID, which needs
-	// a MusicBrainz lookup to resolve and so is worth less on its own.
-	confidenceFromRelease = 0.85
+	confidenceReleaseGroup = 0.98
+	// confidenceFromRelease names the work through its release, one unambiguous hop.
+	confidenceFromRelease = 0.97
 	// confidenceFromRecording is the weakest: a recording appears on many releases.
-	confidenceFromRecording = 0.70
+	confidenceFromRecording = 0.80
 )
 
 // TagSource supplies the tags for a file. It exists so the chain never spawns a
@@ -79,6 +77,7 @@ func (m MBIDIdentifier) Identify(ctx context.Context, file model.FileRef) ([]mod
 	return []model.Identification{{
 		Strategy:   StrategyEmbeddedTag,
 		ExternalID: &model.ExternalID{Provider: provider, ExternalID: external, Confidence: 1.0},
+		Precedence: model.PrecedenceAsserted,
 		Confidence: confidence,
 		Evidence:   evidenceFor(mbids),
 	}}, nil

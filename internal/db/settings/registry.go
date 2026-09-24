@@ -161,9 +161,9 @@ func NewDefaultRegistry() *Registry {
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyImportAutoCommitConfidence, Kind: KindFloat, Tier: TierNormal,
-		Name: "Import commit line",
-		HelpText: "The confidence a unit's identification must clear to import " +
-			"automatically rather than wait in the manual queue (ADR-48).",
+		Name: "Identification confidence",
+		HelpText: "How likely an identification must be to be right before a scan or an import " +
+			"acts on it without asking; below it, the file waits for review.",
 		Default: "0.9",
 	})
 	registry.MustRegister(SettingDef{

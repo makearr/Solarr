@@ -99,7 +99,7 @@ func TestManualCommitter_CommitHeldPlacesAQueuedUnitUsingItsTopCandidate(t *test
 		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
 
 	catID := int64(7)
-	job := fx.job(t, 0.97) // above confidenceReleaseGroup (0.95): queues, not commits
+	job := fx.job(t, 0.99) // above a release-group tag (0.98): queues, not commits
 	if err := fx.run(t, job, importjob.Payload{
 		SourcePath: root, Origin: library.ImportOriginManual, CategoryID: &catID,
 	}); err != nil {
@@ -200,7 +200,7 @@ func TestManualCommitter_CommitHeldRefusesWithNoSessionCategory(t *testing.T) {
 	fx.tool.byPath[filepath.Join(root, "Artist/Album/01.flac")] = mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
 	fx.tool.byPath[filepath.Join(root, "Artist/Album/02.flac")] = mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
 
-	job := fx.job(t, 0.97) // queues; no CategoryID on the payload
+	job := fx.job(t, 0.99) // queues; no CategoryID on the payload
 	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestManualCommitter_CommitHeldRefusesWhenTheUnitChangedSinceInspection(t *t
 	fx.tool.byPath[filepath.Join(root, "Artist/Album/02.flac")] = mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
 
 	catID := int64(7)
-	job := fx.job(t, 0.97)
+	job := fx.job(t, 0.99)
 	if err := fx.run(t, job, importjob.Payload{
 		SourcePath: root, Origin: library.ImportOriginManual, CategoryID: &catID,
 	}); err != nil {
@@ -272,7 +272,7 @@ func TestManualCommitter_CommitHeldPlacesTheCorrectSiblingWhenUnitsShareADirecto
 		mediatool.Tags{"musicbrainz_releasegroupid": otherReleaseGroupMBID}
 
 	catID := int64(7)
-	job := fx.job(t, 0.97) // above confidenceReleaseGroup (0.95): both queue
+	job := fx.job(t, 0.99) // above confidenceReleaseGroup (0.95): both queue
 	if err := fx.run(t, job, importjob.Payload{
 		SourcePath: root, Origin: library.ImportOriginManual, CategoryID: &catID,
 	}); err != nil {
@@ -329,7 +329,7 @@ func TestManualCommitter_CommitHeldRefusesAReveredSession(t *testing.T) {
 	fx.tool.byPath[filepath.Join(root, "Artist/Album/02.flac")] = mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
 
 	catID := int64(7)
-	job := fx.job(t, 0.97)
+	job := fx.job(t, 0.99)
 	if err := fx.run(t, job, importjob.Payload{
 		SourcePath: root, Origin: library.ImportOriginManual, CategoryID: &catID,
 	}); err != nil {

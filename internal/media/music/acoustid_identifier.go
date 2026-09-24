@@ -103,6 +103,7 @@ func (a AcoustIDIdentifier) Identify(ctx context.Context, f model.FileRef) ([]mo
 				// audio matched, which is exactly what this rung is claiming.
 				// It is never 1.0 the way an embedded MBID is, because this is
 				// a guess with a confidence (ADR-24).
+				Precedence: model.PrecedenceSearched,
 				Confidence: match.Score,
 				ExternalID: &model.ExternalID{
 					Provider: ProviderReleaseGroup, ExternalID: group, Confidence: match.Score,

@@ -48,7 +48,7 @@ func searchIdentify(t *testing.T, tags mediatool.Tags, relPath string, searcher 
 // exactly one identification, confident enough to clear Consumer's
 // DefaultAmbiguityThreshold (0.6) but still below MBIDIdentifier's weakest
 // embedded-tag confidence (0.70) -- a search match must never outrank a real MBID.
-func TestSearchIdentify_ACleanMatchResolvesAboveAmbiguityThresholdButBelowAnyTagConfidence(t *testing.T) {
+func TestSearchIdentify_ACleanMatchResolvesAndRanksBelowAnyTag(t *testing.T) {
 	searcher := &fakeSearcher{matches: []musicbrainz.ReleaseGroupMatch{
 		{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg1", Title: "The Sezo Siluko", FirstReleaseDate: "1978"},
 			ArtistCredit: "Vutu Doci"},
@@ -65,11 +65,11 @@ func TestSearchIdentify_ACleanMatchResolvesAboveAmbiguityThresholdButBelowAnyTag
 	if found[0].ExternalID.Provider != music.ProviderReleaseGroup || found[0].ExternalID.ExternalID != "rg1" {
 		t.Errorf("ExternalID = %+v, want the matched release group", found[0].ExternalID)
 	}
-	if found[0].Confidence < 0.6 {
-		t.Errorf("Confidence = %.2f, want it to clear the 0.6 ambiguity threshold", found[0].Confidence)
+	if found[0].Confidence < 0.9 {
+		t.Errorf("Confidence = %.2f, want a clean match to clear the 0.90 threshold", found[0].Confidence)
 	}
-	if found[0].Confidence >= 0.70 {
-		t.Errorf("Confidence = %.2f, want it strictly below any embedded-tag confidence", found[0].Confidence)
+	if found[0].Precedence != model.PrecedenceSearched {
+		t.Errorf("Precedence = %d, want searched: below any embedded tag by kind, not by number", found[0].Precedence)
 	}
 }
 

@@ -20,15 +20,13 @@ import (
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
-// DefaultAcceptThreshold and DefaultAmbiguityThreshold tune the ADR-24 chain.
-// MBIDIdentifier's confidences (0.95/0.85/0.70, identifier.go) all clear
-// AcceptThreshold, so a tagged file never pays for a search; SearchIdentifier's
-// ceiling (0.65, search_identifier.go) stays below it, so a search match never
-// stops the chain early either -- it can only be the final answer, not a shortcut
-// past a strategy that might still find a real MBID.
+// DefaultAcceptThreshold stops the chain once a candidate is that likely right; a release-group
+// or release tag clears it, so a tagged file never pays for a search. DefaultAmbiguityThreshold
+// is the one identification threshold (import.auto_commit_confidence's default), for scan and
+// import alike since confidence became a calibrated likelihood (2026-09-24).
 const (
 	DefaultAcceptThreshold    = 0.9
-	DefaultAmbiguityThreshold = 0.6
+	DefaultAmbiguityThreshold = 0.9
 )
 
 // Categories answers the one policy question discovery needs: what a scan
@@ -79,6 +77,7 @@ type Consumer struct {
 	desired          *library.Desired
 	categories       Categories
 	defaultProfileID int64
+	threshold        func() float64
 }
 
 // ConsumerConfig is what a Consumer needs. Every field is required except
@@ -107,8 +106,11 @@ type ConsumerConfig struct {
 	Clock        clock.Clock
 	// Chain tunes RunChain (model.ChainConfig). The zero value takes the package
 	// defaults above.
-	Chain  model.ChainConfig
-	Logger *slog.Logger
+	Chain model.ChainConfig
+	// Threshold is the configured identification threshold, read per batch so a change applies
+	// without a restart; nil keeps Chain's AmbiguityThreshold.
+	Threshold func() float64
+	Logger    *slog.Logger
 	// Desired, Categories and DefaultProfileID together turn on section 19.6's
 	// scan-time discovery. DefaultProfileID is used when a category has no
 	// quality profile of its own configured yet (todo 4.3's own gap).
@@ -133,7 +135,7 @@ func NewConsumer(config ConsumerConfig) Consumer {
 		fsys: config.FS, physical: config.Physical, identity: config.Identity,
 		unidentified: config.Unidentified, attempts: config.Attempts, search: config.Search, albums: config.Albums,
 		fingerprints: config.Fingerprints, acoustID: config.AcoustID,
-		clock: config.Clock, chain: chain, logger: logger,
+		clock: config.Clock, chain: chain, threshold: config.Threshold, logger: logger,
 		desired: config.Desired, categories: config.Categories, defaultProfileID: config.DefaultProfileID,
 	}
 }
@@ -384,7 +386,7 @@ func (c Consumer) fingerprintPass(
 		}
 		return append(pending, named...)
 	}
-	return append(pending, applyAlbumDecision(out, PassFingerprint, named, decision)...)
+	return append(pending, applyAlbumDecision(out, PassFingerprint, named, decision.Within(c.chainConfig().AmbiguityThreshold))...)
 }
 
 // namesFromAudio fingerprints every still-unidentified file in one call and asks AcoustID
@@ -554,6 +556,16 @@ func recordedTrack(one scan.Observed, recording acoustid.Recording, decoded time
 	return local
 }
 
+// chainConfig is the chain's thresholds, with the configured identification threshold when one
+// is wired.
+func (c Consumer) chainConfig() model.ChainConfig {
+	chain := c.chain
+	if c.threshold != nil {
+		chain.AmbiguityThreshold = c.threshold()
+	}
+	return chain
+}
+
 // runChain runs the ADR-24 chain per pending file, answering what is still unresolved; a file
 // whose strategy failed to run is dropped unqueued, so a transient failure never reads as "no candidates".
 func (c Consumer) runChain(
@@ -564,7 +576,7 @@ func (c Consumer) runChain(
 		one := out.observed[file.index]
 		mediaObjectID := out.mediaObjectIDs[file.index]
 		fileRef := model.FileRef{MediaObjectID: &mediaObjectID, RootFolderID: &out.rootFolderID, RelPath: one.File.RelPath}
-		result, err := model.RunChain(ctx, identifiers, fileRef, c.chain)
+		result, err := model.RunChain(ctx, identifiers, fileRef, c.chainConfig())
 		if err != nil {
 			c.logger.Warn("identify failed", slog.String("path", one.File.RelPath), slog.Any("error", err))
 			out.note(file.index, library.AttemptPass{Pass: pass, Outcome: PassOutcomeFailed})
@@ -619,7 +631,8 @@ func (c Consumer) identifyAlbums(ctx context.Context, out *batchResult, files []
 			pending = append(pending, group...)
 			continue
 		}
-		pending = append(pending, applyAlbumDecision(out, PassAlbumMatch, group, decision)...)
+		pending = append(pending, applyAlbumDecision(out, PassAlbumMatch, group,
+			decision.Within(c.chainConfig().AmbiguityThreshold))...)
 	}
 	return pending
 }

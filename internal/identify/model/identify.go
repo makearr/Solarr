@@ -41,9 +41,28 @@ type Identification struct {
 	// this package does no such lookup.
 	WorkID     *int64
 	ExternalID *ExternalID
+	// Precedence is what kind of evidence this is, and alone decides that an assertion
+	// outranks a guess; Confidence is how likely it is to be right, on one calibrated scale
+	// that a single threshold is compared with (2026-09-24).
+	Precedence Precedence
 	Confidence float64
 	Evidence   []MatchEvidence
 }
+
+// Precedence ranks kinds of evidence, strongest last so the zero value is the weakest.
+type Precedence int
+
+// The kinds of evidence, weakest first.
+const (
+	// PrecedenceInferred is borrowed from a neighbour, such as a folder sibling.
+	PrecedenceInferred Precedence = iota
+	// PrecedenceSearched is a lookup by what the file says or sounds like.
+	PrecedenceSearched
+	// PrecedenceMatched is a whole structure fitting, such as a folder against a tracklist.
+	PrecedenceMatched
+	// PrecedenceAsserted is an identifier the file or a person states outright.
+	PrecedenceAsserted
+)
 
 // Identifier is one identification strategy, registered per media type. Core owns
 // the chain and the ordering (RunChain); a strategy only ever answers "what do I
