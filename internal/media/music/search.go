@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
@@ -117,12 +118,30 @@ type SearchTerms struct {
 	Album  string
 }
 
-// searchTerms is one query's own artist/album/year parameters -- Newznab's
-// dedicated music-search function (ADR-43's caps already confirm real
-// indexers implement it) takes these directly, sidestepping the still-open
-// category-id mapping (private/questions.md) entirely for this pass.
+// searchTerms is one t=music query: structured artist/album/year in Extra, or free text in Query.
+// Both are sent, as Lidarr does: NZBgeek through Prowlarr answers only the text form (2026-09-25).
 type searchTerms struct {
+	Query string
 	Extra map[string]string
+}
+
+// musicTerms is one album's structured and text query; an unknown artist drops the structured one.
+func musicTerms(artist, album, year string) []searchTerms {
+	var terms []searchTerms
+	if artist != "" {
+		extra := map[string]string{"artist": artist, "album": album}
+		if year != "" {
+			extra["year"] = year
+		}
+		terms = append(terms, searchTerms{Extra: extra})
+	}
+	words := []string{}
+	for _, word := range []string{artist, album, year} {
+		if word != "" {
+			words = append(words, word)
+		}
+	}
+	return append(terms, searchTerms{Query: strings.Join(words, " ")})
 }
 
 // SearchItem runs the pipeline for one album-level desired item: build its
@@ -172,7 +191,7 @@ func (s Search) SearchItemWithTerms(
 	target := targetIdentity(detail, item, artistName, aliases)
 	tiers := buildSearchTiers(artistName, detail.Work, aliases)
 	if custom != nil {
-		tiers = [][]searchTerms{{{Extra: map[string]string{"artist": custom.Artist, "album": custom.Album}}}}
+		tiers = [][]searchTerms{musicTerms(custom.Artist, custom.Album, "")}
 		// The typed terms are the identity now; the work's year and ids would judge them against the old name.
 		target.Identity = match.Identity{
 			Title: combinedTitle(custom.Artist, custom.Album), AlternateTitles: []string{target.Title},
@@ -183,15 +202,17 @@ func (s Search) SearchItemWithTerms(
 	for tierIndex, terms := range tiers {
 		var accepted []acceptedFind
 		for _, conn := range indexers {
+			seen := map[string]bool{}
 			for _, term := range terms {
 				raws, searchErr := conn.Client.Search(ctx, indexer.SearchRequest{
-					Function: "music-search", Extra: term.Extra, Limit: candidateSearchResultLimit,
+					Function: "music", Query: term.Query, Extra: term.Extra, Limit: candidateSearchResultLimit,
 				})
 				if searchErr != nil {
 					result.IndexerErrors = append(result.IndexerErrors,
 						IndexerSearchError{IndexerID: conn.ID, Error: searchErr.Error()})
-					continue
+					break // a failing indexer is not asked again within the tier
 				}
+				raws = unseen(raws, seen)
 				raws, err = s.withoutBlocklisted(ctx, conn.ID, raws, at)
 				if err != nil {
 					return result, fmt.Errorf("music: search item %d: %w", itemID, err)
@@ -214,6 +235,18 @@ func (s Search) SearchItemWithTerms(
 		return result, nil
 	}
 	return result, nil
+}
+
+// unseen drops a release an earlier query of the same tier already returned from this indexer.
+func unseen(raws []indexer.RawItem, seen map[string]bool) []indexer.RawItem {
+	kept := raws[:0:0]
+	for _, raw := range raws {
+		if !seen[raw.GUID] {
+			seen[raw.GUID] = true
+			kept = append(kept, raw)
+		}
+	}
+	return kept
 }
 
 // withoutBlocklisted drops a release blocklisted by guid on this indexer before it is evaluated
@@ -399,13 +432,10 @@ func primaryArtistName(detail library.WorkDetail) string {
 // when the work has no recorded year, rather than repeating tier 0's own
 // query for no reason.
 func buildSearchTiers(artistName string, work librarydb.Work, aliases []string) [][]searchTerms {
-	tiers := [][]searchTerms{{{Extra: map[string]string{"artist": artistName, "album": work.CanonicalTitle}}}}
+	tiers := [][]searchTerms{musicTerms(artistName, work.CanonicalTitle, "")}
 
 	if work.Year.Valid {
-		tiers = append(tiers, []searchTerms{{Extra: map[string]string{
-			"artist": artistName, "album": work.CanonicalTitle,
-			"year": strconv.FormatInt(work.Year.Int64, 10),
-		}}})
+		tiers = append(tiers, musicTerms(artistName, work.CanonicalTitle, strconv.FormatInt(work.Year.Int64, 10)))
 	}
 
 	if len(aliases) > 0 {
@@ -413,9 +443,9 @@ func buildSearchTiers(artistName string, work librarydb.Work, aliases []string) 
 		if len(limited) > maxAliasSearchTerms {
 			limited = limited[:maxAliasSearchTerms]
 		}
-		terms := make([]searchTerms, len(limited))
-		for i, alias := range limited {
-			terms[i] = searchTerms{Extra: map[string]string{"artist": artistName, "album": alias}}
+		var terms []searchTerms
+		for _, alias := range limited {
+			terms = append(terms, musicTerms(artistName, alias, "")...)
 		}
 		tiers = append(tiers, terms)
 	}
