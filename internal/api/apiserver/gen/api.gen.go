@@ -2458,6 +2458,18 @@ type SettingDefinitionKind string
 // SettingDefinitionTier ADR-26's visibility tier.
 type SettingDefinitionTier string
 
+// SettingsImportResult defines model for SettingsImportResult.
+type SettingsImportResult struct {
+	Warnings []SettingsImportWarning `json:"warnings"`
+}
+
+// SettingsImportWarning defines model for SettingsImportWarning.
+type SettingsImportWarning struct {
+	Message    string  `json:"message"`
+	Path       string  `json:"path"`
+	Suggestion *string `json:"suggestion,omitempty"`
+}
+
 // SetupStatus defines model for SetupStatus.
 type SetupStatus struct {
 	HasRootFolder bool `json:"has_root_folder"`

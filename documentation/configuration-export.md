@@ -45,6 +45,11 @@ error at a time turns a five-mistake file into five round trips.
 Nothing is written unless all of it is valid. A partial import leaves settings in a state the
 user never chose and cannot easily undo (architecture section 14.4).
 
+A key the format does not have is the one exception: it is not a problem but a **warning**. What
+is known is applied, and the response lists every unknown key with its path and the nearest
+valid one (answered 2026-09-24). Silence was the worst option -- a `root_folders:` nested under a
+category once imported with a 204 and attached nothing.
+
 ## Merge, not replace
 
 Applying a document twice changes nothing the second time — it is how a configuration is kept in

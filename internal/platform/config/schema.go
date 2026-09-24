@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -92,4 +93,56 @@ func summarise(value any) string {
 	default:
 		return fmt.Sprint(typed)
 	}
+}
+
+// UnknownKeysIn reports every key a decoded YAML document has that shape does not define, with
+// the nearest valid one: nested structs, lists of structs and pointers are followed, and a map's
+// keys are free. Used for documents other than config.yml, such as a settings restore.
+func UnknownKeysIn(document any, shape reflect.Type) Problems {
+	var problems Problems
+	var walk func(path string, node any, shape reflect.Type)
+	walk = func(path string, node any, shape reflect.Type) {
+		for shape.Kind() == reflect.Pointer {
+			shape = shape.Elem()
+		}
+		switch shape.Kind() {
+		case reflect.Struct:
+			fields, ok := node.(map[string]any)
+			if !ok {
+				return
+			}
+			byName := map[string]reflect.Type{}
+			var valid []string
+			for index := range shape.NumField() {
+				if name := yamlName(shape.Field(index)); name != "" {
+					byName[name] = shape.Field(index).Type
+					valid = append(valid, name)
+				}
+			}
+			for _, key := range slices.Sorted(maps.Keys(fields)) {
+				child := key
+				if path != "" {
+					child = path + "." + key
+				}
+				fieldType, known := byName[key]
+				if !known {
+					problem := newProblem(child, summarise(fields[key]), "unknown key")
+					problem.Suggestion = nearestKey(key, valid)
+					problems = append(problems, problem)
+					continue
+				}
+				walk(child, fields[key], fieldType)
+			}
+		case reflect.Slice:
+			items, ok := node.([]any)
+			if !ok {
+				return
+			}
+			for index, item := range items {
+				walk(fmt.Sprintf("%s[%d]", path, index), item, shape.Elem())
+			}
+		}
+	}
+	walk("", document, shape)
+	return problems
 }

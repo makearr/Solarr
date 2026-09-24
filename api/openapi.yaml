@@ -1443,15 +1443,20 @@ paths:
         turns a five-mistake file into five round trips. Nothing is written
         unless all of it is valid -- a partial import leaves settings in a state
         the user never chose. Merges on natural keys, so applying the same
-        document twice changes nothing the second time.
+        document twice changes nothing the second time. A key the document
+        format does not have is not an error: what is known is applied, and
+        every unknown key comes back as a warning with the nearest valid one.
       requestBody:
         required: true
         content:
           application/yaml:
             schema: { type: string }
       responses:
-        "204":
+        "200":
           description: Applied.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SettingsImportResult" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
@@ -5476,6 +5481,22 @@ components:
         token:
           type: string
           description: Absent when the caller has no feed.
+
+    SettingsImportResult:
+      type: object
+      required: [warnings]
+      properties:
+        warnings:
+          type: array
+          items: { $ref: "#/components/schemas/SettingsImportWarning" }
+
+    SettingsImportWarning:
+      type: object
+      required: [path, message]
+      properties:
+        path: { type: string }
+        message: { type: string }
+        suggestion: { type: string }
 
     CalendarEntry:
       type: object
