@@ -13,18 +13,16 @@ Identifiers are absent too. Rows are matched on natural keys — a category by m
 name, a root folder by path — so a document from one install applies to another, where the
 numbers would mean different things.
 
-The `settings` block carries every todo-4.14-registered scalar setting (auth, import,
-network, cache, priority — ADR-21, ADR-26) as one flat, always-populated group on export.
-It is optional on import: a document that omits it changes nothing about those settings, so
-a hand-edited file need not repeat them all just to add a category. `import_transfer_ladder`
-follows the same rule one level down -- absent means "leave the stored order alone", since an
-empty list would otherwise be indistinguishable from "place nothing". `import_rename_on_import`
-is always written on export, like every other flag in the block; absent on import it keeps
-whatever is stored. When present, a
-non-empty `network_allow_cidrs` is checked against the importing request's own remote
-address the same way `PATCH /network` already is (Invariant 89) — an import with no real
-caller address to check (anything but the HTTP endpoint) refuses conservatively rather than
-risk a lockout it cannot verify.
+The `settings` block carries every registered scalar setting as one flat group, always written
+whole on export. On import **only the keys a document names change**; the rest keep their stored
+values, so a hand-written block of one key cannot switch sign-in off. Keys that only mean
+something together -- the network group, the cache budget, the priority weights -- are asked for
+by name when a document names some of them but not all. `import_transfer_ladder` absent keeps the
+stored order. A non-empty `network_allow_cidrs` is checked against the importing request's own
+remote address the same way `PATCH /network` is (Invariant 89) -- an import with no real caller
+address to check refuses conservatively rather than risk a lockout it cannot verify.
+
+The Backups page downloads the document and restores one (2026-09-24).
 
 A category's `naming` block is present only once the library's naming has been saved; absent,
 the library uses its media type's default. On import it is checked by the media type's own

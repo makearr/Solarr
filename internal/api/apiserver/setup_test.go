@@ -538,3 +538,21 @@ func TestImportSettings_WarnsAboutKeysItDoesNotKnow(t *testing.T) {
 		t.Error("the known part of the document was not applied")
 	}
 }
+
+// Through the real handler: a one-key settings block changes that key and nothing else.
+func TestImportSettings_AOneKeySettingsBlockKeepsSignIn(t *testing.T) {
+	fixture := newSetupFixture(t, stubRoots{freeBytes: 900 << 30})
+	claim := fixture.post(t, "/api/v1/setup/admin", `{"username":"avs","password":"correct horse battery"}`)
+	if claim.Code != http.StatusCreated {
+		t.Fatalf("claim: %d", claim.Code)
+	}
+	document := "version: 1\nsettings:\n  import_auto_commit_confidence: 0.85\n"
+	imported := fixture.authed(t, http.MethodPost, "/api/v1/settings/import", document, claim.Result().Cookies())
+	if imported.Code != http.StatusOK {
+		t.Fatalf("import: %d (%s)", imported.Code, imported.Body)
+	}
+	snapshot := fixture.cache.Snapshot()
+	if !snapshot.AuthRequired() || snapshot.ImportAutoCommitConfidence() != 0.85 {
+		t.Errorf("auth %v confidence %v, want sign-in kept and 0.85", snapshot.AuthRequired(), snapshot.ImportAutoCommitConfidence())
+	}
+}
