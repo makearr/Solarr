@@ -126,6 +126,24 @@ func (a Acquisitions) ListActive(ctx context.Context) ([]Acquisition, error) {
 	return acquisitions, nil
 }
 
+// SetPath records where the client says a download's files are, re-read on every poll.
+func (a Acquisitions) SetPath(ctx context.Context, id int64, path string, at int64) error {
+	return a.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetAcquisitionPath(ctx, librarydb.SetAcquisitionPathParams{
+			DownloadDir: nullString(path), UpdatedAt: at, ID: id,
+		})
+	})
+}
+
+// SetFingerprint records the client's own name and size for a download, when first seen.
+func (a Acquisitions) SetFingerprint(ctx context.Context, id int64, fingerprint string, at int64) error {
+	return a.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetAcquisitionFingerprint(ctx, librarydb.SetAcquisitionFingerprintParams{
+			ClientFingerprint: nullString(fingerprint), UpdatedAt: at, ID: id,
+		})
+	})
+}
+
 // SetState transitions an acquisition's own state machine (section 10.3).
 func (a Acquisitions) SetState(ctx context.Context, id int64, state, lastError string, at int64) error {
 	err := a.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {

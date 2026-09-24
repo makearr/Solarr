@@ -23,6 +23,7 @@ const (
 	capacityScheduleCron           = "50 */6 * * *"  // every 6 hours
 	cacheMaintenanceScheduleCron   = "0 3 * * *"     // daily at 03:00
 	downloadWatchScheduleCron      = "*/5 * * * *"   // every 5 minutes
+	downloadPollScheduleCron       = "* * * * *"     // every minute, as Lidarr checks its clients
 	databaseMaintenanceCron        = "0 4 * * 0"     // Sundays at 04:00, clear of the other nightly tasks
 	backupScheduleCron             = "0 1 * * *"     // daily at 01:00
 	backupCleanupScheduleCron      = "30 1 * * *"    // daily at 01:30, after the backup
@@ -88,6 +89,11 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Key: "download_watch", Name: "Download folder watch", DefaultCadence: downloadWatchScheduleCron,
 		Tier: string(settings.TierNormal), Category: jobs.CategoryDownloads, Startup: jobs.StartupOff,
 		Enqueue: p.enqueueDownloadWatch,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "download_poll", Name: "Check downloads", DefaultCadence: downloadPollScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryDownloads, Startup: jobs.StartupOn,
+		Enqueue: p.enqueuePoll,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "database_maintenance", Name: "Database maintenance", DefaultCadence: databaseMaintenanceCron,

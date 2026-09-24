@@ -1,41 +1,37 @@
 package sabnzbd
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
 	"net/url"
 )
 
-// AddURLRequest is one NZB submission (ADR-57's own acquire.send). name is
-// the NZB's own download URL, not a display name -- SABnzbd fetches it
-// itself rather than Solarr downloading the artefact first.
-type AddURLRequest struct {
-	NZBURL   string
+// AddFileRequest is one NZB uploaded to SABnzbd (ADR-57's acquire.send).
+type AddFileRequest struct {
+	// Name is the job's name in SABnzbd: the release title, never a URL.
+	Name     string
+	NZB      []byte
 	Category string
-	// Priority follows SABnzbd's own scale: -2 paused, -1 low, 0 normal,
-	// 1 high, 2 force. Zero (Normal) is the useful default, so this is not
-	// a pointer -- a caller wanting Paused must say so explicitly.
+	// Priority follows SABnzbd's scale: -2 paused, -1 low, 0 normal, 1 high, 2 force.
 	Priority int
 }
 
-// addURLResponse mirrors SABnzbd's own mode=addurl JSON shape.
-type addURLResponse struct {
+type addResponse struct {
 	Status bool     `json:"status"`
 	NzoIDs []string `json:"nzo_ids"`
 	Error  string   `json:"error"`
 }
 
-// AddURL submits one NZB by URL -- this is the dispatch action ADR-57's own
-// acquire.send performs, and the one call in this package with a real,
-// irreversible side effect on the configured downloader. It exists so the
-// candidate pipeline has somewhere to call once it is wired up; nothing in
-// this codebase calls it yet, and it must never be exercised against a real
-// downloader without the operator's own explicit go-ahead for that specific
-// call (this project's own standing instruction, not a technical
-// limitation here).
-func (c Client) AddURL(ctx context.Context, request AddURLRequest) (clientRef string, err error) {
+// AddFile uploads the NZB Solarr fetched itself, as Lidarr does: SABnzbd never has to reach the
+// indexer, and the job is named after the release from the start.
+func (c Client) AddFile(ctx context.Context, request AddFileRequest) (clientRef string, err error) {
 	params := url.Values{}
-	params.Set("name", request.NZBURL)
+	params.Set("nzbname", request.Name)
 	if request.Category != "" {
 		params.Set("cat", request.Category)
 	}
@@ -43,20 +39,47 @@ func (c Client) AddURL(ctx context.Context, request AddURLRequest) (clientRef st
 		params.Set("priority", fmt.Sprintf("%d", request.Priority))
 	}
 
-	var parsed addURLResponse
-	requestURL := c.apiURL("addurl", params)
-	if err := c.getJSON(ctx, requestURL, &parsed); err != nil {
-		return "", fmt.Errorf("sabnzbd: add url: %w", err)
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	part, err := form.CreateFormFile("name", request.Name+".nzb")
+	if err != nil {
+		return "", fmt.Errorf("sabnzbd: add file: %w", err)
+	}
+	if _, err := part.Write(request.NZB); err != nil {
+		return "", fmt.Errorf("sabnzbd: add file: %w", err)
+	}
+	if err := form.Close(); err != nil {
+		return "", fmt.Errorf("sabnzbd: add file: %w", err)
+	}
+
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, c.apiURL("addfile", params), &body)
+	if err != nil {
+		return "", fmt.Errorf("sabnzbd: add file: %w", err)
+	}
+	httpRequest.Header.Set("Content-Type", form.FormDataContentType())
+	response, err := c.http.Do(ctx, httpRequest)
+	if err != nil {
+		return "", fmt.Errorf("sabnzbd: add file: %w", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+
+	var parsed addResponse
+	raw, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	if err != nil {
+		return "", fmt.Errorf("sabnzbd: add file: read response: %w", err)
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return "", fmt.Errorf("sabnzbd: add file: decode response: %w", err)
 	}
 	if !parsed.Status {
 		message := parsed.Error
 		if message == "" {
 			message = "SABnzbd refused the request"
 		}
-		return "", fmt.Errorf("sabnzbd: add url: %s", message)
+		return "", fmt.Errorf("sabnzbd: add file: %s", message)
 	}
 	if len(parsed.NzoIDs) == 0 {
-		return "", fmt.Errorf("sabnzbd: add url: accepted but returned no nzo_id")
+		return "", fmt.Errorf("sabnzbd: add file: accepted but returned no nzo_id")
 	}
 	return parsed.NzoIDs[0], nil
 }

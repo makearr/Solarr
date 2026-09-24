@@ -2,50 +2,53 @@ package sabnzbd_test
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
 )
 
-// TestAddURL_SendsParamsAndReturnsTheClientRef exercises AddURL entirely
-// against a fake transport -- this is ADR-57's own acquire.send, the one
-// call in this package with a real side effect on a real downloader, and
-// this test suite never points it at anything but the fake.
-func TestAddURL_SendsParamsAndReturnsTheClientRef(t *testing.T) {
+// The NZB is uploaded as a file and the job named after the release, never after a URL.
+func TestAddFile_UploadsTheNZBUnderTheReleaseName(t *testing.T) {
 	transport := &recordingTransport{body: `{"status": true, "nzo_ids": ["SABnzbd_nzo_abc123"]}`}
 	client := sabnzbd.NewClient(newTestClient(t, transport), "http://sabnzbd.local:8080", "test-api-key")
 
-	clientRef, err := client.AddURL(context.Background(), sabnzbd.AddURLRequest{
-		NZBURL: "https://indexer.example/getnzb/abc123.nzb", Category: "music", Priority: 1,
+	clientRef, err := client.AddFile(context.Background(), sabnzbd.AddFileRequest{
+		Name: "Heka-Watermark-1988-FLAC", NZB: []byte("<nzb/>"), Category: "music", Priority: 1,
 	})
 	if err != nil {
-		t.Fatalf("AddURL: %v", err)
+		t.Fatalf("AddFile: %v", err)
 	}
 	if clientRef != "SABnzbd_nzo_abc123" {
 		t.Errorf("clientRef = %q, want SABnzbd_nzo_abc123", clientRef)
 	}
 
-	query := transport.requested[0].URL.Query()
-	if query.Get("mode") != "addurl" {
-		t.Errorf("mode = %q, want addurl", query.Get("mode"))
+	request := transport.requested[0]
+	query := request.URL.Query()
+	got := [5]string{request.Method, query.Get("mode"), query.Get("nzbname"), query.Get("cat"), query.Get("priority")}
+	want := [5]string{"POST", "addfile", "Heka-Watermark-1988-FLAC", "music", "1"}
+	if got != want {
+		t.Errorf("request = %q, want %q", got, want)
 	}
-	if query.Get("name") != "https://indexer.example/getnzb/abc123.nzb" {
-		t.Errorf("name = %q, want the NZB URL", query.Get("name"))
+	file, header, err := request.FormFile("name")
+	if err != nil {
+		t.Fatalf("FormFile: %v", err)
 	}
-	if query.Get("cat") != "music" {
-		t.Errorf("cat = %q, want music", query.Get("cat"))
+	content, err := io.ReadAll(file)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if query.Get("priority") != "1" {
-		t.Errorf("priority = %q, want 1", query.Get("priority"))
+	if string(content) != "<nzb/>" || header.Filename != "Heka-Watermark-1988-FLAC.nzb" {
+		t.Errorf("uploaded %q as %q, want the NZB as Heka-Watermark-1988-FLAC.nzb", content, header.Filename)
 	}
 }
 
-func TestAddURL_RefusalSurfacesSABnzbdsOwnError(t *testing.T) {
-	transport := &recordingTransport{body: `{"status": false, "error": "NZB file not found"}`}
+func TestAddFile_RefusalSurfacesSABnzbdsOwnError(t *testing.T) {
+	transport := &recordingTransport{body: `{"status": false, "error": "NZB file not valid"}`}
 	client := sabnzbd.NewClient(newTestClient(t, transport), "http://sabnzbd.local:8080", "")
 
-	_, err := client.AddURL(context.Background(), sabnzbd.AddURLRequest{NZBURL: "https://indexer.example/gone.nzb"})
-	if err == nil {
-		t.Fatal("AddURL succeeded, want the refusal surfaced")
+	_, err := client.AddFile(context.Background(), sabnzbd.AddFileRequest{Name: "x", NZB: []byte("junk")})
+	if err == nil || err.Error() != "sabnzbd: add file: NZB file not valid" {
+		t.Fatalf("err = %v, want the refusal surfaced", err)
 	}
 }

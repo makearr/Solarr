@@ -211,3 +211,10 @@ ORDER BY iue.id;
 
 -- name: DeleteImportUnitExtras :exec
 DELETE FROM import_unit_extra WHERE unit_id = ?;
+
+-- The newest import a download's poll started, to follow it to IMPORTED.
+-- name: GetLatestImportSessionForAcquisition :one
+SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
+       units_total, units_committed, units_queued, bytes_imported, extract_dir,
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
+FROM import_session WHERE acquisition_id = ? ORDER BY id DESC LIMIT 1;

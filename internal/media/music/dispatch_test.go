@@ -3,22 +3,25 @@ package music_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
 	"testing"
 
-	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
+	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/media/music"
 )
 
-// fakeSabnzbdSender answers a canned client ref (or error) to every AddURL
-// call, recording what it was asked to submit.
+// fakeSabnzbdSender answers a canned client ref (or error) to every Add, recording what it was
+// asked to send; the rest of download.Client is not needed here.
 type fakeSabnzbdSender struct {
+	download.Client
 	clientRef string
 	err       error
-	requests  []sabnzbd.AddURLRequest
+	requests  []download.AddRequest
 }
 
-func (f *fakeSabnzbdSender) AddURL(_ context.Context, request sabnzbd.AddURLRequest) (string, error) {
+func (f *fakeSabnzbdSender) Add(_ context.Context, request download.AddRequest) (string, error) {
 	f.requests = append(f.requests, request)
 	return f.clientRef, f.err
 }
@@ -29,6 +32,9 @@ func (env *searchTestEnv) dispatch(downloaders []music.DownloaderConn) music.Dis
 		Settings: env.settings,
 		Downloaders: func(context.Context) ([]music.DownloaderConn, error) {
 			return downloaders, nil
+		},
+		Fetch: func(_ context.Context, indexerID int64, link string) ([]byte, error) {
+			return []byte(fmt.Sprintf("nzb from indexer %d at %s", indexerID, link)), nil
 		},
 	}
 }
@@ -75,8 +81,13 @@ func TestDispatch_SendCreatesAQueuedAcquisition(t *testing.T) {
 	if acquisition.DownloaderID != 5 {
 		t.Errorf("DownloaderID = %d, want 5", acquisition.DownloaderID)
 	}
-	if len(sender.requests) != 1 || sender.requests[0].NZBURL != detail.ReleaseCandidate.DownloadURL {
-		t.Errorf("sender.requests = %+v, want one request for %s", sender.requests, detail.ReleaseCandidate.DownloadURL)
+	// The NZB is fetched from the listing indexer and sent under the release's own name.
+	want := []download.AddRequest{{
+		Name: "Nosi Zada-Discovery-2001-FLAC-GROUP", File: []byte("nzb from indexer 1 at https://indexer.example/nzb/1"),
+		Category: "Discovery-category",
+	}}
+	if !reflect.DeepEqual(sender.requests, want) {
+		t.Errorf("sender.requests = %+v, want %+v", sender.requests, want)
 	}
 }
 
@@ -93,7 +104,7 @@ func TestDispatch_RefusesANonAcceptDecision(t *testing.T) {
 		t.Errorf("err = %v, want ErrDecisionNotAccepted", err)
 	}
 	if len(sender.requests) != 0 {
-		t.Error("AddURL was called for a REJECTed decision -- it must never be")
+		t.Error("Add was called for a REJECTed decision -- it must never be")
 	}
 }
 
@@ -140,7 +151,7 @@ func TestDispatch_RefusesASecondSendWhileTheFirstIsInFlight(t *testing.T) {
 	}
 }
 
-func TestDispatch_DoesNotRecordAnAcquisitionWhenAddURLFails(t *testing.T) {
+func TestDispatch_DoesNotRecordAnAcquisitionWhenAddFails(t *testing.T) {
 	env := newSearchTestEnv(t)
 	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
 	detail := env.recordDecision(t, item.ID, "ACCEPT")
@@ -150,7 +161,7 @@ func TestDispatch_DoesNotRecordAnAcquisitionWhenAddURLFails(t *testing.T) {
 		{ID: 5, Protocol: "usenet", Client: sender},
 	}).Send(t.Context(), item.ID, detail.Decision.ID, env.clock.Now())
 	if err == nil {
-		t.Fatal("Send succeeded despite AddURL failing")
+		t.Fatal("Send succeeded despite Add failing")
 	}
 
 	active, err := env.acquisitions.ListActive(t.Context())
@@ -159,5 +170,26 @@ func TestDispatch_DoesNotRecordAnAcquisitionWhenAddURLFails(t *testing.T) {
 	}
 	if len(active) != 0 {
 		t.Errorf("active acquisitions = %+v, want none recorded when the client refused the job", active)
+	}
+}
+
+// An NZB that cannot be fetched is never sent, and nothing is recorded as acquired.
+func TestDispatch_SendsNothingWhenTheReleaseCannotBeFetched(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	detail := env.recordDecision(t, item.ID, "ACCEPT")
+	sender := &fakeSabnzbdSender{clientRef: "nzo-123"}
+	dispatch := env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: sender}})
+	dispatch.Fetch = func(context.Context, int64, string) ([]byte, error) { return nil, errors.New("410 gone") }
+
+	if _, err := dispatch.Send(t.Context(), item.ID, detail.Decision.ID, env.clock.Now()); err == nil {
+		t.Fatal("Send succeeded without the release file")
+	}
+	active, err := env.acquisitions.ListActive(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sender.requests) != 0 || len(active) != 0 {
+		t.Errorf("sent %d, recorded %d; want nothing sent and nothing recorded", len(sender.requests), len(active))
 	}
 }

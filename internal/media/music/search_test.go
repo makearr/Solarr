@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -207,8 +208,8 @@ func TestSearchItem_ExactTierAcceptsAMatchingRelease(t *testing.T) {
 	if result.Decisions[0].ReleaseCandidate.Protocol != "usenet" {
 		t.Errorf("Protocol = %q, want usenet for a newznab connection", result.Decisions[0].ReleaseCandidate.Protocol)
 	}
-	if len(searcher.requests) != 1 {
-		t.Errorf("%d requests, want exactly 1 -- tier 0 alone should have found this", len(searcher.requests))
+	if len(searcher.requests) != 2 {
+		t.Errorf("%d requests, want tier 0's structured and text query only", len(searcher.requests))
 	}
 
 	// The decision is queryable back through the repository, not just the
@@ -245,8 +246,8 @@ func TestSearchItem_WidensToTheYearTierWhenExactFindsNothing(t *testing.T) {
 	if result.TierUsed == nil || *result.TierUsed != 1 {
 		t.Fatalf("TierUsed = %v, want tier 1 (+year) once tier 0 found nothing", result.TierUsed)
 	}
-	if calls != 2 {
-		t.Errorf("indexer called %d times, want 2 (tier 0 then tier 1)", calls)
+	if calls != 4 {
+		t.Errorf("indexer called %d times, want 4 (structured and text, tier 0 then tier 1)", calls)
 	}
 }
 
@@ -579,10 +580,15 @@ func TestSearchItemWithTerms_SearchesThePersonsOwnTerms(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SearchItemWithTerms: %v", err)
 	}
-	if len(searcher.requests) != 1 || searcher.requests[0].Extra["album"] != "Trax on da Rocks" {
-		t.Errorf("requests = %+v, want one search for the typed album", searcher.requests)
+	want := []indexer.SearchRequest{
+		{Function: "music", Extra: map[string]string{"artist": "Dekotu Bangalter", "album": "Trax on da Rocks"}, Limit: 20},
+		{Function: "music", Query: "Dekotu Bangalter Trax on da Rocks", Limit: 20},
 	}
+	if !reflect.DeepEqual(searcher.requests, want) {
+		t.Errorf("requests = %+v, want %+v", searcher.requests, want)
+	}
+	// Both queries returned the same guid: one decision, not two.
 	if len(result.Decisions) != 1 {
-		t.Errorf("%d decisions, want the release matching the typed terms", len(result.Decisions))
+		t.Errorf("%d decisions, want the release matching the typed terms once", len(result.Decisions))
 	}
 }

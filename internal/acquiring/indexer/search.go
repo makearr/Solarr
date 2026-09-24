@@ -10,14 +10,8 @@ import (
 	"time"
 )
 
-// SearchRequest is one query's own parameters. Function names one of
-// Newznab's own search modes ("search", "tv-search", "movie-search",
-// "music-search", "book-search", "audio-search") -- this package has no
-// opinion on which one a caller should use for a given media type, only how
-// to send whichever is chosen. Extra carries function-specific parameters
-// (music-search's own artist/album/label/track/year/genre, for instance) --
-// kept generic here rather than hardcoded, since indexer knows nothing
-// about music specifically (ADR-23).
+// SearchRequest is one t=<Function> query: "search", "tvsearch", "movie", "music", "book".
+// Caps name them differently (music-search); the t= value is not the caps element name.
 type SearchRequest struct {
 	Function   string
 	Query      string

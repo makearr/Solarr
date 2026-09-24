@@ -1122,6 +1122,22 @@ func (q *Queries) RemoveFromBlocklist(ctx context.Context, id int64) error {
 	return err
 }
 
+const setAcquisitionFingerprint = `-- name: SetAcquisitionFingerprint :exec
+UPDATE acquisition SET client_fingerprint = ?, updated_at = ? WHERE id = ?
+`
+
+type SetAcquisitionFingerprintParams struct {
+	ClientFingerprint sql.NullString
+	UpdatedAt         int64
+	ID                int64
+}
+
+// The client's own name and size, recorded when first seen (section 10.9's fingerprint).
+func (q *Queries) SetAcquisitionFingerprint(ctx context.Context, arg SetAcquisitionFingerprintParams) error {
+	_, err := q.db.ExecContext(ctx, setAcquisitionFingerprint, arg.ClientFingerprint, arg.UpdatedAt, arg.ID)
+	return err
+}
+
 const setAcquisitionPath = `-- name: SetAcquisitionPath :exec
 UPDATE acquisition SET download_dir = ?, updated_at = ? WHERE id = ?
 `

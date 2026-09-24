@@ -1,0 +1,20 @@
+package indexer
+
+import (
+	"context"
+	"errors"
+	"fmt"
+)
+
+// Fetch downloads the file a search result links to (an NZB), so the download client never has
+// to reach the indexer itself -- Lidarr's way, and the indexer's own egress and rate limit apply.
+func (c Client) Fetch(ctx context.Context, link string) ([]byte, error) {
+	body, err := c.getBody(ctx, link)
+	if err != nil {
+		return nil, fmt.Errorf("indexer: fetch release: %w", err)
+	}
+	if len(body) == 0 {
+		return nil, errors.New("indexer: fetch release: empty response")
+	}
+	return body, nil
+}

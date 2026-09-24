@@ -97,6 +97,7 @@ type Job struct {
 	logger   *slog.Logger
 	// housekeeping is optional.
 	housekeeping Housekeeping
+	onSwept      func(context.Context)
 
 	// include decides which files are worth probing. Nil takes everything.
 	include func(relPath string) bool
@@ -115,6 +116,8 @@ type Config struct {
 	Include  func(relPath string) bool
 	// Housekeeping is optional.
 	Housekeeping Housekeeping
+	// OnSwept is optional: told after every sweep of a root, so derived counts catch up at once.
+	OnSwept func(context.Context)
 }
 
 // NewJob builds the handler.
@@ -135,6 +138,7 @@ func NewJob(config Config) *Job {
 		include:  config.Include,
 
 		housekeeping: config.Housekeeping,
+		onSwept:      config.OnSwept,
 	}
 }
 
@@ -212,6 +216,9 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		if err := j.housekeeping.AfterSweep(ctx, root, payload.CategoryID, outcome); err != nil {
 			j.logger.Warn("scan housekeeping failed", slog.Int64("root_folder_id", root.ID), slog.Any("error", err))
 		}
+	}
+	if j.onSwept != nil {
+		j.onSwept(ctx)
 	}
 	return nil
 }

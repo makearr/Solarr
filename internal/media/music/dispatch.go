@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
+	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 )
@@ -25,22 +25,17 @@ var ErrDecisionNotAccepted = errors.New("music: dispatch: decision is not ACCEPT
 // configured, for instance.
 var ErrNoDownloaderForProtocol = errors.New("music: dispatch: no enabled downloader for this candidate's protocol")
 
-// SabnzbdSender is what Dispatch needs from a downloader connection --
-// AddURL's own signature (internal/acquiring/sabnzbd.Client already
-// satisfies it), ADR-57's acquire.send and the one call in this whole
-// pipeline with a real, irreversible side effect on a real download client.
-type SabnzbdSender interface {
-	AddURL(ctx context.Context, request sabnzbd.AddURLRequest) (string, error)
-}
-
 // DownloaderConn is one configured, enabled download client ready to
 // dispatch to -- building the client (credentials, protocol) is the
 // caller's own job, the same split IndexerConn already keeps for indexers.
 type DownloaderConn struct {
 	ID       int64
 	Protocol string // "usenet" | "torrent" | "ddl" (ADR-46) -- only usenet has a sender today
-	Client   SabnzbdSender
+	Client   download.Client
 }
+
+// ReleaseFetcher downloads a release's file (an NZB) from the indexer that listed it.
+type ReleaseFetcher func(ctx context.Context, indexerID int64, link string) ([]byte, error)
 
 // DownloaderSource resolves the currently configured, enabled downloaders
 // fresh on every dispatch -- the same "ask, don't cache" discipline
@@ -58,6 +53,7 @@ type Dispatch struct {
 	Desired      library.Desired
 	Settings     *settings.Cache
 	Downloaders  DownloaderSource
+	Fetch        ReleaseFetcher
 }
 
 // Send dispatches one decision, previously recorded against itemID by
@@ -91,8 +87,12 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 		category = found.Name
 	}
 
-	clientRef, err := downloader.Client.AddURL(ctx, sabnzbd.AddURLRequest{
-		NZBURL: detail.ReleaseCandidate.DownloadURL, Category: category,
+	file, err := d.Fetch(ctx, detail.ReleaseCandidate.IndexerID, detail.ReleaseCandidate.DownloadURL)
+	if err != nil {
+		return library.Acquisition{}, fmt.Errorf("music: dispatch: fetch release: %w", err)
+	}
+	clientRef, err := downloader.Client.Add(ctx, download.AddRequest{
+		Name: detail.ReleaseCandidate.Title, File: file, Category: category,
 	})
 	if err != nil {
 		return library.Acquisition{}, fmt.Errorf("music: dispatch: %w", err)

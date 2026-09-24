@@ -238,6 +238,8 @@ type Querier interface {
 	GetGroupReputation(ctx context.Context, releaseGroup string) (GroupReputation, error)
 	GetImportSession(ctx context.Context, id int64) (ImportSession, error)
 	GetImportUnit(ctx context.Context, id int64) (ImportUnit, error)
+	// The newest import a download's poll started, to follow it to IMPORTED.
+	GetLatestImportSessionForAcquisition(ctx context.Context, acquisitionID sql.NullInt64) (ImportSession, error)
 	GetMediaObject(ctx context.Context, id int64) (MediaObject, error)
 	// oshash is exact identity: the same bytes, with no decoding (ADR-35).
 	GetMediaObjectByOshash(ctx context.Context, oshash sql.NullString) (MediaObject, error)
@@ -639,6 +641,8 @@ type Querier interface {
 	// (json_each of jobs.sql's visible_categories is the precedent for passing a Go slice as
 	// a JSON array).
 	SearchWorks(ctx context.Context, arg SearchWorksParams) ([]SearchWorksRow, error)
+	// The client's own name and size, recorded when first seen (section 10.9's fingerprint).
+	SetAcquisitionFingerprint(ctx context.Context, arg SetAcquisitionFingerprintParams) error
 	SetAcquisitionPath(ctx context.Context, arg SetAcquisitionPathParams) error
 	SetAcquisitionState(ctx context.Context, arg SetAcquisitionStateParams) error
 	SetArrImportState(ctx context.Context, arg SetArrImportStateParams) error
