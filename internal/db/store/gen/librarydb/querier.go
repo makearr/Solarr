@@ -165,6 +165,7 @@ type Querier interface {
 	DeleteEdition(ctx context.Context, id int64) error
 	// A DEFER is not a failure: the candidate stays cached until it expires (section 10.1).
 	DeleteExpiredCandidates(ctx context.Context, expiresAt int64) error
+	DeleteImportUnitExtras(ctx context.Context, unitID int64) error
 	DeleteLibraryPath(ctx context.Context, id int64) error
 	DeleteMediaObject(ctx context.Context, id int64) error
 	DeletePerson(ctx context.Context, id int64) error
@@ -270,6 +271,7 @@ type Querier interface {
 	// Identification attempts (migration 0033). Column lists follow table order.
 	InsertIdentificationAttempt(ctx context.Context, arg InsertIdentificationAttemptParams) error
 	InsertImportUnit(ctx context.Context, arg InsertImportUnitParams) (ImportUnit, error)
+	InsertImportUnitExtra(ctx context.Context, arg InsertImportUnitExtraParams) error
 	// library_path_id is nullable: 0029's own migration comment explains why
 	// (which path this unit's own placement created, when it can be known).
 	InsertImportUnitFile(ctx context.Context, arg InsertImportUnitFileParams) error
@@ -387,6 +389,7 @@ type Querier interface {
 	// already uses -- an "arg = '' OR ..." single-argument form leaves sqlc unable to
 	// infer a concrete type for the argument.
 	ListImportSessions(ctx context.Context, arg ListImportSessionsParams) ([]ImportSession, error)
+	ListImportUnitExtrasForSession(ctx context.Context, sessionID int64) ([]ImportUnitExtra, error)
 	ListImportUnitFilesForSession(ctx context.Context, sessionID int64) ([]ListImportUnitFilesForSessionRow, error)
 	ListImportUnits(ctx context.Context, sessionID int64) ([]ImportUnit, error)
 	// Cursor-paginated, unlike ListImportUnits above: a session's own unit count

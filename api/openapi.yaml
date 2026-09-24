@@ -6650,6 +6650,18 @@ components:
             (on, the default) or keeps the name it arrived with. The folder
             structure comes from the template either way. Omitted on a PATCH
             leaves the stored value alone.
+        extra_files:
+          type: boolean
+          description: >-
+            Lidarr's "Import Extra Files": bring files with the listed extensions
+            along with the tracks. Off by default. Omitted leaves it alone.
+        extra_file_extensions:
+          type: array
+          description: >-
+            Extensions without the dot, such as lrc, cue, log, nfo (the default).
+            A file named like a track follows the track's new name; any other keeps
+            its own name in the album folder. Omitted leaves the list alone.
+          items: { type: string }
 
     TransferMethod:
       type: string

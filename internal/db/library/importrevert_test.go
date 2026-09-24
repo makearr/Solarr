@@ -17,6 +17,7 @@ func TestImportRevert_UndoesAPlacedUnitAndDeletesTheWorkItCreated(t *testing.T) 
 	fake := clock.NewFakeAtEpoch()
 	fsys := fsx.NewMem(fake)
 	putTestFile(t, fsys, "/media/root/Artist/Album/track.flac", []byte("fake audio"))
+	putTestFile(t, fsys, "/media/root/Artist/Album/track.lrc", []byte("lyrics"))
 
 	work := createWork(t, opened, "music", "Fake Album")
 	item := createDesired(t, opened, work.ID, "SET", 1)
@@ -47,6 +48,8 @@ func TestImportRevert_UndoesAPlacedUnitAndDeletesTheWorkItCreated(t *testing.T) 
 	}
 	if err := sessions.RecordPlacement(ctx, unitIDs[0], library.Placement{
 		WorkID: work.ID, WorkCreated: true, MediaObjectIDs: []int64{object.ID},
+		// The cue sheet was deleted by hand since: revert skips it rather than failing.
+		Extras: []library.UnitExtra{{RootFolderID: 1, RelPath: "Artist/Album/track.lrc"}, {RootFolderID: 1, RelPath: "Artist/Album/gone.cue"}},
 	}); err != nil {
 		t.Fatalf("RecordPlacement: %v", err)
 	}
@@ -62,8 +65,14 @@ func TestImportRevert_UndoesAPlacedUnitAndDeletesTheWorkItCreated(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Revert: %v", err)
 	}
-	if result.UnitsReverted != 1 || result.WorksDeleted != 1 || len(result.QuarantinedPaths) != 1 {
-		t.Fatalf("result = %+v, want UnitsReverted=1 WorksDeleted=1 QuarantinedPaths=1", result)
+	if result.UnitsReverted != 1 || result.WorksDeleted != 1 || len(result.QuarantinedPaths) != 2 {
+		t.Fatalf("result = %+v, want UnitsReverted=1 WorksDeleted=1 QuarantinedPaths=2 (track and lyrics)", result)
+	}
+	if _, err := fsys.Stat("/media/root/Artist/Album/track.lrc"); err == nil {
+		t.Error("extra file still exists after Revert")
+	}
+	if extras, err := sessions.UnitExtras(ctx, sessionID); err != nil || len(extras) != 0 {
+		t.Errorf("UnitExtras after revert = %v, %v, want none", extras, err)
 	}
 
 	if _, err := fsys.Stat("/media/root/Artist/Album/track.flac"); err == nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path"
 	"time"
 
@@ -89,6 +90,10 @@ func (r ImportRevert) Revert(ctx context.Context, sessionID int64, retain time.D
 	if err != nil {
 		return RevertResult{}, fmt.Errorf("library: revert session %d: list unit files: %w", sessionID, err)
 	}
+	unitExtras, err := r.sessions.UnitExtras(ctx, sessionID)
+	if err != nil {
+		return RevertResult{}, fmt.Errorf("library: revert session %d: %w", sessionID, err)
+	}
 
 	var result RevertResult
 	var placed []Unit
@@ -102,6 +107,14 @@ func (r ImportRevert) Revert(ctx context.Context, sessionID int64, retain time.D
 			if err := r.quarantineObject(ctx, file, retain, &result); err != nil {
 				return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
 			}
+		}
+		for _, extra := range unitExtras[unit.ID] {
+			if err := r.quarantineExtra(ctx, extra, retain, &result); err != nil {
+				return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
+			}
+		}
+		if err := r.sessions.DeleteUnitExtras(ctx, unit.ID); err != nil {
+			return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
 		}
 		if err := r.sessions.ClearUnitPlacement(ctx, unit.ID); err != nil {
 			return result, fmt.Errorf("library: revert unit %d: clear placement: %w", unit.ID, err)
@@ -179,6 +192,27 @@ func (r ImportRevert) quarantineObject(ctx context.Context, file UnitFile, retai
 		return r.physical.DeleteObject(ctx, file.MediaObjectID)
 	}
 	return r.physical.DeleteLibraryPathRow(ctx, target.ID)
+}
+
+// quarantineExtra moves one extra file the unit placed into quarantine; one already gone is skipped.
+func (r ImportRevert) quarantineExtra(ctx context.Context, extra UnitExtra, retain time.Duration, result *RevertResult) error {
+	rootPath, ok := r.rootPath(extra.RootFolderID)
+	if !ok {
+		return fmt.Errorf("no known path for root folder %d", extra.RootFolderID)
+	}
+	rootFolderID := extra.RootFolderID
+	entry, err := r.quarantine.Put(ctx, PutRequest{
+		RootPath: rootPath, OriginalPath: path.Join(rootPath, extra.RelPath), RootFolderID: &rootFolderID,
+		Reason: ReasonFailedImport, Retain: retain,
+	})
+	switch {
+	case err == nil:
+		result.QuarantinedPaths = append(result.QuarantinedPaths, entry)
+	case errors.Is(err, ErrCrossDevice), errors.Is(err, fs.ErrNotExist):
+	default:
+		return fmt.Errorf("quarantine extra %q: %w", extra.RelPath, err)
+	}
+	return nil
 }
 
 // selectPathToRevert picks the one row among paths that belongs to this unit's own

@@ -63,6 +63,7 @@ type Committer struct {
 	defaultProfileID int64
 	transferLadder   TransferLadder
 	renameOnImport   RenameOnImport
+	extraFiles       ExtraFiles
 }
 
 // TransferLadder answers the ordered transfer methods import should try, read
@@ -75,6 +76,10 @@ type TransferLadder func() []mover.PlaceMethod
 // or keeps the name it arrived with, read per commit for the same reason
 // TransferLadder is. A nil func means renaming, the shipped default.
 type RenameOnImport func() bool
+
+// ExtraFiles answers the extensions to bring along with the tracks (Lidarr's "Import Extra
+// Files"), read per commit; nil or empty means none.
+type ExtraFiles func() []string
 
 // BlockedContent is the ADR-53 part 2 check CommitUnit's import gate needs
 // (todo 4.15) -- library.BlockedContentStore's own shape, narrowed to an
@@ -100,6 +105,7 @@ type CommitterConfig struct {
 	DefaultProfileID int64
 	TransferLadder   TransferLadder
 	RenameOnImport   RenameOnImport
+	ExtraFiles       ExtraFiles
 }
 
 // NewCommitter builds one.
@@ -109,7 +115,7 @@ func NewCommitter(config CommitterConfig) Committer {
 		identity: config.Identity, desired: config.Desired, categories: config.Categories,
 		blockedContent: config.BlockedContent, clock: config.Clock,
 		defaultProfileID: config.DefaultProfileID, transferLadder: config.TransferLadder,
-		renameOnImport: config.RenameOnImport,
+		renameOnImport: config.RenameOnImport, extraFiles: config.ExtraFiles,
 	}
 }
 
@@ -141,6 +147,12 @@ type Placed struct {
 	// distinguishable on disk -- a reflink and a copy look identical, which is
 	// how an XFS import read as "it copied everything" (2026-09-18).
 	TransferMethods []mover.PlaceMethod
+	// RootFolderID is where the unit was placed; Extras are paths under it.
+	RootFolderID int64
+	// Extras are the extra files placed beside the tracks, relative to the root folder.
+	Extras []string
+	// ExtrasSkipped explains each extra file that was not placed, for the log.
+	ExtrasSkipped []string
 }
 
 // TransferMethodNames answers TransferMethods as plain strings, so a caller
@@ -347,6 +359,7 @@ func (c Committer) CommitMatchedUnit(
 		names.RenameFiles = false
 	}
 
+	destRelPaths := make([]string, len(unit.Media))
 	files := make([]library.PhysicalFile, len(unit.Media))
 	trackFiles := make([]TrackFile, len(unit.Media))
 	pathWarnings := make([][]string, len(unit.Media))
@@ -370,6 +383,7 @@ func (c Committer) CommitMatchedUnit(
 			return Placed{}, fmt.Errorf("music: place %q: %w", media.RelPath, err)
 		}
 		transferMethods[index] = method
+		destRelPaths[index] = destRelPath
 		files[index] = library.PhysicalFile{
 			RelPath: destRelPath, SizeBytes: media.SizeBytes, QuickHash: quickHashes[index], FirstSeenAt: now,
 		}
@@ -412,12 +426,77 @@ func (c Committer) CommitMatchedUnit(
 		return Placed{}, fmt.Errorf("music: discover wanted for unit %q: %w", unit.Directory, err)
 	}
 
+	var extensions []string
+	if c.extraFiles != nil {
+		extensions = c.extraFiles()
+	}
+	extras, extrasSkipped := c.placeExtras(sourceRoot, destRoot.Path, unit, destRelPaths, extensions, methods)
+
 	return Placed{
 		WorkID: resolution.WorkID, WorkCreated: resolution.WorkCreated,
 		EditionID: resolution.EditionID, EditionCreated: resolution.EditionCreated,
 		MediaObjectIDs: mediaObjectIDs, LibraryPathIDs: libraryPathIDs,
 		PathWarnings: pathWarningsByObject, TransferMethods: transferMethods,
+		RootFolderID: destRoot.ID, Extras: extras, ExtrasSkipped: extrasSkipped,
 	}, nil
+}
+
+// placeExtras brings unit.Other files with a listed extension along: one named like a track
+// follows that track's new name (Lidarr's rule), any other goes to the folder of the tracks it
+// sat beside. An existing file is never overwritten, and a failure skips the file, not the album.
+func (c Committer) placeExtras(
+	sourceRoot, destRootPath string, unit inspect.Unit, destRelPaths, extensions []string, methods []mover.PlaceMethod,
+) (placed, skipped []string) {
+	if len(extensions) == 0 {
+		return nil, nil
+	}
+	wanted := make(map[string]bool, len(extensions))
+	for _, extension := range extensions {
+		wanted["."+extension] = true
+	}
+	trackByStem := make(map[string]string, len(unit.Media))
+	folderBySourceDir := make(map[string]string, len(unit.Media))
+	for index, media := range unit.Media {
+		trackByStem[pathStem(media.RelPath)] = destRelPaths[index]
+		if _, found := folderBySourceDir[path.Dir(media.RelPath)]; !found {
+			folderBySourceDir[path.Dir(media.RelPath)] = path.Dir(destRelPaths[index])
+		}
+	}
+
+	claimed := make(map[string]bool)
+	for _, other := range unit.Other {
+		extension := strings.ToLower(path.Ext(other.RelPath))
+		if !wanted[extension] {
+			continue
+		}
+		var destRelPath string
+		if track, found := trackByStem[pathStem(other.RelPath)]; found {
+			destRelPath = strings.TrimSuffix(track, path.Ext(track)) + extension
+		} else {
+			folder, found := folderBySourceDir[path.Dir(other.RelPath)]
+			if !found {
+				folder = path.Dir(destRelPaths[0])
+			}
+			destRelPath = path.Join(folder, fsx.SanitiseComponent(path.Base(other.RelPath)))
+		}
+		destAbs := path.Join(destRootPath, destRelPath)
+		if _, err := c.fsys.Stat(destAbs); err == nil || claimed[destRelPath] {
+			skipped = append(skipped, other.RelPath+": "+destRelPath+" already exists")
+			continue
+		}
+		if _, err := mover.PlaceOne(c.fsys, path.Join(sourceRoot, other.RelPath), destAbs, other.SizeBytes, methods); err != nil {
+			skipped = append(skipped, other.RelPath+": "+err.Error())
+			continue
+		}
+		claimed[destRelPath] = true
+		placed = append(placed, destRelPath)
+	}
+	return placed, skipped
+}
+
+// pathStem is a path without its extension, compared case-insensitively.
+func pathStem(relPath string) string {
+	return strings.ToLower(strings.TrimSuffix(relPath, path.Ext(relPath)))
 }
 
 // rootCandidates answers every root folder attached to categoryID, in

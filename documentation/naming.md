@@ -39,6 +39,15 @@ value's words; `{ARTIST NAME}` and `{artist name}` change its case. One-word tok
 Off, a file keeps the name it arrived with and still goes into the rendered folders. The Import
 screen's rename checkbox can only turn renaming off for one import, never override a library.
 
+## Extra files
+
+Lidarr's "Import Extra Files", on the Import screen: off by default, extensions `lrc,cue,log,nfo`.
+Only files inspect did not class as media are considered. A file whose name matches a track's
+(case-insensitive, without extension) takes that track's new name with its own extension; any
+other goes to the folder the tracks beside it went to, under its own name. An existing file is
+never overwritten; a skipped extra is logged and never fails the album. Extras are recorded in
+`import_unit_extra`, so reverting the session quarantines them with the tracks.
+
 ## Apply to library
 
 `POST /categories/{id}/rename` runs one rename per root the library uses, through the move

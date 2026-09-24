@@ -75,6 +75,7 @@ func (p *process) importCommitter() music.Committer {
 		DefaultProfileID: p.defaultQualityProfileID,
 		TransferLadder:   p.transferLadder,
 		RenameOnImport:   p.renameOnImport,
+		ExtraFiles:       p.extraFileExtensions,
 	})
 }
 
@@ -93,6 +94,14 @@ func (p *process) transferLadder() []mover.PlaceMethod {
 // above is.
 func (p *process) renameOnImport() bool {
 	return p.cache.Snapshot().ImportRenameOnImport()
+}
+
+// extraFileExtensions answers the extensions to bring along, or none while the switch is off.
+func (p *process) extraFileExtensions() []string {
+	if extras := p.cache.Snapshot().ImportExtraFiles(); extras.Enabled {
+		return extras.Extensions
+	}
+	return nil
 }
 
 // mediaTool builds the ffprobe reader every import path needs -- the same

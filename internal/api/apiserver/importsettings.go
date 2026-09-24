@@ -39,7 +39,7 @@ func (s *Server) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.auth.Registry.LookupAll(settings.KeyImportAutoCommitConfidence, settings.KeyImportTransferLadder,
-		settings.KeyImportRenameOnImport); err != nil {
+		settings.KeyImportRenameOnImport, settings.KeyImportExtraFiles, settings.KeyImportExtraFileExtensions); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
@@ -67,6 +67,19 @@ func (s *Server) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if body.ExtraFiles != nil || body.ExtraFileExtensions != nil {
+		extras := s.auth.Settings.Snapshot().ImportExtraFiles()
+		if body.ExtraFiles != nil {
+			extras.Enabled = *body.ExtraFiles
+		}
+		if body.ExtraFileExtensions != nil {
+			extras.Extensions = *body.ExtraFileExtensions
+		}
+		if err := s.auth.Settings.SetImportExtraFiles(r.Context(), clock.NewSystem(), extras); err != nil {
+			s.writeImportSettingsError(w, err)
+			return
+		}
+	}
 	writeJSON(w, s.logger, http.StatusOK, s.importSettingsView())
 }
 
@@ -90,9 +103,12 @@ func (s *Server) importSettingsView() gen.ImportSettings {
 		ladder = append(ladder, gen.TransferMethod(method))
 	}
 	rename := snapshot.ImportRenameOnImport()
+	extras := snapshot.ImportExtraFiles()
 	return gen.ImportSettings{
 		AutoCommitConfidence: float32(snapshot.ImportAutoCommitConfidence()),
 		TransferLadder:       &ladder,
 		RenameOnImport:       &rename,
+		ExtraFiles:           &extras.Enabled,
+		ExtraFileExtensions:  &extras.Extensions,
 	}
 }
