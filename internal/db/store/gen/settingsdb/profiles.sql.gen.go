@@ -33,6 +33,17 @@ func (q *Queries) CountCategoriesUsingQualityProfile(ctx context.Context, qualit
 	return count, err
 }
 
+const countCategoryListsUsingQualityProfile = `-- name: CountCategoryListsUsingQualityProfile :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM category_quality_profile WHERE quality_profile_id = ?
+`
+
+func (q *Queries) CountCategoryListsUsingQualityProfile(ctx context.Context, qualityProfileID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countCategoryListsUsingQualityProfile, qualityProfileID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createLanguageProfile = `-- name: CreateLanguageProfile :one
 INSERT INTO language_profile (name, audio_preferred_json, audio_required_json,
                              subtitle_preferred_json, subtitle_required_json,
@@ -79,7 +90,7 @@ func (q *Queries) CreateLanguageProfile(ctx context.Context, arg CreateLanguageP
 const createQualityProfile = `-- name: CreateQualityProfile :one
 INSERT INTO quality_profile (name, rules_json, upgrade_json)
 VALUES (?, ?, ?)
-RETURNING id, name, rules_json, upgrade_json
+RETURNING id, name, rules_json, upgrade_json, suggested_rank
 `
 
 type CreateQualityProfileParams struct {
@@ -96,8 +107,27 @@ func (q *Queries) CreateQualityProfile(ctx context.Context, arg CreateQualityPro
 		&i.Name,
 		&i.RulesJson,
 		&i.UpgradeJson,
+		&i.SuggestedRank,
 	)
 	return i, err
+}
+
+const deleteCategoryQualityProfiles = `-- name: DeleteCategoryQualityProfiles :exec
+DELETE FROM category_quality_profile WHERE category_id = ?
+`
+
+func (q *Queries) DeleteCategoryQualityProfiles(ctx context.Context, categoryID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteCategoryQualityProfiles, categoryID)
+	return err
+}
+
+const deleteCategoryQualityTarget = `-- name: DeleteCategoryQualityTarget :exec
+DELETE FROM category_quality_target WHERE category_id = ?
+`
+
+func (q *Queries) DeleteCategoryQualityTarget(ctx context.Context, categoryID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteCategoryQualityTarget, categoryID)
+	return err
 }
 
 const deleteLanguageProfile = `-- name: DeleteLanguageProfile :exec
@@ -141,7 +171,7 @@ func (q *Queries) GetLanguageProfile(ctx context.Context, id int64) (LanguagePro
 }
 
 const getQualityProfile = `-- name: GetQualityProfile :one
-SELECT id, name, rules_json, upgrade_json FROM quality_profile WHERE id = ?
+SELECT id, name, rules_json, upgrade_json, suggested_rank FROM quality_profile WHERE id = ?
 `
 
 func (q *Queries) GetQualityProfile(ctx context.Context, id int64) (QualityProfile, error) {
@@ -152,8 +182,84 @@ func (q *Queries) GetQualityProfile(ctx context.Context, id int64) (QualityProfi
 		&i.Name,
 		&i.RulesJson,
 		&i.UpgradeJson,
+		&i.SuggestedRank,
 	)
 	return i, err
+}
+
+const insertCategoryQualityProfile = `-- name: InsertCategoryQualityProfile :exec
+INSERT INTO category_quality_profile (category_id, quality_profile_id, ord) VALUES (?, ?, ?)
+`
+
+type InsertCategoryQualityProfileParams struct {
+	CategoryID       int64
+	QualityProfileID int64
+	Ord              int64
+}
+
+func (q *Queries) InsertCategoryQualityProfile(ctx context.Context, arg InsertCategoryQualityProfileParams) error {
+	_, err := q.db.ExecContext(ctx, insertCategoryQualityProfile, arg.CategoryID, arg.QualityProfileID, arg.Ord)
+	return err
+}
+
+const listCategoryQualityProfiles = `-- name: ListCategoryQualityProfiles :many
+SELECT category_id, quality_profile_id, ord FROM category_quality_profile ORDER BY category_id, ord
+`
+
+func (q *Queries) ListCategoryQualityProfiles(ctx context.Context) ([]CategoryQualityProfile, error) {
+	rows, err := q.db.QueryContext(ctx, listCategoryQualityProfiles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CategoryQualityProfile{}
+	for rows.Next() {
+		var i CategoryQualityProfile
+		if err := rows.Scan(&i.CategoryID, &i.QualityProfileID, &i.Ord); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCategoryQualityTargets = `-- name: ListCategoryQualityTargets :many
+SELECT category_id, audio_codec, container, bitrate_kbps, tolerance_pct FROM category_quality_target
+`
+
+func (q *Queries) ListCategoryQualityTargets(ctx context.Context) ([]CategoryQualityTarget, error) {
+	rows, err := q.db.QueryContext(ctx, listCategoryQualityTargets)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CategoryQualityTarget{}
+	for rows.Next() {
+		var i CategoryQualityTarget
+		if err := rows.Scan(
+			&i.CategoryID,
+			&i.AudioCodec,
+			&i.Container,
+			&i.BitrateKbps,
+			&i.TolerancePct,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listLanguageProfiles = `-- name: ListLanguageProfiles :many
@@ -196,7 +302,7 @@ func (q *Queries) ListLanguageProfiles(ctx context.Context) ([]LanguageProfile, 
 
 const listQualityProfiles = `-- name: ListQualityProfiles :many
 
-SELECT id, name, rules_json, upgrade_json FROM quality_profile ORDER BY name
+SELECT id, name, rules_json, upgrade_json, suggested_rank FROM quality_profile ORDER BY suggested_rank, name
 `
 
 // Quality and language profiles (ADR-40, section 19.8).
@@ -214,6 +320,7 @@ func (q *Queries) ListQualityProfiles(ctx context.Context) ([]QualityProfile, er
 			&i.Name,
 			&i.RulesJson,
 			&i.UpgradeJson,
+			&i.SuggestedRank,
 		); err != nil {
 			return nil, err
 		}
@@ -239,6 +346,20 @@ type SetCategoryLanguageProfileParams struct {
 
 func (q *Queries) SetCategoryLanguageProfile(ctx context.Context, arg SetCategoryLanguageProfileParams) error {
 	_, err := q.db.ExecContext(ctx, setCategoryLanguageProfile, arg.LanguageProfileID, arg.ID)
+	return err
+}
+
+const setCategoryQualityCutoff = `-- name: SetCategoryQualityCutoff :exec
+UPDATE category SET quality_cutoff_profile_id = ? WHERE id = ?
+`
+
+type SetCategoryQualityCutoffParams struct {
+	QualityCutoffProfileID sql.NullInt64
+	ID                     int64
+}
+
+func (q *Queries) SetCategoryQualityCutoff(ctx context.Context, arg SetCategoryQualityCutoffParams) error {
+	_, err := q.db.ExecContext(ctx, setCategoryQualityCutoff, arg.QualityCutoffProfileID, arg.ID)
 	return err
 }
 
@@ -305,6 +426,33 @@ func (q *Queries) UpdateQualityProfile(ctx context.Context, arg UpdateQualityPro
 		arg.RulesJson,
 		arg.UpgradeJson,
 		arg.ID,
+	)
+	return err
+}
+
+const upsertCategoryQualityTarget = `-- name: UpsertCategoryQualityTarget :exec
+INSERT INTO category_quality_target (category_id, audio_codec, container, bitrate_kbps, tolerance_pct)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (category_id) DO UPDATE SET
+  audio_codec = excluded.audio_codec, container = excluded.container,
+  bitrate_kbps = excluded.bitrate_kbps, tolerance_pct = excluded.tolerance_pct
+`
+
+type UpsertCategoryQualityTargetParams struct {
+	CategoryID   int64
+	AudioCodec   string
+	Container    string
+	BitrateKbps  sql.NullInt64
+	TolerancePct int64
+}
+
+func (q *Queries) UpsertCategoryQualityTarget(ctx context.Context, arg UpsertCategoryQualityTargetParams) error {
+	_, err := q.db.ExecContext(ctx, upsertCategoryQualityTarget,
+		arg.CategoryID,
+		arg.AudioCodec,
+		arg.Container,
+		arg.BitrateKbps,
+		arg.TolerancePct,
 	)
 	return err
 }

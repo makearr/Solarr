@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/netip"
+	"slices"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -59,18 +61,40 @@ type ScalarSettingsEntry struct {
 
 // CategoryEntry is one category and the roots attached to it.
 type CategoryEntry struct {
-	MediaType       string         `yaml:"media_type"`
-	Name            string         `yaml:"name"`
-	PriorityRank    int64          `yaml:"priority_rank"`
-	Roots           []AttachedRoot `yaml:"roots,omitempty"`
-	QualityProfile  string         `yaml:"quality_profile,omitempty"`
-	LanguageProfile string         `yaml:"language_profile,omitempty"`
+	MediaType    string         `yaml:"media_type"`
+	Name         string         `yaml:"name"`
+	PriorityRank int64          `yaml:"priority_rank"`
+	Roots        []AttachedRoot `yaml:"roots,omitempty"`
+	// QualityProfile is the single profile of documents written before a library held a list;
+	// read on import as a one-profile list, never written.
+	QualityProfile string `yaml:"quality_profile,omitempty"`
+	// QualityProfiles are the profiles the library accepts, by name, earlier preferred.
+	QualityProfiles []string            `yaml:"quality_profiles,omitempty"`
+	QualityCutoff   string              `yaml:"quality_cutoff,omitempty"`
+	QualityTarget   *QualityTargetEntry `yaml:"quality_target,omitempty"`
+	LanguageProfile string              `yaml:"language_profile,omitempty"`
 	// MonitorDiscovered is section 19.6's policy: what a scan does with an
 	// album it finds that nobody asked for. Empty on import means the
 	// column's own default (monitored) applies.
 	MonitorDiscovered string `yaml:"monitor_discovered,omitempty"`
 	// Naming is absent for a library still on its media type's default.
 	Naming *NamingEntry `yaml:"naming,omitempty"`
+}
+
+// QualityTargetEntry is a library's aimed-for quality.
+type QualityTargetEntry struct {
+	AudioCodec   string `yaml:"audio_codec"`
+	Container    string `yaml:"container"`
+	BitrateKbps  *int64 `yaml:"bitrate_kbps,omitempty"`
+	TolerancePct int64  `yaml:"tolerance_pct"`
+}
+
+// qualityProfileNames is the library's list, reading an older document's single profile as one.
+func (e CategoryEntry) qualityProfileNames() []string {
+	if len(e.QualityProfiles) == 0 && e.QualityProfile != "" {
+		return []string{e.QualityProfile}
+	}
+	return e.QualityProfiles
 }
 
 // NamingEntry is a library's naming profile.
@@ -217,8 +241,17 @@ func (c *Cache) Export() Document {
 			PriorityRank:      category.PriorityRank,
 			MonitorDiscovered: category.MonitorDiscovered,
 		}
-		if category.QualityProfileID != nil {
-			entry.QualityProfile = qualityNameByID[*category.QualityProfileID]
+		for _, id := range category.QualityProfileIDs {
+			entry.QualityProfiles = append(entry.QualityProfiles, qualityNameByID[id])
+		}
+		if category.QualityCutoffID != nil {
+			entry.QualityCutoff = qualityNameByID[*category.QualityCutoffID]
+		}
+		if target := category.QualityTarget; target != nil {
+			entry.QualityTarget = &QualityTargetEntry{
+				AudioCodec: target.AudioCodec, Container: target.Container,
+				BitrateKbps: target.BitrateKbps, TolerancePct: target.TolerancePct,
+			}
 		}
 		if category.LanguageProfileID != nil {
 			entry.LanguageProfile = languageNameByID[*category.LanguageProfileID]
@@ -438,11 +471,29 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 				})
 			}
 		}
-		if category.QualityProfile != "" && !knownQualityProfiles[category.QualityProfile] {
+		names := category.qualityProfileNames()
+		for _, name := range names {
+			if !knownQualityProfiles[name] {
+				problems = append(problems, config.Problem{
+					Path: where + ".quality_profiles", Value: name,
+					Expectation: "a name also listed under quality_profiles",
+				})
+			}
+		}
+		if category.QualityCutoff != "" && !slices.Contains(names, category.QualityCutoff) {
 			problems = append(problems, config.Problem{
-				Path: where + ".quality_profile", Value: category.QualityProfile,
-				Expectation: "a name also listed under quality_profiles",
+				Path: where + ".quality_cutoff", Value: category.QualityCutoff,
+				Expectation: "one of the category's own quality_profiles",
 			})
+		}
+		if target := category.QualityTarget; target != nil {
+			for _, problem := range validateQualityTarget(&QualityTarget{
+				AudioCodec: target.AudioCodec, Container: target.Container,
+				BitrateKbps: target.BitrateKbps, TolerancePct: target.TolerancePct,
+			}) {
+				problem.Path = where + ".quality_" + strings.TrimPrefix(problem.Path, "target.")
+				problems = append(problems, problem)
+			}
 		}
 		if category.LanguageProfile != "" && !knownLanguageProfiles[category.LanguageProfile] {
 			problems = append(problems, config.Problem{
@@ -646,12 +697,26 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 				}
 			}
 
-			if category.QualityProfile != "" {
-				if err := queries.SetCategoryQualityProfile(ctx, settingsdb.SetCategoryQualityProfileParams{
-					QualityProfileID: sql.NullInt64{Int64: qualityIDByName[category.QualityProfile], Valid: true},
-					ID:               id,
+			if names := category.qualityProfileNames(); len(names) > 0 {
+				ids := make([]int64, len(names))
+				for i, name := range names {
+					ids[i] = qualityIDByName[name]
+				}
+				var cutoff *int64
+				if category.QualityCutoff != "" {
+					id := qualityIDByName[category.QualityCutoff]
+					cutoff = &id
+				}
+				if err := writeQualityList(ctx, queries, id, ids, cutoff); err != nil {
+					return fmt.Errorf("category %q quality profiles: %w", key, err)
+				}
+			}
+			if target := category.QualityTarget; target != nil {
+				if err := queries.UpsertCategoryQualityTarget(ctx, settingsdb.UpsertCategoryQualityTargetParams{
+					CategoryID: id, AudioCodec: target.AudioCodec, Container: target.Container,
+					BitrateKbps: int64PtrToNull(target.BitrateKbps), TolerancePct: target.TolerancePct,
 				}); err != nil {
-					return fmt.Errorf("category %q quality profile: %w", key, err)
+					return fmt.Errorf("category %q quality target: %w", key, err)
 				}
 			}
 			if category.MonitorDiscovered != "" {

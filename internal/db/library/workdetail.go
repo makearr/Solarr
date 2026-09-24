@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"path"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
@@ -37,6 +39,8 @@ type PartFile struct {
 	Container     string
 	BitrateKbps   int64
 	Lossless      bool
+	// Extension is the file's own type, "m4a": ffprobe's container is a demuxer list.
+	Extension string
 }
 
 // Credit is one work-level credit, with the person's own name -- the work
@@ -133,6 +137,7 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 			Container:     row.Container.String,
 			BitrateKbps:   bitrateKbps(row.OverallBitrate, row.AudioBitrate),
 			Lossless:      row.Lossless.Valid && row.Lossless.Int64 == 1,
+			Extension:     strings.ToLower(strings.TrimPrefix(path.Ext(row.RelPath), ".")),
 		}
 	}
 

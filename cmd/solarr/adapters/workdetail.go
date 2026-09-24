@@ -135,6 +135,7 @@ func partRows(from []library.PartDetail) []apiserver.PartRow {
 				MediaObjectID: detail.File.MediaObjectID, AudioCodec: detail.File.AudioCodec,
 				VideoCodec: detail.File.VideoCodec, Container: detail.File.Container,
 				BitrateKbps: detail.File.BitrateKbps, Lossless: detail.File.Lossless,
+				Extension: detail.File.Extension,
 			}
 		}
 		rows[index] = row

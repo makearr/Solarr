@@ -142,13 +142,9 @@ func (s Search) SearchItem(ctx context.Context, itemID int64, indexers []Indexer
 	}
 
 	snapshot := s.Settings.Snapshot()
-	profile, found := snapshot.QualityProfile(item.ProfileID)
-	if !found {
-		return ItemSearchResult{}, ErrNoQualityProfile
-	}
-	rules, err := score.Parse([]byte(profile.RulesJSON))
+	rules, err := libraryProfiles(snapshot, item.CategoryID, item.ProfileID)
 	if err != nil {
-		return ItemSearchResult{}, fmt.Errorf("music: search item %d: quality profile %d: %w", itemID, item.ProfileID, err)
+		return ItemSearchResult{}, fmt.Errorf("music: search item %d: %w", itemID, err)
 	}
 	languagePolicy := languagePolicyFor(snapshot, item.CategoryID)
 
@@ -206,7 +202,7 @@ type acceptedFind struct {
 // items).
 func evaluateRawItems(
 	raws []indexer.RawItem, conn IndexerConn, target match.Candidate,
-	rules score.Profile, languagePolicy *score.LanguagePolicy,
+	rules []rankedProfile, languagePolicy *score.LanguagePolicy,
 ) []acceptedFind {
 	var accepted []acceptedFind
 	for _, raw := range raws {
@@ -221,13 +217,7 @@ func evaluateRawItems(
 		}
 
 		facts := factsFromRelease(parsed, raw, conn.Impl)
-		var decision model.Decision
-		if languagePolicy != nil {
-			decision = score.EvaluateWithLanguage(rules, facts, nil, *languagePolicy,
-				facts.File.AudioLanguages, facts.File.SubtitleLanguages)
-		} else {
-			decision = score.Evaluate(rules, facts, nil)
-		}
+		decision := evaluateInOrder(rules, facts, languagePolicy)
 		accepted = append(accepted, acceptedFind{conn: conn, raw: raw, parsed: parsed, distance: distance, decision: decision})
 	}
 	return accepted
@@ -408,4 +398,75 @@ func factsFromRelease(parsed parse.Result, raw indexer.RawItem, impl string) sco
 		facts.File.EditionTokens = []string{parsed.Attributes.Edition}
 	}
 	return facts
+}
+
+// rankedProfile is one of a library's profiles, in its priority order.
+type rankedProfile struct {
+	name  string
+	rules score.Profile
+}
+
+// libraryProfiles is the library's ordered list (2026-09-24), or the item's own profile when the
+// library has none.
+func libraryProfiles(snapshot *settings.Snapshot, categoryID, itemProfileID int64) ([]rankedProfile, error) {
+	ids := []int64{itemProfileID}
+	if category, found := snapshot.Category(categoryID); found && len(category.QualityProfileIDs) > 0 {
+		ids = category.QualityProfileIDs
+	}
+	profiles := make([]rankedProfile, 0, len(ids))
+	for _, id := range ids {
+		profile, found := snapshot.QualityProfile(id)
+		if !found {
+			return nil, ErrNoQualityProfile
+		}
+		rules, err := score.Parse([]byte(profile.RulesJSON))
+		if err != nil {
+			return nil, fmt.Errorf("quality profile %d: %w", id, err)
+		}
+		profiles = append(profiles, rankedProfile{name: profile.Name, rules: rules})
+	}
+	return profiles, nil
+}
+
+// evaluateInOrder judges a release by the first profile it fits, so a release the first profile
+// wants outranks one only a fallback wants; failing that, by the first whose rules merely accept
+// it, ranked after every fit. A release no profile accepts is judged, and refused, by the first.
+// The profile's position is the leading tier of the quality vector (ADR-40: tiers, not weights).
+func evaluateInOrder(profiles []rankedProfile, facts score.Facts, languagePolicy *score.LanguagePolicy) model.Decision {
+	evaluate := func(rules score.Profile) model.Decision {
+		if languagePolicy != nil {
+			return score.EvaluateWithLanguage(rules, facts, nil, *languagePolicy,
+				facts.File.AudioLanguages, facts.File.SubtitleLanguages)
+		}
+		return score.Evaluate(rules, facts, nil)
+	}
+	fallback, fallbackIndex := model.Decision{}, -1
+	for index, profile := range profiles {
+		decision := evaluate(profile.rules)
+		if decision.Outcome != model.OutcomeAccept {
+			continue
+		}
+		if fits, _ := score.Fits(profile.rules, facts); fits {
+			return rankedBy(decision, index, profile.name, "fits")
+		}
+		if fallbackIndex < 0 {
+			fallback, fallbackIndex = decision, index
+		}
+	}
+	if fallbackIndex >= 0 {
+		return rankedBy(fallback, len(profiles)+fallbackIndex, profiles[fallbackIndex].name, "accepted, fits none")
+	}
+	return evaluate(profiles[0].rules)
+}
+
+func rankedBy(decision model.Decision, rank int, name, how string) model.Decision {
+	tier := model.TierValue{
+		Dimension: "profile_priority", Rank: rank, Label: name, Detail: fmt.Sprintf("%s (%s)", name, how),
+	}
+	decision.Quality.Tiers = append([]model.TierValue{tier}, decision.Quality.Tiers...)
+	// Zero points: the stored breakdown says which profile wanted it without changing the score.
+	decision.Components = append(decision.Components, model.ScoreComponent{
+		Rule: "profile-priority", Label: fmt.Sprintf("Wanted by %s (%s)", name, how),
+	})
+	return decision
 }

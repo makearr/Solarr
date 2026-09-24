@@ -94,6 +94,22 @@ type Category struct {
 	MonitorReleaseTypes []string
 	// Naming is nil until the library's naming is first saved; nil means the media type's default.
 	Naming *NamingProfile
+	// QualityProfileIDs are the profiles the library accepts, earlier preferred; QualityProfileID
+	// is always the first. Empty means the instance's default profile.
+	QualityProfileIDs []int64
+	// QualityCutoffID is the profile of the list at or above which upgrades stop.
+	QualityCutoffID *int64
+	// QualityTarget is the one exact quality the library aims for; nil when none is set.
+	QualityTarget *QualityTarget
+}
+
+// QualityTarget is a library's aimed-for quality. BitrateKbps is nil for a lossless codec;
+// otherwise a file within +-TolerancePct of it meets the target.
+type QualityTarget struct {
+	AudioCodec   string
+	Container    string
+	BitrateKbps  *int64
+	TolerancePct int64
 }
 
 // NamingProfile is one library's naming, Lidarr's shape: a template per slot the media type

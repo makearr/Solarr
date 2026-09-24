@@ -17,6 +17,7 @@ type Querier interface {
 	// Invariant 41: deleting an entity in use is refused with a count of what
 	// references it, so the user gets a reason rather than a constraint violation.
 	CountCategoriesUsingRootFolder(ctx context.Context, rootFolderID int64) (int64, error)
+	CountCategoryListsUsingQualityProfile(ctx context.Context, qualityProfileID int64) (int64, error)
 	// Invariant 41: deleting a category in use is refused with a count of what
 	// references it.
 	CountDiscoveryJobsUsingCategory(ctx context.Context, categoryID sql.NullInt64) (int64, error)
@@ -51,6 +52,8 @@ type Querier interface {
 	DeleteArrInstance(ctx context.Context, id int64) error
 	DeleteCalendarFeed(ctx context.Context, userID int64) error
 	DeleteCategory(ctx context.Context, id int64) error
+	DeleteCategoryQualityProfiles(ctx context.Context, categoryID int64) error
+	DeleteCategoryQualityTarget(ctx context.Context, categoryID int64) error
 	DeleteDiscoveryJob(ctx context.Context, id int64) error
 	DeleteDownloadFolder(ctx context.Context, id int64) error
 	DeleteDownloader(ctx context.Context, id int64) error
@@ -87,12 +90,15 @@ type Querier interface {
 	// silently reshape an existing result (documentation/sql-and-sqlc.md).
 	GetUserByID(ctx context.Context, id int64) (AppUser, error)
 	GetUserByUsername(ctx context.Context, username string) (AppUser, error)
+	InsertCategoryQualityProfile(ctx context.Context, arg InsertCategoryQualityProfileParams) error
 	InsertNamingFormat(ctx context.Context, arg InsertNamingFormatParams) error
 	ListAPIKeysForUser(ctx context.Context, userID int64) ([]ApiKey, error)
 	ListAllCategoryAccess(ctx context.Context) ([]UserCategoryAccess, error)
 	ListArrInstances(ctx context.Context) ([]ArrInstance, error)
 	ListCategories(ctx context.Context) ([]Category, error)
 	ListCategoryAccessForUser(ctx context.Context, userID int64) ([]UserCategoryAccess, error)
+	ListCategoryQualityProfiles(ctx context.Context) ([]CategoryQualityProfile, error)
+	ListCategoryQualityTargets(ctx context.Context) ([]CategoryQualityTarget, error)
 	ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFolder, error)
 	ListDiscoveryJobs(ctx context.Context) ([]DiscoveryJob, error)
 	ListDownloadFolders(ctx context.Context) ([]DownloadFolder, error)
@@ -126,6 +132,7 @@ type Querier interface {
 	SetCategoryMonitorDiscovered(ctx context.Context, arg SetCategoryMonitorDiscoveredParams) error
 	SetCategoryMonitorReleaseTypes(ctx context.Context, arg SetCategoryMonitorReleaseTypesParams) error
 	SetCategoryNamingProfile(ctx context.Context, arg SetCategoryNamingProfileParams) error
+	SetCategoryQualityCutoff(ctx context.Context, arg SetCategoryQualityCutoffParams) error
 	SetCategoryQualityProfile(ctx context.Context, arg SetCategoryQualityProfileParams) error
 	// The enable transition on its own: this is the "preview before enabling" gate, a
 	// deliberate act distinct from editing a job's policy.
@@ -168,6 +175,7 @@ type Querier interface {
 	UpdateNamingProfile(ctx context.Context, arg UpdateNamingProfileParams) error
 	UpdateQualityProfile(ctx context.Context, arg UpdateQualityProfileParams) error
 	UpsertCalendarFeed(ctx context.Context, arg UpsertCalendarFeedParams) error
+	UpsertCategoryQualityTarget(ctx context.Context, arg UpsertCategoryQualityTargetParams) error
 }
 
 var _ Querier = (*Queries)(nil)

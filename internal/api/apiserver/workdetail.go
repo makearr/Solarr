@@ -13,6 +13,8 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/score"
 )
 
 // WorkDetailReader reads one work's full detail (WorksReader's own doc
@@ -67,6 +69,7 @@ type PartFileRow struct {
 	Container     string
 	BitrateKbps   int64
 	Lossless      bool
+	Extension     string
 }
 
 // CreditRow is one work-level credit, the person's own name included so a
@@ -211,7 +214,54 @@ func (s *Server) GetWork(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 
-	writeJSON(w, s.logger, http.StatusOK, buildWorkDetailView(row))
+	view := buildWorkDetailView(row)
+	annotateFileQuality(access, row.CategoryIDs, view.Parts)
+	writeJSON(w, s.logger, http.StatusOK, view)
+}
+
+// annotateFileQuality marks each file against the target and cutoff of the work's first library
+// the caller can see (2026-09-19: "items show whether a file satisfies the target or cutoff").
+func annotateFileQuality(access authz.Access, categoryIDs []int64, parts []gen.WorkPart) {
+	for _, id := range categoryIDs {
+		category, err := access.Category(id, settings.PermissionRead)
+		if err != nil {
+			continue
+		}
+		for i := range parts {
+			file := parts[i].File
+			// A file the probe has not measured yet is not judged, rather than shown as failing.
+			if file == nil || file.AudioCodec == nil {
+				continue
+			}
+			quality, judged := fileQualityFor(access.Snapshot(), category, partFileFacts(*file))
+			if !judged {
+				return
+			}
+			meetsTarget, meetsCutoff := quality.MeetsTarget, quality.MeetsCutoff
+			if category.QualityTarget != nil {
+				file.MeetsTarget = &meetsTarget
+			}
+			file.MeetsCutoff = &meetsCutoff
+		}
+		return
+	}
+}
+
+// partFileFacts is what probing measured of a file, as the facts a profile judges.
+func partFileFacts(file gen.PartFile) score.Facts {
+	facts := score.Facts{File: score.FileFacts{
+		AudioBitrate: file.BitrateKbps * 1000, OverallBitrate: file.BitrateKbps * 1000, Lossless: file.Lossless,
+	}}
+	if file.AudioCodec != nil {
+		facts.File.AudioCodec = *file.AudioCodec
+	}
+	// The file's own type, not ffprobe's demuxer list ("mov,mp4,m4a,3gp,3g2,mj2").
+	if file.Extension != nil {
+		facts.File.Container = *file.Extension
+	} else if file.Container != nil {
+		facts.File.Container = *file.Container
+	}
+	return facts
 }
 
 // routeSetWorkMonitored parses the id path parameter, mirroring routeGetWork.
@@ -530,6 +580,7 @@ func buildPartViews(rows []PartRow) []gen.WorkPart {
 				MediaObjectId: row.File.MediaObjectID, AudioCodec: strPtr(row.File.AudioCodec),
 				VideoCodec: strPtr(row.File.VideoCodec), Container: strPtr(row.File.Container),
 				BitrateKbps: row.File.BitrateKbps, Lossless: row.File.Lossless,
+				Extension: strPtr(row.File.Extension),
 			}
 		}
 	}

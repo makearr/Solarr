@@ -88,7 +88,9 @@ FROM desired_item_file WHERE media_object_id = ? ORDER BY desired_item_id;
 -- artist overview cannot disagree about what is there.
 -- name: ListPartFilesForWork :many
 SELECT f.media_ref, f.media_object_id, o.overall_bitrate, o.audio_bitrate,
-       a.audio_codec, a.video_codec, a.container, a.lossless
+       a.audio_codec, a.video_codec, a.container, a.lossless,
+       CAST(COALESCE((SELECT lp.rel_path FROM library_path lp WHERE lp.media_object_id = o.id
+                      ORDER BY lp.is_primary DESC, lp.id LIMIT 1), '') AS TEXT) AS rel_path
 FROM desired_item d
 JOIN desired_item_file f ON f.desired_item_id = d.id
 JOIN media_object o ON o.id = f.media_object_id

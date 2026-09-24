@@ -144,6 +144,14 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 		return nil, fmt.Errorf("settings: list exclusion patterns: %w", err)
 	}
 
+	qualityLists, err := c.queries.ListCategoryQualityProfiles(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list category quality profiles: %w", err)
+	}
+	qualityTargets, err := c.queries.ListCategoryQualityTargets(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list category quality targets: %w", err)
+	}
 	namingProfiles, err := c.queries.ListNamingProfiles(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("settings: list naming profiles: %w", err)
@@ -177,7 +185,8 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 
 	return newSnapshot(
 		convertUsers(users),
-		convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
+		withQuality(convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
+			qualityLists, qualityTargets),
 		convertRootFolders(rootFolders),
 		convertAttachments(attachments),
 		access,
@@ -203,6 +212,30 @@ func convertUsers(rows []settingsdb.AppUser) []User {
 		})
 	}
 	return users
+}
+
+// withQuality attaches each library's ordered profile list and target.
+func withQuality(
+	categories []Category, lists []settingsdb.CategoryQualityProfile, targets []settingsdb.CategoryQualityTarget,
+) []Category {
+	index := make(map[int64]int, len(categories))
+	for i, category := range categories {
+		index[category.ID] = i
+	}
+	for _, row := range lists {
+		if i, ok := index[row.CategoryID]; ok {
+			categories[i].QualityProfileIDs = append(categories[i].QualityProfileIDs, row.QualityProfileID)
+		}
+	}
+	for _, row := range targets {
+		if i, ok := index[row.CategoryID]; ok {
+			categories[i].QualityTarget = &QualityTarget{
+				AudioCodec: row.AudioCodec, Container: row.Container,
+				BitrateKbps: nullInt64Ptr(row.BitrateKbps), TolerancePct: row.TolerancePct,
+			}
+		}
+	}
+	return categories
 }
 
 func convertNamingProfiles(
@@ -242,6 +275,7 @@ func convertCategories(rows []settingsdb.Category, naming map[int64]*NamingProfi
 			MonitorDiscovered:   row.MonitorDiscovered,
 			MonitorReleaseTypes: decodeReleaseTypes(row.MonitorReleaseTypes),
 			Naming:              profile,
+			QualityCutoffID:     nullInt64Ptr(row.QualityCutoffProfileID),
 		})
 	}
 	return categories

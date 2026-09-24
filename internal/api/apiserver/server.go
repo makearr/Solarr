@@ -396,6 +396,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/monitor", server.routeSetWorkMonitored)
 			secured.Post("/works/{id}/remove", server.routeRemoveWork)
 			secured.Post("/works/{id}/parts/{partId}/remove", server.routeRemovePart)
+			secured.Get("/categories/{id}/quality", server.routeGetLibraryQuality)
+			secured.Put("/categories/{id}/quality", server.routeSetLibraryQuality)
 			secured.Get("/categories/{id}/naming", server.routeGetLibraryNaming)
 			secured.Put("/categories/{id}/naming", server.routeSetLibraryNaming)
 			secured.Post("/categories/{id}/naming/examples", server.routePreviewLibraryNaming)

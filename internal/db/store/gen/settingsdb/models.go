@@ -48,15 +48,30 @@ type CalendarFeed struct {
 }
 
 type Category struct {
-	ID                  int64
-	MediaType           string
-	Name                string
-	PriorityRank        int64
-	QualityProfileID    sql.NullInt64
-	LanguageProfileID   sql.NullInt64
-	MonitorDiscovered   string
-	NamingProfileID     sql.NullInt64
-	MonitorReleaseTypes string
+	ID                     int64
+	MediaType              string
+	Name                   string
+	PriorityRank           int64
+	QualityProfileID       sql.NullInt64
+	LanguageProfileID      sql.NullInt64
+	MonitorDiscovered      string
+	NamingProfileID        sql.NullInt64
+	MonitorReleaseTypes    string
+	QualityCutoffProfileID sql.NullInt64
+}
+
+type CategoryQualityProfile struct {
+	CategoryID       int64
+	QualityProfileID int64
+	Ord              int64
+}
+
+type CategoryQualityTarget struct {
+	CategoryID   int64
+	AudioCodec   string
+	Container    string
+	BitrateKbps  sql.NullInt64
+	TolerancePct int64
 }
 
 type CategoryRootFolder struct {
@@ -182,10 +197,11 @@ type PlacementAffinity struct {
 }
 
 type QualityProfile struct {
-	ID          int64
-	Name        string
-	RulesJson   string
-	UpgradeJson string
+	ID            int64
+	Name          string
+	RulesJson     string
+	UpgradeJson   string
+	SuggestedRank int64
 }
 
 type RootFolder struct {
