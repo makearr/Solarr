@@ -20,6 +20,7 @@ const PASS_LABELS: Record<string, string> = {
   embedded_tags: "MusicBrainz IDs in the file",
   album_match: "Whole album against MusicBrainz tracklists",
   text_search: "Title search per file",
+  fingerprint: "Audio fingerprint (AcoustID)",
   folder_siblings: "Other files in the same folder",
 };
 
@@ -38,6 +39,7 @@ const OUTCOME_LABELS: Record<string, string> = {
   joined: "Joined the album the other files agreed on",
   siblings_disagree: "The other files point at different albums",
   no_identified_sibling: "No other file in the folder was identified",
+  disabled_no_key: "Skipped: no AcoustID key is set (Settings -> Metadata)",
 };
 
 export function outcomeLabel(outcome: string): string {

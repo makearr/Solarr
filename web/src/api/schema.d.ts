@@ -1805,6 +1805,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/library/unidentified/{mediaObjectId}/not-media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take a queued file out of the queue for good ("not media", F29).
+         * @description Keyed on the file's bytes, never its name (ADR-53): a later scan finds it and asks nothing; changed bytes are judged afresh. Nothing is moved or deleted.
+         */
+        post: operations["markUnidentifiedNotMedia"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/library/unidentified/{mediaObjectId}/attempts": {
         parameters: {
             query?: never;
@@ -7892,6 +7914,8 @@ export interface operations {
                     /** @description Only musicbrainz:release-group is supported today. */
                     provider: string;
                     external_id: string;
+                    /** @description Also resolve every other queued file directly in the same folder to this album ("identify the whole folder as"). */
+                    whole_folder?: boolean;
                 };
             };
         };
@@ -7905,10 +7929,38 @@ export interface operations {
                     "application/json": {
                         /** Format: int64 */
                         work_id: number;
+                        /**
+                         * Format: int64
+                         * @description How many queued files were resolved, this one included.
+                         */
+                        resolved: number;
                     };
                 };
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            /** @description No such queued file, or the caller cannot read its root folder. */
+            404: components["responses"]["Problem"];
+        };
+    };
+    markUnidentifiedNotMedia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             401: components["responses"]["Problem"];
             /** @description No such queued file, or the caller cannot read its root folder. */
             404: components["responses"]["Problem"];

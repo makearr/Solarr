@@ -121,12 +121,66 @@ func (q *Queries) ListUnidentified(ctx context.Context, arg ListUnidentifiedPara
 	return items, nil
 }
 
+const listUnidentifiedInFolder = `-- name: ListUnidentifiedInFolder :many
+SELECT media_object_id FROM identification_queue
+WHERE root_folder_id = ?1
+  AND substr(rel_path, 1, length(CAST(?2 AS TEXT))) = CAST(?2 AS TEXT)
+  AND instr(substr(rel_path, length(CAST(?2 AS TEXT)) + 1), '/') = 0
+ORDER BY media_object_id
+`
+
+type ListUnidentifiedInFolderParams struct {
+	RootFolderID int64
+	FolderPrefix string
+}
+
+// The queued files directly in one folder, for "identify the whole folder as".
+func (q *Queries) ListUnidentifiedInFolder(ctx context.Context, arg ListUnidentifiedInFolderParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listUnidentifiedInFolder, arg.RootFolderID, arg.FolderPrefix)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var media_object_id int64
+		if err := rows.Scan(&media_object_id); err != nil {
+			return nil, err
+		}
+		items = append(items, media_object_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markNotMedia = `-- name: MarkNotMedia :exec
+INSERT INTO not_media (media_object_id, marked_at) VALUES (?, ?)
+ON CONFLICT (media_object_id) DO NOTHING
+`
+
+type MarkNotMediaParams struct {
+	MediaObjectID int64
+	MarkedAt      int64
+}
+
+func (q *Queries) MarkNotMedia(ctx context.Context, arg MarkNotMediaParams) error {
+	_, err := q.db.ExecContext(ctx, markNotMedia, arg.MediaObjectID, arg.MarkedAt)
+	return err
+}
+
 const upsertUnidentified = `-- name: UpsertUnidentified :exec
 
 INSERT INTO identification_queue (media_object_id, root_folder_id, rel_path, candidates_json,
                                    first_seen_at, last_seen_at)
-VALUES (?1, ?2, ?3,
-        ?4, ?5, ?6)
+SELECT ?1, ?2, ?3,
+       ?4, ?5, ?6
+WHERE NOT EXISTS (SELECT 1 FROM not_media nm WHERE nm.media_object_id = ?1)
+  AND NOT EXISTS (SELECT 1 FROM work_file wf WHERE wf.media_object_id = ?1)
 ON CONFLICT (media_object_id) DO UPDATE SET
   root_folder_id = excluded.root_folder_id, rel_path = excluded.rel_path,
   candidates_json = excluded.candidates_json, last_seen_at = excluded.last_seen_at
@@ -143,6 +197,8 @@ type UpsertUnidentifiedParams struct {
 
 // F29: the manual identification queue (migration 0014). Column lists follow table
 // order, or sqlc stops reusing models.
+// A file marked "not media" is never queued again, nor one that already belongs to a work: a
+// person's resolve survives a full rescan the chain still cannot decide (found 2026-09-24).
 func (q *Queries) UpsertUnidentified(ctx context.Context, arg UpsertUnidentifiedParams) error {
 	_, err := q.db.ExecContext(ctx, upsertUnidentified,
 		arg.MediaObjectID,

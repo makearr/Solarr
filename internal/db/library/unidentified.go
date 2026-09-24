@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"path"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -132,6 +133,33 @@ func (u Unidentified) Clear(ctx context.Context, mediaObjectIDs []int64) error {
 		}
 		return nil
 	})
+}
+
+// MarkNotMedia takes a file out of the queue for good: these bytes are never queued again
+// (F29's "not media", 2026-09-24). A later full scan still sees the file; it just asks nothing.
+func (u Unidentified) MarkNotMedia(ctx context.Context, mediaObjectID, at int64) error {
+	return u.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		if err := queries.MarkNotMedia(ctx, librarydb.MarkNotMediaParams{MediaObjectID: mediaObjectID, MarkedAt: at}); err != nil {
+			return fmt.Errorf("library: mark %d not media: %w", mediaObjectID, err)
+		}
+		return queries.DeleteUnidentified(ctx, mediaObjectID)
+	})
+}
+
+// InFolder answers the queued files directly in the folder relPath sits in, relPath's own included.
+func (u Unidentified) InFolder(ctx context.Context, rootFolderID int64, relPath string) ([]int64, error) {
+	prefix := ""
+	if folder := path.Dir(relPath); folder != "." {
+		prefix = folder + "/"
+	}
+	ids, err := librarydb.New(u.store.Read()).ListUnidentifiedInFolder(ctx, librarydb.ListUnidentifiedInFolderParams{
+		RootFolderID: rootFolderID, FolderPrefix: prefix,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: queued files beside %q: %w", relPath, err)
+	}
+	return ids, nil
 }
 
 // Count answers how many files are queued for manual identification --

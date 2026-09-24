@@ -11,12 +11,9 @@ import type { components } from "@/api/schema";
 type UnidentifiedFile = components["schemas"]["UnidentifiedFile"];
 
 // F29: everything a scan recorded that the ADR-24 chain could not confidently
-// resolve, so a human can point it at the right work. Section 21.3's
-// manual-resolve action confirms the best candidate; picking a different one
-// from the ranked list, searching a provider live, and marking a file as not
-// media are all still their own follow-up (no live-search endpoint exists
-// yet, and "not media" needs a persistent flag a future scan would have to
-// respect that does not exist either).
+// resolve. Confirm takes the best candidate here; the Review page picks another,
+// applies it to the whole folder, or marks the file not media. Searching a
+// provider beyond the chain's candidates is still open.
 const FILTER_KEYS: readonly string[] = ["category_id"];
 
 export function Unidentified() {

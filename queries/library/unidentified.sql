@@ -2,10 +2,14 @@
 -- order, or sqlc stops reusing models.
 
 -- name: UpsertUnidentified :exec
+-- A file marked "not media" is never queued again, nor one that already belongs to a work: a
+-- person's resolve survives a full rescan the chain still cannot decide (found 2026-09-24).
 INSERT INTO identification_queue (media_object_id, root_folder_id, rel_path, candidates_json,
                                    first_seen_at, last_seen_at)
-VALUES (sqlc.arg(media_object_id), sqlc.arg(root_folder_id), sqlc.arg(rel_path),
-        sqlc.arg(candidates_json), sqlc.arg(first_seen_at), sqlc.arg(last_seen_at))
+SELECT sqlc.arg(media_object_id), sqlc.arg(root_folder_id), sqlc.arg(rel_path),
+       sqlc.arg(candidates_json), sqlc.arg(first_seen_at), sqlc.arg(last_seen_at)
+WHERE NOT EXISTS (SELECT 1 FROM not_media nm WHERE nm.media_object_id = sqlc.arg(media_object_id))
+  AND NOT EXISTS (SELECT 1 FROM work_file wf WHERE wf.media_object_id = sqlc.arg(media_object_id))
 ON CONFLICT (media_object_id) DO UPDATE SET
   root_folder_id = excluded.root_folder_id, rel_path = excluded.rel_path,
   candidates_json = excluded.candidates_json, last_seen_at = excluded.last_seen_at;
@@ -42,3 +46,15 @@ WHERE (sqlc.arg(filter_root_folders) = 0
        OR (first_seen_at = sqlc.arg(after_seen) AND media_object_id > sqlc.arg(after_id)))
 ORDER BY first_seen_at, media_object_id
 LIMIT sqlc.arg(page_size);
+
+-- name: MarkNotMedia :exec
+INSERT INTO not_media (media_object_id, marked_at) VALUES (?, ?)
+ON CONFLICT (media_object_id) DO NOTHING;
+
+-- The queued files directly in one folder, for "identify the whole folder as".
+-- name: ListUnidentifiedInFolder :many
+SELECT media_object_id FROM identification_queue
+WHERE root_folder_id = sqlc.arg(root_folder_id)
+  AND substr(rel_path, 1, length(CAST(sqlc.arg(folder_prefix) AS TEXT))) = CAST(sqlc.arg(folder_prefix) AS TEXT)
+  AND instr(substr(rel_path, length(CAST(sqlc.arg(folder_prefix) AS TEXT)) + 1), '/') = 0
+ORDER BY media_object_id;
