@@ -285,6 +285,24 @@ func NewDefaultRegistry() *Registry {
 		Default: `["brainzmash","musicbrainz-proxy","musicbrainz"]`,
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyMetadataCoverSources, Kind: KindStringList, Tier: TierAdvanced,
+		Name:     "Cover sources",
+		HelpText: "Where album covers come from, in order; a source left out is not used.",
+		Default:  `["coverartarchive","embedded"]`,
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyMetadataWikidata, Kind: KindBool, Tier: TierAdvanced,
+		Name:     "Wikidata",
+		HelpText: "Artist photos and biographies from Wikidata and Wikipedia.",
+		Default:  "true",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyMetadataAcoustID, Kind: KindBool, Tier: TierAdvanced,
+		Name:     "AcoustID fingerprints",
+		HelpText: "Identify files by their sound when nothing else names them. Needs an API key.",
+		Default:  "true",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyBrainzMashUserAgent, Kind: KindString, Tier: TierAdvanced,
 		Name:     "BrainzMash User-Agent",
 		HelpText: "Sent to BrainzMash, whose front door refuses agents not starting \"Lidarr/\".",

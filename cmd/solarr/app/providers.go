@@ -118,6 +118,10 @@ const acoustIDMinInterval = 334 * time.Millisecond
 // acoustIDKey opens the stored key per lookup, so entering one in the interface
 // takes effect without a restart; unreadable means the rung is off, not broken.
 func (p *process) acoustIDKey() string {
+	// Switched off, the rung reads as keyless and is skipped, and re-run when switched back on.
+	if !*p.cache.Snapshot().MetadataSettings().AcoustID {
+		return ""
+	}
 	key, err := p.cache.AcoustIDAPIKey()
 	if err != nil {
 		p.logger.Warn("acoustid key could not be opened; the fingerprint rung stays disabled", "error", err)

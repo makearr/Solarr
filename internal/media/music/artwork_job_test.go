@@ -122,7 +122,7 @@ func (fakeArtworkRoots) RootFolder(id int64) (settings.RootFolder, bool) {
 }
 
 func newArtworkJobReadingPictures(
-	t *testing.T, coverArt *fakeCoverArt, imageServerURL string, pictures *fakePictures,
+	t *testing.T, coverArt *fakeCoverArt, imageServerURL string, pictures *fakePictures, coverSources ...string,
 ) (*music.ArtworkJob, *store.Store, *fsx.Mem) {
 	t.Helper()
 	directory := t.TempDir()
@@ -173,6 +173,9 @@ func newArtworkJobReadingPictures(
 	}
 	if pictures != nil {
 		config.Pictures, config.Roots = pictures, fakeArtworkRoots{}
+	}
+	if coverSources != nil {
+		config.CoverSources = func() []string { return coverSources }
 	}
 	return music.NewArtworkJob(config), libraryStore, memFS
 }
@@ -412,5 +415,25 @@ func TestArtworkJob_PrefersTheArchiveOverTheEmbeddedPicture(t *testing.T) {
 	}
 	if len(pictures.asked) != 0 {
 		t.Errorf("embedded pictures read for %v, want none once the archive covered the work", pictures.asked)
+	}
+}
+
+// The configured cover order (2026-09-24): with the files first and the archive switched off, a
+// work's embedded picture is used and the archive is never asked.
+func TestArtworkJob_FollowsTheConfiguredCoverSources(t *testing.T) {
+	server := testImageServer(t)
+	pictures := &fakePictures{byPath: map[string][]byte{"/music/P!po/Trustfall/01.m4a": testPNG(t)}}
+	coverArt := &fakeCoverArt{urlByReleaseGroup: map[string]string{"rg-archived": server.URL + "/cover.png"}}
+	job, opened, _ := newArtworkJobReadingPictures(t, coverArt, server.URL, pictures, settings.CoverSourceEmbedded)
+	resolveWorkFromFile(t, opened, "rg-archived", "P!po/Trustfall/01.m4a")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.ArtworkJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if coverArt.calls+coverArt.releaseGroupCalls != 0 {
+		t.Errorf("the archive was asked %d times while switched off", coverArt.calls+coverArt.releaseGroupCalls)
+	}
+	if len(pictures.asked) != 1 {
+		t.Errorf("embedded pictures read for %v, want the one file", pictures.asked)
 	}
 }

@@ -57,6 +57,11 @@ type ScalarSettingsEntry struct {
 	PriorityNewReleaseDays     int64    `yaml:"priority_new_release_days,omitempty"`
 	BrainzMashUserAgent        string   `yaml:"brainzmash_user_agent,omitempty"`
 	MetadataSourceOrder        []string `yaml:"metadata_source_order,omitempty"`
+	// Pointers, so "all cover sources off" and "switched off" survive a round trip; absent keeps
+	// the stored value.
+	MetadataCoverSources *[]string `yaml:"metadata_cover_sources,omitempty"`
+	MetadataWikidata     *bool     `yaml:"metadata_wikidata,omitempty"`
+	MetadataAcoustID     *bool     `yaml:"metadata_acoustid,omitempty"`
 }
 
 // CategoryEntry is one category and the roots attached to it.
@@ -172,6 +177,7 @@ func (c *Cache) Export() Document {
 	network := snapshot.NetworkSettings()
 	cacheBudget := snapshot.CacheBudget()
 	priority := snapshot.PrioritySettings()
+	metadata := snapshot.MetadataSettings()
 	settingsEntry := ScalarSettingsEntry{
 		AuthRequired:               snapshot.AuthRequired(),
 		ImportAutoCommitConfidence: snapshot.ImportAutoCommitConfidence(),
@@ -194,6 +200,9 @@ func (c *Cache) Export() Document {
 		PriorityNewReleaseDays:     priority.NewReleaseDays,
 		BrainzMashUserAgent:        snapshot.MetadataSettings().BrainzMashUserAgent,
 		MetadataSourceOrder:        snapshot.MetadataSettings().SourceOrder,
+		MetadataCoverSources:       &metadata.CoverSources,
+		MetadataWikidata:           metadata.Wikidata,
+		MetadataAcoustID:           metadata.AcoustID,
 	}
 
 	roots := snapshot.RootFolders()
@@ -376,6 +385,12 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 			}
 			for _, problem := range validateMetadataSettings(MetadataSettings{
 				BrainzMashUserAgent: d.Settings.BrainzMashUserAgent, SourceOrder: order}) {
+				problems = append(problems, prefixed("settings", problem))
+			}
+		}
+		if covers := d.Settings.MetadataCoverSources; covers != nil {
+			for _, problem := range validateMetadataSettings(MetadataSettings{
+				BrainzMashUserAgent: DefaultBrainzMashUserAgent, CoverSources: *covers}) {
 				problems = append(problems, prefixed("settings", problem))
 			}
 		}
@@ -828,6 +843,19 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 	}
 	if entry.BrainzMashUserAgent != "" {
 		values[KeyBrainzMashUserAgent] = entry.BrainzMashUserAgent
+	}
+	if entry.MetadataCoverSources != nil {
+		encoded, err := json.Marshal(*entry.MetadataCoverSources)
+		if err != nil {
+			return fmt.Errorf("settings.metadata_cover_sources: %w", err)
+		}
+		values[KeyMetadataCoverSources] = string(encoded)
+	}
+	if entry.MetadataWikidata != nil {
+		values[KeyMetadataWikidata] = strconv.FormatBool(*entry.MetadataWikidata)
+	}
+	if entry.MetadataAcoustID != nil {
+		values[KeyMetadataAcoustID] = strconv.FormatBool(*entry.MetadataAcoustID)
 	}
 	at := cl.Now().Unix()
 	for key, value := range values {

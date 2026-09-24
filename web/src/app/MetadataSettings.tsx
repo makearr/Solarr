@@ -7,11 +7,26 @@ import type { components } from "@/api/schema";
 import { isTierVisible, useTier } from "@/lib/useTier";
 
 type MetadataSource = components["schemas"]["MetadataSource"];
+type Settings = components["schemas"]["MetadataSettings"];
+type CoverSource = NonNullable<Settings["cover_sources"]>[number];
+
+const COVER_SOURCES: readonly SourceEntry<CoverSource>[] = [
+  {
+    id: "coverartarchive",
+    label: "Cover Art Archive",
+    note: "MusicBrainz's cover archive, fetched by release and then by release group.",
+  },
+  {
+    id: "embedded",
+    label: "Embedded art",
+    note: "The picture already inside your files, used where nothing earlier found a cover.",
+  },
+];
 
 /** What each source is, and what using it means. The BrainzMash note is a
  *  privacy disclosure: it is a third party, and searches from this library
  *  reach it. */
-const SOURCES: readonly { id: MetadataSource; label: string; note: string }[] = [
+const SOURCES: readonly SourceEntry<MetadataSource>[] = [
   {
     id: "brainzmash",
     label: "BrainzMash",
@@ -47,23 +62,20 @@ export function MetadataSettings() {
     },
   });
 
-  const update = useMutation({
-    mutationFn: async (brainzmashUserAgent: string) => {
-      const { error } = await api.PATCH("/metadata/settings", {
-        body: { brainzmash_user_agent: brainzmashUserAgent },
-      });
+  const categories = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/categories");
       if (error) throw error;
+      return data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["metadata-settings"] }),
   });
 
-  const reorder = useMutation({
-    mutationFn: async (order: MetadataSource[]) => {
+  // brainzmash_user_agent is required on every PATCH, so each change carries the stored one.
+  const patch = useMutation({
+    mutationFn: async (change: Partial<Settings>) => {
       const { error } = await api.PATCH("/metadata/settings", {
-        body: {
-          brainzmash_user_agent: metadata.data?.brainzmash_user_agent ?? "",
-          source_order: order,
-        },
+        body: { brainzmash_user_agent: metadata.data?.brainzmash_user_agent ?? "", ...change },
       });
       if (error) throw error;
     },
@@ -81,30 +93,79 @@ export function MetadataSettings() {
   if (!isTierVisible(tier, "advanced")) return null;
   if (metadata.error !== null || !metadata.data) return null;
 
+  const settings = metadata.data;
+  const musicLibraries = (categories.data ?? [])
+    .filter((category) => category.media_type === "music")
+    .map((category) => category.name);
+
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Metadata</h2>
       <p className="text-xs text-ink-muted">
-        Artist and album data is asked from each source in turn until one answers.
+        Sources are set per media type; every library of that type uses them.
       </p>
 
       <div className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3">
-        <SourceOrder
-          order={(metadata.data.source_order ?? []) as MetadataSource[]}
-          busy={reorder.isPending}
-          onChange={(order) => reorder.mutate(order)}
+        <div className="flex flex-col gap-0.5">
+          <h3 className="text-sm font-medium text-ink">Music</h3>
+          <p className="text-xs text-ink-muted">
+            {musicLibraries.length === 0
+              ? "No music library uses these yet."
+              : `Used by ${musicLibraries.join(", ")}.`}
+          </p>
+        </div>
+
+        <p className="text-xs text-ink-muted">
+          Artist and album data is asked from each source in turn until one answers.
+        </p>
+        <OrderedSources
+          title="Source order"
+          sources={SOURCES}
+          order={(settings.source_order ?? []) as MetadataSource[]}
+          required="musicbrainz"
+          requiredNote="MusicBrainz always answers as a last resort"
+          busy={patch.isPending}
+          onChange={(order) => patch.mutate({ source_order: order })}
         />
-        {reorder.isError && <p className="text-xs text-danger">That order was refused.</p>}
         <UserAgentForm
-          key={metadata.data.brainzmash_user_agent}
-          stored={metadata.data.brainzmash_user_agent}
-          onSave={(agent) => update.mutate(agent)}
-          busy={update.isPending}
+          key={settings.brainzmash_user_agent}
+          stored={settings.brainzmash_user_agent}
+          onSave={(agent) => patch.mutate({ brainzmash_user_agent: agent })}
+          busy={patch.isPending}
         />
-        {update.isError && <p className="text-xs text-danger">That change was refused.</p>}
+
+        <div className="flex flex-col gap-3 border-t border-border-subtle pt-3">
+          <p className="text-xs text-ink-muted">
+            Covers come from each source in turn; a later one only fills what the earlier ones left
+            missing.
+          </p>
+          <OrderedSources
+            title="Cover sources"
+            sources={COVER_SOURCES}
+            order={settings.cover_sources ?? []}
+            busy={patch.isPending}
+            onChange={(order) => patch.mutate({ cover_sources: order })}
+          />
+          <Switch
+            label="Wikidata"
+            note="Artist photos and biographies."
+            checked={settings.wikidata ?? true}
+            busy={patch.isPending}
+            onChange={(wikidata) => patch.mutate({ wikidata })}
+          />
+          <Switch
+            label="AcoustID fingerprints"
+            note="Identifies a file by its sound when its tags and folder name cannot. Needs the key below."
+            checked={settings.acoustid ?? true}
+            busy={patch.isPending}
+            onChange={(acoustid) => patch.mutate({ acoustid })}
+          />
+        </div>
+        {patch.isError && <p className="text-xs text-danger">That change was refused.</p>}
+
         <AcoustIDKeyForm
-          key={String(metadata.data.acoustid_api_key?.has_value ?? false)}
-          stored={metadata.data.acoustid_api_key?.has_value ?? false}
+          key={String(settings.acoustid_api_key?.has_value ?? false)}
+          stored={settings.acoustid_api_key?.has_value ?? false}
           onSave={(apiKey) => saveAcoustIDKey.mutate(apiKey)}
           busy={saveAcoustIDKey.isPending}
         />
@@ -113,6 +174,36 @@ export function MetadataSettings() {
         )}
       </div>
     </section>
+  );
+}
+
+function Switch({
+  label,
+  note,
+  checked,
+  busy,
+  onChange,
+}: {
+  label: string;
+  note: string;
+  checked: boolean;
+  busy: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex items-start gap-2 text-xs">
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={busy}
+        className="mt-0.5"
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span className="flex flex-col">
+        <span className="text-ink">{label}</span>
+        <span className="text-[0.6875rem] text-ink-muted">{note}</span>
+      </span>
+    </label>
   );
 }
 
@@ -205,20 +296,30 @@ function AcoustIDKeyForm({
   );
 }
 
+type SourceEntry<T extends string> = { id: T; label: string; note: string };
+
 /** The order sources are tried in, Lidarr's indexer-priority shape. Each row
  *  carries an info button whose tooltip says what the source is -- for
  *  BrainzMash that is a privacy disclosure. */
-function SourceOrder({
+function OrderedSources<T extends string>({
+  title,
+  sources,
   order,
+  required,
+  requiredNote,
   busy,
   onChange,
 }: {
-  order: MetadataSource[];
+  title: string;
+  sources: readonly SourceEntry<T>[];
+  order: T[];
+  required?: T;
+  requiredNote?: string;
   busy: boolean;
-  onChange: (order: MetadataSource[]) => void;
+  onChange: (order: T[]) => void;
 }) {
-  const listed = order.filter((id) => SOURCES.some((source) => source.id === id));
-  const absent = SOURCES.filter((source) => !listed.includes(source.id));
+  const listed = order.filter((id) => sources.some((source) => source.id === id));
+  const absent = sources.filter((source) => !listed.includes(source.id));
 
   const move = (index: number, delta: number) => {
     const target = index + delta;
@@ -233,13 +334,11 @@ function SourceOrder({
 
   return (
     <div className="flex flex-col gap-1 text-xs">
-      <span className="text-ink-muted">Source order</span>
+      <span className="text-ink-muted">{title}</span>
       {listed.map((id, index) => {
-        const source = SOURCES.find((entry) => entry.id === id);
+        const source = sources.find((entry) => entry.id === id);
         if (source === undefined) return null;
-        // MusicBrainz always answers as a last resort, so it can be moved but
-        // never taken out of the list.
-        const removable = source.id !== "musicbrainz";
+        const removable = source.id !== required;
         return (
           <div key={id} className="flex items-center gap-1">
             <input
@@ -247,7 +346,7 @@ function SourceOrder({
               checked
               disabled={busy || !removable}
               aria-label={`Use ${source.label}`}
-              title={removable ? undefined : "MusicBrainz always answers as a last resort"}
+              title={removable ? undefined : requiredNote}
               onChange={() => onChange(listed.filter((entry) => entry !== id))}
             />
             <span className="w-4 text-ink-muted">{index + 1}.</span>
@@ -302,7 +401,7 @@ function SourceOrder({
  *  click also focuses, so the two fought and the tooltip never appeared.
  *  title carries the same text for assistive technology and for a native
  *  hover tip. */
-function SourceInfo({ source }: { source: (typeof SOURCES)[number] }) {
+function SourceInfo({ source }: { source: SourceEntry<string> }) {
   const [open, setOpen] = useState(false);
   return (
     <span className="relative flex items-center">

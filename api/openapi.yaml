@@ -6465,6 +6465,23 @@ components:
             not consulted at all, except musicbrainz, which always answers as
             a last resort. Omitted on a PATCH leaves the stored order alone.
           items: { $ref: "#/components/schemas/MetadataSource" }
+        cover_sources:
+          type: array
+          description: >-
+            Where album covers come from, in order; each fills only covers the
+            earlier ones left missing. A source left out is not used. Omitted
+            on a PATCH leaves it alone.
+          items:
+            type: string
+            enum: [coverartarchive, embedded]
+        wikidata:
+          type: boolean
+          description: Artist photos and biographies from Wikidata. Omitted on a PATCH leaves it alone.
+        acoustid:
+          type: boolean
+          description: >-
+            Fingerprint identification, which also needs an API key. Switching it
+            back on re-runs what it skipped. Omitted on a PATCH leaves it alone.
         acoustid_api_key:
           allOf: [{ $ref: "#/components/schemas/SecretMask" }]
           description: >-

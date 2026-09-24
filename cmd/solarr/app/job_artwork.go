@@ -35,15 +35,16 @@ func (p *process) registerArtworkJob(registry *jobs.Registry, executor *jobs.Exe
 	})
 
 	job := music.NewArtworkJob(music.ArtworkJobConfig{
-		Artworks:  library.NewArtworks(p.library),
-		CoverArt:  musicbrainz.NewCoverArt(client, coverArtBaseURL),
-		Pictures:  mediatool.New(nil, 0),
-		Roots:     adapters.Roots{Cache: p.cache},
-		HTTP:      client,
-		FS:        p.fsys,
-		ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"),
-		Clock:     wall,
-		Logger:    p.logger,
+		Artworks:     library.NewArtworks(p.library),
+		CoverArt:     musicbrainz.NewCoverArt(client, coverArtBaseURL),
+		Pictures:     mediatool.New(nil, 0),
+		Roots:        adapters.Roots{Cache: p.cache},
+		HTTP:         client,
+		FS:           p.fsys,
+		ImagesDir:    filepath.Join(p.config.Paths.CacheDir, "images"),
+		Clock:        wall,
+		Logger:       p.logger,
+		CoverSources: func() []string { return p.cache.Snapshot().MetadataSettings().CoverSources },
 	})
 	executor.Handle(music.ArtworkJobType, job)
 	return nil

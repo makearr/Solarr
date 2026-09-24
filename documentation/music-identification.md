@@ -142,7 +142,8 @@ one, for submitting fingerprints, and a lookup refuses it. Stored sealed in `set
 (`metadata.acoustid.api_key`), never returned by the API — `GET /metadata/settings` says only
 whether one exists, `POST /metadata/acoustid/apikey` replaces it and an empty key clears it.
 With no key the pass reports itself disabled and does not fingerprint at all, so identification
-keeps working with one fewer pass.
+keeps working with one fewer pass. Switching `metadata.acoustid` off does the same with a key
+stored; switching it back on re-runs every file it skipped.
 
 Every file's outcome is recorded on its own identification attempt, including
 `fingerprint: disabled_no_key`: a file skipped for want of a key is not a file AcoustID had no

@@ -125,7 +125,8 @@ requests **positionally**, never by the filename a tool echoes back.
 
 `ffprobe`, `fpcalc`, `ffmpeg` and (from stage 5) the tagging helper must be on `PATH`.
 `ffmpeg` copies a file's embedded cover art out unchanged (`EmbeddedPicture`), the fallback
-album picture when the Cover Art Archive has none (2026-09-17). Startup logs
+album picture when the Cover Art Archive has none (2026-09-17); `metadata.cover_sources`
+orders or drops either. Startup logs
 one warning naming every missing tool rather than each file failing obscurely at scan time,
 and a missing tool degrades: the import proceeds, and tag write-back is recorded as deferred
 rather than dropped.

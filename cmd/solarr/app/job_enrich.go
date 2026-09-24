@@ -35,19 +35,20 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 	})
 
 	job := music.NewEnrichJob(music.EnrichJobConfig{
-		Identity:  library.NewIdentity(p.library),
-		People:    library.NewPeople(p.library),
-		Provider:  p.musicBrainzProvider(),
-		Biography: p.wikidataFetcher(),
-		Artworks:  library.NewArtworks(p.library),
-		Realigner: realigner{p: p},
-		Tags:      mediatool.New(nil, 0),
-		Roots:     adapters.Roots{Cache: p.cache},
-		HTTP:      imageClient,
-		FS:        p.fsys,
-		ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"),
-		Clock:     wall,
-		Logger:    p.logger,
+		Identity:        library.NewIdentity(p.library),
+		People:          library.NewPeople(p.library),
+		Provider:        p.musicBrainzProvider(),
+		Biography:       p.wikidataFetcher(),
+		WikidataEnabled: func() bool { return *p.cache.Snapshot().MetadataSettings().Wikidata },
+		Artworks:        library.NewArtworks(p.library),
+		Realigner:       realigner{p: p},
+		Tags:            mediatool.New(nil, 0),
+		Roots:           adapters.Roots{Cache: p.cache},
+		HTTP:            imageClient,
+		FS:              p.fsys,
+		ImagesDir:       filepath.Join(p.config.Paths.CacheDir, "images"),
+		Clock:           wall,
+		Logger:          p.logger,
 	})
 	executor.Handle(music.EnrichJobType, job)
 	return nil

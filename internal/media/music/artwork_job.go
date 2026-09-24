@@ -55,15 +55,16 @@ type CoverArtFetcher interface {
 // usable release MBID and none recorded yet (section 21.6). Direct-wired the
 // same way the rest of internal/media/music is until stage 9.
 type ArtworkJob struct {
-	artworks  library.Artworks
-	coverArt  CoverArtFetcher
-	pictures  EmbeddedPictureReader
-	roots     RootFolders
-	http      *httpx.Client
-	fs        fsx.FS
-	imagesDir string
-	clock     clock.Clock
-	logger    *slog.Logger
+	artworks     library.Artworks
+	coverArt     CoverArtFetcher
+	pictures     EmbeddedPictureReader
+	roots        RootFolders
+	http         *httpx.Client
+	fs           fsx.FS
+	imagesDir    string
+	clock        clock.Clock
+	logger       *slog.Logger
+	coverSources func() []string
 }
 
 // EmbeddedPictureReader copies a file's own cover art out, or answers
@@ -91,6 +92,9 @@ type ArtworkJobConfig struct {
 	ImagesDir string
 	Clock     clock.Clock
 	Logger    *slog.Logger
+	// CoverSources is the configured order, read per run: settings.CoverSourceArchive and
+	// settings.CoverSourceEmbedded, a source left out not used. Nil is the archive, then the files.
+	CoverSources func() []string
 }
 
 // NewArtworkJob builds the handler.
@@ -101,8 +105,8 @@ func NewArtworkJob(config ArtworkJobConfig) *ArtworkJob {
 	}
 	return &ArtworkJob{
 		artworks: config.Artworks, coverArt: config.CoverArt, pictures: config.Pictures, roots: config.Roots,
-		http: config.HTTP,
-		fs:   config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
+		http: config.HTTP, coverSources: config.CoverSources,
+		fs: config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
 	}
 }
 
@@ -115,17 +119,30 @@ func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
 		return fmt.Errorf("music: artwork: create %s: %w", j.imagesDir, err)
 	}
 
-	// Releases first, as the more exact image; then release groups, for
-	// wanted albums with no edition and releases the archive had nothing for.
-	if err := j.sweep(ctx, "release", j.artworks.NeedingArtwork, j.coverArt.Fetch); err != nil {
-		return err
+	// Each source fills only the works still without a cover, so the order decides which wins.
+	sources := settings.DefaultCoverSources
+	if j.coverSources != nil {
+		sources = j.coverSources()
 	}
-	if err := j.sweep(ctx, "release-group", j.artworks.NeedingReleaseGroupArtwork, j.coverArt.FetchReleaseGroup); err != nil {
-		return err
+	for _, source := range sources {
+		switch source {
+		case settings.CoverSourceArchive:
+			// Releases first, as the more exact image; then release groups, for wanted albums with
+			// no edition and releases the archive had nothing for.
+			if err := j.sweep(ctx, "release", j.artworks.NeedingArtwork, j.coverArt.Fetch); err != nil {
+				return err
+			}
+			if err := j.sweep(ctx, "release-group", j.artworks.NeedingReleaseGroupArtwork,
+				j.coverArt.FetchReleaseGroup); err != nil {
+				return err
+			}
+		case settings.CoverSourceEmbedded:
+			if err := j.sweepEmbedded(ctx); err != nil {
+				return err
+			}
+		}
 	}
-	// Last, the art the files carry themselves: no network, and it covers
-	// albums the archive has nothing for.
-	return j.sweepEmbedded(ctx)
+	return nil
 }
 
 // sweepEmbedded reads cover art out of one known file per work still without

@@ -169,6 +169,7 @@ func newEnrichJobRealigning(
 // nil, biographyFor's own tests never noticed).
 func newEnrichJobWithImageFetch(
 	t *testing.T, source musicbrainz.Source, biographer music.Biographer, imageServerURL string,
+	wikidataEnabled ...func() bool,
 ) (*music.EnrichJob, *store.Store, *librarydb.Queries, *fsx.Mem) {
 	t.Helper()
 	directory := t.TempDir()
@@ -229,11 +230,15 @@ func newEnrichJobWithImageFetch(
 		Provider: "test-image-server", UserAgent: "test",
 	})
 	memFS := fsx.NewMem(fake)
+	var enabled func() bool
+	if len(wikidataEnabled) > 0 {
+		enabled = wikidataEnabled[0]
+	}
 
 	job := music.NewEnrichJob(music.EnrichJobConfig{
 		Identity: identity, People: library.NewPeople(libraryStore), Provider: provider,
 		Biography: biographer, Artworks: library.NewArtworks(libraryStore),
-		HTTP: client, FS: memFS, ImagesDir: "/cache/images",
+		HTTP: client, FS: memFS, ImagesDir: "/cache/images", WikidataEnabled: enabled,
 		Clock: fake, Logger: slog.New(slog.DiscardHandler),
 	})
 	return job, libraryStore, librarydb.New(libraryStore.Read()), memFS
@@ -817,6 +822,33 @@ func TestEnrichJob_BackfillRecordsNothingWithoutAWikidataSource(t *testing.T) {
 	}
 	if len(remaining) != 1 {
 		t.Fatalf("PeopleNeedingArtwork = %+v, want the artist untouched", remaining)
+	}
+}
+
+// Switching Wikidata off must not record every artist as photo-less, or switching it back on
+// would never fetch one.
+func TestEnrichJob_BackfillRecordsNothingWithWikidataSwitchedOff(t *testing.T) {
+	server := testImageServer(t)
+	source := &fakeArtistSource{artists: map[string]musicbrainz.Artist{
+		"artist-5": {MBID: "artist-5", Name: "Pevilodon", SortName: "Pevilodon", WikidataQID: "Q5"},
+	}}
+	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{
+		"Q5": {Description: "American singer", ImageURL: server.URL + "/cover.png"},
+	}}
+	job, opened, _, _ := newEnrichJobWithImageFetch(t, source, biographer, server.URL, func() bool { return false })
+	resolveBareArtist(t, opened, "artist-5", "Pevilodon")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	remaining, err := library.NewArtworks(opened).PeopleNeedingArtwork(t.Context(), 0, 10)
+	if err != nil {
+		t.Fatalf("PeopleNeedingArtwork: %v", err)
+	}
+	if len(remaining) != 1 || biographer.calls != 0 {
+		t.Fatalf("PeopleNeedingArtwork = %+v, Wikidata calls %d; want the artist untouched and no call",
+			remaining, biographer.calls)
 	}
 }
 
