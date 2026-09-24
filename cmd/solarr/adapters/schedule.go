@@ -23,19 +23,30 @@ func (a Schedule) State(ctx context.Context, key string) (jobs.ScheduleRun, bool
 	return a.States.Get(ctx, key)
 }
 
-func (a Schedule) EffectiveCadence(key, defaultCadence string) string {
-	return a.Cache.Snapshot().ScheduleCadence(key, defaultCadence)
+func (a Schedule) EffectiveCadences(key, defaultCadence string) []string {
+	return a.Cache.Snapshot().ScheduleCadences(key, defaultCadence)
+}
+
+func (a Schedule) RunAtStartup(key string, fallback bool) bool {
+	return a.Cache.Snapshot().ScheduleRunAtStartup(key, fallback)
 }
 
 func (a Schedule) Enabled(key string) bool {
 	return a.Cache.Snapshot().ScheduleEnabled(key)
 }
 
-func (a Schedule) SetCadence(ctx context.Context, key, cadence string) error {
+func (a Schedule) SetCadences(ctx context.Context, key string, cadences []string) error {
 	if _, found := a.Registry.Lookup(key); !found {
 		return jobs.ErrUnknownTask
 	}
-	return a.Cache.SetScheduleCadence(ctx, a.Clock, key, cadence)
+	return a.Cache.SetScheduleCadences(ctx, a.Clock, key, cadences)
+}
+
+func (a Schedule) SetRunAtStartup(ctx context.Context, key string, run bool) error {
+	if _, found := a.Registry.Lookup(key); !found {
+		return jobs.ErrUnknownTask
+	}
+	return a.Cache.SetScheduleRunAtStartup(ctx, a.Clock, key, run)
 }
 
 func (a Schedule) SetEnabled(ctx context.Context, key string, enabled bool) error {

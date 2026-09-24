@@ -421,6 +421,15 @@ const (
 	RootFolderDrainStatePAUSED   RootFolderDrainState = "PAUSED"
 )
 
+// Defines values for ScheduleCategory.
+const (
+	ScheduleCategoryDownloads   ScheduleCategory = "downloads"
+	ScheduleCategoryLibrary     ScheduleCategory = "library"
+	ScheduleCategoryMaintenance ScheduleCategory = "maintenance"
+	ScheduleCategoryMetadata    ScheduleCategory = "metadata"
+	ScheduleCategoryStatistics  ScheduleCategory = "statistics"
+)
+
 // Defines values for ScheduleLastOutcome.
 const (
 	ScheduleLastOutcomeDuplicate ScheduleLastOutcome = "duplicate"
@@ -2396,8 +2405,11 @@ type RootRenamePlan struct {
 
 // Schedule One registered periodic task (ADR-59), its effective settings and run-state.
 type Schedule struct {
-	// Cadence Effective cadence -- a stored override if one exists, default_cadence otherwise.
-	Cadence string `json:"cadence"`
+	// Cadences Effective cadences -- a stored override if one exists, [default_cadence] otherwise.
+	Cadences []string `json:"cadences"`
+
+	// Category The group the scheduler screen shows the task under.
+	Category ScheduleCategory `json:"category"`
 
 	// DefaultCadence The registry's own fallback cadence.
 	DefaultCadence string  `json:"default_cadence"`
@@ -2412,12 +2424,21 @@ type Schedule struct {
 	Name        string               `json:"name"`
 	NextRunAt   *time.Time           `json:"next_run_at,omitempty"`
 
+	// RunAtStartup Whether it runs once when Solarr starts; always false when not offered.
+	RunAtStartup bool `json:"run_at_startup"`
+
+	// StartupOffered Whether running once at startup makes sense for this task.
+	StartupOffered bool `json:"startup_offered"`
+
 	// SupportsFull Whether POST /schedules/{key}/run?full=true does something different from an ordinary run for this task -- library scan's full rescan is the only one today (private/questions.md).
 	SupportsFull bool `json:"supports_full"`
 
 	// Tier ADR-26's visibility tier.
 	Tier ScheduleTier `json:"tier"`
 }
+
+// ScheduleCategory The group the scheduler screen shows the task under.
+type ScheduleCategory string
 
 // ScheduleLastOutcome Absent until the task has fired at least once.
 type ScheduleLastOutcome string
@@ -3029,8 +3050,9 @@ type RenameRootFolderJSONBody struct {
 
 // UpdateScheduleJSONBody defines parameters for UpdateSchedule.
 type UpdateScheduleJSONBody struct {
-	Cadence *string `json:"cadence,omitempty"`
-	Enabled *bool   `json:"enabled,omitempty"`
+	Cadences     *[]string `json:"cadences,omitempty"`
+	Enabled      *bool     `json:"enabled,omitempty"`
+	RunAtStartup *bool     `json:"run_at_startup,omitempty"`
 }
 
 // RunScheduleParams defines parameters for RunSchedule.
@@ -3789,7 +3811,7 @@ type ServerInterface interface {
 	// Every registered periodic task (ADR-59).
 	// (GET /schedules)
 	ListSchedules(w http.ResponseWriter, r *http.Request)
-	// Override a task's cadence and/or enabled flag. Administrator only.
+	// Override a task's schedules, enabled flag or startup run. Administrator only.
 	// (PATCH /schedules/{key})
 	UpdateSchedule(w http.ResponseWriter, r *http.Request, key string)
 	// Fire a task immediately. Administrator only.
@@ -4710,7 +4732,7 @@ func (_ Unimplemented) ListSchedules(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Override a task's cadence and/or enabled flag. Administrator only.
+// Override a task's schedules, enabled flag or startup run. Administrator only.
 // (PATCH /schedules/{key})
 func (_ Unimplemented) UpdateSchedule(w http.ResponseWriter, r *http.Request, key string) {
 	w.WriteHeader(http.StatusNotImplemented)

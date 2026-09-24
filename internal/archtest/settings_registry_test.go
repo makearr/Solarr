@@ -27,10 +27,12 @@ var settingsCallerDirs = []string{"internal/api/apiserver", "cmd/solarr/adapters
 // comment gives the reason for each:
 //   - SetCacheMeasurement writes a measurement sweep's own probed facts
 //     (cache.measured.*), never a policy write ADR-44 governs.
-//   - SetScheduleCadence/SetScheduleEnabled are gated by jobs.TaskRegistry.
+//   - SetScheduleCadences/SetScheduleEnabled/SetScheduleRunAtStartup are gated by jobs.TaskRegistry.
 //     Lookup in adapters.Schedule instead -- schedule.<task>.cadence/enabled
 //     is dynamic per registered task, already tier-tagged via jobs.Task.Tier.
-var exemptScalarSetters = []string{"SetCacheMeasurement", "SetScheduleCadence", "SetScheduleEnabled"}
+var exemptScalarSetters = []string{
+	"SetCacheMeasurement", "SetScheduleCadences", "SetScheduleEnabled", "SetScheduleRunAtStartup",
+}
 
 // TestSettingsRegistry_EveryScalarSetterCallIsGuarded is Invariant 81: "an
 // API-reachable setting with no registration fails" -- ADR-26's "cannot be

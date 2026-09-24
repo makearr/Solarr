@@ -457,21 +457,7 @@ func (p *process) startServer(ctx context.Context) error {
 	p.effectivePort, portSource = p.resolvedServerPort()
 
 	p.reportRootFolders()
-	// Each is also a registered task (todo 4.19): this first call is what
-	// makes the library browsable immediately on a fresh start rather than
-	// waiting for the task's own first scheduled tick, which for a 30-minute
-	// cadence could otherwise be up to 30 minutes away. Errors are already
-	// logged inside each function; discarded here since there is nothing
-	// further for a one-off startup call to do with them.
-	_, _ = p.enqueueLibraryScans(ctx)
-	_, _ = p.enqueueEnrichment(ctx)
-	_, _ = p.enqueueSubscriptionExpand(ctx)
-	_, _ = p.enqueueArtwork(ctx)
-	_, _ = p.enqueueCategoryCounts(ctx)
-	_, _ = p.enqueueFreshCounts(ctx)
-	_, _ = p.enqueueProbe(ctx)
-	_, _ = p.enqueueCapacity(ctx)
-	_, _ = p.enqueueCacheMaintenance(ctx)
+	// Startup runs are per task and switchable on the Scheduler screen (2026-09-19 review).
 	p.startSchedulers(ctx)
 	if err := p.seedAuthPolicy(ctx); err != nil {
 		return err
