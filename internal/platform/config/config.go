@@ -116,6 +116,7 @@ type Database struct {
 
 // Backup is the automatic backup policy (ADR-15).
 type Backup struct {
+	// Schedule and Keep are ignored since 2026-09-24: the Backup and Clean old backups tasks replaced them.
 	Schedule string `yaml:"schedule"`
 	// SettingsOnChange snapshots settings.db on every write; it is tiny and
 	// precious (ADR-25).

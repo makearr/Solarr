@@ -94,32 +94,38 @@ func parseBackupName(name, prefix string) (BackupInfo, bool) {
 // outside the rotation entirely -- and keep is raised to minBackupsKept if it is
 // configured lower.
 func (s *Store) PruneBackups(directory string, keep int) ([]string, error) {
-	if keep < minBackupsKept {
-		keep = minBackupsKept
-	}
+	return s.pruneRotation(directory, func(index int, _ BackupInfo) bool {
+		return index >= max(keep, minBackupsKept)
+	})
+}
 
+// PruneBackupsOlderThan deletes rotation backups taken before cutoff, but never the newest
+// minBackupsKept, so a long outage cannot age every backup away.
+func (s *Store) PruneBackupsOlderThan(directory string, cutoff time.Time) ([]string, error) {
+	return s.pruneRotation(directory, func(index int, backup BackupInfo) bool {
+		return index >= minBackupsKept && backup.At.Before(cutoff)
+	})
+}
+
+// pruneRotation removes each rotation backup, newest first by index, that remove selects.
+func (s *Store) pruneRotation(directory string, remove func(index int, backup BackupInfo) bool) ([]string, error) {
 	all, err := s.ListBackups(directory)
 	if err != nil {
 		return nil, err
 	}
-
-	var rotation []BackupInfo
-	for _, backup := range all {
-		if backup.Kind == BackupRotation {
-			rotation = append(rotation, backup)
-		}
-	}
-	if len(rotation) <= keep {
-		return nil, nil
-	}
-
-	// rotation is newest first (ListBackups), so the tail past keep is the oldest.
 	var removed []string
-	for _, backup := range rotation[keep:] {
-		if err := s.fs.Remove(backup.Path); err != nil {
-			return removed, fmt.Errorf("store %s: remove backup %q: %w", s.config.Name, backup.Path, err)
+	index := 0
+	for _, backup := range all {
+		if backup.Kind != BackupRotation {
+			continue
 		}
-		removed = append(removed, backup.Path)
+		if remove(index, backup) {
+			if err := s.fs.Remove(backup.Path); err != nil {
+				return removed, fmt.Errorf("store %s: remove backup %q: %w", s.config.Name, backup.Path, err)
+			}
+			removed = append(removed, backup.Path)
+		}
+		index++
 	}
 	return removed, nil
 }

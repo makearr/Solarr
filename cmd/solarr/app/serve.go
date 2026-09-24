@@ -387,6 +387,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerCategoryCountsJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerMaintenanceJobs(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerFreshCountsJob(registry, executor); err != nil {
 		return err
 	}
@@ -613,9 +616,7 @@ func (p *process) startServer(ctx context.Context) error {
 	stopping, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	if err := p.startBackupSchedules(stopping); err != nil {
-		return err
-	}
+	p.startBackupSchedules()
 
 	dispatcherDone := make(chan struct{})
 	go func() {

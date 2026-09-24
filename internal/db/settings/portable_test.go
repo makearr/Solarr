@@ -628,3 +628,62 @@ func TestImport_RefusesNamingTheMediaTypeRejects(t *testing.T) {
 		t.Error("a refused import created the library anyway")
 	}
 }
+
+// A restore used to lose every cadence override and the backup retention (found 2026-09-24).
+func TestDocument_RoundTrips_IncludesSchedulesAndBackupRetention(t *testing.T) {
+	cache, fake := newCache(t)
+	if err := cache.SetScheduleCadences(t.Context(), fake, "backup", []string{"0 1 * * *", "0 13 * * *"}); err != nil {
+		t.Fatalf("SetScheduleCadences: %v", err)
+	}
+	if err := cache.SetScheduleEnabled(t.Context(), fake, "library_scan", false); err != nil {
+		t.Fatalf("SetScheduleEnabled: %v", err)
+	}
+	if err := cache.SetScheduleRunAtStartup(t.Context(), fake, "library_scan", true); err != nil {
+		t.Fatalf("SetScheduleRunAtStartup: %v", err)
+	}
+	retention := settings.BackupRetention{Mode: settings.BackupKeepDays, KeepCount: 9, KeepDays: 45}
+	if err := cache.SetBackupRetention(t.Context(), fake, retention); err != nil {
+		t.Fatalf("SetBackupRetention: %v", err)
+	}
+
+	exported := cache.Export()
+	yes, no := true, false
+	want := map[string]settings.ScheduleEntry{
+		"backup":       {Cadences: []string{"0 1 * * *", "0 13 * * *"}},
+		"library_scan": {Enabled: &no, RunAtStartup: &yes},
+	}
+	if !reflect.DeepEqual(exported.Schedules, want) {
+		t.Fatalf("exported schedules = %+v, want %+v", exported.Schedules, want)
+	}
+
+	encoded, err := yaml.Marshal(exported)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded settings.Document
+	if err := yaml.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	fresh, freshClock := newCache(t)
+	if err := fresh.Import(t.Context(), freshClock, netip.Addr{}, decoded); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if got := fresh.Export(); !equalDocuments(got, exported) {
+		t.Errorf("round trip changed the configuration:\n got %+v\nwant %+v", got, exported)
+	}
+	if got := fresh.Snapshot().BackupRetention(); got != retention {
+		t.Errorf("retention after restore = %+v, want %+v", got, retention)
+	}
+}
+
+func TestImport_RefusesAScheduleThatNeverFires(t *testing.T) {
+	cache, fake := newCache(t)
+	document := settings.Document{Version: settings.DocumentVersion, Schedules: map[string]settings.ScheduleEntry{
+		"backup": {Cadences: []string{"0 0 30 2 *"}},
+	}}
+	err := cache.Import(t.Context(), fake, netip.Addr{}, document)
+	var problems config.Problems
+	if !errors.As(err, &problems) || len(problems) != 1 || !strings.HasPrefix(problems[0].Path, "schedules.backup.") {
+		t.Fatalf("Import = %v, want one problem under schedules.backup", err)
+	}
+}

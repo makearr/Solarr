@@ -159,10 +159,9 @@ database:
   write_hard: 2s
 
 backup:
-  schedule: "0 3 * * *"
+  # Routine backups and their cleanup are set on the Scheduler screen.
   # settings.db is tiny and holds the credentials, so it is snapshot on change.
   settings_on_change: true
-  keep: 5
   keep_settings: 20
   # Migrations are forward-only; this backup is the only rollback. Not optional.
   before_migration: true

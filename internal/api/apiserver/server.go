@@ -520,6 +520,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/users", server.CreateUser)
 			secured.Get("/settings/users", server.GetUserDefaults)
 			secured.Put("/settings/users", server.SetUserDefaults)
+			secured.Get("/settings/backups", server.GetBackupRetention)
+			secured.Put("/settings/backups", server.SetBackupRetention)
 			secured.Patch("/users/{id}", routeUser(server.UpdateUser))
 			secured.Delete("/users/{id}", routeUser(server.DeleteUser))
 			secured.Put("/users/{id}/access", routeUser(server.SetUserAccess))

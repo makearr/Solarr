@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -159,4 +160,34 @@ func contains(items []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// Age-based pruning removes what is older than the cutoff but never the newest three.
+func TestPruneBackupsOlderThan_KeepsTheNewestThreeWhateverTheirAge(t *testing.T) {
+	fixture := newMigrationFixture(t)
+	var taken []string
+	for range 5 {
+		path, err := fixture.store.Backup(t.Context(), fixture.backupDir, store.BackupRotation)
+		if err != nil {
+			t.Fatalf("Backup: %v", err)
+		}
+		taken = append(taken, path)
+		fixture.clock.Advance(24 * time.Hour)
+	}
+
+	removed, err := fixture.store.PruneBackupsOlderThan(fixture.backupDir, fixture.clock.Now().Add(-48*time.Hour))
+	if err != nil {
+		t.Fatalf("PruneBackupsOlderThan: %v", err)
+	}
+	if want := []string{taken[1], taken[0]}; !slices.Equal(removed, want) {
+		t.Errorf("removed %v, want the two oldest %v", removed, want)
+	}
+
+	removed, err = fixture.store.PruneBackupsOlderThan(fixture.backupDir, fixture.clock.Now())
+	if err != nil {
+		t.Fatalf("PruneBackupsOlderThan: %v", err)
+	}
+	if len(removed) != 0 {
+		t.Errorf("removed %v with only three left, want none", removed)
+	}
 }

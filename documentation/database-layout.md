@@ -117,6 +117,24 @@ is a hard failure naming both checksums.
 Every migration is preceded by a backup, and a failure restores from it rather than leaving a
 half-applied schema (Invariant 7).
 
+## Maintenance and backups
+
+Both are scheduler tasks (Settings -> Scheduler, Maintenance), since 2026-09-24:
+
+| Task | Default | What |
+|---|---|---|
+| Database maintenance | Sundays 04:00 | Per database in turn: `integrity_check`, `optimize`, `VACUUM`, `wal_checkpoint(TRUNCATE)` |
+| Backup | daily 01:00 | A rotation backup of `library.db` and `jobs.db` |
+| Clean old backups | daily 01:30 | Keeps the newest N (default 7) or the last N days; never fewer than 3 |
+
+**Maintenance holds the writer exclusively** (`store.Maintain`), so every write to that database
+waits until it finishes; the others keep working. A failed integrity check stops that database's
+pass before `VACUUM`, which would otherwise rebuild it from whatever it could still read.
+`VACUUM` runs before the truncating checkpoint because in WAL mode its rewrite lands in the log.
+
+`settings.db` is backed up on every change instead and pruned by `backup.keep_settings`.
+`config.yml`'s `backup.schedule` and `backup.keep` are still accepted but ignored, with a warning.
+
 ## Corruption recovery at startup
 
 Every database is verified before it is used (ADR-15, architecture section 15.1).

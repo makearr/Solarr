@@ -275,7 +275,7 @@ export interface paths {
         put?: never;
         /**
          * Back up every database now. Administrator only.
-         * @description A routine backup, subject to the same retention as the scheduled ones. Runs synchronously: a backup that has not finished is not one a user should be told about.
+         * @description A routine backup, which the Clean old backups task later prunes like the scheduled ones. Runs synchronously: a backup that has not finished is not one a user should be told about.
          */
         post: operations["runBackupNow"];
         delete?: never;
@@ -455,6 +455,24 @@ export interface paths {
         get: operations["getUserDefaults"];
         /** Change what a new account starts with. Administrator only. */
         put: operations["setUserDefaults"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How the Clean old backups task decides what to remove. Administrator only. */
+        get: operations["getBackupRetention"];
+        /** Change the backup retention rule. Administrator only. */
+        put: operations["setBackupRetention"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2865,6 +2883,20 @@ export interface components {
         };
         UserDefaults: {
             new_library_permission: components["schemas"]["Permission"];
+        };
+        BackupRetention: {
+            /**
+             * @description count keeps the newest keep_count backups; days keeps those younger than keep_days.
+             * @enum {string}
+             */
+            mode: "count" | "days";
+            /** Format: int64 */
+            keep_count: number;
+            /**
+             * Format: int64
+             * @description The newest three backups stay whatever their age (ADR-15).
+             */
+            keep_days: number;
         };
         AuthPolicy: {
             /** @description Whether a caller must present a credential. False serves every request as the administrator. */
@@ -5510,6 +5542,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserDefaults"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getBackupRetention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rule in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupRetention"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    setBackupRetention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BackupRetention"];
+            };
+        };
+        responses: {
+            /** @description The rule now in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupRetention"];
                 };
             };
             400: components["responses"]["Problem"];

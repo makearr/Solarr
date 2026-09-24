@@ -26,6 +26,8 @@ type Document struct {
 	QualityProfiles   []QualityProfileEntry   `yaml:"quality_profiles,omitempty"`
 	LanguageProfiles  []LanguageProfileEntry  `yaml:"language_profiles,omitempty"`
 	ExclusionPatterns []ExclusionPatternEntry `yaml:"exclusion_patterns,omitempty"`
+	// Schedules holds each task's stored overrides by task key; a task absent here runs on its defaults.
+	Schedules map[string]ScheduleEntry `yaml:"schedules,omitempty"`
 }
 
 // ScalarSettingsEntry is every todo-4.14-registered scalar setting (ADR-21,
@@ -64,6 +66,10 @@ type ScalarSettingsEntry struct {
 	MetadataAcoustID     *bool     `yaml:"metadata_acoustid,omitempty"`
 	// UsersNewLibraryPermission is what new accounts are granted on later libraries; empty keeps it.
 	UsersNewLibraryPermission Permission `yaml:"users_new_library_permission,omitempty"`
+	// Backup retention; an empty mode keeps all three as stored.
+	BackupRetention BackupRetentionMode `yaml:"backup_retention,omitempty"`
+	BackupKeepCount int64               `yaml:"backup_keep_count,omitempty"`
+	BackupKeepDays  int64               `yaml:"backup_keep_days,omitempty"`
 }
 
 // CategoryEntry is one category and the roots attached to it.
@@ -205,12 +211,15 @@ func (c *Cache) Export() Document {
 		MetadataCoverSources:       &metadata.CoverSources,
 		MetadataWikidata:           metadata.Wikidata,
 		UsersNewLibraryPermission:  snapshot.NewLibraryPermission(),
+		BackupRetention:            snapshot.BackupRetention().Mode,
+		BackupKeepCount:            snapshot.BackupRetention().KeepCount,
+		BackupKeepDays:             snapshot.BackupRetention().KeepDays,
 		MetadataAcoustID:           metadata.AcoustID,
 	}
 
 	roots := snapshot.RootFolders()
 	pathOf := make(map[int64]string, len(roots))
-	document := Document{Version: DocumentVersion, Settings: &settingsEntry}
+	document := Document{Version: DocumentVersion, Settings: &settingsEntry, Schedules: snapshot.scheduleOverrides()}
 	for _, root := range roots {
 		pathOf[root.ID] = root.Path
 		document.Roots = append(document.Roots, RootEntry{Path: root.Path, Label: root.Label})
@@ -343,6 +352,7 @@ func prefixed(section string, problem config.Problem) config.Problem {
 // lockout it cannot verify against.
 func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 	var problems config.Problems
+	problems = append(problems, validateScheduleEntries(d.Schedules)...)
 
 	if d.Settings != nil {
 		for _, problem := range validateImportAutoCommitConfidence(d.Settings.ImportAutoCommitConfidence) {
@@ -394,6 +404,12 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 		if covers := d.Settings.MetadataCoverSources; covers != nil {
 			for _, problem := range validateMetadataSettings(MetadataSettings{
 				BrainzMashUserAgent: DefaultBrainzMashUserAgent, CoverSources: *covers}) {
+				problems = append(problems, prefixed("settings", problem))
+			}
+		}
+		if d.Settings.BackupRetention != "" {
+			for _, problem := range validateBackupRetention(BackupRetention{Mode: d.Settings.BackupRetention,
+				KeepCount: d.Settings.BackupKeepCount, KeepDays: d.Settings.BackupKeepDays}) {
 				problems = append(problems, prefixed("settings", problem))
 			}
 		}
@@ -618,6 +634,9 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 			if err := importScalarSettings(ctx, queries, cl, *document.Settings); err != nil {
 				return err
 			}
+		}
+		if err := importSchedules(ctx, queries, cl, document.Schedules); err != nil {
+			return err
 		}
 
 		for _, profile := range document.QualityProfiles {
@@ -863,6 +882,11 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 	}
 	if entry.MetadataAcoustID != nil {
 		values[KeyMetadataAcoustID] = strconv.FormatBool(*entry.MetadataAcoustID)
+	}
+	if entry.BackupRetention != "" {
+		values[KeyBackupRetention] = string(entry.BackupRetention)
+		values[KeyBackupKeepCount] = strconv.FormatInt(entry.BackupKeepCount, 10)
+		values[KeyBackupKeepDays] = strconv.FormatInt(entry.BackupKeepDays, 10)
 	}
 	if entry.UsersNewLibraryPermission != "" {
 		values[KeyUsersNewLibraryPermission] = string(entry.UsersNewLibraryPermission)
