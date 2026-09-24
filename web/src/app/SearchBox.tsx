@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+
+import { isSearchShortcut } from "@/lib/searchShortcut";
 
 import { CoverArt } from "./CoverArt";
 import { useDebouncedValue } from "./useDebouncedValue";
@@ -23,6 +25,20 @@ const DEBOUNCE_MS = 250;
 export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" }) {
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const hero = variant === "hero";
+
+  // "/" focuses the header box from anywhere, as in GitHub or Lidarr's own search (asked 2026-09-19).
+  useEffect(() => {
+    if (hero) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (!isSearchShortcut(event)) return;
+      event.preventDefault();
+      input.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hero]);
   const debounced = useDebouncedValue(query.trim(), DEBOUNCE_MS);
   const searchable = debounced.length >= MINIMUM_QUERY_LENGTH;
 
@@ -40,7 +56,6 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
   });
 
   const open = focused && searchable;
-  const hero = variant === "hero";
 
   return (
     <div className={`relative ${hero ? "w-full" : "w-72"}`}>
@@ -51,7 +66,9 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
         }`}
       />
       <input
+        ref={input}
         type="search"
+        aria-keyshortcuts={hero ? undefined : "/"}
         value={query}
         placeholder="Search the library…"
         onChange={(event) => setQuery(event.target.value)}
@@ -70,6 +87,16 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
                       hero ? "py-3 pr-3 pl-11 text-base" : "py-1.5 pr-2 pl-8 text-sm"
                     }`}
       />
+
+      {!hero && !focused && query === "" && (
+        <kbd
+          aria-hidden
+          className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 rounded border border-border-subtle
+                     px-1.5 text-[0.6875rem] leading-4 text-ink-muted"
+        >
+          /
+        </kbd>
+      )}
 
       {open && (
         <ul
