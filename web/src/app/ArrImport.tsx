@@ -367,7 +367,7 @@ function AddInstance({
         />
       </label>
       <label className="flex flex-col gap-1 text-xs text-ink-muted">
-        Category
+        Library
         <select className={inputStyle} value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
           <option value="">Match by root folder path</option>
           {categories.map((category) => (

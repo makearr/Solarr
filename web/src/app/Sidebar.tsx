@@ -49,21 +49,22 @@ const STORAGE_SECTIONS: readonly { to: string; label: string; icon: LucideIcon; 
   { to: "/storage/import", label: "Import", icon: ScanSearch },
 ];
 
-const CONNECTIONS_SECTIONS: readonly { to: string; label: string; icon: LucideIcon }[] = [
-  { to: "/connections/indexers", label: "Indexers", icon: Radar },
-  { to: "/connections/downloaders", label: "Download clients", icon: Download },
+const CONNECTIONS_SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier: Tier }[] = [
+  { to: "/connections/indexers", label: "Indexers", icon: Radar, tier: "normal" },
+  { to: "/connections/downloaders", label: "Download clients", icon: Download, tier: "normal" },
+  // *Arr import moved here from Settings -> General on the 2026-09-19 review, expert as asked.
+  { to: "/connections/arr", label: "Arr", icon: Share2, tier: "expert" },
 ];
 
-// tier is the whole section's own floor (ADR-26, todo 4.14): General mixes
-// normal and advanced content and always shows, but Cache's entire content is
-// expert-only, so the nav entry itself disappears below that tier.
+// tier is the whole section's own floor (ADR-26): a page mixing tiers always shows and hides
+// its own advanced parts, but Cache's entire content is expert-only.
 const SETTINGS_SECTIONS: readonly { to: string; label: string; tier?: Tier }[] = [
-  { to: "/settings/general", label: "General" },
+  { to: "/settings/libraries", label: "Libraries" },
+  { to: "/settings/blocklists", label: "Blocklists" },
+  { to: "/settings/network", label: "Network" },
+  { to: "/settings/metadata", label: "Metadata" },
   { to: "/settings/user", label: "User" },
   { to: "/settings/scheduler", label: "Scheduler" },
-  // Advanced: an install with no acquisition yet has an empty blocklist and
-  // no way to fill one.
-  { to: "/settings/blocklist", label: "Blocklist", tier: "advanced" },
   { to: "/settings/logs", label: "Logs", tier: "advanced" },
   // Normal: whether your data is safe is not an advanced question. Cache is
   // expert because it is tuning; this is not.
@@ -224,7 +225,7 @@ export function Sidebar() {
         isOpen={sections.isOpen("connections")}
         onToggle={() => sections.toggle("connections")}
       >
-        {CONNECTIONS_SECTIONS.map(({ to, label, icon: Icon }) => (
+        {CONNECTIONS_SECTIONS.filter((section) => isTierVisible(tier, section.tier)).map(({ to, label, icon: Icon }) => (
           <li key={to}>
             <Link to={to} className={sectionLinkClass(path.startsWith(to), false)}>
               <Icon aria-hidden className="size-4 shrink-0" />
@@ -248,7 +249,7 @@ export function Sidebar() {
       <CollapsibleSection
         label="Settings"
         icon={Settings}
-        to="/settings/general"
+        to="/settings/libraries"
         collapsed={collapsed}
         active={path.startsWith("/settings")}
         isOpen={sections.isOpen("settings")}
