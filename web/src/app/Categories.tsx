@@ -192,7 +192,7 @@ function Row({
 
 // Lazy-loaded on "Edit": the list itself renders from the lean LibraryCategory,
 // which carries none of priority_rank/the two profile ids/monitor_discovered.
-function EditCategoryForm({
+export function EditCategoryForm({
   categoryId,
   onDone,
   onCancel,
@@ -263,6 +263,7 @@ function EditCategoryFields({
   const [qualityProfileId, setQualityProfileId] = useState(initial.quality_profile_id ?? 0);
   const [languageProfileId, setLanguageProfileId] = useState(initial.language_profile_id ?? 0);
   const [monitorDiscovered, setMonitorDiscovered] = useState<MonitorDiscovered>(initial.monitor_discovered);
+  const queryClient = useQueryClient();
 
   const save = useMutation({
     mutationFn: async () => {
@@ -278,7 +279,13 @@ function EditCategoryFields({
       });
       if (error) throw error;
     },
-    onSuccess: onDone,
+    onSuccess: () => {
+      // The sidebar tree reads "libraries", not "categories"; a rename must reach both.
+      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+      void queryClient.invalidateQueries({ queryKey: ["categories"] });
+      void queryClient.invalidateQueries({ queryKey: ["category", categoryId] });
+      onDone();
+    },
   });
 
   return (

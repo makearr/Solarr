@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { HardDrive, Plus, X } from "lucide-react";
+import { HardDrive, Pencil, Plus, X } from "lucide-react";
 
 import { api } from "@/api/client";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import type { components } from "@/api/schema";
-import { MEDIA_TYPES } from "./Categories";
+import { EditCategoryForm, MEDIA_TYPES } from "./Categories";
 
 type RootFolder = components["schemas"]["RootFolder"];
 type LibraryCategory = components["schemas"]["LibraryCategory"];
@@ -59,6 +59,26 @@ export function RootFolders() {
       if (error) throw error;
     },
     onSuccess: invalidate,
+  });
+
+  // Attach before detaching, so a moved root is never briefly in no library.
+  const moveRoot = useMutation({
+    mutationFn: async (args: { rootFolderId: number; fromId: number; toId: number }) => {
+      const { error: attachError } = await api.POST("/categories/{id}/rootfolders", {
+        params: { path: { id: args.toId } },
+        body: { root_folder_id: args.rootFolderId },
+      });
+      if (attachError) throw attachError;
+      const { error } = await api.DELETE("/categories/{id}/rootfolders/{rootFolderId}", {
+        params: { path: { id: args.fromId, rootFolderId: args.rootFolderId } },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidate();
+      void queryClient.invalidateQueries({ queryKey: ["categories"] });
+      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+    },
   });
 
   const setPolicy = useMutation({
@@ -124,9 +144,14 @@ export function RootFolders() {
               onToggleOnline={() => setOnline.mutate({ id: root.id, online: !root.online })}
               onAttachCategory={(categoryId) => attachCategory.mutate({ rootFolderId: root.id, categoryId })}
               onDetachCategory={(categoryId) => detachCategory.mutate({ rootFolderId: root.id, categoryId })}
+              onMoveCategory={(fromId, toId) => moveRoot.mutate({ rootFolderId: root.id, fromId, toId })}
+              onLibraryEdited={() => {
+                invalidate();
+                void queryClient.invalidateQueries({ queryKey: ["categories"] });
+              }}
               onRemove={() => remove.mutate(root.id)}
               busy={setPolicy.isPending || setOnline.isPending}
-              categoryBusy={attachCategory.isPending || detachCategory.isPending}
+              categoryBusy={attachCategory.isPending || detachCategory.isPending || moveRoot.isPending}
               removeBusy={remove.isPending && remove.variables === root.id}
               removeError={remove.isError && remove.variables === root.id ? remove.error : null}
             />
@@ -140,7 +165,7 @@ export function RootFolders() {
         )
       )}
 
-      {(setPolicy.isError || setOnline.isError) && (
+      {(setPolicy.isError || setOnline.isError || moveRoot.isError) && (
         <p className="text-xs text-danger">That change was refused.</p>
       )}
 
@@ -187,7 +212,7 @@ function CapacityByCategory({
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
-      <h2 className="text-sm font-medium">Capacity by category</h2>
+      <h2 className="text-sm font-medium">Capacity by library</h2>
       <ul className="flex flex-col gap-1.5">
         {rows.map(({ category, freeBytes, totalBytes, offlineCount }) => (
           <li key={category.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
@@ -216,6 +241,8 @@ function RootFolderCard({
   onToggleOnline,
   onAttachCategory,
   onDetachCategory,
+  onMoveCategory,
+  onLibraryEdited,
   onRemove,
   busy,
   categoryBusy,
@@ -228,6 +255,8 @@ function RootFolderCard({
   onToggleOnline: () => void;
   onAttachCategory: (categoryId: number) => void;
   onDetachCategory: (categoryId: number) => void;
+  onMoveCategory: (fromId: number, toId: number) => void;
+  onLibraryEdited: () => void;
   onRemove: () => void;
   busy: boolean;
   categoryBusy: boolean;
@@ -237,6 +266,9 @@ function RootFolderCard({
   const [readOnly, setReadOnly] = useState(root.read_only ?? false);
   const [allowRename, setAllowRename] = useState(root.allow_rename ?? false);
   const [minFreeBytes, setMinFreeBytes] = useState(root.min_free_bytes ?? 0);
+  const [editingLibraryId, setEditingLibraryId] = useState<number | undefined>();
+  const attached = root.categories ?? [];
+  const onlyLibrary = attached.length === 1 ? attached[0] : undefined;
   const dirty =
     readOnly !== (root.read_only ?? false) ||
     allowRename !== (root.allow_rename ?? false) ||
@@ -265,35 +297,67 @@ function RootFolderCard({
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
-        {(root.categories ?? []).map((category) => (
+        <span className="text-xs text-ink-muted">{attached.length === 1 ? "Library" : "Libraries"}</span>
+        {attached.map((category) => (
           <span
             key={category.id}
-            className="flex items-center gap-1 rounded-full border border-border-subtle
-                       py-px pl-1.5 pr-1 text-[0.6875rem] text-ink-muted"
+            className={`flex items-center gap-1 rounded-full border py-px pl-2 pr-1 text-xs ${
+              editingLibraryId === category.id ? "border-accent" : "border-border-subtle"
+            }`}
           >
-            {category.name}
             <button
               type="button"
-              aria-label={`Remove ${category.name} from this root folder`}
+              title={`Edit the ${category.name} library`}
+              aria-expanded={editingLibraryId === category.id}
+              onClick={() => setEditingLibraryId(editingLibraryId === category.id ? undefined : category.id)}
+              className="flex items-center gap-1 hover:text-accent"
+            >
+              {category.name}
+              <Pencil aria-hidden className="size-2.5 text-ink-muted" />
+            </button>
+            <button
+              type="button"
+              aria-label={`Remove this root folder from ${category.name}`}
               onClick={() => onDetachCategory(category.id)}
               disabled={categoryBusy}
-              className="rounded-full p-0.5 hover:text-danger disabled:opacity-50"
+              className="rounded-full p-0.5 text-ink-muted hover:text-danger disabled:opacity-50"
             >
               <X aria-hidden className="size-2.5" />
             </button>
           </span>
         ))}
+        {onlyLibrary && (
+          <MoveToLibrary
+            from={onlyLibrary}
+            categories={categories}
+            busy={categoryBusy}
+            onMove={(toId) => onMoveCategory(onlyLibrary.id, toId)}
+          />
+        )}
         <AttachCategory
-          alreadyAttached={root.categories ?? []}
+          alreadyAttached={attached}
           categories={categories}
           busy={categoryBusy}
           onAttach={onAttachCategory}
         />
       </div>
-      {(!root.categories || root.categories.length === 0) && (
+      {attached.length === 0 && (
         <p className="text-xs text-warn">
-          Not in any category -- nothing will place files here until it is attached to one.
+          Not in any library -- nothing will place files here until it is added to one.
         </p>
+      )}
+      {editingLibraryId !== undefined && attached.some((category) => category.id === editingLibraryId) && (
+        <div className="rounded-md border border-border-subtle bg-canvas p-3">
+          <EditCategoryForm
+            key={editingLibraryId}
+            categoryId={editingLibraryId}
+            onDone={() => {
+              setEditingLibraryId(undefined);
+              onLibraryEdited();
+            }}
+            onCancel={() => setEditingLibraryId(undefined)}
+          />
+        </div>
       )}
 
       {total > 0 ? (
@@ -390,7 +454,7 @@ function RootFolderCard({
           disabled={removeBusy}
           title={
             root.categories && root.categories.length > 0
-              ? "Detach it from every category first"
+              ? "Remove it from every library first"
               : "Remove this root folder"
           }
           className="rounded-md border border-border-subtle px-2 py-1 text-ink-muted
@@ -436,7 +500,7 @@ function AttachCategory({
         className="rounded-full border border-dashed border-border-subtle bg-canvas
                    px-1.5 py-px text-[0.6875rem] text-ink-muted disabled:opacity-50"
       >
-        <option value="">+ category</option>
+        <option value="">+ Add to library</option>
         {available.map((category) => (
           <option key={category.id} value={category.id}>
             {category.name}
@@ -656,3 +720,39 @@ function formatBytes(bytes: number): string {
 const inputStyle =
   "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+
+function MoveToLibrary({
+  from,
+  categories,
+  busy,
+  onMove,
+}: {
+  from: { id: number; name: string };
+  categories: LibraryCategory[];
+  busy: boolean;
+  onMove: (toId: number) => void;
+}) {
+  const others = categories.filter((category) => category.id !== from.id);
+  if (others.length === 0) return null;
+  return (
+    <select
+      value=""
+      disabled={busy}
+      aria-label={`Move this root folder from ${from.name} to another library`}
+      onChange={(event) => {
+        const toId = Number(event.target.value);
+        const to = others.find((category) => category.id === toId);
+        if (to && window.confirm(`Move this root folder from ${from.name} to ${to.name}?`)) onMove(toId);
+      }}
+      className="rounded-full border border-dashed border-border-subtle bg-canvas
+                 px-1.5 py-px text-[0.6875rem] text-ink-muted disabled:opacity-50"
+    >
+      <option value="">Move to…</option>
+      {others.map((category) => (
+        <option key={category.id} value={category.id}>
+          {category.name}
+        </option>
+      ))}
+    </select>
+  );
+}
