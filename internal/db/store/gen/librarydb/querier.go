@@ -54,6 +54,8 @@ type Querier interface {
 	// workArtistColumn already does (internal/db/library/works.go) -- generalising which
 	// role counts as a level's "primary person" waits for a second media type that
 	// needs a different one.
+	// An artist monitored in this library counts at once, before enrichment has credited any work
+	// to them (answered 2026-09-24: "Artists 0" right after adding one read as broken).
 	CountArtistCreditsVisibleToCategory(ctx context.Context, arg CountArtistCreditsVisibleToCategoryParams) (int64, error)
 	// How many releases fall on each date of a window, for the calendar's year view: the same works
 	// ListCalendarEntries answers, counted rather than listed, so a busy year is never truncated.

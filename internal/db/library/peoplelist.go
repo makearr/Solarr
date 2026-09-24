@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -101,7 +102,18 @@ func addArtistCredit(predicates *store.Predicates, role string, rootFolderIDs, c
 		clause += " AND " + fragment
 		arguments = append(arguments, visibilityArgs...)
 	}
-	predicates.Add(clause+")", arguments...)
+	clause += ")"
+	// A person monitored in one of these libraries belongs here before any work credits them.
+	if len(categoryIDs) > 0 {
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(categoryIDs)), ",")
+		clause = "(" + clause + " OR (person.monitored = 1 AND EXISTS (SELECT 1 FROM subscription s" +
+			" WHERE s.subject_type = 'person' AND s.subject_id = person.id AND s.enabled = 1" +
+			" AND s.category_id IN (" + placeholders + "))))"
+		for _, id := range categoryIDs {
+			arguments = append(arguments, id)
+		}
+	}
+	predicates.Add(clause, arguments...)
 }
 
 // addNamePrefix is addPrefix (works.go), over sort_name instead of sort_title

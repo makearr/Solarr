@@ -265,3 +265,48 @@ func TestCategoryCounters_ACategoryWithNoRootFoldersReconcilesToZero(t *testing.
 		t.Errorf("works = %+v, ok=%v, want Now=0", v, ok)
 	}
 }
+
+// An artist just added counts in their library before enrichment credits any work to them
+// (answered 2026-09-24), and appears on its Artists level -- not in another library's.
+func TestArtists_AMonitoredArtistBelongsToTheirLibraryAtOnce(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
+		Provider: "musicbrainz:artist", ExternalID: "heka",
+		Person: library.PersonIdentity{Name: "Heka", SortName: "Heka"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := people.Subscribe(t.Context(), firstSeen, personID, 1, library.SubscriptionRequest{
+		MediaTypes: []string{"music"}, CategoryID: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	corrections, err := library.NewCategoryCounters(opened, clock.NewFakeAtEpoch()).Reconcile(t.Context(),
+		[]library.CategoryScope{{CategoryID: 1}, {CategoryID: 2}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts := map[string]int64{}
+	for _, c := range corrections {
+		if c.Metric == "artists" {
+			counts[c.Scope] = c.Now
+		}
+	}
+	if counts["category:1"] != 1 || counts["category:2"] != 0 {
+		t.Errorf("artist counts = %v, want 1 in library 1 and 0 in library 2", counts)
+	}
+
+	for categoryID, want := range map[int64]int{1: 1, 2: 0} {
+		page, err := people.ListPeople(t.Context(),
+			library.PersonFilter{Role: "artist", CategoryIDs: []int64{categoryID}}, library.PersonCursor{}, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(page) != want {
+			t.Errorf("library %d lists %d artists, want %d", categoryID, len(page), want)
+		}
+	}
+}
