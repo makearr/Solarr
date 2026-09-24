@@ -22,6 +22,7 @@ import { api } from "@/api/client";
 import { useSidebarCollapsed } from "@/list/useNarrow";
 import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
 import { useOpenSections } from "@/lib/useOpenSections";
+import { isAdministratorPath, useIsAdministrator } from "@/lib/useAdministrator";
 import { isTierVisible, useTier, type Tier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
@@ -100,6 +101,7 @@ export function defaultLevelKey(library: LibraryEntry): string | undefined {
  *  navigating into a branch opens it without closing the rest. */
 export function Sidebar() {
   const tier = useTier();
+  const administrator = useIsAdministrator();
   const path = useRouterState({ select: (state) => state.location.pathname });
   const routeParams = useParams({ strict: false }) as {
     categoryId?: string;
@@ -146,6 +148,7 @@ export function Sidebar() {
             library={library}
             collapsed={collapsed}
             tier={tier}
+            administrator={administrator}
             isActive={routeParams.categoryId === String(library.id)}
             activeLevel={routeParams.level}
             activeSection={routeParams.section}
@@ -193,7 +196,7 @@ export function Sidebar() {
         {libraryTree}
       </CollapsibleSection>
 
-      {isTierVisible(tier, "advanced") && (
+      {administrator && isTierVisible(tier, "advanced") && (
         <CollapsibleSection
           label="Storage"
           icon={HardDrive}
@@ -216,6 +219,7 @@ export function Sidebar() {
         </CollapsibleSection>
       )}
 
+      {administrator && (
       <CollapsibleSection
         label="Connections"
         icon={Share2}
@@ -234,6 +238,7 @@ export function Sidebar() {
           </li>
         ))}
       </CollapsibleSection>
+      )}
 
       <ul className="flex flex-col gap-0.5 px-2 pt-3">
         {SECTIONS.filter((section) => isTierVisible(tier, section.tier)).map(({ to, label, icon: Icon }) => (
@@ -249,13 +254,15 @@ export function Sidebar() {
       <CollapsibleSection
         label="Settings"
         icon={Settings}
-        to="/settings/libraries"
+        to={administrator ? "/settings/libraries" : "/settings/user"}
         collapsed={collapsed}
         active={path.startsWith("/settings")}
         isOpen={sections.isOpen("settings")}
         onToggle={() => sections.toggle("settings")}
       >
-        {SETTINGS_SECTIONS.filter((section) => isTierVisible(tier, section.tier ?? "normal")).map(({ to, label }) => (
+        {SETTINGS_SECTIONS.filter(
+          (section) => isTierVisible(tier, section.tier ?? "normal") && (administrator || !isAdministratorPath(section.to)),
+        ).map(({ to, label }) => (
           <li key={to}>
             <Link to={to} className={sectionLinkClass(path === to, false)}>
               <span className="truncate">{label}</span>
@@ -346,6 +353,7 @@ function LibraryNode({
   library,
   collapsed,
   tier,
+  administrator,
   isActive,
   activeLevel,
   activeSection,
@@ -357,6 +365,7 @@ function LibraryNode({
   library: LibraryEntry;
   collapsed: boolean;
   tier: Tier;
+  administrator: boolean;
   isActive: boolean;
   activeLevel: string | undefined;
   activeSection: string | undefined;
@@ -415,17 +424,19 @@ function LibraryNode({
             </Link>
           </li>
 
-          {/* Normal: M1 acceptance 1, 7 and 8 have a plain user import a folder and
-              resolve what it could not identify, so neither may be hidden. */}
-          <li>
-            <Link
-              to="/library/$categoryId/import"
-              params={{ categoryId }}
-              className={sectionLinkClass(isActive && activePath === `/library/${library.id}/import`, false)}
-            >
-              <span className="truncate">Import</span>
-            </Link>
-          </li>
+          {/* Normal tier: M1 acceptance 1, 7 and 8 have a plain user import a folder and
+              resolve what it could not identify. Importing is an administrator's, as the server says. */}
+          {administrator && (
+            <li>
+              <Link
+                to="/library/$categoryId/import"
+                params={{ categoryId }}
+                className={sectionLinkClass(isActive && activePath === `/library/${library.id}/import`, false)}
+              >
+                <span className="truncate">Import</span>
+              </Link>
+            </li>
+          )}
           <li>
             <Link
               to="/unidentified"
@@ -459,7 +470,7 @@ function LibraryNode({
             </>
           )}
 
-          {CONFIG_SECTIONS.filter((section) => isTierVisible(tier, section.tier)).map((section) =>
+          {CONFIG_SECTIONS.filter((section) => administrator && isTierVisible(tier, section.tier)).map((section) =>
             section.key === "import-lists" ? (
               <li key={section.key}>
                 <Link
