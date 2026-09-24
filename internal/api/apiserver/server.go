@@ -494,6 +494,7 @@ func New(config Config) (*Server, error) {
 			secured.Patch("/rootfolders/{id}/online", server.routeSetRootFolderOnline)
 			secured.Get("/downloadfolders", server.ListDownloadFolders)
 			secured.Post("/downloadfolders", server.AddDownloadFolder)
+			secured.Patch("/downloadfolders/{id}", server.routeUpdateDownloadFolder)
 			secured.Delete("/downloadfolders/{id}", server.routeDeleteDownloadFolder)
 			secured.Get("/downloadfolders/{id}/contents", server.routeListDownloadFolderContents)
 			secured.Get("/storage/browse", server.routeBrowsePath)

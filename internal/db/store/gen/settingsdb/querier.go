@@ -30,8 +30,8 @@ type Querier interface {
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	// Autonomous discovery jobs (ADR-38). Policy, so this stays in settings.db.
 	CreateDiscoveryJob(ctx context.Context, arg CreateDiscoveryJobParams) (DiscoveryJob, error)
-	// Download folders (migration 0010, todo 4.18, section 5.1). Column lists
-	// follow table order, or sqlc stops reusing models.
+	// Download folders (todo 4.18): watched for imports, with an optional library hint and their
+	// own transfer order.
 	CreateDownloadFolder(ctx context.Context, arg CreateDownloadFolderParams) (DownloadFolder, error)
 	// Download client connections (stage 5, ADR-46/57). Column lists follow table order.
 	CreateDownloader(ctx context.Context, arg CreateDownloaderParams) (Downloader, error)
@@ -167,6 +167,7 @@ type Querier interface {
 	UpdateArrInstance(ctx context.Context, arg UpdateArrInstanceParams) error
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) error
 	UpdateDiscoveryJob(ctx context.Context, arg UpdateDiscoveryJobParams) error
+	UpdateDownloadFolder(ctx context.Context, arg UpdateDownloadFolderParams) error
 	UpdateDownloader(ctx context.Context, arg UpdateDownloaderParams) error
 	UpdateExclusionPattern(ctx context.Context, arg UpdateExclusionPatternParams) error
 	UpdateImportList(ctx context.Context, arg UpdateImportListParams) error

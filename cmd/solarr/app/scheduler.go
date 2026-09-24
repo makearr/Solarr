@@ -24,6 +24,7 @@ const (
 	probeScheduleCron              = "0 * * * *"    // every hour
 	capacityScheduleCron           = "0 */6 * * *"  // every 6 hours
 	cacheMaintenanceScheduleCron   = "0 3 * * *"    // once a day, at 03:00
+	downloadWatchScheduleCron      = "*/5 * * * *"  // every 5 minutes
 )
 
 // buildTaskRegistry declares every periodic action this process has (ADR-59).
@@ -72,6 +73,10 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(jobs.Task{
 		Key: "cache_maintenance", Name: "Cache maintenance", DefaultCadence: cacheMaintenanceScheduleCron,
 		Tier: string(settings.TierAdvanced), Enqueue: p.enqueueCacheMaintenance,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "download_watch", Name: "Download folder watch", DefaultCadence: downloadWatchScheduleCron,
+		Tier: string(settings.TierNormal), Enqueue: p.enqueueDownloadWatch,
 	})
 	return registry
 }

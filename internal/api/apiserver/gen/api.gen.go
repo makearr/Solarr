@@ -1096,8 +1096,9 @@ type DiscoverResult struct {
 	Year     *int64        `json:"year,omitempty"`
 }
 
-// DownloadFolder One watched upstream-download destination (todo 4.18, section 5.1). Registry only -- nothing acts on what lands here until stage 5.
+// DownloadFolder One upstream-download destination (todo 4.18). Watched: each entry is imported once it has settled, once only.
 type DownloadFolder struct {
+	// CategoryId The library hint; absent means any library.
 	CategoryId *int64  `json:"category_id,omitempty"`
 	Id         int64   `json:"id"`
 	Label      *string `json:"label,omitempty"`
@@ -1106,6 +1107,10 @@ type DownloadFolder struct {
 	// Readable Probed once, at creation. Nothing refreshes it after -- the same gap root_folder.writable had before the capacity job existed.
 	Readable       bool    `json:"readable"`
 	ReadableReason *string `json:"readable_reason,omitempty"`
+
+	// TransferLadder This folder's own transfer order; absent means the Import screen's.
+	TransferLadder *[]string `json:"transfer_ladder,omitempty"`
+	Watch          bool      `json:"watch"`
 }
 
 // DownloadFolderEntry One top-level entry a live directory read found. Not matched against import state -- that comparison is stage 5's own job, not built yet, so this is a plain listing, not an "unimported files" view.
@@ -2749,9 +2754,25 @@ type SetDownloaderCredentialsJSONBody struct {
 
 // AddDownloadFolderJSONBody defines parameters for AddDownloadFolder.
 type AddDownloadFolderJSONBody struct {
+	// CategoryId The library hint; absent means any library.
 	CategoryId *int64  `json:"category_id,omitempty"`
 	Label      *string `json:"label,omitempty"`
 	Path       string  `json:"path"`
+
+	// TransferLadder This folder's own transfer order; absent means the Import screen's.
+	TransferLadder *[]string `json:"transfer_ladder,omitempty"`
+	Watch          *bool     `json:"watch,omitempty"`
+}
+
+// UpdateDownloadFolderJSONBody defines parameters for UpdateDownloadFolder.
+type UpdateDownloadFolderJSONBody struct {
+	// CategoryId The library hint; absent means any library.
+	CategoryId *int64  `json:"category_id,omitempty"`
+	Label      *string `json:"label,omitempty"`
+
+	// TransferLadder Absent means the Import screen's order.
+	TransferLadder *[]string `json:"transfer_ladder,omitempty"`
+	Watch          bool      `json:"watch"`
 }
 
 // StreamEventsParams defines parameters for StreamEvents.
@@ -3154,6 +3175,9 @@ type SetDownloaderCredentialsJSONRequestBody SetDownloaderCredentialsJSONBody
 // AddDownloadFolderJSONRequestBody defines body for AddDownloadFolder for application/json ContentType.
 type AddDownloadFolderJSONRequestBody AddDownloadFolderJSONBody
 
+// UpdateDownloadFolderJSONRequestBody defines body for UpdateDownloadFolder for application/json ContentType.
+type UpdateDownloadFolderJSONRequestBody UpdateDownloadFolderJSONBody
+
 // CreateExclusionPatternJSONRequestBody defines body for CreateExclusionPattern for application/json ContentType.
 type CreateExclusionPatternJSONRequestBody = ExclusionPatternWrite
 
@@ -3444,6 +3468,9 @@ type ServerInterface interface {
 	// Stop watching a download folder. Administrator only.
 	// (DELETE /downloadfolders/{id})
 	DeleteDownloadFolder(w http.ResponseWriter, r *http.Request, id int64)
+	// Change a download folder's label, library hint, watching and transfer order. Administrator only.
+	// (PATCH /downloadfolders/{id})
+	UpdateDownloadFolder(w http.ResponseWriter, r *http.Request, id int64)
 	// What is sitting in a download folder right now.
 	// (GET /downloadfolders/{id}/contents)
 	ListDownloadFolderContents(w http.ResponseWriter, r *http.Request, id int64)
@@ -4104,6 +4131,12 @@ func (_ Unimplemented) AddDownloadFolder(w http.ResponseWriter, r *http.Request)
 // Stop watching a download folder. Administrator only.
 // (DELETE /downloadfolders/{id})
 func (_ Unimplemented) DeleteDownloadFolder(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change a download folder's label, library hint, watching and transfer order. Administrator only.
+// (PATCH /downloadfolders/{id})
+func (_ Unimplemented) UpdateDownloadFolder(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6405,6 +6438,39 @@ func (siw *ServerInterfaceWrapper) DeleteDownloadFolder(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteDownloadFolder(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateDownloadFolder operation middleware
+func (siw *ServerInterfaceWrapper) UpdateDownloadFolder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateDownloadFolder(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10348,6 +10414,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/downloadfolders/{id}", wrapper.DeleteDownloadFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/downloadfolders/{id}", wrapper.UpdateDownloadFolder)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/downloadfolders/{id}/contents", wrapper.ListDownloadFolderContents)

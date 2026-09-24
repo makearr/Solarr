@@ -70,6 +70,8 @@ type Querier interface {
 	CountFreshWorks(ctx context.Context, arg CountFreshWorksParams) (int64, error)
 	// Recomputable from the observations, which is why they are kept individually.
 	CountGroupOutcomes(ctx context.Context, arg CountGroupOutcomesParams) ([]CountGroupOutcomesRow, error)
+	// A download folder imports each entry once: any session, finished or dismissed, counts.
+	CountImportSessionsForSource(ctx context.Context, sourcePath string) (int64, error)
 	// One row per (unit, method) for a whole session, so the import screen can
 	// say how each unit's files actually arrived without reading every file row.
 	// Mirrors ListImportUnitFilesForSession's own join and filter; rows written

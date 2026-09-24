@@ -57,6 +57,8 @@ type Payload struct {
 	// Preview holds every unit for review instead of placing the confident
 	// ones (Lidarr's interactive import, revision.md 7.9).
 	Preview bool `json:"preview,omitempty"`
+	// TransferLadder is a download folder's own order; empty keeps the Import screen's.
+	TransferLadder []string `json:"transfer_ladder,omitempty"`
 }
 
 // ReasonPreview is why a unit a preview run would otherwise have committed is
@@ -88,7 +90,7 @@ type Policy interface {
 type Committer interface {
 	CommitMatchedUnit(
 		ctx context.Context, sourceRoot string, unit inspect.Unit, best model.Identification, tags music.Resolved,
-		categoryID int64, matched *music.AlbumPlacement,
+		categoryID int64, matched *music.AlbumPlacement, ladder []string,
 	) (music.Placed, error)
 }
 
@@ -189,7 +191,8 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	result, err := inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{Cursor: cursor},
 		inspect.WalkOptions{},
 		func(ctx context.Context, batch []inspect.Unit) error {
-			return j.commitCluster(ctx, sessionID, payload.SourcePath, identifyCfg, payload.Preview, batch)
+			return j.commitCluster(ctx, sessionID, payload.SourcePath, identifyCfg, payload.Preview,
+				payload.TransferLadder, batch)
 		})
 	if errors.Is(err, errCancelled) {
 		j.logger.Info("import inspection cancelled",
@@ -473,7 +476,8 @@ func (j *Job) poisonedByExclusion(batch []inspect.Unit, categoryID *int64) []str
 // PATCH must place into it -- the same "ask, don't cache" rule Policy's own
 // per-run read already follows.
 func (j *Job) commitCluster(
-	ctx context.Context, sessionID int64, sourcePath string, cfg model.ChainConfig, preview bool, batch []inspect.Unit,
+	ctx context.Context, sessionID int64, sourcePath string, cfg model.ChainConfig, preview bool, ladder []string,
+	batch []inspect.Unit,
 ) error {
 	session, err := j.sessions.Get(ctx, sessionID)
 	if err != nil {
@@ -551,7 +555,8 @@ func (j *Job) commitCluster(
 		return fmt.Errorf("importjob: record decisions: %w", err)
 	}
 	if categoryID != nil && j.committer != nil {
-		j.placeCommitted(ctx, sessionID, *categoryID, sourcePath, tagSource, ids, batch, decisions, results, placements)
+		j.placeCommitted(ctx, sessionID, *categoryID, sourcePath, tagSource, ids, batch, decisions, results,
+			placements, ladder)
 	}
 	j.publishProgress(ctx, sessionID, importPhaseWalking, batch[len(batch)-1].Directory)
 	return nil
@@ -589,13 +594,14 @@ func holdForReview(decisions []library.UnitDecision) {
 func (j *Job) placeCommitted(
 	ctx context.Context, sessionID, categoryID int64, sourcePath string, tagSource music.Resolved,
 	ids []int64, batch []inspect.Unit, decisions []library.UnitDecision, results []model.ChainResult,
-	placements []*music.AlbumPlacement,
+	placements []*music.AlbumPlacement, ladder []string,
 ) {
 	for i, decision := range decisions {
 		if decision.Decision != library.UnitCommit || results[i].Best == nil {
 			continue
 		}
-		placed, err := j.committer.CommitMatchedUnit(ctx, sourcePath, batch[i], *results[i].Best, tagSource, categoryID, placements[i])
+		placed, err := j.committer.CommitMatchedUnit(ctx, sourcePath, batch[i], *results[i].Best, tagSource, categoryID,
+			placements[i], ladder)
 		if err != nil {
 			// ADR-53 part 2 (todo 4.15): a blocked hash is loud, not a silent
 			// decided-but-unplaced unit indistinguishable from "no root had

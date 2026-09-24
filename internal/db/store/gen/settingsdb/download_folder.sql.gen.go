@@ -12,9 +12,10 @@ import (
 
 const createDownloadFolder = `-- name: CreateDownloadFolder :one
 
-INSERT INTO download_folder (path, label, category_id, readable, readable_reason)
-VALUES (?1, ?2, ?3, ?4, ?5)
-RETURNING id, path, label, category_id, readable, readable_reason
+INSERT INTO download_folder (path, label, category_id, readable, readable_reason, watch, transfer_ladder)
+VALUES (?1, ?2, ?3, ?4, ?5,
+        ?6, ?7)
+RETURNING id, path, label, category_id, readable, readable_reason, watch, transfer_ladder
 `
 
 type CreateDownloadFolderParams struct {
@@ -23,10 +24,12 @@ type CreateDownloadFolderParams struct {
 	CategoryID     sql.NullInt64
 	Readable       int64
 	ReadableReason sql.NullString
+	Watch          int64
+	TransferLadder sql.NullString
 }
 
-// Download folders (migration 0010, todo 4.18, section 5.1). Column lists
-// follow table order, or sqlc stops reusing models.
+// Download folders (todo 4.18): watched for imports, with an optional library hint and their
+// own transfer order.
 func (q *Queries) CreateDownloadFolder(ctx context.Context, arg CreateDownloadFolderParams) (DownloadFolder, error) {
 	row := q.db.QueryRowContext(ctx, createDownloadFolder,
 		arg.Path,
@@ -34,6 +37,8 @@ func (q *Queries) CreateDownloadFolder(ctx context.Context, arg CreateDownloadFo
 		arg.CategoryID,
 		arg.Readable,
 		arg.ReadableReason,
+		arg.Watch,
+		arg.TransferLadder,
 	)
 	var i DownloadFolder
 	err := row.Scan(
@@ -43,6 +48,8 @@ func (q *Queries) CreateDownloadFolder(ctx context.Context, arg CreateDownloadFo
 		&i.CategoryID,
 		&i.Readable,
 		&i.ReadableReason,
+		&i.Watch,
+		&i.TransferLadder,
 	)
 	return i, err
 }
@@ -57,7 +64,7 @@ func (q *Queries) DeleteDownloadFolder(ctx context.Context, id int64) error {
 }
 
 const getDownloadFolder = `-- name: GetDownloadFolder :one
-SELECT id, path, label, category_id, readable, readable_reason
+SELECT id, path, label, category_id, readable, readable_reason, watch, transfer_ladder
 FROM download_folder WHERE id = ?
 `
 
@@ -71,12 +78,14 @@ func (q *Queries) GetDownloadFolder(ctx context.Context, id int64) (DownloadFold
 		&i.CategoryID,
 		&i.Readable,
 		&i.ReadableReason,
+		&i.Watch,
+		&i.TransferLadder,
 	)
 	return i, err
 }
 
 const listDownloadFolders = `-- name: ListDownloadFolders :many
-SELECT id, path, label, category_id, readable, readable_reason
+SELECT id, path, label, category_id, readable, readable_reason, watch, transfer_ladder
 FROM download_folder ORDER BY path
 `
 
@@ -96,6 +105,8 @@ func (q *Queries) ListDownloadFolders(ctx context.Context) ([]DownloadFolder, er
 			&i.CategoryID,
 			&i.Readable,
 			&i.ReadableReason,
+			&i.Watch,
+			&i.TransferLadder,
 		); err != nil {
 			return nil, err
 		}
@@ -108,4 +119,27 @@ func (q *Queries) ListDownloadFolders(ctx context.Context) ([]DownloadFolder, er
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateDownloadFolder = `-- name: UpdateDownloadFolder :exec
+UPDATE download_folder SET label = ?, category_id = ?, watch = ?, transfer_ladder = ? WHERE id = ?
+`
+
+type UpdateDownloadFolderParams struct {
+	Label          sql.NullString
+	CategoryID     sql.NullInt64
+	Watch          int64
+	TransferLadder sql.NullString
+	ID             int64
+}
+
+func (q *Queries) UpdateDownloadFolder(ctx context.Context, arg UpdateDownloadFolderParams) error {
+	_, err := q.db.ExecContext(ctx, updateDownloadFolder,
+		arg.Label,
+		arg.CategoryID,
+		arg.Watch,
+		arg.TransferLadder,
+		arg.ID,
+	)
+	return err
 }

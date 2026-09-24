@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -714,8 +715,13 @@ func TestJob_PicksUpACategoryAssignedMidRun(t *testing.T) {
 		FS: fx.fsys, Sessions: sessions, Policy: fixedPolicy(0.90),
 		Tool: fx.tool, Committer: committer, Packs: library.NewPacks(fx.store), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
 	})
-	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+	// A download folder's own transfer order travels with the payload to every commit.
+	payload := importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual, TransferLadder: []string{"copy"}}
+	if err := fx.run(t, job, payload); err != nil {
 		t.Fatalf("Run: %v", err)
+	}
+	if !reflect.DeepEqual(committer.lastLadder, []string{"copy"}) {
+		t.Errorf("committed with ladder %v, want the payload's [copy]", committer.lastLadder)
 	}
 
 	done, err := sessions.List(t.Context(), library.ImportDone, false)

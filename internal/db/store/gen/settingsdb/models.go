@@ -104,6 +104,8 @@ type DownloadFolder struct {
 	CategoryID     sql.NullInt64
 	Readable       int64
 	ReadableReason sql.NullString
+	Watch          int64
+	TransferLadder sql.NullString
 }
 
 type Downloader struct {
