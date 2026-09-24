@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -59,6 +60,8 @@ type Client struct {
 	clock         clock.Clock
 	// proxy nil means this client never proxies (see checkProxiedDestination).
 	proxy LiveProxyPolicy
+	// routedBy is the proxy policy the pooled connections were opened under.
+	routedBy atomic.Value
 }
 
 // NewClient builds a client for one provider.
@@ -128,6 +131,7 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 	if err := c.checkProxiedDestination(ctx, request); err != nil {
 		return nil, err
 	}
+	c.dropConnectionsOnProxyChange()
 	if err := c.breaker.Allow(c.provider); err != nil {
 		return nil, err
 	}
@@ -202,6 +206,20 @@ type cancelOnCloseBody struct {
 func (b *cancelOnCloseBody) Close() error {
 	defer b.cancel()
 	return b.ReadCloser.Close()
+}
+
+// dropConnectionsOnProxyChange closes pooled connections once the proxy policy changes: HTTP/2
+// pools by destination, not by route, so an open connection kept its old route until idle
+// (found 2026-09-24 against a real SOCKS5 proxy).
+func (c *Client) dropConnectionsOnProxyChange() {
+	if c.proxy == nil {
+		return
+	}
+	current := c.proxy()
+	route := fmt.Sprint(current.URL, current.Bypass)
+	if previous := c.routedBy.Swap(route); previous != nil && previous != route {
+		c.inner.CloseIdleConnections()
+	}
 }
 
 // checkProxiedDestination validates the destination directly when this

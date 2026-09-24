@@ -421,3 +421,45 @@ func TestParseRetryAfter(t *testing.T) {
 		}
 	}
 }
+
+// closeCountingTransport counts the idle-connection closes http.Client passes on.
+type closeCountingTransport struct {
+	roundTripper
+	closes int
+}
+
+func (c *closeCountingTransport) CloseIdleConnections() { c.closes++ }
+
+// A proxy change reroutes the very next request: pooled connections from the old route are
+// dropped, since HTTP/2 would otherwise keep reusing them (found live against a SOCKS5 proxy).
+func TestClient_DropsPooledConnectionsWhenTheProxyChanges(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	guard := httpx.NewGuard(fakeResolver{}, refusingDial, nil)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 600}}, httpx.NoJitter)
+	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 2, Cooldown: time.Minute})
+	transport := &closeCountingTransport{roundTripper: roundTripper{build: func(*http.Request) *http.Response {
+		return respond(http.StatusOK, nil)
+	}}}
+	policy := httpx.ProxyPolicy{}
+	client := httpx.NewClient(fake, guard, limiter, breaker, httpx.ClientConfig{
+		Provider: "metadata", Transport: transport, Proxy: func() httpx.ProxyPolicy { return policy },
+	})
+	get := func() {
+		response, err := client.Get(t.Context(), "https://93.184.216.34/ws")
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		_ = response.Body.Close()
+	}
+
+	get()
+	get()
+	policy = httpx.ProxyPolicy{URL: mustParseURL(t, "socks5://10.0.0.5:1080")}
+	get()
+	get()
+	policy = httpx.ProxyPolicy{}
+	get()
+	if transport.closes != 2 {
+		t.Errorf("idle connections closed %d times, want 2: once per change, never on an unchanged policy", transport.closes)
+	}
+}
