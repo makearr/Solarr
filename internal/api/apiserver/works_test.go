@@ -75,6 +75,7 @@ type worksFixture struct {
 	moveJobs             *fakeMoveJobLister
 	renameStarter        *fakeRenameStarter
 	namingSchemes        *fakeNamingSchemes
+	calendar             *fakeCalendar
 	libraryTracks        *fakeLibraryTracksReader
 	scheduler            *fakeScheduler
 	cacheManager         *fakeCacheManager
@@ -236,6 +237,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	moveJobs := &fakeMoveJobLister{}
 	renameStarter := &fakeRenameStarter{}
 	namingSchemes := &fakeNamingSchemes{}
+	calendar := &fakeCalendar{}
 	libraryTracks := &fakeLibraryTracksReader{}
 	scheduler := &fakeScheduler{states: map[string]jobs.ScheduleRun{}}
 	cacheManager := &fakeCacheManager{}
@@ -268,6 +270,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		MoveJobs:              moveJobs,
 		RenameStarter:         renameStarter,
 		NamingSchemes:         namingSchemes,
+		Calendar:              calendar,
 		FS:                    fsys,
 		ConfigPath:            configPath,
 		DownloadRoots:         apiserver.FilesystemRoots{FS: fsys},
@@ -303,7 +306,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		blockedContent: blockedContent, packs: packs, removeAndBlocker: removeAndBlocker,
 		importSessions: importSessions, importInspector: importInspector,
 		fingerprintRetrier: fingerprintRetrier,
-		drainStarter:       drainStarter, moveJobs: moveJobs, renameStarter: renameStarter, namingSchemes: namingSchemes,
+		drainStarter:       drainStarter, moveJobs: moveJobs, renameStarter: renameStarter, namingSchemes: namingSchemes, calendar: calendar,
 		libraryTracks: libraryTracks, scheduler: scheduler, cacheManager: cacheManager, discover: discover,
 		arrSync: arrSync, indexerTester: indexerTester, downloaderTester: downloaderTester,
 		candidateSearcher: candidateSearcher, fsys: fsys, clock: fake,

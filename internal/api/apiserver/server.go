@@ -362,6 +362,8 @@ func New(config Config) (*Server, error) {
 		api.Put("/settings/auth", server.SetAuthPolicy)
 		api.Get("/setup", server.GetSetupStatus)
 		api.Post("/setup/admin", server.CreateFirstAdministrator)
+		// Calendar clients cannot log in; the token in the URL is the credential (2026-09-19).
+		api.Get("/calendar/feed.ics", server.routeCalendarFeedICS)
 
 		// Everything else needs an identity.
 		api.Group(func(secured chi.Router) {
@@ -373,10 +375,14 @@ func New(config Config) (*Server, error) {
 			secured.Get("/me/apikeys", server.ListMyAPIKeys)
 			secured.Post("/me/apikeys", server.CreateMyAPIKey)
 			secured.Delete("/me/apikeys/{id}", server.routeDeleteMyAPIKey)
+			secured.Get("/me/calendar-feed", server.GetMyCalendarFeed)
+			secured.Post("/me/calendar-feed", server.CreateMyCalendarFeed)
+			secured.Delete("/me/calendar-feed", server.DeleteMyCalendarFeed)
 			secured.Get("/dashboard", server.GetDashboard)
 			secured.Get("/library/health", server.GetLibraryHealth)
 			secured.Get("/system/health", server.GetSystemHealth)
 			secured.Get("/calendar", server.routeListCalendar)
+			secured.Get("/calendar/dates", server.routeListCalendarDates)
 			secured.Get("/system/logs", server.routeListLogs)
 			secured.Get("/system/backups", server.ListBackups)
 			secured.Post("/system/backups", server.RunBackupNow)

@@ -119,6 +119,71 @@ func (q *Queries) ClearWorkClassification(ctx context.Context, arg ClearWorkClas
 	return err
 }
 
+const countCalendarDates = `-- name: CountCalendarDates :many
+SELECT release_date, CAST(COUNT(*) AS INTEGER) AS releases
+FROM (
+  SELECT MIN(wd.date) AS release_date
+  FROM work_date wd
+  JOIN work w ON w.id = wd.work_id
+  WHERE wd.kind = ?1
+    AND wd.date >= ?2 AND wd.date <= ?3
+    AND (
+      EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = w.id AND di.monitored = 1
+              AND di.category_id IN (SELECT value FROM json_each(?4)))
+      OR EXISTS (SELECT 1 FROM credit c
+                 JOIN person p ON p.id = c.person_id
+                 JOIN subscription s ON s.subject_type = 'person' AND s.subject_id = p.id AND s.enabled = 1
+                 WHERE c.work_id = w.id AND c.role = 'artist' AND p.monitored = 1
+                   AND s.category_id IN (SELECT value FROM json_each(?4)))
+    )
+  GROUP BY w.id
+)
+GROUP BY release_date
+ORDER BY release_date
+`
+
+type CountCalendarDatesParams struct {
+	Kind        string
+	FromDate    string
+	ToDate      string
+	CategoryIds interface{}
+}
+
+type CountCalendarDatesRow struct {
+	ReleaseDate interface{}
+	Releases    int64
+}
+
+// How many releases fall on each date of a window, for the calendar's year view: the same works
+// ListCalendarEntries answers, counted rather than listed, so a busy year is never truncated.
+func (q *Queries) CountCalendarDates(ctx context.Context, arg CountCalendarDatesParams) ([]CountCalendarDatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, countCalendarDates,
+		arg.Kind,
+		arg.FromDate,
+		arg.ToDate,
+		arg.CategoryIds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountCalendarDatesRow{}
+	for rows.Next() {
+		var i CountCalendarDatesRow
+		if err := rows.Scan(&i.ReleaseDate, &i.Releases); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countFreshWorks = `-- name: CountFreshWorks :one
 SELECT CAST(COUNT(DISTINCT work_id) AS INTEGER) AS total FROM work_date
 WHERE kind = ? AND date >= ?
@@ -813,28 +878,34 @@ func (q *Queries) LinkWorkPartExternalID(ctx context.Context, arg LinkWorkPartEx
 
 const listCalendarEntries = `-- name: ListCalendarEntries :many
 SELECT w.id, w.canonical_title, w.sort_title, w.primary_type,
-       COALESCE(w.primary_artist_sort_name, '') AS artist_sort,
+       COALESCE(pa.name, '') AS artist_name,
        MIN(wd.date) AS release_date,
        EXISTS (SELECT 1 FROM work_file wf WHERE wf.work_id = w.id) AS on_disk
 FROM work_date wd
 JOIN work w ON w.id = wd.work_id
+LEFT JOIN person pa ON pa.id = w.primary_artist_id
 WHERE wd.kind = ?1
   AND wd.date >= ?2 AND wd.date <= ?3
   AND (
-    EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = w.id AND di.monitored = 1)
-    OR EXISTS (SELECT 1 FROM credit c JOIN person p ON p.id = c.person_id
-               WHERE c.work_id = w.id AND c.role = 'artist' AND p.monitored = 1)
+    EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = w.id AND di.monitored = 1
+            AND di.category_id IN (SELECT value FROM json_each(?4)))
+    OR EXISTS (SELECT 1 FROM credit c
+               JOIN person p ON p.id = c.person_id
+               JOIN subscription s ON s.subject_type = 'person' AND s.subject_id = p.id AND s.enabled = 1
+               WHERE c.work_id = w.id AND c.role = 'artist' AND p.monitored = 1
+                 AND s.category_id IN (SELECT value FROM json_each(?4)))
   )
 GROUP BY w.id
 ORDER BY release_date, w.sort_title, w.id
-LIMIT ?4
+LIMIT ?5
 `
 
 type ListCalendarEntriesParams struct {
-	Kind     string
-	FromDate string
-	ToDate   string
-	PageSize int64
+	Kind        string
+	FromDate    string
+	ToDate      string
+	CategoryIds interface{}
+	PageSize    int64
 }
 
 type ListCalendarEntriesRow struct {
@@ -842,7 +913,7 @@ type ListCalendarEntriesRow struct {
 	CanonicalTitle string
 	SortTitle      string
 	PrimaryType    sql.NullString
-	ArtistSort     string
+	ArtistName     string
 	ReleaseDate    interface{}
 	OnDisk         bool
 }
@@ -851,11 +922,14 @@ type ListCalendarEntriesRow struct {
 // either something wants the work, or an artist credited on it is monitored.
 // A work with several dates of the same kind in different regions would repeat,
 // so the earliest per work is taken -- a calendar shows one entry per release.
+// Only libraries the caller can see: a wanted work through its desired_item, a followed artist's
+// release through the subscription that follows them.
 func (q *Queries) ListCalendarEntries(ctx context.Context, arg ListCalendarEntriesParams) ([]ListCalendarEntriesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listCalendarEntries,
 		arg.Kind,
 		arg.FromDate,
 		arg.ToDate,
+		arg.CategoryIds,
 		arg.PageSize,
 	)
 	if err != nil {
@@ -870,7 +944,7 @@ func (q *Queries) ListCalendarEntries(ctx context.Context, arg ListCalendarEntri
 			&i.CanonicalTitle,
 			&i.SortTitle,
 			&i.PrimaryType,
-			&i.ArtistSort,
+			&i.ArtistName,
 			&i.ReleaseDate,
 			&i.OnDisk,
 		); err != nil {

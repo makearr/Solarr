@@ -181,6 +181,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/calendar/dates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How many releases fall on each date of a window, for the year view.
+         * @description The same releases listCalendar answers, counted per date so a busy year is never cut off by a page size. A date is as precise as the provider gave it: "2024", "2024-03" or "2024-03-01".
+         */
+        get: operations["listCalendarDates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/calendar-feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's calendar feed token, if one exists. */
+        get: operations["getMyCalendarFeed"];
+        put?: never;
+        /** Give the caller a new calendar feed token, revoking the previous one. */
+        post: operations["createMyCalendarFeed"];
+        /** Revoke the caller's calendar feed; the link stops working at once. */
+        delete: operations["deleteMyCalendarFeed"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/calendar/feed.ics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The calendar as iCalendar, for a calendar client. Authenticated by the token alone.
+         * @description Calendar clients cannot log in, so the per-user token in the URL is the credential (2026-09-19). It shows only the libraries its user can see, and only releases with a full date.
+         */
+        get: operations["getCalendarFeedICS"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/logs": {
         parameters: {
             query?: never;
@@ -3342,6 +3401,15 @@ export interface components {
              */
             files_quarantined: number;
         };
+        CalendarDate: {
+            date: string;
+            /** Format: int64 */
+            releases: number;
+        };
+        CalendarFeed: {
+            /** @description Absent when the caller has no feed. */
+            token?: string;
+        };
         /** @description One release in the calendar window. */
         CalendarEntry: {
             /** Format: int64 */
@@ -4807,6 +4875,117 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+        };
+    };
+    listCalendarDates: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One row per date that has a release. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarDate"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+        };
+    };
+    getMyCalendarFeed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The token, or none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarFeed"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    createMyCalendarFeed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new token. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarFeed"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    deleteMyCalendarFeed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    getCalendarFeedICS: {
+        parameters: {
+            query: {
+                token: string;
+                past_days?: number;
+                future_days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An iCalendar document. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/calendar": string;
+                };
+            };
+            404: components["responses"]["Problem"];
         };
     };
     listLogs: {

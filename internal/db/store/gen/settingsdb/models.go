@@ -40,6 +40,13 @@ type ArrInstance struct {
 	LastSyncError sql.NullString
 }
 
+type CalendarFeed struct {
+	UserID      int64
+	TokenHash   string
+	TokenSealed []byte
+	CreatedAt   int64
+}
+
 type Category struct {
 	ID                  int64
 	MediaType           string

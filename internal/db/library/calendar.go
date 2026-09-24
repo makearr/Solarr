@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -36,9 +37,15 @@ func NewCalendar(opened *store.Store) Calendar { return Calendar{store: opened} 
 // an artist credited on it is monitored. Dates are compared as ISO strings,
 // which sorts correctly and lets a partial date sit in the window it belongs
 // to without inventing a day for it.
-func (c Calendar) Entries(ctx context.Context, from, to string, pageSize int) ([]CalendarEntry, error) {
+func (c Calendar) Entries(
+	ctx context.Context, from, to string, categoryIDs []int64, pageSize int,
+) ([]CalendarEntry, error) {
+	encoded, err := json.Marshal(categoryIDs)
+	if err != nil {
+		return nil, fmt.Errorf("library: calendar categories: %w", err)
+	}
 	rows, err := librarydb.New(c.store.Read()).ListCalendarEntries(ctx, librarydb.ListCalendarEntriesParams{
-		Kind: WorkDateStreet, FromDate: from, ToDate: to, PageSize: int64(pageSize),
+		Kind: WorkDateStreet, FromDate: from, ToDate: to, CategoryIds: string(encoded), PageSize: int64(pageSize),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: calendar entries %s..%s: %w", from, to, err)
@@ -46,7 +53,7 @@ func (c Calendar) Entries(ctx context.Context, from, to string, pageSize int) ([
 	entries := make([]CalendarEntry, len(rows))
 	for i, row := range rows {
 		entries[i] = CalendarEntry{
-			WorkID: row.ID, Title: row.CanonicalTitle, Artist: row.ArtistSort,
+			WorkID: row.ID, Title: row.CanonicalTitle, Artist: row.ArtistName,
 			PrimaryType: row.PrimaryType.String, ReleaseDate: asString(row.ReleaseDate),
 			OnDisk: row.OnDisk,
 		}
@@ -61,4 +68,29 @@ func asString(value any) string {
 		return text
 	}
 	return ""
+}
+
+// CalendarDate is how many releases share one date, as precise as the provider gave it.
+type CalendarDate struct {
+	Date     string
+	Releases int64
+}
+
+// Dates counts Entries' releases per date, for a view that needs every dot but no titles.
+func (c Calendar) Dates(ctx context.Context, from, to string, categoryIDs []int64) ([]CalendarDate, error) {
+	encoded, err := json.Marshal(categoryIDs)
+	if err != nil {
+		return nil, fmt.Errorf("library: calendar categories: %w", err)
+	}
+	rows, err := librarydb.New(c.store.Read()).CountCalendarDates(ctx, librarydb.CountCalendarDatesParams{
+		Kind: WorkDateStreet, FromDate: from, ToDate: to, CategoryIds: string(encoded),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: calendar dates %s..%s: %w", from, to, err)
+	}
+	dates := make([]CalendarDate, len(rows))
+	for i, row := range rows {
+		dates[i] = CalendarDate{Date: asString(row.ReleaseDate), Releases: row.Releases}
+	}
+	return dates, nil
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
@@ -23,7 +24,16 @@ type CalendarRow struct {
 // CalendarReader answers releases in a date window. Defined here and
 // implemented by the caller, the same separation WorksReader keeps.
 type CalendarReader interface {
-	Entries(ctx context.Context, from, to string, limit int) ([]CalendarRow, error)
+	// Entries answers only works wanted by one of categoryIDs, the libraries the caller can see.
+	Entries(ctx context.Context, from, to string, categoryIDs []int64, limit int) ([]CalendarRow, error)
+	// Dates counts the same releases per date.
+	Dates(ctx context.Context, from, to string, categoryIDs []int64) ([]CalendarDate, error)
+}
+
+// CalendarDate is how many releases share one date.
+type CalendarDate struct {
+	Date     string
+	Releases int64
 }
 
 // isoDate is the shortest and longest a date parameter may be: a bare year up
@@ -68,7 +78,8 @@ func (s *Server) routeListCalendar(w http.ResponseWriter, r *http.Request) {
 
 // ListCalendar answers releases in a date window, earliest first.
 func (s *Server) ListCalendar(w http.ResponseWriter, r *http.Request, params gen.ListCalendarParams) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
@@ -79,7 +90,8 @@ func (s *Server) ListCalendar(w http.ResponseWriter, r *http.Request, params gen
 	}
 
 	limit := paginate.ClampLimit(derefOr(params.Limit, 0))
-	rows, err := s.calendar.Entries(r.Context(), params.From, params.To, limit)
+	rows, err := s.calendar.Entries(r.Context(), params.From, params.To,
+		access.VisibleCategoryIDs(settings.PermissionRead), limit)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -96,6 +108,41 @@ func (s *Server) ListCalendar(w http.ResponseWriter, r *http.Request, params gen
 			view.PrimaryType = &row.PrimaryType
 		}
 		views[i] = view
+	}
+	writeJSON(w, s.logger, http.StatusOK, views)
+}
+
+func (s *Server) routeListCalendarDates(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	from, to := query.Get("from"), query.Get("to")
+	if !isoDate(from) || !isoDate(to) {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "from and to must be ISO dates: 2024, 2024-03 or 2024-03-01")
+		return
+	}
+	s.ListCalendarDates(w, r, gen.ListCalendarDatesParams{From: from, To: to})
+}
+
+// ListCalendarDates counts releases per date, only in libraries the caller can see.
+func (s *Server) ListCalendarDates(w http.ResponseWriter, r *http.Request, params gen.ListCalendarDatesParams) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.calendar == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "the calendar is not available")
+		return
+	}
+	dates, err := s.calendar.Dates(r.Context(), params.From, params.To, access.VisibleCategoryIDs(settings.PermissionRead))
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	views := make([]gen.CalendarDate, len(dates))
+	for i, date := range dates {
+		views[i] = gen.CalendarDate{Date: date.Date, Releases: date.Releases}
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)
 }
