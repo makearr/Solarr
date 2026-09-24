@@ -956,6 +956,8 @@ type CalendarFeed struct {
 
 // CandidateDecision One release an indexer answered, decided against a specific desired item (section 10.1/12). components/rejections/deferrals are the same shape Decision itself carries -- quality is omitted here since a candidate is compared against a profile, not against another candidate (no ADR-40 tiered comparison to show).
 type CandidateDecision struct {
+	// Blocklisted The release is blocklisted and will not be offered again.
+	Blocklisted *bool            `json:"blocklisted,omitempty"`
 	CandidateId int64            `json:"candidate_id"`
 	Components  []ScoreComponent `json:"components"`
 	DecidedAt   time.Time        `json:"decided_at"`
@@ -964,7 +966,10 @@ type CandidateDecision struct {
 	Guid        string           `json:"guid"`
 	Id          int64            `json:"id"`
 	IndexerId   int64            `json:"indexer_id"`
-	Leechers    *int64           `json:"leechers"`
+
+	// IndexerName The indexer's name; empty when it has since been removed.
+	IndexerName *string `json:"indexer_name,omitempty"`
+	Leechers    *int64  `json:"leechers"`
 
 	// MatchConfidence 1 - the match distance against this item's own identity (section 10.2).
 	MatchConfidence *float32                  `json:"match_confidence"`
@@ -3293,6 +3298,12 @@ type RemoveWorkJSONBody struct {
 	DeleteFiles *bool `json:"delete_files,omitempty"`
 }
 
+// SearchWorkJSONBody defines parameters for SearchWork.
+type SearchWorkJSONBody struct {
+	Album  string `json:"album"`
+	Artist string `json:"artist"`
+}
+
 // AddArrInstanceJSONRequestBody defines body for AddArrInstance for application/json ContentType.
 type AddArrInstanceJSONRequestBody = AddArrInstanceRequest
 
@@ -3490,6 +3501,9 @@ type SetTrackWantedJSONRequestBody SetTrackWantedJSONBody
 
 // RemoveWorkJSONRequestBody defines body for RemoveWork for application/json ContentType.
 type RemoveWorkJSONRequestBody RemoveWorkJSONBody
+
+// SearchWorkJSONRequestBody defines body for SearchWork for application/json ContentType.
+type SearchWorkJSONRequestBody SearchWorkJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -3997,6 +4011,9 @@ type ServerInterface interface {
 	// Every release ever decided against this work's own wanted album item (section 12's own "why wasn't this downloaded"), newest first. Empty, never 404, for a work nobody has searched yet.
 	// (GET /works/{id}/candidates)
 	ListWorkCandidates(w http.ResponseWriter, r *http.Request, id int64)
+	// Never offer this release again (section 10.11): blocklisted by its indexer and guid, permanently, as the user's own choice. Later searches drop it before it is decided. Administrator only.
+	// (POST /works/{id}/candidates/{decisionId}/blocklist)
+	BlocklistCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64)
 	// Dispatch one ACCEPTed decision's own release to a matching downloader (ADR-57's acquire.send). No resource gate yet -- every dispatch here is a user's own explicit action (ADR-12's own "user request: never paused"), since nothing automatic calls this until stage 6's planner exists.
 	// (POST /works/{id}/candidates/{decisionId}/send)
 	SendCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64)
@@ -4018,7 +4035,7 @@ type ServerInterface interface {
 	// Stop wanting an album, and optionally delete its files. Administrator only.
 	// (POST /works/{id}/remove)
 	RemoveWork(w http.ResponseWriter, r *http.Request, id int64)
-	// Search every configured indexer for this work's own wanted album (stage 5's candidate pipeline, section 10.1/10.2). Synchronous -- one album, a handful of indexer calls, tiers 0-2 (exact, +year, +alias) widening only until one clears the match-distance gate.
+	// Search every configured indexer for this work's own wanted album (stage 5's candidate pipeline, section 10.1/10.2). Synchronous -- one album, a handful of indexer calls, tiers 0-2 (exact, +year, +alias) widening only until one clears the match-distance gate. With a body, searches those terms instead ("search with different terms"); a release matching them counts as matching the work.
 	// (POST /works/{id}/search)
 	SearchWork(w http.ResponseWriter, r *http.Request, id int64)
 }
@@ -5035,6 +5052,12 @@ func (_ Unimplemented) ListWorkCandidates(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Never offer this release again (section 10.11): blocklisted by its indexer and guid, permanently, as the user's own choice. Later searches drop it before it is decided. Administrator only.
+// (POST /works/{id}/candidates/{decisionId}/blocklist)
+func (_ Unimplemented) BlocklistCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Dispatch one ACCEPTed decision's own release to a matching downloader (ADR-57's acquire.send). No resource gate yet -- every dispatch here is a user's own explicit action (ADR-12's own "user request: never paused"), since nothing automatic calls this until stage 6's planner exists.
 // (POST /works/{id}/candidates/{decisionId}/send)
 func (_ Unimplemented) SendCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64) {
@@ -5077,7 +5100,7 @@ func (_ Unimplemented) RemoveWork(w http.ResponseWriter, r *http.Request, id int
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Search every configured indexer for this work's own wanted album (stage 5's candidate pipeline, section 10.1/10.2). Synchronous -- one album, a handful of indexer calls, tiers 0-2 (exact, +year, +alias) widening only until one clears the match-distance gate.
+// Search every configured indexer for this work's own wanted album (stage 5's candidate pipeline, section 10.1/10.2). Synchronous -- one album, a handful of indexer calls, tiers 0-2 (exact, +year, +alias) widening only until one clears the match-distance gate. With a body, searches those terms instead ("search with different terms"); a release matching them counts as matching the work.
 // (POST /works/{id}/search)
 func (_ Unimplemented) SearchWork(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -10268,6 +10291,48 @@ func (siw *ServerInterfaceWrapper) ListWorkCandidates(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// BlocklistCandidate operation middleware
+func (siw *ServerInterfaceWrapper) BlocklistCandidate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "decisionId" -------------
+	var decisionId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "decisionId", chi.URLParam(r, "decisionId"), &decisionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "decisionId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BlocklistCandidate(w, r, id, decisionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SendCandidate operation middleware
 func (siw *ServerInterfaceWrapper) SendCandidate(w http.ResponseWriter, r *http.Request) {
 
@@ -11193,6 +11258,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/{id}/candidates", wrapper.ListWorkCandidates)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/candidates/{decisionId}/blocklist", wrapper.BlocklistCandidate)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/candidates/{decisionId}/send", wrapper.SendCandidate)

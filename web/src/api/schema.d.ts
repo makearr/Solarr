@@ -1662,6 +1662,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/candidates/{decisionId}/blocklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                decisionId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Never offer this release again (section 10.11): blocklisted by its indexer and guid, permanently, as the user's own choice. Later searches drop it before it is decided. Administrator only. */
+        post: operations["blocklistCandidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}/parts/{partId}/search": {
         parameters: {
             query?: never;
@@ -1696,7 +1716,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Search every configured indexer for this work's own wanted album (stage 5's candidate pipeline, section 10.1/10.2). Synchronous -- one album, a handful of indexer calls, tiers 0-2 (exact, +year, +alias) widening only until one clears the match-distance gate. */
+        /** Search every configured indexer for this work's own wanted album (stage 5's candidate pipeline, section 10.1/10.2). Synchronous -- one album, a handful of indexer calls, tiers 0-2 (exact, +year, +alias) widening only until one clears the match-distance gate. With a body, searches those terms instead ("search with different terms"); a release matching them counts as matching the work. */
         post: operations["searchWork"];
         delete?: never;
         options?: never;
@@ -4819,6 +4839,10 @@ export interface components {
             match_confidence?: number | null;
             /** Format: int64 */
             indexer_id: number;
+            /** @description The indexer's name; empty when it has since been removed. */
+            indexer_name?: string;
+            /** @description The release is blocklisted and will not be offered again. */
+            blocklisted?: boolean;
             guid: string;
             /** @description The release's own raw title */
             title: string;
@@ -7714,6 +7738,28 @@ export interface operations {
             };
         };
     };
+    blocklistCandidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                decisionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Blocklisted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
     searchTrack: {
         parameters: {
             query?: never;
@@ -7757,7 +7803,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    artist: string;
+                    album: string;
+                };
+            };
+        };
         responses: {
             /** @description What this run found, decided and persisted. */
             200: {

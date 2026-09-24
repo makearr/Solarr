@@ -6,6 +6,7 @@ import { Search as SearchIcon, Trash2 as TrashIcon } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { discCountOf, formatTrackNumber } from "@/lib/trackNumber";
+import { useIsAdministrator } from "@/lib/useAdministrator";
 import { usePreference } from "@/lib/usePreference";
 
 import { CoverArt } from "./CoverArt";
@@ -54,13 +55,25 @@ export function WorkDetail() {
   const navigate = useNavigate();
 
   const search = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (terms?: { artist: string; album: string }) => {
       if (id === undefined) return;
-      const { error } = await api.POST("/works/{id}/search", { params: { path: { id } } });
+      const { error } = await api.POST("/works/{id}/search", { params: { path: { id } }, body: terms });
       if (error) throw error;
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["work", id, "candidates"] }),
   });
+
+  const blocklist = useMutation({
+    mutationFn: async (decisionId: number) => {
+      if (id === undefined) return;
+      const { error } = await api.POST("/works/{id}/candidates/{decisionId}/blocklist", {
+        params: { path: { id, decisionId } },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["work", id, "candidates"] }),
+  });
+  const administrator = useIsAdministrator();
 
   const send = useMutation({
     mutationFn: async (decisionId: number) => {
@@ -231,12 +244,18 @@ export function WorkDetail() {
               <button
                 type="button"
                 disabled={search.isPending}
-                onClick={() => search.mutate()}
+                onClick={() => search.mutate(undefined)}
                 className="w-fit rounded-md border border-border-subtle px-3 py-1.5 text-sm
                            enabled:hover:bg-surface disabled:cursor-default disabled:opacity-50"
               >
                 {search.isPending ? "Searching…" : "Search now"}
               </button>
+              <DifferentTerms
+                artist={work.credits.find((credit) => credit.role === "artist")?.person_name ?? ""}
+                album={work.title}
+                busy={search.isPending}
+                onSearch={(terms) => search.mutate(terms)}
+              />
               {search.isError && (
                 <p className="text-xs text-danger">
                   That search could not run -- check that an indexer is connected and enabled.
@@ -248,6 +267,7 @@ export function WorkDetail() {
                 onSend={(decisionId) => send.mutate(decisionId)}
                 sendPendingId={send.isPending ? send.variables : undefined}
                 sendError={send.isError ? send.variables : undefined}
+                onBlocklist={administrator ? (decisionId) => blocklist.mutate(decisionId) : undefined}
               />
             </div>
           </Section>
@@ -681,12 +701,14 @@ function CandidateList({
   onSend,
   sendPendingId,
   sendError,
+  onBlocklist,
 }: {
   decisions: CandidateDecision[];
   loading: boolean;
   onSend: (decisionId: number) => void;
   sendPendingId: number | undefined;
   sendError: number | undefined;
+  onBlocklist?: (decisionId: number) => void;
 }) {
   if (loading) return <p className="text-xs text-ink-muted">Loading…</p>;
   if (decisions.length === 0) {
@@ -704,10 +726,26 @@ function CandidateList({
             <span className="truncate font-mono text-xs" title={decision.title}>
               {decision.title}
             </span>
+            {decision.blocklisted && (
+              <span className="rounded-full border border-danger px-1.5 py-px text-[0.6875rem] text-danger">
+                blocklisted
+              </span>
+            )}
             <span className="ml-auto shrink-0 text-xs text-ink-muted">
               score {decision.score.toFixed(1)}
             </span>
-            {decision.outcome === "ACCEPT" && (
+            {onBlocklist && !decision.blocklisted && (
+              <button
+                type="button"
+                onClick={() => onBlocklist(decision.id)}
+                title="Never offer this release again"
+                className="shrink-0 rounded-md border border-border-subtle px-2 py-0.5 text-xs
+                           text-ink-muted hover:text-danger"
+              >
+                Blocklist
+              </button>
+            )}
+            {decision.outcome === "ACCEPT" && !decision.blocklisted && (
               <button
                 type="button"
                 onClick={() => onSend(decision.id)}
@@ -725,6 +763,7 @@ function CandidateList({
             </p>
           )}
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">
+            {decision.indexer_name && <span className="text-ink">{decision.indexer_name}</span>}
             <span>{decision.protocol}</span>
             {decision.size_bytes != null && <span>{formatBytes(decision.size_bytes)}</span>}
             {decision.seeders != null && <span>{decision.seeders} seeders</span>}
@@ -752,6 +791,54 @@ function CandidateList({
         </li>
       ))}
     </ul>
+  );
+}
+
+/** "Search with different terms": the indexer calls it something else. Starts from the work's own. */
+function DifferentTerms({
+  artist,
+  album,
+  busy,
+  onSearch,
+}: {
+  artist: string;
+  album: string;
+  busy: boolean;
+  onSearch: (terms: { artist: string; album: string }) => void;
+}) {
+  const [terms, setTerms] = useState({ artist, album });
+  const ready = terms.artist.trim() !== "" && terms.album.trim() !== "";
+  return (
+    <details className="text-xs">
+      <summary className="cursor-pointer text-ink-muted hover:text-ink">Search with different terms</summary>
+      <form
+        className="mt-2 flex flex-wrap items-center gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (ready) onSearch({ artist: terms.artist.trim(), album: terms.album.trim() });
+        }}
+      >
+        <input
+          aria-label="Artist"
+          value={terms.artist}
+          onChange={(event) => setTerms({ ...terms, artist: event.target.value })}
+          className="rounded-md border border-border-subtle bg-canvas px-2 py-1 text-sm"
+        />
+        <input
+          aria-label="Album"
+          value={terms.album}
+          onChange={(event) => setTerms({ ...terms, album: event.target.value })}
+          className="rounded-md border border-border-subtle bg-canvas px-2 py-1 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={busy || !ready}
+          className="rounded-md border border-border-subtle px-3 py-1 text-sm enabled:hover:bg-surface disabled:opacity-50"
+        >
+          Search these
+        </button>
+      </form>
+    </details>
   );
 }
 

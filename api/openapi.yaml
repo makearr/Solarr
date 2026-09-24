@@ -2631,6 +2631,27 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
+  /works/{id}/candidates/{decisionId}/blocklist:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: decisionId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: blocklistCandidate
+      tags: [acquisition]
+      summary: >-
+        Never offer this release again (section 10.11): blocklisted by its
+        indexer and guid, permanently, as the user's own choice. Later
+        searches drop it before it is decided. Administrator only.
+      responses:
+        "204": { description: Blocklisted. }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/parts/{partId}/search:
     parameters:
       - name: id
@@ -2678,6 +2699,18 @@ paths:
         (stage 5's candidate pipeline, section 10.1/10.2). Synchronous --
         one album, a handful of indexer calls, tiers 0-2 (exact, +year,
         +alias) widening only until one clears the match-distance gate.
+        With a body, searches those terms instead ("search with different
+        terms"); a release matching them counts as matching the work.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [artist, album]
+              properties:
+                artist: { type: string, minLength: 1 }
+                album: { type: string, minLength: 1 }
       responses:
         "200":
           description: What this run found, decided and persisted.
@@ -7355,6 +7388,12 @@ components:
           nullable: true
           description: 1 - the match distance against this item's own identity (section 10.2).
         indexer_id: { type: integer, format: int64 }
+        indexer_name:
+          type: string
+          description: The indexer's name; empty when it has since been removed.
+        blocklisted:
+          type: boolean
+          description: The release is blocklisted and will not be offered again.
         guid: { type: string }
         title: { type: string, description: The release's own raw title, unparsed. }
         size_bytes: { type: integer, format: int64, nullable: true }

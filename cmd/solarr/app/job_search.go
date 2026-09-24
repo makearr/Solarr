@@ -40,9 +40,11 @@ func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error)
 
 // musicSearch builds internal/media/music.Search over the real stores.
 func (p *process) musicSearch() music.Search {
+	blocklist := library.NewBlocklistStore(p.library)
 	return music.Search{
 		Works: library.NewWorks(p.library), Desired: library.NewDesired(p.library),
 		Candidates: library.NewCandidates(p.library), Settings: p.cache, Clock: clock.NewSystem(),
+		Blocklist: &blocklist,
 	}
 }
 

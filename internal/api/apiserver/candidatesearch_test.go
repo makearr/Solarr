@@ -23,6 +23,8 @@ type fakeCandidateSearcher struct {
 	sendErr      error
 
 	lastSearchWorkID     int64
+	lastSearchTerms      *apiserver.SearchTerms
+	blocklisted          [][2]int64
 	lastSearchPartID     int64
 	lastListCandidatesID int64
 	lastSearchCategoryID int64
@@ -36,9 +38,17 @@ func (f *fakeCandidateSearcher) SendCandidate(_ context.Context, workID, decisio
 	return f.acquisition, f.sendErr
 }
 
-func (f *fakeCandidateSearcher) SearchWork(_ context.Context, workID int64) (apiserver.SearchItemResult, error) {
+func (f *fakeCandidateSearcher) SearchWork(
+	_ context.Context, workID int64, terms *apiserver.SearchTerms,
+) (apiserver.SearchItemResult, error) {
 	f.lastSearchWorkID = workID
+	f.lastSearchTerms = terms
 	return f.searchResult, f.searchErr
+}
+
+func (f *fakeCandidateSearcher) BlocklistCandidate(_ context.Context, workID, decisionID int64) error {
+	f.blocklisted = append(f.blocklisted, [2]int64{workID, decisionID})
+	return nil
 }
 
 func (f *fakeCandidateSearcher) SearchTrack(_ context.Context, workID, partID int64) (apiserver.SearchItemResult, error) {
@@ -312,5 +322,41 @@ func TestSearchTrack_ReachesTheSearcherWithBothIDs(t *testing.T) {
 	}
 	if got := fixture.candidateSearcher; got.lastSearchWorkID != 12 || got.lastSearchPartID != 34 {
 		t.Errorf("searched work %d part %d, want 12 and 34", got.lastSearchWorkID, got.lastSearchPartID)
+	}
+}
+
+// "Search with different terms": the typed artist and album reach the pipeline; half a pair is refused.
+func TestSearchWork_ForwardsDifferentTerms(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/search", `{"artist":" Heka ","album":"Watermark"}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if got := fixture.candidateSearcher.lastSearchTerms; got == nil || *got != (apiserver.SearchTerms{Artist: "Heka", Album: "Watermark"}) {
+		t.Errorf("terms = %+v, want Heka / Watermark", got)
+	}
+	recorder = fixture.do(authedPost(t, cookies, "/api/v1/works/42/search", `{"artist":"Heka","album":""}`))
+	if recorder.Code != http.StatusBadRequest {
+		t.Errorf("half a pair: status %d, want 400", recorder.Code)
+	}
+}
+
+// Blocklisting a release is an administrator's decision.
+func TestBlocklistCandidate_AdministratorOnly(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+
+	recorder := fixture.do(authedPost(t, fixture.signIn(t, "listener"), "/api/v1/works/42/candidates/7/blocklist", ""))
+	if recorder.Code != http.StatusForbidden || len(fixture.candidateSearcher.blocklisted) != 0 {
+		t.Fatalf("listener: status %d, blocklisted %v; want 403 and nothing", recorder.Code, fixture.candidateSearcher.blocklisted)
+	}
+	recorder = fixture.do(authedPost(t, fixture.signIn(t, "admin"), "/api/v1/works/42/candidates/7/blocklist", ""))
+	if recorder.Code != http.StatusNoContent || len(fixture.candidateSearcher.blocklisted) != 1 ||
+		fixture.candidateSearcher.blocklisted[0] != [2]int64{42, 7} {
+		t.Errorf("admin: status %d, blocklisted %v; want 204 and [42 7]", recorder.Code, fixture.candidateSearcher.blocklisted)
 	}
 }
