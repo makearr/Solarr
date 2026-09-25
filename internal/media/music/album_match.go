@@ -74,6 +74,8 @@ type LocalTrack struct {
 	Year                 int
 	Duration             time.Duration
 	RecordingMBID        string
+	// FolderAlbum is the album the folder's name gives, searched and scored beside the tag's.
+	FolderAlbum string
 }
 
 // AlbumCandidate is one release to score, with the release group it belongs to.
@@ -308,7 +310,10 @@ func addAlbumDimensions(d *distance, locals []LocalTrack, candidate AlbumCandida
 	}
 	if album := consensusClaim(locals, func(t LocalTrack) Claim { return t.Album }); album.present() {
 		penalty := 1.0
-		for _, title := range []string{album.Value, cleanAlbumTag(album.Value)} {
+		for _, title := range []string{album.Value, cleanAlbumTag(album.Value), folderAlbum(locals)} {
+			if title == "" {
+				continue
+			}
 			penalty = min(penalty, match.EditPenalty(title, candidate.Release.Title), match.EditPenalty(title, candidate.ReleaseGroup.Title))
 		}
 		d.add(dimensionAlbum, dampened(penalty, album.Provenance))
@@ -473,6 +478,16 @@ func DecideAlbum(locals []LocalTrack, candidates []AlbumCandidate) AlbumDecision
 	decision.Outcome = AlbumIdentified
 	decision.Best = &decision.Scores[0]
 	return decision
+}
+
+// folderAlbum is the album the folder names, empty when no file's path gave one.
+func folderAlbum(locals []LocalTrack) string {
+	for _, local := range locals {
+		if local.FolderAlbum != "" {
+			return local.FolderAlbum
+		}
+	}
+	return ""
 }
 
 // withoutCollidingDiscs drops every disc claim once two files claim the same disc and track: a

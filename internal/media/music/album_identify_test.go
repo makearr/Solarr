@@ -190,3 +190,27 @@ func TestIdentifyAlbum_AMergedGroupListedTwiceIsScoredOnceUnderItsCurrentID(t *t
 		})
 	}
 }
+
+// A malformed album tag hides the title; the folder that names it recalls and fits the album
+// (Gus Hogecuru' "Sohe Basen", tagged "Dee Gees / Sohe Basen - Gus Hogecuru / Live").
+func TestIdentifyAlbum_TheFoldersAlbumNameRecallsWhatAMalformedTagHides(t *testing.T) {
+	lookup := &fakeAlbumLookup{
+		searches: map[string][]musicbrainz.ReleaseGroupMatch{"P!po/Kebilegev Bibihi": {
+			{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg-studio", Title: "Kebilegev Bibihi", PrimaryType: "Album"}, ArtistCredit: "P!po"},
+		}},
+		releases: map[string][]musicbrainz.Release{"rg-studio": {studioRelease}},
+	}
+	locals := folderOf(traumaTracks)
+	for i := range locals {
+		locals[i].Album = tagged("P!po / Kebilegev Bibihi - Live / Remixed")
+		locals[i].FolderAlbum = "Kebilegev Bibihi"
+	}
+
+	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, nil)
+	if err != nil {
+		t.Fatalf("IdentifyAlbum: %v", err)
+	}
+	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-studio" {
+		t.Errorf("decision = %s %q (asked %v), want identified rg-studio", decision.Outcome, bestReleaseGroup(decision), lookup.asked)
+	}
+}

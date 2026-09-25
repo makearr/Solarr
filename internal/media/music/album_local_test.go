@@ -20,6 +20,7 @@ func TestReadLocalTrack_TagsWin(t *testing.T) {
 		Artist: music.Claim{Value: "P!po", Provenance: music.ProvenanceTag},
 		Album:  music.Claim{Value: "Kebilegev Bibihi", Provenance: music.ProvenanceTag},
 		Disc:   1, Track: 4, Year: 2017, Duration: 270 * time.Second,
+		FolderAlbum: "Kebilegev Bibihi",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ReadLocalTrack = %+v\nwant %+v", got, want)
@@ -35,6 +36,7 @@ func TestReadLocalTrack_FallsBackToThePath(t *testing.T) {
 		Artist: music.Claim{Value: "P!po", Provenance: music.ProvenanceParsed},
 		Album:  music.Claim{Value: "Kebilegev Bibihi", Provenance: music.ProvenanceParsed},
 		Track:  4, Year: 2017,
+		FolderAlbum: "Kebilegev Bibihi",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ReadLocalTrack = %+v\nwant %+v", got, want)
