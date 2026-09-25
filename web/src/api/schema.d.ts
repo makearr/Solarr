@@ -2715,6 +2715,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What happened to downloads -- grabbed, imported, failed (section 5.7).
+         * @description Cursor-paged, newest first, only for libraries the caller can read. With work_id, one album's history. A page may hold fewer entries than asked for and still carry a next cursor, when entries from hidden libraries were skipped.
+         */
+        get: operations["listHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/blocklist/{id}": {
         parameters: {
             query?: never;
@@ -3637,6 +3657,34 @@ export interface components {
             expires_at?: string;
             /** Format: date-time */
             created_at: string;
+        };
+        /** @description One cursor page of download history. */
+        HistoryPage: {
+            items: components["schemas"]["HistoryEntry"][];
+            /**
+             * Format: int64
+             * @description Absent on the last page.
+             */
+            next_cursor?: number;
+        };
+        /** @description One thing that happened to a download, as it was known then. */
+        HistoryEntry: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            at: string;
+            /** @enum {string} */
+            kind: "grabbed" | "imported" | "failed";
+            /** Format: int64 */
+            work_id?: number;
+            album?: string;
+            artist?: string;
+            release_title: string;
+            indexer?: string;
+            /** @description The download client's name. */
+            client?: string;
+            /** @description Why a download failed, in the client's or the importer's words. */
+            detail?: string;
         };
         /** @description What removing an album actually did. */
         RemoveWorkResult: {
@@ -9563,6 +9611,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BlocklistPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    listHistory: {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+                work_id?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of entries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryPage"];
                 };
             };
             401: components["responses"]["Problem"];

@@ -173,11 +173,11 @@ function StatusPanels({ summary }: { summary: components["schemas"]["DashboardSu
   return (
     <Section title="Activity">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <Tile label="Queued" value={jobs.pending} to="/activity" />
-        <Tile label="Running" value={jobs.running} to="/activity" tone="accent" />
-        <Tile label="Failed" value={jobs.failed} to="/activity" tone="danger" />
-        <Tile label="Done" value={jobs.succeeded} to="/activity" />
-        <Tile label="Cancelled" value={jobs.cancelled} to="/activity" />
+        <Tile label="Queued" value={jobs.pending} to="/activity/jobs" />
+        <Tile label="Running" value={jobs.running} to="/activity/jobs" tone="accent" />
+        <Tile label="Failed" value={jobs.failed} to="/activity/jobs" tone="danger" />
+        <Tile label="Done" value={jobs.succeeded} to="/activity/jobs" />
+        <Tile label="Cancelled" value={jobs.cancelled} to="/activity/jobs" />
       </div>
     </Section>
   );

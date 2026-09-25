@@ -5,6 +5,7 @@ import { Search as SearchIcon, Trash2 as TrashIcon } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { HistoryKind, historySource, historyWhen } from "@/lib/downloadHistory";
 import { discCountOf, formatTrackNumber } from "@/lib/trackNumber";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import { usePreference } from "@/lib/usePreference";
@@ -324,6 +325,8 @@ export function WorkDetail() {
             onRemove={(partId, deleteFiles) => removeTrack.mutate({ partId, deleteFiles })}
           />
         )}
+
+        <WorkHistory workId={work.id} />
 
         {work.external_ids.length > 0 && (
           <Section title="External IDs">
@@ -860,6 +863,40 @@ function formatBytes(bytes: number): string {
     unitIndex += 1;
   }
   return `${value.toFixed(1)} ${units[unitIndex]}`;
+}
+
+// The album's own download history, as Lidarr's album page shows it: shown once there is any.
+function WorkHistory({ workId }: { workId: number }) {
+  const history = useQuery({
+    queryKey: ["history", "work", workId],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/history", { params: { query: { work_id: workId, limit: 50 } } });
+      if (error) throw error;
+      return data.items;
+    },
+  });
+  if (!history.data || history.data.length === 0) return null;
+  return (
+    <Section title="History">
+      <ul className="flex flex-col gap-1 text-sm">
+        {history.data.map((entry) => (
+          <li key={entry.id} className="flex items-baseline gap-3">
+            <time className="shrink-0 font-mono text-xs text-ink-muted" dateTime={entry.at}>
+              {historyWhen(entry)}
+            </time>
+            <span className="w-16 shrink-0">
+              <HistoryKind kind={entry.kind} />
+            </span>
+            <span className="min-w-0 truncate" title={entry.release_title}>
+              {entry.release_title}
+              {entry.detail && <span className="text-danger"> — {entry.detail}</span>}
+            </span>
+            <span className="ml-auto shrink-0 text-xs text-ink-muted">{historySource(entry)}</span>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

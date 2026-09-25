@@ -24,7 +24,8 @@ var allowedInternalImports = map[string][]string{
 		"migrations",
 	},
 	"cmd/solarr/app": {
-		"cmd/solarr/adapters", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/sabnzbd",
+		"cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll",
+		"internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
 		"internal/api/webui", "internal/db/library", "internal/db/recovery", "internal/db/settings",
 		"internal/db/store", "internal/importing/arrimport", "internal/importing/downloadwatch",
@@ -39,7 +40,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
 	"cmd/solarr/adapters": {
-		"internal/acquiring/indexer", "internal/acquiring/sabnzbd",
+		"internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/db/library", "internal/db/settings",
 		"internal/identify/model", "internal/identify/priority", "internal/importing/arrimport",
 		"internal/importing/importjob", "internal/importing/inspect", "internal/jobs",

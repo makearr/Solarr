@@ -21,7 +21,7 @@ func (p *process) registerPollJob(registry *jobs.Registry, executor *jobs.Execut
 		Acquisitions: library.NewAcquisitions(p.library), Sessions: library.NewImportSessions(p.library),
 		Blocklist: library.NewBlocklistStore(p.library), FS: p.fsys,
 		Clients: p.pollClients, DownloadFolders: p.pollDownloadFolders,
-		Import: p.importAcquisition, Search: p.searchAgain,
+		Import: p.importAcquisition, Search: p.searchAgain, History: p.recordDownloadHistory,
 		Clock: clock.NewSystem(), Logger: p.logger,
 	}))
 	return nil

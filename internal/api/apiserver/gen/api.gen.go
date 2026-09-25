@@ -193,6 +193,13 @@ const (
 	HealthStatusStatusOk HealthStatusStatus = "ok"
 )
 
+// Defines values for HistoryEntryKind.
+const (
+	HistoryEntryKindFailed   HistoryEntryKind = "failed"
+	HistoryEntryKindGrabbed  HistoryEntryKind = "grabbed"
+	HistoryEntryKindImported HistoryEntryKind = "imported"
+)
+
 // Defines values for IdentificationAttemptOutcome.
 const (
 	IdentificationAttemptOutcomeIdentified IdentificationAttemptOutcome = "identified"
@@ -1374,6 +1381,35 @@ type HealthStatus struct {
 
 // HealthStatusStatus defines model for HealthStatus.Status.
 type HealthStatusStatus string
+
+// HistoryEntry One thing that happened to a download, as it was known then.
+type HistoryEntry struct {
+	Album  *string   `json:"album,omitempty"`
+	Artist *string   `json:"artist,omitempty"`
+	At     time.Time `json:"at"`
+
+	// Client The download client's name.
+	Client *string `json:"client,omitempty"`
+
+	// Detail Why a download failed, in the client's or the importer's words.
+	Detail       *string          `json:"detail,omitempty"`
+	Id           int64            `json:"id"`
+	Indexer      *string          `json:"indexer,omitempty"`
+	Kind         HistoryEntryKind `json:"kind"`
+	ReleaseTitle string           `json:"release_title"`
+	WorkId       *int64           `json:"work_id,omitempty"`
+}
+
+// HistoryEntryKind defines model for HistoryEntry.Kind.
+type HistoryEntryKind string
+
+// HistoryPage One cursor page of download history.
+type HistoryPage struct {
+	Items []HistoryEntry `json:"items"`
+
+	// NextCursor Absent on the last page.
+	NextCursor *int64 `json:"next_cursor,omitempty"`
+}
 
 // IdentificationAttempt defines model for IdentificationAttempt.
 type IdentificationAttempt struct {
@@ -2945,6 +2981,13 @@ type StreamEventsParams struct {
 	LastEventID *string       `json:"Last-Event-ID,omitempty"`
 }
 
+// ListHistoryParams defines parameters for ListHistory.
+type ListHistoryParams struct {
+	After  *int64 `form:"after,omitempty" json:"after,omitempty"`
+	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
+	WorkId *int64 `form:"work_id,omitempty" json:"work_id,omitempty"`
+}
+
 // ListImportSessionsParams defines parameters for ListImportSessions.
 type ListImportSessionsParams struct {
 	State *ListImportSessionsParamsState `form:"state,omitempty" json:"state,omitempty"`
@@ -3693,6 +3736,9 @@ type ServerInterface interface {
 	// Liveness.
 	// (GET /health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// What happened to downloads -- grabbed, imported, failed (section 5.7).
+	// (GET /history)
+	ListHistory(w http.ResponseWriter, r *http.Request, params ListHistoryParams)
 	// Remove an import list. Administrator only.
 	// (DELETE /import-lists/{id})
 	DeleteImportList(w http.ResponseWriter, r *http.Request, id int64)
@@ -4422,6 +4468,12 @@ func (_ Unimplemented) RemoveAndBlockFile(w http.ResponseWriter, r *http.Request
 // Liveness.
 // (GET /health)
 func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What happened to downloads -- grabbed, imported, failed (section 5.7).
+// (GET /history)
+func (_ Unimplemented) ListHistory(w http.ResponseWriter, r *http.Request, params ListHistoryParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7074,6 +7126,57 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListHistory operation middleware
+func (siw *ServerInterfaceWrapper) ListHistory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListHistoryParams
+
+	// ------------- Optional query parameter "after" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "after", r.URL.Query(), &params.After)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "work_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "work_id", r.URL.Query(), &params.WorkId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "work_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListHistory(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11066,6 +11169,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/health", wrapper.GetHealth)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/history", wrapper.ListHistory)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/import-lists/{id}", wrapper.DeleteImportList)

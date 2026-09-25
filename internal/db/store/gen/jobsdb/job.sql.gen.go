@@ -565,6 +565,65 @@ func (q *Queries) ListEventsForSubject(ctx context.Context, arg ListEventsForSub
 	return items, nil
 }
 
+const listEventsOfKinds = `-- name: ListEventsOfKinds :many
+SELECT id, at, kind, subject_type, subject_id, user_id, correlation_id, data_json
+FROM event_log
+WHERE kind IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
+  AND (CAST(?2 AS INTEGER) = 0
+       OR (subject_type = ?3 AND subject_id = ?2))
+  AND (CAST(?4 AS INTEGER) = 0 OR id < ?4)
+ORDER BY id DESC
+LIMIT ?5
+`
+
+type ListEventsOfKindsParams struct {
+	Kinds       string
+	SubjectID   int64
+	SubjectType sql.NullString
+	BeforeID    int64
+	PageSize    int64
+}
+
+// History and an album's page: several kinds, optionally one subject. json_each keeps the kind
+// list one parameter.
+func (q *Queries) ListEventsOfKinds(ctx context.Context, arg ListEventsOfKindsParams) ([]EventLog, error) {
+	rows, err := q.db.QueryContext(ctx, listEventsOfKinds,
+		arg.Kinds,
+		arg.SubjectID,
+		arg.SubjectType,
+		arg.BeforeID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []EventLog{}
+	for rows.Next() {
+		var i EventLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.At,
+			&i.Kind,
+			&i.SubjectType,
+			&i.SubjectID,
+			&i.UserID,
+			&i.CorrelationID,
+			&i.DataJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJobsPage = `-- name: ListJobsPage :many
 
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,

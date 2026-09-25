@@ -2,6 +2,7 @@ package poll_test
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -49,6 +50,7 @@ type env struct {
 	removeDone   bool
 	imported     []string
 	searched     []int64
+	history      []string
 }
 
 func newEnv(t *testing.T) *env {
@@ -98,6 +100,9 @@ func (e *env) job() *poll.Job {
 		Search: func(_ context.Context, desiredItemID int64) error {
 			e.searched = append(e.searched, desiredItemID)
 			return nil
+		},
+		History: func(_ context.Context, kind download.HistoryKind, acquisition library.Acquisition, detail string) {
+			e.history = append(e.history, fmt.Sprintf("%s %s %s", kind, acquisition.DownloadClientRef, detail))
 		},
 		Clock: e.clock, Logger: slog.New(slog.DiscardHandler),
 	})
@@ -206,6 +211,9 @@ func TestPoll_AFailedDownloadIsBlocklistedAndSearchedAgain(t *testing.T) {
 	if !slices.Equal(e.client.removed, []string{"nzo-1+files"}) || !slices.Equal(e.searched, []int64{*sent.DesiredItemID}) {
 		t.Errorf("removed %v, searched %v; want removed with files and the album searched", e.client.removed, e.searched)
 	}
+	if want := []string{"download.failed nzo-1 Repair failed"}; !slices.Equal(e.history, want) {
+		t.Errorf("history = %q, want %q", e.history, want)
+	}
 }
 
 // A person removing a download is respected: failed, never sent again. Losing most at once is a
@@ -216,6 +224,9 @@ func TestPoll_VanishedAndMassVanished(t *testing.T) {
 	e.run(t)
 	if got := e.state(t, one.ID); got.State != poll.StateFailed || len(e.searched) != 0 {
 		t.Errorf("one vanished: %s, searched %v; want FAILED and no new search", got.State, e.searched)
+	}
+	if want := []string{"download.failed nzo-1 removed from the download client"}; !slices.Equal(e.history, want) {
+		t.Errorf("history = %q, want %q", e.history, want)
 	}
 
 	f := newEnv(t)
@@ -307,6 +318,9 @@ func TestPoll_AFinishedImportIsCleanedUp(t *testing.T) {
 		if got := e.state(t, sent.ID); got.State != want || !slices.Equal(e.client.removed, wantRemoved) {
 			t.Errorf("remove completed %v: %s, removed %v; want %s, %v", removeDone, got.State, e.client.removed, want, wantRemoved)
 		}
+		if wantHistory := []string{"download.imported nzo-1 "}; !slices.Equal(e.history, wantHistory) {
+			t.Errorf("history = %q, want %q", e.history, wantHistory)
+		}
 	}
 }
 
@@ -317,6 +331,9 @@ func TestPoll_AnImportWaitingForAPersonWaits(t *testing.T) {
 	e.run(t)
 	if got := e.state(t, sent.ID); got.State != poll.StateImporting || got.LastError == "" || len(e.client.removed) != 0 {
 		t.Errorf("= %s %q, removed %v; want IMPORTING, waiting, nothing removed", got.State, got.LastError, e.client.removed)
+	}
+	if len(e.history) != 0 {
+		t.Errorf("history = %q, want nothing until the import finishes", e.history)
 	}
 }
 

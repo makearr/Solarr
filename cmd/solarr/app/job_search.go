@@ -85,7 +85,7 @@ func (p *process) musicDispatch() music.Dispatch {
 	return music.Dispatch{
 		Candidates: library.NewCandidates(p.library), Acquisitions: library.NewAcquisitions(p.library),
 		Desired: library.NewDesired(p.library), Downloaders: p.downloaderConns,
-		Fetch: p.fetchRelease,
+		Fetch: p.fetchRelease, History: p.recordDownloadHistory,
 	}
 }
 

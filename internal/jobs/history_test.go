@@ -2,6 +2,7 @@ package jobs_test
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -127,4 +128,45 @@ func listByKind(t *testing.T, opened *store.Store, kind string) []jobsdb.EventLo
 		t.Fatalf("ListEventsByKind: %v", err)
 	}
 	return found
+}
+
+// History lists the asked-for kinds newest first, for one subject or all, and pages by id.
+func TestHistory_ListsKindsForASubjectNewestFirst(t *testing.T) {
+	_, opened, fake := newQueueWithStore(t)
+	history := jobs.NewHistory(opened, fake)
+	for _, event := range []jobs.Event{
+		{Kind: "download.grabbed", SubjectType: "work", SubjectID: 1, Data: "{}"},
+		{Kind: "recovery", Data: "{}"},
+		{Kind: "download.grabbed", SubjectType: "work", SubjectID: 2, Data: "{}"},
+		{Kind: "download.imported", SubjectType: "work", SubjectID: 1, Data: "{}"},
+	} {
+		if _, err := history.Append(t.Context(), event); err != nil {
+			t.Fatalf("Append: %v", err)
+		}
+	}
+	kinds := []string{"download.grabbed", "download.imported"}
+	summarise := func(events []jobs.StoredEvent) []string {
+		var got []string
+		for _, event := range events {
+			got = append(got, fmt.Sprintf("%d %s %s:%d", event.ID, event.Kind, event.SubjectType, event.SubjectID))
+		}
+		return got
+	}
+
+	all, err := history.List(t.Context(), jobs.HistoryQuery{Kinds: kinds, Limit: 10})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if got, want := summarise(all), []string{
+		"4 download.imported work:1", "3 download.grabbed work:2", "1 download.grabbed work:1",
+	}; !slices.Equal(got, want) {
+		t.Errorf("all = %q, want %q", got, want)
+	}
+	album, err := history.List(t.Context(), jobs.HistoryQuery{Kinds: kinds, SubjectType: "work", SubjectID: 1, BeforeID: 4, Limit: 10})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if got, want := summarise(album), []string{"1 download.grabbed work:1"}; !slices.Equal(got, want) {
+		t.Errorf("album before 4 = %q, want %q", got, want)
+	}
 }
