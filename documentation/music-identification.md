@@ -13,7 +13,9 @@ A scan batch is one directory's files. Each pass only sees what the previous one
    merged into; a retired one, 404 at every source, is recorded `retired` and the files go on to
    album matching like untagged ones. An unreachable source trusts the tags.
 2. **Album matching**: the remaining files, grouped by album tag, scored together against
-   whole release tracklists. Identified → every file gets the release group *and* the release
+   whole release tracklists. A group that fits nothing as a whole while its track numbers
+   collide is split by the track total each file claims ("3/10" against "3") and each part
+   matched alone: an album's first half and its single's remixes under one album tag. Identified → every file gets the release group *and* the release
    (edition). Ambiguous → queued with the rival albums. Anything else → next pass.
 3. **Per-file text search** (`SearchIdentifier`): the older title-only match.
 4. **Fingerprints**: what is left is fingerprinted, named by AcoustID and matched as an album

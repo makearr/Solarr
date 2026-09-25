@@ -1151,3 +1151,51 @@ func TestObserve_AMergedEmbeddedReleaseGroupIsKeptUnderItsCurrentID(t *testing.T
 		t.Errorf("work files = %d (err %v), want all %d", len(locations), err, len(traumaTracks))
 	}
 }
+
+// An album's first tracks and its single's remixes under one album tag are two releases: when the
+// folder fits neither as a whole, each part is matched on its own (Vezahu Savaz's "Cevekufu").
+func TestObserve_TwoReleasesUnderOneAlbumTagAreSplitByTrackTotal(t *testing.T) {
+	remixes := []trackSpec{{"Kebilegev Bibihi (club mix)", 420}, {"Kebilegev Bibihi (dub)", 380}, {"Kebilegev Bibihi (instrumental)", 330}}
+	single := "22222222-3333-4444-5555-666666666666"
+	lookup := traumaLookup(releaseGroupMBID)
+	lookup.searches["P!po/Kebilegev Bibihi"] = append(lookup.searches["P!po/Kebilegev Bibihi"], musicbrainz.ReleaseGroupMatch{
+		ReleaseGroup: musicbrainz.ReleaseGroup{MBID: single, Title: "Kebilegev Bibihi", PrimaryType: "Single"}, ArtistCredit: "P!po",
+	})
+	lookup.releases[single] = []musicbrainz.Release{releaseOf("release-of-single", "Kebilegev Bibihi", "official", "2017-08-01", remixes)}
+	consumer, opened, fsys := newAlbumConsumer(t, lookup, nil)
+
+	var batch []scan.Observed
+	add := func(track trackSpec, number string) {
+		relPath := "P!po/Kebilegev Bibihi (2017)/" + track.title + ".m4a"
+		content := []byte("mixed " + track.title)
+		writeMusicFile(t, fsys, relPath, content)
+		observed := observedFile(relPath, int64(len(content)), mediatool.Tags{
+			"title": track.title, "album_artist": "P!po", "album": "Kebilegev Bibihi", "track": number,
+		})
+		observed.Probe.Measured.Duration = time.Duration(track.seconds) * time.Second
+		batch = append(batch, observed)
+	}
+	for i, track := range traumaTracks[:3] {
+		add(track, fmt.Sprintf("%d/6", i+1))
+	}
+	for i, track := range remixes {
+		add(track, fmt.Sprint(i+1))
+	}
+
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	queries := librarydb.New(opened.Read())
+	for _, mbid := range []string{releaseGroupMBID, single} {
+		work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+			Provider: music.ProviderReleaseGroup, ExternalID: mbid,
+		})
+		if err != nil {
+			t.Fatalf("GetWorkByExternalID(%s): %v", mbid, err)
+		}
+		locations, err := library.NewIdentity(opened).WorkFileLocations(t.Context(), []int64{work.ID})
+		if err != nil || len(locations) != 3 {
+			t.Errorf("%s holds %d files (err %v), want 3", mbid, len(locations), err)
+		}
+	}
+}
