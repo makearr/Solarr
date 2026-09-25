@@ -134,6 +134,8 @@ type Source interface {
 type ReleaseGroupMatch struct {
 	ReleaseGroup
 	ArtistCredit string
+	// ArtistNames are the credited artists' own names, which a credit may spell differently.
+	ArtistNames string
 }
 
 // Searcher is an optional Source capability -- text search, not MBID lookup.

@@ -188,7 +188,10 @@ type directSearchReleaseGroup struct {
 	SecondaryTypes   []string `json:"secondary-types"`
 	FirstReleaseDate string   `json:"first-release-date"`
 	ArtistCredit     []struct {
-		Name string `json:"name"`
+		Name   string `json:"name"`
+		Artist struct {
+			Name string `json:"name"`
+		} `json:"artist"`
 	} `json:"artist-credit"`
 }
 
@@ -196,7 +199,9 @@ type directSearchReleaseGroup struct {
 // endpoint, scoped to artist and release-group (album) title -- the two fields a
 // caller with no MBID at all can actually claim to know (section 10.2).
 func (d direct) SearchReleaseGroups(ctx context.Context, artist, title string, limit int) ([]ReleaseGroupMatch, error) {
-	query := fmt.Sprintf(`artist:%s AND releasegroup:%s`, luceneQuoted(artist), luceneQuoted(title))
+	// artist is the credited name, artistname the artist's own: 2Ibe's live album is credited "Tupac".
+	query := fmt.Sprintf(`(artist:%s OR artistname:%s) AND releasegroup:%s`,
+		luceneQuoted(artist), luceneQuoted(artist), luceneQuoted(title))
 	matches, err := d.searchReleaseGroups(ctx, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("musicbrainz: search release-group %q/%q: %w", artist, title, err)
@@ -269,9 +274,10 @@ func (d direct) searchReleaseGroups(ctx context.Context, luceneQuery string, lim
 
 	matches := make([]ReleaseGroupMatch, len(parsed.ReleaseGroups))
 	for i, rg := range parsed.ReleaseGroups {
-		var creditNames []string
+		var creditNames, artistNames []string
 		for _, credit := range rg.ArtistCredit {
 			creditNames = append(creditNames, credit.Name)
+			artistNames = append(artistNames, credit.Artist.Name)
 		}
 		matches[i] = ReleaseGroupMatch{
 			ReleaseGroup: ReleaseGroup{
@@ -279,6 +285,7 @@ func (d direct) searchReleaseGroups(ctx context.Context, luceneQuery string, lim
 				SecondaryTypes: rg.SecondaryTypes, FirstReleaseDate: rg.FirstReleaseDate,
 			},
 			ArtistCredit: strings.Join(creditNames, " & "),
+			ArtistNames:  strings.Join(artistNames, " & "),
 		}
 	}
 	return matches, nil

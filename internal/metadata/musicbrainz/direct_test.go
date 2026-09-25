@@ -203,13 +203,13 @@ const directSearchBody = `{
       "title": "Duet Album",
       "primary-type": "Album",
       "first-release-date": "2001-01-01",
-      "artist-credit": [{"name": "Artist One"}, {"name": "Artist Two"}]
+      "artist-credit": [{"name": "Artist One", "artist": {"name": "One"}}, {"name": "Artist Two", "artist": {"name": "Two"}}]
     }
   ]
 }`
 
 func TestDirect_SearchReleaseGroupsParsesTheRealFieldShape(t *testing.T) {
-	query := `artist:"Vutu Doci" AND releasegroup:"The Sezo Siluko"`
+	query := `(artist:"Vutu Doci" OR artistname:"Vutu Doci") AND releasegroup:"The Sezo Siluko"`
 	requestURL := "https://musicbrainz.invalid/release-group/?query=" + url.QueryEscape(query) + "&fmt=json&limit=5"
 	transport := &fakeTransport{responses: map[string]fakeResponse{
 		requestURL: {status: http.StatusOK, body: directSearchBody},
@@ -228,13 +228,13 @@ func TestDirect_SearchReleaseGroupsParsesTheRealFieldShape(t *testing.T) {
 		matches[0].ArtistCredit != "Vutu Doci" || matches[0].FirstReleaseDate != "1978-01-12" {
 		t.Errorf("matches[0] = %+v, want the real field shape mapped through", matches[0])
 	}
-	if matches[1].ArtistCredit != "Artist One & Artist Two" {
-		t.Errorf("ArtistCredit = %q, want every credited artist joined", matches[1].ArtistCredit)
+	if matches[1].ArtistCredit != "Artist One & Artist Two" || matches[1].ArtistNames != "One & Two" {
+		t.Errorf("ArtistCredit = %q, ArtistNames = %q; want both joined", matches[1].ArtistCredit, matches[1].ArtistNames)
 	}
 }
 
 func TestDirect_SearchReleaseGroupsEscapesLuceneSpecialCharacters(t *testing.T) {
-	query := `artist:"Guns \"N\" Roses" AND releasegroup:"Fak Your Begogiro"`
+	query := `(artist:"Guns \"N\" Roses" OR artistname:"Guns \"N\" Roses") AND releasegroup:"Fak Your Begogiro"`
 	requestURL := "https://musicbrainz.invalid/release-group/?query=" + url.QueryEscape(query) + "&fmt=json&limit=5"
 	transport := &fakeTransport{responses: map[string]fakeResponse{
 		requestURL: {status: http.StatusOK, body: `{"release-groups":[]}`},

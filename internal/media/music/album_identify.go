@@ -46,6 +46,8 @@ type AlbumLookup interface {
 type recalled struct {
 	group  musicbrainz.ReleaseGroup
 	credit string
+	// names are the credited artists' own names, empty when the recall did not say.
+	names  string
 	recall string
 	known  bool
 }
@@ -81,7 +83,8 @@ func IdentifyAlbum(
 		}
 		for _, release := range releases {
 			candidates = append(candidates, AlbumCandidate{
-				ReleaseGroup: group.group, ArtistCredit: group.credit, Release: release, Recall: group.recall,
+				ReleaseGroup: group.group, ArtistCredit: group.credit, ArtistNames: group.names,
+				Release: release, Recall: group.recall,
 			})
 		}
 	}
@@ -124,7 +127,10 @@ func recallAlbums(
 				*failures = append(*failures, err)
 			}
 			for _, found := range matches {
-				add(recalled{group: found.ReleaseGroup, credit: found.ArtistCredit, recall: RecallAlbumTags, known: true})
+				add(recalled{
+					group: found.ReleaseGroup, credit: found.ArtistCredit, names: found.ArtistNames,
+					recall: RecallAlbumTags, known: true,
+				})
 			}
 		}
 	}

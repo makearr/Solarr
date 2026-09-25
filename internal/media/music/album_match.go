@@ -80,7 +80,9 @@ type LocalTrack struct {
 type AlbumCandidate struct {
 	ReleaseGroup musicbrainz.ReleaseGroup
 	ArtistCredit string
-	Release      musicbrainz.Release
+	// ArtistNames are the credited artists' own names: a tag saying "2Ibe" fits a "Tupac" credit.
+	ArtistNames string
+	Release     musicbrainz.Release
 	// Recall is how the release group was found: sibling, album_tags or recording_search.
 	Recall string
 }
@@ -298,6 +300,9 @@ func addAlbumDimensions(d *distance, locals []LocalTrack, candidate AlbumCandida
 	if artist := consensusClaim(locals, func(t LocalTrack) Claim { return t.Artist }); artist.present() &&
 		!isVariousArtists(candidate) && candidate.ArtistCredit != "" {
 		penalty := artistPenalty(artist.Value, candidate.ArtistCredit)
+		if candidate.ArtistNames != "" {
+			penalty = min(penalty, artistPenalty(artist.Value, candidate.ArtistNames))
+		}
 		artistOK = penalty <= maxArtistPenalty
 		d.add(dimensionArtist, dampened(penalty, artist.Provenance))
 	}

@@ -244,3 +244,16 @@ func TestDecideAlbum_EnoughRefutedFilesVetoAnOtherwiseAcceptedRelease(t *testing
 		t.Errorf("decision = %s accepted=%v, want contradictory and refused", decision.Outcome, score.Accepted)
 	}
 }
+
+// Found on the main library (2026-09-25): 2Ibe's live album is credited "Tupac". A tag naming the
+// artist by their own name still fits.
+func TestDecideAlbum_ATagNamingTheArtistFitsACreditSpellingItOtherwise(t *testing.T) {
+	candidate := candidateOf("rg-live", "Album", []string{"Live"},
+		releaseOf("rel-live", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks))
+	candidate.ArtistCredit, candidate.ArtistNames = "Alecia Moore", "P!po"
+
+	decision := music.DecideAlbum(folderOf(traumaTracks), []music.AlbumCandidate{candidate})
+	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-live" {
+		t.Errorf("decision = %s best %q, want identified rg-live", decision.Outcome, bestReleaseGroup(decision))
+	}
+}
