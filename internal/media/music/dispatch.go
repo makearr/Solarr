@@ -74,6 +74,13 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 		return library.Acquisition{}, ErrDecisionNotAccepted
 	}
 
+	// Before the client is involved: refusing after the send leaves a duplicate in its queue.
+	if _, inFlight, err := d.Acquisitions.InFlightForItem(ctx, itemID); err != nil {
+		return library.Acquisition{}, fmt.Errorf("music: dispatch: %w", err)
+	} else if inFlight {
+		return library.Acquisition{}, library.ErrAcquisitionAlreadyInFlight
+	}
+
 	downloaders, err := d.Downloaders(ctx)
 	if err != nil {
 		return library.Acquisition{}, fmt.Errorf("music: dispatch: downloaders: %w", err)

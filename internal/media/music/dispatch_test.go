@@ -211,3 +211,22 @@ func TestDispatch_SendsNothingWhenTheReleaseCannotBeFetched(t *testing.T) {
 		t.Errorf("sent %d, recorded %d; want nothing sent and nothing recorded", len(sender.requests), len(active))
 	}
 }
+
+// A second send while the first download is on its way never reaches the client.
+func TestDispatch_ASecondSendNeverReachesTheClient(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	detail := env.recordDecision(t, item.ID, "ACCEPT")
+	sender := &fakeSabnzbdSender{clientRef: "nzo-1"}
+	dispatch := env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: sender}})
+
+	if _, err := dispatch.Send(t.Context(), item.ID, detail.Decision.ID, env.clock.Now()); err != nil {
+		t.Fatalf("first Send: %v", err)
+	}
+	if _, err := dispatch.Send(t.Context(), item.ID, detail.Decision.ID, env.clock.Now()); !errors.Is(err, library.ErrAcquisitionAlreadyInFlight) {
+		t.Errorf("second Send = %v, want ErrAcquisitionAlreadyInFlight", err)
+	}
+	if len(sender.requests) != 1 {
+		t.Errorf("client received %d releases, want 1", len(sender.requests))
+	}
+}

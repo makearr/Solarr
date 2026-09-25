@@ -95,17 +95,17 @@ func (p *process) importAcquisition(ctx context.Context, acquisition library.Acq
 	return err
 }
 
-// searchAgain searches a desired item after its download failed. The new candidates wait to be
-// sent, like every search's, until the planner sends on its own (stage 6).
+// searchAgain searches a desired item after its download failed and sends the best release left,
+// Lidarr's "Redownload Failed"; the failed one is blocklisted by then.
 func (p *process) searchAgain(ctx context.Context, desiredItemID int64) error {
 	indexers, err := p.indexerConns(ctx)
 	if err != nil || len(indexers) == 0 {
 		return err
 	}
-	result, err := p.musicSearch().SearchItem(ctx, desiredItemID, indexers, clock.NewSystem().Now())
+	result, err := p.musicGrab().SearchAndSend(ctx, desiredItemID, indexers, clock.NewSystem().Now())
 	if err == nil {
-		p.logger.Info("searched again after a failed download",
-			slog.Int64("desired_item_id", desiredItemID), slog.Int("found", len(result.Decisions)))
+		p.logger.Info("searched again after a failed download", slog.Int64("desired_item_id", desiredItemID),
+			slog.Int("found", len(result.Search.Decisions)), slog.Bool("sent", result.Sent != nil))
 	}
 	return err
 }

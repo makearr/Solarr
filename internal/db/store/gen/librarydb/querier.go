@@ -603,6 +603,9 @@ type Querier interface {
 	// fault, and counting it would make reputation measure the environment (ADR-45).
 	RecordGroupObservation(ctx context.Context, arg RecordGroupObservationParams) error
 	RecordImportDecision(ctx context.Context, arg RecordImportDecisionParams) (ImportDecision, error)
+	// Every search records when it ran, whoever started it (Wanted's "last searched"). The planner's
+	// own upsert sets priority and class and never touches these two columns.
+	RecordItemSearched(ctx context.Context, arg RecordItemSearchedParams) error
 	RecordManualIdentification(ctx context.Context, arg RecordManualIdentificationParams) error
 	RecordPersonRefresh(ctx context.Context, arg RecordPersonRefreshParams) error
 	// ADR-51's own RECORD step: media_object never changes (Invariant 70), only

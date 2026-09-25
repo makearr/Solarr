@@ -30,6 +30,8 @@ const (
 	WorkSortAdded WorkSort = "added"
 	// WorkSortArtist orders by primary artist, then title.
 	WorkSortArtist WorkSort = "artist"
+	// WorkSortSearched orders by when the album was last searched.
+	WorkSortSearched WorkSort = "searched"
 )
 
 // SortDirection is which way a WorkSort orders. The zero value is ascending.
@@ -63,11 +65,12 @@ type WorksFilter struct {
 // WorksCursor is a position in the list. Only the field matching the active
 // WorkSort is read; the others are ignored (library.WorkCursor's own convention).
 type WorksCursor struct {
-	SortTitle  string
-	SortYear   int64
-	SortAdded  int64
-	SortArtist string
-	ID         int64
+	SortTitle    string
+	SortYear     int64
+	SortAdded    int64
+	SortArtist   string
+	SortSearched int64
+	ID           int64
 }
 
 // WorkRow is one work as the library reports it.
@@ -96,6 +99,8 @@ type WorkRow struct {
 	Downloading   bool
 	// OnDisk reports a file for this work, for albumStatus' own fallback.
 	OnDisk bool
+	// LastSearchedAt is nil for an album never searched.
+	LastSearchedAt *time.Time
 }
 
 // ListWorks returns a page of the library the caller may see (ADR-27). A work
@@ -156,6 +161,9 @@ func worksCursorFor(sort WorkSort, cursor paginate.TextCursor) WorksCursor {
 	case WorkSortAdded:
 		value, _ := strconv.ParseInt(cursor.Sort, 10, 64)
 		return WorksCursor{SortAdded: value, ID: cursor.ID}
+	case WorkSortSearched:
+		value, _ := strconv.ParseInt(cursor.Sort, 10, 64)
+		return WorksCursor{SortSearched: value, ID: cursor.ID}
 	case WorkSortArtist:
 		artist, title, _ := strings.Cut(cursor.Sort, artistCursorSeparator)
 		return WorksCursor{SortArtist: artist, SortTitle: title, ID: cursor.ID}
@@ -216,7 +224,7 @@ func buildWorkPage(rows []WorkRow, limit int, sort WorkSort) gen.WorkPage {
 		views[index] = gen.Work{
 			Id: row.ID, MediaType: row.MediaType, Title: row.Title, SortTitle: row.SortTitle,
 			Year: yearOf(row.Year), Artist: row.Artist, AddedAt: row.AddedAt, UpdatedAt: row.UpdatedAt,
-			WantedState: wantedStateOf(row.WantedState),
+			WantedState: wantedStateOf(row.WantedState), LastSearchedAt: row.LastSearchedAt,
 		}
 	}
 
@@ -235,6 +243,11 @@ func cursorValueFor(sort WorkSort, row WorkRow) string {
 		return strconv.FormatInt(derefOr(row.Year, 0), 10)
 	case WorkSortAdded:
 		return strconv.FormatInt(row.AddedAt.Unix(), 10)
+	case WorkSortSearched:
+		if row.LastSearchedAt == nil {
+			return "0"
+		}
+		return strconv.FormatInt(row.LastSearchedAt.Unix(), 10)
 	case WorkSortArtist:
 		return row.ArtistSortName + artistCursorSeparator + row.SortTitle
 	default:

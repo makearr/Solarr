@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -28,6 +30,8 @@ type fakeCandidateSearcher struct {
 	lastSearchPartID     int64
 	lastListCandidatesID int64
 	lastSearchCategoryID int64
+	lastSearchWorkIDs    []int64
+	grabResult           apiserver.GrabResult
 	lastSendWorkID       int64
 	lastSendDecisionID   int64
 }
@@ -62,9 +66,14 @@ func (f *fakeCandidateSearcher) ListWorkCandidates(_ context.Context, workID int
 	return f.candidates, f.candidateErr
 }
 
-func (f *fakeCandidateSearcher) SearchCategory(_ context.Context, categoryID int64) (bool, error) {
-	f.lastSearchCategoryID = categoryID
+func (f *fakeCandidateSearcher) SearchCategory(_ context.Context, categoryID int64, workIDs []int64) (bool, error) {
+	f.lastSearchCategoryID, f.lastSearchWorkIDs = categoryID, workIDs
 	return f.duplicate, f.categoryErr
+}
+
+func (f *fakeCandidateSearcher) GrabWork(_ context.Context, workID int64) (apiserver.GrabResult, error) {
+	f.lastSearchWorkID = workID
+	return f.grabResult, f.searchErr
 }
 
 func TestSearchWork_ReturnsWhatThePipelineFound(t *testing.T) {
@@ -185,12 +194,18 @@ func TestSearchCategory_EnqueuesAndAnswers202(t *testing.T) {
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
 
-	recorder := fixture.do(authedPost(t, cookies, "/api/v1/categories/7/search", ""))
+	music, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := "/api/v1/categories/" + strconv.FormatInt(music.ID, 10) + "/search"
+
+	recorder := fixture.do(authedPost(t, cookies, target, ""))
 	if recorder.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
 	}
-	if fixture.candidateSearcher.lastSearchCategoryID != 7 {
-		t.Errorf("lastSearchCategoryID = %d, want 7", fixture.candidateSearcher.lastSearchCategoryID)
+	if fixture.candidateSearcher.lastSearchCategoryID != music.ID {
+		t.Errorf("lastSearchCategoryID = %d, want %d", fixture.candidateSearcher.lastSearchCategoryID, music.ID)
 	}
 	var body struct {
 		Duplicate bool `json:"duplicate"`
@@ -293,8 +308,12 @@ func TestSearchCategory_ReportsADuplicateRun(t *testing.T) {
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
 	fixture.candidateSearcher.duplicate = true
+	music, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	recorder := fixture.do(authedPost(t, cookies, "/api/v1/categories/7/search", ""))
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/categories/"+strconv.FormatInt(music.ID, 10)+"/search", ""))
 	if recorder.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
 	}
@@ -358,5 +377,65 @@ func TestBlocklistCandidate_AdministratorOnly(t *testing.T) {
 	if recorder.Code != http.StatusNoContent || len(fixture.candidateSearcher.blocklisted) != 1 ||
 		fixture.candidateSearcher.blocklisted[0] != [2]int64{42, 7} {
 		t.Errorf("admin: status %d, blocklisted %v; want 204 and [42 7]", recorder.Code, fixture.candidateSearcher.blocklisted)
+	}
+}
+
+// "Search this page" names its albums; a reader of the library may not start downloads in it.
+func TestSearchCategory_SearchesTheNamedAlbumsAndNeedsRequestPermission(t *testing.T) {
+	fixture := newWorksFixture(t)
+	music, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := "/api/v1/categories/" + strconv.FormatInt(music.ID, 10) + "/search"
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	admin := fixture.signIn(t, "admin")
+
+	if recorder := fixture.do(authedPost(t, admin, target, `{"work_ids":[3,5]}`)); recorder.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if got := fixture.candidateSearcher.lastSearchWorkIDs; !reflect.DeepEqual(got, []int64{3, 5}) {
+		t.Errorf("work ids = %v, want [3 5]", got)
+	}
+
+	reader := fixture.createUser(t, "reader", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), reader.ID, music.ID, settings.PermissionRead); err != nil {
+		t.Fatal(err)
+	}
+	fixture.candidateSearcher.lastSearchCategoryID = 0
+	recorder := fixture.do(authedPost(t, fixture.signIn(t, "reader"), target, ""))
+	if recorder.Code != http.StatusForbidden || fixture.candidateSearcher.lastSearchCategoryID != 0 {
+		t.Errorf("reader: status %d, searched %d; want 403 and nothing searched",
+			recorder.Code, fixture.candidateSearcher.lastSearchCategoryID)
+	}
+}
+
+// The automatic search answers what it sent.
+func TestGrabWork_AnswersWhatWasSent(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.candidateSearcher.grabResult = apiserver.GrabResult{
+		Found: 4, Sent: &apiserver.Acquisition{ID: 9, State: "QUEUED", DownloadClientRef: "nzo-9"},
+	}
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/grab", ""))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	var body struct {
+		Found              int  `json:"found"`
+		AlreadyDownloading bool `json:"already_downloading"`
+		Sent               *struct {
+			ID int64 `json:"id"`
+		} `json:"sent"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Found != 4 || body.AlreadyDownloading || body.Sent == nil || body.Sent.ID != 9 ||
+		fixture.candidateSearcher.lastSearchWorkID != 42 {
+		t.Errorf("body = %+v, searched work %d; want 4 found, acquisition 9 sent, work 42",
+			body, fixture.candidateSearcher.lastSearchWorkID)
 	}
 }

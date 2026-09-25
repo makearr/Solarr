@@ -10,6 +10,7 @@ import { discCountOf, formatTrackNumber } from "@/lib/trackNumber";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import { usePreference } from "@/lib/usePreference";
 
+import { CandidateList } from "./CandidateList";
 import { CoverArt } from "./CoverArt";
 
 type Edition = components["schemas"]["Edition"];
@@ -17,7 +18,6 @@ type WorkPart = components["schemas"]["WorkPart"];
 type ExternalID = components["schemas"]["ExternalID"];
 type Credit = components["schemas"]["Credit"];
 type Wanted = components["schemas"]["Wanted"];
-type CandidateDecision = components["schemas"]["CandidateDecision"];
 
 // Title, release date, credits, genres, description, editions, parts read
 // straight from the work; monitoring (album and per-part) is the one write
@@ -62,6 +62,20 @@ export function WorkDetail() {
       if (error) throw error;
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["work", id, "candidates"] }),
+  });
+
+  // Lidarr's automatic search: the best release goes straight to the download client.
+  const grab = useMutation({
+    mutationFn: async () => {
+      if (id === undefined) throw new Error("no work id");
+      const { data, error } = await api.POST("/works/{id}/grab", { params: { path: { id } } });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["work", id, "candidates"] });
+      void queryClient.invalidateQueries({ queryKey: ["history", "work", id] });
+    },
   });
 
   const blocklist = useMutation({
@@ -242,22 +256,46 @@ export function WorkDetail() {
         {work.wanted && (
           <Section title="Search">
             <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                disabled={search.isPending}
-                onClick={() => search.mutate(undefined)}
-                className="w-fit rounded-md border border-border-subtle px-3 py-1.5 text-sm
-                           enabled:hover:bg-surface disabled:cursor-default disabled:opacity-50"
-              >
-                {search.isPending ? "Searching…" : "Search now"}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={grab.isPending}
+                  onClick={() => grab.mutate()}
+                  title="Send the best release to the download client"
+                  className="w-fit rounded-md border border-border-subtle px-3 py-1.5 text-sm
+                             enabled:hover:bg-surface disabled:cursor-default disabled:opacity-50"
+                >
+                  {grab.isPending ? "Searching…" : "Search"}
+                </button>
+                <button
+                  type="button"
+                  disabled={search.isPending}
+                  onClick={() => search.mutate(undefined)}
+                  title="List what the indexers have, and choose"
+                  className="w-fit rounded-md border border-border-subtle px-3 py-1.5 text-sm
+                             enabled:hover:bg-surface disabled:cursor-default disabled:opacity-50"
+                >
+                  {search.isPending ? "Searching…" : "Interactive search"}
+                </button>
+                {grab.data && (
+                  <span className="text-xs text-ink-muted">
+                    {grab.data.already_downloading
+                      ? "Already downloading."
+                      : grab.data.sent
+                        ? "Sent to the download client."
+                        : grab.data.found > 0
+                          ? `${grab.data.found} found, none acceptable.`
+                          : "Nothing found."}
+                  </span>
+                )}
+              </div>
               <DifferentTerms
                 artist={work.credits.find((credit) => credit.role === "artist")?.person_name ?? ""}
                 album={work.title}
                 busy={search.isPending}
                 onSearch={(terms) => search.mutate(terms)}
               />
-              {search.isError && (
+              {(search.isError || grab.isError) && (
                 <p className="text-xs text-danger">
                   That search could not run -- check that an indexer is connected and enabled.
                 </p>
@@ -695,106 +733,6 @@ function formatDuration(ms: number): string {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
-// CandidateList is F16's first slice: every release ever decided against
-// this work's own wanted album, newest first, with its score breakdown --
-// no dispatch action yet (stage 5's own next pass).
-function CandidateList({
-  decisions,
-  loading,
-  onSend,
-  sendPendingId,
-  sendError,
-  onBlocklist,
-}: {
-  decisions: CandidateDecision[];
-  loading: boolean;
-  onSend: (decisionId: number) => void;
-  sendPendingId: number | undefined;
-  sendError: number | undefined;
-  onBlocklist?: (decisionId: number) => void;
-}) {
-  if (loading) return <p className="text-xs text-ink-muted">Loading…</p>;
-  if (decisions.length === 0) {
-    return <p className="text-xs text-ink-muted">Nothing found yet -- try Search now.</p>;
-  }
-  return (
-    <ul className="flex flex-col gap-2">
-      {decisions.map((decision) => (
-        <li
-          key={decision.id}
-          className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3 text-sm"
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <OutcomeBadge outcome={decision.outcome} />
-            <span className="truncate font-mono text-xs" title={decision.title}>
-              {decision.title}
-            </span>
-            {decision.blocklisted && (
-              <span className="rounded-full border border-danger px-1.5 py-px text-[0.6875rem] text-danger">
-                blocklisted
-              </span>
-            )}
-            <QualityVerdict decision={decision} />
-            {onBlocklist && !decision.blocklisted && (
-              <button
-                type="button"
-                onClick={() => onBlocklist(decision.id)}
-                title="Never offer this release again"
-                className="shrink-0 rounded-md border border-border-subtle px-2 py-0.5 text-xs
-                           text-ink-muted hover:text-danger"
-              >
-                Blocklist
-              </button>
-            )}
-            {decision.outcome === "ACCEPT" && !decision.blocklisted && (
-              <button
-                type="button"
-                onClick={() => onSend(decision.id)}
-                disabled={sendPendingId === decision.id}
-                className="shrink-0 rounded-md border border-border-subtle px-2 py-0.5 text-xs
-                           text-ink-muted hover:text-ink disabled:opacity-50"
-              >
-                {sendPendingId === decision.id ? "Sending…" : "Send"}
-              </button>
-            )}
-          </div>
-          {sendError === decision.id && (
-            <p className="text-xs text-danger">
-              That could not be sent -- check that a matching download client is connected.
-            </p>
-          )}
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">
-            {decision.indexer_name && <span className="text-ink">{decision.indexer_name}</span>}
-            <span>{decision.protocol}</span>
-            {decision.size_bytes != null && <span>{formatBytes(decision.size_bytes)}</span>}
-            {decision.seeders != null && <span>{decision.seeders} seeders</span>}
-            {decision.match_confidence != null && (
-              <span>{Math.round(decision.match_confidence * 100)}% match</span>
-            )}
-            <span>{new Date(decision.decided_at).toLocaleString()}</span>
-          </div>
-          {decision.rejections.length > 0 && (
-            <ul className="text-xs text-danger">
-              {decision.rejections.map((rejection, index) => (
-                <li key={index}>
-                  {rejection.field}: wanted {rejection.wanted}, got {rejection.got}
-                </li>
-              ))}
-            </ul>
-          )}
-          {decision.deferrals.length > 0 && (
-            <ul className="text-xs text-warn">
-              {decision.deferrals.map((deferral, index) => (
-                <li key={index}>{deferral.reason}</li>
-              ))}
-            </ul>
-          )}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 /** "Search with different terms": the indexer calls it something else. Starts from the work's own. */
 function DifferentTerms({
   artist,
@@ -841,39 +779,6 @@ function DifferentTerms({
       </form>
     </details>
   );
-}
-
-// Releases rank by the library's profiles first (ADR-40 tiers); the additive score only breaks ties,
-// and is zero unless a profile scores, so the profile a release fits is what is worth reading.
-function QualityVerdict({ decision }: { decision: CandidateDecision }) {
-  const fit = decision.components.find((component) => component.rule === "profile-priority");
-  const fits = fit !== undefined && fit.label.endsWith("(fits)");
-  return (
-    <span className={`ml-auto shrink-0 text-xs ${fits ? "text-ok" : "text-ink-muted"}`}>
-      {fit?.label}
-      {decision.score !== 0 && ` · score ${decision.score.toFixed(1)}`}
-    </span>
-  );
-}
-
-function OutcomeBadge({ outcome }: { outcome: CandidateDecision["outcome"] }) {
-  const tone =
-    outcome === "ACCEPT" ? "text-ok border-border-subtle" : outcome === "DEFER" ? "text-warn border-warn" : "text-danger border-danger";
-  return (
-    <span className={`rounded-full border px-1.5 py-px text-[0.6875rem] ${tone}`}>{outcome}</span>
-  );
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1024;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
 
 // The album's own download history, as Lidarr's album page shows it: shown once there is any.

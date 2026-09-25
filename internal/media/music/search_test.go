@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -431,8 +432,11 @@ func TestSearchCategoryJob_SearchesEveryIncompleteItemInTheCategory(t *testing.T
 			}
 		},
 	}
+	sender := &fakeSabnzbdSender{clientRef: "nzo"}
 	job := music.NewSearchCategoryJob(music.SearchCategoryConfig{
-		Search: env.search(),
+		Grab: music.Grab{Search: env.search(), Dispatch: env.dispatch([]music.DownloaderConn{
+			{ID: 5, Protocol: "usenet", Client: sender},
+		})},
 		Indexers: func(context.Context) ([]music.IndexerConn, error) {
 			return []music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, nil
 		},
@@ -445,6 +449,16 @@ func TestSearchCategoryJob_SearchesEveryIncompleteItemInTheCategory(t *testing.T
 	}
 	if err := job.Run(t.Context(), jobs.Job{Payload: payload}); err != nil {
 		t.Fatalf("Run: %v", err)
+	}
+
+	// "Search all" is Lidarr's automatic search: every album's best release is sent.
+	var sent []string
+	for _, request := range sender.requests {
+		sent = append(sent, request.Name)
+	}
+	slices.Sort(sent)
+	if want := []string{"Nosi Zada-Discovery-2001-FLAC-GROUP", "Nosi Zada-Homework-1997-FLAC-GROUP"}; !slices.Equal(sent, want) {
+		t.Errorf("sent %v, want %v", sent, want)
 	}
 
 	for _, item := range []struct {
@@ -507,7 +521,9 @@ func TestSearchCategoryJob_OneItemFailingDoesNotStopTheRest(t *testing.T) {
 		},
 	}
 	job := music.NewSearchCategoryJob(music.SearchCategoryConfig{
-		Search: env.search(),
+		Grab: music.Grab{Search: env.search(), Dispatch: env.dispatch([]music.DownloaderConn{
+			{ID: 5, Protocol: "usenet", Client: &fakeSabnzbdSender{clientRef: "nzo"}},
+		})},
 		Indexers: func(context.Context) ([]music.IndexerConn, error) {
 			return []music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, nil
 		},

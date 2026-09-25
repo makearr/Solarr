@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -37,11 +38,19 @@ func SearchCategoryActionKey(categoryID int64) string {
 type SearchCategoryPayload struct {
 	CategoryID int64 `json:"category_id"`
 	PersonID   int64 `json:"person_id,omitempty"`
+	// ItemIDs searches exactly these albums: the Wanted page's "search this page".
+	ItemIDs []int64 `json:"item_ids,omitempty"`
 }
 
 // EnqueueSearchCategory submits one category's own search run.
 func EnqueueSearchCategory(ctx context.Context, queue *jobs.Queue, categoryID int64) (jobs.EnqueueResult, error) {
 	return enqueueSearch(ctx, queue, SearchCategoryPayload{CategoryID: categoryID}, SearchCategoryActionKey(categoryID))
+}
+
+// EnqueueSearchItems searches exactly these albums of one library, one after another.
+func EnqueueSearchItems(ctx context.Context, queue *jobs.Queue, categoryID int64, itemIDs []int64) (jobs.EnqueueResult, error) {
+	return enqueueSearch(ctx, queue, SearchCategoryPayload{CategoryID: categoryID, ItemIDs: itemIDs},
+		fmt.Sprintf("%s:%d:items:%v", SearchCategoryJobType, categoryID, itemIDs))
 }
 
 // EnqueueSearchArtist searches one artist's missing albums; zero categoryID means every library.
@@ -80,7 +89,7 @@ type IndexerSource func(ctx context.Context) ([]IndexerConn, error)
 // scope, not a defect in the item. One item failing does not stop the rest,
 // the same per-item isolation SubscriptionExpandJob's own Run already uses.
 type SearchCategoryJob struct {
-	search   Search
+	grab     Grab
 	indexers IndexerSource
 	clock    clock.Clock
 	logger   *slog.Logger
@@ -89,7 +98,8 @@ type SearchCategoryJob struct {
 // SearchCategoryConfig is what a SearchCategoryJob needs. Every field is
 // required except Logger.
 type SearchCategoryConfig struct {
-	Search   Search
+	// Grab sends each album's best release, as Lidarr's "Search all" does (2026-09-25).
+	Grab     Grab
 	Indexers IndexerSource
 	Clock    clock.Clock
 	Logger   *slog.Logger
@@ -101,7 +111,7 @@ func NewSearchCategoryJob(config SearchCategoryConfig) *SearchCategoryJob {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &SearchCategoryJob{search: config.Search, indexers: config.Indexers, clock: config.Clock, logger: logger}
+	return &SearchCategoryJob{grab: config.Grab, indexers: config.Indexers, clock: config.Clock, logger: logger}
 }
 
 // Run walks every monitored MISSING/PARTIAL item in the category once,
@@ -124,42 +134,66 @@ func (j *SearchCategoryJob) Run(ctx context.Context, job jobs.Job) error {
 	}
 
 	now := j.clock.Now()
-	var searched, found, skipped, failed int
+	var tally searchTally
+	if len(payload.ItemIDs) > 0 {
+		for _, itemID := range payload.ItemIDs {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			j.grabOne(ctx, payload.CategoryID, itemID, indexers, now, &tally)
+		}
+	} else if err := j.grabIncomplete(ctx, payload, indexers, now, &tally); err != nil {
+		return err
+	}
+
+	j.logger.Info("music: search category: done", "category_id", payload.CategoryID,
+		"searched", tally.searched, "found", tally.found, "sent", tally.sent, "skipped", tally.skipped,
+		"failed", tally.failed)
+	return nil
+}
+
+// searchTally is what one run did, for its log line.
+type searchTally struct{ searched, found, sent, skipped, failed int }
+
+func (j *SearchCategoryJob) grabIncomplete(
+	ctx context.Context, payload SearchCategoryPayload, indexers []IndexerConn, now time.Time, tally *searchTally,
+) error {
 	afterID := int64(0)
 	for {
-		items, err := j.search.Desired.IncompleteItems(ctx, payload.CategoryID, payload.PersonID, afterID, searchCategoryPageSize)
+		items, err := j.grab.Search.Desired.IncompleteItems(ctx, payload.CategoryID, payload.PersonID, afterID, searchCategoryPageSize)
 		if err != nil {
 			return fmt.Errorf("music: search category %d: list items: %w", payload.CategoryID, err)
-		}
-		if len(items) == 0 {
-			break
 		}
 		for _, item := range items {
 			afterID = item.ID
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			result, itemErr := j.search.SearchItem(ctx, item.ID, indexers, now)
-			switch {
-			case errors.Is(itemErr, ErrTrackSearchNotSupported):
-				skipped++
-			case itemErr != nil:
-				failed++
-				j.logger.Warn("music: search category: item failed",
-					"category_id", payload.CategoryID, "item_id", item.ID, "error", itemErr)
-			default:
-				searched++
-				if result.TierUsed != nil {
-					found++
-				}
-			}
+			j.grabOne(ctx, payload.CategoryID, item.ID, indexers, now, tally)
 		}
 		if len(items) < searchCategoryPageSize {
-			break
+			return nil
 		}
 	}
+}
 
-	j.logger.Info("music: search category: done", "category_id", payload.CategoryID,
-		"searched", searched, "found", found, "skipped", skipped, "failed", failed)
-	return nil
+func (j *SearchCategoryJob) grabOne(
+	ctx context.Context, categoryID, itemID int64, indexers []IndexerConn, now time.Time, tally *searchTally,
+) {
+	result, err := j.grab.SearchAndSend(ctx, itemID, indexers, now)
+	switch {
+	case errors.Is(err, ErrTrackSearchNotSupported), result.AlreadyInFlight:
+		tally.skipped++
+	case err != nil:
+		tally.failed++
+		j.logger.Warn("music: search category: item failed", "category_id", categoryID, "item_id", itemID, "error", err)
+	default:
+		tally.searched++
+		if result.Search.TierUsed != nil {
+			tally.found++
+		}
+		if result.Sent != nil {
+			tally.sent++
+		}
+	}
 }

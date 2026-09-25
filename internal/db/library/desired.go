@@ -182,6 +182,18 @@ func (d Desired) SetItemMonitored(ctx context.Context, itemID int64, monitored b
 	return nil
 }
 
+// RecordSearched notes that itemID was searched at, found anything or not.
+func (d Desired) RecordSearched(ctx context.Context, itemID, at int64) error {
+	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).RecordItemSearched(ctx,
+			librarydb.RecordItemSearchedParams{DesiredItemID: itemID, LastSearchedAt: at})
+	})
+	if err != nil {
+		return fmt.Errorf("library: record item searched: %w", err)
+	}
+	return nil
+}
+
 // UnmonitorItemsLosingFiles unmonitors categoryID's items that hold a file on rootFolderID marked
 // missing at missingSince (a library's "Unmonitor Deleted Tracks"), in batches; answers how many.
 func (d Desired) UnmonitorItemsLosingFiles(ctx context.Context, categoryID, rootFolderID, missingSince int64) (int, error) {

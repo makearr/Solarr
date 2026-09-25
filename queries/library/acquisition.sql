@@ -48,7 +48,7 @@ SELECT cd.id, cd.candidate_id, cd.desired_item_id, cd.outcome, cd.score, cd.comp
        c.protocol, c.download_url, c.parse_confidence, c.source, c.first_seen_at, c.expires_at
 FROM candidate_decision cd
 JOIN candidate c ON c.id = cd.candidate_id
-WHERE cd.desired_item_id = ? ORDER BY cd.decided_at DESC, cd.id DESC LIMIT ?;
+WHERE cd.desired_item_id = ? ORDER BY cd.decided_at DESC, cd.id ASC LIMIT ?;
 
 -- name: CreateAcquisition :one
 INSERT INTO acquisition (desired_item_id, candidate_id, indexer_id, candidate_guid,

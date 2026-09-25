@@ -8,10 +8,12 @@ package music
 // decide-and-persist only.
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -166,6 +168,9 @@ func (s Search) SearchItemWithTerms(
 	if item.SatisfactionKind != "SET" {
 		return ItemSearchResult{}, ErrTrackSearchNotSupported
 	}
+	if err := s.Desired.RecordSearched(ctx, itemID, at.Unix()); err != nil {
+		return ItemSearchResult{}, fmt.Errorf("music: search item %d: %w", itemID, err)
+	}
 
 	detail, err := s.Works.Detail(ctx, item.WorkID)
 	if err != nil {
@@ -225,6 +230,7 @@ func (s Search) SearchItemWithTerms(
 		}
 		tier := tierIndex
 		result.TierUsed = &tier
+		sortBestFirst(accepted)
 		for _, found := range accepted {
 			decisionDetail, persistErr := s.persist(ctx, itemID, found, at)
 			if persistErr != nil {
@@ -235,6 +241,26 @@ func (s Search) SearchItemWithTerms(
 		return result, nil
 	}
 	return result, nil
+}
+
+// sortBestFirst ranks releases as a grab chooses them: accepted first, then the quality tiers
+// (ADR-40), then the additive score, then the closer match.
+func sortBestFirst(finds []acceptedFind) {
+	slices.SortStableFunc(finds, func(a, b acceptedFind) int {
+		if aOK, bOK := a.decision.Outcome == model.OutcomeAccept, b.decision.Outcome == model.OutcomeAccept; aOK != bOK {
+			if aOK {
+				return -1
+			}
+			return 1
+		}
+		if winner, _ := model.Compare(a.decision.Quality, b.decision.Quality); winner != 0 {
+			return winner
+		}
+		if byScore := cmp.Compare(b.decision.Score(), a.decision.Score()); byScore != 0 {
+			return byScore
+		}
+		return cmp.Compare(a.distance.Total, b.distance.Total)
+	})
 }
 
 // unseen drops a release an earlier query of the same tier already returned from this indexer.

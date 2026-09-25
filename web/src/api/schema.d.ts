@@ -1724,6 +1724,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/grab": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Automatic search, as in Lidarr: search this work's wanted album and send its best accepted release to a download client. Nothing is searched while a download for the album is already on its way. */
+        post: operations["grabWork"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/search": {
         parameters: {
             query?: never;
@@ -1735,7 +1754,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Search every monitored, incomplete album in one category (todo 5.2's own "manual search, per-item and per-category"). Runs as a background job -- GET /jobs shows its progress; results land per work, visible through GET /works/{id}/candidates. */
+        /** Automatic search of every monitored, incomplete album in one library, or of the albums named in work_ids ("search this page"). Each album's best release is sent. Runs as a background job; GET /jobs shows its progress. */
         post: operations["searchCategory"];
         delete?: never;
         options?: never;
@@ -3621,6 +3640,11 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
             /**
+             * Format: date-time
+             * @description When the album was last searched. Absent means never.
+             */
+            last_searched_at?: string;
+            /**
              * @description Set when this work has a monitored desired_item, regardless of whether the wanted filter was used.
              * @enum {string}
              */
@@ -3660,6 +3684,14 @@ export interface components {
             expires_at?: string;
             /** Format: date-time */
             created_at: string;
+        };
+        /** @description One automatic search. */
+        GrabResult: {
+            /** @description How many releases matched the album. */
+            found: number;
+            sent?: components["schemas"]["Acquisition"];
+            /** @description A download for the album was on its way, so nothing was searched. */
+            already_downloading: boolean;
         };
         /** @description One cursor page of download history. */
         HistoryPage: {
@@ -6946,7 +6978,7 @@ export interface operations {
                 /** @description Narrows to one category. Naming a category the caller cannot read answers 404, matching a single-item lookup (Invariant 37) rather than a filter that silently returns nothing. */
                 category_id?: number;
                 /** @description Which column orders the list; title is the default. artist orders by the primary artist's sort name, then title -- the Albums view's grouping -- with a work that has no artist first. */
-                sort?: "title" | "year" | "added" | "artist";
+                sort?: "title" | "year" | "added" | "artist" | "searched";
                 dir?: "asc" | "desc";
                 /** @description Only works released within priority.new_release_days (ADR-55's release-date window; the 48h indexer/RSS window is not built -- it needs candidate.first_seen_at, stage 5). A work with no known release date, or one known only to the year or month, never matches: day precision is required. */
                 fresh?: boolean;
@@ -7941,7 +7973,7 @@ export interface operations {
             };
         };
     };
-    searchCategory: {
+    grabWork: {
         parameters: {
             query?: never;
             header?: never;
@@ -7951,6 +7983,45 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description What the search found and what, if anything, was sent. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrabResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The work is not wanted, no indexer is enabled, or no client takes the release. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    searchCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    work_ids?: number[];
+                };
+            };
+        };
         responses: {
             /** @description Enqueued (or already running -- duplicate says which). */
             202: {

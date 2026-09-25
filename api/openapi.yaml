@@ -1749,7 +1749,7 @@ paths:
             Which column orders the list; title is the default. artist orders by
             the primary artist's sort name, then title -- the Albums view's
             grouping -- with a work that has no artist first.
-          schema: { type: string, enum: [title, year, added, artist] }
+          schema: { type: string, enum: [title, year, added, artist, searched] }
         - name: dir
           in: query
           schema: { type: string, enum: [asc, desc], default: asc }
@@ -2727,6 +2727,33 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
+  /works/{id}/grab:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: grabWork
+      tags: [acquisition]
+      summary: >-
+        Automatic search, as in Lidarr: search this work's wanted album and send
+        its best accepted release to a download client. Nothing is searched while
+        a download for the album is already on its way.
+      responses:
+        "200":
+          description: What the search found and what, if anything, was sent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GrabResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          description: The work is not wanted, no indexer is enabled, or no client takes the release.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
   /categories/{id}/search:
     parameters:
       - name: id
@@ -2737,10 +2764,20 @@ paths:
       operationId: searchCategory
       tags: [acquisition]
       summary: >-
-        Search every monitored, incomplete album in one category
-        (todo 5.2's own "manual search, per-item and per-category").
-        Runs as a background job -- GET /jobs shows its progress; results
-        land per work, visible through GET /works/{id}/candidates.
+        Automatic search of every monitored, incomplete album in one library, or
+        of the albums named in work_ids ("search this page"). Each album's best
+        release is sent. Runs as a background job; GET /jobs shows its progress.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                work_ids:
+                  type: array
+                  items: { type: integer, format: int64 }
+                  maxItems: 200
       responses:
         "202":
           description: Enqueued (or already running -- duplicate says which).
@@ -5717,6 +5754,10 @@ components:
             by sort=artist.
         added_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        last_searched_at:
+          type: string
+          format: date-time
+          description: When the album was last searched. Absent means never.
         wanted_state:
           type: string
           enum: [MISSING, PARTIAL, COMPLETE, UPGRADABLE]
@@ -5771,6 +5812,19 @@ components:
           format: date-time
           description: Absent means permanent. Only automatic entries expire.
         created_at: { type: string, format: date-time }
+
+    GrabResult:
+      type: object
+      description: One automatic search.
+      required: [found, already_downloading]
+      properties:
+        found:
+          type: integer
+          description: How many releases matched the album.
+        sent: { $ref: "#/components/schemas/Acquisition" }
+        already_downloading:
+          type: boolean
+          description: A download for the album was on its way, so nothing was searched.
 
     HistoryPage:
       type: object

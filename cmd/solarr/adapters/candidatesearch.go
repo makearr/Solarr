@@ -97,9 +97,8 @@ func (c CandidateSearch) SearchTrack(ctx context.Context, workID, partID int64) 
 	return c.searchItemResultView(ctx, result), nil
 }
 
-// ListWorkCandidates answers every decision recorded against workID's own
-// wanted album -- empty, not an error, for a work never searched or never
-// wanted at all.
+// ListWorkCandidates answers the latest search's decisions for workID's wanted album, best first --
+// empty, not an error, for a work never searched or never wanted at all.
 func (c CandidateSearch) ListWorkCandidates(ctx context.Context, workID int64) ([]apiserver.CandidateDecision, error) {
 	detail, err := c.Works.Detail(ctx, workID)
 	if err != nil {
@@ -112,7 +111,18 @@ func (c CandidateSearch) ListWorkCandidates(ctx context.Context, workID int64) (
 	if err != nil {
 		return nil, err
 	}
-	return c.decisionViews(ctx, details), nil
+	return c.decisionViews(ctx, latestRun(details)), nil
+}
+
+// latestRun keeps the newest search's decisions: every search re-decides the same releases, and
+// listing them all showed one release once per search (2026-09-25). One run shares one time.
+func latestRun(details []library.DecisionDetail) []library.DecisionDetail {
+	for i, detail := range details {
+		if detail.Decision.DecidedAt != details[0].Decision.DecidedAt {
+			return details[:i]
+		}
+	}
+	return details
 }
 
 // candidateHistoryLimit bounds how much of one item's own search history a
@@ -166,12 +176,54 @@ func acquisitionView(acquisition library.Acquisition) apiserver.Acquisition {
 }
 
 // SearchCategory enqueues music.SearchCategoryJob for categoryID.
-func (c CandidateSearch) SearchCategory(ctx context.Context, categoryID int64) (bool, error) {
-	result, err := music.EnqueueSearchCategory(ctx, c.Queue, categoryID)
+func (c CandidateSearch) SearchCategory(ctx context.Context, categoryID int64, workIDs []int64) (bool, error) {
+	enqueue := func() (jobs.EnqueueResult, error) { return music.EnqueueSearchCategory(ctx, c.Queue, categoryID) }
+	if len(workIDs) > 0 {
+		itemIDs := make([]int64, 0, len(workIDs))
+		for _, workID := range workIDs {
+			detail, err := c.Works.Detail(ctx, workID)
+			if err != nil {
+				return false, err
+			}
+			if detail.Wanted != nil {
+				itemIDs = append(itemIDs, detail.Wanted.ID)
+			}
+		}
+		enqueue = func() (jobs.EnqueueResult, error) { return music.EnqueueSearchItems(ctx, c.Queue, categoryID, itemIDs) }
+	}
+	result, err := enqueue()
 	if err != nil {
 		return false, err
 	}
 	return result.Duplicate, nil
+}
+
+// GrabWork is the automatic search of workID's wanted album: search, then send the best release.
+func (c CandidateSearch) GrabWork(ctx context.Context, workID int64) (apiserver.GrabResult, error) {
+	detail, err := c.Works.Detail(ctx, workID)
+	if err != nil {
+		return apiserver.GrabResult{}, err
+	}
+	if detail.Wanted == nil {
+		return apiserver.GrabResult{}, apiserver.ErrWorkNotWanted
+	}
+	indexers, err := c.Indexers(ctx)
+	if err != nil {
+		return apiserver.GrabResult{}, fmt.Errorf("adapters: grab: indexers: %w", err)
+	}
+	if len(indexers) == 0 {
+		return apiserver.GrabResult{}, apiserver.ErrNoIndexersConfigured
+	}
+	result, err := music.Grab{Search: c.Search, Dispatch: c.Dispatch}.SearchAndSend(ctx, detail.Wanted.ID, indexers, c.Clock.Now())
+	if err != nil {
+		return apiserver.GrabResult{}, translateDispatchError(err)
+	}
+	view := apiserver.GrabResult{Found: len(result.Search.Decisions), AlreadyDownloading: result.AlreadyInFlight}
+	if result.Sent != nil {
+		sent := acquisitionView(*result.Sent)
+		view.Sent = &sent
+	}
+	return view, nil
 }
 
 // decisionViews adds what a row shows beyond the decision: its indexer's name, and whether the
