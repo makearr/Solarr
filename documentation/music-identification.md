@@ -8,7 +8,10 @@ How a scanned or imported music file comes to belong to an album. Code:
 
 A scan batch is one directory's files. Each pass only sees what the previous ones left.
 
-1. **Embedded MBIDs**, per file, no network (`MBIDIdentifier`). Unchanged.
+1. **Embedded MBIDs**, per file (`MBIDIdentifier`). Each distinct release group is looked up once
+   per folder (cached; enrichment needs it anyway): a merged id is stored as the group it was
+   merged into; a retired one, 404 at every source, is recorded `retired` and the files go on to
+   album matching like untagged ones. An unreachable source trusts the tags.
 2. **Album matching**: the remaining files, grouped by album tag, scored together against
    whole release tracklists. Identified → every file gets the release group *and* the release
    (edition). Ambiguous → queued with the rival albums. Anything else → next pass.
@@ -29,6 +32,12 @@ when that differs — "(2008 mix)" is part of a real title); then, when the tags
 recalled fewer than two groups, recording search on up to four track titles, keeping the five
 release groups most tracks appear on, studio albums before compilations. Every release of each
 group is scored. Releases and recording searches are cached like everything else.
+
+The search index still lists merged release groups under their old ids, so one album can be
+recalled twice and tie with itself. A release belongs to exactly one group, so two groups
+sharing a release are one: it is scored once, under the id a lookup of the later one answers.
+The artist is compared against both the credited name and the artists' own names, from search
+and lookup alike ("Tupac" credits 2Ibe, "Gohudo" credits Gohudo Cosicatebi).
 
 ## Scoring
 

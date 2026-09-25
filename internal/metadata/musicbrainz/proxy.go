@@ -117,12 +117,12 @@ func proxyArtistCredit(album proxyAlbum) []ArtistCredit {
 	credits := make([]ArtistCredit, 0, len(album.Artists))
 	for _, artist := range album.Artists {
 		if artist.ID == album.ArtistID {
-			credits = append(credits, ArtistCredit{MBID: artist.ID, Name: artist.Name})
+			credits = append(credits, ArtistCredit{MBID: artist.ID, Name: artist.Name, ArtistName: artist.Name})
 		}
 	}
 	for _, artist := range album.Artists {
 		if artist.ID != album.ArtistID {
-			credits = append(credits, ArtistCredit{MBID: artist.ID, Name: artist.Name})
+			credits = append(credits, ArtistCredit{MBID: artist.ID, Name: artist.Name, ArtistName: artist.Name})
 		}
 	}
 	return credits

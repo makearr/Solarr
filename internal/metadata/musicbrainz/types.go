@@ -39,7 +39,9 @@ type ReleaseGroup struct {
 // ArtistCredit is one credited artist on a release group.
 type ArtistCredit struct {
 	MBID string
-	Name string
+	// Name is as credited, ArtistName the artist's own: 2Ibe's live album credits "Tupac".
+	Name       string
+	ArtistName string
 }
 
 // Genre is one release group's genre tag, with MusicBrainz's own vote count --

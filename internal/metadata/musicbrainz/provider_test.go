@@ -3,7 +3,9 @@ package musicbrainz_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -184,6 +186,31 @@ func TestProvider_ErrorsWhenEverySourceFails(t *testing.T) {
 	_, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "rg1", "rel1")
 	if err == nil {
 		t.Fatal("Album succeeded although both sources failed")
+	}
+}
+
+// Only every source answering 404 says an id is retired; one unreachable source leaves it open.
+func TestProvider_NotFoundOnlyWhenEverySourceAnswers404(t *testing.T) {
+	gone := func(name string) error {
+		return fmt.Errorf("%s: %w", name, &httpx.StatusError{Provider: name, Status: http.StatusNotFound})
+	}
+	cases := []struct {
+		name    string
+		direct  error
+		retired bool
+	}{
+		{"every source 404", gone("direct"), true},
+		{"one source down", &httpx.StatusError{Provider: "direct", Status: http.StatusServiceUnavailable}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			proxy := &fakeSource{name: "proxy", err: gone("proxy")}
+			direct := &fakeSource{name: "direct", err: tc.direct}
+			_, _, err := newProvider(t, proxy, direct).Album(t.Context(), musicbrainz.PriorityEnrich, "rg1", "")
+			if err == nil || errors.Is(err, musicbrainz.ErrNotFound) != tc.retired {
+				t.Errorf("err = %v, want ErrNotFound %v", err, tc.retired)
+			}
+		})
 	}
 }
 

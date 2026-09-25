@@ -153,7 +153,7 @@ func TestProxy_AlbumReadsArtistsGenresAndWikidata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Album: %v", err)
 	}
-	wantCredit := []musicbrainz.ArtistCredit{{MBID: "9546cacb-d515-4327-878c-de2125eb70af", Name: "Heka"}}
+	wantCredit := []musicbrainz.ArtistCredit{{MBID: "9546cacb-d515-4327-878c-de2125eb70af", Name: "Heka", ArtistName: "Heka"}}
 	if !slices.Equal(rg.ArtistCredit, wantCredit) {
 		t.Errorf("ArtistCredit = %+v, want %+v", rg.ArtistCredit, wantCredit)
 	}
@@ -181,7 +181,7 @@ func TestProxy_AlbumPutsItsPrimaryArtistFirst(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Album: %v", err)
 	}
-	want := []musicbrainz.ArtistCredit{{MBID: "primary", Name: "Primary"}, {MBID: "guest", Name: "Guest"}}
+	want := []musicbrainz.ArtistCredit{{MBID: "primary", Name: "Primary", ArtistName: "Primary"}, {MBID: "guest", Name: "Guest", ArtistName: "Guest"}}
 	if !slices.Equal(rg.ArtistCredit, want) {
 		t.Errorf("ArtistCredit = %+v, want %+v", rg.ArtistCredit, want)
 	}

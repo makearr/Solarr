@@ -89,7 +89,8 @@ type directReleaseGroup struct {
 	ArtistCredit     []struct {
 		Name   string `json:"name"`
 		Artist struct {
-			ID string `json:"id"`
+			ID   string `json:"id"`
+			Name string `json:"name"`
 		} `json:"artist"`
 	} `json:"artist-credit"`
 	Genres []struct {
@@ -108,7 +109,7 @@ func (d direct) releaseGroup(ctx context.Context, mbid string) (ReleaseGroup, er
 
 	credits := make([]ArtistCredit, len(parsed.ArtistCredit))
 	for i, credit := range parsed.ArtistCredit {
-		credits[i] = ArtistCredit{MBID: credit.Artist.ID, Name: credit.Name}
+		credits[i] = ArtistCredit{MBID: credit.Artist.ID, Name: credit.Name, ArtistName: credit.Artist.Name}
 	}
 	genres := make([]Genre, len(parsed.Genres))
 	for i, genre := range parsed.Genres {

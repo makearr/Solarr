@@ -2,6 +2,7 @@ package music
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path"
@@ -252,6 +253,7 @@ func (c Consumer) identifyBatch(
 		rootFolderID: rootFolderID, rootPath: rootPath, observed: observed, mediaObjectIDs: mediaObjectIDs,
 		at:     c.clock.Now().Unix(),
 		passes: make(map[int][]library.AttemptPass), outcomes: make(map[int]string),
+		releaseGroups: make(map[string]string),
 	}
 	all := make([]pendingFile, len(observed))
 	for index := range observed {
@@ -300,6 +302,9 @@ type batchResult struct {
 	observed       []scan.Observed
 	mediaObjectIDs []int64
 	at             int64
+
+	// releaseGroups is each embedded release group checked so far, to its current id; "" is retired.
+	releaseGroups map[string]string
 
 	links      []library.WorkLink
 	trackFiles []TrackFile
@@ -602,18 +607,49 @@ func (c Consumer) runChain(
 			pending = append(pending, file)
 			continue
 		}
+		externalID := result.Best.ExternalID.ExternalID
+		if pass == PassEmbeddedTags && result.Best.ExternalID.Provider == ProviderReleaseGroup {
+			current, known := c.currentReleaseGroup(ctx, out, externalID)
+			if !known {
+				out.note(file.index, library.AttemptPass{Pass: pass, Outcome: PassOutcomeRetired})
+				pending = append(pending, file)
+				continue
+			}
+			externalID = current
+		}
 		if pass != PassEmbeddedTags {
 			out.note(file.index, library.AttemptPass{
 				Pass: pass, Outcome: PassOutcomeIdentified, Candidates: library.AttemptCandidatesFrom(result.Candidates),
 			})
 		}
 		out.identify(file.index, library.WorkLink{
-			Provider: result.Best.ExternalID.Provider, ExternalID: result.Best.ExternalID.ExternalID,
+			Provider: result.Best.ExternalID.Provider, ExternalID: externalID,
 			Confidence: result.Best.ExternalID.Confidence, Work: newWorkIdentity(one),
 			Edition: newEditionLink(one), RootFolderID: out.rootFolderID, MediaObjectID: mediaObjectID,
 		}, ReadTrackFile(mediaObjectID, one.Probe.Tags))
 	}
 	return pending
+}
+
+// currentReleaseGroup checks an embedded release group once per batch: a merged id answers the
+// group it was merged into, a retired one is not known; an unreachable source trusts the tags.
+func (c Consumer) currentReleaseGroup(ctx context.Context, out *batchResult, mbid string) (string, bool) {
+	if c.albums == nil {
+		return mbid, true
+	}
+	if current, checked := out.releaseGroups[mbid]; checked {
+		return current, current != ""
+	}
+	current := mbid
+	group, _, err := c.albums.Album(ctx, musicbrainz.PriorityIdentify, mbid, "")
+	switch {
+	case errors.Is(err, musicbrainz.ErrNotFound):
+		current = ""
+	case err == nil && group.MBID != "":
+		current = group.MBID
+	}
+	out.releaseGroups[mbid] = current
+	return current, current != ""
 }
 
 // identifyAlbums matches pending files album by album: identified links each file to the release,

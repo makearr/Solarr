@@ -65,6 +65,7 @@ func IdentifyAlbum(
 	calls := len(failures)
 
 	var candidates []AlbumCandidate
+	groupOfRelease := make(map[string]string)
 	for _, group := range groups {
 		if !group.known {
 			rg, _, err := lookup.Album(ctx, priority, group.group.MBID, "")
@@ -73,7 +74,7 @@ func IdentifyAlbum(
 				failures = append(failures, err)
 				continue
 			}
-			group.group, group.credit = rg, creditNames(rg.ArtistCredit)
+			group.group, group.credit, group.names = rg, creditNames(rg.ArtistCredit), artistNames(rg.ArtistCredit)
 		}
 		releases, err := lookup.Releases(ctx, priority, group.group.MBID)
 		calls++
@@ -81,7 +82,13 @@ func IdentifyAlbum(
 			failures = append(failures, err)
 			continue
 		}
+		if earlier, merged := mergedGroup(groupOfRelease, releases); merged {
+			calls++
+			candidates = keepCurrentGroup(ctx, lookup, priority, candidates, earlier, group, &failures)
+			continue
+		}
 		for _, release := range releases {
+			groupOfRelease[release.MBID] = group.group.MBID
 			candidates = append(candidates, AlbumCandidate{
 				ReleaseGroup: group.group, ArtistCredit: group.credit, ArtistNames: group.names,
 				Release: release, Recall: group.recall,
@@ -92,6 +99,42 @@ func IdentifyAlbum(
 		return AlbumDecision{}, fmt.Errorf("music: identify album: every lookup failed: %w", errors.Join(failures...))
 	}
 	return DecideAlbum(locals, candidates), nil
+}
+
+// mergedGroup answers the group already recalled with one of these releases: a release has one
+// group, so sharing one means a merged group the search index still lists under its old id.
+func mergedGroup(groupOfRelease map[string]string, releases []musicbrainz.Release) (string, bool) {
+	for _, release := range releases {
+		if earlier, found := groupOfRelease[release.MBID]; found {
+			return earlier, true
+		}
+	}
+	return "", false
+}
+
+// keepCurrentGroup scores a merged group once, under the id a lookup of the later one answers:
+// MusicBrainz answers an old id with the group it was merged into.
+func keepCurrentGroup(
+	ctx context.Context, lookup AlbumLookup, priority musicbrainz.Priority, candidates []AlbumCandidate,
+	earlier string, later recalled, failures *[]error,
+) []AlbumCandidate {
+	current, _, err := lookup.Album(ctx, priority, later.group.MBID, "")
+	if err != nil {
+		*failures = append(*failures, err)
+		return candidates
+	}
+	if current.MBID != later.group.MBID {
+		return candidates
+	}
+	for i := range candidates {
+		if candidates[i].ReleaseGroup.MBID == earlier {
+			candidates[i].ReleaseGroup, candidates[i].ArtistCredit = current, creditNames(current.ArtistCredit)
+			if names := artistNames(current.ArtistCredit); names != "" {
+				candidates[i].ArtistNames = names
+			}
+		}
+	}
+	return candidates
 }
 
 // recallAlbums gathers release groups in order of evidence: seeds, the album tags, then
@@ -218,6 +261,17 @@ func creditNames(credits []musicbrainz.ArtistCredit) string {
 	names := make([]string, len(credits))
 	for i, credit := range credits {
 		names[i] = credit.Name
+	}
+	return strings.Join(names, " & ")
+}
+
+// artistNames joins the credited artists' own names, empty when the source did not give them.
+func artistNames(credits []musicbrainz.ArtistCredit) string {
+	var names []string
+	for _, credit := range credits {
+		if credit.ArtistName != "" {
+			names = append(names, credit.ArtistName)
+		}
 	}
 	return strings.Join(names, " & ")
 }
