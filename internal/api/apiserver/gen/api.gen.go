@@ -430,13 +430,13 @@ const (
 	RemoveAndBlockRequestBlockReasonUNWANTED    RemoveAndBlockRequestBlockReason = "UNWANTED"
 )
 
-// Defines values for RemoveAndBlockRequestQuarantineReason.
+// Defines values for RemoveAndBlockRequestRecycleReason.
 const (
-	RemoveAndBlockRequestQuarantineReasonFailedImport  RemoveAndBlockRequestQuarantineReason = "failed_import"
-	RemoveAndBlockRequestQuarantineReasonJunk          RemoveAndBlockRequestQuarantineReason = "junk"
-	RemoveAndBlockRequestQuarantineReasonRejectedWorse RemoveAndBlockRequestQuarantineReason = "rejected_worse"
-	RemoveAndBlockRequestQuarantineReasonReplaced      RemoveAndBlockRequestQuarantineReason = "replaced"
-	RemoveAndBlockRequestQuarantineReasonUserDelete    RemoveAndBlockRequestQuarantineReason = "user_delete"
+	RemoveAndBlockRequestRecycleReasonFailedImport  RemoveAndBlockRequestRecycleReason = "failed_import"
+	RemoveAndBlockRequestRecycleReasonJunk          RemoveAndBlockRequestRecycleReason = "junk"
+	RemoveAndBlockRequestRecycleReasonRejectedWorse RemoveAndBlockRequestRecycleReason = "rejected_worse"
+	RemoveAndBlockRequestRecycleReasonReplaced      RemoveAndBlockRequestRecycleReason = "replaced"
+	RemoveAndBlockRequestRecycleReasonUserDelete    RemoveAndBlockRequestRecycleReason = "user_delete"
 )
 
 // Defines values for Role.
@@ -1319,7 +1319,7 @@ type ExternalID struct {
 	Provider   string `json:"provider"`
 }
 
-// FileManagement Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's quarantine: nothing is deleted directly, so only how long it keeps what this library removes is set here.
+// FileManagement Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's recycle bin: nothing is deleted directly, so only how long it keeps what this library removes is set here.
 type FileManagement struct {
 	ChangeFileDate FileManagementChangeFileDate `json:"change_file_date"`
 
@@ -1565,15 +1565,15 @@ type ImportPlacementResult struct {
 
 // ImportRevertRequest defines model for ImportRevertRequest.
 type ImportRevertRequest struct {
-	// QuarantineRetainHours Defaults to the session's library's recycling bin retention (its File Management), one week unless changed.
-	QuarantineRetainHours *int `json:"quarantine_retain_hours,omitempty"`
+	// RecycleRetainHours Defaults to the session's library's recycling bin retention (its File Management), one week unless changed.
+	RecycleRetainHours *int `json:"recycle_retain_hours,omitempty"`
 }
 
 // ImportRevertResult defines model for ImportRevertResult.
 type ImportRevertResult struct {
-	EditionsDeleted  int64    `json:"editions_deleted"`
-	QuarantinedPaths []string `json:"quarantined_paths"`
-	UnitsReverted    int64    `json:"units_reverted"`
+	EditionsDeleted int64    `json:"editions_deleted"`
+	RecycledPaths   []string `json:"recycled_paths"`
+	UnitsReverted   int64    `json:"units_reverted"`
 
 	// WorksDeleted Only a work this session's own CommitUnit created, never one it matched.
 	WorksDeleted int64 `json:"works_deleted"`
@@ -2402,32 +2402,32 @@ type Rejection struct {
 
 // RemoveAndBlockRequest Each step is independently requestable (architecture.md section 10.8's own text) -- requesting none of the four is accepted and does nothing.
 type RemoveAndBlockRequest struct {
-	Block            *bool                                  `json:"block,omitempty"`
-	BlockNote        *string                                `json:"block_note,omitempty"`
-	BlockReason      *RemoveAndBlockRequestBlockReason      `json:"block_reason,omitempty"`
-	BlockTitle       *string                                `json:"block_title,omitempty"`
-	Blocklist        *bool                                  `json:"blocklist,omitempty"`
-	BlocklistTitle   *string                                `json:"blocklist_title,omitempty"`
-	ContentHash      *string                                `json:"content_hash,omitempty"`
-	DesiredItemId    *int64                                 `json:"desired_item_id,omitempty"`
-	Guid             *string                                `json:"guid,omitempty"`
-	IndexerId        *int64                                 `json:"indexer_id,omitempty"`
-	Oshash           *string                                `json:"oshash,omitempty"`
-	Quarantine       *bool                                  `json:"quarantine,omitempty"`
-	QuarantineReason *RemoveAndBlockRequestQuarantineReason `json:"quarantine_reason,omitempty"`
+	Block          *bool                               `json:"block,omitempty"`
+	BlockNote      *string                             `json:"block_note,omitempty"`
+	BlockReason    *RemoveAndBlockRequestBlockReason   `json:"block_reason,omitempty"`
+	BlockTitle     *string                             `json:"block_title,omitempty"`
+	Blocklist      *bool                               `json:"blocklist,omitempty"`
+	BlocklistTitle *string                             `json:"blocklist_title,omitempty"`
+	ContentHash    *string                             `json:"content_hash,omitempty"`
+	DesiredItemId  *int64                              `json:"desired_item_id,omitempty"`
+	Guid           *string                             `json:"guid,omitempty"`
+	IndexerId      *int64                              `json:"indexer_id,omitempty"`
+	Oshash         *string                             `json:"oshash,omitempty"`
+	QuickHash      *string                             `json:"quick_hash,omitempty"`
+	RecycleBin     *bool                               `json:"recycle_bin,omitempty"`
+	RecycleReason  *RemoveAndBlockRequestRecycleReason `json:"recycle_reason,omitempty"`
 
-	// QuarantineRetainHours How long the quarantined copy survives before Sweep purges it.
-	QuarantineRetainHours *int    `json:"quarantine_retain_hours,omitempty"`
-	QuickHash             *string `json:"quick_hash,omitempty"`
-	ReleaseGroup          *string `json:"release_group,omitempty"`
-	Reopen                *bool   `json:"reopen,omitempty"`
+	// RecycleRetainHours How long the recycled copy survives before Sweep purges it.
+	RecycleRetainHours *int    `json:"recycle_retain_hours,omitempty"`
+	ReleaseGroup       *string `json:"release_group,omitempty"`
+	Reopen             *bool   `json:"reopen,omitempty"`
 }
 
 // RemoveAndBlockRequestBlockReason defines model for RemoveAndBlockRequest.BlockReason.
 type RemoveAndBlockRequestBlockReason string
 
-// RemoveAndBlockRequestQuarantineReason defines model for RemoveAndBlockRequest.QuarantineReason.
-type RemoveAndBlockRequestQuarantineReason string
+// RemoveAndBlockRequestRecycleReason defines model for RemoveAndBlockRequest.RecycleReason.
+type RemoveAndBlockRequestRecycleReason string
 
 // RemoveAndBlockResult What the action actually did -- each field only set when its own step ran.
 type RemoveAndBlockResult struct {
@@ -2437,11 +2437,11 @@ type RemoveAndBlockResult struct {
 	// BlocklistId Present when `blocklist` was requested.
 	BlocklistId *int64 `json:"blocklist_id,omitempty"`
 
-	// CrossDeviceDeletes Copies that turned out to be on a different filesystem than their own quarantine directory -- deleted directly instead of quarantined (section 10.8), unrestorable.
+	// CrossDeviceDeletes Copies that turned out to be on a different filesystem than their own recycle bin directory -- deleted directly instead of recycled (section 10.8), unrestorable.
 	CrossDeviceDeletes int `json:"cross_device_deletes"`
 
-	// QuarantinedPaths The quarantine path each copy landed at, one per copy actually moved.
-	QuarantinedPaths []string `json:"quarantined_paths"`
+	// RecycledPaths The recycle bin path each copy landed at, one per copy actually moved.
+	RecycledPaths []string `json:"recycled_paths"`
 
 	// ReopenedItems Every desired_item id detached and recomputed.
 	ReopenedItems []int64 `json:"reopened_items"`
@@ -2449,8 +2449,8 @@ type RemoveAndBlockResult struct {
 
 // RemovePartResult What removing a track actually did.
 type RemovePartResult struct {
-	// FilesQuarantined How many files delete_files moved out of the library; 0 or 1.
-	FilesQuarantined int64 `json:"files_quarantined"`
+	// FilesRecycled How many files delete_files moved out of the library; 0 or 1.
+	FilesRecycled int64 `json:"files_recycled"`
 }
 
 // RemoveWorkResult What removing an album actually did.
@@ -2458,8 +2458,8 @@ type RemoveWorkResult struct {
 	// FilesKept How many files the library still holds for this work.
 	FilesKept int64 `json:"files_kept"`
 
-	// FilesQuarantined How many files delete_files moved out of the library.
-	FilesQuarantined *int64 `json:"files_quarantined,omitempty"`
+	// FilesRecycled How many files delete_files moved out of the library.
+	FilesRecycled *int64 `json:"files_recycled,omitempty"`
 
 	// WorkDeleted False when the album was kept because files for it remain in the library.
 	WorkDeleted bool `json:"work_deleted"`
@@ -3349,7 +3349,7 @@ type SetPartMonitoredJSONBody struct {
 
 // RemovePartJSONBody defines parameters for RemovePart.
 type RemovePartJSONBody struct {
-	// DeleteFiles Also move this track's file into quarantine.
+	// DeleteFiles Also move this track's file into the recycle bin.
 	DeleteFiles *bool `json:"delete_files,omitempty"`
 }
 
@@ -3360,7 +3360,7 @@ type SetTrackWantedJSONBody struct {
 
 // RemoveWorkJSONBody defines parameters for RemoveWork.
 type RemoveWorkJSONBody struct {
-	// DeleteFiles Also move every file of this album into quarantine.
+	// DeleteFiles Also move every file of this album into the recycle bin.
 	DeleteFiles *bool `json:"delete_files,omitempty"`
 }
 

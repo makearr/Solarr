@@ -292,7 +292,7 @@ func (p Physical) Relocate(ctx context.Context, oldRootFolderID int64, oldRelPat
 // library_path and desired_item_file row that referenced it. Unlike
 // MarkMissing (section 10.4's "a vanished path is MISSING, not deleted,
 // until the root is confirmed online"), this is for a caller that already
-// knows, with certainty, that the bytes are gone -- a deliberate quarantine,
+// knows, with certainty, that the bytes are gone -- a deliberate recycle bin,
 // not a scan's own uncertainty about a path it has not looked at again yet.
 func (p Physical) DeleteObject(ctx context.Context, mediaObjectID int64) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
@@ -307,7 +307,7 @@ func (p Physical) DeleteObject(ctx context.Context, mediaObjectID int64) error {
 // DeleteLibraryPathRow removes exactly one library_path row, leaving its media_object
 // and every other path referencing it untouched -- the half of ADR-11 case C DeleteObject
 // cannot give a caller that must remove only its own copy of shared bytes (4.22's own
-// linking audit; see ImportRevert.quarantineObject).
+// linking audit; see ImportRevert.recycleObject).
 func (p Physical) DeleteLibraryPathRow(ctx context.Context, libraryPathID int64) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return librarydb.New(tx).DeleteLibraryPath(ctx, libraryPathID)

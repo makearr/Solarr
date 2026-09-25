@@ -218,8 +218,8 @@ func (w *sweep) directory(ctx context.Context, relative string) error {
 		if !entry.IsDir {
 			continue
 		}
-		// Quarantined files have left the library; walking them would bring them back.
-		if relative == "" && entry.Name == library.QuarantineDirectory {
+		// Recycled files have left the library; walking them would bring them back.
+		if relative == "" && (entry.Name == library.RecycleBinDirectory || entry.Name == library.LegacyRecycleBinDirectory) {
 			continue
 		}
 		if err := w.directory(ctx, path.Join(relative, entry.Name)); err != nil {

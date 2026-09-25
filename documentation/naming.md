@@ -46,7 +46,7 @@ Only files inspect did not class as media are considered. A file whose name matc
 (case-insensitive, without extension) takes that track's new name with its own extension; any
 other goes to the folder the tracks beside it went to, under its own name. An existing file is
 never overwritten; a skipped extra is logged and never fails the album. Extras are recorded in
-`import_unit_extra`, so reverting the session quarantines them with the tracks.
+`import_unit_extra`, so reverting the session recycles them with the tracks.
 
 ## Apply to library
 

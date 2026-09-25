@@ -162,7 +162,7 @@ func TestReconcile_FailsTheQueueDirtiesTheLibraryAndRecordsWhy(t *testing.T) {
 		t.Fatalf("recorded %+v, want it to match the returned %+v", stored, report)
 	}
 	if stored.Restored[0].CorruptPath != "/db/library.db.corrupt.x" {
-		t.Errorf("recorded CorruptPath = %q, want the quarantined path", stored.Restored[0].CorruptPath)
+		t.Errorf("recorded CorruptPath = %q, want the recycled path", stored.Restored[0].CorruptPath)
 	}
 }
 

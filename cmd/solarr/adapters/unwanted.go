@@ -72,12 +72,12 @@ func (a RemoveAndBlock) RemoveAndBlockFile(
 
 	at := a.Clock.Now().Unix()
 	result, err := a.Action.Do(ctx, library.RemoveAndBlockRequest{
-		MediaObjectID:    mediaObjectID,
-		Quarantine:       req.Quarantine,
-		QuarantineReason: library.Reason(req.QuarantineReason),
-		QuarantineRetain: time.Duration(req.QuarantineRetainHours) * time.Hour,
-		Block:            req.Block,
-		OSHash:           req.OSHash, QuickHash: req.QuickHash,
+		MediaObjectID: mediaObjectID,
+		RecycleBin:    req.RecycleBin,
+		RecycleReason: library.Reason(req.RecycleReason),
+		RecycleRetain: time.Duration(req.RecycleRetainHours) * time.Hour,
+		Block:         req.Block,
+		OSHash:        req.OSHash, QuickHash: req.QuickHash,
 		BlockReason: library.BlockReason(req.BlockReason), BlockNote: req.BlockNote,
 		BlockTitle: req.BlockTitle, ReleaseGroup: req.ReleaseGroup,
 		Blocklist: req.Blocklist, IndexerID: req.IndexerID, GUID: req.GUID,
@@ -91,8 +91,8 @@ func (a RemoveAndBlock) RemoveAndBlockFile(
 	output := apiserver.RemoveAndBlockOutput{
 		CrossDeviceDeletes: result.CrossDeviceDeletes, ReopenedItems: result.ReopenedItems,
 	}
-	for _, entry := range result.QuarantinedPaths {
-		output.QuarantinedPaths = append(output.QuarantinedPaths, entry.QuarantinePath)
+	for _, entry := range result.RecycledPaths {
+		output.RecycledPaths = append(output.RecycledPaths, entry.RecycledPath)
 	}
 	if result.Block != nil {
 		output.BlockID = &result.Block.ID
@@ -103,15 +103,15 @@ func (a RemoveAndBlock) RemoveAndBlockFile(
 	return output, nil
 }
 
-// QuarantineFile is RemoveAndBlockFile's own first step alone: the bytes
+// RecycleFile is RemoveAndBlockFile's own first step alone: the bytes
 // leave the library and stay recoverable, nothing is blocked, and every
 // desired_item that file satisfied is reopened so the album reports what it
 // really has.
-func (a RemoveAndBlock) QuarantineFile(ctx context.Context, mediaObjectID int64, recycling library.Recycling) error {
+func (a RemoveAndBlock) RecycleFile(ctx context.Context, mediaObjectID int64, recycling library.Recycling) error {
 	_, err := a.Action.Do(ctx, library.RemoveAndBlockRequest{
-		MediaObjectID: mediaObjectID, Quarantine: true,
-		QuarantineReason: library.ReasonUserDelete, Reopen: true,
-		QuarantineRetain: recycling.Retain, RemoveEmptyFolders: recycling.RemoveEmptyFolders,
+		MediaObjectID: mediaObjectID, RecycleBin: true,
+		RecycleReason: library.ReasonUserDelete, Reopen: true,
+		RecycleRetain: recycling.Retain, RemoveEmptyFolders: recycling.RemoveEmptyFolders,
 		At: a.Clock.Now().Unix(),
 	})
 	return err

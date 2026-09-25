@@ -50,7 +50,7 @@ it stops the import and tells you, because that's usually the most useful thing 
 The list is yours to edit.
 
 And when something turns out to be a fake, **remove and block** does the whole job in one
-action: the file goes to quarantine, its *contents* are blocked so those exact bytes can never
+action: the file goes to the recycle bin, its *contents* are blocked so those exact bytes can never
 be imported again — blocking by name would be defeated by a rename — the release it came from is
 blocklisted so it isn't grabbed a second time, and what you actually wanted goes back on the
 list to be found properly. Any other copies of the same file in your library are cleared out

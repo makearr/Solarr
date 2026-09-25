@@ -59,14 +59,14 @@ func TestImportRevert_UndoesAPlacedUnitAndDeletesTheWorkItCreated(t *testing.T) 
 
 	revert := library.NewImportRevert(
 		sessions, library.NewPhysical(opened), library.NewIdentity(opened),
-		library.NewQuarantine(opened, fsys, fake), rootPathLookup(map[int64]string{1: "/media/root"}),
+		library.NewRecycleBin(opened, fsys, fake), rootPathLookup(map[int64]string{1: "/media/root"}),
 	)
 	result, err := revert.Revert(ctx, sessionID, library.Recycling{Retain: 168 * time.Hour}, 200)
 	if err != nil {
 		t.Fatalf("Revert: %v", err)
 	}
-	if result.UnitsReverted != 1 || result.WorksDeleted != 1 || len(result.QuarantinedPaths) != 2 {
-		t.Fatalf("result = %+v, want UnitsReverted=1 WorksDeleted=1 QuarantinedPaths=2 (track and lyrics)", result)
+	if result.UnitsReverted != 1 || result.WorksDeleted != 1 || len(result.RecycledPaths) != 2 {
+		t.Fatalf("result = %+v, want UnitsReverted=1 WorksDeleted=1 RecycledPaths=2 (track and lyrics)", result)
 	}
 	if _, err := fsys.Stat("/media/root/Artist/Album/track.lrc"); err == nil {
 		t.Error("extra file still exists after Revert")
@@ -78,8 +78,8 @@ func TestImportRevert_UndoesAPlacedUnitAndDeletesTheWorkItCreated(t *testing.T) 
 	if _, err := fsys.Stat("/media/root/Artist/Album/track.flac"); err == nil {
 		t.Error("original file still exists after Revert")
 	}
-	if _, err := fsys.Stat(result.QuarantinedPaths[0].QuarantinePath); err != nil {
-		t.Errorf("quarantine path does not exist: %v", err)
+	if _, err := fsys.Stat(result.RecycledPaths[0].RecycledPath); err != nil {
+		t.Errorf("recycle bin path does not exist: %v", err)
 	}
 
 	if _, err := librarydb.New(opened.Read()).GetMediaObject(ctx, object.ID); !errors.Is(err, sql.ErrNoRows) {
@@ -175,7 +175,7 @@ func TestImportRevert_SharedObjectFromAnUnrelatedCommitSurvives(t *testing.T) {
 
 	revert := library.NewImportRevert(
 		sessions, library.NewPhysical(opened), library.NewIdentity(opened),
-		library.NewQuarantine(opened, fsys, fake), rootPathLookup(map[int64]string{1: "/media/root"}),
+		library.NewRecycleBin(opened, fsys, fake), rootPathLookup(map[int64]string{1: "/media/root"}),
 	)
 	result, err := revert.Revert(ctx, sessionID, library.Recycling{Retain: 168 * time.Hour}, 200)
 	if err != nil {
@@ -184,11 +184,11 @@ func TestImportRevert_SharedObjectFromAnUnrelatedCommitSurvives(t *testing.T) {
 	if len(result.SkippedSharedObjects) != 0 {
 		t.Errorf("SkippedSharedObjects = %v, want none -- LibraryPathID makes this unambiguous", result.SkippedSharedObjects)
 	}
-	if len(result.QuarantinedPaths) != 1 {
-		t.Fatalf("QuarantinedPaths = %d, want exactly 1 (only the session's own copy)", len(result.QuarantinedPaths))
+	if len(result.RecycledPaths) != 1 {
+		t.Fatalf("RecycledPaths = %d, want exactly 1 (only the session's own copy)", len(result.RecycledPaths))
 	}
 
-	// The session's own file: gone from disk and quarantined.
+	// The session's own file: gone from disk and recycled.
 	if _, err := fsys.Stat("/media/root/New/Compilation/track.flac"); err == nil {
 		t.Error("the session's own placed file still exists after Revert")
 	}
@@ -267,7 +267,7 @@ func TestImportRevert_AmbiguousSharedObjectWithoutALibraryPathIDIsSkipped(t *tes
 
 	revert := library.NewImportRevert(
 		sessions, library.NewPhysical(opened), library.NewIdentity(opened),
-		library.NewQuarantine(opened, fsys, fake), rootPathLookup(map[int64]string{1: "/media/root"}),
+		library.NewRecycleBin(opened, fsys, fake), rootPathLookup(map[int64]string{1: "/media/root"}),
 	)
 	result, err := revert.Revert(ctx, sessionID, library.Recycling{Retain: 168 * time.Hour}, 200)
 	if err != nil {
@@ -276,8 +276,8 @@ func TestImportRevert_AmbiguousSharedObjectWithoutALibraryPathIDIsSkipped(t *tes
 	if len(result.SkippedSharedObjects) != 1 || result.SkippedSharedObjects[0] != object.ID {
 		t.Errorf("SkippedSharedObjects = %v, want [%d]", result.SkippedSharedObjects, object.ID)
 	}
-	if len(result.QuarantinedPaths) != 0 {
-		t.Errorf("QuarantinedPaths = %d, want 0 -- an ambiguous shared object must not be guessed at", len(result.QuarantinedPaths))
+	if len(result.RecycledPaths) != 0 {
+		t.Errorf("RecycledPaths = %d, want 0 -- an ambiguous shared object must not be guessed at", len(result.RecycledPaths))
 	}
 	if _, err := fsys.Stat("/media/root/Existing/Album/track.flac"); err != nil {
 		t.Errorf("the unrelated file was removed despite the ambiguous skip: %v", err)
@@ -345,7 +345,7 @@ func TestImportRevert_TwoUnitsSharingAWorkDeletesItExactlyOnce(t *testing.T) {
 
 	revert := library.NewImportRevert(
 		sessions, library.NewPhysical(opened), library.NewIdentity(opened),
-		library.NewQuarantine(opened, fsys, fake), rootPathLookup(map[int64]string{1: "/media/root"}),
+		library.NewRecycleBin(opened, fsys, fake), rootPathLookup(map[int64]string{1: "/media/root"}),
 	)
 	result, err := revert.Revert(ctx, sessionID, library.Recycling{Retain: 168 * time.Hour}, 200)
 	if err != nil {
@@ -357,8 +357,8 @@ func TestImportRevert_TwoUnitsSharingAWorkDeletesItExactlyOnce(t *testing.T) {
 	if result.WorksDeleted != 1 {
 		t.Errorf("WorksDeleted = %d, want exactly 1 (the work must not be deleted twice)", result.WorksDeleted)
 	}
-	if len(result.QuarantinedPaths) != 2 {
-		t.Errorf("QuarantinedPaths = %d, want 2 (one per disc)", len(result.QuarantinedPaths))
+	if len(result.RecycledPaths) != 2 {
+		t.Errorf("RecycledPaths = %d, want 2 (one per disc)", len(result.RecycledPaths))
 	}
 	if _, err := librarydb.New(opened.Read()).GetWork(ctx, work.ID); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("GetWork after revert: err=%v, want sql.ErrNoRows", err)

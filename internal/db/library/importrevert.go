@@ -18,7 +18,7 @@ import (
 // CANCELLED has nothing left.
 var ErrSessionNotRevertible = errors.New("library: import session cannot be reverted from its current state")
 
-// Recycling is where a library's removed files go: how long quarantine keeps them (Sonarr's
+// Recycling is where a library's removed files go: how long recycle bin keeps them (Sonarr's
 // recycling bin cleanup) and whether folders they leave empty are removed.
 type Recycling struct {
 	Retain             time.Duration
@@ -27,41 +27,41 @@ type Recycling struct {
 
 // RevertResult is what one session's revert actually did.
 type RevertResult struct {
-	QuarantinedPaths []Entry
-	UnitsReverted    int
-	WorksDeleted     int
-	EditionsDeleted  int
+	RecycledPaths   []Entry
+	UnitsReverted   int
+	WorksDeleted    int
+	EditionsDeleted int
 	// SkippedSharedObjects are media_object ids revert left untouched: bytes
 	// this unit shares with a path from outside this session (ADR-11's
 	// quick-hash dedupe), recorded before migration 0029 gave revert a way to
 	// tell its own path apart from the other one -- refusing to guess rather
-	// than risk quarantining and deleting a library entry the session never
+	// than risk recycling and deleting a library entry the session never
 	// created (Invariant 92).
 	SkippedSharedObjects []int64
 }
 
 // ImportRevert is ADR-48's own "revert this session": move every file the
-// session placed back through quarantine (section 10.8) and remove exactly
+// session placed back through the recycle bin (section 10.8) and remove exactly
 // the rows the session created, never a row it only matched (ADR-48's own
 // wording) -- import_unit.work_created/edition_created say which is which,
 // RecordPlacement's own doc comment explains why they exist. Composes
-// ImportSessions, Physical and Quarantine the same way RemoveAndBlock
+// ImportSessions, Physical and RecycleBin the same way RemoveAndBlock
 // composes its own four stores; not a new kind of orchestration, the same
 // one, aimed at an import session instead of one file.
 type ImportRevert struct {
 	sessions   ImportSessions
 	physical   Physical
 	identity   Identity
-	quarantine Quarantine
+	recycleBin RecycleBin
 	rootPath   RootFolderPath
 }
 
 // NewImportRevert builds it over the stores it composes.
 func NewImportRevert(
-	sessions ImportSessions, physical Physical, identity Identity, quarantine Quarantine, rootPath RootFolderPath,
+	sessions ImportSessions, physical Physical, identity Identity, recycleBin RecycleBin, rootPath RootFolderPath,
 ) ImportRevert {
 	return ImportRevert{
-		sessions: sessions, physical: physical, identity: identity, quarantine: quarantine, rootPath: rootPath,
+		sessions: sessions, physical: physical, identity: identity, recycleBin: recycleBin, rootPath: rootPath,
 	}
 }
 
@@ -72,7 +72,7 @@ func NewImportRevert(
 // a unit this needs to act on.
 //
 // Two passes over the session's own units, deliberately not one: the first
-// quarantines every file and clears every unit's own work_id/edition_id
+// recycles every file and clears every unit's own work_id/edition_id
 // (ClearImportUnitPlacement), the second deletes the work/edition rows
 // themselves. A work two units in the same session both resolved to (one
 // created it, the second only matched it) would foreign-key-violate if the
@@ -111,12 +111,12 @@ func (r ImportRevert) Revert(ctx context.Context, sessionID int64, recycling Rec
 		placed = append(placed, unit)
 
 		for _, file := range unitFiles[unit.ID] {
-			if err := r.quarantineObject(ctx, file, recycling, &result); err != nil {
+			if err := r.recycleObject(ctx, file, recycling, &result); err != nil {
 				return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
 			}
 		}
 		for _, extra := range unitExtras[unit.ID] {
-			if err := r.quarantineExtra(ctx, extra, recycling, &result); err != nil {
+			if err := r.recycleExtra(ctx, extra, recycling, &result); err != nil {
 				return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
 			}
 		}
@@ -150,19 +150,19 @@ func (r ImportRevert) Revert(ctx context.Context, sessionID int64, recycling Rec
 	return result, nil
 }
 
-// quarantineObject quarantines exactly the one library_path row this unit's own
+// recycleObject recycles exactly the one library_path row this unit's own
 // placement created for file.MediaObjectID, then deletes the media_object outright
 // only if that was its last remaining path.
 //
 // ADR-11's quick-hash dedupe means RegisterBatch can point this unit's placement at
 // bytes an unrelated, untouched commit already owns (a duplicate track shipped in two
-// releases, say). The naive shape this replaced -- quarantine every PathsForObject row
+// releases, say). The naive shape this replaced -- recycle every PathsForObject row
 // and delete the object -- destroyed that untouched library entry too whenever it
 // happened. file.LibraryPathID (migration 0029) is what lets this pick out only the
 // session's own row; when it is nil (data from before that migration) or PathsForObject
 // no longer contains it, this refuses to guess among more than one candidate rather
 // than repeat the bug (Invariant 92), and records the skip instead.
-func (r ImportRevert) quarantineObject(ctx context.Context, file UnitFile, recycling Recycling, result *RevertResult) error {
+func (r ImportRevert) recycleObject(ctx context.Context, file UnitFile, recycling Recycling, result *RevertResult) error {
 	paths, err := r.physical.PathsForObject(ctx, file.MediaObjectID)
 	if err != nil {
 		return fmt.Errorf("paths for object %d: %w", file.MediaObjectID, err)
@@ -179,20 +179,20 @@ func (r ImportRevert) quarantineObject(ctx context.Context, file UnitFile, recyc
 		return fmt.Errorf("no known path for root folder %d", target.RootFolderID)
 	}
 	rootFolderID, mediaObjectID := target.RootFolderID, file.MediaObjectID
-	entry, err := r.quarantine.Put(ctx, PutRequest{
+	entry, err := r.recycleBin.Put(ctx, PutRequest{
 		RootPath: rootPath, OriginalPath: path.Join(rootPath, target.RelPath),
 		RootFolderID: &rootFolderID, MediaObjectID: &mediaObjectID,
 		Reason: ReasonFailedImport, Retain: recycling.Retain, RemoveEmptyFolders: recycling.RemoveEmptyFolders,
 	})
 	if err != nil {
 		if !errors.Is(err, ErrCrossDevice) {
-			return fmt.Errorf("quarantine %q: %w", target.RelPath, err)
+			return fmt.Errorf("recycle bin %q: %w", target.RelPath, err)
 		}
-		// Already gone (deleted directly, Quarantine's own doc comment) -- nothing to
+		// Already gone (deleted directly, Recycle bin's own doc comment) -- nothing to
 		// restore for this copy, but the row (and, below, maybe the object) is still
 		// cleaned up.
 	} else {
-		result.QuarantinedPaths = append(result.QuarantinedPaths, entry)
+		result.RecycledPaths = append(result.RecycledPaths, entry)
 	}
 
 	if len(paths) == 1 {
@@ -201,23 +201,23 @@ func (r ImportRevert) quarantineObject(ctx context.Context, file UnitFile, recyc
 	return r.physical.DeleteLibraryPathRow(ctx, target.ID)
 }
 
-// quarantineExtra moves one extra file the unit placed into quarantine; one already gone is skipped.
-func (r ImportRevert) quarantineExtra(ctx context.Context, extra UnitExtra, recycling Recycling, result *RevertResult) error {
+// recycleExtra moves one extra file the unit placed into the recycle bin; one already gone is skipped.
+func (r ImportRevert) recycleExtra(ctx context.Context, extra UnitExtra, recycling Recycling, result *RevertResult) error {
 	rootPath, ok := r.rootPath(extra.RootFolderID)
 	if !ok {
 		return fmt.Errorf("no known path for root folder %d", extra.RootFolderID)
 	}
 	rootFolderID := extra.RootFolderID
-	entry, err := r.quarantine.Put(ctx, PutRequest{
+	entry, err := r.recycleBin.Put(ctx, PutRequest{
 		RootPath: rootPath, OriginalPath: path.Join(rootPath, extra.RelPath), RootFolderID: &rootFolderID,
 		Reason: ReasonFailedImport, Retain: recycling.Retain, RemoveEmptyFolders: recycling.RemoveEmptyFolders,
 	})
 	switch {
 	case err == nil:
-		result.QuarantinedPaths = append(result.QuarantinedPaths, entry)
+		result.RecycledPaths = append(result.RecycledPaths, entry)
 	case errors.Is(err, ErrCrossDevice), errors.Is(err, fs.ErrNotExist):
 	default:
-		return fmt.Errorf("quarantine extra %q: %w", extra.RelPath, err)
+		return fmt.Errorf("recycle bin extra %q: %w", extra.RelPath, err)
 	}
 	return nil
 }

@@ -143,36 +143,36 @@ func TestExpiredBlocklistEntriesStopMatching(t *testing.T) {
 	}
 }
 
-// ADR-12: quarantined bytes are not free space. Counting them as free lets
-// quarantine cause the disk-full condition it exists to prevent.
-func TestQuarantinedBytesAreCountedPerRoot(t *testing.T) {
+// ADR-12: recycled bytes are not free space. Counting them as free lets
+// recycle bin cause the disk-full condition it exists to prevent.
+func TestRecycledBytesAreCountedPerRoot(t *testing.T) {
 	opened, queries := newLibrary(t)
 
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		for index, size := range []int64{1_000, 2_000} {
-			if _, err := q.Quarantine(ctx, librarydb.QuarantineParams{
-				OriginalPath:   fmt.Sprintf("/media/a%d.mkv", index),
-				QuarantinePath: fmt.Sprintf("/media/.quarantine/a%d.mkv", index),
-				RootFolderID:   sql.NullInt64{Int64: 1, Valid: true},
-				Reason:         "rejected_worse", SizeBytes: size,
-				QuarantinedAt: 1, ExpiresAt: 1_000,
+			if _, err := q.RecycleBin(ctx, librarydb.RecycleBinParams{
+				OriginalPath: fmt.Sprintf("/media/a%d.mkv", index),
+				RecycledPath: fmt.Sprintf("/media/.recycle-bin/a%d.mkv", index),
+				RootFolderID: sql.NullInt64{Int64: 1, Valid: true},
+				Reason:       "rejected_worse", SizeBytes: size,
+				RecycledAt: 1, ExpiresAt: 1_000,
 			}); err != nil {
 				return err
 			}
 		}
 		// Another root's holdings must not be counted here.
-		_, err := q.Quarantine(ctx, librarydb.QuarantineParams{
-			OriginalPath: "/other/b.mkv", QuarantinePath: "/other/.quarantine/b.mkv",
+		_, err := q.RecycleBin(ctx, librarydb.RecycleBinParams{
+			OriginalPath: "/other/b.mkv", RecycledPath: "/other/.recycle-bin/b.mkv",
 			RootFolderID: sql.NullInt64{Int64: 2, Valid: true},
-			Reason:       "junk", SizeBytes: 9_000, QuarantinedAt: 1, ExpiresAt: 1_000,
+			Reason:       "junk", SizeBytes: 9_000, RecycledAt: 1, ExpiresAt: 1_000,
 		})
 		return err
 	})
 
-	held, err := queries.QuarantinedBytesForRoot(t.Context(),
+	held, err := queries.RecycledBytesForRoot(t.Context(),
 		sql.NullInt64{Int64: 1, Valid: true})
 	if err != nil {
-		t.Fatalf("QuarantinedBytesForRoot: %v", err)
+		t.Fatalf("RecycledBytesForRoot: %v", err)
 	}
 	if held != 3_000 {
 		t.Errorf("held %d bytes for the root, want 3000", held)
@@ -183,27 +183,27 @@ func TestQuarantinedBytesAreCountedPerRoot(t *testing.T) {
 func TestRestoringReleasesTheHeldBytes(t *testing.T) {
 	opened, queries := newLibrary(t)
 
-	var entry librarydb.Quarantine
+	var entry librarydb.RecycleBin
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
-		row, err := q.Quarantine(ctx, librarydb.QuarantineParams{
-			OriginalPath: "/media/a.mkv", QuarantinePath: "/media/.quarantine/a.mkv",
+		row, err := q.RecycleBin(ctx, librarydb.RecycleBinParams{
+			OriginalPath: "/media/a.mkv", RecycledPath: "/media/.recycle-bin/a.mkv",
 			RootFolderID: sql.NullInt64{Int64: 1, Valid: true},
-			Reason:       "user_delete", SizeBytes: 5_000, QuarantinedAt: 1, ExpiresAt: 100,
+			Reason:       "user_delete", SizeBytes: 5_000, RecycledAt: 1, ExpiresAt: 100,
 		})
 		entry = row
 		return err
 	})
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
-		_, err := q.MarkQuarantineRestored(ctx, librarydb.MarkQuarantineRestoredParams{
+		_, err := q.MarkRecycleBinRestored(ctx, librarydb.MarkRecycleBinRestoredParams{
 			ID: entry.ID, RestoredAt: sql.NullInt64{Int64: 50, Valid: true},
 		})
 		return err
 	})
 
-	held, err := queries.QuarantinedBytesForRoot(t.Context(),
+	held, err := queries.RecycledBytesForRoot(t.Context(),
 		sql.NullInt64{Int64: 1, Valid: true})
 	if err != nil {
-		t.Fatalf("QuarantinedBytesForRoot: %v", err)
+		t.Fatalf("RecycledBytesForRoot: %v", err)
 	}
 	if held != 0 {
 		t.Errorf("a restored file still holds %d bytes", held)

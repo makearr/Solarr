@@ -116,7 +116,7 @@ func (m *Mem) SetHardlinkSupported(supported bool) {
 
 // SetRenameSupported switches Rename's own cross-device behaviour off, standing
 // in for the same "two different filesystems" case Link already simulates --
-// section 10.8's quarantine refuses to cross one rather than silently copying.
+// section 10.8's recycle bin refuses to cross one rather than silently copying.
 func (m *Mem) SetRenameSupported(supported bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

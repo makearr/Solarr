@@ -390,7 +390,7 @@ func TestRevertImportSession_RequiresAdministrator(t *testing.T) {
 func TestRevertImportSession_LeavesRetainToTheLibraryWhenAbsent(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.importSessions.revertResult = apiserver.ImportRevertResult{
-		UnitsReverted: 2, WorksDeleted: 1, EditionsDeleted: 1, QuarantinedPaths: []string{"/q/1", "/q/2"},
+		UnitsReverted: 2, WorksDeleted: 1, EditionsDeleted: 1, RecycledPaths: []string{"/q/1", "/q/2"},
 	}
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
@@ -409,7 +409,7 @@ func TestRevertImportSession_LeavesRetainToTheLibraryWhenAbsent(t *testing.T) {
 	if err := json.NewDecoder(recorder.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	paths, _ := body["quarantined_paths"].([]any)
+	paths, _ := body["recycled_paths"].([]any)
 	if body["units_reverted"] != float64(2) || body["works_deleted"] != float64(1) || len(paths) != 2 {
 		t.Errorf("response = %+v, want the fake's revertResult echoed back", body)
 	}
@@ -420,7 +420,7 @@ func TestRevertImportSession_HonoursAnExplicitRetain(t *testing.T) {
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
 
-	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/42/revert", `{"quarantine_retain_hours":24}`))
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/42/revert", `{"recycle_retain_hours":24}`))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
 	}

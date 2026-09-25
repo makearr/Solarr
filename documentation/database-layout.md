@@ -41,7 +41,7 @@ Everything else is `library.db`. Applying that test:
 **`library.db`** — identity (`work`, `work_part`, `edition`, titles, external ids), files (`media_object`,
 `library_path`, `media_attributes`), desired state (`desired_item`, `desired_item_file`,
 `hunt_queue`, `counter`), acquisition (`candidate`, `acquisition`, `blocklisted_release`,
-`quarantine`), people and organisations (`person`, `credit`, `organisation`), tags,
+`recycleBin`), people and organisations (`person`, `credit`, `organisation`), tags,
 subscriptions, collections, `artwork`, `stat_rollup` and learned reputation.
 
 People, credits, tags, collections, counters and reputation are **library data, not settings**.
@@ -75,7 +75,7 @@ application instead.
 
 The columns that do this: `work.added_by`, `library_path.root_folder_id`,
 `desired_item.category_id`, `desired_item.profile_id`, `desired_item.added_by`,
-`candidate.indexer_id`, `quarantine.root_folder_id`, `subscription.category_id`,
+`candidate.indexer_id`, `recycleBin.root_folder_id`, `subscription.category_id`,
 `subscription.profile_id`, `subscription.user_id`.
 
 Deleting a referenced row is **refused, not cascaded** (Invariant 41). The references are
@@ -131,7 +131,7 @@ Both are scheduler tasks (Settings -> Scheduler, Maintenance), since 2026-09-24:
 | Database maintenance | Sundays 04:00 | Per database in turn: `integrity_check`, `optimize`, `VACUUM`, `wal_checkpoint(TRUNCATE)` |
 | Backup | daily 01:00 | A rotation backup of `library.db` and `jobs.db` |
 | Clean old backups | daily 01:30 | Keeps the newest N (default 7) or the last N days; never fewer than 3 |
-| Clean recycling bin | daily 02:30 | Purges quarantine entries past their library's retention ([file-management.md](file-management.md)) |
+| Clean recycling bin | daily 02:30 | Purges recycle bin entries past their library's retention ([file-management.md](file-management.md)) |
 
 **Maintenance holds the writer exclusively** (`store.Maintain`), so every write to that database
 waits until it finishes; the others keep working. A failed integrity check stops that database's

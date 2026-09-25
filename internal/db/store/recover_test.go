@@ -258,7 +258,7 @@ func TestOpenChecked_RefusesToStartWhenNoBackupIsUsable(t *testing.T) {
 	only := fixture.backup(t)
 	corrupt(t, only)
 	// Not a database at all, which is what a truncated or zeroed file looks like:
-	// SQLite never gets far enough to touch the log, so quarantine has one to move.
+	// SQLite never gets far enough to touch the log, so recycle bin has one to move.
 	if err := os.WriteFile(fixture.path, []byte("this is not a database"), 0o600); err != nil {
 		t.Fatalf("replace the database with garbage: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestOpenChecked_WithoutABackupDirectoryLeavesTheDamagedFileInPlace(t *testi
 		t.Fatalf("err = %v, want ErrUnrecoverable", err)
 	}
 	if report.CorruptPath != "" {
-		t.Errorf("quarantined to %q with no backup to put in its place", report.CorruptPath)
+		t.Errorf("recycled to %q with no backup to put in its place", report.CorruptPath)
 	}
 	if _, statErr := os.Stat(fixture.path); statErr != nil {
 		t.Errorf("database moved despite nothing replacing it: %v", statErr)

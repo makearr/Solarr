@@ -99,7 +99,7 @@ convention. Write `section 5.5`, not `§5.5`, in SQL.
   `COUNT(*)` is the exception and is inferred as `int64` on its own.
 
   ```sql
-  SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM quarantine
+  SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM recycleBin
   ```
 
 - **A recursive CTE must not name its column `id`**, or sqlc reports

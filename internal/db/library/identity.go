@@ -378,7 +378,7 @@ type RemoveWorkResult struct {
 // RemoveWork drops the intent to have an album -- every desired_item for the
 // work -- and deletes the work itself only when the library holds no files
 // for it. Files are never touched either way: removing an album is about no
-// longer wanting it, and deleting bytes goes through quarantine (section
+// longer wanting it, and deleting bytes goes through the recycle bin (section
 // 10.8), never through here.
 // WorkFiles answers every media object the work has on disk, for a caller
 // deleting an album's files along with it (2026-09-19).

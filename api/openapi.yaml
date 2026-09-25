@@ -3271,9 +3271,9 @@ paths:
       tags: [library]
       summary: Reverse a block. Administrator only.
       description: >-
-        Removes the block only -- it does not restore a quarantined file or
+        Removes the block only -- it does not restore a recycled file or
         undo a blocklist entry; those are their own separate reversals
-        (`POST /quarantine/{id}/restore`, not yet built, and
+        (`POST /recycleBin/{id}/restore`, not yet built, and
         `DELETE` on the blocklist, not yet exposed either).
       responses:
         "204": { description: Removed. }
@@ -3293,7 +3293,7 @@ paths:
         "This is fake, get rid of it and make sure it never comes back"
         (architecture.md section 10.8/ADR-53 section 3). Administrator only.
       description: >-
-        Four steps, each independently requestable: quarantine every copy of
+        Four steps, each independently requestable: recycle every copy of
         the file's bytes (never a direct delete, restorable), block its
         hashes, blocklist the source release so it is not re-grabbed, and
         detach the file from every desired item it satisfied so that item
@@ -3551,7 +3551,7 @@ paths:
       tags: [library]
       summary: Undo every file this session placed. Administrator only.
       description: >-
-        Every placed unit's own files move back through quarantine (section
+        Every placed unit's own files move back through the recycle bin (section
         10.8) and the rows this session created (never one it only matched
         against an existing work -- ADR-48) are removed: work_id/edition_id
         go back to null on the unit, and a work or edition CommitUnit itself
@@ -4461,7 +4461,7 @@ paths:
         the library holds no files for it -- with files on disk the next scan
         would recreate it, so deleting the row would be a lie. Files are kept
         unless delete_files says otherwise, and even then they go to
-        quarantine (section 10.8): nothing is ever deleted outright, so a
+        recycle bin (section 10.8): nothing is ever deleted outright, so a
         mistaken delete stays recoverable for the retention window.
       parameters:
         - name: id
@@ -4478,7 +4478,7 @@ paths:
                 delete_files:
                   type: boolean
                   default: false
-                  description: Also move every file of this album into quarantine.
+                  description: Also move every file of this album into the recycle bin.
       responses:
         "200":
           description: What was removed.
@@ -4506,7 +4506,7 @@ paths:
       description: >-
         Unmonitors the track, shrinking the album's required_count, and stops
         wanting it on its own if it was. The file is kept unless delete_files
-        says otherwise, and even then it goes to quarantine (section 10.8).
+        says otherwise, and even then it goes to the recycle bin (section 10.8).
       requestBody:
         required: false
         content:
@@ -4517,7 +4517,7 @@ paths:
                 delete_files:
                   type: boolean
                   default: false
-                  description: Also move this track's file into quarantine.
+                  description: Also move this track's file into the recycle bin.
       responses:
         "200":
           description: What was removed.
@@ -5873,7 +5873,7 @@ components:
           type: integer
           format: int64
           description: How many files the library still holds for this work.
-        files_quarantined:
+        files_recycled:
           type: integer
           format: int64
           description: How many files delete_files moved out of the library.
@@ -5881,9 +5881,9 @@ components:
     RemovePartResult:
       type: object
       description: What removing a track actually did.
-      required: [files_quarantined]
+      required: [files_recycled]
       properties:
-        files_quarantined:
+        files_recycled:
           type: integer
           format: int64
           description: How many files delete_files moved out of the library; 0 or 1.
@@ -6791,15 +6791,15 @@ components:
         10.8's own text) -- requesting none of the four is accepted and
         does nothing.
       properties:
-        quarantine: { type: boolean, default: false }
-        quarantine_reason:
+        recycle_bin: { type: boolean, default: false }
+        recycle_reason:
           type: string
           enum: [rejected_worse, replaced, junk, user_delete, failed_import]
           default: user_delete
-        quarantine_retain_hours:
+        recycle_retain_hours:
           type: integer
           default: 168
-          description: How long the quarantined copy survives before Sweep purges it.
+          description: How long the recycled copy survives before Sweep purges it.
         block: { type: boolean, default: false }
         oshash: { type: string }
         quick_hash: { type: string }
@@ -6821,18 +6821,18 @@ components:
     RemoveAndBlockResult:
       type: object
       description: What the action actually did -- each field only set when its own step ran.
-      required: [quarantined_paths, cross_device_deletes, reopened_items]
+      required: [recycled_paths, cross_device_deletes, reopened_items]
       properties:
-        quarantined_paths:
+        recycled_paths:
           type: array
           items: { type: string }
-          description: The quarantine path each copy landed at, one per copy actually moved.
+          description: The recycle bin path each copy landed at, one per copy actually moved.
         cross_device_deletes:
           type: integer
           description: >-
             Copies that turned out to be on a different filesystem than
-            their own quarantine directory -- deleted directly instead of
-            quarantined (section 10.8), unrestorable.
+            their own recycle bin directory -- deleted directly instead of
+            recycled (section 10.8), unrestorable.
         block_id:
           type: integer
           format: int64
@@ -6915,7 +6915,7 @@ components:
       type: object
       description: >-
         Sonarr's File Management and Permissions for one library. The recycling
-        bin is Solarr's quarantine: nothing is deleted directly, so only how long
+        bin is Solarr's recycle bin: nothing is deleted directly, so only how long
         it keeps what this library removes is set here.
       required: [propers_repacks, rescan_after_refresh, change_file_date, recycle_retention_days,
                  delete_empty_folders, create_empty_artist_folders, unmonitor_deleted,
@@ -7049,7 +7049,7 @@ components:
     ImportRevertRequest:
       type: object
       properties:
-        quarantine_retain_hours:
+        recycle_retain_hours:
           type: integer
           description: >-
             Defaults to the session's library's recycling bin retention (its File
@@ -7070,7 +7070,7 @@ components:
 
     ImportRevertResult:
       type: object
-      required: [units_reverted, works_deleted, editions_deleted, quarantined_paths]
+      required: [units_reverted, works_deleted, editions_deleted, recycled_paths]
       properties:
         units_reverted: { type: integer, format: int64 }
         works_deleted:
@@ -7078,7 +7078,7 @@ components:
           format: int64
           description: Only a work this session's own CommitUnit created, never one it matched.
         editions_deleted: { type: integer, format: int64 }
-        quarantined_paths:
+        recycled_paths:
           type: array
           items: { type: string }
 

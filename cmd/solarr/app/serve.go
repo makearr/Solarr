@@ -583,7 +583,7 @@ func (p *process) startServer(ctx context.Context) error {
 			Sessions: library.NewImportSessions(p.library),
 			Revert: library.NewImportRevert(
 				library.NewImportSessions(p.library), library.NewPhysical(p.library), library.NewIdentity(p.library),
-				library.NewQuarantine(p.library, p.fsys, clock.NewSystem()), adapters.RootFolderPath(p.cache),
+				library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()), adapters.RootFolderPath(p.cache),
 			),
 			Manual: p.manualCommitter(), Libraries: adapters.Categories{Cache: p.cache},
 			Clock: clock.NewSystem(),
@@ -745,7 +745,7 @@ func (p *process) worksMonitor() adapters.WorksMonitor {
 func (p *process) fileRemover() adapters.RemoveAndBlock {
 	return adapters.RemoveAndBlock{
 		Action: library.NewRemoveAndBlock(
-			library.NewQuarantine(p.library, p.fsys, clock.NewSystem()),
+			library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()),
 			library.NewBlockedContentStore(p.library), library.NewBlocklistStore(p.library),
 			library.NewDesired(p.library), library.NewPhysical(p.library),
 			adapters.RootFolderPath(p.cache),

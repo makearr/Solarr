@@ -9,9 +9,9 @@ import (
 )
 
 // RootFolderPath answers a root folder's own absolute filesystem path, for
-// resolving library_path.rel_path into a real path to quarantine. This
+// resolving library_path.rel_path into a real path to the recycle bin. This
 // package never reaches into settings.db itself (ADR-25's own database
-// split), so a caller supplies the lookup -- the same shape Quarantine's own
+// split), so a caller supplies the lookup -- the same shape Recycle bin's own
 // Sweep already asks a caller for root capacity.
 type RootFolderPath func(rootFolderID int64) (path string, ok bool)
 
@@ -22,16 +22,16 @@ type RootFolderPath func(rootFolderID int64) (path string, ok bool)
 type RemoveAndBlockRequest struct {
 	MediaObjectID int64
 
-	// Quarantine is step 1. Every copy of these bytes (every library_path
+	// Recycle bin is step 1. Every copy of these bytes (every library_path
 	// row for MediaObjectID, across every root -- ADR-11 cross-entry
-	// hardlinking means there can be more than one) is quarantined together,
+	// hardlinking means there can be more than one) is recycled together,
 	// then the media_object itself is removed: "remove and block" removes
 	// the fake everywhere it exists, not just the one path a caller happened
 	// to be looking at.
-	Quarantine       bool
-	QuarantineReason Reason
-	QuarantineRetain time.Duration
-	// RemoveEmptyFolders is the library's "Delete empty folders" for what quarantine leaves behind.
+	RecycleBin    bool
+	RecycleReason Reason
+	RecycleRetain time.Duration
+	// RemoveEmptyFolders is the library's "Delete empty folders" for what recycle bin leaves behind.
 	RemoveEmptyFolders bool
 
 	// Block is step 2: block the file's own hashes so the bytes never enter
@@ -67,19 +67,19 @@ type RemoveAndBlockRequest struct {
 // its own step ran, so a caller can report exactly what was done rather than
 // assuming every requested step succeeded identically.
 type RemoveAndBlockResult struct {
-	QuarantinedPaths   []Entry
+	RecycledPaths      []Entry
 	CrossDeviceDeletes int
 	Block              *BlockedContent
 	Blocklisted        *BlocklistEntry
 	ReopenedItems      []int64
 }
 
-// RemoveAndBlock composes quarantine, blocked_content, blocklisted_release
+// RemoveAndBlock composes recycle bin, blocked_content, blocklisted_release
 // and desired_item into the one action architecture.md section 10.8/ADR-53
 // describes -- each of its own pieces already exists and is independently
 // tested; this is the orchestration, not new storage.
 type RemoveAndBlock struct {
-	quarantine Quarantine
+	recycleBin RecycleBin
 	blocks     BlockedContentStore
 	blocklist  BlocklistStore
 	desired    Desired
@@ -89,21 +89,21 @@ type RemoveAndBlock struct {
 
 // NewRemoveAndBlock builds it over the four stores it composes.
 func NewRemoveAndBlock(
-	quarantine Quarantine, blocks BlockedContentStore, blocklist BlocklistStore,
+	recycleBin RecycleBin, blocks BlockedContentStore, blocklist BlocklistStore,
 	desired Desired, physical Physical, rootPath RootFolderPath,
 ) RemoveAndBlock {
 	return RemoveAndBlock{
-		quarantine: quarantine, blocks: blocks, blocklist: blocklist,
+		recycleBin: recycleBin, blocks: blocks, blocklist: blocklist,
 		desired: desired, physical: physical, rootPath: rootPath,
 	}
 }
 
 // Do runs every requested step. Membership (which desired_item this file
-// satisfies) is read before anything is deleted, since Quarantine's own
+// satisfies) is read before anything is deleted, since Recycle bin's own
 // media_object cleanup would otherwise cascade it away first -- Reopen then
 // explicitly detaches each one regardless, which is a harmless no-op for
 // whatever the cascade already removed and the only path for whatever it
-// did not (Quarantine not requested, or a cross-device delete leaving the
+// did not (Recycle bin not requested, or a cross-device delete leaving the
 // object in place).
 func (r RemoveAndBlock) Do(ctx context.Context, req RemoveAndBlockRequest) (RemoveAndBlockResult, error) {
 	var result RemoveAndBlockResult
@@ -117,15 +117,15 @@ func (r RemoveAndBlock) Do(ctx context.Context, req RemoveAndBlockRequest) (Remo
 		}
 	}
 
-	if req.Quarantine {
-		if err := r.doQuarantine(ctx, req, &result); err != nil {
+	if req.RecycleBin {
+		if err := r.doRecycle(ctx, req, &result); err != nil {
 			return result, err
 		}
 	}
 
 	if req.Block {
 		block, err := r.blocks.Create(ctx, NewBlock{
-			OSHash: req.OSHash, QuickHash: req.QuickHash, SizeBytes: totalBytes(result.QuarantinedPaths),
+			OSHash: req.OSHash, QuickHash: req.QuickHash, SizeBytes: totalBytes(result.RecycledPaths),
 			Reason: req.BlockReason, Note: req.BlockNote, Title: req.BlockTitle,
 			ReleaseGroup: req.ReleaseGroup, Source: req.BlockSource, UserID: req.BlockUserID,
 			CreatedAt: req.At,
@@ -157,7 +157,7 @@ func (r RemoveAndBlock) Do(ctx context.Context, req RemoveAndBlockRequest) (Remo
 	return result, nil
 }
 
-func (r RemoveAndBlock) doQuarantine(ctx context.Context, req RemoveAndBlockRequest, result *RemoveAndBlockResult) error {
+func (r RemoveAndBlock) doRecycle(ctx context.Context, req RemoveAndBlockRequest, result *RemoveAndBlockResult) error {
 	paths, err := r.physical.PathsForObject(ctx, req.MediaObjectID)
 	if err != nil {
 		return fmt.Errorf("library: remove and block: %w", err)
@@ -170,22 +170,22 @@ func (r RemoveAndBlock) doQuarantine(ctx context.Context, req RemoveAndBlockRequ
 			return fmt.Errorf("library: remove and block: no known path for root folder %d", p.RootFolderID)
 		}
 		rootFolderID := p.RootFolderID
-		entry, err := r.quarantine.Put(ctx, PutRequest{
+		entry, err := r.recycleBin.Put(ctx, PutRequest{
 			RootPath: rootPath, OriginalPath: path.Join(rootPath, p.RelPath),
 			RootFolderID: &rootFolderID, MediaObjectID: &objectID,
-			Reason: req.QuarantineReason, Retain: req.QuarantineRetain, RemoveEmptyFolders: req.RemoveEmptyFolders,
+			Reason: req.RecycleReason, Retain: req.RecycleRetain, RemoveEmptyFolders: req.RemoveEmptyFolders,
 		})
 		if err != nil {
 			if errors.Is(err, ErrCrossDevice) {
-				// The file is already gone (deleted directly, per Quarantine's
+				// The file is already gone (deleted directly, per Recycle bin's
 				// own doc comment) -- there is nothing to restore for this copy,
 				// but the other copies and the rest of this action still proceed.
 				result.CrossDeviceDeletes++
 				continue
 			}
-			return fmt.Errorf("library: remove and block: quarantine %q: %w", p.RelPath, err)
+			return fmt.Errorf("library: remove and block: recycle bin %q: %w", p.RelPath, err)
 		}
-		result.QuarantinedPaths = append(result.QuarantinedPaths, entry)
+		result.RecycledPaths = append(result.RecycledPaths, entry)
 	}
 
 	if err := r.physical.DeleteObject(ctx, req.MediaObjectID); err != nil {

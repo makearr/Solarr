@@ -238,8 +238,8 @@ export function WorkDetail() {
                 if (
                   window.confirm(
                     `Delete ${work.title} and its files?\n\n` +
-                      "The files go to quarantine rather than being deleted outright, so this " +
-                      "can be undone for as long as quarantine keeps them.",
+                      "The files go to the recycle bin rather than being deleted outright, so this " +
+                      "can be undone for as long as the recycle bin keeps them.",
                   )
                 ) {
                   remove.mutate(true);
@@ -666,7 +666,7 @@ function PartRow({
             />
             Also delete the file on disk
             <span className="text-ink-muted">
-              {file ? "(it goes to quarantine and can be restored)" : "(there is none)"}
+              {file ? "(it goes to the recycle bin and can be restored)" : "(there is none)"}
             </span>
           </label>
           <span className="ml-auto flex gap-2">

@@ -98,13 +98,13 @@ func (a ImportSessions) RevertImportSession(ctx context.Context, id int64, retai
 	if err != nil {
 		return apiserver.ImportRevertResult{}, err
 	}
-	paths := make([]string, len(result.QuarantinedPaths))
-	for i, entry := range result.QuarantinedPaths {
-		paths[i] = entry.QuarantinePath
+	paths := make([]string, len(result.RecycledPaths))
+	for i, entry := range result.RecycledPaths {
+		paths[i] = entry.RecycledPath
 	}
 	return apiserver.ImportRevertResult{
 		UnitsReverted: int64(result.UnitsReverted), WorksDeleted: int64(result.WorksDeleted),
-		EditionsDeleted: int64(result.EditionsDeleted), QuarantinedPaths: paths,
+		EditionsDeleted: int64(result.EditionsDeleted), RecycledPaths: paths,
 	}, nil
 }
 

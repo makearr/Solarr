@@ -136,7 +136,7 @@ export function LibraryFileManagement() {
             className={`${inputStyle} w-20`}
           />
           <span className="text-xs text-ink-muted">
-            days. Deleted files go to each root folder&apos;s quarantine, never straight to deletion, and are
+            days. Deleted files go to each root folder&apos;s recycle bin, never straight to deletion, and are
             removed after this.
           </span>
         </label>
