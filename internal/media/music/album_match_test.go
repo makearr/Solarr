@@ -326,3 +326,25 @@ func TestDecideAlbum_OneAlbumCataloguedTwiceIsIdentified(t *testing.T) {
 		t.Errorf("decision = %s %q, want identified rg-a, the earlier", decision.Outcome, bestReleaseGroup(decision))
 	}
 }
+
+// A two-disc set tagged disc 3 throughout scores as if untagged: two files claiming the same disc
+// and track prove the disc claims wrong, so they abstain (NETA' "Kick", the main library).
+func TestDecideAlbum_DiscClaimsThatCollideAbstain(t *testing.T) {
+	release := releaseOf("rel-set", "Kebilegev Bibihi", "official", "2017-10-13", nil)
+	for disc, tracks := range [][]trackSpec{traumaTracks[:3], traumaTracks[3:]} {
+		medium := releaseOf("", "", "", "", tracks).Media[0]
+		medium.Position = disc + 1
+		release.Media = append(release.Media, medium)
+	}
+	candidates := []music.AlbumCandidate{candidateOf("rg-set", "Album", nil, release)}
+	untagged, wrong := folderOf(traumaTracks), folderOf(traumaTracks)
+	for i := range traumaTracks {
+		untagged[i].Track, wrong[i].Track = i%3+1, i%3+1
+		wrong[i].Disc = 3
+	}
+
+	want := music.DecideAlbum(untagged, candidates).Scores[0].Distance
+	if got := music.DecideAlbum(wrong, candidates).Scores[0].Distance; got != want {
+		t.Errorf("distance = %.3f, want %.3f as with no disc tags", got, want)
+	}
+}

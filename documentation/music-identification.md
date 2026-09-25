@@ -45,7 +45,9 @@ The method is Lidarr's distance as DroppedNeedle adapted it. A distance is the w
 penalties in [0,1].
 
 Per file against per track: title (weight 3, normalised Levenshtein), length (2; free within
-10 s, full at 40 s), position (1; absolute or per-disc), recording MBID (10). Files and tracks
+10 s, full at 40 s), position (1; absolute or per-disc), recording MBID (10). When two files
+claim the same disc and track, every disc claim in the folder abstains: a three-disc set tagged
+disc 3 throughout is otherwise scored as if two of its discs were misplaced. Files and tracks
 are paired by optimal assignment (`match.Assign`), unpaired at cost 2.
 
 Per release: artist (3), album title (3), year (1, over ten years), each pair's distance (2),

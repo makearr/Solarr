@@ -443,6 +443,7 @@ func DecideAlbum(locals []LocalTrack, candidates []AlbumCandidate) AlbumDecision
 	if len(candidates) == 0 || len(locals) == 0 {
 		return AlbumDecision{Outcome: AlbumNoCandidate}
 	}
+	locals = withoutCollidingDiscs(locals)
 	scores := make([]ReleaseScore, len(candidates))
 	for i, candidate := range candidates {
 		scores[i] = scoreRelease(locals, candidate)
@@ -472,6 +473,28 @@ func DecideAlbum(locals []LocalTrack, candidates []AlbumCandidate) AlbumDecision
 	decision.Outcome = AlbumIdentified
 	decision.Best = &decision.Scores[0]
 	return decision
+}
+
+// withoutCollidingDiscs drops every disc claim once two files claim the same disc and track: a
+// three-disc set tagged disc 3 throughout lost its first two discs' positions (NETA, the main library).
+func withoutCollidingDiscs(locals []LocalTrack) []LocalTrack {
+	claimed := make(map[[2]int]bool, len(locals))
+	for _, local := range locals {
+		if local.Disc == 0 || local.Track == 0 {
+			continue
+		}
+		key := [2]int{local.Disc, local.Track}
+		if !claimed[key] {
+			claimed[key] = true
+			continue
+		}
+		cleared := slices.Clone(locals)
+		for i := range cleared {
+			cleared[i].Disc = 0
+		}
+		return cleared
+	}
+	return locals
 }
 
 // onlyCompleteFit is the best release filled exactly by the folder while no rival group inside the
