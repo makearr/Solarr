@@ -15,6 +15,8 @@ import (
 type TrackFilter struct {
 	RootFolderIDs []int64
 	CategoryIDs   []int64
+	// Descending orders the albums Z to A; tracks stay in their album's order.
+	Descending bool
 }
 
 // TrackAlbumCursor is a position among the albums backing a Tracks page (see
@@ -66,14 +68,18 @@ func composeAlbumPage(filter TrackFilter, after TrackAlbumCursor, albumPageSize 
 	// COALESCE matches the expression index (migration 0022) exactly, so a
 	// work with no artist credit yet sorts first rather than arbitrarily.
 	artistExpr := "COALESCE(primary_artist_sort_name, '')"
+	operator, direction := ">", ""
+	if filter.Descending {
+		operator, direction = "<", " DESC"
+	}
 	predicates.AddIf(after.AlbumID != 0,
-		"("+artistExpr+" > ? OR ("+artistExpr+" = ? AND (sort_title > ? OR (sort_title = ? AND id > ?))))",
+		"("+artistExpr+" "+operator+" ? OR ("+artistExpr+" = ? AND (sort_title "+operator+" ? OR (sort_title = ? AND id "+operator+" ?))))",
 		after.ArtistSortName, after.ArtistSortName, after.AlbumSortTitle, after.AlbumSortTitle, after.AlbumID)
 
 	query := "SELECT id, sort_title, canonical_title, year, primary_artist_sort_name,\n" +
 		"       (SELECT p.name FROM person p WHERE p.id = work.primary_artist_id) AS artist_name\n" +
 		"FROM work" + predicates.Where() +
-		"\nORDER BY " + artistExpr + ", sort_title, id\nLIMIT ?"
+		"\nORDER BY " + artistExpr + direction + ", sort_title" + direction + ", id" + direction + "\nLIMIT ?"
 	return query, predicates.Args(albumPageSize)
 }
 

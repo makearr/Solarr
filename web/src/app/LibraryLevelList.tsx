@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import type { LinkProps } from "@tanstack/react-router";
-import { LayoutGrid, Plus, Rows3 } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { ArrowDown, ArrowUp, Check, Columns3, LayoutGrid, Plus, Rows3 } from "lucide-react";
 
 import { api } from "@/api/client";
 import { albumStatusFill, albumStatusLabel } from "@/lib/albumStatus";
@@ -145,6 +146,17 @@ export function LibraryLevelList() {
 
   const [view, setView] = useViewMode(level);
   const [sort, setSort] = usePreference<SortKey>(`level.sort.${level ?? ""}`, "title");
+  const [storedDir, setDir] = usePreference<"asc" | "desc" | "">(`level.dir.${level ?? ""}`, "");
+  const dir = storedDir || SORTS[sort].dir || "asc";
+  const [hidden, setHidden] = usePreference<string[]>(`level.hiddenColumns.${level ?? ""}`, []);
+  // A header clicked again turns its order round, as in Lidarr.
+  const sortBy = (key: SortKey) => {
+    if (key === sort) setDir(dir === "asc" ? "desc" : "asc");
+    else {
+      setSort(key);
+      setDir("");
+    }
+  };
   const [showBars, setShowBars] = usePreference("posters.availabilityBar", true);
   const frameRef = useRef<HTMLDivElement>(null);
   const metrics = useGridMetrics(frameRef, POSTER_MIN_WIDTH, POSTER_GAP, POSTER_PADDING);
@@ -152,7 +164,7 @@ export function LibraryLevelList() {
 
   const list = useLibraryList<LevelItem>(
     {
-      name: `library-level:${categoryId ?? ""}:${level ?? ""}:${sort}`,
+      name: `library-level:${categoryId ?? ""}:${level ?? ""}:${sort}:${dir}`,
       rowHeight: isPoster ? metrics.cellWidth + POSTER_LABEL_HEIGHT + POSTER_GAP : ROW_HEIGHT,
       itemsPerRow: isPoster ? metrics.columns : 1,
       idOf: (item) => item.id,
@@ -160,7 +172,7 @@ export function LibraryLevelList() {
         const { data, error } = await api.GET("/libraries/{id}/{level}", {
           params: {
             path: { id: Number(categoryId), level: level ?? "" },
-            query: { cursor, limit: 100, sort, dir: SORTS[sort].dir },
+            query: { cursor, limit: 100, sort, dir },
           },
           signal,
         });
@@ -180,7 +192,11 @@ export function LibraryLevelList() {
             <input type="checkbox" checked={showBars} onChange={(e) => setShowBars(e.target.checked)} />
             Availability
           </label>
-          <SortPicker level={level} sort={sort} onChange={setSort} />
+          {isPoster ? (
+            <SortPicker level={level} sort={sort} onChange={sortBy} />
+          ) : (
+            <ColumnChooser level={level} hidden={hidden} onChange={setHidden} />
+          )}
           <ViewToggle view={view} onChange={setView} />
           {categoryId && (
             <Link
@@ -226,7 +242,7 @@ export function LibraryLevelList() {
               }}
             />
           ) : (
-            <CompactList list={list} level={level} />
+            <LevelTable list={list} level={level} sort={sort} dir={dir} onSort={sortBy} hidden={hidden} />
           )}
         </div>
       )}
@@ -262,61 +278,211 @@ function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (mode: ViewM
   );
 }
 
-function CompactList({
+type OptionalColumn = "subtitle" | "year" | "progress" | "status";
+
+interface LevelColumns {
+  title: { header: string; sort?: SortKey };
+  optional: readonly { key: OptionalColumn; header: string; sort?: SortKey; width: string }[];
+}
+
+// What each level's table shows, and which headers sort (the orders the API has for that level).
+const LEVEL_COLUMNS: Record<string, LevelColumns> = {
+  artists: {
+    title: { header: "Artist", sort: "title" },
+    optional: [
+      { key: "progress", header: "Albums", width: "7rem" },
+      { key: "status", header: "Status", width: "6rem" },
+    ],
+  },
+  albums: {
+    title: { header: "Album", sort: "title" },
+    optional: [
+      { key: "subtitle", header: "Artist", sort: "artist", width: "1fr" },
+      { key: "year", header: "Released", sort: "year", width: "6rem" },
+      { key: "progress", header: "Tracks", width: "6rem" },
+      { key: "status", header: "Status", width: "6rem" },
+    ],
+  },
+  tracks: {
+    title: { header: "Track" },
+    optional: [
+      { key: "subtitle", header: "Artist -- Album", sort: "artist", width: "1.5fr" },
+      { key: "year", header: "Released", width: "6rem" },
+    ],
+  },
+};
+
+const FALLBACK_COLUMNS: LevelColumns = {
+  title: { header: "Title", sort: "title" },
+  optional: [
+    { key: "subtitle", header: "", width: "1fr" },
+    { key: "year", header: "Year", width: "6rem" },
+  ],
+};
+
+function columnsFor(level: string | undefined): LevelColumns {
+  return (level && LEVEL_COLUMNS[level]) || FALLBACK_COLUMNS;
+}
+
+/** The small config button beside a table: which of its columns to show. */
+function ColumnChooser({
+  level,
+  hidden,
+  onChange,
+}: {
+  level: string | undefined;
+  hidden: readonly string[];
+  onChange: (hidden: string[]) => void;
+}) {
+  const { optional } = columnsFor(level);
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger
+        aria-label="Choose columns"
+        title="Choose columns"
+        className="rounded-md border border-border-subtle p-1.5 text-ink-muted hover:text-ink"
+      >
+        <Columns3 aria-hidden className="size-4" />
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          sideOffset={4}
+          className="z-50 min-w-40 rounded-md border border-border-subtle bg-surface p-1 text-sm shadow-lg"
+        >
+          {optional.map((column) => (
+            <DropdownMenu.CheckboxItem
+              key={column.key}
+              checked={!hidden.includes(column.key)}
+              onSelect={(event) => event.preventDefault()}
+              onCheckedChange={(shown) =>
+                onChange(shown ? hidden.filter((key) => key !== column.key) : [...hidden, column.key])
+              }
+              className="flex cursor-default items-center gap-2 rounded px-2 py-1 outline-none data-[highlighted]:bg-canvas"
+            >
+              <span className="size-3.5">
+                <DropdownMenu.ItemIndicator>
+                  <Check aria-hidden className="size-3.5" />
+                </DropdownMenu.ItemIndicator>
+              </span>
+              {column.header || "Details"}
+            </DropdownMenu.CheckboxItem>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+function LevelTable({
   list,
   level,
+  sort,
+  dir,
+  onSort,
+  hidden,
 }: {
   list: ReturnType<typeof useLibraryList<LevelItem>>;
   level: string | undefined;
+  sort: SortKey;
+  dir: "asc" | "desc";
+  onSort: (key: SortKey) => void;
+  hidden: readonly string[];
 }) {
+  const { title, optional } = columnsFor(level);
+  const shown = optional.filter((column) => !hidden.includes(column.key));
+  const template = ["2rem", "1.5fr", ...shown.map((column) => column.width)].join(" ");
+  const header = (label: string, key: SortKey | undefined) =>
+    key ? (
+      <button type="button" onClick={() => onSort(key)} className="flex items-center gap-1 text-left hover:text-ink">
+        {label}
+        {sort === key && (dir === "asc" ? <ArrowUp aria-hidden className="size-3" /> : <ArrowDown aria-hidden className="size-3" />)}
+      </button>
+    ) : (
+      <span>{label}</span>
+    );
+
   return (
-    <div ref={list.scrollRef} className="h-full overflow-auto">
-      <div style={{ height: list.totalSize, position: "relative" }}>
-        {list.virtualItems.map((virtual) => {
-          const item = list.items[virtual.index];
-          if (!item) return null;
-          const image = imageSourceFor(level, item);
-          const link = linkFor(level, item);
-          const rowClass = "absolute inset-x-0 flex items-center gap-3 border-b border-border-subtle px-4 text-sm";
-          const row = (
-            <>
-              {image && (
-                <CoverArt
-                  subject={image.subject}
-                  workId={image.id}
-                  title={item.title}
-                  size="thumb"
-                  className={`h-8 w-8 shrink-0 object-cover ${
-                    image.subject === "people" ? "rounded-full" : "rounded"
-                  }`}
-                />
-              )}
-              {item.status && (
-                <span
-                  aria-label={albumStatusLabel(item.status)}
-                  title={albumStatusLabel(item.status)}
-                  className={`size-2 shrink-0 rounded-full ${albumStatusFill(item.status)}`}
-                />
-              )}
-              <span className="min-w-0 flex-1 truncate font-medium">{item.title}</span>
-              {item.subtitle && <span className="min-w-0 flex-1 truncate text-ink-muted">{item.subtitle}</span>}
-              {item.year != null && <span className="shrink-0 text-ink-muted">{item.year}</span>}
-            </>
-          );
-          const style = { height: virtual.size, transform: `translateY(${virtual.start}px)` };
-          return link ? (
-            <Link key={item.id} {...link} className={`${rowClass} hover:bg-surface`} style={style}>
-              {row}
-            </Link>
-          ) : (
-            <div key={item.id} className={rowClass} style={style}>
-              {row}
-            </div>
-          );
-        })}
+    <div className="flex h-full flex-col">
+      <div
+        role="row"
+        className="grid shrink-0 items-center gap-3 border-b border-border-subtle bg-surface px-4 py-2 text-xs font-medium text-ink-muted"
+        style={{ gridTemplateColumns: template }}
+      >
+        <span />
+        {header(title.header, title.sort)}
+        {shown.map((column) => (
+          <span key={column.key}>{header(column.header, column.sort)}</span>
+        ))}
+      </div>
+      <div ref={list.scrollRef} className="min-h-0 flex-1 overflow-auto">
+        <div style={{ height: list.totalSize, position: "relative" }}>
+          {list.virtualItems.map((virtual) => {
+            const item = list.items[virtual.index];
+            if (!item) return null;
+            const image = imageSourceFor(level, item);
+            const link = linkFor(level, item);
+            const rowClass = "absolute inset-x-0 grid items-center gap-3 border-b border-border-subtle px-4 text-sm";
+            const style = {
+              height: virtual.size,
+              transform: `translateY(${virtual.start}px)`,
+              gridTemplateColumns: template,
+            };
+            const cells = (
+              <>
+                {image ? (
+                  <CoverArt
+                    subject={image.subject}
+                    workId={image.id}
+                    title={item.title}
+                    size="thumb"
+                    className={`h-8 w-8 object-cover ${image.subject === "people" ? "rounded-full" : "rounded"}`}
+                  />
+                ) : (
+                  <span />
+                )}
+                <span className="truncate font-medium">{item.title}</span>
+                {shown.map((column) => (
+                  <span key={column.key} className="truncate text-ink-muted">
+                    {cellFor(column.key, item)}
+                  </span>
+                ))}
+              </>
+            );
+            return link ? (
+              <Link key={item.id} {...link} className={`${rowClass} hover:bg-surface`} style={style}>
+                {cells}
+              </Link>
+            ) : (
+              <div key={item.id} className={rowClass} style={style}>
+                {cells}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
+}
+
+function cellFor(column: OptionalColumn, item: LevelItem): React.ReactNode {
+  switch (column) {
+    case "subtitle":
+      return item.subtitle ?? "";
+    case "year":
+      return item.year ?? "";
+    case "progress":
+      return item.required_count != null ? `${item.present_count ?? 0} / ${item.required_count}` : "";
+    case "status":
+      return item.status ? (
+        <span className="flex items-center gap-1.5">
+          <span className={`size-2 shrink-0 rounded-full ${albumStatusFill(item.status)}`} />
+          {albumStatusLabel(item.status)}
+        </span>
+      ) : (
+        ""
+      );
+  }
 }
 
 function Message({ children }: { children: React.ReactNode }) {

@@ -54,6 +54,8 @@ type PersonFilter struct {
 	Role          string
 	RootFolderIDs []int64
 	CategoryIDs   []int64
+	// Descending lists Z to A: a table header clicked twice (2026-09-25).
+	Descending bool
 }
 
 // PersonCursor is a position in the people list: sort name, plus the id to
@@ -76,13 +78,17 @@ func composePeopleList(filter PersonFilter, after PersonCursor, pageSize int) (s
 	}
 	addNamePrefix(&predicates, filter.NamePrefix)
 	addArtistCredit(&predicates, filter.Role, filter.RootFolderIDs, filter.CategoryIDs)
+	operator, direction := ">", ""
+	if filter.Descending {
+		operator, direction = "<", " DESC"
+	}
 	predicates.AddIf(after.SortName != "" || after.ID != 0,
-		"(sort_name > ? OR (sort_name = ? AND id > ?))",
+		"(sort_name "+operator+" ? OR (sort_name = ? AND id "+operator+" ?))",
 		after.SortName, after.SortName, after.ID)
 
 	query := "SELECT " + personColumns + ",\n       " + personCoverageColumns +
 		"\nFROM person" + predicates.Where() +
-		"\nORDER BY sort_name, id\nLIMIT ?"
+		"\nORDER BY sort_name" + direction + ", id" + direction + "\nLIMIT ?"
 	return query, predicates.Args(pageSize)
 }
 

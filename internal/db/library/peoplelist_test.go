@@ -326,3 +326,29 @@ func TestArtistsDueRefresh_StalestMonitoredFirst(t *testing.T) {
 		t.Errorf("due = %v, %v; want %v", due, err, want)
 	}
 }
+
+// A name header clicked twice lists Z to A, across pages.
+func TestListPeople_DescendingPagesZToA(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	resolvePersonNamed(t, people, "artist-1", "Katupoken", "Katupoken")
+	resolvePersonNamed(t, people, "artist-2", "Vutu Doci", "Bush, Vutu")
+	resolvePersonNamed(t, people, "artist-3", "CEHA", "CEHA")
+
+	var got []string
+	var after library.PersonCursor
+	for {
+		page, err := people.ListPeople(t.Context(), library.PersonFilter{Descending: true}, after, 1)
+		if err != nil {
+			t.Fatalf("ListPeople: %v", err)
+		}
+		if len(page) == 0 {
+			break
+		}
+		got = append(got, page[0].SortName)
+		after = library.PersonCursor{SortName: page[0].SortName, ID: page[0].ID}
+	}
+	if want := []string{"Katupoken", "Bush, Vutu", "CEHA"}; !slices.Equal(got, want) {
+		t.Errorf("order = %q, want %q", got, want)
+	}
+}

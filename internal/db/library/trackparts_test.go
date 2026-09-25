@@ -2,6 +2,7 @@ package library_test
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -147,3 +148,33 @@ func TestTrackParts_PaginatesAtTheAlbumBoundaryNeverSplittingOneAlbum(t *testing
 // bench_test.go's TestADR28_TrackAlbumPagePlanReachesTheIndexAndNeverSorts,
 // at corpus scale -- a small table lets SQLite get away with a plan that says
 // nothing about 500k rows (bench_test.go's own planCases doc comment).
+
+// Descending orders the albums Z to A; each album's tracks keep their own order.
+func TestTrackParts_DescendingReversesTheAlbumsNotTheirTracks(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	people := library.NewPeople(opened)
+	tracks := library.NewTrackParts(opened)
+	setUpAlbumWithParts(t, identity, people, "a-album", "A Album", "a album", "artist-a", "Zemih", 1, "A1", "A2")
+	setUpAlbumWithParts(t, identity, people, "b-album", "B Album", "b album", "artist-b", "Bravo", 1, "B1", "B2")
+
+	filter := library.TrackFilter{RootFolderIDs: []int64{1}, Descending: true}
+	var got []string
+	cursor := library.TrackAlbumCursor{}
+	for {
+		page, next, hasMore, err := tracks.List(t.Context(), filter, cursor, 1)
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		for _, row := range page {
+			got = append(got, row.Title.String)
+		}
+		if !hasMore {
+			break
+		}
+		cursor = next
+	}
+	if want := []string{"B1", "B2", "A1", "A2"}; !slices.Equal(got, want) {
+		t.Errorf("tracks = %q, want %q", got, want)
+	}
+}

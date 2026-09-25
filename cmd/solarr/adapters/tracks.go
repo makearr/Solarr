@@ -14,7 +14,7 @@ func (a Tracks) ListLibraryTracks(
 	ctx context.Context, filter apiserver.TracksFilter, cursor apiserver.TracksCursor, albumPageSize int,
 ) ([]apiserver.TrackRow, apiserver.TracksCursor, bool, error) {
 	rows, next, hasMore, err := a.Tracks.List(ctx,
-		library.TrackFilter{RootFolderIDs: filter.RootFolderIDs, CategoryIDs: filter.CategoryIDs},
+		library.TrackFilter{RootFolderIDs: filter.RootFolderIDs, CategoryIDs: filter.CategoryIDs, Descending: filter.Descending},
 		library.TrackAlbumCursor{
 			ArtistSortName: cursor.ArtistSortName, AlbumSortTitle: cursor.AlbumSortTitle, AlbumID: cursor.AlbumID,
 		}, albumPageSize)
