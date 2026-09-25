@@ -10,8 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
-// The default preset keeps the library's own track shapes: "06" on one disc, "1-06" on several
-// (the user's "{medium:0}:{track:00}" through smart colon replacement).
+// The default preset keeps the library's own track shapes: "06" on one disc, "1-06" on several.
 func TestNamingFor_DefaultTrackShapes(t *testing.T) {
 	track := TrackNaming{ArtistName: "Heka", AlbumTitle: "Memory of Trees", ReleaseYear: 1995, Track: 6, TrackTitle: "Anywhere Is"}
 	for _, tc := range []struct {

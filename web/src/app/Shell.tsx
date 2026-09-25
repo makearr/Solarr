@@ -5,6 +5,8 @@ import { isAdministratorPath, useIsAdministrator } from "@/lib/useAdministrator"
 import { SearchBox } from "./SearchBox";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
+import { ThemeToggle } from "./ThemeToggle";
+import { UserMenu } from "./UserMenu";
 
 /** Sidebar, header, content, status bar. The setup gate sits outside this in App, so a
  *  half-configured install is never shown a dashboard of zeroes it cannot act
@@ -15,8 +17,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-0 flex-1">
         <Sidebar />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="flex shrink-0 items-center justify-end border-b border-border-subtle px-4 py-2">
+          <header className="flex shrink-0 items-center justify-end gap-3 border-b border-border-subtle px-4 py-2">
             <SearchBox />
+            <ThemeToggle />
+            <UserMenu />
           </header>
           <main className="min-h-0 flex-1">
             <AdministratorGate>{children}</AdministratorGate>

@@ -49,7 +49,7 @@ export function LanguageProfiles() {
     <div className="mx-auto flex max-w-3xl flex-col gap-3 p-6">
       <h1 className="text-lg font-semibold">Language profiles</h1>
       <p className="text-sm leading-relaxed text-ink-muted">
-        Language is its own axis (section 19.8): a required list is any_of -- at least one listed
+        A required list means at least one listed
         language must be present, evaluated from the probe, never the release name. An empty
         profile carries no language policy at all.
       </p>

@@ -167,11 +167,11 @@ func (b Backup) validate() Problems {
 	}
 	if b.Keep < minimumBackupsKept {
 		problems = append(problems, newProblem("backup.keep", strconv.Itoa(b.Keep),
-			fmt.Sprintf("expected at least %d (ADR-15)", minimumBackupsKept)))
+			fmt.Sprintf("expected at least %d", minimumBackupsKept)))
 	}
 	if b.KeepSettings < minimumBackupsKept {
 		problems = append(problems, newProblem("backup.keep_settings", strconv.Itoa(b.KeepSettings),
-			fmt.Sprintf("expected at least %d (ADR-15)", minimumBackupsKept)))
+			fmt.Sprintf("expected at least %d", minimumBackupsKept)))
 	}
 	if !b.BeforeMigration {
 		// Migrations are forward-only, so the pre-migration backup is the only
@@ -237,7 +237,7 @@ func (w Workers) validate() Problems {
 	// so is better than accepting a value and ignoring it.
 	if w.Import != 1 {
 		problems = append(problems, newProblem("workers.import", strconv.Itoa(w.Import),
-			"fixed at 1 and not configurable (ADR-3)"))
+			"fixed at 1 and not configurable"))
 	}
 	return problems
 }

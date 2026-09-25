@@ -155,7 +155,7 @@ func Parse(data []byte) (Profile, error) {
 	for dimension, targets := range profile.Targets {
 		if _, declaredAsTier := profile.Tiers[dimension]; declaredAsTier {
 			return Profile{}, fmt.Errorf(
-				"score: %q is declared in both \"tiers\" and \"targets\" -- a dimension is one or the other, never both (Invariant 72)",
+				"score: %q is declared in both \"tiers\" and \"targets\" -- a dimension is one or the other, never both",
 				dimension)
 		}
 		for index := range targets {

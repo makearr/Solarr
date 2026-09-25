@@ -108,6 +108,23 @@
     text-rendering: optimizeLegibility;
   }
 
+  /* Thin and themed: the default bar beside a long sidebar was "ugly" (2026-09-25). */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-subtle) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-border-subtle);
+    border-radius: 4px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
   /* A virtualised list is scrolled constantly; a scrollbar that appears and
      disappears reflows the whole window on every hover. */
   @media (prefers-reduced-motion: no-preference) {

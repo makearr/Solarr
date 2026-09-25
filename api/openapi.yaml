@@ -5425,9 +5425,13 @@ components:
 
     Me:
       type: object
-      required: [user_id, role, tier, tier_max, categories]
+      required: [user_id, role, tier, tier_max, categories, auth_required]
       properties:
         user_id: { type: integer, format: int64 }
+        username: { type: string }
+        auth_required:
+          type: boolean
+          description: False means every request is served as the administrator, so signing out does nothing.
         role: { $ref: "#/components/schemas/Role" }
         tier_max:
           $ref: "#/components/schemas/Tier"

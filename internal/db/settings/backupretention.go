@@ -61,7 +61,7 @@ func validateBackupRetention(retention BackupRetention) config.Problems {
 	}
 	if retention.KeepCount < MinimumBackupsKept || retention.KeepCount > 1000 {
 		problems = append(problems, config.Problem{Path: KeyBackupKeepCount,
-			Value: strconv.FormatInt(retention.KeepCount, 10), Expectation: "3 to 1000 (ADR-15 keeps at least 3)"})
+			Value: strconv.FormatInt(retention.KeepCount, 10), Expectation: "3 to 1000: at least 3 backups are always kept"})
 	}
 	if retention.KeepDays < 1 || retention.KeepDays > 3650 {
 		problems = append(problems, config.Problem{Path: KeyBackupKeepDays,

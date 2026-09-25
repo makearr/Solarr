@@ -54,7 +54,7 @@ export function QualityProfiles() {
         <>
           <h2 className="pt-4 text-sm font-medium">All profiles</h2>
           <p className="text-sm leading-relaxed text-ink-muted">
-            Hard gates, then tiers, then an additive score (ADR-40). Editing the rules directly is
+            Hard gates, then tiers, then an additive score. Editing the rules directly is
             expert work; picking one for a library above is not.
           </p>
         </>
@@ -191,7 +191,7 @@ function QualityProfileForm({
         />
       </label>
       <label className="flex flex-col gap-1 text-xs text-ink-muted">
-        Rules (ADR-40's tier/target JSON)
+        Rules (tiers and targets, JSON)
         <textarea
           className={`${inputStyle} h-32 font-mono text-xs`}
           value={rules}

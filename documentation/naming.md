@@ -25,8 +25,8 @@ answer, 2026-09-24):
 | `:` per Colon Replacement: delete, `-`, ` -`, ` - `, or smart (`": "` → `" - "`, `":"` → `"-"`) | `:` removed |
 
 Then a doubled separator (`  `, `--`, `..`, `__`) becomes one and trailing separators go —
-what an empty token leaves behind. Smart replacement is why the default multi-disc
-`{medium:0}:{track:00}` renders `2-05`.
+what an empty token leaves behind. The default multi-disc template writes `{medium:0}-{track:00}`
+(`2-05`) itself since 2026-09-25, so no colon reaches the replacement.
 
 ## Token spellings
 

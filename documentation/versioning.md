@@ -21,11 +21,13 @@ number (see below); nothing in this scheme is ever "reached".
 compared as four separate parts, never as one parsed decimal — treating `.09` as `9` loses the
 padding and breaks the string format.
 
-## BUILD and RELEASE — advanced only by `make image`
+## BUILD and RELEASE — advanced by every successful image
 
-Both advance **only** when `make image` completes successfully. Commits do not change them, so
-the numbers mean "this many images have been produced" and "this many this month", not "this
-much has been typed".
+Both advance when `make image` **or `make image-local`** completes successfully (the latter since
+2026-09-25). Commits do not change them, so the numbers mean "this many images have been
+produced" and "this many this month", not "this much has been typed". `make image-local` writes
+the new `VERSION` and nothing else: no push, tag or release. Its image carries `-dirty` when the
+tree had uncommitted changes.
 
 A failed build leaves the version untouched.
 

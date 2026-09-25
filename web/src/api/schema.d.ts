@@ -3423,6 +3423,9 @@ export interface components {
         Me: {
             /** Format: int64 */
             user_id: number;
+            username?: string;
+            /** @description False means every request is served as the administrator, so signing out does nothing. */
+            auth_required: boolean;
             role: components["schemas"]["Role"];
             tier_max: components["schemas"]["Tier"];
             /**

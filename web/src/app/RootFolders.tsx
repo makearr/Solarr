@@ -120,7 +120,7 @@ export function RootFolders() {
         <p className="text-sm leading-relaxed text-ink-muted">
           Every library root, its own placement policy, and what the last capacity sweep found.
           A root declared offline stays that way until declared online again -- a disk coming
-          back on its own never clears it (section 10.4, Invariant 87).
+          back on its own never clears it.
         </p>
       </header>
 

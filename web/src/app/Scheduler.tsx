@@ -24,13 +24,14 @@ const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 
 const number = /^\d+$/;
 
-function parseCadence(cadence: string): Trigger {
+export function parseCadence(cadence: string): Trigger {
   const fields = cadence.trim().split(/\s+/);
   if (fields.length !== 5) return { mode: "advanced", cadence };
   const [minute, hour, dayOfMonth, month, dayOfWeek] = fields as [string, string, string, string, string];
   if (month !== "*") return { mode: "advanced", cadence };
 
-  const everyMinutes = /^\*\/(\d+)$/.exec(minute);
+  // A bare "*" is every minute: Check Downloads' own default read as "Advanced" (2026-09-25).
+  const everyMinutes = minute === "*" ? ["*", "1"] : /^\*\/(\d+)$/.exec(minute);
   if (everyMinutes && hour === "*" && dayOfMonth === "*" && dayOfWeek === "*") {
     return { mode: "minutes", minutes: Number(everyMinutes[1]) };
   }

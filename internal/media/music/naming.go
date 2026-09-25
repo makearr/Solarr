@@ -84,7 +84,7 @@ var NamingScheme = naming.Scheme{
 		{Name: "Solarr default", Formats: map[string]string{
 			SlotArtistFolder:   "{Artist Name}",
 			SlotStandardTrack:  "{Album Title} ({Release Year})/{Artist Name} - {track:00} - {Track Title}",
-			SlotMultiDiscTrack: "{Album Title} ({Release Year})/{Artist Name} - {medium:0}:{track:00} - {Track Title}",
+			SlotMultiDiscTrack: "{Album Title} ({Release Year})/{Artist Name} - {medium:0}-{track:00} - {Track Title}",
 		}},
 		{Name: "Lidarr default", Formats: map[string]string{
 			SlotArtistFolder:   "{Artist Name}",

@@ -127,12 +127,13 @@ func (s *Server) GetMe(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	tierMax := settings.TierExpert
-	if user, found := s.auth.Settings.Snapshot().User(access.UserID()); found {
-		tierMax = user.Limits.TierMax
+	tierMax, username := settings.TierExpert, ""
+	snapshot := s.auth.Settings.Snapshot()
+	if user, found := snapshot.User(access.UserID()); found {
+		tierMax, username = user.Limits.TierMax, user.Username
 	}
 	writeJSON(w, s.logger, http.StatusOK, meView{
-		UserID:     access.UserID(),
+		UserID: access.UserID(), Username: username, AuthRequired: snapshot.AuthRequired(),
 		Role:       string(access.Role()),
 		Tier:       string(access.Tier()),
 		TierMax:    string(tierMax),
@@ -196,11 +197,13 @@ func (s *Server) SetMyTier(w http.ResponseWriter, r *http.Request) {
 }
 
 type meView struct {
-	UserID     int64          `json:"user_id"`
-	Role       string         `json:"role"`
-	Tier       string         `json:"tier"`
-	TierMax    string         `json:"tier_max"`
-	Categories []categoryView `json:"categories"`
+	UserID       int64          `json:"user_id"`
+	Username     string         `json:"username,omitempty"`
+	AuthRequired bool           `json:"auth_required"`
+	Role         string         `json:"role"`
+	Tier         string         `json:"tier"`
+	TierMax      string         `json:"tier_max"`
+	Categories   []categoryView `json:"categories"`
 }
 
 // ListMyAPIKeys lists the caller's own non-interactive credentials --
