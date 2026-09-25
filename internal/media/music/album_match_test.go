@@ -112,21 +112,30 @@ func TestDecideAlbum_TheOneReleaseAFolderFillsExactlyBeatsALongerRival(t *testin
 	for i := range 10 {
 		longer = append(longer, trackSpec{fmt.Sprintf("Bonus %d", i+1), 200})
 	}
-	// One track 15 s off ranks the complete release second, so it must win from behind.
-	completeTracks := slices.Clone(traumaTracks)
-	completeTracks[0].seconds += 15
-	complete := candidateOf("rg-complete", "Album", []string{"Compilation"}, releaseOf("rel-complete", "Kebilegev Bibihi", "official", "2001", completeTracks))
+	complete := candidateOf("rg-complete", "Album", []string{"Compilation"}, releaseOf("rel-complete", "Kebilegev Bibihi", "official", "2001", traumaTracks))
 	partial := candidateOf("rg-partial", "Album", []string{"Compilation"}, releaseOf("rel-partial", "Kebilegev Bibihi", "official", "2003", longer))
 
-	for name, candidates := range map[string][]music.AlbumCandidate{
-		"complete first": {complete, partial}, "partial first": {partial, complete},
-	} {
-		t.Run(name, func(t *testing.T) {
-			decision := music.DecideAlbum(folderOf(traumaTracks), candidates)
-			if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-complete" {
-				t.Errorf("decision = %s %q, want identified rg-complete", decision.Outcome, bestReleaseGroup(decision))
-			}
-		})
+	decision := music.DecideAlbum(folderOf(traumaTracks), []music.AlbumCandidate{partial, complete})
+	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-complete" {
+		t.Errorf("decision = %s %q, want identified rg-complete", decision.Outcome, bestReleaseGroup(decision))
+	}
+}
+
+// Completeness never overrides a closer fit: Hofun Bogilu Monufinam's 23 files fit the 43-track
+// soundtrack exactly and a 23-track album of another year slightly worse (the main library).
+func TestDecideAlbum_ACompleteReleaseFittingWorseDoesNotWin(t *testing.T) {
+	longer := slices.Clone(traumaTracks)
+	for i := range 10 {
+		longer = append(longer, trackSpec{fmt.Sprintf("Bonus %d", i+1), 200})
+	}
+	completeTracks := slices.Clone(traumaTracks)
+	completeTracks[0].seconds += 15
+	complete := candidateOf("rg-complete", "Album", nil, releaseOf("rel-complete", "Kebilegev Bibihi", "official", "2017", completeTracks))
+	partial := candidateOf("rg-partial", "Album", nil, releaseOf("rel-partial", "Kebilegev Bibihi", "official", "2017", longer))
+
+	decision := music.DecideAlbum(folderOf(traumaTracks), []music.AlbumCandidate{complete, partial})
+	if decision.Outcome != music.AlbumAmbiguous {
+		t.Errorf("decision = %s %q, want ambiguous", decision.Outcome, bestReleaseGroup(decision))
 	}
 }
 
