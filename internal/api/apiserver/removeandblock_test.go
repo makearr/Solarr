@@ -43,14 +43,14 @@ func TestRemoveAndBlockFile_RunsTheRequestedSteps(t *testing.T) {
 	fixture := newWorksFixture(t)
 	blockID := int64(9)
 	fixture.removeAndBlocker.result = apiserver.RemoveAndBlockOutput{
-		QuarantinedPaths: []string{"/media/root/quarantine/2026-09-05/track.flac"},
-		BlockID:          &blockID, ReopenedItems: []int64{5},
+		RecycledPaths: []string{"/media/root/recycle-bin/2026-09-05/track.flac"},
+		BlockID:       &blockID, ReopenedItems: []int64{5},
 	}
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/files/42/remove-block",
-		`{"quarantine":true,"block":true,"oshash":"abc123","reopen":true}`))
+		`{"recycle_bin":true,"block":true,"oshash":"abc123","reopen":true}`))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
 	}
@@ -59,19 +59,19 @@ func TestRemoveAndBlockFile_RunsTheRequestedSteps(t *testing.T) {
 		t.Errorf("mediaObjectID = %d, want 42", fixture.removeAndBlocker.lastMediaObjectID)
 	}
 	req := fixture.removeAndBlocker.lastReq
-	if !req.Quarantine || !req.Block || req.OSHash != "abc123" || !req.Reopen {
-		t.Errorf("request = %+v, want quarantine/block/reopen true and oshash=abc123", req)
+	if !req.RecycleBin || !req.Block || req.OSHash != "abc123" || !req.Reopen {
+		t.Errorf("request = %+v, want recycle bin/block/reopen true and oshash=abc123", req)
 	}
 
 	var body struct {
-		QuarantinedPaths []string `json:"quarantined_paths"`
-		BlockID          int64    `json:"block_id"`
-		ReopenedItems    []int64  `json:"reopened_items"`
+		RecycledPaths []string `json:"recycled_paths"`
+		BlockID       int64    `json:"block_id"`
+		ReopenedItems []int64  `json:"reopened_items"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(body.QuarantinedPaths) != 1 || body.BlockID != 9 || len(body.ReopenedItems) != 1 {
+	if len(body.RecycledPaths) != 1 || body.BlockID != 9 || len(body.ReopenedItems) != 1 {
 		t.Errorf("body = %+v, want the canned result", body)
 	}
 }

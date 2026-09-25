@@ -29,15 +29,15 @@ var maintenanceDefinitions = []jobs.Definition{
 	{Type: recycleBinCleanupJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3},
 }
 
-// recycleBinCleanupJob purges quarantine entries past the retention their library gave them
+// recycleBinCleanupJob purges recycle bin entries past the retention their library gave them
 // (section 10.8; Sonarr's recycling bin cleanup).
 type recycleBinCleanupJob struct {
-	quarantine library.Quarantine
+	recycleBin library.RecycleBin
 	logger     *slog.Logger
 }
 
 func (j recycleBinCleanupJob) Run(ctx context.Context, _ jobs.Job) error {
-	result, err := j.quarantine.Sweep(ctx, library.QuarantineConfig{}, nil, nil)
+	result, err := j.recycleBin.Sweep(ctx, library.RecycleBinConfig{}, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 		stores: []*store.Store{p.settings, p.jobs, p.library, p.metadata}, logger: p.logger,
 	})
 	executor.Handle(recycleBinCleanupJobType, recycleBinCleanupJob{
-		quarantine: library.NewQuarantine(p.library, p.fsys, clock.NewSystem()), logger: p.logger,
+		recycleBin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()), logger: p.logger,
 	})
 	executor.Handle(backupJobType, backupJob{stores: backedUp, directory: p.config.Paths.BackupDir, logger: p.logger})
 	executor.Handle(backupCleanupJobType, backupCleanupJob{

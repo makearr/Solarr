@@ -322,7 +322,7 @@ func (s ImportSessions) UnitExtras(ctx context.Context, sessionID int64) (map[in
 	return byUnit, nil
 }
 
-// DeleteUnitExtras forgets a unit's extra files once revert has quarantined them.
+// DeleteUnitExtras forgets a unit's extra files once revert has recycled them.
 func (s ImportSessions) DeleteUnitExtras(ctx context.Context, unitID int64) error {
 	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return librarydb.New(tx).DeleteImportUnitExtras(ctx, unitID)

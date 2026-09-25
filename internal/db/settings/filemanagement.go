@@ -45,7 +45,7 @@ type FileManagement struct {
 	PropersRepacks     PropersRepacks
 	RescanAfterRefresh RescanAfterRefresh
 	ChangeFileDate     ChangeFileDate
-	// RecycleRetentionDays is how long quarantine keeps what this library removes (Sonarr's bin cleanup).
+	// RecycleRetentionDays is how long recycle bin keeps what this library removes (Sonarr's bin cleanup).
 	RecycleRetentionDays     int64
 	DeleteEmptyFolders       bool
 	CreateEmptyArtistFolders bool
@@ -58,7 +58,7 @@ type FileManagement struct {
 	ChownGroup string
 }
 
-// DefaultFileManagement is Sonarr's defaults, with Solarr's 7-day quarantine as the bin.
+// DefaultFileManagement is Sonarr's defaults, with Solarr's 7-day recycle bin as the bin.
 var DefaultFileManagement = FileManagement{
 	PropersRepacks: PropersPreferAndUpgrade, RescanAfterRefresh: RescanAlways, ChangeFileDate: FileDateNone,
 	RecycleRetentionDays: 7, ChmodFolder: "755",

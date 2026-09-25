@@ -448,7 +448,7 @@ func (f *fakeWorksMonitor) RemovePart(
 		return apiserver.RemovePartResult{}, f.err
 	}
 	if deleteFiles {
-		return apiserver.RemovePartResult{FilesQuarantined: 1}, nil
+		return apiserver.RemovePartResult{FilesRecycled: 1}, nil
 	}
 	return apiserver.RemovePartResult{}, nil
 }
@@ -478,8 +478,8 @@ func TestRemovePart_OnlyDeletesTheFileWhenAsked(t *testing.T) {
 		want removePartCall
 		json string
 	}{
-		{"", removePartCall{workID: 3, partID: 7}, `{"files_quarantined":0}`},
-		{`{"delete_files":true}`, removePartCall{workID: 3, partID: 7, deleteFiles: true}, `{"files_quarantined":1}`},
+		{"", removePartCall{workID: 3, partID: 7}, `{"files_recycled":0}`},
+		{`{"delete_files":true}`, removePartCall{workID: 3, partID: 7, deleteFiles: true}, `{"files_recycled":1}`},
 	} {
 		recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/3/parts/7/remove", tc.body))
 		if recorder.Code != http.StatusOK {

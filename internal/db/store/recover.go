@@ -101,7 +101,7 @@ func OpenChecked(ctx context.Context, c clock.Clock, config Config, options Reco
 	return opened, report, err
 }
 
-// recoverFromBackup quarantines the damaged file and walks the retention set newest
+// recoverFromBackup recycles the damaged file and walks the retention set newest
 // first until one restores clean.
 func recoverFromBackup(ctx context.Context, c clock.Clock, config Config, options RecoveryOptions) (RecoveryReport, error) {
 	if options.BackupDir == "" {
@@ -117,7 +117,7 @@ func recoverFromBackup(ctx context.Context, c clock.Clock, config Config, option
 			config.Name, ErrUnrecoverable, options.BackupDir)
 	}
 
-	corruptPath, err := quarantine(c, config)
+	corruptPath, err := recycleBin(c, config)
 	if err != nil {
 		return RecoveryReport{Database: config.Name}, err
 	}
@@ -141,20 +141,20 @@ func recoverFromBackup(ctx context.Context, c clock.Clock, config Config, option
 		config.Name, ErrUnrecoverable, len(backups), options.BackupDir, corruptPath)
 }
 
-// quarantine moves the database aside as <path>.corrupt.<timestamp>, never deleting
+// recycle bin moves the database aside as <path>.corrupt.<timestamp>, never deleting
 // it. Only the database: the driver discards an unreadable log when probe opens the
 // file, so by here there is never one left to move (documentation/database-layout.md).
-func quarantine(c clock.Clock, config Config) (string, error) {
+func recycleBin(c clock.Clock, config Config) (string, error) {
 	stamp := strings.ReplaceAll(c.Now().UTC().Format(time.RFC3339), ":", "-")
 	corruptPath := fmt.Sprintf("%s.corrupt.%s", config.Path, stamp)
 	if _, err := config.FS.Stat(corruptPath); err == nil {
-		return "", fmt.Errorf("store %s: quarantine target %q already exists", config.Name, corruptPath)
+		return "", fmt.Errorf("store %s: recycle bin target %q already exists", config.Name, corruptPath)
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		return "", fmt.Errorf("store %s: check quarantine target %q: %w", config.Name, corruptPath, err)
+		return "", fmt.Errorf("store %s: check recycle bin target %q: %w", config.Name, corruptPath, err)
 	}
 
 	if err := config.FS.Rename(config.Path, corruptPath); err != nil {
-		return "", fmt.Errorf("store %s: quarantine %q: %w", config.Name, config.Path, err)
+		return "", fmt.Errorf("store %s: recycle bin %q: %w", config.Name, config.Path, err)
 	}
 	return corruptPath, nil
 }

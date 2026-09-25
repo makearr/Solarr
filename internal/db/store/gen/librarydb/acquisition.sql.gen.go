@@ -157,12 +157,12 @@ func (q *Queries) DeleteExpiredCandidates(ctx context.Context, expiresAt int64) 
 	return err
 }
 
-const deleteQuarantineEntry = `-- name: DeleteQuarantineEntry :exec
-DELETE FROM quarantine WHERE id = ?
+const deleteRecycleBinEntry = `-- name: DeleteRecycleBinEntry :exec
+DELETE FROM recycle_bin WHERE id = ?
 `
 
-func (q *Queries) DeleteQuarantineEntry(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteQuarantineEntry, id)
+func (q *Queries) DeleteRecycleBinEntry(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteRecycleBinEntry, id)
 	return err
 }
 
@@ -318,25 +318,25 @@ func (q *Queries) GetCandidate(ctx context.Context, id int64) (Candidate, error)
 	return i, err
 }
 
-const getQuarantine = `-- name: GetQuarantine :one
-SELECT id, original_path, quarantine_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
-FROM quarantine WHERE id = ?
+const getRecycleBin = `-- name: GetRecycleBin :one
+SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+FROM recycle_bin WHERE id = ?
 `
 
-func (q *Queries) GetQuarantine(ctx context.Context, id int64) (Quarantine, error) {
-	row := q.db.QueryRowContext(ctx, getQuarantine, id)
-	var i Quarantine
+func (q *Queries) GetRecycleBin(ctx context.Context, id int64) (RecycleBin, error) {
+	row := q.db.QueryRowContext(ctx, getRecycleBin, id)
+	var i RecycleBin
 	err := row.Scan(
 		&i.ID,
 		&i.OriginalPath,
-		&i.QuarantinePath,
+		&i.RecycledPath,
 		&i.RootFolderID,
 		&i.MediaObjectID,
 		&i.AcquisitionID,
 		&i.Reason,
 		&i.SizeBytes,
-		&i.QuarantinedAt,
+		&i.RecycledAt,
 		&i.ExpiresAt,
 		&i.RestoredAt,
 	)
@@ -461,39 +461,39 @@ func (q *Queries) ListActiveAcquisitions(ctx context.Context) ([]Acquisition, er
 	return items, nil
 }
 
-const listActiveQuarantineByRootOldestFirst = `-- name: ListActiveQuarantineByRootOldestFirst :many
-SELECT id, original_path, quarantine_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
-FROM quarantine
+const listActiveRecycleBinByRootOldestFirst = `-- name: ListActiveRecycleBinByRootOldestFirst :many
+SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+FROM recycle_bin
 WHERE restored_at IS NULL AND root_folder_id = ?1
-ORDER BY quarantined_at LIMIT ?2
+ORDER BY recycled_at LIMIT ?2
 `
 
-type ListActiveQuarantineByRootOldestFirstParams struct {
+type ListActiveRecycleBinByRootOldestFirstParams struct {
 	RootFolderID sql.NullInt64
 	Limit        int64
 }
 
 // The per-root counterpart, for the max_percent_of_root guard.
-func (q *Queries) ListActiveQuarantineByRootOldestFirst(ctx context.Context, arg ListActiveQuarantineByRootOldestFirstParams) ([]Quarantine, error) {
-	rows, err := q.db.QueryContext(ctx, listActiveQuarantineByRootOldestFirst, arg.RootFolderID, arg.Limit)
+func (q *Queries) ListActiveRecycleBinByRootOldestFirst(ctx context.Context, arg ListActiveRecycleBinByRootOldestFirstParams) ([]RecycleBin, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveRecycleBinByRootOldestFirst, arg.RootFolderID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Quarantine{}
+	items := []RecycleBin{}
 	for rows.Next() {
-		var i Quarantine
+		var i RecycleBin
 		if err := rows.Scan(
 			&i.ID,
 			&i.OriginalPath,
-			&i.QuarantinePath,
+			&i.RecycledPath,
 			&i.RootFolderID,
 			&i.MediaObjectID,
 			&i.AcquisitionID,
 			&i.Reason,
 			&i.SizeBytes,
-			&i.QuarantinedAt,
+			&i.RecycledAt,
 			&i.ExpiresAt,
 			&i.RestoredAt,
 		); err != nil {
@@ -510,34 +510,34 @@ func (q *Queries) ListActiveQuarantineByRootOldestFirst(ctx context.Context, arg
 	return items, nil
 }
 
-const listActiveQuarantineOldestFirst = `-- name: ListActiveQuarantineOldestFirst :many
-SELECT id, original_path, quarantine_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
-FROM quarantine
-WHERE restored_at IS NULL ORDER BY quarantined_at LIMIT ?
+const listActiveRecycleBinOldestFirst = `-- name: ListActiveRecycleBinOldestFirst :many
+SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+FROM recycle_bin
+WHERE restored_at IS NULL ORDER BY recycled_at LIMIT ?
 `
 
 // Oldest-first eviction order for the max_bytes guard -- distinct from
-// ListExpiredQuarantine, which is age-of-expiry, not age-of-entry.
-func (q *Queries) ListActiveQuarantineOldestFirst(ctx context.Context, limit int64) ([]Quarantine, error) {
-	rows, err := q.db.QueryContext(ctx, listActiveQuarantineOldestFirst, limit)
+// ListExpiredRecycleBin, which is age-of-expiry, not age-of-entry.
+func (q *Queries) ListActiveRecycleBinOldestFirst(ctx context.Context, limit int64) ([]RecycleBin, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveRecycleBinOldestFirst, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Quarantine{}
+	items := []RecycleBin{}
 	for rows.Next() {
-		var i Quarantine
+		var i RecycleBin
 		if err := rows.Scan(
 			&i.ID,
 			&i.OriginalPath,
-			&i.QuarantinePath,
+			&i.RecycledPath,
 			&i.RootFolderID,
 			&i.MediaObjectID,
 			&i.AcquisitionID,
 			&i.Reason,
 			&i.SizeBytes,
-			&i.QuarantinedAt,
+			&i.RecycledAt,
 			&i.ExpiresAt,
 			&i.RestoredAt,
 		); err != nil {
@@ -738,37 +738,37 @@ func (q *Queries) ListDecisionsForItemWithCandidate(ctx context.Context, arg Lis
 	return items, nil
 }
 
-const listExpiredQuarantine = `-- name: ListExpiredQuarantine :many
-SELECT id, original_path, quarantine_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
-FROM quarantine
+const listExpiredRecycleBin = `-- name: ListExpiredRecycleBin :many
+SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+FROM recycle_bin
 WHERE restored_at IS NULL AND expires_at <= ? ORDER BY expires_at LIMIT ?
 `
 
-type ListExpiredQuarantineParams struct {
+type ListExpiredRecycleBinParams struct {
 	ExpiresAt int64
 	Limit     int64
 }
 
-func (q *Queries) ListExpiredQuarantine(ctx context.Context, arg ListExpiredQuarantineParams) ([]Quarantine, error) {
-	rows, err := q.db.QueryContext(ctx, listExpiredQuarantine, arg.ExpiresAt, arg.Limit)
+func (q *Queries) ListExpiredRecycleBin(ctx context.Context, arg ListExpiredRecycleBinParams) ([]RecycleBin, error) {
+	rows, err := q.db.QueryContext(ctx, listExpiredRecycleBin, arg.ExpiresAt, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Quarantine{}
+	items := []RecycleBin{}
 	for rows.Next() {
-		var i Quarantine
+		var i RecycleBin
 		if err := rows.Scan(
 			&i.ID,
 			&i.OriginalPath,
-			&i.QuarantinePath,
+			&i.RecycledPath,
 			&i.RootFolderID,
 			&i.MediaObjectID,
 			&i.AcquisitionID,
 			&i.Reason,
 			&i.SizeBytes,
-			&i.QuarantinedAt,
+			&i.RecycledAt,
 			&i.ExpiresAt,
 			&i.RestoredAt,
 		); err != nil {
@@ -828,11 +828,11 @@ func (q *Queries) ListImportDecisionsNeedingReview(ctx context.Context, limit in
 	return items, nil
 }
 
-const markQuarantineRestored = `-- name: MarkQuarantineRestored :execrows
-UPDATE quarantine SET restored_at = ? WHERE id = ? AND restored_at IS NULL
+const markRecycleBinRestored = `-- name: MarkRecycleBinRestored :execrows
+UPDATE recycle_bin SET restored_at = ? WHERE id = ? AND restored_at IS NULL
 `
 
-type MarkQuarantineRestoredParams struct {
+type MarkRecycleBinRestoredParams struct {
 	RestoredAt sql.NullInt64
 	ID         int64
 }
@@ -840,8 +840,8 @@ type MarkQuarantineRestoredParams struct {
 // :execrows so a caller can tell "already restored" (0 rows) from "restored
 // just now" (1 row) without a separate read first -- nothing calls this yet,
 // so tightening it here does not touch a working caller.
-func (q *Queries) MarkQuarantineRestored(ctx context.Context, arg MarkQuarantineRestoredParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, markQuarantineRestored, arg.RestoredAt, arg.ID)
+func (q *Queries) MarkRecycleBinRestored(ctx context.Context, arg MarkRecycleBinRestoredParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markRecycleBinRestored, arg.RestoredAt, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -908,72 +908,6 @@ DELETE FROM blocklisted_release WHERE expires_at IS NOT NULL AND expires_at <= ?
 func (q *Queries) PurgeExpiredBlocklist(ctx context.Context, expiresAt sql.NullInt64) error {
 	_, err := q.db.ExecContext(ctx, purgeExpiredBlocklist, expiresAt)
 	return err
-}
-
-const quarantine = `-- name: Quarantine :one
-INSERT INTO quarantine (original_path, quarantine_path, root_folder_id,
-                        media_object_id, acquisition_id, reason, size_bytes,
-                        quarantined_at, expires_at, restored_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, original_path, quarantine_path, root_folder_id, media_object_id,
-          acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
-`
-
-type QuarantineParams struct {
-	OriginalPath   string
-	QuarantinePath string
-	RootFolderID   sql.NullInt64
-	MediaObjectID  sql.NullInt64
-	AcquisitionID  sql.NullInt64
-	Reason         string
-	SizeBytes      int64
-	QuarantinedAt  int64
-	ExpiresAt      int64
-	RestoredAt     sql.NullInt64
-}
-
-func (q *Queries) Quarantine(ctx context.Context, arg QuarantineParams) (Quarantine, error) {
-	row := q.db.QueryRowContext(ctx, quarantine,
-		arg.OriginalPath,
-		arg.QuarantinePath,
-		arg.RootFolderID,
-		arg.MediaObjectID,
-		arg.AcquisitionID,
-		arg.Reason,
-		arg.SizeBytes,
-		arg.QuarantinedAt,
-		arg.ExpiresAt,
-		arg.RestoredAt,
-	)
-	var i Quarantine
-	err := row.Scan(
-		&i.ID,
-		&i.OriginalPath,
-		&i.QuarantinePath,
-		&i.RootFolderID,
-		&i.MediaObjectID,
-		&i.AcquisitionID,
-		&i.Reason,
-		&i.SizeBytes,
-		&i.QuarantinedAt,
-		&i.ExpiresAt,
-		&i.RestoredAt,
-	)
-	return i, err
-}
-
-const quarantinedBytesForRoot = `-- name: QuarantinedBytesForRoot :one
-SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM quarantine
-WHERE root_folder_id = ? AND restored_at IS NULL
-`
-
-// Quarantined bytes count against the free-space gate, so they are summed per
-// root rather than assumed to be free (ADR-12).
-func (q *Queries) QuarantinedBytesForRoot(ctx context.Context, rootFolderID sql.NullInt64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, quarantinedBytesForRoot, rootFolderID)
-	var held int64
-	err := row.Scan(&held)
-	return held, err
 }
 
 const recordAcquiredFile = `-- name: RecordAcquiredFile :one
@@ -1113,6 +1047,72 @@ func (q *Queries) RecordImportDecision(ctx context.Context, arg RecordImportDeci
 	return i, err
 }
 
+const recycleBin = `-- name: RecycleBin :one
+INSERT INTO recycle_bin (original_path, recycled_path, root_folder_id,
+                        media_object_id, acquisition_id, reason, size_bytes,
+                        recycled_at, expires_at, restored_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, original_path, recycled_path, root_folder_id, media_object_id,
+          acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+`
+
+type RecycleBinParams struct {
+	OriginalPath  string
+	RecycledPath  string
+	RootFolderID  sql.NullInt64
+	MediaObjectID sql.NullInt64
+	AcquisitionID sql.NullInt64
+	Reason        string
+	SizeBytes     int64
+	RecycledAt    int64
+	ExpiresAt     int64
+	RestoredAt    sql.NullInt64
+}
+
+func (q *Queries) RecycleBin(ctx context.Context, arg RecycleBinParams) (RecycleBin, error) {
+	row := q.db.QueryRowContext(ctx, recycleBin,
+		arg.OriginalPath,
+		arg.RecycledPath,
+		arg.RootFolderID,
+		arg.MediaObjectID,
+		arg.AcquisitionID,
+		arg.Reason,
+		arg.SizeBytes,
+		arg.RecycledAt,
+		arg.ExpiresAt,
+		arg.RestoredAt,
+	)
+	var i RecycleBin
+	err := row.Scan(
+		&i.ID,
+		&i.OriginalPath,
+		&i.RecycledPath,
+		&i.RootFolderID,
+		&i.MediaObjectID,
+		&i.AcquisitionID,
+		&i.Reason,
+		&i.SizeBytes,
+		&i.RecycledAt,
+		&i.ExpiresAt,
+		&i.RestoredAt,
+	)
+	return i, err
+}
+
+const recycledBytesForRoot = `-- name: RecycledBytesForRoot :one
+SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM recycle_bin
+WHERE root_folder_id = ? AND restored_at IS NULL
+`
+
+// Recycled bytes count against the free-space gate, so they are summed per
+// root rather than assumed to be free (ADR-12).
+func (q *Queries) RecycledBytesForRoot(ctx context.Context, rootFolderID sql.NullInt64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, recycledBytesForRoot, rootFolderID)
+	var held int64
+	err := row.Scan(&held)
+	return held, err
+}
+
 const removeFromBlocklist = `-- name: RemoveFromBlocklist :exec
 DELETE FROM blocklisted_release WHERE id = ?
 `
@@ -1200,15 +1200,15 @@ func (q *Queries) SetDownloadProgress(ctx context.Context, arg SetDownloadProgre
 	return err
 }
 
-const sumQuarantinedBytes = `-- name: SumQuarantinedBytes :one
-SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM quarantine
+const sumRecycledBytes = `-- name: SumRecycledBytes :one
+SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM recycle_bin
 WHERE restored_at IS NULL
 `
 
-// The global counterpart to QuarantinedBytesForRoot, for the config.max_bytes
+// The global counterpart to RecycledBytesForRoot, for the config.max_bytes
 // guard (section 10.8) -- a budget across every root, not one at a time.
-func (q *Queries) SumQuarantinedBytes(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, sumQuarantinedBytes)
+func (q *Queries) SumRecycledBytes(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, sumRecycledBytes)
 	var held int64
 	err := row.Scan(&held)
 	return held, err

@@ -100,7 +100,7 @@ var ErrBlockedContent = errors.New("apiserver: this content is blocked and canno
 // ImportRevertResult is what one session's revert actually did.
 type ImportRevertResult struct {
 	UnitsReverted, WorksDeleted, EditionsDeleted int64
-	QuarantinedPaths                             []string
+	RecycledPaths                                []string
 }
 
 // ImportPlacementResult is AssignImportCategory's own outcome: every unit
@@ -476,7 +476,7 @@ func (s *Server) RevertImportSession(w http.ResponseWriter, r *http.Request, id 
 		}
 	}
 	// Absent means the library's own recycling bin retention.
-	retainHours := derefOr(body.QuarantineRetainHours, 0)
+	retainHours := derefOr(body.RecycleRetainHours, 0)
 
 	result, err := s.importSessions.RevertImportSession(r.Context(), id, retainHours)
 	switch {
@@ -632,13 +632,13 @@ func (s *Server) CommitImportUnit(w http.ResponseWriter, r *http.Request, id, un
 }
 
 func importRevertResultView(result ImportRevertResult) gen.ImportRevertResult {
-	paths := result.QuarantinedPaths
+	paths := result.RecycledPaths
 	if paths == nil {
 		paths = []string{}
 	}
 	return gen.ImportRevertResult{
 		UnitsReverted: result.UnitsReverted, WorksDeleted: result.WorksDeleted,
-		EditionsDeleted: result.EditionsDeleted, QuarantinedPaths: paths,
+		EditionsDeleted: result.EditionsDeleted, RecycledPaths: paths,
 	}
 }
 

@@ -13,8 +13,8 @@ import (
 
 // putTestFile writes content at path, creating its full parent chain --
 // unlike the package's own writeFile, which only ever creates flat files
-// directly under /media and cannot support quarantine's own nested
-// <root>/quarantine/<date>/ layout.
+// directly under /media and cannot support recycle bin's own nested
+// <root>/recycle-bin/<date>/ layout.
 func putTestFile(t *testing.T, fsys *fsx.Mem, path string, content []byte) {
 	t.Helper()
 	if err := fsys.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -32,11 +32,11 @@ func putTestFile(t *testing.T, fsys *fsx.Mem, path string, content []byte) {
 	}
 }
 
-func TestQuarantinePut_MovesFileAndRecordsIt(t *testing.T) {
+func TestRecycleBinPut_MovesFileAndRecordsIt(t *testing.T) {
 	opened, _ := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()
 	fsys := fsx.NewMem(fake)
-	q := library.NewQuarantine(opened, fsys, fake)
+	q := library.NewRecycleBin(opened, fsys, fake)
 
 	putTestFile(t, fsys, "/media/root/track.flac", []byte("audio bytes"))
 
@@ -61,8 +61,8 @@ func TestQuarantinePut_MovesFileAndRecordsIt(t *testing.T) {
 	if _, err := fsys.Stat("/media/root/track.flac"); err == nil {
 		t.Error("original path still exists after Put")
 	}
-	if _, err := fsys.Stat(entry.QuarantinePath); err != nil {
-		t.Errorf("quarantine path %q does not exist: %v", entry.QuarantinePath, err)
+	if _, err := fsys.Stat(entry.RecycledPath); err != nil {
+		t.Errorf("recycle bin path %q does not exist: %v", entry.RecycledPath, err)
 	}
 
 	got, err := q.Get(t.Context(), entry.ID)
@@ -74,12 +74,12 @@ func TestQuarantinePut_MovesFileAndRecordsIt(t *testing.T) {
 	}
 }
 
-func TestQuarantinePut_CrossDeviceDeletesDirectlyInstead(t *testing.T) {
+func TestRecycleBinPut_CrossDeviceDeletesDirectlyInstead(t *testing.T) {
 	opened, _ := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()
 	fsys := fsx.NewMem(fake)
 	fsys.SetRenameSupported(false)
-	q := library.NewQuarantine(opened, fsys, fake)
+	q := library.NewRecycleBin(opened, fsys, fake)
 
 	putTestFile(t, fsys, "/media/root/track.flac", []byte("audio bytes"))
 
@@ -96,11 +96,11 @@ func TestQuarantinePut_CrossDeviceDeletesDirectlyInstead(t *testing.T) {
 	}
 }
 
-func TestQuarantineRestore_PutsFileBackAndMarksRow(t *testing.T) {
+func TestRecycleBinRestore_PutsFileBackAndMarksRow(t *testing.T) {
 	opened, _ := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()
 	fsys := fsx.NewMem(fake)
-	q := library.NewQuarantine(opened, fsys, fake)
+	q := library.NewRecycleBin(opened, fsys, fake)
 
 	putTestFile(t, fsys, "/media/root/track.flac", []byte("audio bytes"))
 	entry, err := q.Put(t.Context(), library.PutRequest{
@@ -122,8 +122,8 @@ func TestQuarantineRestore_PutsFileBackAndMarksRow(t *testing.T) {
 	if _, err := fsys.Stat("/media/root/track.flac"); err != nil {
 		t.Errorf("original path missing after Restore: %v", err)
 	}
-	if _, err := fsys.Stat(entry.QuarantinePath); err == nil {
-		t.Error("quarantine path still exists after Restore")
+	if _, err := fsys.Stat(entry.RecycledPath); err == nil {
+		t.Error("recycle bin path still exists after Restore")
 	}
 
 	if _, err := q.Restore(t.Context(), entry.ID); !errors.Is(err, library.ErrAlreadyRestored) {
@@ -131,11 +131,11 @@ func TestQuarantineRestore_PutsFileBackAndMarksRow(t *testing.T) {
 	}
 }
 
-func TestQuarantineRestore_RefusesWhenOriginalPathIsOccupied(t *testing.T) {
+func TestRecycleBinRestore_RefusesWhenOriginalPathIsOccupied(t *testing.T) {
 	opened, _ := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()
 	fsys := fsx.NewMem(fake)
-	q := library.NewQuarantine(opened, fsys, fake)
+	q := library.NewRecycleBin(opened, fsys, fake)
 
 	putTestFile(t, fsys, "/media/root/track.flac", []byte("audio bytes"))
 	entry, err := q.Put(t.Context(), library.PutRequest{
@@ -164,11 +164,11 @@ func TestQuarantineRestore_RefusesWhenOriginalPathIsOccupied(t *testing.T) {
 	}
 }
 
-func TestQuarantinePurge_RemovesBytesAndRow(t *testing.T) {
+func TestRecycleBinPurge_RemovesBytesAndRow(t *testing.T) {
 	opened, _ := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()
 	fsys := fsx.NewMem(fake)
-	q := library.NewQuarantine(opened, fsys, fake)
+	q := library.NewRecycleBin(opened, fsys, fake)
 
 	putTestFile(t, fsys, "/media/root/track.flac", []byte("audio bytes"))
 	entry, err := q.Put(t.Context(), library.PutRequest{
@@ -182,19 +182,19 @@ func TestQuarantinePurge_RemovesBytesAndRow(t *testing.T) {
 	if err := q.Purge(t.Context(), entry.ID); err != nil {
 		t.Fatalf("Purge: %v", err)
 	}
-	if _, err := fsys.Stat(entry.QuarantinePath); err == nil {
-		t.Error("quarantine path still exists after Purge")
+	if _, err := fsys.Stat(entry.RecycledPath); err == nil {
+		t.Error("recycle bin path still exists after Purge")
 	}
 	if _, err := q.Get(t.Context(), entry.ID); err == nil {
 		t.Error("row still exists after Purge")
 	}
 }
 
-func TestQuarantineSweep_PurgesExpiredEntries(t *testing.T) {
+func TestRecycleBinSweep_PurgesExpiredEntries(t *testing.T) {
 	opened, _ := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()
 	fsys := fsx.NewMem(fake)
-	q := library.NewQuarantine(opened, fsys, fake)
+	q := library.NewRecycleBin(opened, fsys, fake)
 
 	putTestFile(t, fsys, "/media/root/a.flac", []byte("aaaa"))
 	putTestFile(t, fsys, "/media/root/b.flac", []byte("bbbb"))
@@ -216,7 +216,7 @@ func TestQuarantineSweep_PurgesExpiredEntries(t *testing.T) {
 
 	fake.Advance(2 * time.Hour)
 
-	result, err := q.Sweep(t.Context(), library.QuarantineConfig{}, nil, nil)
+	result, err := q.Sweep(t.Context(), library.RecycleBinConfig{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Sweep: %v", err)
 	}
@@ -231,11 +231,11 @@ func TestQuarantineSweep_PurgesExpiredEntries(t *testing.T) {
 	}
 }
 
-func TestQuarantineSweep_EvictsOldestFirstOverGlobalByteBudget(t *testing.T) {
+func TestRecycleBinSweep_EvictsOldestFirstOverGlobalByteBudget(t *testing.T) {
 	opened, _ := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()
 	fsys := fsx.NewMem(fake)
-	q := library.NewQuarantine(opened, fsys, fake)
+	q := library.NewRecycleBin(opened, fsys, fake)
 
 	putTestFile(t, fsys, "/media/root/a.flac", []byte("aaaa"))
 	fake.Advance(time.Minute)
@@ -258,7 +258,7 @@ func TestQuarantineSweep_EvictsOldestFirstOverGlobalByteBudget(t *testing.T) {
 
 	// Both entries total 8 bytes; a 4-byte budget must evict exactly the
 	// older one and leave the newer one alone.
-	result, err := q.Sweep(t.Context(), library.QuarantineConfig{MaxBytes: 4}, nil, nil)
+	result, err := q.Sweep(t.Context(), library.RecycleBinConfig{MaxBytes: 4}, nil, nil)
 	if err != nil {
 		t.Fatalf("Sweep: %v", err)
 	}
@@ -273,11 +273,11 @@ func TestQuarantineSweep_EvictsOldestFirstOverGlobalByteBudget(t *testing.T) {
 	}
 }
 
-func TestQuarantineSweep_EvictsOverPerRootPercentBudget(t *testing.T) {
+func TestRecycleBinSweep_EvictsOverPerRootPercentBudget(t *testing.T) {
 	opened, _ := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()
 	fsys := fsx.NewMem(fake)
-	q := library.NewQuarantine(opened, fsys, fake)
+	q := library.NewRecycleBin(opened, fsys, fake)
 
 	rootID := int64(1)
 	putTestFile(t, fsys, "/media/root/a.flac", []byte("aaaaaaaaaa")) // 10 bytes
@@ -297,7 +297,7 @@ func TestQuarantineSweep_EvictsOverPerRootPercentBudget(t *testing.T) {
 		}
 		return 0, false
 	}
-	result, err := q.Sweep(t.Context(), library.QuarantineConfig{MaxPercentOfRoot: 0.5}, capacity, []int64{rootID})
+	result, err := q.Sweep(t.Context(), library.RecycleBinConfig{MaxPercentOfRoot: 0.5}, capacity, []int64{rootID})
 	if err != nil {
 		t.Fatalf("Sweep: %v", err)
 	}
@@ -311,11 +311,11 @@ func TestQuarantineSweep_EvictsOverPerRootPercentBudget(t *testing.T) {
 
 // A library's "Delete empty folders": the album folder goes, the artist folder that still holds
 // another album stays, and so does the root.
-func TestQuarantinePut_RemovesTheFoldersItEmptied(t *testing.T) {
+func TestRecycleBinPut_RemovesTheFoldersItEmptied(t *testing.T) {
 	opened, _ := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()
 	fsys := fsx.NewMem(fake)
-	q := library.NewQuarantine(opened, fsys, fake)
+	q := library.NewRecycleBin(opened, fsys, fake)
 	putTestFile(t, fsys, "/media/root/Heka/Watermark/03.flac", []byte("audio"))
 	putTestFile(t, fsys, "/media/root/Heka/Detisisu Binip/01.flac", []byte("audio"))
 	putTestFile(t, fsys, "/media/root/Solo/Only/01.flac", []byte("audio"))

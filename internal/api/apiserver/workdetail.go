@@ -147,24 +147,24 @@ type WorksMonitor interface {
 	// only when no files remain for it. Never touches files. Answers a
 	// missing work id with an error wrapping sql.ErrNoRows.
 	// RemoveWork stops wanting an album. deleteFiles also puts its files
-	// into quarantine (section 10.8 -- never a direct delete).
+	// into the recycle bin (section 10.8 -- never a direct delete).
 	RemoveWork(ctx context.Context, workID int64, deleteFiles bool) (RemoveWorkResult, error)
-	// RemovePart stops wanting one track; deleteFiles also quarantines its file.
+	// RemovePart stops wanting one track; deleteFiles also recycles its file.
 	// Answers a part outside the work with an error wrapping sql.ErrNoRows.
 	RemovePart(ctx context.Context, workID, partID int64, deleteFiles bool) (RemovePartResult, error)
 }
 
 // RemovePartResult is what removing a track did.
 type RemovePartResult struct {
-	FilesQuarantined int64
+	FilesRecycled int64
 }
 
 // RemoveWorkResult is what removing an album did.
 type RemoveWorkResult struct {
 	WorkDeleted bool
 	FilesKept   int64
-	// FilesQuarantined counts what deleteFiles moved out of the library.
-	FilesQuarantined int64
+	// FilesRecycled counts what deleteFiles moved out of the library.
+	FilesRecycled int64
 }
 
 // routeGetWork parses the id path parameter, mirroring routeUser: a malformed
@@ -629,7 +629,7 @@ func (s *Server) RemoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 	}
 	writeJSON(w, s.logger, http.StatusOK, gen.RemoveWorkResult{
 		WorkDeleted: result.WorkDeleted, FilesKept: result.FilesKept,
-		FilesQuarantined: &result.FilesQuarantined,
+		FilesRecycled: &result.FilesRecycled,
 	})
 }
 
@@ -675,5 +675,5 @@ func (s *Server) RemovePart(w http.ResponseWriter, r *http.Request, id, partID i
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, gen.RemovePartResult{FilesQuarantined: result.FilesQuarantined})
+	writeJSON(w, s.logger, http.StatusOK, gen.RemovePartResult{FilesRecycled: result.FilesRecycled})
 }

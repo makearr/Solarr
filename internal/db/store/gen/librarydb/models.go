@@ -548,20 +548,6 @@ type PersonRefresh struct {
 	RefreshedAt int64
 }
 
-type Quarantine struct {
-	ID             int64
-	OriginalPath   string
-	QuarantinePath string
-	RootFolderID   sql.NullInt64
-	MediaObjectID  sql.NullInt64
-	AcquisitionID  sql.NullInt64
-	Reason         string
-	SizeBytes      int64
-	QuarantinedAt  int64
-	ExpiresAt      int64
-	RestoredAt     sql.NullInt64
-}
-
 type ReadyQueue struct {
 	CandidateID   int64
 	DesiredItemID int64
@@ -569,6 +555,20 @@ type ReadyQueue struct {
 	QueuedAt      int64
 	ExpiresAt     int64
 	SizeBytes     sql.NullInt64
+}
+
+type RecycleBin struct {
+	ID            int64
+	OriginalPath  string
+	RecycledPath  string
+	RootFolderID  sql.NullInt64
+	MediaObjectID sql.NullInt64
+	AcquisitionID sql.NullInt64
+	Reason        string
+	SizeBytes     int64
+	RecycledAt    int64
+	ExpiresAt     int64
+	RestoredAt    sql.NullInt64
 }
 
 type Relationship struct {

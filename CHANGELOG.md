@@ -118,7 +118,7 @@ below `0.0.x` predate that scheme and are left as history, unconverted.
 - Cut SQL comments to one line, and move the prose to documentation
 - Complete library.db: collections, ready queue, artwork, statistics, reputation
 - Add people, organisations, tags and subscriptions
-- Add candidates, decisions, provenance and quarantine
+- Add candidates, decisions, provenance and recycle bin
 - Add desired state, the work-to-file link, the hunt queue and counters
 - Plan eleven media types, and add classification and image attributes
 - Add the physical layer: objects, paths and interned attributes

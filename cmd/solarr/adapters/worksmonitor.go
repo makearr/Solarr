@@ -21,7 +21,7 @@ type WorksMonitor struct {
 	Works    library.Works
 	Identity library.Identity
 	Desired  library.Desired
-	// Remover quarantines the files of an album being deleted with them.
+	// Remover recycles the files of an album being deleted with them.
 	Remover    FileRemover
 	Categories music.CategoryFinder
 	// Libraries gives a removal its library's recycling bin.
@@ -30,11 +30,11 @@ type WorksMonitor struct {
 	Logger           *slog.Logger
 }
 
-// FileRemover puts one file into quarantine. Narrow on purpose: deleting an
-// album's files is quarantine and nothing else -- no blocking, no blocklist
+// FileRemover puts one file into the recycle bin. Narrow on purpose: deleting an
+// album's files is recycle bin and nothing else -- no blocking, no blocklist
 // (section 10.8, ADR-53's steps are separate choices).
 type FileRemover interface {
-	QuarantineFile(ctx context.Context, mediaObjectID int64, recycling library.Recycling) error
+	RecycleFile(ctx context.Context, mediaObjectID int64, recycling library.Recycling) error
 }
 
 // SetWorkMonitored always ensures the album item exists, monitored or not:
@@ -247,21 +247,21 @@ func (a WorksMonitor) RemoveWork(
 		return apiserver.RemoveWorkResult{}, err
 	}
 
-	var quarantined int64
+	var recycled int64
 	if deleteFiles {
 		files, err := a.Identity.WorkFiles(ctx, workID)
 		if err != nil {
 			return apiserver.RemoveWorkResult{}, err
 		}
-		// Quarantine, never delete: section 10.8 -- the bytes stay
+		// Recycle bin, never delete: section 10.8 -- the bytes stay
 		// recoverable for the retention window, and a mistaken delete of a
 		// whole album is exactly what that window is for.
 		recycling := recyclingFor(a.Libraries, detail.CategoryIDs)
 		for _, mediaObjectID := range files {
-			if err := a.Remover.QuarantineFile(ctx, mediaObjectID, recycling); err != nil {
+			if err := a.Remover.RecycleFile(ctx, mediaObjectID, recycling); err != nil {
 				return apiserver.RemoveWorkResult{}, err
 			}
-			quarantined++
+			recycled++
 		}
 	}
 
@@ -271,11 +271,11 @@ func (a WorksMonitor) RemoveWork(
 	}
 	return apiserver.RemoveWorkResult{
 		WorkDeleted: result.WorkDeleted, FilesKept: result.FilesKept,
-		FilesQuarantined: quarantined,
+		FilesRecycled: recycled,
 	}, nil
 }
 
-// RemovePart stops wanting one track: the file goes to quarantine first, so the
+// RemovePart stops wanting one track: the file goes to the recycle bin first, so the
 // album is recomputed without it, then the part is unmonitored and unwanted.
 func (a WorksMonitor) RemovePart(
 	ctx context.Context, workID, partID int64, deleteFiles bool,
@@ -298,10 +298,10 @@ func (a WorksMonitor) RemovePart(
 	var result apiserver.RemovePartResult
 	if deleteFiles && part.File != nil {
 		recycling := recyclingFor(a.Libraries, detail.CategoryIDs)
-		if err := a.Remover.QuarantineFile(ctx, part.File.MediaObjectID, recycling); err != nil {
+		if err := a.Remover.RecycleFile(ctx, part.File.MediaObjectID, recycling); err != nil {
 			return apiserver.RemovePartResult{}, err
 		}
-		result.FilesQuarantined = 1
+		result.FilesRecycled = 1
 	}
 	if err := a.Desired.SetPartMonitored(ctx, workID, partID, false); err != nil {
 		return apiserver.RemovePartResult{}, err

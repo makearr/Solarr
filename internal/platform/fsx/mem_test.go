@@ -74,7 +74,7 @@ func TestMem_RenameAcrossFilesystemsIsEXDEV(t *testing.T) {
 	fsys.SetRenameSupported(false)
 
 	if err := fsys.Rename("/library/a.flac", "/library/b.flac"); !errors.Is(err, syscall.EXDEV) {
-		t.Errorf("Rename = %v, want EXDEV — quarantine's own cross-device case (section 10.8)", err)
+		t.Errorf("Rename = %v, want EXDEV — recycle bin's own cross-device case (section 10.8)", err)
 	}
 	if _, err := fsys.Stat("/library/a.flac"); err != nil {
 		t.Errorf("a failed rename must leave the source alone: %v", err)

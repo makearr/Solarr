@@ -10,18 +10,18 @@ document (`categories[].file_management`).
 | Setting | Default | When it acts | Where |
 |---|---|---|---|
 | Create Empty Artist Folders | off | every disk scan: a monitored artist of this library with no folder on any of its roots gets one, on the root an import would choose (affinity, then most free space) | `music.Housekeeping` |
-| Delete Empty Folders | off | every disk scan, from the empty folders the sweep met; and when files are deleted (remove album/track, import revert) | `music.Housekeeping`, `library.Quarantine.Put` |
+| Delete Empty Folders | off | every disk scan, from the empty folders the sweep met; and when files are deleted (remove album/track, import revert) | `music.Housekeeping`, `library.RecycleBin.Put` |
 | Unmonitor Deleted Tracks | off | a **full** scan: an album holding a file the scan found missing is unmonitored. Only a full scan is evidence of absence (section 10.4) | `library.Desired.UnmonitorItemsLosingFiles` |
 | Propers and Repacks | Prefer and Upgrade | search: a proper or repack ranks after quality, before the additive score. *Upgrade* vs *Do not Upgrade Automatically* differ only once upgrades are evaluated (stage 6); today both prefer | `music.withRevision` |
 | Rescan Artist Folder after Refresh | Always | after an artist refresh (the artist page's Refresh is manual; the weekly *Refresh artists* task is not) and after enrichment refines an album, its folders are rescanned: always, only after a manual refresh, or never | `app.realigner` |
 | Change File Date | None | import, and every scan of a writable root: a file's date becomes its release date (the `date` tag). Never on a read-only root (Invariant 69) | `music.Committer`, `music.Consumer` |
-| Recycling Bin Cleanup | 7 days | how long quarantine keeps what this library removes; the *Clean recycling bin* task (daily 02:30) purges what is past it | `adapters.recyclingFor`, `library.Quarantine.Sweep` |
+| Recycling Bin Cleanup | 7 days | how long recycle bin keeps what this library removes; the *Clean recycling bin* task (daily 02:30) purges what is past it | `adapters.recyclingFor`, `library.RecycleBin.Sweep` |
 | Set Permissions, chmod Folder, chown Group | off, 755, unchanged | import and library rename: the file gets the folder mode without execute bits, every folder between it and the root gets the folder mode, both the group | `mover.ApplyPermissions` |
 
 Rules worth knowing:
 
-- **The recycling bin is quarantine** (section 10.8): there is no bin path. Removed files go to
-  `<root>/quarantine/<date>/` on the same filesystem. A file in two libraries is kept as long as
+- **The recycling bin is recycle bin** (section 10.8): there is no bin path. Removed files go to
+  `<root>/recycleBin/<date>/` on the same filesystem. A file in two libraries is kept as long as
   either wants and its folders removed only when both say so.
 - **The root folder itself is never touched**: no mode, no group, never deleted. Host
   permissions are reported, never corrected (section 20.2); `chmod Folder` must leave the owner

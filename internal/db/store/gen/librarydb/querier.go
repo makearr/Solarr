@@ -169,7 +169,7 @@ type Querier interface {
 	DeleteLibraryPath(ctx context.Context, id int64) error
 	DeleteMediaObject(ctx context.Context, id int64) error
 	DeletePerson(ctx context.Context, id int64) error
-	DeleteQuarantineEntry(ctx context.Context, id int64) error
+	DeleteRecycleBinEntry(ctx context.Context, id int64) error
 	// A root that is removed from configuration leaves no progress behind.
 	DeleteScanState(ctx context.Context, rootFolderID int64) error
 	DeleteSubscription(ctx context.Context, id int64) error
@@ -249,7 +249,7 @@ type Querier interface {
 	GetPathByLocation(ctx context.Context, arg GetPathByLocationParams) (LibraryPath, error)
 	GetPerson(ctx context.Context, id int64) (Person, error)
 	GetPersonByExternalID(ctx context.Context, arg GetPersonByExternalIDParams) (Person, error)
-	GetQuarantine(ctx context.Context, id int64) (Quarantine, error)
+	GetRecycleBin(ctx context.Context, id int64) (RecycleBin, error)
 	GetRequest(ctx context.Context, id int64) (Request, error)
 	// Per-root sweep progress (section 10.4). Column lists follow table order, or sqlc
 	// stops reusing models.
@@ -305,10 +305,10 @@ type Querier interface {
 	// Startup reconciliation polls every non-terminal acquisition (section 10.9).
 	ListActiveAcquisitions(ctx context.Context) ([]Acquisition, error)
 	// The per-root counterpart, for the max_percent_of_root guard.
-	ListActiveQuarantineByRootOldestFirst(ctx context.Context, arg ListActiveQuarantineByRootOldestFirstParams) ([]Quarantine, error)
+	ListActiveRecycleBinByRootOldestFirst(ctx context.Context, arg ListActiveRecycleBinByRootOldestFirstParams) ([]RecycleBin, error)
 	// Oldest-first eviction order for the max_bytes guard -- distinct from
-	// ListExpiredQuarantine, which is age-of-expiry, not age-of-entry.
-	ListActiveQuarantineOldestFirst(ctx context.Context, limit int64) ([]Quarantine, error)
+	// ListExpiredRecycleBin, which is age-of-expiry, not age-of-entry.
+	ListActiveRecycleBinOldestFirst(ctx context.Context, limit int64) ([]RecycleBin, error)
 	// The person detail page's own need: every alias this person is known by.
 	ListAliasesForPerson(ctx context.Context, personID int64) ([]string, error)
 	// Every credit anywhere under a work, at any scope. Coverage counts use this;
@@ -376,7 +376,7 @@ type Querier interface {
 	ListEditionlessWorks(ctx context.Context, arg ListEditionlessWorksParams) ([]ListEditionlessWorksRow, error)
 	ListEditions(ctx context.Context, workID int64) ([]Edition, error)
 	ListEnabledSubscriptions(ctx context.Context) ([]Subscription, error)
-	ListExpiredQuarantine(ctx context.Context, arg ListExpiredQuarantineParams) ([]Quarantine, error)
+	ListExpiredRecycleBin(ctx context.Context, arg ListExpiredRecycleBinParams) ([]RecycleBin, error)
 	ListFilesForDesiredItem(ctx context.Context, desiredItemID int64) ([]DesiredItemFile, error)
 	// Genre chips for the artist page (Lidarr-like): the union of every genre
 	// tagged on any work credited to this person -- Person itself carries no
@@ -557,7 +557,7 @@ type Querier interface {
 	// :execrows so a caller can tell "already restored" (0 rows) from "restored
 	// just now" (1 row) without a separate read first -- nothing calls this yet,
 	// so tightening it here does not touch a working caller.
-	MarkQuarantineRestored(ctx context.Context, arg MarkQuarantineRestoredParams) (int64, error)
+	MarkRecycleBinRestored(ctx context.Context, arg MarkRecycleBinRestoredParams) (int64, error)
 	MarkRequestFulfilled(ctx context.Context, id int64) (int64, error)
 	NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error)
 	// oldest_searched, the default hunt mode (section 9.3).
@@ -578,10 +578,6 @@ type Querier interface {
 	// Auto entries expire because indexers repair things; manual ones do not.
 	PurgeExpiredBlocklist(ctx context.Context, expiresAt sql.NullInt64) error
 	PurgeExpiredReady(ctx context.Context, expiresAt int64) error
-	Quarantine(ctx context.Context, arg QuarantineParams) (Quarantine, error)
-	// Quarantined bytes count against the free-space gate, so they are summed per
-	// root rather than assumed to be free (ADR-12).
-	QuarantinedBytesForRoot(ctx context.Context, rootFolderID sql.NullInt64) (int64, error)
 	// Recomputed from import_unit rather than incremented as units are added or
 	// redecided -- the same drift-and-repair shape CategoryCounters already uses,
 	// cheaper to reason about than keeping a running total consistent through
@@ -608,6 +604,10 @@ type Querier interface {
 	RecordItemSearched(ctx context.Context, arg RecordItemSearchedParams) error
 	RecordManualIdentification(ctx context.Context, arg RecordManualIdentificationParams) error
 	RecordPersonRefresh(ctx context.Context, arg RecordPersonRefreshParams) error
+	RecycleBin(ctx context.Context, arg RecycleBinParams) (RecycleBin, error)
+	// Recycled bytes count against the free-space gate, so they are summed per
+	// root rather than assumed to be free (ADR-12).
+	RecycledBytesForRoot(ctx context.Context, rootFolderID sql.NullInt64) (int64, error)
 	// ADR-51's own RECORD step: media_object never changes (Invariant 70), only
 	// where it lives. Matched by the old (root_folder_id, rel_path) rather than
 	// by id, since that pair is what Apply already has in hand from its own
@@ -712,9 +712,9 @@ type Querier interface {
 	// A sweep that starts records only that it started: the watermark must not move
 	// until one finishes, or an interrupted scan would look complete.
 	StartScan(ctx context.Context, arg StartScanParams) error
-	// The global counterpart to QuarantinedBytesForRoot, for the config.max_bytes
+	// The global counterpart to RecycledBytesForRoot, for the config.max_bytes
 	// guard (section 10.8) -- a budget across every root, not one at a time.
-	SumQuarantinedBytes(ctx context.Context) (int64, error)
+	SumRecycledBytes(ctx context.Context) (int64, error)
 	// Re-observing a known path proves it is still present, and clears any earlier
 	// missing mark (section 10.4): a file coming back is exactly the case this exists
 	// for.

@@ -59,7 +59,7 @@ func TestRemoveAndBlock_FullActionOnARealDesiredItem(t *testing.T) {
 	}
 
 	action := library.NewRemoveAndBlock(
-		library.NewQuarantine(opened, fsys, fake),
+		library.NewRecycleBin(opened, fsys, fake),
 		library.NewBlockedContentStore(opened),
 		library.NewBlocklistStore(opened),
 		library.NewDesired(opened),
@@ -70,7 +70,7 @@ func TestRemoveAndBlock_FullActionOnARealDesiredItem(t *testing.T) {
 	itemID := item.ID
 	result, err := action.Do(t.Context(), library.RemoveAndBlockRequest{
 		MediaObjectID: object.ID,
-		Quarantine:    true, QuarantineReason: library.ReasonJunk, QuarantineRetain: 168 * time.Hour,
+		RecycleBin:    true, RecycleReason: library.ReasonJunk, RecycleRetain: 168 * time.Hour,
 		Block: true, OSHash: "oshash-1", BlockReason: library.BlockReasonFake, BlockTitle: "Fake Album",
 		Blocklist: true, ContentHash: "content-hash-1", BlocklistTitle: "Fake Album", DesiredItemID: &itemID,
 		Reopen: true,
@@ -80,8 +80,8 @@ func TestRemoveAndBlock_FullActionOnARealDesiredItem(t *testing.T) {
 		t.Fatalf("Do: %v", err)
 	}
 
-	if len(result.QuarantinedPaths) != 1 {
-		t.Fatalf("QuarantinedPaths = %+v, want 1 entry", result.QuarantinedPaths)
+	if len(result.RecycledPaths) != 1 {
+		t.Fatalf("RecycledPaths = %+v, want 1 entry", result.RecycledPaths)
 	}
 	if result.CrossDeviceDeletes != 0 {
 		t.Errorf("CrossDeviceDeletes = %d, want 0", result.CrossDeviceDeletes)
@@ -89,8 +89,8 @@ func TestRemoveAndBlock_FullActionOnARealDesiredItem(t *testing.T) {
 	if _, err := fsys.Stat("/media/root/Artist/Album/track.flac"); err == nil {
 		t.Error("original file still exists after Do")
 	}
-	if _, err := fsys.Stat(result.QuarantinedPaths[0].QuarantinePath); err != nil {
-		t.Errorf("quarantine path does not exist: %v", err)
+	if _, err := fsys.Stat(result.RecycledPaths[0].RecycledPath); err != nil {
+		t.Errorf("recycle bin path does not exist: %v", err)
 	}
 
 	if result.Block == nil || result.Block.OSHash != "oshash-1" {
@@ -115,11 +115,11 @@ func TestRemoveAndBlock_FullActionOnARealDesiredItem(t *testing.T) {
 	}
 
 	if _, err := librarydb.New(opened.Read()).GetMediaObject(t.Context(), object.ID); err == nil {
-		t.Error("media_object still exists after Do -- it should be deleted once every copy is quarantined")
+		t.Error("media_object still exists after Do -- it should be deleted once every copy is recycled")
 	}
 }
 
-func TestRemoveAndBlock_QuarantinesEveryHardlinkedCopy(t *testing.T) {
+func TestRemoveAndBlock_RecyclesEveryHardlinkedCopy(t *testing.T) {
 	opened, _ := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()
 	fsys := fsx.NewMem(fake)
@@ -132,7 +132,7 @@ func TestRemoveAndBlock_QuarantinesEveryHardlinkedCopy(t *testing.T) {
 	addPath(t, opened, object.ID, 2, "track-copy.flac")
 
 	action := library.NewRemoveAndBlock(
-		library.NewQuarantine(opened, fsys, fake),
+		library.NewRecycleBin(opened, fsys, fake),
 		library.NewBlockedContentStore(opened),
 		library.NewBlocklistStore(opened),
 		library.NewDesired(opened),
@@ -141,14 +141,14 @@ func TestRemoveAndBlock_QuarantinesEveryHardlinkedCopy(t *testing.T) {
 	)
 
 	result, err := action.Do(t.Context(), library.RemoveAndBlockRequest{
-		MediaObjectID: object.ID, Quarantine: true, QuarantineReason: library.ReasonJunk,
-		QuarantineRetain: time.Hour, At: 1,
+		MediaObjectID: object.ID, RecycleBin: true, RecycleReason: library.ReasonJunk,
+		RecycleRetain: time.Hour, At: 1,
 	})
 	if err != nil {
 		t.Fatalf("Do: %v", err)
 	}
-	if len(result.QuarantinedPaths) != 2 {
-		t.Fatalf("QuarantinedPaths = %+v, want both copies quarantined", result.QuarantinedPaths)
+	if len(result.RecycledPaths) != 2 {
+		t.Fatalf("RecycledPaths = %+v, want both copies recycled", result.RecycledPaths)
 	}
 	if _, err := fsys.Stat("/media/root-a/track.flac"); err == nil {
 		t.Error("copy in root-a still exists")
@@ -170,27 +170,27 @@ func TestRemoveAndBlock_CrossDeviceCopyStillLetsOthersProceed(t *testing.T) {
 	addPath(t, opened, object.ID, 1, "track.flac")
 	addPath(t, opened, object.ID, 2, "track-copy.flac")
 
-	quarantine := library.NewQuarantine(opened, fsys, fake)
+	recycleBin := library.NewRecycleBin(opened, fsys, fake)
 	action := library.NewRemoveAndBlock(
-		quarantine, library.NewBlockedContentStore(opened), library.NewBlocklistStore(opened),
+		recycleBin, library.NewBlockedContentStore(opened), library.NewBlocklistStore(opened),
 		library.NewDesired(opened), library.NewPhysical(opened),
 		rootPathLookup(map[int64]string{1: "/media/root-a", 2: "/media/root-b"}),
 	)
 
-	// Only root-b's quarantine directory creation will hit the disabled
+	// Only root-b's recycle bin directory creation will hit the disabled
 	// rename -- root-a's Put must still succeed, proving one cross-device
 	// copy does not abort the rest of the action.
 	fsys.SetRenameSupported(false)
 
 	result, err := action.Do(t.Context(), library.RemoveAndBlockRequest{
-		MediaObjectID: object.ID, Quarantine: true, QuarantineReason: library.ReasonJunk,
-		QuarantineRetain: time.Hour, At: 1,
+		MediaObjectID: object.ID, RecycleBin: true, RecycleReason: library.ReasonJunk,
+		RecycleRetain: time.Hour, At: 1,
 	})
 	if err != nil {
 		t.Fatalf("Do: %v", err)
 	}
-	if len(result.QuarantinedPaths) != 0 {
-		t.Errorf("QuarantinedPaths = %+v, want none -- rename is disabled entirely", result.QuarantinedPaths)
+	if len(result.RecycledPaths) != 0 {
+		t.Errorf("RecycledPaths = %+v, want none -- rename is disabled entirely", result.RecycledPaths)
 	}
 	if result.CrossDeviceDeletes != 2 {
 		t.Errorf("CrossDeviceDeletes = %d, want 2", result.CrossDeviceDeletes)
@@ -203,7 +203,7 @@ func TestRemoveAndBlock_CrossDeviceCopyStillLetsOthersProceed(t *testing.T) {
 	}
 }
 
-func TestRemoveAndBlock_ReopenWithoutQuarantineStillDetaches(t *testing.T) {
+func TestRemoveAndBlock_ReopenWithoutRecycleBinStillDetaches(t *testing.T) {
 	opened, _ := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()
 	fsys := fsx.NewMem(fake)
@@ -214,7 +214,7 @@ func TestRemoveAndBlock_ReopenWithoutQuarantineStillDetaches(t *testing.T) {
 	attach(t, opened, item.ID, object.ID, "primary", "disc1:track1")
 
 	action := library.NewRemoveAndBlock(
-		library.NewQuarantine(opened, fsys, fake), library.NewBlockedContentStore(opened),
+		library.NewRecycleBin(opened, fsys, fake), library.NewBlockedContentStore(opened),
 		library.NewBlocklistStore(opened), library.NewDesired(opened), library.NewPhysical(opened),
 		rootPathLookup(nil),
 	)
@@ -237,10 +237,10 @@ func TestRemoveAndBlock_ReopenWithoutQuarantineStillDetaches(t *testing.T) {
 		t.Errorf("PresentCount = %d, want 0", after.PresentCount)
 	}
 
-	// The object itself was never quarantined or deleted -- Quarantine was
+	// The object itself was never recycled or deleted -- Recycle bin was
 	// not requested.
 	if _, err := librarydb.New(opened.Read()).GetMediaObject(t.Context(), object.ID); err != nil {
-		t.Error("media_object should still exist -- Quarantine was not requested")
+		t.Error("media_object should still exist -- Recycle bin was not requested")
 	}
 }
 
@@ -252,7 +252,7 @@ func TestRemoveAndBlock_OnlyBlockRunsWhenOnlyBlockIsRequested(t *testing.T) {
 	object := createObject(t, opened, "quick-1", 4096)
 
 	action := library.NewRemoveAndBlock(
-		library.NewQuarantine(opened, fsys, fake), library.NewBlockedContentStore(opened),
+		library.NewRecycleBin(opened, fsys, fake), library.NewBlockedContentStore(opened),
 		library.NewBlocklistStore(opened), library.NewDesired(opened), library.NewPhysical(opened),
 		rootPathLookup(nil),
 	)
@@ -267,12 +267,12 @@ func TestRemoveAndBlock_OnlyBlockRunsWhenOnlyBlockIsRequested(t *testing.T) {
 	if result.Block == nil {
 		t.Fatal("Block result is nil")
 	}
-	if result.Blocklisted != nil || len(result.QuarantinedPaths) != 0 || len(result.ReopenedItems) != 0 {
+	if result.Blocklisted != nil || len(result.RecycledPaths) != 0 || len(result.ReopenedItems) != 0 {
 		t.Errorf("result = %+v, want only Block set", result)
 	}
-	// Untouched: no quarantine and no delete requested.
+	// Untouched: no recycle bin and no delete requested.
 	if _, err := librarydb.New(opened.Read()).GetMediaObject(t.Context(), object.ID); err != nil {
-		t.Error("media_object should still exist -- Quarantine was not requested")
+		t.Error("media_object should still exist -- Recycle bin was not requested")
 	}
 }
 
@@ -285,14 +285,14 @@ func TestRemoveAndBlock_MissingRootPathIsAnError(t *testing.T) {
 	addPath(t, opened, object.ID, 999, "track.flac")
 
 	action := library.NewRemoveAndBlock(
-		library.NewQuarantine(opened, fsys, fake), library.NewBlockedContentStore(opened),
+		library.NewRecycleBin(opened, fsys, fake), library.NewBlockedContentStore(opened),
 		library.NewBlocklistStore(opened), library.NewDesired(opened), library.NewPhysical(opened),
 		rootPathLookup(nil), // no root folder known at all
 	)
 
 	_, err := action.Do(t.Context(), library.RemoveAndBlockRequest{
-		MediaObjectID: object.ID, Quarantine: true, QuarantineReason: library.ReasonJunk,
-		QuarantineRetain: time.Hour, At: 1,
+		MediaObjectID: object.ID, RecycleBin: true, RecycleReason: library.ReasonJunk,
+		RecycleRetain: time.Hour, At: 1,
 	})
 	if err == nil {
 		t.Fatal("Do succeeded, want it refused: no known path for root folder 999")

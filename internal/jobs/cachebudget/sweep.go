@@ -251,7 +251,7 @@ func (s *Sweep) evictOldestImagesUntilUnder(budgetBytes int64) (int64, error) {
 }
 
 // evictOldestMetadataUntilUnder removes one entry at a time, re-measuring
-// after each -- deliberately not a larger batch. library.Quarantine's own
+// after each -- deliberately not a larger batch. library.Recycle bin's own
 // Sweep once over-evicted by purging a whole batch before re-checking the
 // running total against a small budget; the fix there was the same one
 // applied here from the start: evict one entry, then check again.

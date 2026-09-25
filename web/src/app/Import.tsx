@@ -869,7 +869,7 @@ function SessionRow({
           <button
             type="button"
             onClick={() => {
-              if (confirm("Revert this session? Every placed file moves back through quarantine.")) {
+              if (confirm("Revert this session? Every placed file moves back through the recycle bin.")) {
                 revert.mutate();
               }
             }}

@@ -22,9 +22,9 @@ type RemoveAndBlocker interface {
 
 // RemoveAndBlockInput is one request's own four independently-requestable steps.
 type RemoveAndBlockInput struct {
-	Quarantine            bool
-	QuarantineReason      string
-	QuarantineRetainHours int
+	RecycleBin            bool
+	RecycleReason         string
+	RecycleRetainHours    int
 	Block                 bool
 	OSHash, QuickHash     string
 	BlockReason           string
@@ -40,7 +40,7 @@ type RemoveAndBlockInput struct {
 
 // RemoveAndBlockOutput is what actually happened.
 type RemoveAndBlockOutput struct {
-	QuarantinedPaths   []string
+	RecycledPaths      []string
 	CrossDeviceDeletes int
 	BlockID            *int64
 	BlocklistID        *int64
@@ -95,34 +95,34 @@ func (s *Server) RemoveAndBlockFile(w http.ResponseWriter, r *http.Request, medi
 
 func removeAndBlockInputFromBody(body gen.RemoveAndBlockRequest) RemoveAndBlockInput {
 	input := RemoveAndBlockInput{
-		Quarantine:            derefOr(body.Quarantine, false),
-		QuarantineReason:      string(derefOr(body.QuarantineReason, gen.RemoveAndBlockRequestQuarantineReasonUserDelete)),
-		QuarantineRetainHours: derefOr(body.QuarantineRetainHours, 168),
-		Block:                 derefOr(body.Block, false),
-		OSHash:                derefOr(body.Oshash, ""),
-		QuickHash:             derefOr(body.QuickHash, ""),
-		BlockReason:           string(derefOr(body.BlockReason, gen.RemoveAndBlockRequestBlockReasonFAKE)),
-		BlockNote:             derefOr(body.BlockNote, ""),
-		BlockTitle:            derefOr(body.BlockTitle, ""),
-		ReleaseGroup:          derefOr(body.ReleaseGroup, ""),
-		Blocklist:             derefOr(body.Blocklist, false),
-		IndexerID:             body.IndexerId,
-		GUID:                  derefOr(body.Guid, ""),
-		ContentHash:           derefOr(body.ContentHash, ""),
-		BlocklistTitle:        derefOr(body.BlocklistTitle, ""),
-		DesiredItemID:         body.DesiredItemId,
-		Reopen:                derefOr(body.Reopen, false),
+		RecycleBin:         derefOr(body.RecycleBin, false),
+		RecycleReason:      string(derefOr(body.RecycleReason, gen.RemoveAndBlockRequestRecycleReasonUserDelete)),
+		RecycleRetainHours: derefOr(body.RecycleRetainHours, 168),
+		Block:              derefOr(body.Block, false),
+		OSHash:             derefOr(body.Oshash, ""),
+		QuickHash:          derefOr(body.QuickHash, ""),
+		BlockReason:        string(derefOr(body.BlockReason, gen.RemoveAndBlockRequestBlockReasonFAKE)),
+		BlockNote:          derefOr(body.BlockNote, ""),
+		BlockTitle:         derefOr(body.BlockTitle, ""),
+		ReleaseGroup:       derefOr(body.ReleaseGroup, ""),
+		Blocklist:          derefOr(body.Blocklist, false),
+		IndexerID:          body.IndexerId,
+		GUID:               derefOr(body.Guid, ""),
+		ContentHash:        derefOr(body.ContentHash, ""),
+		BlocklistTitle:     derefOr(body.BlocklistTitle, ""),
+		DesiredItemID:      body.DesiredItemId,
+		Reopen:             derefOr(body.Reopen, false),
 	}
 	return input
 }
 
 func removeAndBlockResultView(result RemoveAndBlockOutput) gen.RemoveAndBlockResult {
 	view := gen.RemoveAndBlockResult{
-		QuarantinedPaths: result.QuarantinedPaths, CrossDeviceDeletes: result.CrossDeviceDeletes,
+		RecycledPaths: result.RecycledPaths, CrossDeviceDeletes: result.CrossDeviceDeletes,
 		ReopenedItems: result.ReopenedItems,
 	}
-	if view.QuarantinedPaths == nil {
-		view.QuarantinedPaths = []string{}
+	if view.RecycledPaths == nil {
+		view.RecycledPaths = []string{}
 	}
 	if view.ReopenedItems == nil {
 		view.ReopenedItems = []int64{}

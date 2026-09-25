@@ -161,61 +161,61 @@ SELECT id, desired_item_id, acquisition_id, incumbent_object_id,
 FROM import_decision
 WHERE outcome = 'NEEDS_REVIEW' ORDER BY decided_at DESC LIMIT ?;
 
--- name: Quarantine :one
-INSERT INTO quarantine (original_path, quarantine_path, root_folder_id,
+-- name: RecycleBin :one
+INSERT INTO recycle_bin (original_path, recycled_path, root_folder_id,
                         media_object_id, acquisition_id, reason, size_bytes,
-                        quarantined_at, expires_at, restored_at)
+                        recycled_at, expires_at, restored_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, original_path, quarantine_path, root_folder_id, media_object_id,
-          acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at;
+RETURNING id, original_path, recycled_path, root_folder_id, media_object_id,
+          acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at;
 
 -- :execrows so a caller can tell "already restored" (0 rows) from "restored
 -- just now" (1 row) without a separate read first -- nothing calls this yet,
 -- so tightening it here does not touch a working caller.
--- name: MarkQuarantineRestored :execrows
-UPDATE quarantine SET restored_at = ? WHERE id = ? AND restored_at IS NULL;
+-- name: MarkRecycleBinRestored :execrows
+UPDATE recycle_bin SET restored_at = ? WHERE id = ? AND restored_at IS NULL;
 
--- name: DeleteQuarantineEntry :exec
-DELETE FROM quarantine WHERE id = ?;
+-- name: DeleteRecycleBinEntry :exec
+DELETE FROM recycle_bin WHERE id = ?;
 
--- Quarantined bytes count against the free-space gate, so they are summed per
+-- Recycled bytes count against the free-space gate, so they are summed per
 -- root rather than assumed to be free (ADR-12).
--- name: QuarantinedBytesForRoot :one
-SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM quarantine
+-- name: RecycledBytesForRoot :one
+SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM recycle_bin
 WHERE root_folder_id = ? AND restored_at IS NULL;
 
--- name: ListExpiredQuarantine :many
-SELECT id, original_path, quarantine_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
-FROM quarantine
+-- name: ListExpiredRecycleBin :many
+SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+FROM recycle_bin
 WHERE restored_at IS NULL AND expires_at <= ? ORDER BY expires_at LIMIT ?;
 
--- name: GetQuarantine :one
-SELECT id, original_path, quarantine_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
-FROM quarantine WHERE id = ?;
+-- name: GetRecycleBin :one
+SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+FROM recycle_bin WHERE id = ?;
 
--- The global counterpart to QuarantinedBytesForRoot, for the config.max_bytes
+-- The global counterpart to RecycledBytesForRoot, for the config.max_bytes
 -- guard (section 10.8) -- a budget across every root, not one at a time.
--- name: SumQuarantinedBytes :one
-SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM quarantine
+-- name: SumRecycledBytes :one
+SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM recycle_bin
 WHERE restored_at IS NULL;
 
 -- Oldest-first eviction order for the max_bytes guard -- distinct from
--- ListExpiredQuarantine, which is age-of-expiry, not age-of-entry.
--- name: ListActiveQuarantineOldestFirst :many
-SELECT id, original_path, quarantine_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
-FROM quarantine
-WHERE restored_at IS NULL ORDER BY quarantined_at LIMIT ?;
+-- ListExpiredRecycleBin, which is age-of-expiry, not age-of-entry.
+-- name: ListActiveRecycleBinOldestFirst :many
+SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+FROM recycle_bin
+WHERE restored_at IS NULL ORDER BY recycled_at LIMIT ?;
 
 -- The per-root counterpart, for the max_percent_of_root guard.
--- name: ListActiveQuarantineByRootOldestFirst :many
-SELECT id, original_path, quarantine_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, quarantined_at, expires_at, restored_at
-FROM quarantine
+-- name: ListActiveRecycleBinByRootOldestFirst :many
+SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+FROM recycle_bin
 WHERE restored_at IS NULL AND root_folder_id = sqlc.arg(root_folder_id)
-ORDER BY quarantined_at LIMIT sqlc.arg(limit);
+ORDER BY recycled_at LIMIT sqlc.arg(limit);
 
 -- name: RecordAcquiredFile :one
 INSERT INTO acquisition_file (acquisition_id, source_path, media_object_id,

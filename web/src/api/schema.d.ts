@@ -2045,7 +2045,7 @@ export interface paths {
         post?: never;
         /**
          * Reverse a block. Administrator only.
-         * @description Removes the block only -- it does not restore a quarantined file or undo a blocklist entry; those are their own separate reversals (`POST /quarantine/{id}/restore`, not yet built, and `DELETE` on the blocklist, not yet exposed either).
+         * @description Removes the block only -- it does not restore a recycled file or undo a blocklist entry; those are their own separate reversals (`POST /recycleBin/{id}/restore`, not yet built, and `DELETE` on the blocklist, not yet exposed either).
          */
         delete: operations["removeBlockedContent"];
         options?: never;
@@ -2066,7 +2066,7 @@ export interface paths {
         put?: never;
         /**
          * "This is fake, get rid of it and make sure it never comes back" (architecture.md section 10.8/ADR-53 section 3). Administrator only.
-         * @description Four steps, each independently requestable: quarantine every copy of the file's bytes (never a direct delete, restorable), block its hashes, blocklist the source release so it is not re-grabbed, and detach the file from every desired item it satisfied so that item returns to wanting the real thing. Requesting none of the four is a no-op, not an error.
+         * @description Four steps, each independently requestable: recycle every copy of the file's bytes (never a direct delete, restorable), block its hashes, blocklist the source release so it is not re-grabbed, and detach the file from every desired item it satisfied so that item returns to wanting the real thing. Requesting none of the four is a no-op, not an error.
          */
         post: operations["removeAndBlockFile"];
         delete?: never;
@@ -2235,7 +2235,7 @@ export interface paths {
         put?: never;
         /**
          * Undo every file this session placed. Administrator only.
-         * @description Every placed unit's own files move back through quarantine (section 10.8) and the rows this session created (never one it only matched against an existing work -- ADR-48) are removed: work_id/edition_id go back to null on the unit, and a work or edition CommitUnit itself created is deleted. Refused with 409 unless the session already finished (DONE or FAILED) -- there is nothing to undo from a session still running, and nothing left once it is already REVERTED.
+         * @description Every placed unit's own files move back through the recycle bin (section 10.8) and the rows this session created (never one it only matched against an existing work -- ADR-48) are removed: work_id/edition_id go back to null on the unit, and a work or edition CommitUnit itself created is deleted. Refused with 409 unless the session already finished (DONE or FAILED) -- there is nothing to undo from a session still running, and nothing left once it is already REVERTED.
          */
         post: operations["revertImportSession"];
         delete?: never;
@@ -2782,7 +2782,7 @@ export interface paths {
         put?: never;
         /**
          * Stop wanting an album, and optionally delete its files. Administrator only.
-         * @description Deletes every desired item for the work, and the work itself only when the library holds no files for it -- with files on disk the next scan would recreate it, so deleting the row would be a lie. Files are kept unless delete_files says otherwise, and even then they go to quarantine (section 10.8): nothing is ever deleted outright, so a mistaken delete stays recoverable for the retention window.
+         * @description Deletes every desired item for the work, and the work itself only when the library holds no files for it -- with files on disk the next scan would recreate it, so deleting the row would be a lie. Files are kept unless delete_files says otherwise, and even then they go to recycle bin (section 10.8): nothing is ever deleted outright, so a mistaken delete stays recoverable for the retention window.
          */
         post: operations["removeWork"];
         delete?: never;
@@ -2805,7 +2805,7 @@ export interface paths {
         put?: never;
         /**
          * Stop wanting one track, and optionally delete its file. Administrator only.
-         * @description Unmonitors the track, shrinking the album's required_count, and stops wanting it on its own if it was. The file is kept unless delete_files says otherwise, and even then it goes to quarantine (section 10.8).
+         * @description Unmonitors the track, shrinking the album's required_count, and stops wanting it on its own if it was. The file is kept unless delete_files says otherwise, and even then it goes to the recycle bin (section 10.8).
          */
         post: operations["removePart"];
         delete?: never;
@@ -3734,7 +3734,7 @@ export interface components {
              * Format: int64
              * @description How many files delete_files moved out of the library.
              */
-            files_quarantined?: number;
+            files_recycled?: number;
         };
         /** @description What removing a track actually did. */
         RemovePartResult: {
@@ -3742,7 +3742,7 @@ export interface components {
              * Format: int64
              * @description How many files delete_files moved out of the library; 0 or 1.
              */
-            files_quarantined: number;
+            files_recycled: number;
         };
         CalendarDate: {
             date: string;
@@ -4416,17 +4416,17 @@ export interface components {
         /** @description Each step is independently requestable (architecture.md section 10.8's own text) -- requesting none of the four is accepted and does nothing. */
         RemoveAndBlockRequest: {
             /** @default false */
-            quarantine: boolean;
+            recycle_bin: boolean;
             /**
              * @default user_delete
              * @enum {string}
              */
-            quarantine_reason: "rejected_worse" | "replaced" | "junk" | "user_delete" | "failed_import";
+            recycle_reason: "rejected_worse" | "replaced" | "junk" | "user_delete" | "failed_import";
             /**
-             * @description How long the quarantined copy survives before Sweep purges it.
+             * @description How long the recycled copy survives before Sweep purges it.
              * @default 168
              */
-            quarantine_retain_hours: number;
+            recycle_retain_hours: number;
             /** @default false */
             block: boolean;
             oshash?: string;
@@ -4453,9 +4453,9 @@ export interface components {
         };
         /** @description What the action actually did -- each field only set when its own step ran. */
         RemoveAndBlockResult: {
-            /** @description The quarantine path each copy landed at, one per copy actually moved. */
-            quarantined_paths: string[];
-            /** @description Copies that turned out to be on a different filesystem than their own quarantine directory -- deleted directly instead of quarantined (section 10.8), unrestorable. */
+            /** @description The recycle bin path each copy landed at, one per copy actually moved. */
+            recycled_paths: string[];
+            /** @description Copies that turned out to be on a different filesystem than their own recycle bin directory -- deleted directly instead of recycled (section 10.8), unrestorable. */
             cross_device_deletes: number;
             /**
              * Format: int64
@@ -4518,7 +4518,7 @@ export interface components {
             /** @description Whether an AcoustID application key is stored. Read-only here and ignored on a PATCH; it is written through POST /metadata/acoustid/apikey. Never returned, not even masked -- saying whether one exists is all a screen asking for one needs, and decrypting it to render would be gratuitous (ADR-14). */
             acoustid_api_key?: components["schemas"]["SecretMask"];
         };
-        /** @description Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's quarantine: nothing is deleted directly, so only how long it keeps what this library removes is set here. */
+        /** @description Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's recycle bin: nothing is deleted directly, so only how long it keeps what this library removes is set here. */
         FileManagement: {
             /** @enum {string} */
             propers_repacks: "prefer_and_upgrade" | "do_not_upgrade" | "do_not_prefer";
@@ -4591,7 +4591,7 @@ export interface components {
         };
         ImportRevertRequest: {
             /** @description Defaults to the session's library's recycling bin retention (its File Management), one week unless changed. */
-            quarantine_retain_hours?: number;
+            recycle_retain_hours?: number;
         };
         /** @description POST .../category's own outcome: every unit the session had already decided COMMIT but not yet placed, placed best-effort. */
         ImportPlacementResult: {
@@ -4610,7 +4610,7 @@ export interface components {
             works_deleted: number;
             /** Format: int64 */
             editions_deleted: number;
-            quarantined_paths: string[];
+            recycled_paths: string[];
         };
         /** @description One inspection-and-import run over one source path (ADR-48). */
         ImportSession: {
@@ -9750,7 +9750,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /**
-                     * @description Also move every file of this album into quarantine.
+                     * @description Also move every file of this album into the recycle bin.
                      * @default false
                      */
                     delete_files?: boolean;
@@ -9786,7 +9786,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /**
-                     * @description Also move this track's file into quarantine.
+                     * @description Also move this track's file into the recycle bin.
                      * @default false
                      */
                     delete_files?: boolean;

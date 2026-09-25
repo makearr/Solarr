@@ -458,12 +458,14 @@ func TestSweep_ReportsEmptyDirectoriesOnAnIncrementalPass(t *testing.T) {
 	}
 }
 
-// Quarantined files have left the library: a sweep that found them would register them again,
+// Recycled files have left the library: a sweep that found them would register them again,
 // bringing back what a revert or a delete removed.
-func TestSweep_NeverWalksTheRootsQuarantine(t *testing.T) {
-	lib := newTree(t, "Nick Cave/Tender Prey/01.flac", "quarantine/2026-09-24/02.flac", "Artist/quarantine/03.flac")
+func TestSweep_NeverWalksTheRootsRecycleBin(t *testing.T) {
+	// The folder was called "quarantine" before 2026-09-25; files recycled then are still in it.
+	lib := newTree(t, "Nick Cave/Tender Prey/01.flac", "recycle-bin/2026-09-24/02.flac",
+		"quarantine/2026-09-20/04.flac", "Artist/recycle-bin/03.flac")
 	_, collected := sweep(t, lib, scan.State{}, scan.Options{Full: true})
-	if want := []string{"Artist/quarantine/03.flac", "Nick Cave/Tender Prey/01.flac"}; !slices.Equal(collected.sorted(), want) {
+	if want := []string{"Artist/recycle-bin/03.flac", "Nick Cave/Tender Prey/01.flac"}; !slices.Equal(collected.sorted(), want) {
 		t.Errorf("found %v, want %v", collected.sorted(), want)
 	}
 }
