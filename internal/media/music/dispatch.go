@@ -54,6 +54,8 @@ type Dispatch struct {
 	Desired      library.Desired
 	Downloaders  DownloaderSource
 	Fetch        ReleaseFetcher
+	// History is optional: told of every grab, for History and the album's page.
+	History func(ctx context.Context, kind download.HistoryKind, acquisition library.Acquisition, detail string)
 }
 
 // Send dispatches one decision, previously recorded against itemID by
@@ -117,6 +119,9 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 	})
 	if err != nil {
 		return library.Acquisition{}, fmt.Errorf("music: dispatch: %w", err)
+	}
+	if d.History != nil {
+		d.History(ctx, download.HistoryGrabbed, created, "")
 	}
 	return created, nil
 }

@@ -8,7 +8,9 @@ import {
   Download,
   HardDrive,
   HelpCircle,
+  History as HistoryIcon,
   LayoutDashboard,
+  ListChecks,
   Library as LibraryIcon,
   Radar,
   ScanSearch,
@@ -38,7 +40,12 @@ const SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier: Ti
   // operational screen.
   { to: "/calendar", label: "Calendar", icon: CalendarDays, tier: "normal" },
   { to: "/unidentified", label: "Unidentified", icon: HelpCircle, tier: "advanced" },
-  { to: "/activity", label: "Activity", icon: Activity, tier: "advanced" },
+];
+
+// Lidarr's Activity: what happened to downloads at normal, the job queue behind them advanced.
+const ACTIVITY_SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier: Tier }[] = [
+  { to: "/activity/history", label: "History", icon: HistoryIcon, tier: "normal" },
+  { to: "/activity/jobs", label: "Jobs", icon: ListChecks, tier: "advanced" },
 ];
 
 // The whole section is advanced and Move & drain expert (2026-09-19):
@@ -127,6 +134,7 @@ export function Sidebar() {
   if (path.startsWith("/library") || routeParams.categoryId) activeKeys.push("library");
   if (path.startsWith("/storage")) activeKeys.push("storage");
   if (path.startsWith("/connections")) activeKeys.push("connections");
+  if (path.startsWith("/activity")) activeKeys.push("activity");
   if (path.startsWith("/settings")) activeKeys.push("settings");
   if (routeParams.categoryId) activeKeys.push(`library:${routeParams.categoryId}`);
   if (path === "/unidentified" && search.category_id) activeKeys.push(`library:${search.category_id}`);
@@ -239,6 +247,25 @@ export function Sidebar() {
         ))}
       </CollapsibleSection>
       )}
+
+      <CollapsibleSection
+        label="Activity"
+        icon={Activity}
+        to="/activity/history"
+        collapsed={collapsed}
+        active={path.startsWith("/activity")}
+        isOpen={sections.isOpen("activity")}
+        onToggle={() => sections.toggle("activity")}
+      >
+        {ACTIVITY_SECTIONS.filter((section) => isTierVisible(tier, section.tier)).map(({ to, label, icon: Icon }) => (
+          <li key={to}>
+            <Link to={to} className={sectionLinkClass(path.startsWith(to), false)}>
+              <Icon aria-hidden className="size-4 shrink-0" />
+              {label}
+            </Link>
+          </li>
+        ))}
+      </CollapsibleSection>
 
       <ul className="flex flex-col gap-0.5 px-2 pt-3">
         {SECTIONS.filter((section) => isTierVisible(tier, section.tier)).map(({ to, label, icon: Icon }) => (

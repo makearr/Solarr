@@ -90,6 +90,25 @@ func TestDispatch_SendCreatesAQueuedAcquisition(t *testing.T) {
 	}
 }
 
+// A grab is history: M1's acceptance test wants a "grabbed" entry for the album.
+func TestDispatch_RecordsTheGrab(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	detail := env.recordDecision(t, item.ID, "ACCEPT")
+	dispatch := env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: &fakeSabnzbdSender{clientRef: "nzo-1"}}})
+	var recorded []string
+	dispatch.History = func(_ context.Context, kind download.HistoryKind, acquisition library.Acquisition, _ string) {
+		recorded = append(recorded, fmt.Sprintf("%s %s", kind, acquisition.DownloadClientRef))
+	}
+
+	if _, err := dispatch.Send(t.Context(), item.ID, detail.Decision.ID, env.clock.Now()); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if want := []string{"download.grabbed nzo-1"}; !reflect.DeepEqual(recorded, want) {
+		t.Errorf("history = %q, want %q", recorded, want)
+	}
+}
+
 func TestDispatch_RefusesANonAcceptDecision(t *testing.T) {
 	env := newSearchTestEnv(t)
 	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)

@@ -19,6 +19,31 @@ const (
 	StateFailed     State = "failed"
 )
 
+// HistoryKind is what happened to a download, as History and an album's page show it (section 5.7).
+type HistoryKind string
+
+// The history kinds M1's acceptance test names: "grabbed" and "imported", and a failure.
+const (
+	HistoryGrabbed  HistoryKind = "download.grabbed"
+	HistoryImported HistoryKind = "download.imported"
+	HistoryFailed   HistoryKind = "download.failed"
+)
+
+// HistoryKinds are every download history kind, newest-first listings read all of them.
+var HistoryKinds = []HistoryKind{HistoryGrabbed, HistoryImported, HistoryFailed}
+
+// HistoryData is a history entry's payload: what was known when it happened, kept as it was.
+type HistoryData struct {
+	AcquisitionID int64  `json:"acquisition_id"`
+	CategoryID    int64  `json:"category_id,omitempty"`
+	ReleaseTitle  string `json:"release_title"`
+	Album         string `json:"album,omitempty"`
+	Artist        string `json:"artist,omitempty"`
+	Indexer       string `json:"indexer,omitempty"`
+	Client        string `json:"client,omitempty"`
+	Detail        string `json:"detail,omitempty"`
+}
+
 // Download is one download as the client reports it.
 type Download struct {
 	ClientRef     string

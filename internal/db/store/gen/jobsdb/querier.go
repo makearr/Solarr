@@ -34,6 +34,9 @@ type Querier interface {
 	// What happened to this album, in the order it happened. Cursor on id, never OFFSET
 	// (Invariant 32); at is not unique, so it cannot page on its own.
 	ListEventsForSubject(ctx context.Context, arg ListEventsForSubjectParams) ([]EventLog, error)
+	// History and an album's page: several kinds, optionally one subject. json_each keeps the kind
+	// list one parameter.
+	ListEventsOfKinds(ctx context.Context, arg ListEventsOfKindsParams) ([]EventLog, error)
 	// Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
 	// updated_at is not unique. A zero cursor is the start, hence the guarded comparison.
 	ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]Job, error)

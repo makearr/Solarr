@@ -66,8 +66,10 @@ type Config struct {
 	Import func(ctx context.Context, acquisition library.Acquisition, localPath string) error
 	// Search searches a desired item again after its download failed.
 	Search func(ctx context.Context, desiredItemID int64) error
-	Clock  clock.Clock
-	Logger *slog.Logger
+	// History records an imported or failed download for History and the album's page.
+	History func(ctx context.Context, kind download.HistoryKind, acquisition library.Acquisition, detail string)
+	Clock   clock.Clock
+	Logger  *slog.Logger
 }
 
 // Job is one poll.
@@ -158,7 +160,7 @@ func (j *Job) advance(
 			return nil
 		}
 		// A person removed it: record that, never send it again on our own (section 10.9).
-		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateFailed, "removed from the download client", now)
+		return j.setFailed(ctx, acquisition, "removed from the download client")
 	}
 	if reused, err := j.checkFingerprint(ctx, acquisition, entry); err != nil || reused {
 		return err
@@ -190,8 +192,16 @@ func (j *Job) checkFingerprint(ctx context.Context, acquisition library.Acquisit
 	if acquisition.ClientFingerprint == fingerprint {
 		return false, nil
 	}
-	return true, j.config.Acquisitions.SetState(ctx, acquisition.ID, StateFailed,
-		"the download client reused this reference for another download", now)
+	return true, j.setFailed(ctx, acquisition, "the download client reused this reference for another download")
+}
+
+// setFailed is the one way a download becomes FAILED, so every failure reaches History.
+func (j *Job) setFailed(ctx context.Context, acquisition library.Acquisition, detail string) error {
+	if err := j.config.Acquisitions.SetState(ctx, acquisition.ID, StateFailed, detail, j.config.Clock.Now().Unix()); err != nil {
+		return err
+	}
+	j.config.History(ctx, download.HistoryFailed, acquisition, detail)
+	return nil
 }
 
 func (j *Job) completed(ctx context.Context, client Client, acquisition library.Acquisition, entry download.Download) error {
@@ -275,6 +285,7 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 			return err
 		}
 		acquisition.State = StateImported
+		j.config.History(ctx, download.HistoryImported, acquisition, "")
 		return j.cleanUp(ctx, client, acquisition)
 	case waiting > 0:
 		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting,
@@ -320,7 +331,7 @@ func (j *Job) failed(
 		j.config.Logger.Warn("failed download could not be removed from the client",
 			slog.Int64("acquisition_id", acquisition.ID), slog.Any("error", err))
 	}
-	if err := j.config.Acquisitions.SetState(ctx, acquisition.ID, StateFailed, detail, now.Unix()); err != nil {
+	if err := j.setFailed(ctx, acquisition, detail); err != nil {
 		return err
 	}
 	if acquisition.DesiredItemID != nil {

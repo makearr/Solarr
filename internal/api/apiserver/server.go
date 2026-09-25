@@ -169,6 +169,8 @@ type Config struct {
 
 	// Blocklist reads and reverses section 10.11's failure memory.
 	Blocklist Blocklist
+	// History reads what happened to downloads: grabbed, imported, failed.
+	History History
 
 	// Backups lists and takes backups (ADR-15). Restoring stays offline.
 	Backups Backups
@@ -245,6 +247,7 @@ type Server struct {
 	libraryHealth         LibraryHealth
 	systemHealth          SystemHealthSource
 	blocklist             Blocklist
+	history               History
 	backups               Backups
 	logReader             LogReader
 	calendar              CalendarReader
@@ -329,6 +332,7 @@ func New(config Config) (*Server, error) {
 		libraryHealth:         config.LibraryHealth,
 		systemHealth:          config.SystemHealth,
 		blocklist:             config.Blocklist,
+		history:               config.History,
 		backups:               config.Backups,
 		logReader:             config.LogReader,
 		calendar:              config.Calendar,
@@ -391,6 +395,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/system/backups", server.ListBackups)
 			secured.Post("/system/backups", server.RunBackupNow)
 			secured.Get("/blocklist", server.routeListBlocklist)
+			secured.Get("/history", server.routeListHistory)
 			secured.Delete("/blocklist/{id}", server.routeRemoveBlocklistEntry)
 			secured.Get("/system/egress", server.GetEgress)
 			secured.Get("/jobs", server.routeListJobs)

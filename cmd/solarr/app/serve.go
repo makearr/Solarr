@@ -515,6 +515,7 @@ func (p *process) startServer(ctx context.Context) error {
 		WorksMonitor: p.worksMonitor(),
 		SystemHealth: adapters.SystemHealth{Cache: p.cache},
 		Blocklist:    adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
+		History:      adapters.History{Log: jobs.NewHistory(p.jobs, clock.NewSystem())},
 		LogReader:    logSource{ring: p.logRing},
 		Calendar:     adapters.Calendar{Calendar: library.NewCalendar(p.library)},
 		Backups: backupSource{

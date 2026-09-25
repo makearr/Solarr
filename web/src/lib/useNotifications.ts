@@ -10,7 +10,20 @@ export interface Notification {
   readonly entity: string;
   readonly kind: string;
   readonly at: string;
+  /** Present on download history events: what was grabbed, imported or failed. */
+  readonly data?: {
+    readonly release_title?: string;
+    readonly album?: string;
+    readonly artist?: string;
+    readonly detail?: string;
+  };
 }
+
+const DOWNLOAD_VERBS: Record<string, string> = {
+  "download.grabbed": "Grabbed",
+  "download.imported": "Imported",
+  "download.failed": "Download failed",
+};
 
 /** How much scrollback the bar keeps. Enough to answer "what just happened",
  *  far short of being a history view -- that is what the event log is for. */
@@ -67,8 +80,13 @@ export function useNotifications(): Stream {
   return { recent, unread, connection, markRead };
 }
 
-/** Plain language for the bar. The entity is already "job:42" shaped, so this
- *  reads as "job:42 updated" rather than inventing a sentence per topic. */
+/** Plain language for the bar: a download reads as a sentence, anything else as "job:42 updated". */
 export function describe(event: Notification): string {
+  const verb = DOWNLOAD_VERBS[event.kind];
+  if (verb !== undefined && event.data) {
+    const album = [event.data.artist, event.data.album].filter(Boolean).join(" — ");
+    const what = album || event.data.release_title || event.entity;
+    return event.data.detail ? `${verb}: ${what} (${event.data.detail})` : `${verb}: ${what}`;
+  }
   return `${event.entity} ${event.kind}`;
 }

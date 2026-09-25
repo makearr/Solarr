@@ -9,6 +9,7 @@ import {
 import { api } from "@/api/client";
 
 import { Activity } from "./Activity";
+import { History } from "./History";
 import { ArrImport } from "./ArrImport";
 import { Dashboard } from "./Dashboard";
 import { Discover } from "./Discover";
@@ -198,7 +199,9 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/indexers", component: Indexers }),
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/downloaders", component: Downloaders }),
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/arr", component: ArrImport }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/activity", component: Activity }),
+  // Activity holds History and Jobs, as Lidarr's holds Queue and History (2026-09-25).
+  createRoute({ getParentRoute: () => rootRoute, path: "/activity/history", component: History }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/activity/jobs", component: Activity }),
   // Settings split into General/User/Scheduler/Cache 2026-09-11 (asked for
   // twice before this) -- /settings itself now just redirects to the first
   // of the four, the same courtesy the old flat /library got.
@@ -214,6 +217,7 @@ const routes = [
     ["/settings/general", "/settings/libraries"],
     ["/settings/blocklist", "/settings/blocklists"],
     ["/settings/arr", "/connections/arr"],
+    ["/activity", "/activity/history"],
   ].map(([from, to]) =>
     createRoute({
       getParentRoute: () => rootRoute,

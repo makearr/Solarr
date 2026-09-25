@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -57,6 +58,48 @@ func (h History) Append(ctx context.Context, event Event) (int64, error) {
 		return 0, fmt.Errorf("jobs: append %s event: %w", event.Kind, err)
 	}
 	return id, nil
+}
+
+// StoredEvent is one history entry as it was recorded.
+type StoredEvent struct {
+	ID          int64
+	At          int64
+	Kind        string
+	SubjectType string
+	SubjectID   int64
+	Data        string
+}
+
+// HistoryQuery selects entries of some kinds, newest first; a zero SubjectID means any subject.
+type HistoryQuery struct {
+	Kinds       []string
+	SubjectType string
+	SubjectID   int64
+	BeforeID    int64
+	Limit       int
+}
+
+// List reads one page of history, newest first, cursored by id (Invariant 32).
+func (h History) List(ctx context.Context, query HistoryQuery) ([]StoredEvent, error) {
+	kinds, err := json.Marshal(query.Kinds)
+	if err != nil {
+		return nil, fmt.Errorf("jobs: list history: %w", err)
+	}
+	rows, err := jobsdb.New(h.store.Read()).ListEventsOfKinds(ctx, jobsdb.ListEventsOfKindsParams{
+		Kinds: string(kinds), SubjectID: query.SubjectID, SubjectType: nullableText(query.SubjectType),
+		BeforeID: query.BeforeID, PageSize: int64(query.Limit),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("jobs: list history: %w", err)
+	}
+	events := make([]StoredEvent, len(rows))
+	for i, row := range rows {
+		events[i] = StoredEvent{
+			ID: row.ID, At: row.At, Kind: row.Kind, SubjectType: row.SubjectType.String,
+			SubjectID: row.SubjectID.Int64, Data: row.DataJson,
+		}
+	}
+	return events, nil
 }
 
 // FailUnfinished fails every job that has not reached a terminal state, in batches.
