@@ -218,14 +218,16 @@ func creditNames(credits []musicbrainz.ArtistCredit) string {
 
 // albumConfidence is a tracklist fit's likelihood: 120 of 120 right on the test library
 // (2026-09-17). At the accept distance (0.20) it reaches 0.89, just short of review-free.
-func albumConfidence(distance float64) float64 {
-	return 0.99 - distance*0.5
+// It reads the gate distance: release type ranks editions, it is no evidence against one, and
+// counting it sent a correct compilation to review (the main library, 2026-09-25).
+func albumConfidence(score ReleaseScore) float64 {
+	return 0.99 - score.GateDistance*0.5
 }
 
 // Within keeps an identified album only when it is at least threshold likely right; below it the
 // match goes to review like an ambiguous one -- the one threshold governs album matching too.
 func (d AlbumDecision) Within(threshold float64) AlbumDecision {
-	if d.Outcome == AlbumIdentified && d.Best != nil && albumConfidence(d.Best.Distance) < threshold {
+	if d.Outcome == AlbumIdentified && d.Best != nil && albumConfidence(*d.Best) < threshold {
 		d.Outcome = AlbumAmbiguous
 	}
 	return d

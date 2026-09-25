@@ -713,7 +713,7 @@ func groupByAlbum(observed []scan.Observed, files []pendingFile) [][]pendingFile
 // albumLink links one file of an identified album to its release group and release; a file
 // the release has no track for sits at sibling confidence, since only its folder says so.
 func albumLink(out *batchResult, index int, best ReleaseScore, track *ReleaseTrack) library.WorkLink {
-	confidence := albumConfidence(best.Distance)
+	confidence := albumConfidence(best)
 	if track == nil {
 		confidence = siblingConfidence
 	}

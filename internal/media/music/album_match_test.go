@@ -81,6 +81,18 @@ func TestDecideAlbum_AStudioAlbumBeatsACompilationOfTheSameRecordings(t *testing
 	}
 }
 
+// Found on the main library (2026-09-25): a greatest-hits album, uncontested and fitting, went to
+// review because its release type counted against its confidence. Release type only ranks.
+func TestDecideAlbum_ALoneFittingCompilationIsNotSentToReview(t *testing.T) {
+	compilation := candidateOf("rg-hits", "Album", []string{"Compilation"},
+		releaseOf("rel-hits", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks))
+
+	decision := music.DecideAlbum(folderOf(traumaTracks), []music.AlbumCandidate{compilation}).Within(0.93)
+	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-hits" {
+		t.Errorf("decision = %s best %q, want identified rg-hits", decision.Outcome, bestReleaseGroup(decision))
+	}
+}
+
 // Two different albums fitting equally well are a coin flip, not an identification.
 func TestDecideAlbum_TwoReleaseGroupsFittingEquallyAreAmbiguous(t *testing.T) {
 	first := candidateOf("rg-a", "Album", nil, releaseOf("rel-a", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks))
