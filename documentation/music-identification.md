@@ -70,7 +70,9 @@ date. The best is **identified** unless a different release group's best is with
 is **ambiguous** — except that an official release beats a rival known only as a promo or
 bootleg, and a best release the folder fills exactly (every file paired, as many files as
 tracks) beats rivals it only partly covers: 12 files are the 12-track album, not 12 of a
-26-track compilation of the same name. Completeness never lifts a worse fit over a better one. A contradicted folder falls through to text search rather than being queued: two
+26-track compilation of the same name. Completeness never lifts a worse fit over a better one.
+Nor is it ambiguous when every close rival holds the best's tracklist — as many tracks, every
+file on the same recording: that is one album catalogued twice, decided by the ranking above. A contradicted folder falls through to text search rather than being queued: two
 real singles were longer edits of the catalogued recording.
 
 DroppedNeedle also refuses a win when the runner-up leaves some file without a supported
