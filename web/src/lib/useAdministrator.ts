@@ -23,6 +23,7 @@ export function isAdministratorPath(path: string): boolean {
   return (
     path.startsWith("/storage") ||
     path.startsWith("/connections") ||
+    path.startsWith("/quality-profiles") ||
     /^\/library\/[^/]+\/(config(\/|$)|import$)/.test(path)
   );
 }

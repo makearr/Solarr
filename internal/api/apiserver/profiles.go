@@ -44,7 +44,8 @@ func (s *Server) CreateQualityProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := s.auth.Settings.CreateQualityProfile(r.Context(), body.Name, body.Rules, body.Upgrade)
+	created, err := s.auth.Settings.CreateQualityProfileFor(r.Context(), derefOr(body.MediaType, "music"),
+		body.Name, body.Rules, body.Upgrade)
 	if err != nil {
 		var problems config.Problems
 		if errors.As(err, &problems) {
@@ -124,7 +125,7 @@ func (s *Server) DeleteQualityProfile(w http.ResponseWriter, r *http.Request, id
 }
 
 func qualityProfileView(p settings.QualityProfile) gen.QualityProfile {
-	return gen.QualityProfile{Id: p.ID, Name: p.Name, Rules: p.RulesJSON, Upgrade: p.UpgradeJSON}
+	return gen.QualityProfile{Id: p.ID, Name: p.Name, Rules: p.RulesJSON, Upgrade: p.UpgradeJSON, MediaType: p.MediaType}
 }
 
 // ListLanguageProfiles returns every section 19.8 language profile.

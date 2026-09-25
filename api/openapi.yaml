@@ -6695,10 +6695,13 @@ components:
         internal/identify/score owns that shape (Parse/ParseUpgrade); this
         layer only checks a name and that they decode (settings.
         validateQualityProfile).
-      required: [id, name, rules, upgrade]
+      required: [id, name, rules, upgrade, media_type]
       properties:
         id: { type: integer, format: int64 }
         name: { type: string }
+        media_type:
+          type: string
+          description: What the profile judges; a library lists only profiles of its own media type.
         rules:
           type: string
           description: ADR-40's rule JSON -- internal/identify/score.Parse's own shape.
@@ -6711,6 +6714,9 @@ components:
       required: [name, rules, upgrade]
       properties:
         name: { type: string, minLength: 1 }
+        media_type:
+          type: string
+          description: Set when a profile is created, music when absent; an update cannot change it.
         rules: { type: string }
         upgrade: { type: string }
 

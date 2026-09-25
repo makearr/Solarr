@@ -235,14 +235,25 @@ func (c *Cache) DeleteCategory(ctx context.Context, id int64) error {
 // syntactically valid JSON (ADR-44 -- a bad policy must be refused on write, not
 // discovered later at startup).
 func (c *Cache) CreateQualityProfile(ctx context.Context, name, rulesJSON, upgradeJSON string) (QualityProfile, error) {
-	if problems := validateQualityProfile(name, rulesJSON, upgradeJSON); len(problems) > 0 {
+	return c.CreateQualityProfileFor(ctx, "music", name, rulesJSON, upgradeJSON)
+}
+
+// CreateQualityProfileFor adds a quality profile judging one media type.
+func (c *Cache) CreateQualityProfileFor(
+	ctx context.Context, mediaType, name, rulesJSON, upgradeJSON string,
+) (QualityProfile, error) {
+	problems := validateQualityProfile(name, rulesJSON, upgradeJSON)
+	if !slices.Contains(MediaTypes, mediaType) {
+		problems = append(problems, config.Problem{Path: "media_type", Value: mediaType, Expectation: "one of " + strings.Join(MediaTypes, ", ")})
+	}
+	if len(problems) > 0 {
 		return QualityProfile{}, problems
 	}
 
 	var created settingsdb.QualityProfile
 	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		row, err := queries.CreateQualityProfile(ctx, settingsdb.CreateQualityProfileParams{
-			Name: name, RulesJson: rulesJSON, UpgradeJson: upgradeJSON,
+			Name: name, RulesJson: rulesJSON, UpgradeJson: upgradeJSON, MediaType: mediaType,
 		})
 		created = row
 		return err
@@ -251,7 +262,7 @@ func (c *Cache) CreateQualityProfile(ctx context.Context, name, rulesJSON, upgra
 		return QualityProfile{}, fmt.Errorf("settings: create quality profile %q: %w", name, err)
 	}
 	return QualityProfile{ID: created.ID, Name: created.Name, RulesJSON: created.RulesJson,
-		UpgradeJSON: created.UpgradeJson}, nil
+		UpgradeJSON: created.UpgradeJson, MediaType: created.MediaType}, nil
 }
 
 // UpdateQualityProfile replaces a quality profile's policy.
@@ -418,16 +429,20 @@ func (c *Cache) SetCategoryQuality(
 	ctx context.Context, categoryID int64, profileIDs []int64, cutoffID *int64, target *QualityTarget,
 ) error {
 	snapshot := c.Snapshot()
-	if _, found := snapshot.Category(categoryID); !found {
+	category, found := snapshot.Category(categoryID)
+	if !found {
 		return fmt.Errorf("%w: category %d", ErrNotFound, categoryID)
 	}
 	var problems config.Problems
 	seen := make(map[int64]bool, len(profileIDs))
 	for index, id := range profileIDs {
 		where := fmt.Sprintf("profiles[%d]", index)
-		if _, found := snapshot.QualityProfile(id); !found {
+		if profile, found := snapshot.QualityProfile(id); !found {
 			problems = append(problems, config.Problem{Path: where, Value: strconv.FormatInt(id, 10),
 				Expectation: "an existing quality profile"})
+		} else if profile.MediaType != category.MediaType {
+			problems = append(problems, config.Problem{Path: where, Value: profile.Name,
+				Expectation: "a " + category.MediaType + " quality profile"})
 		}
 		if seen[id] {
 			problems = append(problems, config.Problem{Path: where, Value: strconv.FormatInt(id, 10),

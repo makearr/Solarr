@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  Gauge,
   HardDrive,
   HelpCircle,
   History as HistoryIcon,
@@ -40,6 +41,8 @@ const SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier: Ti
   // operational screen.
   { to: "/calendar", label: "Calendar", icon: CalendarDays, tier: "normal" },
   { to: "/unidentified", label: "Unidentified", icon: HelpCircle, tier: "advanced" },
+  // Shared by every library of a media type, so a main entry of its own (2026-09-25).
+  { to: "/quality-profiles", label: "Quality profiles", icon: Gauge, tier: "advanced" },
 ];
 
 // Lidarr's Activity: what happened to downloads at normal, the job queue behind them advanced.
@@ -268,7 +271,9 @@ export function Sidebar() {
       </CollapsibleSection>
 
       <ul className="flex flex-col gap-0.5 px-2 pt-3">
-        {SECTIONS.filter((section) => isTierVisible(tier, section.tier)).map(({ to, label, icon: Icon }) => (
+        {SECTIONS.filter(
+          (section) => isTierVisible(tier, section.tier) && (administrator || !isAdministratorPath(section.to)),
+        ).map(({ to, label, icon: Icon }) => (
           <li key={to}>
             <Link to={to} title={collapsed ? label : undefined} className={sectionLinkClass(path.startsWith(to), collapsed)}>
               <Icon aria-hidden className="size-4 shrink-0" />

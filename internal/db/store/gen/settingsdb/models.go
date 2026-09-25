@@ -221,6 +221,7 @@ type QualityProfile struct {
 	RulesJson     string
 	UpgradeJson   string
 	SuggestedRank int64
+	MediaType     string
 }
 
 type RootFolder struct {

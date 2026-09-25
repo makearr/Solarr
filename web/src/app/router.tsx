@@ -31,6 +31,7 @@ import { Libraries } from "./Libraries";
 import { Packs } from "./Packs";
 import { People } from "./People";
 import { PersonDetail } from "./PersonDetail";
+import { QualityProfilesPage } from "./QualityProfileEditor";
 import { QualityProfiles } from "./QualityProfiles";
 import { RootFolders } from "./RootFolders";
 import { BlocklistsSettings, LibrariesSettings, MetadataSettingsPage, NetworkSettings } from "./Settings";
@@ -200,6 +201,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/downloaders", component: Downloaders }),
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/arr", component: ArrImport }),
   // Activity holds History and Jobs, as Lidarr's holds Queue and History (2026-09-25).
+  createRoute({ getParentRoute: () => rootRoute, path: "/quality-profiles", component: QualityProfilesPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity/history", component: History }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity/jobs", component: Activity }),
   // Settings split into General/User/Scheduler/Cache 2026-09-11 (asked for

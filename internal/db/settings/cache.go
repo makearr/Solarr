@@ -297,6 +297,7 @@ func convertQualityProfiles(rows []settingsdb.QualityProfile) []QualityProfile {
 			Name:        row.Name,
 			RulesJSON:   row.RulesJson,
 			UpgradeJSON: row.UpgradeJson,
+			MediaType:   row.MediaType,
 		})
 	}
 	return profiles

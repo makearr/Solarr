@@ -176,6 +176,8 @@ type QualityProfile struct {
 	Name        string
 	RulesJSON   string
 	UpgradeJSON string
+	// MediaType is what the profile judges; a library is offered only profiles of its own type.
+	MediaType string
 }
 
 // LanguageProfile is section 19.8's policy: language is its own axis, belonging to

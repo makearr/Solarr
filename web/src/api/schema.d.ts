@@ -4346,6 +4346,8 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /** @description What the profile judges; a library lists only profiles of its own media type. */
+            media_type: string;
             /** @description ADR-40's rule JSON -- internal/identify/score.Parse's own shape. */
             rules: string;
             /** @description ADR-40's upgrade JSON -- internal/identify/score.ParseUpgrade's own shape. */
@@ -4353,6 +4355,8 @@ export interface components {
         };
         QualityProfileWrite: {
             name: string;
+            /** @description Set when a profile is created, music when absent; an update cannot change it. */
+            media_type?: string;
             rules: string;
             upgrade: string;
         };
