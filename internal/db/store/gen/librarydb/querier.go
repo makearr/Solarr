@@ -269,6 +269,8 @@ type Querier interface {
 	// Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
 	GetWorkByExternalID(ctx context.Context, arg GetWorkByExternalIDParams) (Work, error)
 	GetWorkExternalIDByProvider(ctx context.Context, arg GetWorkExternalIDByProviderParams) (WorkExternalID, error)
+	// An import names an album it already knows by the canonical title and artist, never the tags.
+	GetWorkNamingByExternalID(ctx context.Context, arg GetWorkNamingByExternalIDParams) (GetWorkNamingByExternalIDRow, error)
 	GetWorkPart(ctx context.Context, id int64) (WorkPart, error)
 	// Identification attempts (migration 0033). Column lists follow table order.
 	InsertIdentificationAttempt(ctx context.Context, arg InsertIdentificationAttemptParams) error

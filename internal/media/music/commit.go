@@ -311,6 +311,20 @@ func (c Committer) CommitMatchedUnit(
 	}
 	artist := representative.First("albumartist", "album_artist", "artist")
 	year := parseYear(representative.First("date", "year"))
+	known, found, err := c.identity.KnownWork(ctx, best.ExternalID.Provider, best.ExternalID.ExternalID)
+	if err != nil {
+		return Placed{}, fmt.Errorf("music: commit unit %q: %w", unit.Directory, err)
+	}
+	if found {
+		// Tags said "HEKA" where MusicBrainz says "Heka": a known album is named canonically.
+		work.CanonicalTitle, work.SortTitle = known.Title, SortTitle(known.Title)
+		if known.ArtistName != "" {
+			artist = known.ArtistName
+		}
+		if year == nil {
+			year = known.Year
+		}
+	}
 
 	affinityKey := artistAffinityKey(artist)
 	var existingAffinityRoot *int64

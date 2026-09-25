@@ -42,6 +42,7 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 		WikidataEnabled: func() bool { return *p.cache.Snapshot().MetadataSettings().Wikidata },
 		Artworks:        library.NewArtworks(p.library),
 		Realigner:       realigner{p: p},
+		OnRefined:       func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		Tags:            mediatool.New(nil, 0),
 		Roots:           adapters.Roots{Cache: p.cache},
 		HTTP:            imageClient,

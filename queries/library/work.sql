@@ -23,6 +23,14 @@ FROM work w
 JOIN work_external_id e ON e.work_id = w.id
 WHERE e.provider = ? AND e.external_id = ?;
 
+-- An import names an album it already knows by the canonical title and artist, never the tags.
+-- name: GetWorkNamingByExternalID :one
+SELECT w.canonical_title, w.year, p.name AS primary_artist_name
+FROM work w
+JOIN work_external_id e ON e.work_id = w.id
+LEFT JOIN person p ON p.id = w.primary_artist_id
+WHERE e.provider = ? AND e.external_id = ?;
+
 -- name: SetWorkPrimaryArtist :exec
 -- The Tracks navigation level's own denormalized sort key (0021_work_primary_artist.sql's
 -- doc comment) -- written only by internal/db/library.People.AddCredit, the one place a

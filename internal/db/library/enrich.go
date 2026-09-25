@@ -63,6 +63,30 @@ func (i Identity) WorkExternalID(ctx context.Context, workID int64, provider str
 	return row.ExternalID, true, nil
 }
 
+// KnownWorkNaming is what an already known work is named by: its canonical title, year and artist.
+type KnownWorkNaming struct {
+	Title      string
+	Year       *int64
+	ArtistName string
+}
+
+// KnownWork answers how the work an external id already resolves to is named, or ok=false.
+func (i Identity) KnownWork(ctx context.Context, provider, externalID string) (KnownWorkNaming, bool, error) {
+	row, err := librarydb.New(i.store.Read()).GetWorkNamingByExternalID(ctx,
+		librarydb.GetWorkNamingByExternalIDParams{Provider: provider, ExternalID: externalID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return KnownWorkNaming{}, false, nil
+	}
+	if err != nil {
+		return KnownWorkNaming{}, false, fmt.Errorf("library: known work: %w", err)
+	}
+	known := KnownWorkNaming{Title: row.CanonicalTitle, ArtistName: row.PrimaryArtistName.String}
+	if row.Year.Valid {
+		known.Year = &row.Year.Int64
+	}
+	return known, true, nil
+}
+
 // EditionRefinement is what a placeholder edition becomes once a provider has
 // answered -- naming only, exactly like EditionIdentity; RefineEdition's job is
 // persisting it.

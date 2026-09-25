@@ -503,6 +503,55 @@ func TestCommitUnit_MatchesAnExistingWorkOnASecondUnit(t *testing.T) {
 	}
 }
 
+// A download tagged "HEKA" lands in the album the library already knows, named as MusicBrainz names it.
+func TestCommitUnit_NamesAKnownAlbumCanonicallyNotByItsTags(t *testing.T) {
+	committer, opened, fsys := newCommitter(t, true)
+	at := time.Unix(1_700_000_000, 0)
+	workIDs, err := library.NewIdentity(opened).ResolveWorks(t.Context(), at, []library.WorkLink{{
+		Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 1,
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Watermark", SortTitle: "Watermark"},
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+	people := library.NewPeople(opened)
+	personID, err := people.ResolvePerson(t.Context(), at, library.PersonLink{
+		Provider: "musicbrainz:artist", ExternalID: "heka", Person: library.PersonIdentity{Name: "Heka", SortName: "Heka"},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePerson: %v", err)
+	}
+	if err := people.AddCredit(t.Context(), workIDs[0], personID, music.CreditRoleArtist, 0); err != nil {
+		t.Fatalf("AddCredit: %v", err)
+	}
+
+	track := []byte("pihudoc zaze bytes")
+	writeCommitSourceFile(t, fsys, "HEKA-WATERMARK/03-pihudoc_zaze.flac", track)
+	unit := testUnit("HEKA-WATERMARK", []inspect.File{
+		{RelPath: "HEKA-WATERMARK/03-pihudoc_zaze.flac", SizeBytes: int64(len(track))},
+	})
+	tags := music.UnitTagSourceFor(commitSourceRoot, []mediatool.Probe{{
+		Path: path.Join(commitSourceRoot, "HEKA-WATERMARK/03-pihudoc_zaze.flac"),
+		Tags: mediatool.Tags{"album": "WATERMARK", "artist": "HEKA", "date": "1988", "tracknumber": "3", "title": "Pihudoc Zaze"},
+	}})
+	best := model.Identification{
+		Confidence: 0.95,
+		ExternalID: &model.ExternalID{Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 0.95},
+	}
+
+	placed, err := committer.CommitUnit(t.Context(), commitSourceRoot, unit, best, tags, commitCategoryID)
+	if err != nil {
+		t.Fatalf("CommitUnit: %v", err)
+	}
+	paths, err := library.NewPhysical(opened).PathsForObject(t.Context(), placed.MediaObjectIDs[0])
+	if err != nil {
+		t.Fatalf("PathsForObject: %v", err)
+	}
+	if want := "Heka/Watermark (1988)/Heka - 03 - Pihudoc Zaze.flac"; len(paths) != 1 || paths[0].RelPath != want {
+		t.Errorf("placed at %+v, want %q", paths, want)
+	}
+}
+
 func TestCommitUnit_NoRootAcceptsThisCategory(t *testing.T) {
 	committer, _, fsys := newCommitter(t, false) // no CategoryRoot attached at all
 	track := []byte("airbag bytes")
