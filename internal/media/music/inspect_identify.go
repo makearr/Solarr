@@ -78,7 +78,7 @@ func RefineUnitByAlbum(
 	switch decision = decision.Within(threshold); decision.Outcome {
 	case AlbumIdentified:
 		best := AlbumCandidates(AlbumDecision{Outcome: decision.Outcome, Scores: []ReleaseScore{*decision.Best}})[0]
-		best.Confidence = albumConfidence(decision.Best.Distance)
+		best.Confidence = albumConfidence(*decision.Best)
 		best.ExternalID.Confidence = best.Confidence
 		return model.ChainResult{Best: &best, Candidates: append([]model.Identification{best}, result.Candidates...)},
 			PlacementOf(decision, relPaths), nil

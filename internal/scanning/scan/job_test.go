@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,6 +38,7 @@ func (f fakeRoots) RootFolder(id int64) (settings.RootFolder, bool) {
 
 // fakeTool answers every path with the same tags unless told to fail.
 type fakeTool struct {
+	mu        sync.Mutex
 	tags      mediatool.Tags
 	failPath  string
 	batchErr  error
@@ -46,6 +48,8 @@ type fakeTool struct {
 func (f *fakeTool) Available(context.Context) error { return nil }
 
 func (f *fakeTool) ReadTags(_ context.Context, paths []string) ([]mediatool.Probe, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.batchErr != nil {
 		return nil, f.batchErr
 	}
@@ -69,16 +73,21 @@ func (f *fakeTool) Fingerprint(context.Context, []string) ([]mediatool.Fingerpri
 }
 
 // recorder is the Consumer under test's stand-in for library.db.
+// The scan observes several directories at once, so it is safe for concurrent use.
 type recorder struct {
+	mu              sync.Mutex
 	seen            []scan.Observed
 	seenCategoryIDs []int64
 	batches         int
-	failAfter       int
-	failure         error
+	// failDirectory's batch fails with failure; every other batch commits.
+	failDirectory string
+	failure       error
 }
 
 func (r *recorder) Observe(_ context.Context, _ settings.RootFolder, categoryID int64, batch []scan.Observed) error {
-	if r.failure != nil && r.batches >= r.failAfter {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.failure != nil && len(batch) > 0 && path.Dir(batch[0].File.RelPath) == r.failDirectory {
 		return r.failure
 	}
 	r.batches++
@@ -87,11 +96,15 @@ func (r *recorder) Observe(_ context.Context, _ settings.RootFolder, categoryID 
 	return nil
 }
 
+// paths is every path seen, sorted: batches arrive in whatever order they finish.
 func (r *recorder) paths() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	found := make([]string, len(r.seen))
 	for index, observed := range r.seen {
 		found[index] = observed.File.RelPath
 	}
+	slices.Sort(found)
 	return found
 }
 
@@ -364,7 +377,7 @@ func TestJob_ResumesFromWhatTheConsumerCommitted(t *testing.T) {
 	handler := fixture.job(t, scan.IsAudio)
 
 	refused := errors.New("write queue closed")
-	fixture.recorder.failAfter = 2
+	fixture.recorder.failDirectory = "c"
 	fixture.recorder.failure = refused
 	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, Full: true}); !errors.Is(err, refused) {
 		t.Fatalf("Run = %v, want the consumer's error", err)

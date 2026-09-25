@@ -177,11 +177,15 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	}
 
 	state := State{SweptThrough: progress.SweptThrough, Cursor: progress.Cursor}
+	flow := pipeline{
+		observe: func(ctx context.Context, batch Batch) error { return j.observe(ctx, root, payload.CategoryID, batch) },
+		advance: func(ctx context.Context, directory string) error { return j.scans.Advance(ctx, root.ID, directory) },
+	}
 	result, err := j.sweeper.Sweep(ctx, root.Path, state,
-		Options{Full: payload.Full, Include: j.include},
-		func(ctx context.Context, batch Batch) error {
-			return j.batch(ctx, root, payload.CategoryID, batch)
-		})
+		Options{Full: payload.Full, Include: j.include}, flow.submit)
+	if waited := flow.wait(ctx); err == nil {
+		err = waited
+	}
 	if err != nil {
 		// Nothing to record: each batch persisted its own cursor as it committed,
 		// which is also what survives the process simply being killed.
@@ -263,16 +267,6 @@ func (j *Job) markMissing(ctx context.Context, root settings.RootFolder, sweptTh
 	j.logger.Info("library paths marked missing",
 		slog.Int64("root_folder_id", root.ID), slog.String("path", root.Path),
 		slog.Int("marked", marked))
-}
-
-// batch probes one directory's files in a single mediatool call and hands the result
-// on. The cursor advances only after the consumer has committed, which is what makes
-// a restart resume rather than lose a batch.
-func (j *Job) batch(ctx context.Context, root settings.RootFolder, categoryID int64, batch Batch) error {
-	if err := j.observe(ctx, root, categoryID, batch); err != nil {
-		return err
-	}
-	return j.scans.Advance(ctx, root.ID, batch.Directory)
 }
 
 // observe probes one batch in a single mediatool call and hands it to the consumer.
