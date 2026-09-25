@@ -39,7 +39,7 @@ export function Priority() {
     <section className="flex flex-col gap-2">
       <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Priority</h2>
       <p className="text-xs text-ink-muted">
-        ADR-36's composite acquisition priority: four trigger weights (bigger is more urgent) and
+        How urgently something is fetched: four trigger weights (bigger is more urgent) and
         how long a release counts as newly released before it competes as a gap instead.
       </p>
 
@@ -105,7 +105,7 @@ function PriorityForm({
           className={`${inputStyle} w-24`}
         />
         <span className="text-[0.6875rem]">
-          Days after release an item still counts as newly released rather than a gap (ADR-55).
+          Days after release an item still counts as newly released rather than a gap.
         </span>
       </label>
 

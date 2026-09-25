@@ -1941,13 +1941,16 @@ type LogoutStatusStatus string
 
 // Me defines model for Me.
 type Me struct {
-	Categories []Category `json:"categories"`
-	Role       Role       `json:"role"`
+	// AuthRequired False means every request is served as the administrator, so signing out does nothing.
+	AuthRequired bool       `json:"auth_required"`
+	Categories   []Category `json:"categories"`
+	Role         Role       `json:"role"`
 
 	// Tier How much of the settings surface this caller is shown (ADR-26). Self-service via PATCH /me/tier -- raising or lowering it never changes behaviour, only what is displayed.
-	Tier    MeTier `json:"tier"`
-	TierMax Tier   `json:"tier_max"`
-	UserId  int64  `json:"user_id"`
+	Tier     MeTier  `json:"tier"`
+	TierMax  Tier    `json:"tier_max"`
+	UserId   int64   `json:"user_id"`
+	Username *string `json:"username,omitempty"`
 }
 
 // MeTier How much of the settings surface this caller is shown (ADR-26). Self-service via PATCH /me/tier -- raising or lowering it never changes behaviour, only what is displayed.

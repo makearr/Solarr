@@ -28,7 +28,7 @@ import { isAdministratorPath, useIsAdministrator } from "@/lib/useAdministrator"
 import { isTierVisible, useTier, type Tier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
-import { ThemeToggle } from "./ThemeToggle";
+import { Logo } from "./Logo";
 
 type LibraryEntry = components["schemas"]["Library"];
 
@@ -58,8 +58,8 @@ const STORAGE_SECTIONS: readonly { to: string; label: string; icon: LucideIcon; 
 ];
 
 const CONNECTIONS_SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier: Tier }[] = [
-  { to: "/connections/indexers", label: "Indexers", icon: Radar, tier: "normal" },
-  { to: "/connections/downloaders", label: "Download clients", icon: Download, tier: "normal" },
+  { to: "/connections/indexers", label: "Indexers", icon: Radar, tier: "advanced" },
+  { to: "/connections/downloaders", label: "Download clients", icon: Download, tier: "advanced" },
   // *Arr import moved here from Settings -> General on the 2026-09-19 review, expert as asked.
   { to: "/connections/arr", label: "Arr", icon: Share2, tier: "expert" },
 ];
@@ -68,9 +68,10 @@ const CONNECTIONS_SECTIONS: readonly { to: string; label: string; icon: LucideIc
 // its own advanced parts, but Cache's entire content is expert-only.
 const SETTINGS_SECTIONS: readonly { to: string; label: string; tier?: Tier }[] = [
   { to: "/settings/libraries", label: "Libraries" },
-  { to: "/settings/blocklists", label: "Blocklists" },
-  { to: "/settings/network", label: "Network" },
-  { to: "/settings/metadata", label: "Metadata" },
+  // An entry whose page shows nothing at a tier is hidden at that tier (2026-09-25).
+  { to: "/settings/blocklists", label: "Blocklists", tier: "expert" },
+  { to: "/settings/network", label: "Network", tier: "advanced" },
+  { to: "/settings/metadata", label: "Metadata", tier: "advanced" },
   { to: "/settings/user", label: "User" },
   { to: "/settings/scheduler", label: "Scheduler" },
   { to: "/settings/logs", label: "Logs", tier: "advanced" },
@@ -177,9 +178,8 @@ export function Sidebar() {
         collapsed ? "w-14" : "w-48"
       }`}
     >
-      <div className={`flex items-center gap-2 px-4 py-3 ${collapsed ? "justify-center" : "justify-between"}`}>
-        {!collapsed && <span className="text-sm font-semibold tracking-tight">Solarr</span>}
-        <ThemeToggle />
+      <div className={`flex items-center px-4 py-3 ${collapsed ? "justify-center" : ""}`}>
+        <Logo showName={!collapsed} />
       </div>
 
       <ul className="flex flex-col gap-0.5 px-2">
@@ -227,7 +227,7 @@ export function Sidebar() {
         </CollapsibleSection>
       )}
 
-      {administrator && (
+      {administrator && isTierVisible(tier, "advanced") && (
       <CollapsibleSection
         label="Connections"
         icon={Share2}
@@ -370,9 +370,9 @@ function ExpandToggle({ label, isOpen, onToggle }: { label: string; isOpen: bool
 // generic per-library config, each with the tier that may see it.
 const CONFIG_SECTIONS: readonly { key: string; label: string; tier: Tier }[] = [
   { key: "naming", label: "Naming", tier: "advanced" },
-  { key: "file-management", label: "File management", tier: "normal" },
+  { key: "file-management", label: "File management", tier: "expert" },
   { key: "import-lists", label: "Import lists", tier: "advanced" },
-  { key: "quality", label: "Quality", tier: "normal" },
+  { key: "quality", label: "Quality", tier: "advanced" },
   { key: "language", label: "Language", tier: "expert" },
 ];
 
@@ -451,9 +451,8 @@ function LibraryNode({
             </Link>
           </li>
 
-          {/* Normal tier: M1 acceptance 1, 7 and 8 have a plain user import a folder and
-              resolve what it could not identify. Importing is an administrator's, as the server says. */}
-          {administrator && (
+          {/* Advanced and an administrator's (2026-09-25 review). */}
+          {administrator && isTierVisible(tier, "advanced") && (
             <li>
               <Link
                 to="/library/$categoryId/import"

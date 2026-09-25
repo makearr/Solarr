@@ -144,12 +144,12 @@ func validateQualityProfile(name, rulesJSON, upgradeJSON string) config.Problems
 	}
 	if _, err := score.Parse([]byte(rulesJSON)); err != nil {
 		problems = append(problems, config.Problem{
-			Path: "rules", Value: rulesJSON, Expectation: fmt.Sprintf("ADR-40's rule shape: %v", err),
+			Path: "rules", Value: rulesJSON, Expectation: fmt.Sprintf("a valid rules document: %v", err),
 		})
 	}
 	if _, err := score.ParseUpgrade([]byte(upgradeJSON)); err != nil {
 		problems = append(problems, config.Problem{
-			Path: "upgrade", Value: upgradeJSON, Expectation: fmt.Sprintf("ADR-40's upgrade shape: %v", err),
+			Path: "upgrade", Value: upgradeJSON, Expectation: fmt.Sprintf("a valid upgrade document: %v", err),
 		})
 	}
 	return problems

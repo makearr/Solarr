@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
-	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/score"
 )
 
@@ -242,7 +241,7 @@ func TestCategory_CarriesItsProfileAssignments(t *testing.T) {
 }
 
 // TestQualityProfile_ShippedDefaultsAreSeeded is todo 4.3's own remaining checklist
-// item: four ready-made profiles so a fresh install has something usable before
+// item: ready-made profiles so a fresh install has something usable before
 // anyone opens the profile builder (migrations/settings/0012). Every shipped
 // profile must parse as valid ADR-40 shape -- score.Parse/ParseUpgrade, the same
 // validator CreateQualityProfile itself runs -- not just be present.
@@ -250,7 +249,8 @@ func TestQualityProfile_ShippedDefaultsAreSeeded(t *testing.T) {
 	cache, _ := newCache(t)
 
 	profiles := cache.Snapshot().QualityProfiles()
-	wantNames := []string{"Lossless preferred", "Lossy 320", "Space conscious", "AAC 160/48kHz/16-bit (m4a)"}
+	// The fourth, AAC 160/48kHz/16-bit, was removed by migration 0023 (2026-09-25).
+	wantNames := []string{"Lossless preferred", "Lossy 320", "Space conscious"}
 	if len(profiles) != len(wantNames) {
 		t.Fatalf("len(profiles) = %d, want %d shipped defaults", len(profiles), len(wantNames))
 	}
@@ -271,48 +271,5 @@ func TestQualityProfile_ShippedDefaultsAreSeeded(t *testing.T) {
 		if _, err := score.ParseUpgrade([]byte(profile.UpgradeJSON)); err != nil {
 			t.Errorf("%q: upgrade_json does not parse: %v", name, err)
 		}
-	}
-}
-
-// TestQualityProfile_AAC16048kHzShippedDefault_RanksAsIntended is the same
-// acceptance criterion TestTargetedProfile_ModerateSpecBeatsMaximalSpec proves
-// for the profile builder's own worked example: the shipped "AAC 160/48kHz/
-// 16-bit (m4a)" default must actually rank an at-target aac/m4a file above a
-// FLAC file that overshoots its sample-rate/bit-depth targets, not merely parse.
-func TestQualityProfile_AAC16048kHzShippedDefault_RanksAsIntended(t *testing.T) {
-	cache, _ := newCache(t)
-
-	profiles := cache.Snapshot().QualityProfiles()
-	var rulesJSON string
-	for _, profile := range profiles {
-		if profile.Name == "AAC 160/48kHz/16-bit (m4a)" {
-			rulesJSON = profile.RulesJSON
-		}
-	}
-	if rulesJSON == "" {
-		t.Fatal(`shipped default "AAC 160/48kHz/16-bit (m4a)" not found`)
-	}
-
-	profile, err := score.Parse([]byte(rulesJSON))
-	if err != nil {
-		t.Fatalf("score.Parse: %v", err)
-	}
-
-	atTarget := score.Facts{File: score.FileFacts{
-		Container: "m4a", AudioCodec: "aac", AudioChannels: "2.0",
-		OverallBitrate: 160_000, SampleRate: 48000, BitDepth: 16,
-	}}
-	overshoot := score.Facts{File: score.FileFacts{
-		Container: "flac", AudioCodec: "flac", Lossless: true, AudioChannels: "2.0",
-		OverallBitrate: 900_000, SampleRate: 192000, BitDepth: 24,
-	}}
-
-	atTargetDecision := score.Evaluate(profile, atTarget, nil)
-	overshootDecision := score.Evaluate(profile, overshoot, nil)
-
-	winner, _ := model.Compare(atTargetDecision.Quality, overshootDecision.Quality)
-	if winner != -1 {
-		t.Errorf("Compare winner = %d, want -1 (the at-target aac/m4a file should win the "+
-			"user's own worked example, not the overshooting FLAC)", winner)
 	}
 }

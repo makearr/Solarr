@@ -157,7 +157,7 @@ func NewDefaultRegistry() *Registry {
 	registry.MustRegister(SettingDef{
 		Key: KeyAuthRequired, Kind: KindBool, Tier: TierNormal,
 		Name:     "Require login",
-		HelpText: "Whether a caller must present a credential at all (ADR-14).",
+		HelpText: "Whether a caller must present a credential at all.",
 		Default:  "true",
 	})
 	registry.MustRegister(SettingDef{
@@ -246,7 +246,7 @@ func NewDefaultRegistry() *Registry {
 	registry.MustRegister(SettingDef{
 		Key: KeyNetworkAllowCIDRs, Kind: KindStringList, Tier: TierAdvanced,
 		Name:     "IP whitelist",
-		HelpText: "Once enforced this can only deny, never grant (Invariant 89).",
+		HelpText: "Once enforced this can only deny, never grant.",
 		Default:  `["127.0.0.0/8","10.0.0.0/8","172.16.0.0/12","192.168.0.0/16"]`,
 	})
 
@@ -299,7 +299,7 @@ func NewDefaultRegistry() *Registry {
 	registry.MustRegister(SettingDef{
 		Key: KeyPriorityNewReleaseDays, Kind: KindInt, Tier: TierAdvanced,
 		Name:     "Freshness window",
-		HelpText: "Days after release an item still counts as newly released rather than a gap (ADR-55).",
+		HelpText: "Days after release an item still counts as newly released rather than a gap.",
 		Default:  fmt.Sprintf("%d", DefaultPriorityNewReleaseDays),
 	})
 
@@ -354,15 +354,15 @@ func NewDefaultRegistry() *Registry {
 	// connection is a working library.
 	registry.MustRegister(SettingDef{
 		Key: EntityRootFolder, Kind: KindEntity, Tier: TierNormal,
-		Name: "Root folders", HelpText: "Where the library actually lives (section 11.7).",
+		Name: "Root folders", HelpText: "Where the library actually lives.",
 	})
 	registry.MustRegister(SettingDef{
 		Key: EntityCategory, Kind: KindEntity, Tier: TierNormal,
-		Name: "Categories", HelpText: "The policy boundary for naming, profiles and access (ADR-27).",
+		Name: "Categories", HelpText: "The policy boundary for naming, profiles and access.",
 	})
 	registry.MustRegister(SettingDef{
 		Key: EntityQualityProfile, Kind: KindEntity, Tier: TierAdvanced,
-		Name: "Quality profiles", HelpText: "ADR-40's hard-gate/tier/score policy, assignable per category.",
+		Name: "Quality profiles", HelpText: "Gates, tiers and scores that rank releases, assignable per library.",
 	})
 	registry.MustRegister(SettingDef{
 		Key: EntityLanguageProfile, Kind: KindEntity, Tier: TierAdvanced,
@@ -370,11 +370,11 @@ func NewDefaultRegistry() *Registry {
 	})
 	registry.MustRegister(SettingDef{
 		Key: EntityExclusionPattern, Kind: KindEntity, Tier: TierAdvanced,
-		Name: "Unwanted file patterns", HelpText: "ADR-53 part 1: what a scan ignores or refuses by shape.",
+		Name: "Unwanted file patterns", HelpText: "What a scan ignores or refuses by shape.",
 	})
 	registry.MustRegister(SettingDef{
 		Key: EntityArrInstance, Kind: KindEntity, Tier: TierAdvanced,
-		Name: "*Arr connections", HelpText: "ADR-52: importing intent from a Lidarr/Sonarr/etc instance.",
+		Name: "*Arr connections", HelpText: "Importing what a Lidarr, Sonarr or similar instance wants.",
 	})
 	registry.MustRegister(SettingDef{
 		Key: EntityImportList, Kind: KindEntity, Tier: TierAdvanced,
@@ -386,11 +386,11 @@ func NewDefaultRegistry() *Registry {
 	})
 	registry.MustRegister(SettingDef{
 		Key: EntityIndexer, Kind: KindEntity, Tier: TierAdvanced,
-		Name: "Indexers", HelpText: "Stage 5: Newznab/Torznab search providers (ADR-37/43/47).",
+		Name: "Indexers", HelpText: "Newznab and Torznab search providers, Prowlarr included.",
 	})
 	registry.MustRegister(SettingDef{
 		Key: EntityDownloader, Kind: KindEntity, Tier: TierAdvanced,
-		Name: "Download clients", HelpText: "Stage 5: SABnzbd and other download clients (ADR-46/57).",
+		Name: "Download clients", HelpText: "SABnzbd and other download clients.",
 	})
 
 	return registry

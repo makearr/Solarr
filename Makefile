@@ -69,6 +69,8 @@ COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_DATE  := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 # -ldflags's value is itself whitespace-split, so a milestone name containing a
 # space ("music, usenet") needs its own quoting or the build fails outright.
+# A local image built from uncommitted changes says so in its version.
+DIRTY       := $(shell git diff --quiet && git diff --cached --quiet || echo -dirty)
 LDFLAGS     := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE) \
                -X 'main.milestone=$(MILESTONE)'
 IMAGE       ?= ghcr.io/makearr/solarr
@@ -201,7 +203,7 @@ image:      ## Release build: multi-arch, push to ghcr, bump, changelog, tag, pu
 	  -t $(IMAGE):$(NEXT_VERSION) -t $(IMAGE):$(TODAY_YEAR).$(TODAY_MONTH) -t $(IMAGE):latest .
 	@NEXT_VERSION=$(NEXT_VERSION) MILESTONE="$(MILESTONE)" ./scripts/release.sh
 
-image-local: ## Local single-arch build: allows a dirty tree, no bump, no push
+image-local: ## Local single-arch build: allows a dirty tree, advances the build number, no push
 	@test -f Dockerfile || { echo "no Dockerfile yet"; exit 1; }
 	@# Falls back to the legacy builder when buildx is absent. The Dockerfile
 	@# gives its platform args defaults for exactly this, so a machine without
@@ -209,15 +211,17 @@ image-local: ## Local single-arch build: allows a dirty tree, no bump, no push
 	@if [ -n "$(HAS_BUILDX)" ]; then \
 	  $(MAKE) --no-print-directory builder; \
 	  docker buildx build --builder $(BUILDER) --load --platform linux/$(ARCH) \
-	    --build-arg VERSION=$(VERSION)-dirty --build-arg COMMIT=$(COMMIT) \
-	    --build-arg BUILD_DATE=$(BUILD_DATE) -t $(IMAGE):dev . ; \
+	    --build-arg VERSION=$(NEXT_VERSION)$(DIRTY) --build-arg COMMIT=$(COMMIT) \
+	    --build-arg BUILD_DATE=$(BUILD_DATE) -t $(IMAGE):dev . || exit 1; \
 	else \
 	  echo "buildx not found; building single-arch with the legacy builder"; \
-	  docker build --build-arg VERSION=$(VERSION)-dirty --build-arg COMMIT=$(COMMIT) \
+	  docker build --build-arg VERSION=$(NEXT_VERSION)$(DIRTY) --build-arg COMMIT=$(COMMIT) \
 	    --build-arg BUILD_DATE=$(BUILD_DATE) --build-arg TARGETARCH=$(ARCH) \
-	    -t $(IMAGE):dev . ; \
+	    -t $(IMAGE):dev . || exit 1; \
 	fi
-	@echo "built $(IMAGE):dev - version held at $(VERSION)"
+	@# Answered 2026-09-25: a local image advances the build number too; only `make image` releases.
+	@echo "$(NEXT_VERSION)" > VERSION
+	@echo "built $(IMAGE):dev - version $(NEXT_VERSION)$(DIRTY)"
 
 milestone:  ## Name the milestone shown beside the version: make milestone NAME="music, usenet"
 	@test -n "$(NAME)" || { echo 'usage: make milestone NAME="name"'; exit 1; }

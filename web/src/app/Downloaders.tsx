@@ -65,10 +65,6 @@ export function Downloaders() {
     <div className="mx-auto flex h-full max-w-3xl flex-col gap-4 overflow-y-auto p-6">
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold">Download clients</h1>
-        <p className="text-sm leading-relaxed text-ink-muted">
-          SABnzbd and other download clients (ADR-46). Solarr implements no download client of
-          its own -- this is the connection record, never the transfer.
-        </p>
       </header>
 
       {downloaders.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}

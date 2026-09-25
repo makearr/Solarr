@@ -29,7 +29,7 @@ func TestQualityProfiles_ListedInSuggestedOrder(t *testing.T) {
 	for _, profile := range cache.Snapshot().QualityProfiles() {
 		names = append(names, profile.Name)
 	}
-	want := []string{"Space conscious", "Lossy 320", "Lossless preferred", "AAC 160/48kHz/16-bit (m4a)"}
+	want := []string{"Space conscious", "Lossy 320", "Lossless preferred"}
 	if !reflect.DeepEqual(names, want) {
 		t.Errorf("order = %v, want %v", names, want)
 	}

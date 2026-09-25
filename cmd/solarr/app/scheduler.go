@@ -25,8 +25,8 @@ const (
 	downloadWatchScheduleCron      = "*/5 * * * *"   // every 5 minutes
 	downloadPollScheduleCron       = "* * * * *"     // every minute, as Lidarr checks its clients
 	databaseMaintenanceCron        = "0 4 * * 0"     // Sundays at 04:00, clear of the other nightly tasks
-	backupScheduleCron             = "0 1 * * *"     // daily at 01:00
-	backupCleanupScheduleCron      = "30 1 * * *"    // daily at 01:30, after the backup
+	backupScheduleCron             = "0 1 * * 0"     // Sundays at 01:00 (weekly, asked 2026-09-25)
+	backupCleanupScheduleCron      = "30 1 * * 0"    // Sundays at 01:30, after the backup
 	recycleBinCleanupScheduleCron  = "30 2 * * *"    // daily at 02:30
 	refreshArtistsScheduleCron     = "0 5 * * 0"     // Sundays at 05:00, after database maintenance
 )
