@@ -480,6 +480,11 @@ func DecideAlbum(locals []LocalTrack, candidates []AlbumCandidate) AlbumDecision
 	return decision
 }
 
+// settled is a decision that identified the album or put it to the user; anything else may yet split.
+func (d AlbumDecision) settled() bool {
+	return d.Outcome == AlbumIdentified || d.Outcome == AlbumAmbiguous
+}
+
 // folderAlbum is the album the folder names, empty when no file's path gave one.
 func folderAlbum(locals []LocalTrack) string {
 	for _, local := range locals {

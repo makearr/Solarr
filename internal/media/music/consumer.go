@@ -662,25 +662,83 @@ func (c Consumer) identifyAlbums(ctx context.Context, out *batchResult, files []
 
 	var pending []pendingFile
 	for _, group := range groupByAlbum(out.observed, files) {
-		locals := make([]LocalTrack, len(group))
-		for i, file := range group {
-			one := out.observed[file.index]
-			locals[i] = ReadLocalTrack(one.Probe.Tags, one.Probe.Measured, one.File.RelPath)
-		}
-		decision, err := IdentifyAlbum(ctx, c.albums, musicbrainz.PriorityIdentify, locals, seeds)
+		decision, err := c.matchAlbum(ctx, out, group, seeds)
 		if err != nil {
-			c.logger.Warn("album identification failed",
-				slog.String("path", out.observed[group[0].index].File.RelPath), slog.Any("error", err))
-			for _, file := range group {
-				out.note(file.index, library.AttemptPass{Pass: PassAlbumMatch, Outcome: PassOutcomeFailed})
-			}
 			pending = append(pending, group...)
 			continue
 		}
-		pending = append(pending, applyAlbumDecision(out, PassAlbumMatch, group,
-			decision.Within(c.chainConfig().AmbiguityThreshold))...)
+		if !decision.settled() {
+			if parts := splitByTrackTotal(out.observed, group); len(parts) > 1 {
+				for _, part := range parts {
+					if decision, err := c.matchAlbum(ctx, out, part, seeds); err != nil {
+						pending = append(pending, part...)
+					} else {
+						pending = append(pending, applyAlbumDecision(out, PassAlbumMatch, part, decision)...)
+					}
+				}
+				continue
+			}
+		}
+		pending = append(pending, applyAlbumDecision(out, PassAlbumMatch, group, decision)...)
 	}
 	return pending
+}
+
+// matchAlbum matches one group of files as an album, recording a failed lookup on each file.
+func (c Consumer) matchAlbum(ctx context.Context, out *batchResult, group []pendingFile, seeds []string) (AlbumDecision, error) {
+	locals := make([]LocalTrack, len(group))
+	for i, file := range group {
+		one := out.observed[file.index]
+		locals[i] = ReadLocalTrack(one.Probe.Tags, one.Probe.Measured, one.File.RelPath)
+	}
+	decision, err := IdentifyAlbum(ctx, c.albums, musicbrainz.PriorityIdentify, locals, seeds)
+	if err != nil {
+		c.logger.Warn("album identification failed",
+			slog.String("path", out.observed[group[0].index].File.RelPath), slog.Any("error", err))
+		for _, file := range group {
+			out.note(file.index, library.AttemptPass{Pass: PassAlbumMatch, Outcome: PassOutcomeFailed})
+		}
+		return AlbumDecision{}, err
+	}
+	return decision.Within(c.chainConfig().AmbiguityThreshold), nil
+}
+
+// splitByTrackTotal separates a group whose track numbers collide by the total each file claims:
+// "3/10" and "3" under one album tag are two releases, an album's first half and its single.
+func splitByTrackTotal(observed []scan.Observed, group []pendingFile) [][]pendingFile {
+	numbered := make(map[int]bool)
+	collide := false
+	parts := make(map[int][]pendingFile)
+	var totals []int
+	for _, file := range group {
+		tags := observed[file.index].Probe.Tags
+		value := tags.First("tracknumber", "track")
+		if number := firstTrackNumber(value); number > 0 {
+			collide = collide || numbered[number]
+			numbered[number] = true
+		}
+		total := trackTotal(value, tags.First("tracktotal", "totaltracks"))
+		if _, seen := parts[total]; !seen {
+			totals = append(totals, total)
+		}
+		parts[total] = append(parts[total], file)
+	}
+	if !collide || len(totals) < 2 {
+		return nil
+	}
+	split := make([][]pendingFile, len(totals))
+	for i, total := range totals {
+		split[i] = parts[total]
+	}
+	return split
+}
+
+// trackTotal is the total of a "3/10" track number, else the separate total tag, else 0.
+func trackTotal(number, total string) int {
+	if _, after, found := strings.Cut(number, "/"); found {
+		return firstTrackNumber(after)
+	}
+	return firstTrackNumber(total)
 }
 
 // applyAlbumDecision records one album match and acts on it: identified links every
