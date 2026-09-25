@@ -138,8 +138,9 @@ func TestDecideAlbum_ACompleteReleaseFittingWorseDoesNotWin(t *testing.T) {
 	for i := range 10 {
 		longer = append(longer, trackSpec{fmt.Sprintf("Bonus %d", i+1), 200})
 	}
+	longer[1].seconds += 15 // neither fits perfectly, or the perfect one would simply win
 	completeTracks := slices.Clone(traumaTracks)
-	completeTracks[0].seconds += 15
+	completeTracks[0].seconds += 20
 	complete := candidateOf("rg-complete", "Album", nil, releaseOf("rel-complete", "Kebilegev Bibihi", "official", "2017", completeTracks))
 	partial := candidateOf("rg-partial", "Album", nil, releaseOf("rel-partial", "Kebilegev Bibihi", "official", "2017", longer))
 
@@ -361,5 +362,18 @@ func TestDecideAlbum_TheFoldersAlbumNameFitsWhereTheTagDoesNot(t *testing.T) {
 	want := music.DecideAlbum(folderOf(traumaTracks), candidates).Scores[0].Distance
 	if got := music.DecideAlbum(malformed, candidates).Scores[0].Distance; got != want {
 		t.Errorf("distance = %.3f, want %.3f as with a correct tag", got, want)
+	}
+}
+
+// A release every claim agrees with beats a rival one claim contradicts, however small the gap
+// (Dacapa Hivop Pibazi's "Mepukafamo" at 0.000 against "Mepukafamo" at 0.042, the main library).
+func TestDecideAlbum_APerfectFitBeatsACloseImperfectRival(t *testing.T) {
+	perfect := candidateOf("rg-perfect", "Album", nil, releaseOf("rel-perfect", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks))
+	close := candidateOf("rg-close", "Album", nil, recordedAs(releaseOf("rel-close", "Kebilegev Bibihi: Live", "official", "2017-10-13", traumaTracks), "live"))
+
+	decision := music.DecideAlbum(folderOf(traumaTracks), []music.AlbumCandidate{close, perfect})
+	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-perfect" {
+		t.Errorf("decision = %s %q (distances %.3f, %.3f), want identified rg-perfect", decision.Outcome, bestReleaseGroup(decision),
+			decision.Scores[0].Distance, decision.Scores[1].Distance)
 	}
 }
