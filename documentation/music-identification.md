@@ -66,7 +66,9 @@ off, or a different recording MBID.
 Accepted releases rank by distance, then official, track count closest to the folder, earliest
 date. The best is **identified** unless a different release group's best is within 0.05, which
 is **ambiguous** — except that an official release beats a rival known only as a promo or
-bootleg. A contradicted folder falls through to text search rather than being queued: two
+bootleg, and a release the folder fills exactly (every file paired, as many files as tracks)
+beats rivals it only partly covers, when exactly one release group within the margin has one:
+12 files are the 12-track album, not 12 of a 26-track compilation of the same name. A contradicted folder falls through to text search rather than being queued: two
 real singles were longer edits of the catalogued recording.
 
 DroppedNeedle also refuses a win when the runner-up leaves some file without a supported
