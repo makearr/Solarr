@@ -187,7 +187,9 @@ type Config struct {
 	LibraryHealth LibraryHealth
 	// IndexerTester and DownloaderTester run todo 5.2's own "every connection
 	// tested before it is accepted" against the real indexer/download client.
-	IndexerTester    IndexerTester
+	IndexerTester IndexerTester
+	// Prowlarr lists a Prowlarr's indexers to add from.
+	Prowlarr         ProwlarrLister
 	DownloaderTester DownloaderTester
 	// CandidateSearcher is stage 5's own candidate pipeline (section 10.1/10.2).
 	CandidateSearcher CandidateSearcher
@@ -252,6 +254,7 @@ type Server struct {
 	logReader             LogReader
 	calendar              CalendarReader
 	indexerTester         IndexerTester
+	prowlarr              ProwlarrLister
 	downloaderTester      DownloaderTester
 	candidateSearcher     CandidateSearcher
 	// effectivePort is the port this process actually bound to, resolved at
@@ -337,6 +340,7 @@ func New(config Config) (*Server, error) {
 		logReader:             config.LogReader,
 		calendar:              config.Calendar,
 		indexerTester:         config.IndexerTester,
+		prowlarr:              config.Prowlarr,
 		downloaderTester:      config.DownloaderTester,
 		candidateSearcher:     config.CandidateSearcher,
 		effectivePort:         config.Port,
@@ -436,12 +440,14 @@ func New(config Config) (*Server, error) {
 			secured.Post("/arr/imports/{id}/revert", server.routeRevertArrImport)
 			secured.Get("/indexers", server.ListIndexers)
 			secured.Post("/indexers", server.AddIndexer)
+			secured.Post("/indexers/prowlarr", server.ListProwlarrIndexers)
 			secured.Patch("/indexers/{id}", server.routeUpdateIndexer)
 			secured.Delete("/indexers/{id}", server.routeDeleteIndexer)
 			secured.Post("/indexers/{id}/apikey", server.routeSetIndexerAPIKey)
 			secured.Post("/indexers/{id}/test", server.routeTestIndexer)
 			secured.Get("/downloaders", server.ListDownloaders)
 			secured.Post("/downloaders", server.AddDownloader)
+			secured.Post("/downloaders/test", server.TestDownloaderConfig)
 			secured.Patch("/downloaders/{id}", server.routeUpdateDownloader)
 			secured.Delete("/downloaders/{id}", server.routeDeleteDownloader)
 			secured.Post("/downloaders/{id}/credentials", server.routeSetDownloaderCredentials)

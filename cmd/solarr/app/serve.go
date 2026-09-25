@@ -541,6 +541,7 @@ func (p *process) startServer(ctx context.Context) error {
 			DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Lidarr: p.arrClientFactory(),
 			Logger: p.logger,
 		},
+		Prowlarr: adapters.Prowlarr{Cache: p.cache, List: p.listProwlarr},
 		IndexerTester: adapters.ConnectionTester{
 			Cache: p.cache, Indexer: p.indexerClientFactory(), Downloader: p.downloaderClientFactory(),
 			Clock: clock.NewSystem(),

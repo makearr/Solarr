@@ -97,6 +97,17 @@ type IndexerRequest struct {
 	EgressProxyURL string
 }
 
+// defaultIndexerPriority is Lidarr's default, what a request without one gets.
+const defaultIndexerPriority = 25
+
+// withDefaults fills what a request may leave out.
+func (request IndexerRequest) withDefaults() IndexerRequest {
+	if request.Priority == 0 {
+		request.Priority = defaultIndexerPriority
+	}
+	return request
+}
+
 func validateIndexer(request IndexerRequest) config.Problems {
 	var problems config.Problems
 	if strings.TrimSpace(request.Name) == "" {
@@ -107,6 +118,11 @@ func validateIndexer(request IndexerRequest) config.Problems {
 	}
 	if strings.TrimSpace(request.BaseURL) == "" {
 		problems = append(problems, config.Problem{Path: "base_url", Expectation: "not empty"})
+	}
+	// Lidarr's range: lower is preferred when the same release is on several indexers.
+	if request.Priority < 1 || request.Priority > 50 {
+		problems = append(problems, config.Problem{Path: "priority", Value: fmt.Sprint(request.Priority),
+			Expectation: "1 to 50, lower preferred"})
 	}
 	return problems
 }
@@ -141,7 +157,7 @@ func (c *Cache) CreateIndexer(ctx context.Context, request IndexerRequest, apiKe
 	if !apiKey.IsZero() && c.cipher == nil {
 		return Indexer{}, ErrSecretsUnavailable
 	}
-	if problems := validateIndexer(request); len(problems) > 0 {
+	if problems := validateIndexer(request.withDefaults()); len(problems) > 0 {
 		return Indexer{}, problems
 	}
 	sealed, err := c.sealOptional(apiKey)
@@ -155,7 +171,7 @@ func (c *Cache) CreateIndexer(ctx context.Context, request IndexerRequest, apiKe
 		var err error
 		created, err = c.queries.WithTx(tx).CreateIndexer(ctx, settingsdb.CreateIndexerParams{
 			Name: request.Name, Impl: request.Impl, BaseUrl: request.BaseURL, ApiKey: sealed,
-			Enabled: boolToInt(request.Enabled), Priority: request.Priority,
+			Enabled: boolToInt(request.Enabled), Priority: request.withDefaults().Priority,
 			SettingsJson: sql.NullString{String: settingsJSON, Valid: settingsJSON != ""},
 			CreatedAt:    at, UpdatedAt: at,
 		})
@@ -173,7 +189,7 @@ func (c *Cache) UpdateIndexer(ctx context.Context, id int64, request IndexerRequ
 	if _, err := c.GetIndexer(ctx, id); err != nil {
 		return Indexer{}, err
 	}
-	if problems := validateIndexer(request); len(problems) > 0 {
+	if problems := validateIndexer(request.withDefaults()); len(problems) > 0 {
 		return Indexer{}, problems
 	}
 
@@ -181,7 +197,7 @@ func (c *Cache) UpdateIndexer(ctx context.Context, id int64, request IndexerRequ
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		return c.queries.WithTx(tx).UpdateIndexer(ctx, settingsdb.UpdateIndexerParams{
 			Name: request.Name, Impl: request.Impl, BaseUrl: request.BaseURL,
-			Enabled: boolToInt(request.Enabled), Priority: request.Priority,
+			Enabled: boolToInt(request.Enabled), Priority: request.withDefaults().Priority,
 			SettingsJson: sql.NullString{String: settingsJSON, Valid: settingsJSON != ""},
 			UpdatedAt:    at, ID: id,
 		})

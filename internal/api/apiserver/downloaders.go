@@ -53,7 +53,7 @@ func (s *Server) AddDownloader(w http.ResponseWriter, r *http.Request) {
 
 	created, err := s.auth.Settings.CreateDownloader(r.Context(), settings.DownloaderRequest{
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
-		Enabled: derefOr(body.Enabled, true), Protocol: string(body.Protocol),
+		Enabled: derefOr(body.Enabled, true), Protocol: string(body.Protocol), SettingsJSON: optionsJSON(body.Options),
 	}, secrets.Secret(derefOr(body.Credentials, "")), s.wall.Now().Unix())
 	if err != nil {
 		writeDownloaderError(w, s, err, "The connection has problems", "Nothing was created.")
@@ -86,9 +86,19 @@ func (s *Server) UpdateDownloader(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 
+	// No options in the request keeps the stored ones: switching a client off must not wipe them.
+	settingsJSON := optionsJSON(body.Options)
+	if body.Options == nil {
+		existing, err := s.auth.Settings.GetDownloader(r.Context(), id)
+		if err != nil {
+			writeDownloaderError(w, s, err, "The connection has problems", "Nothing was changed.")
+			return
+		}
+		settingsJSON = existing.SettingsJSON
+	}
 	updated, err := s.auth.Settings.UpdateDownloader(r.Context(), id, settings.DownloaderRequest{
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
-		Enabled: derefOr(body.Enabled, true), Protocol: string(body.Protocol),
+		Enabled: derefOr(body.Enabled, true), Protocol: string(body.Protocol), SettingsJSON: settingsJSON,
 	}, s.wall.Now().Unix())
 	if err != nil {
 		writeDownloaderError(w, s, err, "The connection has problems", "Nothing was changed.")
@@ -167,6 +177,8 @@ func (s *Server) routeTestDownloader(w http.ResponseWriter, r *http.Request) {
 // call, never a queue or dispatch action.
 type DownloaderTester interface {
 	TestDownloader(ctx context.Context, id int64) (ConnectionTestResult, error)
+	// TestDownloaderConfig tests a client that is not saved yet.
+	TestDownloaderConfig(ctx context.Context, impl, baseURL, credentials string, options settings.DownloaderOptions) (ConnectionTestResult, error)
 }
 
 // TestDownloader runs a connection test against the real download client.
@@ -180,9 +192,50 @@ func (s *Server) TestDownloader(w http.ResponseWriter, r *http.Request, id int64
 		writeDownloaderError(w, s, err, "The connection has problems", "Nothing was tested.")
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, gen.ConnectionTestResult{
-		Ok: result.OK, Message: result.Message, TestedAt: result.TestedAt,
-	})
+	writeJSON(w, s.logger, http.StatusOK, connectionTestView(result))
+}
+
+// TestDownloaderConfig tests a download client before it is added ("Test", then "Add").
+func (s *Server) TestDownloaderConfig(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	var body gen.TestDownloaderConfigJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil ||
+		body.Impl == "" || body.BaseUrl == "" {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected impl and base_url")
+		return
+	}
+	var options settings.DownloaderOptions
+	_ = json.Unmarshal([]byte(optionsJSON(body.Options)), &options)
+	result, err := s.downloaderTester.TestDownloaderConfig(r.Context(), body.Impl, body.BaseUrl, derefOr(body.Credentials, ""), options)
+	if err != nil {
+		writeDownloaderError(w, s, err, "The connection has problems", "Nothing was tested.")
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, connectionTestView(result))
+}
+
+func connectionTestView(result ConnectionTestResult) gen.ConnectionTestResult {
+	return gen.ConnectionTestResult{
+		Ok: result.OK, Message: result.Message, TestedAt: result.TestedAt, DownloadFolder: strPtr(result.DownloadFolder),
+	}
+}
+
+// optionsJSON is a client's options as settings.db stores them; nil is none.
+func optionsJSON(options *gen.DownloaderOptions) string {
+	if options == nil {
+		return ""
+	}
+	stored := settings.DownloaderOptions{
+		RemoveCompleted: options.RemoveCompleted, Category: derefOr(options.Category, ""),
+		RemotePath: derefOr(options.RemotePath, ""), LocalPath: derefOr(options.LocalPath, ""),
+	}
+	encoded, err := json.Marshal(stored)
+	if err != nil || string(encoded) == "{}" {
+		return ""
+	}
+	return string(encoded)
 }
 
 // writeDownloaderError translates settings.Downloader's own error
@@ -209,5 +262,13 @@ func downloaderView(downloader settings.Downloader) gen.Downloader {
 		Enabled: downloader.Enabled, Protocol: gen.DownloaderProtocol(downloader.Protocol),
 		Credentials: gen.SecretMask{HasValue: downloader.HasCredentials},
 		CreatedAt:   unixTime(downloader.CreatedAt), UpdatedAt: unixTime(downloader.UpdatedAt),
+		Options: downloaderOptionsView(downloader.Options()),
+	}
+}
+
+func downloaderOptionsView(options settings.DownloaderOptions) *gen.DownloaderOptions {
+	return &gen.DownloaderOptions{
+		Category: strPtr(options.Category), RemoveCompleted: options.RemoveCompleted,
+		RemotePath: strPtr(options.RemotePath), LocalPath: strPtr(options.LocalPath),
 	}
 }

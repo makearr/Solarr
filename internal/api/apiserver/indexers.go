@@ -53,7 +53,7 @@ func (s *Server) AddIndexer(w http.ResponseWriter, r *http.Request) {
 
 	created, err := s.auth.Settings.CreateIndexer(r.Context(), settings.IndexerRequest{
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
-		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 50),
+		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 25),
 		EgressProxyURL: derefOr(body.EgressProxyUrl, ""),
 	}, secrets.Secret(derefOr(body.ApiKey, "")), s.wall.Now().Unix())
 	if err != nil {
@@ -89,7 +89,7 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 
 	updated, err := s.auth.Settings.UpdateIndexer(r.Context(), id, settings.IndexerRequest{
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
-		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 50),
+		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 25),
 		EgressProxyURL: derefOr(body.EgressProxyUrl, ""),
 	}, s.wall.Now().Unix())
 	if err != nil {
@@ -179,6 +179,8 @@ type ConnectionTestResult struct {
 	OK       bool
 	Message  string
 	TestedAt time.Time
+	// DownloadFolder is where a download client says it puts finished downloads.
+	DownloadFolder string
 }
 
 // TestIndexer runs a connection test against the real indexer. Any signed-in

@@ -2,7 +2,10 @@ package apiserver_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -18,6 +21,14 @@ type fakeConnectionTester struct {
 
 	lastIndexerID    int64
 	lastDownloaderID int64
+	lastConfig       string
+}
+
+func (f *fakeConnectionTester) TestDownloaderConfig(
+	_ context.Context, impl, baseURL, credentials string, options settings.DownloaderOptions,
+) (apiserver.ConnectionTestResult, error) {
+	f.lastConfig = impl + " " + baseURL + " " + credentials + " " + options.CategoryFor("music")
+	return f.result, f.err
 }
 
 func (f *fakeConnectionTester) TestIndexer(_ context.Context, id int64) (apiserver.ConnectionTestResult, error) {
@@ -141,5 +152,56 @@ func TestTestDownloader_MissingAnswers404(t *testing.T) {
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/downloaders/999/test", ""))
 	if recorder.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", recorder.Code)
+	}
+}
+
+// "Test" before "Add": the unsaved settings reach the tester, and the client's folder comes back.
+func TestTestDownloaderConfig_TestsWhatIsNotSavedYet(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.downloaderTester.result = apiserver.ConnectionTestResult{OK: true, Message: "Connected.", DownloadFolder: "/downloads/sabnzbd"}
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/downloaders/test",
+		`{"impl":"sabnzbd","base_url":"http://sab:8080","credentials":"key","options":{"category":"lidarr"}}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, %s", recorder.Code, recorder.Body)
+	}
+	if fixture.downloaderTester.lastConfig != "sabnzbd http://sab:8080 key lidarr" {
+		t.Errorf("tested %q", fixture.downloaderTester.lastConfig)
+	}
+	if !strings.Contains(recorder.Body.String(), `"download_folder":"/downloads/sabnzbd"`) {
+		t.Errorf("body = %s, want the download folder", recorder.Body)
+	}
+}
+
+// A client's options are saved with it, and switching it off (no options sent) keeps them.
+func TestDownloaderOptions_SavedAndKeptByAnUpdateWithoutThem(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/downloaders",
+		`{"name":"SABnzbd","impl":"sabnzbd","base_url":"http://sab:8080","protocol":"usenet","options":{"category":"lidarr","remote_path":"/downloads","local_path":"/data/downloads"}}`))
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", recorder.Code, recorder.Body)
+	}
+	var created struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	target := "/api/v1/downloaders/" + strconv.FormatInt(created.ID, 10)
+	recorder = fixture.do(authedPatch(t, cookies, target, `{"name":"SABnzbd","impl":"sabnzbd","base_url":"http://sab:8080","protocol":"usenet","enabled":false}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("update: %d %s", recorder.Code, recorder.Body)
+	}
+	stored, err := fixture.cache.GetDownloader(t.Context(), created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := stored.Options(); got.Category != "lidarr" || got.LocalPathFor("/downloads/x") != "/data/downloads/x" {
+		t.Errorf("options after update = %+v, want them kept", got)
 	}
 }

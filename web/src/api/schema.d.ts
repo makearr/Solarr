@@ -1296,6 +1296,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/indexers/prowlarr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Every indexer a Prowlarr serves, each reachable through Prowlarr as Lidarr's Prowlarr sync reaches it. Nothing is saved; adding one is POST /indexers with its base_url and the same API key. Administrator only. */
+        post: operations["listProwlarrIndexers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/indexers/{id}": {
         parameters: {
             query?: never;
@@ -1369,6 +1386,23 @@ export interface paths {
          * @description credentials is sealed at rest (secrets.Cipher) and never returned in plaintext again -- every response shows Masked instead.
          */
         post: operations["addDownloader"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/downloaders/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test a download client before it is added, and read its download folder. Administrator only. */
+        post: operations["testDownloaderConfig"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3693,6 +3727,21 @@ export interface components {
             /** @description A download for the album was on its way, so nothing was searched. */
             already_downloading: boolean;
         };
+        ProwlarrIndexer: {
+            /** Format: int64 */
+            prowlarr_id: number;
+            name: string;
+            /** @enum {string} */
+            impl: "newznab" | "torznab";
+            /** @description Prowlarr's own endpoint for this indexer. */
+            base_url: string;
+            /** @description Whether the indexer is enabled in Prowlarr. */
+            enabled: boolean;
+            /** @description Whether it offers the Audio categories. */
+            music: boolean;
+            /** @description An indexer with this base URL is already configured here. */
+            already_added: boolean;
+        };
         /** @description One cursor page of download history. */
         HistoryPage: {
             items: components["schemas"]["HistoryEntry"][];
@@ -3924,7 +3973,8 @@ export interface components {
             enabled: boolean;
             /**
              * Format: int64
-             * @default 50
+             * @description Lower is preferred when several indexers list the same release.
+             * @default 25
              */
             priority: number;
             egress_proxy_url?: string;
@@ -3937,7 +3987,7 @@ export interface components {
             enabled: boolean;
             /**
              * Format: int64
-             * @default 50
+             * @default 25
              */
             priority: number;
             egress_proxy_url?: string;
@@ -3948,6 +3998,8 @@ export interface components {
             message: string;
             /** Format: date-time */
             tested_at: string;
+            /** @description Where a download client puts finished downloads, as it reports it. */
+            download_folder?: string;
         };
         Downloader: {
             /** Format: int64 */
@@ -3960,10 +4012,28 @@ export interface components {
             /** @enum {string} */
             protocol: "usenet" | "torrent" | "ddl";
             credentials: components["schemas"]["SecretMask"];
+            options?: components["schemas"]["DownloaderOptions"];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        /** @description Lidarr's download client options. */
+        DownloaderOptions: {
+            /** @description The client category downloads are sent under; empty means "music" for music. */
+            category?: string;
+            /** @description Remove a download from the client once imported. Absent means yes. */
+            remove_completed?: boolean;
+            /** @description Where the client says its downloads are (remote path mapping). */
+            remote_path?: string;
+            /** @description Where Solarr sees that same folder. */
+            local_path?: string;
+        };
+        TestDownloaderRequest: {
+            impl: string;
+            base_url: string;
+            credentials?: string;
+            options?: components["schemas"]["DownloaderOptions"];
         };
         AddDownloaderRequest: {
             name: string;
@@ -3974,6 +4044,7 @@ export interface components {
             credentials?: string;
             /** @default true */
             enabled: boolean;
+            options?: components["schemas"]["DownloaderOptions"];
         };
         UpdateDownloaderRequest: {
             name: string;
@@ -3983,6 +4054,7 @@ export interface components {
             protocol: "usenet" | "torrent" | "ddl";
             /** @default true */
             enabled: boolean;
+            options?: components["schemas"]["DownloaderOptions"];
         };
         ArrRootFolder: {
             /** @description As the *Arr instance's own container sees it. */
@@ -7304,6 +7376,37 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
+    listProwlarrIndexers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    base_url: string;
+                    api_key: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Prowlarr's indexers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProwlarrIndexer"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
     deleteIndexer: {
         parameters: {
             query?: never;
@@ -7453,6 +7556,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Downloader"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    testDownloaderConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestDownloaderRequest"];
+            };
+        };
+        responses: {
+            /** @description What the client answered; ok false says why. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionTestResult"];
                 };
             };
             400: components["responses"]["Problem"];
