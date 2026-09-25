@@ -448,24 +448,33 @@ func (d direct) release(ctx context.Context, mbid string) (Release, error) {
 	return parsed.toRelease(), nil
 }
 
-// directReleaseBrowseLimit is MusicBrainz's own maximum page size for a browse.
+// directReleaseBrowseLimit is the page size asked for; with tracklists included MusicBrainz sends
+// at most 25 a page whatever is asked, so the pages are followed by offset.
 const directReleaseBrowseLimit = 100
 
-// Releases implements ReleaseLister with one browse request: every release of
-// the group, tracklists included. A group with more than one page of releases
-// is judged on its first page.
+// directReleaseBrowseMax bounds the releases read for one group: "Red" has 97 (2026-09-25).
+const directReleaseBrowseMax = 200
+
+// Releases implements ReleaseLister: every release of the group, tracklists included, page by
+// page -- one page held only 25 of Red's 97, and missed both 32-track editions.
 func (d direct) Releases(ctx context.Context, releaseGroupMBID string) ([]Release, error) {
-	var parsed struct {
-		Releases []directRelease `json:"releases"`
-	}
-	url := fmt.Sprintf("%s/release?release-group=%s&fmt=json&inc=recordings+labels+media&limit=%d",
-		d.baseURL, releaseGroupMBID, directReleaseBrowseLimit)
-	if err := getJSON(ctx, d.client, url, &parsed); err != nil {
-		return nil, fmt.Errorf("musicbrainz: releases of %s: %w", releaseGroupMBID, err)
-	}
-	releases := make([]Release, len(parsed.Releases))
-	for index, one := range parsed.Releases {
-		releases[index] = one.toRelease()
+	var releases []Release
+	for len(releases) < directReleaseBrowseMax {
+		var parsed struct {
+			Count    int             `json:"release-count"`
+			Releases []directRelease `json:"releases"`
+		}
+		url := fmt.Sprintf("%s/release?release-group=%s&fmt=json&inc=recordings+labels+media&limit=%d&offset=%d",
+			d.baseURL, releaseGroupMBID, directReleaseBrowseLimit, len(releases))
+		if err := getJSON(ctx, d.client, url, &parsed); err != nil {
+			return nil, fmt.Errorf("musicbrainz: releases of %s: %w", releaseGroupMBID, err)
+		}
+		for _, one := range parsed.Releases {
+			releases = append(releases, one.toRelease())
+		}
+		if len(parsed.Releases) == 0 || len(releases) >= parsed.Count {
+			break
+		}
 	}
 	return releases, nil
 }

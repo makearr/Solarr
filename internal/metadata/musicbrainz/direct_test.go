@@ -1,9 +1,11 @@
 package musicbrainz_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
@@ -463,7 +465,7 @@ func discographyFor(t *testing.T, source musicbrainz.Source) musicbrainz.Discogr
 
 // One browse request lists every release of the group with its tracklist.
 func TestDirect_ReleasesBrowsesTheGroupsReleasesWithTracks(t *testing.T) {
-	const body = `{"releases": [
+	const body = `{"release-count": 2, "releases": [
 	  {"id": "rel-standard", "title": "Detisisu Binip", "status": "Official", "date": "1991-11-04",
 	   "media": [{"position": 1, "format": "CD", "tracks": [
 	     {"position": 1, "number": "1", "title": "Detisisu Binip", "recording": {"id": "rec-1"}},
@@ -472,7 +474,7 @@ func TestDirect_ReleasesBrowsesTheGroupsReleasesWithTracks(t *testing.T) {
 	   "media": [{"position": 1, "format": "CD", "tracks": [
 	     {"position": 1, "number": "1", "title": "Covabapoz Fofu", "recording": {"id": "rec-2"}}]}]}]}`
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://mb.invalid/release?release-group=rg-shepherd&fmt=json&inc=recordings+labels+media&limit=100": {
+		"https://mb.invalid/release?release-group=rg-shepherd&fmt=json&inc=recordings+labels+media&limit=100&offset=0": {
 			status: http.StatusOK, body: body,
 		},
 	}}
@@ -490,6 +492,31 @@ func TestDirect_ReleasesBrowsesTheGroupsReleasesWithTracks(t *testing.T) {
 		len(releases[0].Media) != 1 || len(releases[0].Media[0].Tracks) != 2 ||
 		releases[0].Media[0].Tracks[1].RecordingMBID != "rec-2" {
 		t.Errorf("Releases = %+v, want both releases, statuses lowercased, tracks and recordings read", releases)
+	}
+}
+
+// A browse with tracklists sends 25 releases a page whatever is asked; every page is read.
+func TestDirect_ReleasesFollowsEveryPage(t *testing.T) {
+	page := func(from, to, count int) string {
+		var releases []string
+		for i := from; i < to; i++ {
+			releases = append(releases, fmt.Sprintf(`{"id": "rel-%d", "title": "Red", "status": "Official", "media": []}`, i))
+		}
+		return fmt.Sprintf(`{"release-count": %d, "releases": [%s]}`, count, strings.Join(releases, ","))
+	}
+	base := "https://mb.invalid/release?release-group=rg-red&fmt=json&inc=recordings+labels+media&limit=100&offset="
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		base + "0":  {status: http.StatusOK, body: page(0, 25, 30)},
+		base + "25": {status: http.StatusOK, body: page(25, 30, 30)},
+	}}
+	source := musicbrainz.NewDirect(newTestClient(t, transport, musicbrainz.DirectName), "https://mb.invalid")
+
+	releases, err := source.(musicbrainz.ReleaseLister).Releases(t.Context(), "rg-red")
+	if err != nil {
+		t.Fatalf("Releases: %v", err)
+	}
+	if len(releases) != 30 || releases[29].MBID != "rel-29" {
+		t.Errorf("Releases = %d releases, want all 30 across both pages", len(releases))
 	}
 }
 
