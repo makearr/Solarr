@@ -648,11 +648,16 @@ func traumaLookup(groups ...string) *fakeAlbumLookup {
 		// seed arrives -- from an identified sibling, or from a fingerprint.
 		groups: map[string]musicbrainz.ReleaseGroup{},
 	}
-	for _, group := range groups {
+	for i, group := range groups {
 		lookup.groups[group] = musicbrainz.ReleaseGroup{MBID: group, Title: "Kebilegev Bibihi", PrimaryType: "Album"}
 		lookup.searches["P!po/Kebilegev Bibihi"] = append(lookup.searches["P!po/Kebilegev Bibihi"],
 			musicbrainz.ReleaseGroupMatch{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: group, Title: "Kebilegev Bibihi", PrimaryType: "Album"}, ArtistCredit: "P!po"})
-		lookup.releases[group] = []musicbrainz.Release{releaseOf("release-of-"+group, "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks)}
+		release := releaseOf("release-of-"+group, "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks)
+		if i > 0 {
+			// Every further group is another album with the same titles and lengths, never a duplicate entry.
+			release = recordedAs(release, group)
+		}
+		lookup.releases[group] = []musicbrainz.Release{release}
 	}
 	return lookup
 }

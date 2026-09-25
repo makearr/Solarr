@@ -47,6 +47,16 @@ func releaseOf(mbid, title, status, date string, tracks []trackSpec) musicbrainz
 	return musicbrainz.Release{MBID: mbid, Title: title, Status: status, Date: date, Media: []musicbrainz.Medium{medium}}
 }
 
+// recordedAs gives a release its own recordings: another album with the same titles and lengths.
+func recordedAs(release musicbrainz.Release, prefix string) musicbrainz.Release {
+	for m := range release.Media {
+		for t := range release.Media[m].Tracks {
+			release.Media[m].Tracks[t].RecordingMBID = prefix + "-" + release.Media[m].Tracks[t].RecordingMBID
+		}
+	}
+	return release
+}
+
 func candidateOf(rgMBID, primary string, secondary []string, release musicbrainz.Release) music.AlbumCandidate {
 	return music.AlbumCandidate{
 		ReleaseGroup: musicbrainz.ReleaseGroup{MBID: rgMBID, Title: release.Title, PrimaryType: primary, SecondaryTypes: secondary},
@@ -97,7 +107,7 @@ func TestDecideAlbum_ALoneFittingCompilationIsNotSentToReview(t *testing.T) {
 // Two different albums fitting equally well are a coin flip, not an identification.
 func TestDecideAlbum_TwoReleaseGroupsFittingEquallyAreAmbiguous(t *testing.T) {
 	first := candidateOf("rg-a", "Album", nil, releaseOf("rel-a", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks))
-	second := candidateOf("rg-b", "Album", nil, releaseOf("rel-b", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks))
+	second := candidateOf("rg-b", "Album", nil, recordedAs(releaseOf("rel-b", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks), "b"))
 
 	decision := music.DecideAlbum(folderOf(traumaTracks), []music.AlbumCandidate{first, second})
 	if decision.Outcome != music.AlbumAmbiguous || decision.Best != nil {
@@ -143,7 +153,7 @@ func TestDecideAlbum_ACompleteReleaseFittingWorseDoesNotWin(t *testing.T) {
 func TestDecideAlbum_APartialFolderBetweenTwoRivalsStaysAmbiguous(t *testing.T) {
 	folder := folderOf(traumaTracks[:4])
 	first := candidateOf("rg-a", "Album", nil, releaseOf("rel-a", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks))
-	second := candidateOf("rg-b", "Album", nil, releaseOf("rel-b", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks))
+	second := candidateOf("rg-b", "Album", nil, recordedAs(releaseOf("rel-b", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks), "b"))
 
 	decision := music.DecideAlbum(folder, []music.AlbumCandidate{first, second})
 	if decision.Outcome != music.AlbumAmbiguous {
@@ -302,5 +312,17 @@ func TestDecideAlbum_ATagNamingTheArtistFitsACreditSpellingItOtherwise(t *testin
 	decision := music.DecideAlbum(folderOf(traumaTracks), []music.AlbumCandidate{candidate})
 	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-live" {
 		t.Errorf("decision = %s best %q, want identified rg-live", decision.Outcome, bestReleaseGroup(decision))
+	}
+}
+
+// One album catalogued as two release groups -- same length, same recordings -- is identified,
+// not put to the user (Hall & Oates' "Backtracks" and Sobo Mutuke's "Halek", the main library).
+func TestDecideAlbum_OneAlbumCataloguedTwiceIsIdentified(t *testing.T) {
+	first := candidateOf("rg-a", "Album", nil, releaseOf("rel-a", "Kebilegev Bibihi", "official", "2017-06-08", traumaTracks))
+	second := candidateOf("rg-b", "Album", nil, releaseOf("rel-b", "Kebilegev Bibihi", "official", "2017-12-13", traumaTracks))
+
+	decision := music.DecideAlbum(folderOf(traumaTracks), []music.AlbumCandidate{second, first})
+	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-a" {
+		t.Errorf("decision = %s %q, want identified rg-a, the earlier", decision.Outcome, bestReleaseGroup(decision))
 	}
 }

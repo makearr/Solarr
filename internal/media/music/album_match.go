@@ -465,7 +465,7 @@ func DecideAlbum(locals []LocalTrack, candidates []AlbumCandidate) AlbumDecision
 	officialOverUnofficial := best.Candidate.Release.Status == "official" &&
 		runnerUp >= 0 && scores[runnerUp].Candidate.Release.Status != "official"
 	if runnerUp >= 0 && scores[runnerUp].Distance-best.Distance < winnerMargin && !officialOverUnofficial &&
-		!onlyCompleteFit(scores, len(locals)) {
+		!onlyCompleteFit(scores, len(locals)) && !rivalsAreTheSameMusic(scores) {
 		decision.Outcome = AlbumAmbiguous
 		return decision
 	}
@@ -488,6 +488,30 @@ func onlyCompleteFit(scores []ReleaseScore, localCount int) bool {
 		return score.Accepted && score.Distance-best.Distance < winnerMargin &&
 			score.Candidate.ReleaseGroup.MBID != best.Candidate.ReleaseGroup.MBID && complete(score)
 	})
+}
+
+// rivalsAreTheSameMusic is every close rival group holding the best's tracklist: as many tracks,
+// every file on the same recording. One album catalogued twice is no choice to put to anyone.
+func rivalsAreTheSameMusic(scores []ReleaseScore) bool {
+	best := scores[0]
+	return !slices.ContainsFunc(scores[1:], func(rival ReleaseScore) bool {
+		return rival.Accepted && rival.Distance-best.Distance < winnerMargin &&
+			rival.Candidate.ReleaseGroup.MBID != best.Candidate.ReleaseGroup.MBID && !sameRecordings(best, rival)
+	})
+}
+
+// sameRecordings is two releases of equal length pairing every file with the same recording.
+func sameRecordings(a, b ReleaseScore) bool {
+	if trackCount(a.Candidate.Release) != trackCount(b.Candidate.Release) {
+		return false
+	}
+	for i, track := range a.Tracks {
+		other := b.Tracks[i]
+		if track == nil || other == nil || track.RecordingMBID == "" || track.RecordingMBID != other.RecordingMBID {
+			return false
+		}
+	}
+	return true
 }
 
 // compareScores orders accepted first, then distance, then among equally fitting editions:
