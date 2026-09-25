@@ -398,12 +398,22 @@ func (i Identity) RemoveWork(ctx context.Context, workID int64) (RemoveWorkResul
 		if err != nil {
 			return fmt.Errorf("count files: %w", err)
 		}
+		// Without this, removing any album that was ever downloaded failed on acquisition's FK.
+		if err := queries.DetachAcquisitionsForWork(ctx, workID); err != nil {
+			return fmt.Errorf("detach acquisitions: %w", err)
+		}
 		if err := queries.DeleteDesiredItemsForWork(ctx, workID); err != nil {
 			return fmt.Errorf("delete desired items: %w", err)
 		}
 		result.FilesKept = files
 		if files > 0 {
 			return nil
+		}
+		if err := queries.DetachImportUnitsFromWork(ctx, sql.NullInt64{Int64: workID, Valid: true}); err != nil {
+			return fmt.Errorf("detach import units: %w", err)
+		}
+		if err := queries.DetachPackItemsFromWork(ctx, sql.NullInt64{Int64: workID, Valid: true}); err != nil {
+			return fmt.Errorf("detach pack items: %w", err)
 		}
 		if err := queries.DeleteWork(ctx, workID); err != nil {
 			return fmt.Errorf("delete work: %w", err)
