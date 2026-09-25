@@ -4,7 +4,7 @@ import { Globe } from "lucide-react";
 
 import { api } from "@/api/client";
 import { SKEW_TOLERANCE_MS, useServerClock } from "@/lib/useServerClock";
-import { describe, useNotifications, type Connection } from "@/lib/useNotifications";
+import { describe, historyNotification, useNotifications, type Connection } from "@/lib/useNotifications";
 
 /** The bottom bar: what just happened on the left, the clock on the right.
  *  Persistent rather than transient -- covering content with a toast is one of
@@ -39,7 +39,19 @@ export function StatusBar() {
     retry: false,
   });
 
+  // A fresh page has heard nothing live yet; the last download is still what just happened.
+  const lastDownload = useQuery({
+    queryKey: ["history", "latest"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/history", { params: { query: { limit: 1 } } });
+      if (error) throw error;
+      return data.items[0] ?? null;
+    },
+    staleTime: 60_000,
+  });
+
   const latest = recent[0];
+  const idle = lastDownload.data ? describe(historyNotification(lastDownload.data)) : "Nothing has happened yet";
 
   return (
     <footer className="relative shrink-0 border-t border-border-subtle bg-surface">
@@ -75,7 +87,7 @@ export function StatusBar() {
         >
           <Light connection={connection} />
           <span className="truncate">
-            {latest ? describe(latest) : "Nothing has happened yet"}
+            {latest ? describe(latest) : idle}
           </span>
           {unread > 0 && (
             <span className="shrink-0 rounded-full bg-accent px-1.5 py-px text-[0.6875rem]

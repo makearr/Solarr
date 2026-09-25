@@ -160,6 +160,10 @@ func Parse(title string) Result {
 	simple = normalizeHiResPair(simple)
 
 	claims := &claimSet{}
+	// "...LOSSLESS.FLAC" names its codec where a file has its extension; Lidarr reads it too.
+	if extension := strings.ToLower(strings.TrimPrefix(title[len(releaseTitle):], ".")); losslessFormats[extension] != "" || lossyFormats[extension] != "" {
+		claimField(extension, claims)
+	}
 
 	core := extractBrackets(simple, group, claims)
 	core = dashRunRe.ReplaceAllString(core, "-")

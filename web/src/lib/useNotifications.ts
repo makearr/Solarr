@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { API_PREFIX } from "@/api/client";
+import type { components } from "@/api/schema";
 
 export type Connection = "connecting" | "live" | "dropped";
 
@@ -89,4 +90,12 @@ export function describe(event: Notification): string {
     return event.data.detail ? `${verb}: ${what} (${event.data.detail})` : `${verb}: ${what}`;
   }
   return `${event.entity} ${event.kind}`;
+}
+
+/** A stored history entry, shaped like the live event that announced it. */
+export function historyNotification(entry: components["schemas"]["HistoryEntry"]): Notification {
+  return {
+    id: entry.id, topic: "acquisition", entity: `work:${entry.work_id ?? 0}`, kind: `download.${entry.kind}`, at: entry.at,
+    data: { release_title: entry.release_title, album: entry.album, artist: entry.artist, detail: entry.detail },
+  };
 }

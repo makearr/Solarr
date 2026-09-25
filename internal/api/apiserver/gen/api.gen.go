@@ -969,7 +969,6 @@ type CandidateDecision struct {
 	Components  []ScoreComponent `json:"components"`
 	DecidedAt   time.Time        `json:"decided_at"`
 	Deferrals   []Deferral       `json:"deferrals"`
-	DownloadUrl string           `json:"download_url"`
 	Guid        string           `json:"guid"`
 	Id          int64            `json:"id"`
 	IndexerId   int64            `json:"indexer_id"`

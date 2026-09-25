@@ -734,9 +734,7 @@ function CandidateList({
                 blocklisted
               </span>
             )}
-            <span className="ml-auto shrink-0 text-xs text-ink-muted">
-              score {decision.score.toFixed(1)}
-            </span>
+            <QualityVerdict decision={decision} />
             {onBlocklist && !decision.blocklisted && (
               <button
                 type="button"
@@ -842,6 +840,19 @@ function DifferentTerms({
         </button>
       </form>
     </details>
+  );
+}
+
+// Releases rank by the library's profiles first (ADR-40 tiers); the additive score only breaks ties,
+// and is zero unless a profile scores, so the profile a release fits is what is worth reading.
+function QualityVerdict({ decision }: { decision: CandidateDecision }) {
+  const fit = decision.components.find((component) => component.rule === "profile-priority");
+  const fits = fit !== undefined && fit.label.endsWith("(fits)");
+  return (
+    <span className={`ml-auto shrink-0 text-xs ${fits ? "text-ok" : "text-ink-muted"}`}>
+      {fit?.label}
+      {decision.score !== 0 && ` · score ${decision.score.toFixed(1)}`}
+    </span>
   );
 }
 
