@@ -2,6 +2,7 @@ package music_test
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -101,6 +102,43 @@ func TestDecideAlbum_TwoReleaseGroupsFittingEquallyAreAmbiguous(t *testing.T) {
 	decision := music.DecideAlbum(folderOf(traumaTracks), []music.AlbumCandidate{first, second})
 	if decision.Outcome != music.AlbumAmbiguous || decision.Best != nil {
 		t.Errorf("decision = %s best %q, want ambiguous with no best", decision.Outcome, bestReleaseGroup(decision))
+	}
+}
+
+// A folder filling one release exactly is that release, not a longer rival it only partly covers
+// (the Nak Nime' 12-track "The Nak Nime" against a 26-track one of the same name, the main library).
+func TestDecideAlbum_TheOneReleaseAFolderFillsExactlyBeatsALongerRival(t *testing.T) {
+	longer := slices.Clone(traumaTracks)
+	for i := range 10 {
+		longer = append(longer, trackSpec{fmt.Sprintf("Bonus %d", i+1), 200})
+	}
+	// One track 15 s off ranks the complete release second, so it must win from behind.
+	completeTracks := slices.Clone(traumaTracks)
+	completeTracks[0].seconds += 15
+	complete := candidateOf("rg-complete", "Album", []string{"Compilation"}, releaseOf("rel-complete", "Kebilegev Bibihi", "official", "2001", completeTracks))
+	partial := candidateOf("rg-partial", "Album", []string{"Compilation"}, releaseOf("rel-partial", "Kebilegev Bibihi", "official", "2003", longer))
+
+	for name, candidates := range map[string][]music.AlbumCandidate{
+		"complete first": {complete, partial}, "partial first": {partial, complete},
+	} {
+		t.Run(name, func(t *testing.T) {
+			decision := music.DecideAlbum(folderOf(traumaTracks), candidates)
+			if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-complete" {
+				t.Errorf("decision = %s %q, want identified rg-complete", decision.Outcome, bestReleaseGroup(decision))
+			}
+		})
+	}
+}
+
+// A folder filling neither of two rivals exactly is still theirs to choose between.
+func TestDecideAlbum_APartialFolderBetweenTwoRivalsStaysAmbiguous(t *testing.T) {
+	folder := folderOf(traumaTracks[:4])
+	first := candidateOf("rg-a", "Album", nil, releaseOf("rel-a", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks))
+	second := candidateOf("rg-b", "Album", nil, releaseOf("rel-b", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks))
+
+	decision := music.DecideAlbum(folder, []music.AlbumCandidate{first, second})
+	if decision.Outcome != music.AlbumAmbiguous {
+		t.Errorf("decision = %s %q, want ambiguous", decision.Outcome, bestReleaseGroup(decision))
 	}
 }
 
