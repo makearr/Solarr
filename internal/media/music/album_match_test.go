@@ -369,9 +369,9 @@ func TestDecideAlbum_TheFoldersAlbumNameFitsWhereTheTagDoesNot(t *testing.T) {
 // (Dacapa Hivop Pibazi's "Mepukafamo" at 0.000 against "Mepukafamo" at 0.042, the main library).
 func TestDecideAlbum_APerfectFitBeatsACloseImperfectRival(t *testing.T) {
 	perfect := candidateOf("rg-perfect", "Album", nil, releaseOf("rel-perfect", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks))
-	close := candidateOf("rg-close", "Album", nil, recordedAs(releaseOf("rel-close", "Kebilegev Bibihi: Live", "official", "2017-10-13", traumaTracks), "live"))
+	rival := candidateOf("rg-close", "Album", nil, recordedAs(releaseOf("rel-close", "Kebilegev Bibihi: Live", "official", "2017-10-13", traumaTracks), "live"))
 
-	decision := music.DecideAlbum(folderOf(traumaTracks), []music.AlbumCandidate{close, perfect})
+	decision := music.DecideAlbum(folderOf(traumaTracks), []music.AlbumCandidate{rival, perfect})
 	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-perfect" {
 		t.Errorf("decision = %s %q (distances %.3f, %.3f), want identified rg-perfect", decision.Outcome, bestReleaseGroup(decision),
 			decision.Scores[0].Distance, decision.Scores[1].Distance)
