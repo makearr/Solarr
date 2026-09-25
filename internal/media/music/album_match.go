@@ -464,40 +464,30 @@ func DecideAlbum(locals []LocalTrack, candidates []AlbumCandidate) AlbumDecision
 	// Inside the margin an official release still beats a rival MusicBrainz only knows as a promo or bootleg.
 	officialOverUnofficial := best.Candidate.Release.Status == "official" &&
 		runnerUp >= 0 && scores[runnerUp].Candidate.Release.Status != "official"
-	if runnerUp >= 0 && scores[runnerUp].Distance-best.Distance < winnerMargin && !officialOverUnofficial {
-		complete, found := soleCompleteFit(scores, len(locals))
-		if !found {
-			decision.Outcome = AlbumAmbiguous
-			return decision
-		}
-		chosen := scores[complete]
-		copy(scores[1:complete+1], scores[:complete])
-		scores[0] = chosen
+	if runnerUp >= 0 && scores[runnerUp].Distance-best.Distance < winnerMargin && !officialOverUnofficial &&
+		!onlyCompleteFit(scores, len(locals)) {
+		decision.Outcome = AlbumAmbiguous
+		return decision
 	}
 	decision.Outcome = AlbumIdentified
 	decision.Best = &decision.Scores[0]
 	return decision
 }
 
-// soleCompleteFit finds the one release group, among the rivals inside the margin, whose release
-// the folder fills exactly: 12 files are the 12-track album, not 12 of a 26-track compilation.
-func soleCompleteFit(scores []ReleaseScore, localCount int) (int, bool) {
-	chosen, group := -1, ""
-	for i, score := range scores {
-		if !score.Accepted || score.Distance-scores[0].Distance >= winnerMargin {
-			continue
-		}
-		if score.Mapped != localCount || trackCount(score.Candidate.Release) != localCount {
-			continue
-		}
-		switch {
-		case chosen < 0:
-			chosen, group = i, score.Candidate.ReleaseGroup.MBID
-		case score.Candidate.ReleaseGroup.MBID != group:
-			return -1, false
-		}
+// onlyCompleteFit is the best release filled exactly by the folder while no rival group inside the
+// margin is: 12 files are the 12-track album, not 12 of a 26-track compilation of the same name.
+func onlyCompleteFit(scores []ReleaseScore, localCount int) bool {
+	complete := func(score ReleaseScore) bool {
+		return score.Mapped == localCount && trackCount(score.Candidate.Release) == localCount
 	}
-	return chosen, chosen >= 0
+	best := scores[0]
+	if !complete(best) {
+		return false
+	}
+	return !slices.ContainsFunc(scores[1:], func(score ReleaseScore) bool {
+		return score.Accepted && score.Distance-best.Distance < winnerMargin &&
+			score.Candidate.ReleaseGroup.MBID != best.Candidate.ReleaseGroup.MBID && complete(score)
+	})
 }
 
 // compareScores orders accepted first, then distance, then among equally fitting editions:
