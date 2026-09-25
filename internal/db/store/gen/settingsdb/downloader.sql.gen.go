@@ -12,21 +12,22 @@ import (
 
 const createDownloader = `-- name: CreateDownloader :one
 
-INSERT INTO downloader (name, impl, base_url, credentials, enabled, protocol, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO downloader (name, impl, base_url, credentials, enabled, protocol, settings_json, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, name, impl, base_url, credentials, enabled, protocol, settings_json,
           created_at, updated_at
 `
 
 type CreateDownloaderParams struct {
-	Name        string
-	Impl        string
-	BaseUrl     string
-	Credentials []byte
-	Enabled     int64
-	Protocol    string
-	CreatedAt   int64
-	UpdatedAt   int64
+	Name         string
+	Impl         string
+	BaseUrl      string
+	Credentials  []byte
+	Enabled      int64
+	Protocol     string
+	SettingsJson sql.NullString
+	CreatedAt    int64
+	UpdatedAt    int64
 }
 
 // Download client connections (stage 5, ADR-46/57). Column lists follow table order.
@@ -38,6 +39,7 @@ func (q *Queries) CreateDownloader(ctx context.Context, arg CreateDownloaderPara
 		arg.Credentials,
 		arg.Enabled,
 		arg.Protocol,
+		arg.SettingsJson,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)

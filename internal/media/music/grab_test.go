@@ -46,3 +46,27 @@ func TestGrab_SendsTheBestReleaseAndNeverSearchesAnAlbumAlreadyDownloading(t *te
 			second, len(searcher.requests)-calls)
 	}
 }
+
+// A torrent ranked best is passed over while no torrent client exists; the best usenet release goes.
+func TestGrab_PassesOverAReleaseNoClientCanTake(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, losslessFirstRules)
+	torrents := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+		return []indexer.RawItem{rawItem("guid-t", "Nosi Zada-Discovery-2001-FLAC-GROUP")}, nil
+	}}
+	usenet := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+		return []indexer.RawItem{rawItem("guid-u", "Nosi Zada-Discovery-2001-MP3-320-GROUP")}, nil
+	}}
+	sender := &fakeSabnzbdSender{clientRef: "nzo-1"}
+	grab := music.Grab{Search: env.search(), Dispatch: env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: sender}})}
+
+	result, err := grab.SearchAndSend(t.Context(), item.ID, []music.IndexerConn{
+		{ID: 1, Impl: "torznab", Client: torrents}, {ID: 2, Impl: "newznab", Client: usenet},
+	}, env.clock.Now())
+	if err != nil {
+		t.Fatalf("SearchAndSend: %v", err)
+	}
+	if result.Sent == nil || result.Sent.CandidateTitle != "Nosi Zada-Discovery-2001-MP3-320-GROUP" {
+		t.Errorf("sent %+v, want the usenet release", result.Sent)
+	}
+}

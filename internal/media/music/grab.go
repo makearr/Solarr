@@ -46,6 +46,10 @@ func (g Grab) SearchAndSend(ctx context.Context, itemID int64, indexers []Indexe
 		if errors.Is(err, library.ErrAcquisitionAlreadyInFlight) {
 			return GrabResult{Search: found, AlreadyInFlight: true}, nil
 		}
+		// A torrent with no torrent client yet: the next best release may still be sendable.
+		if errors.Is(err, ErrNoDownloaderForProtocol) {
+			continue
+		}
 		if err != nil {
 			return GrabResult{Search: found}, fmt.Errorf("music: grab item %d: %w", itemID, err)
 		}

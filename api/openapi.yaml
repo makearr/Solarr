@@ -2066,6 +2066,37 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /indexers/prowlarr:
+    post:
+      operationId: listProwlarrIndexers
+      tags: [settings]
+      summary: >-
+        Every indexer a Prowlarr serves, each reachable through Prowlarr as Lidarr's Prowlarr sync
+        reaches it. Nothing is saved; adding one is POST /indexers with its base_url and the same
+        API key. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [base_url, api_key]
+              properties:
+                base_url: { type: string, minLength: 1 }
+                api_key: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Prowlarr's indexers.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProwlarrIndexer" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+
   /indexers/{id}:
     parameters:
       - name: id
@@ -2194,6 +2225,26 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Downloader" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /downloaders/test:
+    post:
+      operationId: testDownloaderConfig
+      tags: [settings]
+      summary: Test a download client before it is added, and read its download folder. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TestDownloaderRequest" }
+      responses:
+        "200":
+          description: What the client answered; ok false says why.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectionTestResult" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
@@ -5826,6 +5877,26 @@ components:
           type: boolean
           description: A download for the album was on its way, so nothing was searched.
 
+    ProwlarrIndexer:
+      type: object
+      required: [prowlarr_id, name, impl, base_url, enabled, music, already_added]
+      properties:
+        prowlarr_id: { type: integer, format: int64 }
+        name: { type: string }
+        impl: { type: string, enum: [newznab, torznab] }
+        base_url:
+          type: string
+          description: Prowlarr's own endpoint for this indexer.
+        enabled:
+          type: boolean
+          description: Whether the indexer is enabled in Prowlarr.
+        music:
+          type: boolean
+          description: Whether it offers the Audio categories.
+        already_added:
+          type: boolean
+          description: An indexer with this base URL is already configured here.
+
     HistoryPage:
       type: object
       description: One cursor page of download history.
@@ -6123,7 +6194,7 @@ components:
           type: string
           description: Omitted or empty for a public endpoint that needs none (ADR-47).
         enabled: { type: boolean, default: true }
-        priority: { type: integer, format: int64, default: 50 }
+        priority: { type: integer, format: int64, minimum: 1, maximum: 50, default: 25, description: "Lower is preferred when several indexers list the same release." }
         egress_proxy_url: { type: string }
 
     UpdateIndexerRequest:
@@ -6134,7 +6205,7 @@ components:
         impl: { type: string, minLength: 1 }
         base_url: { type: string, minLength: 1 }
         enabled: { type: boolean, default: true }
-        priority: { type: integer, format: int64, default: 50 }
+        priority: { type: integer, format: int64, minimum: 1, maximum: 50, default: 25 }
         egress_proxy_url: { type: string }
 
     ConnectionTestResult:
@@ -6148,6 +6219,9 @@ components:
             What was found -- the indexer/client's own reported version or
             capability summary when ok, or why the call failed otherwise.
         tested_at: { type: string, format: date-time }
+        download_folder:
+          type: string
+          description: Where a download client puts finished downloads, as it reports it.
 
     Downloader:
       type: object
@@ -6162,8 +6236,35 @@ components:
         enabled: { type: boolean }
         protocol: { type: string, enum: [usenet, torrent, ddl] }
         credentials: { $ref: "#/components/schemas/SecretMask" }
+        options: { $ref: "#/components/schemas/DownloaderOptions" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    DownloaderOptions:
+      type: object
+      description: Lidarr's download client options.
+      properties:
+        category:
+          type: string
+          description: The client category downloads are sent under; empty means "music" for music.
+        remove_completed:
+          type: boolean
+          description: Remove a download from the client once imported. Absent means yes.
+        remote_path:
+          type: string
+          description: Where the client says its downloads are (remote path mapping).
+        local_path:
+          type: string
+          description: Where Solarr sees that same folder.
+
+    TestDownloaderRequest:
+      type: object
+      required: [impl, base_url]
+      properties:
+        impl: { type: string, minLength: 1 }
+        base_url: { type: string, minLength: 1 }
+        credentials: { type: string }
+        options: { $ref: "#/components/schemas/DownloaderOptions" }
 
     AddDownloaderRequest:
       type: object
@@ -6175,6 +6276,7 @@ components:
         protocol: { type: string, enum: [usenet, torrent, ddl] }
         credentials: { type: string }
         enabled: { type: boolean, default: true }
+        options: { $ref: "#/components/schemas/DownloaderOptions" }
 
     UpdateDownloaderRequest:
       type: object
@@ -6185,6 +6287,7 @@ components:
         base_url: { type: string, minLength: 1 }
         protocol: { type: string, enum: [usenet, torrent, ddl] }
         enabled: { type: boolean, default: true }
+        options: { $ref: "#/components/schemas/DownloaderOptions" }
 
     ArrRootFolder:
       type: object

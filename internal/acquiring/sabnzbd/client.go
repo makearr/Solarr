@@ -7,8 +7,10 @@
 package sabnzbd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -61,15 +63,21 @@ func (c Client) getJSON(ctx context.Context, requestURL string, into any) error 
 	if err != nil {
 		return fmt.Errorf("sabnzbd: read response: %w", err)
 	}
+	// SABnzbd answers a refused key in plain text, not JSON.
+	if bytes.HasPrefix(bytes.TrimSpace(body), []byte("API Key")) {
+		return ErrAPIKeyRefused
+	}
 	if err := json.Unmarshal(body, into); err != nil {
 		return fmt.Errorf("sabnzbd: decode response: %w", err)
 	}
 	return nil
 }
 
-// Version answers the instance's own version -- a connection test: a wrong
-// base URL or API key fails here, before anything else asks it. The same
-// role LidarrClient's own SystemStatus plays for a *Arr connection.
+// ErrAPIKeyRefused is SABnzbd refusing the API key.
+var ErrAPIKeyRefused = errors.New("sabnzbd: the API key was refused")
+
+// Version answers the instance's own version. SABnzbd answers it without a key, so it proves the
+// address, never the key; CompleteFolder does that.
 func (c Client) Version(ctx context.Context) (string, error) {
 	var parsed struct {
 		Version string `json:"version"`
@@ -102,4 +110,32 @@ func kbPerSecToBytesPerSec(kb string) int64 {
 		return 0
 	}
 	return int64(value * 1024)
+}
+
+// CompleteFolder answers where SABnzbd puts finished downloads. It needs the full API key, so a
+// connection test that reads it has proved the key too.
+func (c Client) CompleteFolder(ctx context.Context) (string, error) {
+	var parsed struct {
+		Config struct {
+			Misc struct {
+				CompleteDir string `json:"complete_dir"`
+			} `json:"misc"`
+		} `json:"config"`
+	}
+	params := url.Values{"section": {"misc"}, "keyword": {"complete_dir"}}
+	if err := c.getJSON(ctx, c.apiURL("get_config", params), &parsed); err != nil {
+		return "", fmt.Errorf("sabnzbd: complete folder: %w", err)
+	}
+	return parsed.Config.Misc.CompleteDir, nil
+}
+
+// Categories answers the categories SABnzbd knows, "*" included.
+func (c Client) Categories(ctx context.Context) ([]string, error) {
+	var parsed struct {
+		Categories []string `json:"categories"`
+	}
+	if err := c.getJSON(ctx, c.apiURL("get_cats", nil), &parsed); err != nil {
+		return nil, fmt.Errorf("sabnzbd: categories: %w", err)
+	}
+	return parsed.Categories, nil
 }

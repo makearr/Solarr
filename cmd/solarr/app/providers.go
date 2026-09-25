@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"net/url"
 	"strconv"
 	"time"
@@ -206,6 +207,17 @@ func (p *process) arrClientFactory() adapters.LidarrClientFactory {
 		})
 		return arrimport.NewLidarrClient(client, baseURL, apiKey)
 	}
+}
+
+// listProwlarr reads a Prowlarr's indexer list; the guard admits Prowlarr's own host, as for an indexer.
+func (p *process) listProwlarr(ctx context.Context, baseURL, apiKey string) ([]indexer.ProwlarrIndexer, error) {
+	wall := clock.NewSystem()
+	client := httpx.NewClient(wall, connectionGuard(baseURL), httpx.NewLimiter(wall, httpx.Config{}, nil),
+		httpx.NewBreaker(wall, httpx.BreakerConfig{}), httpx.ClientConfig{
+			Provider: "prowlarr", UserAgent: httpx.UserAgent(p.build.Version), Proxy: p.liveProxyPolicy(),
+			Timeout: 30 * time.Second,
+		})
+	return indexer.ListProwlarr(ctx, client, baseURL, apiKey)
 }
 
 // indexerLiveProxyPolicy resolves ADR-47's own per-indexer egress proxy when

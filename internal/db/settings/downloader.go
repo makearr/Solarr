@@ -113,7 +113,8 @@ func (c *Cache) CreateDownloader(ctx context.Context, request DownloaderRequest,
 		created, err = c.queries.WithTx(tx).CreateDownloader(ctx, settingsdb.CreateDownloaderParams{
 			Name: request.Name, Impl: request.Impl, BaseUrl: request.BaseURL, Credentials: sealed,
 			Enabled: boolToInt(request.Enabled), Protocol: request.Protocol,
-			CreatedAt: at, UpdatedAt: at,
+			SettingsJson: sql.NullString{String: request.SettingsJSON, Valid: request.SettingsJSON != ""},
+			CreatedAt:    at, UpdatedAt: at,
 		})
 		return err
 	})

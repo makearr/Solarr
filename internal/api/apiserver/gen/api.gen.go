@@ -416,6 +416,12 @@ const (
 	ProblemTypeUnavailable      ProblemType = "unavailable"
 )
 
+// Defines values for ProwlarrIndexerImpl.
+const (
+	ProwlarrIndexerImplNewznab ProwlarrIndexerImpl = "newznab"
+	ProwlarrIndexerImplTorznab ProwlarrIndexerImpl = "torznab"
+)
+
 // Defines values for ReadyStatusStatus.
 const (
 	ReadyStatusStatusReady ReadyStatusStatus = "ready"
@@ -670,12 +676,15 @@ type AddArrInstanceRequest struct {
 
 // AddDownloaderRequest defines model for AddDownloaderRequest.
 type AddDownloaderRequest struct {
-	BaseUrl     string                       `json:"base_url"`
-	Credentials *string                      `json:"credentials,omitempty"`
-	Enabled     *bool                        `json:"enabled,omitempty"`
-	Impl        string                       `json:"impl"`
-	Name        string                       `json:"name"`
-	Protocol    AddDownloaderRequestProtocol `json:"protocol"`
+	BaseUrl     string  `json:"base_url"`
+	Credentials *string `json:"credentials,omitempty"`
+	Enabled     *bool   `json:"enabled,omitempty"`
+	Impl        string  `json:"impl"`
+	Name        string  `json:"name"`
+
+	// Options Lidarr's download client options.
+	Options  *DownloaderOptions           `json:"options,omitempty"`
+	Protocol AddDownloaderRequestProtocol `json:"protocol"`
 }
 
 // AddDownloaderRequestProtocol defines model for AddDownloaderRequest.Protocol.
@@ -690,7 +699,9 @@ type AddIndexerRequest struct {
 	Enabled        *bool   `json:"enabled,omitempty"`
 	Impl           string  `json:"impl"`
 	Name           string  `json:"name"`
-	Priority       *int64  `json:"priority,omitempty"`
+
+	// Priority Lower is preferred when several indexers list the same release.
+	Priority *int64 `json:"priority,omitempty"`
 }
 
 // ArrApp Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships.
@@ -1071,6 +1082,9 @@ type CategoryWriteMonitorDiscovered string
 
 // ConnectionTestResult defines model for ConnectionTestResult.
 type ConnectionTestResult struct {
+	// DownloadFolder Where a download client puts finished downloads, as it reports it.
+	DownloadFolder *string `json:"download_folder,omitempty"`
+
 	// Message What was found -- the indexer/client's own reported version or capability summary when ok, or why the call failed otherwise.
 	Message  string    `json:"message"`
 	Ok       bool      `json:"ok"`
@@ -1204,14 +1218,32 @@ type Downloader struct {
 	Id          int64      `json:"id"`
 
 	// Impl "sabnzbd" today (ADR-46).
-	Impl      string             `json:"impl"`
-	Name      string             `json:"name"`
+	Impl string `json:"impl"`
+	Name string `json:"name"`
+
+	// Options Lidarr's download client options.
+	Options   *DownloaderOptions `json:"options,omitempty"`
 	Protocol  DownloaderProtocol `json:"protocol"`
 	UpdatedAt time.Time          `json:"updated_at"`
 }
 
 // DownloaderProtocol defines model for Downloader.Protocol.
 type DownloaderProtocol string
+
+// DownloaderOptions Lidarr's download client options.
+type DownloaderOptions struct {
+	// Category The client category downloads are sent under; empty means "music" for music.
+	Category *string `json:"category,omitempty"`
+
+	// LocalPath Where Solarr sees that same folder.
+	LocalPath *string `json:"local_path,omitempty"`
+
+	// RemotePath Where the client says its downloads are (remote path mapping).
+	RemotePath *string `json:"remote_path,omitempty"`
+
+	// RemoveCompleted Remove a download from the client once imported. Absent means yes.
+	RemoveCompleted *bool `json:"remove_completed,omitempty"`
+}
 
 // DrainMove defines model for DrainMove.
 type DrainMove struct {
@@ -2346,6 +2378,27 @@ type Problem struct {
 // ProblemType defines model for ProblemType.
 type ProblemType string
 
+// ProwlarrIndexer defines model for ProwlarrIndexer.
+type ProwlarrIndexer struct {
+	// AlreadyAdded An indexer with this base URL is already configured here.
+	AlreadyAdded bool `json:"already_added"`
+
+	// BaseUrl Prowlarr's own endpoint for this indexer.
+	BaseUrl string `json:"base_url"`
+
+	// Enabled Whether the indexer is enabled in Prowlarr.
+	Enabled bool                `json:"enabled"`
+	Impl    ProwlarrIndexerImpl `json:"impl"`
+
+	// Music Whether it offers the Audio categories.
+	Music      bool   `json:"music"`
+	Name       string `json:"name"`
+	ProwlarrId int64  `json:"prowlarr_id"`
+}
+
+// ProwlarrIndexerImpl defines model for ProwlarrIndexer.Impl.
+type ProwlarrIndexerImpl string
+
 // QualityProfile ADR-40's policy: hard gates, then lexicographic tiers, then an additive score. `rules` and `upgrade` are kept as opaque JSON here -- internal/identify/score owns that shape (Parse/ParseUpgrade); this layer only checks a name and that they decode (settings. validateQualityProfile).
 type QualityProfile struct {
 	Id int64 `json:"id"`
@@ -2668,6 +2721,16 @@ type SubscriptionPreview struct {
 	ReleaseGroups                 []PreviewReleaseGroup `json:"release_groups"`
 }
 
+// TestDownloaderRequest defines model for TestDownloaderRequest.
+type TestDownloaderRequest struct {
+	BaseUrl     string  `json:"base_url"`
+	Credentials *string `json:"credentials,omitempty"`
+	Impl        string  `json:"impl"`
+
+	// Options Lidarr's download client options.
+	Options *DownloaderOptions `json:"options,omitempty"`
+}
+
 // Tier defines model for Tier.
 type Tier string
 
@@ -2734,10 +2797,13 @@ type UpdateArrInstanceRequest struct {
 
 // UpdateDownloaderRequest defines model for UpdateDownloaderRequest.
 type UpdateDownloaderRequest struct {
-	BaseUrl  string                          `json:"base_url"`
-	Enabled  *bool                           `json:"enabled,omitempty"`
-	Impl     string                          `json:"impl"`
-	Name     string                          `json:"name"`
+	BaseUrl string `json:"base_url"`
+	Enabled *bool  `json:"enabled,omitempty"`
+	Impl    string `json:"impl"`
+	Name    string `json:"name"`
+
+	// Options Lidarr's download client options.
+	Options  *DownloaderOptions              `json:"options,omitempty"`
 	Protocol UpdateDownloaderRequestProtocol `json:"protocol"`
 }
 
@@ -3041,6 +3107,12 @@ type ListImportUnitsParams struct {
 
 // ListImportUnitsParamsDecision defines parameters for ListImportUnits.
 type ListImportUnitsParamsDecision string
+
+// ListProwlarrIndexersJSONBody defines parameters for ListProwlarrIndexers.
+type ListProwlarrIndexersJSONBody struct {
+	ApiKey  string `json:"api_key"`
+	BaseUrl string `json:"base_url"`
+}
 
 // SetIndexerAPIKeyJSONBody defines parameters for SetIndexerAPIKey.
 type SetIndexerAPIKeyJSONBody struct {
@@ -3423,6 +3495,9 @@ type DiscoverAddJSONRequestBody = DiscoverAddRequest
 // AddDownloaderJSONRequestBody defines body for AddDownloader for application/json ContentType.
 type AddDownloaderJSONRequestBody = AddDownloaderRequest
 
+// TestDownloaderConfigJSONRequestBody defines body for TestDownloaderConfig for application/json ContentType.
+type TestDownloaderConfigJSONRequestBody = TestDownloaderRequest
+
 // UpdateDownloaderJSONRequestBody defines body for UpdateDownloader for application/json ContentType.
 type UpdateDownloaderJSONRequestBody = UpdateDownloaderRequest
 
@@ -3464,6 +3539,9 @@ type UpdateImportSettingsJSONRequestBody = ImportSettings
 
 // AddIndexerJSONRequestBody defines body for AddIndexer for application/json ContentType.
 type AddIndexerJSONRequestBody = AddIndexerRequest
+
+// ListProwlarrIndexersJSONRequestBody defines body for ListProwlarrIndexers for application/json ContentType.
+type ListProwlarrIndexersJSONRequestBody ListProwlarrIndexersJSONBody
 
 // UpdateIndexerJSONRequestBody defines body for UpdateIndexer for application/json ContentType.
 type UpdateIndexerJSONRequestBody = UpdateIndexerRequest
@@ -3719,6 +3797,9 @@ type ServerInterface interface {
 	// Connect a new download client. Administrator only.
 	// (POST /downloaders)
 	AddDownloader(w http.ResponseWriter, r *http.Request)
+	// Test a download client before it is added, and read its download folder. Administrator only.
+	// (POST /downloaders/test)
+	TestDownloaderConfig(w http.ResponseWriter, r *http.Request)
 	// Remove a connection. Administrator only.
 	// (DELETE /downloaders/{id})
 	DeleteDownloader(w http.ResponseWriter, r *http.Request, id int64)
@@ -3818,6 +3899,9 @@ type ServerInterface interface {
 	// Connect a new indexer. Administrator only.
 	// (POST /indexers)
 	AddIndexer(w http.ResponseWriter, r *http.Request)
+	// Every indexer a Prowlarr serves, each reachable through Prowlarr as Lidarr's Prowlarr sync reaches it. Nothing is saved; adding one is POST /indexers with its base_url and the same API key. Administrator only.
+	// (POST /indexers/prowlarr)
+	ListProwlarrIndexers(w http.ResponseWriter, r *http.Request)
 	// Remove a connection. Administrator only.
 	// (DELETE /indexers/{id})
 	DeleteIndexer(w http.ResponseWriter, r *http.Request, id int64)
@@ -4409,6 +4493,12 @@ func (_ Unimplemented) AddDownloader(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Test a download client before it is added, and read its download folder. Administrator only.
+// (POST /downloaders/test)
+func (_ Unimplemented) TestDownloaderConfig(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Remove a connection. Administrator only.
 // (DELETE /downloaders/{id})
 func (_ Unimplemented) DeleteDownloader(w http.ResponseWriter, r *http.Request, id int64) {
@@ -4604,6 +4694,12 @@ func (_ Unimplemented) ListIndexers(w http.ResponseWriter, r *http.Request) {
 // Connect a new indexer. Administrator only.
 // (POST /indexers)
 func (_ Unimplemented) AddIndexer(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every indexer a Prowlarr serves, each reachable through Prowlarr as Lidarr's Prowlarr sync reaches it. Nothing is saved; adding one is POST /indexers with its base_url and the same API key. Administrator only.
+// (POST /indexers/prowlarr)
+func (_ Unimplemented) ListProwlarrIndexers(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6687,6 +6783,28 @@ func (siw *ServerInterfaceWrapper) AddDownloader(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// TestDownloaderConfig operation middleware
+func (siw *ServerInterfaceWrapper) TestDownloaderConfig(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestDownloaderConfig(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteDownloader operation middleware
 func (siw *ServerInterfaceWrapper) DeleteDownloader(w http.ResponseWriter, r *http.Request) {
 
@@ -7736,6 +7854,28 @@ func (siw *ServerInterfaceWrapper) AddIndexer(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AddIndexer(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListProwlarrIndexers operation middleware
+func (siw *ServerInterfaceWrapper) ListProwlarrIndexers(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProwlarrIndexers(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11196,6 +11336,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/downloaders", wrapper.AddDownloader)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/downloaders/test", wrapper.TestDownloaderConfig)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/downloaders/{id}", wrapper.DeleteDownloader)
 	})
 	r.Group(func(r chi.Router) {
@@ -11293,6 +11436,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/indexers", wrapper.AddIndexer)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/indexers/prowlarr", wrapper.ListProwlarrIndexers)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/indexers/{id}", wrapper.DeleteIndexer)

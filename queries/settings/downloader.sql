@@ -1,8 +1,8 @@
 -- Download client connections (stage 5, ADR-46/57). Column lists follow table order.
 
 -- name: CreateDownloader :one
-INSERT INTO downloader (name, impl, base_url, credentials, enabled, protocol, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO downloader (name, impl, base_url, credentials, enabled, protocol, settings_json, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, name, impl, base_url, credentials, enabled, protocol, settings_json,
           created_at, updated_at;
 
