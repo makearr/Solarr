@@ -28,7 +28,8 @@ without an edition uses the same scorer (`chooseRelease`).
 
 Up to 10 release groups per folder, in evidence order: the release group the identified
 siblings agree on; an artist + album search (the album tag cleaned of edition noise, and raw
-when that differs — "(2008 mix)" is part of a real title); then, when the tags are missing or
+when that differs — "(2008 mix)" is part of a real title — and the album the folder names, when
+that differs again, since a malformed tag can hide the title); then, when the tags are missing or
 recalled fewer than two groups, recording search on up to four track titles, keeping the five
 release groups most tracks appear on, studio albums before compilations. Every release of each
 group is scored. Releases and recording searches are cached like everything else.
@@ -52,6 +53,7 @@ are paired by optimal assignment (`match.Assign`), unpaired at cost 2.
 
 Per release: artist (3), album title (3), year (1, over ten years), each pair's distance (2),
 unmatched files (0.9), release type (3: album 0, EP 0.3, other 0.5, compilation or live 1).
+The album title is the best of the tag, the cleaned tag and the folder's album name.
 Missing tracks are never counted, so a partial album still matches its own release.
 
 A value read from the path instead of a tag counts at half strength. The artist is read from the

@@ -164,6 +164,11 @@ func recallAlbums(
 		if raw := strings.TrimSpace(album.Value); !strings.EqualFold(raw, titles[0]) {
 			titles = append(titles, raw)
 		}
+		// A malformed tag ("Dee Gees / Sohe Basen - Gus Hogecuru / Live") hides the title the folder names.
+		if folder := cleanAlbumTag(folderAlbum(locals)); folder != "" &&
+			!slices.ContainsFunc(titles, func(title string) bool { return strings.EqualFold(title, folder) }) {
+			titles = append(titles, folder)
+		}
 		for _, title := range titles {
 			matches, err := lookup.Search(ctx, priority, artist.Value, title, albumSearchLimit)
 			if err != nil {

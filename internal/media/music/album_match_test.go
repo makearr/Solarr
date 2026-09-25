@@ -348,3 +348,18 @@ func TestDecideAlbum_DiscClaimsThatCollideAbstain(t *testing.T) {
 		t.Errorf("distance = %.3f, want %.3f as with no disc tags", got, want)
 	}
 }
+
+// The folder naming the album fits it as well as a correct tag would.
+func TestDecideAlbum_TheFoldersAlbumNameFitsWhereTheTagDoesNot(t *testing.T) {
+	candidates := []music.AlbumCandidate{candidateOf("rg-studio", "Album", nil, studioRelease)}
+	malformed := folderOf(traumaTracks)
+	for i := range malformed {
+		malformed[i].Album = tagged("P!po / Kebilegev Bibihi - Live / Remixed")
+		malformed[i].FolderAlbum = "Kebilegev Bibihi"
+	}
+
+	want := music.DecideAlbum(folderOf(traumaTracks), candidates).Scores[0].Distance
+	if got := music.DecideAlbum(malformed, candidates).Scores[0].Distance; got != want {
+		t.Errorf("distance = %.3f, want %.3f as with a correct tag", got, want)
+	}
+}

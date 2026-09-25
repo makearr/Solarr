@@ -37,6 +37,7 @@ func ReadLocalTrack(tags mediatool.Tags, measured mediatool.Measured, relPath st
 		Year:          yearOf(tags.First("originaldate", "date", "year")),
 		Duration:      measured.Duration,
 		RecordingMBID: ReadMBIDs(tags).Recording,
+		FolderAlbum:   folder.Album,
 	}
 	if local.Track == 0 {
 		local.Disc, local.Track = stemDisc, stemTrack
