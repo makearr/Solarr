@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { describe as describeEvent } from "./useNotifications";
+import { describe as describeEvent, historyNotification } from "./useNotifications";
 
 const base = { id: 1, topic: "acquisition", entity: "work:7", at: "2026-09-25T10:00:00Z" };
 
@@ -15,4 +15,13 @@ test("a download reads as a sentence naming the album", () => {
 
 test("anything else keeps the entity and kind", () => {
   expect(describeEvent({ ...base, topic: "job", entity: "job:42", kind: "updated" })).toBe("job:42 updated");
+});
+
+test("a stored history entry reads as its live event did", () => {
+  expect(
+    describeEvent(historyNotification({
+      id: 3, at: "2026-09-25T10:00:00Z", kind: "grabbed", work_id: 1,
+      release_title: "Heka-Detisisu.Binip.1992.[FLAC]", album: "Detisisu Binip", artist: "Heka",
+    })),
+  ).toBe("Grabbed: Heka — Detisisu Binip");
 });
