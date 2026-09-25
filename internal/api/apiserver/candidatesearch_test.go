@@ -78,7 +78,7 @@ func TestSearchWork_ReturnsWhatThePipelineFound(t *testing.T) {
 		Decisions: []apiserver.CandidateDecision{{
 			ID: 1, CandidateID: 1, Outcome: "ACCEPT", Score: 12.5,
 			IndexerID: 1, GUID: "guid-1", Title: "Nosi Zada-Discovery-2001-FLAC-GROUP",
-			Protocol: "usenet", DownloadURL: "https://indexer/nzb/1", Source: "search",
+			Protocol: "usenet", Source: "search",
 		}},
 	}
 

@@ -219,8 +219,8 @@ func candidateDecisionView(detail library.DecisionDetail) apiserver.CandidateDec
 		IndexerID:       detail.ReleaseCandidate.IndexerID, GUID: detail.ReleaseCandidate.GUID,
 		Title: detail.ReleaseCandidate.Title, SizeBytes: detail.ReleaseCandidate.SizeBytes,
 		Seeders: detail.ReleaseCandidate.Seeders, Leechers: detail.ReleaseCandidate.Leechers,
-		Protocol: detail.ReleaseCandidate.Protocol, DownloadURL: detail.ReleaseCandidate.DownloadURL,
-		Source: detail.ReleaseCandidate.Source, DecidedAt: time.Unix(detail.Decision.DecidedAt, 0),
+		Protocol: detail.ReleaseCandidate.Protocol,
+		Source:   detail.ReleaseCandidate.Source, DecidedAt: time.Unix(detail.Decision.DecidedAt, 0),
 	}
 	if detail.ReleaseCandidate.PublishedAt != nil {
 		publishedAt := time.Unix(*detail.ReleaseCandidate.PublishedAt, 0)

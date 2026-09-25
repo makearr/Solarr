@@ -4961,7 +4961,6 @@ export interface components {
             published_at?: string | null;
             /** @enum {string} */
             protocol: "usenet" | "torrent" | "ddl" | "feed";
-            download_url: string;
             /** @enum {string} */
             source: "rss" | "search";
             /** Format: date-time */

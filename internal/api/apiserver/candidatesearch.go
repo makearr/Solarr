@@ -65,7 +65,6 @@ type CandidateDecision struct {
 	Leechers        *int64
 	PublishedAt     *time.Time
 	Protocol        string
-	DownloadURL     string
 	Source          string
 	DecidedAt       time.Time
 	// IndexerName is empty when the indexer has since been removed.
@@ -382,8 +381,8 @@ func candidateDecisionView(decision CandidateDecision) gen.CandidateDecision {
 		Outcome: gen.CandidateDecisionOutcome(decision.Outcome), Score: float32(decision.Score),
 		Components: components, Rejections: rejections, Deferrals: deferrals,
 		IndexerId: decision.IndexerID, Guid: decision.GUID, Title: decision.Title,
-		Protocol: gen.CandidateDecisionProtocol(decision.Protocol), DownloadUrl: decision.DownloadURL,
-		Source: gen.CandidateDecisionSource(decision.Source), DecidedAt: decision.DecidedAt,
+		Protocol: gen.CandidateDecisionProtocol(decision.Protocol),
+		Source:   gen.CandidateDecisionSource(decision.Source), DecidedAt: decision.DecidedAt,
 		IndexerName: &decision.IndexerName, Blocklisted: &decision.Blocklisted,
 	}
 	if decision.MatchConfidence != nil {

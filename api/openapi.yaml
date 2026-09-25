@@ -7494,7 +7494,7 @@ components:
       required:
         [
           id, candidate_id, outcome, score, components, rejections, deferrals,
-          indexer_id, guid, title, protocol, download_url, source, decided_at,
+          indexer_id, guid, title, protocol, source, decided_at,
         ]
       properties:
         id: { type: integer, format: int64 }
@@ -7528,7 +7528,6 @@ components:
         leechers: { type: integer, format: int64, nullable: true }
         published_at: { type: string, format: date-time, nullable: true }
         protocol: { type: string, enum: [usenet, torrent, ddl, feed] }
-        download_url: { type: string }
         source: { type: string, enum: [rss, search] }
         decided_at: { type: string, format: date-time }
 
