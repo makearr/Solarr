@@ -858,6 +858,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/metadata/theaudiodb/apikey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace or clear an own TheAudioDB key; clearing it goes back to the public key. Administrator only. */
+        post: operations["setTheAudioDBAPIKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/import/settings": {
         parameters: {
             query?: never;
@@ -4586,13 +4603,17 @@ export interface components {
             /** @description Which metadata sources are tried, in order. A source left out is not consulted at all, except musicbrainz, which always answers as a last resort. Omitted on a PATCH leaves the stored order alone. */
             source_order?: components["schemas"]["MetadataSource"][];
             /** @description Where album covers come from, in order; each fills only covers the earlier ones left missing. A source left out is not used. Omitted on a PATCH leaves it alone. */
-            cover_sources?: ("coverartarchive" | "embedded")[];
+            cover_sources?: ("coverartarchive" | "embedded" | "theaudiodb")[];
             /** @description Artist photos and biographies from Wikidata. Omitted on a PATCH leaves it alone. */
             wikidata?: boolean;
             /** @description Fingerprint identification, which also needs an API key. Switching it back on re-runs what it skipped. Omitted on a PATCH leaves it alone. */
             acoustid?: boolean;
             /** @description Whether an AcoustID application key is stored. Read-only here and ignored on a PATCH; it is written through POST /metadata/acoustid/apikey. Never returned, not even masked -- saying whether one exists is all a screen asking for one needs, and decrypting it to render would be gratuitous (ADR-14). */
             acoustid_api_key?: components["schemas"]["SecretMask"];
+            /** @description Artist photos and biographies from TheAudioDB where Wikidata has none. Omitted on a PATCH leaves it alone. */
+            theaudiodb?: boolean;
+            /** @description Whether an own TheAudioDB key is stored; without one the public key is used. Read-only here. */
+            theaudiodb_api_key?: components["schemas"]["SecretMask"];
         };
         /** @description Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's recycle bin: nothing is deleted directly, so only how long it keeps what this library removes is set here. */
         FileManagement: {
@@ -6601,6 +6622,33 @@ export interface operations {
         };
     };
     setAcoustIDAPIKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    api_key?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Replaced. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    setTheAudioDBAPIKey: {
         parameters: {
             query?: never;
             header?: never;

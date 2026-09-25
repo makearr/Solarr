@@ -189,6 +189,12 @@ Conditions under which Solarr uses them:
 
 They may change or withdraw access at any time without notice, and that is their prerogative.
 
+**TheAudioDB** (`theaudiodb.com`) supplies artist photos and biographies, and album covers, where
+Wikidata and the Cover Art Archive have none. Its free public API key is used unless the person
+enters their own supporter key. The images and texts are contributed by TheAudioDB's users; they
+are fetched for the person's own library and cached locally, never redistributed by this project.
+It can be switched off under Settings -> Metadata, and removed from the cover sources.
+
 ## Not sanctioned
 
 - Trademarks and branding. The names and logos are not covered by the source licence.

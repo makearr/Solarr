@@ -1320,6 +1320,25 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /metadata/theaudiodb/apikey:
+    post:
+      operationId: setTheAudioDBAPIKey
+      tags: [settings]
+      summary: Replace or clear an own TheAudioDB key; clearing it goes back to the public key. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                api_key: { type: string }
+      responses:
+        "204": { description: Replaced. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /import/settings:
     get:
       operationId: getImportSettings
@@ -7002,7 +7021,7 @@ components:
             on a PATCH leaves it alone.
           items:
             type: string
-            enum: [coverartarchive, embedded]
+            enum: [coverartarchive, embedded, theaudiodb]
         wikidata:
           type: boolean
           description: Artist photos and biographies from Wikidata. Omitted on a PATCH leaves it alone.
@@ -7019,6 +7038,12 @@ components:
             /metadata/acoustid/apikey. Never returned, not even masked --
             saying whether one exists is all a screen asking for one needs,
             and decrypting it to render would be gratuitous (ADR-14).
+        theaudiodb:
+          type: boolean
+          description: Artist photos and biographies from TheAudioDB where Wikidata has none. Omitted on a PATCH leaves it alone.
+        theaudiodb_api_key:
+          allOf: [{ $ref: "#/components/schemas/SecretMask" }]
+          description: Whether an own TheAudioDB key is stored; without one the public key is used. Read-only here.
 
     FileManagement:
       type: object

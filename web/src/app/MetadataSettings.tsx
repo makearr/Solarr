@@ -21,6 +21,11 @@ const COVER_SOURCES: readonly SourceEntry<CoverSource>[] = [
     label: "Embedded art",
     note: "The picture already inside your files, used where nothing earlier found a cover.",
   },
+  {
+    id: "theaudiodb",
+    label: "TheAudioDB",
+    note: "Album covers from theaudiodb.com, by release group, where nothing earlier found one.",
+  },
 ];
 
 /** What each source is, and what using it means. The BrainzMash note is a
@@ -77,6 +82,14 @@ export function MetadataSettings() {
       const { error } = await api.PATCH("/metadata/settings", {
         body: { brainzmash_user_agent: metadata.data?.brainzmash_user_agent ?? "", ...change },
       });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["metadata-settings"] }),
+  });
+
+  const saveTheAudioDBKey = useMutation({
+    mutationFn: async (key: string) => {
+      const { error } = await api.POST("/metadata/theaudiodb/apikey", { body: { api_key: key } });
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["metadata-settings"] }),
@@ -154,6 +167,13 @@ export function MetadataSettings() {
             onChange={(wikidata) => patch.mutate({ wikidata })}
           />
           <Switch
+            label="TheAudioDB"
+            note="Artist photos and biographies where Wikidata has none."
+            checked={settings.theaudiodb ?? true}
+            busy={patch.isPending}
+            onChange={(theaudiodb) => patch.mutate({ theaudiodb })}
+          />
+          <Switch
             label="AcoustID fingerprints"
             note="Identifies a file by its sound when its tags and folder name cannot. Needs the key below."
             checked={settings.acoustid ?? true}
@@ -163,13 +183,43 @@ export function MetadataSettings() {
         </div>
         {patch.isError && <p className="text-xs text-danger">That change was refused.</p>}
 
-        <AcoustIDKeyForm
-          key={String(settings.acoustid_api_key?.has_value ?? false)}
+        <ApiKeyForm
+          key={`acoustid-${String(settings.acoustid_api_key?.has_value ?? false)}`}
+          label="AcoustID API key"
+          unset="not set"
           stored={settings.acoustid_api_key?.has_value ?? false}
           onSave={(apiKey) => saveAcoustIDKey.mutate(apiKey)}
           busy={saveAcoustIDKey.isPending}
-        />
+        >
+          Identifies a file by its sound when nothing else can name it. Without a key that step is
+          skipped and everything else still works. Free, and it takes a minute: register an
+          application at{" "}
+          <a
+            href="https://acoustid.org/new-application"
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent underline underline-offset-2"
+          >
+            acoustid.org/new-application
+          </a>
+          . The key it gives you is the one to paste here -- the key on your own account page is a
+          different one, for submitting fingerprints, and lookups refuse it.
+        </ApiKeyForm>
         {saveAcoustIDKey.isError && (
+          <p className="text-xs text-danger">That key could not be stored.</p>
+        )}
+        <ApiKeyForm
+          key={`theaudiodb-${String(settings.theaudiodb_api_key?.has_value ?? false)}`}
+          label="TheAudioDB API key"
+          unset="the free public key is used"
+          stored={settings.theaudiodb_api_key?.has_value ?? false}
+          onSave={(apiKey) => saveTheAudioDBKey.mutate(apiKey)}
+          busy={saveTheAudioDBKey.isPending}
+        >
+          Optional. TheAudioDB works without one; a supporter key from theaudiodb.com replaces the
+          public key and its limits.
+        </ApiKeyForm>
+        {saveTheAudioDBKey.isError && (
           <p className="text-xs text-danger">That key could not be stored.</p>
         )}
       </div>
@@ -207,17 +257,22 @@ function Switch({
   );
 }
 
-/** The AcoustID application key. A stored key is never shown, not even masked,
- *  so the field stands empty and says whether one is set -- typing replaces it,
- *  Clear removes it. */
-function AcoustIDKeyForm({
+/** A provider's API key. A stored key is never shown, not even masked, so the field stands empty
+ *  and says whether one is set -- typing replaces it, Clear removes it. */
+function ApiKeyForm({
+  label,
+  unset,
   stored,
   onSave,
   busy,
+  children,
 }: {
+  label: string;
+  unset: string;
   stored: boolean;
   onSave: (apiKey: string) => void;
   busy: boolean;
+  children: React.ReactNode;
 }) {
   const [apiKey, setApiKey] = useState("");
 
@@ -232,9 +287,9 @@ function AcoustIDKeyForm({
     >
       <label className="flex flex-col gap-1">
         <span className="flex items-center gap-2">
-          AcoustID API key
+          {label}
           <span className={stored ? "text-ok" : "text-ink-muted"}>
-            {stored ? "stored" : "not set"}
+            {stored ? "stored" : unset}
           </span>
         </span>
         <input
@@ -248,21 +303,7 @@ function AcoustIDKeyForm({
           onChange={(event) => setApiKey(event.target.value)}
           className={`${inputStyle} max-w-md font-mono`}
         />
-        <span className="text-[0.6875rem]">
-          Identifies a file by its sound when nothing else can name it. Without a key that step is
-          skipped and everything else still works. Free, and it takes a minute: register an
-          application at{" "}
-          <a
-            href="https://acoustid.org/new-application"
-            target="_blank"
-            rel="noreferrer"
-            className="text-accent underline underline-offset-2"
-          >
-            acoustid.org/new-application
-          </a>
-          . The key it gives you is the one to paste here -- the key on your own account page is a
-          different one, for submitting fingerprints, and lookups refuse it.
-        </span>
+        <span className="text-[0.6875rem]">{children}</span>
       </label>
 
       <div className="flex gap-2">

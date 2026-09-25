@@ -40,6 +40,7 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 		Provider:        p.musicBrainzProvider(),
 		Biography:       p.wikidataFetcher(),
 		WikidataEnabled: func() bool { return *p.cache.Snapshot().MetadataSettings().Wikidata },
+		ArtistArt:       p.theAudioDBArtist(p.theAudioDB()),
 		Artworks:        library.NewArtworks(p.library),
 		Realigner:       realigner{p: p},
 		OnRefined:       func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },

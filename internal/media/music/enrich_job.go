@@ -35,6 +35,10 @@ type Biographer interface {
 	Biography(ctx context.Context, qid string) (wikidata.Biography, error)
 }
 
+// ArtistArt is a second source of an artist's photo and biography, by MusicBrainz artist id
+// (TheAudioDB, 2026-09-25): asked only for what Wikidata left empty.
+type ArtistArt func(ctx context.Context, artistMBID string) (photoURL, biography string, err error)
+
 // EnrichJobType is the registered type of the background enrichment sweep.
 const EnrichJobType = jobs.Type("music.enrich")
 
@@ -89,6 +93,7 @@ type EnrichJob struct {
 	artworks        library.Artworks
 	realigner       Realigner
 	onRefined       func(context.Context)
+	artistArt       ArtistArt
 	tags            TagReader
 	roots           RootFolders
 	http            *httpx.Client
@@ -128,7 +133,9 @@ type EnrichJobConfig struct {
 	Biography Biographer
 	// WikidataEnabled is the configured switch, read per artist; nil is on.
 	WikidataEnabled func() bool
-	Artworks        library.Artworks
+	// ArtistArt is optional: without it an artist Wikidata has no photo for keeps none.
+	ArtistArt ArtistArt
+	Artworks  library.Artworks
 	// Realigner is optional: without one, refined albums wait for the next
 	// scan that happens to revisit their directory.
 	Realigner Realigner
@@ -155,7 +162,8 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 		identity: config.Identity, people: config.People, provider: config.Provider,
 		biography: config.Biography, wikidataEnabled: config.WikidataEnabled,
 		artworks: config.Artworks, realigner: config.Realigner, onRefined: config.OnRefined,
-		tags: config.Tags, roots: config.Roots, http: config.HTTP,
+		artistArt: config.ArtistArt,
+		tags:      config.Tags, roots: config.Roots, http: config.HTTP,
 		fs: config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
 	}
 }
@@ -426,6 +434,9 @@ func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArt
 	}
 
 	bio, err := j.wikidataLookup(ctx, artist)
+	if err == nil {
+		bio = j.withArtistArt(ctx, artist, bio)
+	}
 	if err != nil {
 		// A failed lookup says nothing about whether the artist has a photo.
 		j.logger.WarnContext(ctx, "artist backfill wikidata lookup failed",
@@ -617,7 +628,26 @@ func (j *EnrichJob) wikidataBiographyFor(ctx context.Context, artist musicbrainz
 	if err != nil {
 		j.logger.WarnContext(ctx, "biography lookup failed",
 			slog.String("qid", artist.WikidataQID), slog.Any("error", err))
-		return wikidata.Biography{}
+		bio = wikidata.Biography{}
+	}
+	return j.withArtistArt(ctx, artist, bio)
+}
+
+// withArtistArt fills the photo and biography Wikidata left empty from the second source.
+func (j *EnrichJob) withArtistArt(ctx context.Context, artist musicbrainz.Artist, bio wikidata.Biography) wikidata.Biography {
+	if j.artistArt == nil || artist.MBID == "" || (bio.ImageURL != "" && biographyText(bio) != "") {
+		return bio
+	}
+	photo, text, err := j.artistArt(ctx, artist.MBID)
+	if err != nil {
+		j.logger.DebugContext(ctx, "second artist source had nothing", slog.String("mbid", artist.MBID), slog.Any("error", err))
+		return bio
+	}
+	if bio.ImageURL == "" {
+		bio.ImageURL = photo
+	}
+	if biographyText(bio) == "" {
+		bio.Extract = text
 	}
 	return bio
 }

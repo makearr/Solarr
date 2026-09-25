@@ -106,6 +106,7 @@ func (f *fakeRealigner) RealignWorks(_ context.Context, workIDs []int64, manual 
 
 func newEnrichJobRealigning(
 	t *testing.T, source musicbrainz.Source, biographer music.Biographer, realigner *fakeRealigner, tags music.TagReader,
+	configure ...func(*music.EnrichJobConfig),
 ) (*music.EnrichJob, *store.Store, *librarydb.Queries) {
 	t.Helper()
 	directory := t.TempDir()
@@ -162,6 +163,9 @@ func newEnrichJobRealigning(
 	}
 	if tags != nil {
 		config.Tags, config.Roots = tags, fakeArtworkRoots{}
+	}
+	for _, change := range configure {
+		change(&config)
 	}
 	return music.NewEnrichJob(config), libraryStore, librarydb.New(libraryStore.Read())
 }
@@ -1188,5 +1192,41 @@ func TestEnrichJob_RefreshArtistFetchesAgainAndRescans(t *testing.T) {
 	}
 	if n := len(realigner.manual); n == 0 || !realigner.manual[n-1] || !slices.Equal(realigner.batches[n-1], []int64{work.ID}) {
 		t.Errorf("rescans = %v (manual %v), want the album rescanned as a manual refresh", realigner.batches, realigner.manual)
+	}
+}
+
+// An artist Wikidata knows nothing about still gets TheAudioDB's biography (2026-09-25); one it
+// does know keeps Wikidata's, and the second source is not asked.
+func TestEnrichJob_FillsWhatWikidataLacksFromTheSecondSource(t *testing.T) {
+	source := &fakeArtistSource{
+		fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{
+				MBID: "rg-1", Title: "Dumucamoko", PrimaryType: "Album",
+				ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "artist-1", Name: "Heka"}},
+			},
+			release: musicbrainz.Release{MBID: "rel-1", Title: "Dumucamoko", Status: "official"},
+		},
+		artists: map[string]musicbrainz.Artist{"artist-1": {MBID: "artist-1", Name: "Heka", SortName: "Heka"}},
+	}
+	var asked []string
+	job, opened, queries := newEnrichJobRealigning(t, source, &fakeBiographer{}, nil, nil, func(config *music.EnrichJobConfig) {
+		config.ArtistArt = func(_ context.Context, mbid string) (string, string, error) {
+			asked = append(asked, mbid)
+			return "", "Heka is an Irish singer.", nil
+		}
+	})
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	person, err := queries.GetPersonByExternalID(t.Context(), librarydb.GetPersonByExternalIDParams{
+		Provider: music.ProviderArtist, ExternalID: "artist-1",
+	})
+	if err != nil {
+		t.Fatalf("GetPersonByExternalID: %v", err)
+	}
+	if !strings.Contains(person.FieldsJson.String, "Heka is an Irish singer.") || !slices.Contains(asked, "artist-1") {
+		t.Errorf("fields_json = %q, asked %v; want the second source's biography", person.FieldsJson.String, asked)
 	}
 }

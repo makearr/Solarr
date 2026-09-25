@@ -55,16 +55,17 @@ type CoverArtFetcher interface {
 // usable release MBID and none recorded yet (section 21.6). Direct-wired the
 // same way the rest of internal/media/music is until stage 9.
 type ArtworkJob struct {
-	artworks     library.Artworks
-	coverArt     CoverArtFetcher
-	pictures     EmbeddedPictureReader
-	roots        RootFolders
-	http         *httpx.Client
-	fs           fsx.FS
-	imagesDir    string
-	clock        clock.Clock
-	logger       *slog.Logger
-	coverSources func() []string
+	artworks        library.Artworks
+	coverArt        CoverArtFetcher
+	pictures        EmbeddedPictureReader
+	roots           RootFolders
+	http            *httpx.Client
+	fs              fsx.FS
+	imagesDir       string
+	clock           clock.Clock
+	logger          *slog.Logger
+	coverSources    func() []string
+	theAudioDBCover artworkSource
 }
 
 // EmbeddedPictureReader copies a file's own cover art out, or answers
@@ -95,6 +96,9 @@ type ArtworkJobConfig struct {
 	// CoverSources is the configured order, read per run: settings.CoverSourceArchive and
 	// settings.CoverSourceEmbedded, a source left out not used. Nil is the archive, then the files.
 	CoverSources func() []string
+	// TheAudioDBCover is optional: a release group's cover URL from TheAudioDB, or
+	// musicbrainz.ErrNoCoverArt when it has none.
+	TheAudioDBCover func(ctx context.Context, releaseGroupMBID string) (string, error)
 }
 
 // NewArtworkJob builds the handler.
@@ -105,7 +109,7 @@ func NewArtworkJob(config ArtworkJobConfig) *ArtworkJob {
 	}
 	return &ArtworkJob{
 		artworks: config.Artworks, coverArt: config.CoverArt, pictures: config.Pictures, roots: config.Roots,
-		http: config.HTTP, coverSources: config.CoverSources,
+		http: config.HTTP, coverSources: config.CoverSources, theAudioDBCover: config.TheAudioDBCover,
 		fs: config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
 	}
 }
@@ -138,6 +142,13 @@ func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
 			}
 		case settings.CoverSourceEmbedded:
 			if err := j.sweepEmbedded(ctx); err != nil {
+				return err
+			}
+		case settings.CoverSourceTheAudioDB:
+			if j.theAudioDBCover == nil {
+				continue
+			}
+			if err := j.sweep(ctx, "theaudiodb", j.artworks.NeedingReleaseGroupArtwork, j.theAudioDBCover); err != nil {
 				return err
 			}
 		}

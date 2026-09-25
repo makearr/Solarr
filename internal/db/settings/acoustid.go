@@ -24,7 +24,19 @@ func (s *Snapshot) AcoustIDConfigured() bool { return s.policy[KeyAcoustIDAPIKey
 // already in the in-memory snapshot, so this reads nothing and blocks on
 // nothing.
 func (c *Cache) AcoustIDAPIKey() (secrets.Secret, error) {
-	sealed := c.Snapshot().policy[KeyAcoustIDAPIKey]
+	return c.openSealedPolicy(KeyAcoustIDAPIKey)
+}
+
+// SetAcoustIDAPIKey stores the key sealed, or clears it when given an empty
+// one. Base64 because instance_setting holds text; the bytes themselves are
+// the cipher's, never the key.
+func (c *Cache) SetAcoustIDAPIKey(ctx context.Context, cl clock.Clock, key secrets.Secret) error {
+	return c.setSealedPolicy(ctx, cl, KeyAcoustIDAPIKey, key)
+}
+
+// openSealedPolicy opens a key stored sealed; empty when none is set.
+func (c *Cache) openSealedPolicy(policyKey string) (secrets.Secret, error) {
+	sealed := c.Snapshot().policy[policyKey]
 	if sealed == "" {
 		return "", nil
 	}
@@ -33,21 +45,19 @@ func (c *Cache) AcoustIDAPIKey() (secrets.Secret, error) {
 	}
 	raw, err := base64.StdEncoding.DecodeString(sealed)
 	if err != nil {
-		return "", fmt.Errorf("settings: decode acoustid api key: %w", err)
+		return "", fmt.Errorf("settings: decode %s: %w", policyKey, err)
 	}
 	opened, err := c.cipher.Open(raw)
 	if err != nil {
-		return "", fmt.Errorf("settings: open acoustid api key: %w", err)
+		return "", fmt.Errorf("settings: open %s: %w", policyKey, err)
 	}
 	return opened, nil
 }
 
-// SetAcoustIDAPIKey stores the key sealed, or clears it when given an empty
-// one. Base64 because instance_setting holds text; the bytes themselves are
-// the cipher's, never the key.
-func (c *Cache) SetAcoustIDAPIKey(ctx context.Context, cl clock.Clock, key secrets.Secret) error {
+// setSealedPolicy stores a key sealed, or clears it when given an empty one.
+func (c *Cache) setSealedPolicy(ctx context.Context, cl clock.Clock, policyKey string, key secrets.Secret) error {
 	if key == "" {
-		return c.setPolicy(ctx, cl, KeyAcoustIDAPIKey, "")
+		return c.setPolicy(ctx, cl, policyKey, "")
 	}
 	if c.cipher == nil {
 		return ErrSecretsUnavailable
@@ -56,7 +66,7 @@ func (c *Cache) SetAcoustIDAPIKey(ctx context.Context, cl clock.Clock, key secre
 	if err != nil {
 		return err
 	}
-	return c.setPolicy(ctx, cl, KeyAcoustIDAPIKey, stored)
+	return c.setPolicy(ctx, cl, policyKey, stored)
 }
 
 // sealedForStorage is what actually lands in instance_setting: the cipher's
@@ -65,7 +75,7 @@ func (c *Cache) SetAcoustIDAPIKey(ctx context.Context, cl clock.Clock, key secre
 func sealedForStorage(cipher *secrets.Cipher, key secrets.Secret) (string, error) {
 	sealed, err := cipher.Seal(key)
 	if err != nil {
-		return "", fmt.Errorf("settings: seal acoustid api key: %w", err)
+		return "", fmt.Errorf("settings: seal api key: %w", err)
 	}
 	return base64.StdEncoding.EncodeToString(sealed), nil
 }
