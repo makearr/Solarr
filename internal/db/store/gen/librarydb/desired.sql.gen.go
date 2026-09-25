@@ -958,6 +958,26 @@ func (q *Queries) RecomputePresentCount(ctx context.Context, id int64) error {
 	return err
 }
 
+const recordItemSearched = `-- name: RecordItemSearched :exec
+INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at, search_count)
+VALUES (?, 'missing', 0, ?, 1)
+ON CONFLICT (desired_item_id) DO UPDATE SET
+  last_searched_at = excluded.last_searched_at,
+  search_count = hunt_queue.search_count + 1
+`
+
+type RecordItemSearchedParams struct {
+	DesiredItemID  int64
+	LastSearchedAt int64
+}
+
+// Every search records when it ran, whoever started it (Wanted's "last searched"). The planner's
+// own upsert sets priority and class and never touches these two columns.
+func (q *Queries) RecordItemSearched(ctx context.Context, arg RecordItemSearchedParams) error {
+	_, err := q.db.ExecContext(ctx, recordItemSearched, arg.DesiredItemID, arg.LastSearchedAt)
+	return err
+}
+
 const removeFromHuntQueue = `-- name: RemoveFromHuntQueue :exec
 DELETE FROM hunt_queue WHERE desired_item_id = ?
 `

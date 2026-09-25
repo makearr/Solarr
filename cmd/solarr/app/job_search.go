@@ -79,6 +79,11 @@ func (p *process) downloaderConns(ctx context.Context) ([]music.DownloaderConn, 
 	return conns, nil
 }
 
+// musicGrab is Lidarr's automatic search: search, then send the best release.
+func (p *process) musicGrab() music.Grab {
+	return music.Grab{Search: p.musicSearch(), Dispatch: p.musicDispatch()}
+}
+
 // musicDispatch builds internal/media/music.Dispatch (ADR-57's own
 // acquire.send) over the real stores.
 func (p *process) musicDispatch() music.Dispatch {
@@ -116,7 +121,7 @@ func (p *process) registerSearchCategoryJob(registry *jobs.Registry, executor *j
 		return err
 	}
 	job := music.NewSearchCategoryJob(music.SearchCategoryConfig{
-		Search: p.musicSearch(), Indexers: p.indexerConns, Clock: clock.NewSystem(), Logger: p.logger,
+		Grab: p.musicGrab(), Indexers: p.indexerConns, Clock: clock.NewSystem(), Logger: p.logger,
 	})
 	executor.Handle(music.SearchCategoryJobType, job)
 	return nil

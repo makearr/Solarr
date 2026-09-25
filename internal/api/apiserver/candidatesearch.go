@@ -14,6 +14,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 )
 
@@ -111,9 +112,11 @@ type CandidateSearcher interface {
 	// nothing did.
 	SearchTrack(ctx context.Context, workID, partID int64) (SearchItemResult, error)
 	ListWorkCandidates(ctx context.Context, workID int64) ([]CandidateDecision, error)
-	// SearchCategory enqueues a search run; duplicate reports whether one
-	// was already running for this category.
-	SearchCategory(ctx context.Context, categoryID int64) (duplicate bool, err error)
+	// SearchCategory enqueues an automatic search of the library, or of workIDs only when given;
+	// duplicate reports whether the same run was already queued.
+	SearchCategory(ctx context.Context, categoryID int64, workIDs []int64) (duplicate bool, err error)
+	// GrabWork is the automatic search of one album: search, then send the best release.
+	GrabWork(ctx context.Context, workID int64) (GrabResult, error)
 	// SendCandidate is ADR-57's own acquire.send: dispatch decisionID (which
 	// must belong to workID and be ACCEPT) to a matching downloader.
 	SendCandidate(ctx context.Context, workID, decisionID int64) (Acquisition, error)
@@ -271,6 +274,9 @@ func (s *Server) BlocklistCandidate(w http.ResponseWriter, r *http.Request, id, 
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// maxPageSearch is the most albums "search this page" names, the Wanted page's largest page.
+const maxPageSearch = 200
+
 // routeSearchCategory parses the id path parameter.
 func (s *Server) routeSearchCategory(w http.ResponseWriter, r *http.Request) {
 	id, err := parsePathID(w, s, r, "id", "a category id must be a number")
@@ -283,16 +289,65 @@ func (s *Server) routeSearchCategory(w http.ResponseWriter, r *http.Request) {
 // SearchCategory enqueues a search run across every monitored, incomplete
 // item in one category.
 func (s *Server) SearchCategory(w http.ResponseWriter, r *http.Request, id int64) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	duplicate, err := s.candidateSearcher.SearchCategory(r.Context(), id)
+	// Searching sends downloads now, so it is a request on the library, not a read of it.
+	if err := access.Require(id, settings.PermissionRequest); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	var body gen.SearchCategoryJSONRequestBody
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil ||
+			body.WorkIds != nil && len(*body.WorkIds) > maxPageSearch {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "work_ids must be a list of at most 200 album ids")
+			return
+		}
+	}
+	duplicate, err := s.candidateSearcher.SearchCategory(r.Context(), id, derefOr(body.WorkIds, nil))
 	if err != nil {
 		writeCandidateSearchError(w, s, err)
 		return
 	}
 	writeJSON(w, s.logger, http.StatusAccepted, gen.CategorySearchEnqueued{Duplicate: duplicate})
+}
+
+// GrabResult is one automatic search: how many releases matched, and what was sent.
+type GrabResult struct {
+	Found              int
+	Sent               *Acquisition
+	AlreadyDownloading bool
+}
+
+func (s *Server) routeGrabWork(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathID(w, s, r, "id", "a work id must be a number")
+	if err != nil {
+		return
+	}
+	s.GrabWork(w, r, id)
+}
+
+// GrabWork is Lidarr's automatic search of one album; any signed-in user, as SearchWork.
+func (s *Server) GrabWork(w http.ResponseWriter, r *http.Request, id int64) {
+	if _, err := authz.FromContext(r.Context()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	result, err := s.candidateSearcher.GrabWork(r.Context(), id)
+	if err != nil {
+		writeCandidateSearchError(w, s, err)
+		return
+	}
+	view := gen.GrabResult{Found: result.Found, AlreadyDownloading: result.AlreadyDownloading}
+	if result.Sent != nil {
+		sent := acquisitionView(*result.Sent)
+		view.Sent = &sent
+	}
+	writeJSON(w, s.logger, http.StatusOK, view)
 }
 
 // parsePathID is the shared "{id} must be a number" parse this file's three

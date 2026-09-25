@@ -607,10 +607,11 @@ const (
 
 // Defines values for ListWorksParamsSort.
 const (
-	ListWorksParamsSortAdded  ListWorksParamsSort = "added"
-	ListWorksParamsSortArtist ListWorksParamsSort = "artist"
-	ListWorksParamsSortTitle  ListWorksParamsSort = "title"
-	ListWorksParamsSortYear   ListWorksParamsSort = "year"
+	ListWorksParamsSortAdded    ListWorksParamsSort = "added"
+	ListWorksParamsSortArtist   ListWorksParamsSort = "artist"
+	ListWorksParamsSortSearched ListWorksParamsSort = "searched"
+	ListWorksParamsSortTitle    ListWorksParamsSort = "title"
+	ListWorksParamsSortYear     ListWorksParamsSort = "year"
 )
 
 // Defines values for ListWorksParamsDir.
@@ -1353,6 +1354,18 @@ type GateResult struct {
 	Got    string `json:"got"`
 	Passed bool   `json:"passed"`
 	Wanted string `json:"wanted"`
+}
+
+// GrabResult One automatic search.
+type GrabResult struct {
+	// AlreadyDownloading A download for the album was on its way, so nothing was searched.
+	AlreadyDownloading bool `json:"already_downloading"`
+
+	// Found How many releases matched the album.
+	Found int `json:"found"`
+
+	// Sent One dispatch to a download client (ADR-57, section 12) -- denormalised from the candidate it came from, since a candidate can expire while this row must outlive it.
+	Sent *Acquisition `json:"sent,omitempty"`
 }
 
 // HealthCheck One thing wrong with this instance right now.
@@ -2788,12 +2801,15 @@ type Work struct {
 	AddedAt time.Time `json:"added_at"`
 
 	// Artist The work's own primary artist credit, when it has one. Ordered on by sort=artist.
-	Artist    *string   `json:"artist,omitempty"`
-	Id        int64     `json:"id"`
-	MediaType string    `json:"media_type"`
-	SortTitle string    `json:"sort_title"`
-	Title     string    `json:"title"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Artist *string `json:"artist,omitempty"`
+	Id     int64   `json:"id"`
+
+	// LastSearchedAt When the album was last searched. Absent means never.
+	LastSearchedAt *time.Time `json:"last_searched_at,omitempty"`
+	MediaType      string     `json:"media_type"`
+	SortTitle      string     `json:"sort_title"`
+	Title          string     `json:"title"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 
 	// WantedState Set when this work has a monitored desired_item, regardless of whether the wanted filter was used.
 	WantedState *WorkWantedState `json:"wanted_state,omitempty"`
@@ -2934,6 +2950,11 @@ type RenameLibraryJSONBody struct {
 type AttachRootFolderToCategoryJSONBody struct {
 	AcceptsNew   *bool `json:"accepts_new,omitempty"`
 	RootFolderId int64 `json:"root_folder_id"`
+}
+
+// SearchCategoryJSONBody defines parameters for SearchCategory.
+type SearchCategoryJSONBody struct {
+	WorkIds *[]int64 `json:"work_ids,omitempty"`
 }
 
 // DiscoverSearchParams defines parameters for DiscoverSearch.
@@ -3388,6 +3409,9 @@ type RenameLibraryJSONRequestBody RenameLibraryJSONBody
 // AttachRootFolderToCategoryJSONRequestBody defines body for AttachRootFolderToCategory for application/json ContentType.
 type AttachRootFolderToCategoryJSONRequestBody AttachRootFolderToCategoryJSONBody
 
+// SearchCategoryJSONRequestBody defines body for SearchCategory for application/json ContentType.
+type SearchCategoryJSONRequestBody SearchCategoryJSONBody
+
 // DiscoverAddJSONRequestBody defines body for DiscoverAdd for application/json ContentType.
 type DiscoverAddJSONRequestBody = DiscoverAddRequest
 
@@ -3672,7 +3696,7 @@ type ServerInterface interface {
 	// Take a root folder out of a category. Administrator only.
 	// (DELETE /categories/{id}/rootfolders/{rootFolderId})
 	DetachRootFolderFromCategory(w http.ResponseWriter, r *http.Request, id int64, rootFolderId int64)
-	// Search every monitored, incomplete album in one category (todo 5.2's own "manual search, per-item and per-category"). Runs as a background job -- GET /jobs shows its progress; results land per work, visible through GET /works/{id}/candidates.
+	// Automatic search of every monitored, incomplete album in one library, or of the albums named in work_ids ("search this page"). Each album's best release is sent. Runs as a background job; GET /jobs shows its progress.
 	// (POST /categories/{id}/search)
 	SearchCategory(w http.ResponseWriter, r *http.Request, id int64)
 	// Configured libraries and current state, for the landing page.
@@ -4074,6 +4098,9 @@ type ServerInterface interface {
 	// Dispatch one ACCEPTed decision's own release to a matching downloader (ADR-57's acquire.send). No resource gate yet -- every dispatch here is a user's own explicit action (ADR-12's own "user request: never paused"), since nothing automatic calls this until stage 6's planner exists.
 	// (POST /works/{id}/candidates/{decisionId}/send)
 	SendCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64)
+	// Automatic search, as in Lidarr: search this work's wanted album and send its best accepted release to a download client. Nothing is searched while a download for the album is already on its way.
+	// (POST /works/{id}/grab)
+	GrabWork(w http.ResponseWriter, r *http.Request, id int64)
 	// Monitor or unmonitor a work at the album level (section 19.6).
 	// (POST /works/{id}/monitor)
 	SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64)
@@ -4341,7 +4368,7 @@ func (_ Unimplemented) DetachRootFolderFromCategory(w http.ResponseWriter, r *ht
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Search every monitored, incomplete album in one category (todo 5.2's own "manual search, per-item and per-category"). Runs as a background job -- GET /jobs shows its progress; results land per work, visible through GET /works/{id}/candidates.
+// Automatic search of every monitored, incomplete album in one library, or of the albums named in work_ids ("search this page"). Each album's best release is sent. Runs as a background job; GET /jobs shows its progress.
 // (POST /categories/{id}/search)
 func (_ Unimplemented) SearchCategory(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -5142,6 +5169,12 @@ func (_ Unimplemented) BlocklistCandidate(w http.ResponseWriter, r *http.Request
 // Dispatch one ACCEPTed decision's own release to a matching downloader (ADR-57's acquire.send). No resource gate yet -- every dispatch here is a user's own explicit action (ADR-12's own "user request: never paused"), since nothing automatic calls this until stage 6's planner exists.
 // (POST /works/{id}/candidates/{decisionId}/send)
 func (_ Unimplemented) SendCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Automatic search, as in Lidarr: search this work's wanted album and send its best accepted release to a download client. Nothing is searched while a download for the album is already on its way.
+// (POST /works/{id}/grab)
+func (_ Unimplemented) GrabWork(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10606,6 +10639,39 @@ func (siw *ServerInterfaceWrapper) SendCandidate(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// GrabWork operation middleware
+func (siw *ServerInterfaceWrapper) GrabWork(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GrabWork(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetWorkMonitored operation middleware
 func (siw *ServerInterfaceWrapper) SetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 
@@ -11507,6 +11573,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/candidates/{decisionId}/send", wrapper.SendCandidate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/grab", wrapper.GrabWork)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/monitor", wrapper.SetWorkMonitored)

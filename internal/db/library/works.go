@@ -47,6 +47,8 @@ const (
 	// WorkSortArtist orders by primary artist, then title, which is what the
 	// Albums view groups by (asked for 2026-09-17).
 	WorkSortArtist WorkSort = "artist"
+	// WorkSortSearched orders by when the album was last searched, never-searched first.
+	WorkSortSearched WorkSort = "searched"
 )
 
 // SortDirection is which way WorkSort orders. The zero value is ascending.
@@ -106,8 +108,9 @@ type WorkCursor struct {
 	SortYear  int64
 	SortAdded int64
 	// SortArtist is read, with SortTitle, only by WorkSortArtist.
-	SortArtist string
-	ID         int64
+	SortArtist   string
+	SortSearched int64
+	ID           int64
 }
 
 // WorkListRow is one row of the library list plus its primary artist credit
@@ -128,6 +131,8 @@ type WorkListRow struct {
 	// OnDisk reports a root folder link, so an album nothing wants but whose
 	// files are present is not coloured as missing.
 	OnDisk bool
+	// LastSearchedAt is when any of the work's desired items was last searched; 0 is never.
+	LastSearchedAt int64
 }
 
 // Works reads the library list surface.
@@ -194,6 +199,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		",\n       " + discographyStatusColumns +
 		",\n       EXISTS (SELECT 1 FROM work_root_folder wrf WHERE wrf.work_id = work.id) AS on_disk" +
 		",\n       COALESCE(work.primary_artist_sort_name, '') AS artist_sort" +
+		",\n       " + lastSearchedColumn + " AS last_searched" +
 		"\nFROM work" + workArtistJoin +
 		predicates.Where() + "\nORDER BY " + orderBy + "\nLIMIT ?"
 	return query, predicates.Args(pageSize)
@@ -208,10 +214,17 @@ func sortColumn(sort WorkSort, after WorkCursor) (column string, cursorValue any
 		return "work.year", after.SortYear
 	case WorkSortAdded:
 		return "work.added_at", after.SortAdded
+	case WorkSortSearched:
+		return lastSearchedColumn, after.SortSearched
 	default:
 		return "work.sort_title", after.SortTitle
 	}
 }
+
+// lastSearchedColumn is when the work was last searched, 0 for never. Not indexed: the only list
+// sorting on it is Wanted, which holds the incomplete albums alone.
+const lastSearchedColumn = "COALESCE((SELECT MAX(h.last_searched_at) FROM hunt_queue h " +
+	"JOIN desired_item hd ON hd.id = h.desired_item_id WHERE hd.work_id = work.id), 0)"
 
 // addPrefix filters on the start of the sort title as a range, so it stays a range scan
 // on the index. LIKE 'x%' would not: SQLite only optimises that with a case-insensitive
@@ -321,7 +334,7 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 			&work.OriginalLanguage, &work.Year, &work.RuntimeMs, &work.AddedAt,
 			&work.UpdatedAt, &work.AddedBy, &work.Artist, &work.WantedState,
 			&work.PresentCount, &work.RequiredCount, &work.AvailableFrom, &work.Downloading,
-			&work.OnDisk, &work.ArtistSortName); err != nil {
+			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt); err != nil {
 			return nil, fmt.Errorf("library: scan work: %w", err)
 		}
 		works = append(works, work)

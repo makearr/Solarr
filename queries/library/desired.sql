@@ -161,6 +161,15 @@ JOIN desired_item d ON d.id = h.desired_item_id
 WHERE d.work_id = ?
 ORDER BY h.desired_item_id;
 
+-- Every search records when it ran, whoever started it (Wanted's "last searched"). The planner's
+-- own upsert sets priority and class and never touches these two columns.
+-- name: RecordItemSearched :exec
+INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at, search_count)
+VALUES (?, 'missing', 0, ?, 1)
+ON CONFLICT (desired_item_id) DO UPDATE SET
+  last_searched_at = excluded.last_searched_at,
+  search_count = hunt_queue.search_count + 1;
+
 -- name: RemoveFromHuntQueue :exec
 DELETE FROM hunt_queue WHERE desired_item_id = ?;
 

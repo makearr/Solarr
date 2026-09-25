@@ -3,6 +3,8 @@ package library_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -425,6 +427,49 @@ func TestListWorks_WantedFiltersToMonitoredIncompleteDesiredItems(t *testing.T) 
 	}
 	if !page[0].WantedState.Valid || page[0].WantedState.String != "MISSING" {
 		t.Errorf("WantedState = %+v, want MISSING", page[0].WantedState)
+	}
+}
+
+// Wanted sorts by last searched: never searched first, then oldest, across pages.
+func TestListWorks_SortBySearchedPutsNeverSearchedFirst(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	desired := library.NewDesired(opened)
+	for _, title := range []string{"Searched Late", "Never Searched", "Searched Early"} {
+		work := createWork(t, opened, "music", title)
+		item := createDesired(t, opened, work.ID, "SET", 10)
+		switch title {
+		case "Searched Late":
+			mustRecordSearched(t, desired, item.ID, 2000)
+		case "Searched Early":
+			mustRecordSearched(t, desired, item.ID, 1000)
+			mustRecordSearched(t, desired, item.ID, 1500)
+		}
+	}
+
+	var got []string
+	var after library.WorkCursor
+	for {
+		page, err := works.List(t.Context(), library.WorkFilter{WantedOnly: true, Sort: library.WorkSortSearched}, after, 1)
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(page) == 0 {
+			break
+		}
+		got = append(got, fmt.Sprintf("%s@%d", page[0].CanonicalTitle, page[0].LastSearchedAt))
+		after = library.WorkCursor{SortSearched: page[0].LastSearchedAt, ID: page[0].ID}
+	}
+	want := []string{"Never Searched@0", "Searched Early@1500", "Searched Late@2000"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("order = %v, want %v", got, want)
+	}
+}
+
+func mustRecordSearched(t *testing.T, desired library.Desired, itemID, at int64) {
+	t.Helper()
+	if err := desired.RecordSearched(t.Context(), itemID, at); err != nil {
+		t.Fatalf("RecordSearched: %v", err)
 	}
 }
 

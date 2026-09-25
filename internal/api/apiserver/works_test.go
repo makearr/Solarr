@@ -576,6 +576,37 @@ func TestListWorks_SortAndDirReachTheFilter(t *testing.T) {
 	}
 }
 
+// Wanted's "Last searched" column: the sort is accepted and its cursor carries the search time.
+func TestListWorks_SortBySearchedPagesOnTheSearchTime(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	searched := time.Unix(1_700_000_000, 0)
+	fixture.works.rows = []apiserver.WorkRow{
+		{ID: 1, Title: "A", LastSearchedAt: &searched}, {ID: 2, Title: "B"},
+	}
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works?sort=searched&limit=1"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	var body struct {
+		NextCursor string `json:"next_cursor"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	recorder = fixture.do(authedGet(t, cookies, "/api/v1/works?sort=searched&cursor="+body.NextCursor))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("second page: status %d (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.works.lastFilter.Sort != apiserver.WorkSortSearched || fixture.works.lastCursor.SortSearched != searched.Unix() {
+		t.Errorf("sort %q, cursor %+v; want searched, SortSearched %d",
+			fixture.works.lastFilter.Sort, fixture.works.lastCursor, searched.Unix())
+	}
+}
+
 func TestListWorks_FreshReachesTheFilter(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.createCategoryWithRoot(t, "Music", "/media/music")

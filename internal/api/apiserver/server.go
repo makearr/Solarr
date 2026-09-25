@@ -420,6 +420,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/candidates/{decisionId}/send", server.routeSendCandidate)
 			secured.Post("/works/{id}/candidates/{decisionId}/blocklist", server.routeBlocklistCandidate)
 			secured.Post("/works/{id}/search", server.routeSearchWork)
+			secured.Post("/works/{id}/grab", server.routeGrabWork)
 			secured.Post("/works/{id}/parts/{partId}/search", server.routeSearchTrack)
 			secured.Get("/discover/search", server.routeDiscoverSearch)
 			secured.Post("/discover/add", server.DiscoverAdd)
@@ -725,12 +726,12 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 	if raw := query.Get("sort"); raw != "" {
 		switch gen.ListWorksParamsSort(raw) {
 		case gen.ListWorksParamsSortTitle, gen.ListWorksParamsSortYear, gen.ListWorksParamsSortAdded,
-			gen.ListWorksParamsSortArtist:
+			gen.ListWorksParamsSortArtist, gen.ListWorksParamsSortSearched:
 			sort := gen.ListWorksParamsSort(raw)
 			params.Sort = &sort
 		default:
 			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-				"Bad request", "sort must be title, year, added or artist")
+				"Bad request", "sort must be title, year, added, artist or searched")
 			return
 		}
 	}

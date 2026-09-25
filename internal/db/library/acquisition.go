@@ -112,6 +112,18 @@ func (a Acquisitions) Get(ctx context.Context, id int64) (Acquisition, error) {
 	return acquisitionFromRow(row), nil
 }
 
+// InFlightForItem answers the desired item's download still on its way, if it has one (Invariant 15).
+func (a Acquisitions) InFlightForItem(ctx context.Context, desiredItemID int64) (Acquisition, bool, error) {
+	row, err := librarydb.New(a.store.Read()).GetActiveAcquisitionForItem(ctx, nullInt64(&desiredItemID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Acquisition{}, false, nil
+	}
+	if err != nil {
+		return Acquisition{}, false, fmt.Errorf("library: in-flight acquisition for item %d: %w", desiredItemID, err)
+	}
+	return acquisitionFromRow(row), true, nil
+}
+
 // ListActive answers every non-terminal acquisition -- startup
 // reconciliation's own future job (section 10.9), not built yet.
 func (a Acquisitions) ListActive(ctx context.Context) ([]Acquisition, error) {
