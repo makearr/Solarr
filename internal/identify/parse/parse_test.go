@@ -43,6 +43,14 @@ func TestParse_ConfidenceNeverReachesCertainty(t *testing.T) {
 	}
 }
 
+// Found live 2026-09-25: NZBgeek listed "...LOSSLESS.FLAC"; the codec is the part that looks like an extension.
+func TestParse_ACodecWhereAnExtensionWouldBeIsStillClaimed(t *testing.T) {
+	result := parse.Parse("Heka-Detisisu.Binip.1991.[2009.Remastered.Japan.SHM-CD].LOSSLESS.FLAC")
+	if result.Attributes.Format != "flac" || !result.Attributes.Lossless {
+		t.Errorf("Format, Lossless = %q, %v; want flac, true", result.Attributes.Format, result.Attributes.Lossless)
+	}
+}
+
 // Regression, found against a real release name during this project's own live
 // verification pass: an edition marker like "EP" must only ever match as its own
 // word. A raw substring check matched "ep" inside "Mesofisak" and classified the
