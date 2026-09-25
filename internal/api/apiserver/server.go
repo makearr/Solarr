@@ -534,6 +534,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/metadata/settings", server.GetMetadataSettings)
 			secured.Patch("/metadata/settings", server.UpdateMetadataSettings)
 			secured.Post("/metadata/acoustid/apikey", server.SetAcoustIDAPIKey)
+			secured.Post("/metadata/theaudiodb/apikey", server.SetTheAudioDBAPIKey)
 			secured.Post("/cache/clear", server.ClearCache)
 			secured.Post("/rootfolders/{id}/drain", server.routeDrainRootFolder)
 			secured.Delete("/rootfolders/{id}/drain", server.routeStopDrainingRootFolder)

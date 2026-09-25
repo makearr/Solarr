@@ -337,6 +337,18 @@ func NewDefaultRegistry() *Registry {
 		Default:  "true",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyMetadataTheAudioDB, Kind: KindBool, Tier: TierAdvanced,
+		Name:     "TheAudioDB",
+		HelpText: "Artist photos and biographies, and album covers, where other sources have none.",
+		Default:  "true",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyTheAudioDBAPIKey, Kind: KindString, Tier: TierAdvanced,
+		Name:     "TheAudioDB API key",
+		HelpText: "Optional: a supporter key from theaudiodb.com. Without one the free public key is used.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyBrainzMashUserAgent, Kind: KindString, Tier: TierAdvanced,
 		Name:     "BrainzMash User-Agent",
 		HelpText: "Sent to BrainzMash, whose front door refuses agents not starting \"Lidarr/\".",

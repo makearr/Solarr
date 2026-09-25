@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"strconv"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/metacache"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/metadata/theaudiodb"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
@@ -308,4 +310,42 @@ func (p *process) publicIPClient() *httpx.Client {
 			Timeout:   10 * time.Second,
 			Proxy:     p.liveProxyPolicy(),
 		})
+}
+
+// theAudioDB is TheAudioDB's client, on its own rate bucket, with the own key when one is stored.
+func (p *process) theAudioDB() theaudiodb.Client {
+	wall := clock.NewSystem()
+	client := httpx.NewClient(wall, httpx.NewGuard(nil, nil, nil),
+		httpx.NewLimiter(wall, httpx.Config{Defaults: httpx.Limits{MinInterval: 500 * time.Millisecond}}, nil),
+		httpx.NewBreaker(wall, httpx.BreakerConfig{}), httpx.ClientConfig{
+			Provider: "theaudiodb", UserAgent: httpx.UserAgent(p.build.Version), Proxy: p.liveProxyPolicy(),
+		})
+	return theaudiodb.New(client, func() string {
+		if key, err := p.cache.TheAudioDBAPIKey(); err == nil && key != "" {
+			return key.Reveal()
+		}
+		return theaudiodb.PublicKey
+	})
+}
+
+// theAudioDBArtist is music.ArtistArt over TheAudioDB, asking nothing while it is switched off.
+func (p *process) theAudioDBArtist(client theaudiodb.Client) music.ArtistArt {
+	return func(ctx context.Context, artistMBID string) (string, string, error) {
+		if !*p.cache.Snapshot().MetadataSettings().TheAudioDB {
+			return "", "", nil
+		}
+		artist, err := client.Artist(ctx, artistMBID)
+		return artist.Photo, artist.Biography, err
+	}
+}
+
+// theAudioDBCover answers a release group's cover from TheAudioDB, in the artwork job's terms.
+func theAudioDBCover(client theaudiodb.Client) func(ctx context.Context, releaseGroupMBID string) (string, error) {
+	return func(ctx context.Context, releaseGroupMBID string) (string, error) {
+		cover, err := client.AlbumCover(ctx, releaseGroupMBID)
+		if errors.Is(err, theaudiodb.ErrNotFound) {
+			return "", musicbrainz.ErrNoCoverArt
+		}
+		return cover, err
+	}
 }

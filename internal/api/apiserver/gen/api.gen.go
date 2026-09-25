@@ -323,6 +323,7 @@ const (
 const (
 	MetadataSettingsCoverSourcesCoverartarchive MetadataSettingsCoverSources = "coverartarchive"
 	MetadataSettingsCoverSourcesEmbedded        MetadataSettingsCoverSources = "embedded"
+	MetadataSettingsCoverSourcesTheaudiodb      MetadataSettingsCoverSources = "theaudiodb"
 )
 
 // Defines values for MetadataSource.
@@ -2021,6 +2022,12 @@ type MetadataSettings struct {
 	// SourceOrder Which metadata sources are tried, in order. A source left out is not consulted at all, except musicbrainz, which always answers as a last resort. Omitted on a PATCH leaves the stored order alone.
 	SourceOrder *[]MetadataSource `json:"source_order,omitempty"`
 
+	// Theaudiodb Artist photos and biographies from TheAudioDB where Wikidata has none. Omitted on a PATCH leaves it alone.
+	Theaudiodb *bool `json:"theaudiodb,omitempty"`
+
+	// TheaudiodbApiKey Whether an own TheAudioDB key is stored; without one the public key is used. Read-only here.
+	TheaudiodbApiKey *SecretMask `json:"theaudiodb_api_key,omitempty"`
+
 	// Wikidata Artist photos and biographies from Wikidata. Omitted on a PATCH leaves it alone.
 	Wikidata *bool `json:"wikidata,omitempty"`
 }
@@ -3195,6 +3202,11 @@ type SetAcoustIDAPIKeyJSONBody struct {
 	ApiKey *string `json:"api_key,omitempty"`
 }
 
+// SetTheAudioDBAPIKeyJSONBody defines parameters for SetTheAudioDBAPIKey.
+type SetTheAudioDBAPIKeyJSONBody struct {
+	ApiKey *string `json:"api_key,omitempty"`
+}
+
 // ListMoveJobsParams defines parameters for ListMoveJobs.
 type ListMoveJobsParams struct {
 	Reason *ListMoveJobsParamsReason `form:"reason,omitempty" json:"reason,omitempty"`
@@ -3578,6 +3590,9 @@ type SetAcoustIDAPIKeyJSONRequestBody SetAcoustIDAPIKeyJSONBody
 
 // UpdateMetadataSettingsJSONRequestBody defines body for UpdateMetadataSettings for application/json ContentType.
 type UpdateMetadataSettingsJSONRequestBody = MetadataSettings
+
+// SetTheAudioDBAPIKeyJSONRequestBody defines body for SetTheAudioDBAPIKey for application/json ContentType.
+type SetTheAudioDBAPIKeyJSONRequestBody SetTheAudioDBAPIKeyJSONBody
 
 // UpdateNetworkSettingsJSONRequestBody defines body for UpdateNetworkSettings for application/json ContentType.
 type UpdateNetworkSettingsJSONRequestBody = NetworkSettingsUpdate
@@ -3998,6 +4013,9 @@ type ServerInterface interface {
 	// Change the metadata providers' settings. Administrator only.
 	// (PATCH /metadata/settings)
 	UpdateMetadataSettings(w http.ResponseWriter, r *http.Request)
+	// Replace or clear an own TheAudioDB key; clearing it goes back to the public key. Administrator only.
+	// (POST /metadata/theaudiodb/apikey)
+	SetTheAudioDBAPIKey(w http.ResponseWriter, r *http.Request)
 	// Every move job (ADR-51), newest first.
 	// (GET /moves)
 	ListMoveJobs(w http.ResponseWriter, r *http.Request, params ListMoveJobsParams)
@@ -4892,6 +4910,12 @@ func (_ Unimplemented) GetMetadataSettings(w http.ResponseWriter, r *http.Reques
 // Change the metadata providers' settings. Administrator only.
 // (PATCH /metadata/settings)
 func (_ Unimplemented) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace or clear an own TheAudioDB key; clearing it goes back to the public key. Administrator only.
+// (POST /metadata/theaudiodb/apikey)
+func (_ Unimplemented) SetTheAudioDBAPIKey(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8856,6 +8880,28 @@ func (siw *ServerInterfaceWrapper) UpdateMetadataSettings(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// SetTheAudioDBAPIKey operation middleware
+func (siw *ServerInterfaceWrapper) SetTheAudioDBAPIKey(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetTheAudioDBAPIKey(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMoveJobs operation middleware
 func (siw *ServerInterfaceWrapper) ListMoveJobs(w http.ResponseWriter, r *http.Request) {
 
@@ -11535,6 +11581,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/metadata/settings", wrapper.UpdateMetadataSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/metadata/theaudiodb/apikey", wrapper.SetTheAudioDBAPIKey)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/moves", wrapper.ListMoveJobs)

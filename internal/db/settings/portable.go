@@ -67,6 +67,7 @@ type ScalarSettingsEntry struct {
 	MetadataCoverSources *[]string `yaml:"metadata_cover_sources,omitempty"`
 	MetadataWikidata     *bool     `yaml:"metadata_wikidata,omitempty"`
 	MetadataAcoustID     *bool     `yaml:"metadata_acoustid,omitempty"`
+	MetadataTheAudioDB   *bool     `yaml:"metadata_theaudiodb,omitempty"`
 	// UsersNewLibraryPermission is what new accounts are granted on later libraries; empty keeps it.
 	UsersNewLibraryPermission Permission `yaml:"users_new_library_permission,omitempty"`
 	// Backup retention; an empty mode keeps all three as stored.
@@ -315,6 +316,7 @@ func (c *Cache) Export() Document {
 		BackupKeepCount:            snapshot.BackupRetention().KeepCount,
 		BackupKeepDays:             snapshot.BackupRetention().KeepDays,
 		MetadataAcoustID:           metadata.AcoustID,
+		MetadataTheAudioDB:         metadata.TheAudioDB,
 	}
 
 	roots := snapshot.RootFolders()
@@ -1032,6 +1034,9 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 	}
 	if entry.MetadataAcoustID != nil {
 		values[KeyMetadataAcoustID] = strconv.FormatBool(*entry.MetadataAcoustID)
+	}
+	if entry.MetadataTheAudioDB != nil {
+		values[KeyMetadataTheAudioDB] = strconv.FormatBool(*entry.MetadataTheAudioDB)
 	}
 	if entry.ImportExtraFiles != nil {
 		values[KeyImportExtraFiles] = strconv.FormatBool(*entry.ImportExtraFiles)

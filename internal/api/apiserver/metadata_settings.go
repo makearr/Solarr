@@ -38,13 +38,15 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := s.auth.Registry.LookupAll(settings.KeyBrainzMashUserAgent, settings.KeyMetadataSourceOrder,
-		settings.KeyMetadataCoverSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID); err != nil {
+		settings.KeyMetadataCoverSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID,
+		settings.KeyMetadataTheAudioDB); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
 
 	wanted := settings.MetadataSettings{
 		BrainzMashUserAgent: body.BrainzmashUserAgent, Wikidata: body.Wikidata, AcoustID: body.Acoustid,
+		TheAudioDB: body.Theaudiodb,
 	}
 	if body.CoverSources != nil {
 		wanted.CoverSources = make([]string, 0, len(*body.CoverSources))
@@ -146,6 +148,35 @@ func (s *Server) metadataSettingsView() gen.MetadataSettings {
 	return gen.MetadataSettings{
 		BrainzmashUserAgent: stored.BrainzMashUserAgent, SourceOrder: &order,
 		CoverSources: &covers, Wikidata: stored.Wikidata, Acoustid: stored.AcoustID,
-		AcoustidApiKey: &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().AcoustIDConfigured()},
+		AcoustidApiKey:   &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().AcoustIDConfigured()},
+		Theaudiodb:       stored.TheAudioDB,
+		TheaudiodbApiKey: &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().TheAudioDBConfigured()},
 	}
+}
+
+// SetTheAudioDBAPIKey replaces or clears an own TheAudioDB key. Administrator only.
+func (s *Server) SetTheAudioDBAPIKey(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	var body gen.SetTheAudioDBAPIKeyJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a JSON object")
+		return
+	}
+	if err := s.auth.Registry.LookupAll(settings.KeyTheAudioDBAPIKey); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	key := secrets.Secret(strings.TrimSpace(derefOr(body.ApiKey, "")))
+	if err := s.auth.Settings.SetTheAudioDBAPIKey(r.Context(), clock.NewSystem(), key); err != nil {
+		if errors.Is(err, settings.ErrSecretsUnavailable) {
+			writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+				"Unavailable", "no encryption key is configured; an api key cannot be stored")
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

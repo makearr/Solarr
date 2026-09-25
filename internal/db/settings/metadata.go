@@ -56,16 +56,23 @@ const (
 	KeyMetadataWikidata = "metadata.wikidata"
 	// KeyMetadataAcoustID turns fingerprint identification on or off; it still needs its key.
 	KeyMetadataAcoustID = "metadata.acoustid"
+	// KeyMetadataTheAudioDB turns TheAudioDB's artist photos and biographies on or off (2026-09-25).
+	KeyMetadataTheAudioDB = "metadata.theaudiodb"
 )
 
 // The cover sources, in the artwork job's terms.
 const (
-	CoverSourceArchive  = "coverartarchive"
-	CoverSourceEmbedded = "embedded"
+	CoverSourceArchive    = "coverartarchive"
+	CoverSourceEmbedded   = "embedded"
+	CoverSourceTheAudioDB = "theaudiodb"
 )
 
-// DefaultCoverSources is the order covers were always taken in: the archive, then the files.
-var DefaultCoverSources = []string{CoverSourceArchive, CoverSourceEmbedded}
+// DefaultCoverSources is the archive, then the files, then TheAudioDB for what neither has.
+var DefaultCoverSources = []string{CoverSourceArchive, CoverSourceEmbedded, CoverSourceTheAudioDB}
+
+func validCoverSource(name string) bool {
+	return name == CoverSourceArchive || name == CoverSourceEmbedded || name == CoverSourceTheAudioDB
+}
 
 // MetadataSettings is the metadata providers' own policy.
 type MetadataSettings struct {
@@ -81,8 +88,9 @@ type MetadataSettings struct {
 	// non-nil list turns every cover source off.
 	CoverSources []string
 	// Wikidata and AcoustID are on unless switched off; nil on a write leaves them alone.
-	Wikidata *bool
-	AcoustID *bool
+	Wikidata   *bool
+	AcoustID   *bool
+	TheAudioDB *bool
 }
 
 // MetadataSettings reads the configured policy; an absent or empty agent is the shipped default.
@@ -96,10 +104,11 @@ func (s *Snapshot) MetadataSettings() MetadataSettings {
 		order = DefaultMetadataSourceOrder
 	}
 	wikidata, acoustID := s.policyBool(KeyMetadataWikidata, true), s.policyBool(KeyMetadataAcoustID, true)
+	theAudioDB := s.policyBool(KeyMetadataTheAudioDB, true)
 	return MetadataSettings{
 		BrainzMashUserAgent: agent, SourceOrder: order,
 		CoverSources: s.policyStringListOr(KeyMetadataCoverSources, DefaultCoverSources),
-		Wikidata:     &wikidata, AcoustID: &acoustID,
+		Wikidata:     &wikidata, AcoustID: &acoustID, TheAudioDB: &theAudioDB,
 	}
 }
 
@@ -120,7 +129,9 @@ func (c *Cache) SetMetadataSettings(ctx context.Context, cl clock.Clock, ms Meta
 			return err
 		}
 	}
-	for key, value := range map[string]*bool{KeyMetadataWikidata: ms.Wikidata, KeyMetadataAcoustID: ms.AcoustID} {
+	for key, value := range map[string]*bool{
+		KeyMetadataWikidata: ms.Wikidata, KeyMetadataAcoustID: ms.AcoustID, KeyMetadataTheAudioDB: ms.TheAudioDB,
+	} {
 		if value == nil {
 			continue
 		}
@@ -165,10 +176,10 @@ func validateMetadataSettings(ms MetadataSettings) config.Problems {
 	}
 	coverSeen := make(map[string]bool, len(ms.CoverSources))
 	for _, name := range ms.CoverSources {
-		if (name != CoverSourceArchive && name != CoverSourceEmbedded) || coverSeen[name] {
+		if !validCoverSource(name) || coverSeen[name] {
 			problems = append(problems, config.Problem{
 				Path: KeyMetadataCoverSources, Value: name,
-				Expectation: "coverartarchive or embedded, each at most once",
+				Expectation: "coverartarchive, embedded or theaudiodb, each at most once",
 			})
 		}
 		coverSeen[name] = true
