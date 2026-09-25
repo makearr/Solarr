@@ -88,19 +88,25 @@ func (q *Queries) CreateLanguageProfile(ctx context.Context, arg CreateLanguageP
 }
 
 const createQualityProfile = `-- name: CreateQualityProfile :one
-INSERT INTO quality_profile (name, rules_json, upgrade_json)
-VALUES (?, ?, ?)
-RETURNING id, name, rules_json, upgrade_json, suggested_rank
+INSERT INTO quality_profile (name, rules_json, upgrade_json, media_type)
+VALUES (?, ?, ?, ?)
+RETURNING id, name, rules_json, upgrade_json, suggested_rank, media_type
 `
 
 type CreateQualityProfileParams struct {
 	Name        string
 	RulesJson   string
 	UpgradeJson string
+	MediaType   string
 }
 
 func (q *Queries) CreateQualityProfile(ctx context.Context, arg CreateQualityProfileParams) (QualityProfile, error) {
-	row := q.db.QueryRowContext(ctx, createQualityProfile, arg.Name, arg.RulesJson, arg.UpgradeJson)
+	row := q.db.QueryRowContext(ctx, createQualityProfile,
+		arg.Name,
+		arg.RulesJson,
+		arg.UpgradeJson,
+		arg.MediaType,
+	)
 	var i QualityProfile
 	err := row.Scan(
 		&i.ID,
@@ -108,6 +114,7 @@ func (q *Queries) CreateQualityProfile(ctx context.Context, arg CreateQualityPro
 		&i.RulesJson,
 		&i.UpgradeJson,
 		&i.SuggestedRank,
+		&i.MediaType,
 	)
 	return i, err
 }
@@ -171,7 +178,7 @@ func (q *Queries) GetLanguageProfile(ctx context.Context, id int64) (LanguagePro
 }
 
 const getQualityProfile = `-- name: GetQualityProfile :one
-SELECT id, name, rules_json, upgrade_json, suggested_rank FROM quality_profile WHERE id = ?
+SELECT id, name, rules_json, upgrade_json, suggested_rank, media_type FROM quality_profile WHERE id = ?
 `
 
 func (q *Queries) GetQualityProfile(ctx context.Context, id int64) (QualityProfile, error) {
@@ -183,6 +190,7 @@ func (q *Queries) GetQualityProfile(ctx context.Context, id int64) (QualityProfi
 		&i.RulesJson,
 		&i.UpgradeJson,
 		&i.SuggestedRank,
+		&i.MediaType,
 	)
 	return i, err
 }
@@ -302,7 +310,8 @@ func (q *Queries) ListLanguageProfiles(ctx context.Context) ([]LanguageProfile, 
 
 const listQualityProfiles = `-- name: ListQualityProfiles :many
 
-SELECT id, name, rules_json, upgrade_json, suggested_rank FROM quality_profile ORDER BY suggested_rank, name
+SELECT id, name, rules_json, upgrade_json, suggested_rank, media_type FROM quality_profile
+ORDER BY media_type, suggested_rank, name
 `
 
 // Quality and language profiles (ADR-40, section 19.8).
@@ -321,6 +330,7 @@ func (q *Queries) ListQualityProfiles(ctx context.Context) ([]QualityProfile, er
 			&i.RulesJson,
 			&i.UpgradeJson,
 			&i.SuggestedRank,
+			&i.MediaType,
 		); err != nil {
 			return nil, err
 		}

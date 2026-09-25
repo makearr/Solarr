@@ -2348,8 +2348,11 @@ type ProblemType string
 
 // QualityProfile ADR-40's policy: hard gates, then lexicographic tiers, then an additive score. `rules` and `upgrade` are kept as opaque JSON here -- internal/identify/score owns that shape (Parse/ParseUpgrade); this layer only checks a name and that they decode (settings. validateQualityProfile).
 type QualityProfile struct {
-	Id   int64  `json:"id"`
-	Name string `json:"name"`
+	Id int64 `json:"id"`
+
+	// MediaType What the profile judges; a library lists only profiles of its own media type.
+	MediaType string `json:"media_type"`
+	Name      string `json:"name"`
 
 	// Rules ADR-40's rule JSON -- internal/identify/score.Parse's own shape.
 	Rules string `json:"rules"`
@@ -2366,9 +2369,11 @@ type QualityProfileRef struct {
 
 // QualityProfileWrite defines model for QualityProfileWrite.
 type QualityProfileWrite struct {
-	Name    string `json:"name"`
-	Rules   string `json:"rules"`
-	Upgrade string `json:"upgrade"`
+	// MediaType Set when a profile is created, music when absent; an update cannot change it.
+	MediaType *string `json:"media_type,omitempty"`
+	Name      string  `json:"name"`
+	Rules     string  `json:"rules"`
+	Upgrade   string  `json:"upgrade"`
 }
 
 // QualityTarget defines model for QualityTarget.

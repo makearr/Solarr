@@ -148,3 +148,24 @@ func TestImport_ASingleQualityProfileBecomesAListOfOne(t *testing.T) {
 		t.Errorf("list = %v, want %v", category.QualityProfileIDs, want)
 	}
 }
+
+// A library lists only profiles of its own media type (2026-09-25).
+func TestSetCategoryQuality_RefusesAnotherMediaTypesProfile(t *testing.T) {
+	cache, _ := newCache(t)
+	music := mustCategory(t, cache, "music", "Music", 10)
+	tv, err := cache.CreateQualityProfileFor(t.Context(), "tv", "HD", `{"quality_profile":"x","compare":["score"],"tiers":{},"targets":{}}`, "{}")
+	if err != nil {
+		t.Fatalf("CreateQualityProfileFor: %v", err)
+	}
+	if tv.MediaType != "tv" {
+		t.Errorf("MediaType = %q, want tv", tv.MediaType)
+	}
+	err = cache.SetCategoryQuality(t.Context(), music.ID, []int64{tv.ID}, nil, nil)
+	var problems config.Problems
+	if !errors.As(err, &problems) || len(problems) != 1 || problems[0].Expectation != "a music quality profile" {
+		t.Errorf("err = %v, want one problem asking for a music profile", err)
+	}
+	if _, err := cache.CreateQualityProfileFor(t.Context(), "vinyl", "x", `{"quality_profile":"x","compare":["score"],"tiers":{},"targets":{}}`, "{}"); err == nil {
+		t.Error("created a profile for an unknown media type")
+	}
+}

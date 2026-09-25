@@ -221,9 +221,11 @@ func (e NamingEntry) profile() NamingProfile {
 // text rather than nested YAML -- internal/identify/score, not settings, owns that shape,
 // and settings must not need updating every time it grows a field.
 type QualityProfileEntry struct {
-	Name    string `yaml:"name"`
-	Rules   string `yaml:"rules"`
-	Upgrade string `yaml:"upgrade"`
+	Name string `yaml:"name"`
+	// MediaType is omitted for music, the only type exports before 2026-09-25 knew.
+	MediaType string `yaml:"media_type,omitempty"`
+	Rules     string `yaml:"rules"`
+	Upgrade   string `yaml:"upgrade"`
 }
 
 // LanguageProfileEntry is one section 19.8 profile. Its fields are simple and
@@ -333,6 +335,7 @@ func (c *Cache) Export() Document {
 		qualityNameByID[profile.ID] = profile.Name
 		document.QualityProfiles = append(document.QualityProfiles, QualityProfileEntry{
 			Name: profile.Name, Rules: profile.RulesJSON, Upgrade: profile.UpgradeJSON,
+			MediaType: exportedMediaType(profile.MediaType),
 		})
 	}
 	sort.Slice(document.QualityProfiles, func(i, j int) bool {
@@ -765,8 +768,15 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 			if _, exists := qualityIDByName[profile.Name]; exists {
 				continue
 			}
+			mediaType := profile.MediaType
+			if mediaType == "" {
+				mediaType = "music"
+			}
+			if !slices.Contains(MediaTypes, mediaType) {
+				return fmt.Errorf("quality profile %q: media_type %q is not one of %s", profile.Name, mediaType, strings.Join(MediaTypes, ", "))
+			}
 			created, err := queries.CreateQualityProfile(ctx, settingsdb.CreateQualityProfileParams{
-				Name: profile.Name, RulesJson: profile.Rules, UpgradeJson: profile.Upgrade,
+				Name: profile.Name, RulesJson: profile.Rules, UpgradeJson: profile.Upgrade, MediaType: mediaType,
 			})
 			if err != nil {
 				return fmt.Errorf("quality profile %q: %w", profile.Name, err)
@@ -1050,4 +1060,12 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 		}
 	}
 	return nil
+}
+
+// exportedMediaType leaves music out, so an export of a music-only instance reads as before.
+func exportedMediaType(mediaType string) string {
+	if mediaType == "music" {
+		return ""
+	}
+	return mediaType
 }

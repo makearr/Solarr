@@ -93,7 +93,9 @@ func (s *Server) libraryQualityView(category settings.Category) gen.LibraryQuali
 		}
 	}
 	for _, profile := range snapshot.QualityProfiles() {
-		view.Available = append(view.Available, gen.QualityProfileRef{Id: profile.ID, Name: profile.Name})
+		if profile.MediaType == category.MediaType {
+			view.Available = append(view.Available, gen.QualityProfileRef{Id: profile.ID, Name: profile.Name})
+		}
 	}
 	if target := category.QualityTarget; target != nil {
 		view.Target = &gen.QualityTarget{

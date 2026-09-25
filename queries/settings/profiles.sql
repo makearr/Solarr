@@ -1,15 +1,16 @@
 -- Quality and language profiles (ADR-40, section 19.8).
 
 -- name: ListQualityProfiles :many
-SELECT id, name, rules_json, upgrade_json, suggested_rank FROM quality_profile ORDER BY suggested_rank, name;
+SELECT id, name, rules_json, upgrade_json, suggested_rank, media_type FROM quality_profile
+ORDER BY media_type, suggested_rank, name;
 
 -- name: GetQualityProfile :one
-SELECT id, name, rules_json, upgrade_json, suggested_rank FROM quality_profile WHERE id = ?;
+SELECT id, name, rules_json, upgrade_json, suggested_rank, media_type FROM quality_profile WHERE id = ?;
 
 -- name: CreateQualityProfile :one
-INSERT INTO quality_profile (name, rules_json, upgrade_json)
-VALUES (?, ?, ?)
-RETURNING id, name, rules_json, upgrade_json, suggested_rank;
+INSERT INTO quality_profile (name, rules_json, upgrade_json, media_type)
+VALUES (?, ?, ?, ?)
+RETURNING id, name, rules_json, upgrade_json, suggested_rank, media_type;
 
 -- name: UpdateQualityProfile :exec
 UPDATE quality_profile SET name = ?, rules_json = ?, upgrade_json = ? WHERE id = ?;
