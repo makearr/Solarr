@@ -208,6 +208,7 @@ func countFor(values map[string]int64, entity model.LevelEntity) *int {
 type TracksFilter struct {
 	RootFolderIDs []int64
 	CategoryIDs   []int64
+	Descending    bool
 }
 
 // TracksCursor is a position among the albums backing a Tracks page --
@@ -244,6 +245,7 @@ type LibraryTracksReader interface {
 type ArtistsFilter struct {
 	RootFolderIDs []int64
 	CategoryIDs   []int64
+	Descending    bool
 }
 
 // ArtistsCursor is a position in the Artists level, ordered by sort name.
@@ -404,9 +406,9 @@ func (s *Server) ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int
 	case model.LevelEntityWork:
 		s.listLibraryLevelWorks(w, r, rootFolderIDs, categoryIDs, cursor, limit, sort, direction)
 	case model.LevelEntityWorkPart:
-		s.listLibraryLevelTracks(w, r, rootFolderIDs, categoryIDs, cursor, limit)
+		s.listLibraryLevelTracks(w, r, rootFolderIDs, categoryIDs, cursor, limit, direction == SortDescending)
 	case model.LevelEntityPerson:
-		s.listLibraryLevelArtists(w, r, rootFolderIDs, categoryIDs, cursor, limit)
+		s.listLibraryLevelArtists(w, r, rootFolderIDs, categoryIDs, cursor, limit, direction == SortDescending)
 	default:
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
 			"Unavailable", "this level has no reader wired up yet")
@@ -479,6 +481,7 @@ func (s *Server) listLibraryLevelWorks(
 // LibraryTracksReader.
 func (s *Server) listLibraryLevelTracks(
 	w http.ResponseWriter, r *http.Request, rootFolderIDs, categoryIDs []int64, cursor levelCursor, limit int,
+	descending bool,
 ) {
 	if s.libraryTracks == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
@@ -486,7 +489,7 @@ func (s *Server) listLibraryLevelTracks(
 		return
 	}
 	rows, next, hasMore, err := s.libraryTracks.ListLibraryTracks(r.Context(),
-		TracksFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs},
+		TracksFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Descending: descending},
 		TracksCursor{ArtistSortName: cursor.field(0), AlbumSortTitle: cursor.field(1), AlbumID: cursor.id}, limit)
 	if err != nil {
 		writeError(w, s.logger, err)
@@ -515,6 +518,7 @@ func (s *Server) listLibraryLevelTracks(
 // LibraryArtistsReader.
 func (s *Server) listLibraryLevelArtists(
 	w http.ResponseWriter, r *http.Request, rootFolderIDs, categoryIDs []int64, cursor levelCursor, limit int,
+	descending bool,
 ) {
 	if s.libraryArtists == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
@@ -522,7 +526,7 @@ func (s *Server) listLibraryLevelArtists(
 		return
 	}
 	rows, err := s.libraryArtists.ListLibraryArtists(r.Context(),
-		ArtistsFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs},
+		ArtistsFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Descending: descending},
 		ArtistsCursor{SortName: cursor.field(0), ID: cursor.id}, limit+1)
 	if err != nil {
 		writeError(w, s.logger, err)
