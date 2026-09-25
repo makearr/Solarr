@@ -94,7 +94,7 @@ func TestDirect_AlbumParsesTheRealFieldShape(t *testing.T) {
 		t.Errorf("ReleaseGroup = %+v, want the real field shape mapped through", rg)
 	}
 	if len(rg.ArtistCredit) != 1 || rg.ArtistCredit[0].MBID != "d6f6e536-85f7-4d04-8327-66db2e835786" ||
-		rg.ArtistCredit[0].Name != "Katupoken" {
+		rg.ArtistCredit[0].Name != "Katupoken" || rg.ArtistCredit[0].ArtistName != "Katupoken" {
 		t.Errorf("ArtistCredit = %+v, want Katupoken's own id and name", rg.ArtistCredit)
 	}
 	if len(rg.Genres) != 2 || rg.Genres[0].Name != "alternative rock" || rg.Genres[0].Count != 25 {

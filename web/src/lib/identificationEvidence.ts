@@ -39,6 +39,7 @@ const OUTCOME_LABELS: Record<string, string> = {
   joined: "Joined the album the other files agreed on",
   siblings_disagree: "The other files point at different albums",
   no_identified_sibling: "No other file in the folder was identified",
+  retired: "The album ID in the tags no longer exists at MusicBrainz",
   disabled_no_key: "Skipped: no AcoustID key is set (Settings -> Metadata)",
 };
 

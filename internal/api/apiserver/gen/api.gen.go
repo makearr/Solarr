@@ -1487,7 +1487,7 @@ type IdentificationEvidence struct {
 	Kind   string `json:"kind"`
 }
 
-// IdentificationPass One pass of a run. pass is embedded_tags, album_match, text_search or folder_siblings. outcome is identified, none or failed; album_match answers no_candidate, insufficient_evidence, ambiguous or contradictory instead; folder_siblings answers joined, siblings_disagree or no_identified_sibling.
+// IdentificationPass One pass of a run. pass is embedded_tags, album_match, text_search or folder_siblings. outcome is identified, none or failed; embedded_tags also answers retired, an album ID MusicBrainz no longer knows; album_match answers no_candidate, insufficient_evidence, ambiguous or contradictory instead; folder_siblings answers joined, siblings_disagree or no_identified_sibling.
 type IdentificationPass struct {
 	Candidates []IdentificationCandidate `json:"candidates"`
 	Outcome    string                    `json:"outcome"`

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -13,6 +15,9 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
+
+// ErrNotFound is every source answering that an id does not exist: retired, not merely unreachable.
+var ErrNotFound = errors.New("musicbrainz: not found at any source")
 
 // Priority is ADR-29's request-priority ladder: within one source's rate-limit bucket a
 // lower level takes the next token first (httpx.WithPriority), so a user never waits behind a scan.
@@ -152,8 +157,18 @@ func (p Provider) Album(
 		p.remember(ctx, source.Name(), rg, release)
 		return rg, release, nil
 	}
+	if len(errs) > 0 && !slices.ContainsFunc(errs, func(err error) bool { return !notFound(err) }) {
+		return ReleaseGroup{}, Release{}, fmt.Errorf("musicbrainz: %s/%s: %w: %w",
+			releaseGroupMBID, releaseMBID, ErrNotFound, errors.Join(errs...))
+	}
 	return ReleaseGroup{}, Release{}, fmt.Errorf("musicbrainz: no source answered for %s/%s: %w",
 		releaseGroupMBID, releaseMBID, errors.Join(errs...))
+}
+
+// notFound reports a source answering 404 for the id itself.
+func notFound(err error) bool {
+	var statusErr *httpx.StatusError
+	return errors.As(err, &statusErr) && statusErr.Status == http.StatusNotFound
 }
 
 // Search answers a text search for release groups matching artist and title,

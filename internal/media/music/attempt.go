@@ -17,6 +17,8 @@ const (
 	PassOutcomeJoined              = "joined"
 	PassOutcomeSiblingsDisagree    = "siblings_disagree"
 	PassOutcomeNoIdentifiedSibling = "no_identified_sibling"
+	// PassOutcomeRetired is an embedded release group no source knows any more; the album is matched instead.
+	PassOutcomeRetired = "retired"
 	// PassOutcomeDisabled is recorded rather than skipped silently, so the files
 	// an absent AcoustID key cost can be found once a key is entered (D12).
 	PassOutcomeDisabled = "disabled_no_key"

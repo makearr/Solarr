@@ -1072,3 +1072,77 @@ func TestObserve_AWrongRecordingIsOutvotedByTheRestOfTheFolder(t *testing.T) {
 		t.Errorf("the outvoted recording's album was recalled: %v", albums.asked)
 	}
 }
+
+// taggedTraumaBatch is the untagged folder with every file naming mbid as its release group.
+func taggedTraumaBatch(t *testing.T, fsys *fsx.Mem, mbid string) []scan.Observed {
+	t.Helper()
+	batch := untaggedTraumaBatch(t, fsys)
+	for i := range batch {
+		batch[i].Probe.Tags["musicbrainz_releasegroupid"] = mbid
+	}
+	return batch
+}
+
+// A release group MusicBrainz no longer knows is no identity: the folder is matched by its album
+// tags instead, never kept under an id no enrichment can ever answer.
+func TestObserve_ARetiredEmbeddedReleaseGroupIsMatchedAsAnAlbumInstead(t *testing.T) {
+	retired := "99999999-8888-7777-6666-555555555555"
+	lookup := traumaLookup(releaseGroupMBID)
+	lookup.missing = map[string]bool{retired: true}
+	consumer, opened, fsys := newAlbumConsumer(t, lookup, nil)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+
+	if err := consumer.Observe(t.Context(), root, 0, taggedTraumaBatch(t, fsys, retired)); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queries := librarydb.New(opened.Read())
+	if _, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: retired,
+	}); err == nil {
+		t.Error("a work was created under the retired id")
+	}
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: releaseGroupMBID,
+	})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v, want the album found by its tags", err)
+	}
+	locations, err := library.NewIdentity(opened).WorkFileLocations(t.Context(), []int64{work.ID})
+	if err != nil || len(locations) != len(traumaTracks) {
+		t.Errorf("work files = %d (err %v), want all %d", len(locations), err, len(traumaTracks))
+	}
+	if first := slices.Index(lookup.asked, "album:"+retired); first < 0 || slices.Contains(lookup.asked[first+1:], "album:"+retired) {
+		t.Errorf("asked %v, want the retired id looked up exactly once for the folder", lookup.asked)
+	}
+}
+
+// A merged release group still in the tags is kept under the id it was merged into.
+func TestObserve_AMergedEmbeddedReleaseGroupIsKeptUnderItsCurrentID(t *testing.T) {
+	merged := "99999999-8888-7777-6666-555555555555"
+	lookup := traumaLookup(releaseGroupMBID)
+	lookup.groups[merged] = lookup.groups[releaseGroupMBID]
+	consumer, opened, fsys := newAlbumConsumer(t, lookup, nil)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+
+	if err := consumer.Observe(t.Context(), root, 0, taggedTraumaBatch(t, fsys, merged)); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queries := librarydb.New(opened.Read())
+	if _, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: merged,
+	}); err == nil {
+		t.Error("a work was created under the merged id")
+	}
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: releaseGroupMBID,
+	})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v, want the current id", err)
+	}
+	locations, err := library.NewIdentity(opened).WorkFileLocations(t.Context(), []int64{work.ID})
+	if err != nil || len(locations) != len(traumaTracks) {
+		t.Errorf("work files = %d (err %v), want all %d", len(locations), err, len(traumaTracks))
+	}
+}
