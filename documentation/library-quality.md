@@ -8,7 +8,9 @@ profiles themselves are ADR-40's rules: gates, then lexicographic tiers, then an
 A library holds an **ordered list of profiles** (`category_quality_profile`). Earlier is
 preferred; later ones are fallbacks; a profile not listed is never used. `category.quality_profile_id`
 is kept equal to the first, so everything that reads one profile keeps working. An empty list
-means the instance default. Profiles carry a `suggested_rank`, the order a library is offered
+means the instance default: the shipped **Lossless preferred**, which accepts anything and ranks
+lossless first, as Lidarr's default does (the no-op "Unconfigured" profile only if it was deleted).
+Profiles carry a `suggested_rank`, the order a library is offered
 ("Space conscious, Lossy 320, Lossless preferred, then the rest" — the user's own example).
 
 ## Fitting a profile

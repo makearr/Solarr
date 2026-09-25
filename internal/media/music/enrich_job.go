@@ -88,6 +88,7 @@ type EnrichJob struct {
 	biography       Biographer
 	artworks        library.Artworks
 	realigner       Realigner
+	onRefined       func(context.Context)
 	tags            TagReader
 	roots           RootFolders
 	http            *httpx.Client
@@ -131,6 +132,8 @@ type EnrichJobConfig struct {
 	// Realigner is optional: without one, refined albums wait for the next
 	// scan that happens to revisit their directory.
 	Realigner Realigner
+	// OnRefined is optional: told when a run refined any album, so its new tracks are counted at once.
+	OnRefined func(context.Context)
 	// Tags and Roots are optional: without both, an album identified only at
 	// release-group level gets no edition chosen and so no tracklist.
 	Tags      TagReader
@@ -151,7 +154,7 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 	return &EnrichJob{
 		identity: config.Identity, people: config.People, provider: config.Provider,
 		biography: config.Biography, wikidataEnabled: config.WikidataEnabled,
-		artworks: config.Artworks, realigner: config.Realigner,
+		artworks: config.Artworks, realigner: config.Realigner, onRefined: config.OnRefined,
 		tags: config.Tags, roots: config.Roots, http: config.HTTP,
 		fs: config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
 	}
@@ -215,6 +218,10 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 			j.logger.WarnContext(ctx, "realign refined works failed",
 				slog.Int("works", len(refinedWorkIDs)), slog.Any("error", err))
 		}
+	}
+
+	if j.onRefined != nil && len(refinedWorkIDs) > 0 {
+		j.onRefined(ctx)
 	}
 
 	j.backfillPeople(ctx)

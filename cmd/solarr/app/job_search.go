@@ -72,7 +72,7 @@ func (p *process) downloaderConns(ctx context.Context) ([]music.DownloaderConn, 
 			return nil, err
 		}
 		conns = append(conns, music.DownloaderConn{
-			ID: downloader.ID, Protocol: downloader.Protocol,
+			ID: downloader.ID, Protocol: downloader.Protocol, Category: downloader.Options().CategoryFor("music"),
 			Client: sabnzbd.Downloader{Client: factory(downloader.ID, downloader.BaseURL, credentials.Reveal())},
 		})
 	}
@@ -84,7 +84,7 @@ func (p *process) downloaderConns(ctx context.Context) ([]music.DownloaderConn, 
 func (p *process) musicDispatch() music.Dispatch {
 	return music.Dispatch{
 		Candidates: library.NewCandidates(p.library), Acquisitions: library.NewAcquisitions(p.library),
-		Desired: library.NewDesired(p.library), Settings: p.cache, Downloaders: p.downloaderConns,
+		Desired: library.NewDesired(p.library), Downloaders: p.downloaderConns,
 		Fetch: p.fetchRelease,
 	}
 }

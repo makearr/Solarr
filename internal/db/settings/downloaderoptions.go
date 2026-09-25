@@ -15,6 +15,8 @@ type DownloaderOptions struct {
 	// is, and where Solarr sees the same folder.
 	RemotePath string `json:"remote_path,omitempty"`
 	LocalPath  string `json:"local_path,omitempty"`
+	// Category is Lidarr's client category; empty means the media type's own name ("music").
+	Category string `json:"category,omitempty"`
 }
 
 // Options reads a downloader's options; unreadable or absent means the defaults.
@@ -29,6 +31,14 @@ func (d Downloader) Options() DownloaderOptions {
 // RemovesCompleted is RemoveCompleted with its default.
 func (o DownloaderOptions) RemovesCompleted() bool {
 	return o.RemoveCompleted == nil || *o.RemoveCompleted
+}
+
+// CategoryFor is the client category a download of mediaType is sent under.
+func (o DownloaderOptions) CategoryFor(mediaType string) string {
+	if o.Category != "" {
+		return o.Category
+	}
+	return mediaType
 }
 
 // LocalPathFor maps a path the client reported to where Solarr sees it; unmapped paths pass through.

@@ -29,7 +29,6 @@ func (f *fakeSabnzbdSender) Add(_ context.Context, request download.AddRequest) 
 func (env *searchTestEnv) dispatch(downloaders []music.DownloaderConn) music.Dispatch {
 	return music.Dispatch{
 		Candidates: env.candidates, Acquisitions: env.acquisitions, Desired: env.desired,
-		Settings: env.settings,
 		Downloaders: func(context.Context) ([]music.DownloaderConn, error) {
 			return downloaders, nil
 		},
@@ -70,7 +69,7 @@ func TestDispatch_SendCreatesAQueuedAcquisition(t *testing.T) {
 	sender := &fakeSabnzbdSender{clientRef: "nzo-123"}
 
 	acquisition, err := env.dispatch([]music.DownloaderConn{
-		{ID: 5, Protocol: "usenet", Client: sender},
+		{ID: 5, Protocol: "usenet", Client: sender, Category: "music"},
 	}).Send(t.Context(), item.ID, detail.Decision.ID, env.clock.Now())
 	if err != nil {
 		t.Fatalf("Send: %v", err)
@@ -84,7 +83,7 @@ func TestDispatch_SendCreatesAQueuedAcquisition(t *testing.T) {
 	// The NZB is fetched from the listing indexer and sent under the release's own name.
 	want := []download.AddRequest{{
 		Name: "Nosi Zada-Discovery-2001-FLAC-GROUP", File: []byte("nzb from indexer 1 at https://indexer.example/nzb/1"),
-		Category: "Discovery-category",
+		Category: "music",
 	}}
 	if !reflect.DeepEqual(sender.requests, want) {
 		t.Errorf("sender.requests = %+v, want %+v", sender.requests, want)

@@ -8,7 +8,6 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
-	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // ErrDecisionNotFound reports a decision id that does not belong to the
@@ -32,6 +31,8 @@ type DownloaderConn struct {
 	ID       int64
 	Protocol string // "usenet" | "torrent" | "ddl" (ADR-46) -- only usenet has a sender today
 	Client   download.Client
+	// Category is the client category music is sent under, "music" unless the client says otherwise.
+	Category string
 }
 
 // ReleaseFetcher downloads a release's file (an NZB) from the indexer that listed it.
@@ -51,7 +52,6 @@ type Dispatch struct {
 	Candidates   library.Candidates
 	Acquisitions library.Acquisitions
 	Desired      library.Desired
-	Settings     *settings.Cache
 	Downloaders  DownloaderSource
 	Fetch        ReleaseFetcher
 }
@@ -60,8 +60,7 @@ type Dispatch struct {
 // Search.SearchItem, to whichever configured downloader matches its own
 // protocol.
 func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Time) (library.Acquisition, error) {
-	item, err := d.Desired.Get(ctx, itemID)
-	if err != nil {
+	if _, err := d.Desired.Get(ctx, itemID); err != nil {
 		return library.Acquisition{}, fmt.Errorf("music: dispatch: %w", err)
 	}
 
@@ -82,11 +81,7 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 		return library.Acquisition{}, ErrNoDownloaderForProtocol
 	}
 
-	category := ""
-	if found, ok := d.Settings.Snapshot().Category(item.CategoryID); ok {
-		category = found.Name
-	}
-
+	category := downloader.Category
 	file, err := d.Fetch(ctx, detail.ReleaseCandidate.IndexerID, detail.ReleaseCandidate.DownloadURL)
 	if err != nil {
 		return library.Acquisition{}, fmt.Errorf("music: dispatch: fetch release: %w", err)

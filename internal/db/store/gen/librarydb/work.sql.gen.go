@@ -779,6 +779,33 @@ func (q *Queries) GetWorkExternalIDByProvider(ctx context.Context, arg GetWorkEx
 	return i, err
 }
 
+const getWorkNamingByExternalID = `-- name: GetWorkNamingByExternalID :one
+SELECT w.canonical_title, w.year, p.name AS primary_artist_name
+FROM work w
+JOIN work_external_id e ON e.work_id = w.id
+LEFT JOIN person p ON p.id = w.primary_artist_id
+WHERE e.provider = ? AND e.external_id = ?
+`
+
+type GetWorkNamingByExternalIDParams struct {
+	Provider   string
+	ExternalID string
+}
+
+type GetWorkNamingByExternalIDRow struct {
+	CanonicalTitle    string
+	Year              sql.NullInt64
+	PrimaryArtistName sql.NullString
+}
+
+// An import names an album it already knows by the canonical title and artist, never the tags.
+func (q *Queries) GetWorkNamingByExternalID(ctx context.Context, arg GetWorkNamingByExternalIDParams) (GetWorkNamingByExternalIDRow, error) {
+	row := q.db.QueryRowContext(ctx, getWorkNamingByExternalID, arg.Provider, arg.ExternalID)
+	var i GetWorkNamingByExternalIDRow
+	err := row.Scan(&i.CanonicalTitle, &i.Year, &i.PrimaryArtistName)
+	return i, err
+}
+
 const getWorkPart = `-- name: GetWorkPart :one
 SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored
 FROM work_part WHERE id = ?

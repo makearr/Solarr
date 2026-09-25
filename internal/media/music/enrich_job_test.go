@@ -91,10 +91,11 @@ func newEnrichJobWithBiographer(
 	return newEnrichJobRealigning(t, source, biographer, nil, nil)
 }
 
-// fakeRealigner records every batch of works it is asked to realign.
+// fakeRealigner records every batch of works it is asked to realign, and every OnRefined call.
 type fakeRealigner struct {
 	batches [][]int64
 	manual  []bool
+	refined int
 }
 
 func (f *fakeRealigner) RealignWorks(_ context.Context, workIDs []int64, manual bool) error {
@@ -157,6 +158,7 @@ func newEnrichJobRealigning(
 	}
 	if realigner != nil {
 		config.Realigner = realigner
+		config.OnRefined = func(context.Context) { realigner.refined++ }
 	}
 	if tags != nil {
 		config.Tags, config.Roots = tags, fakeArtworkRoots{}
@@ -918,6 +920,10 @@ func TestEnrichJob_HandsRefinedWorksBackToBeRealigned(t *testing.T) {
 	if len(realigner.batches) != 1 || !slices.Equal(realigner.batches[0], []int64{work.ID}) {
 		t.Errorf("realigned %v, want one batch holding work %d", realigner.batches, work.ID)
 	}
+	// The new tracklist is counted at once, not at the daily counter sweep.
+	if realigner.refined != 1 {
+		t.Errorf("OnRefined called %d times, want 1", realigner.refined)
+	}
 }
 
 // Nothing refined, nothing to realign: an idle sweep must not queue rescans.
@@ -928,8 +934,8 @@ func TestEnrichJob_RealignsNothingWhenNothingWasRefined(t *testing.T) {
 	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if len(realigner.batches) != 0 {
-		t.Errorf("realigned %v, want nothing", realigner.batches)
+	if len(realigner.batches) != 0 || realigner.refined != 0 {
+		t.Errorf("realigned %v, refined %d times; want nothing", realigner.batches, realigner.refined)
 	}
 }
 
