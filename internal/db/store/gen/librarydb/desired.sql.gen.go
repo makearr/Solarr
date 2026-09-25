@@ -267,10 +267,21 @@ const deleteDesiredItemsForWork = `-- name: DeleteDesiredItemsForWork :exec
 DELETE FROM desired_item WHERE work_id = ?
 `
 
-// Every desired item for one work, however many profiles target it (F33
-// widened the key). Removing an album is removing the intent to have it.
 func (q *Queries) DeleteDesiredItemsForWork(ctx context.Context, workID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteDesiredItemsForWork, workID)
+	return err
+}
+
+const detachAcquisitionsForWork = `-- name: DetachAcquisitionsForWork :exec
+UPDATE acquisition SET desired_item_id = NULL
+WHERE desired_item_id IN (SELECT id FROM desired_item WHERE work_id = ?)
+`
+
+// Every desired item for one work, however many profiles target it (F33
+// widened the key). Removing an album is removing the intent to have it.
+// A download's record outlives the want it served: history keeps its own copy of the names.
+func (q *Queries) DetachAcquisitionsForWork(ctx context.Context, workID int64) error {
+	_, err := q.db.ExecContext(ctx, detachAcquisitionsForWork, workID)
 	return err
 }
 
@@ -311,6 +322,29 @@ func (q *Queries) DetachFilePart(ctx context.Context, arg DetachFilePartParams) 
 		arg.Role,
 		arg.MediaRef,
 	)
+	return err
+}
+
+const detachImportUnitsFromWork = `-- name: DetachImportUnitsFromWork :exec
+UPDATE import_unit SET work_id = NULL, edition_id = NULL
+WHERE import_unit.work_id = ?1
+   OR import_unit.edition_id IN (SELECT e.id FROM edition e WHERE e.work_id = ?1)
+`
+
+// Import sessions and packs are history too: they keep their rows, no longer pointing at the album.
+func (q *Queries) DetachImportUnitsFromWork(ctx context.Context, workID sql.NullInt64) error {
+	_, err := q.db.ExecContext(ctx, detachImportUnitsFromWork, workID)
+	return err
+}
+
+const detachPackItemsFromWork = `-- name: DetachPackItemsFromWork :exec
+UPDATE pack_item SET work_id = NULL, edition_id = NULL
+WHERE pack_item.work_id = ?1
+   OR pack_item.edition_id IN (SELECT e.id FROM edition e WHERE e.work_id = ?1)
+`
+
+func (q *Queries) DetachPackItemsFromWork(ctx context.Context, workID sql.NullInt64) error {
+	_, err := q.db.ExecContext(ctx, detachPackItemsFromWork, workID)
 	return err
 }
 

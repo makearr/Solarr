@@ -252,6 +252,22 @@ LIMIT sqlc.arg(page_size);
 
 -- Every desired item for one work, however many profiles target it (F33
 -- widened the key). Removing an album is removing the intent to have it.
+-- A download's record outlives the want it served: history keeps its own copy of the names.
+-- name: DetachAcquisitionsForWork :exec
+UPDATE acquisition SET desired_item_id = NULL
+WHERE desired_item_id IN (SELECT id FROM desired_item WHERE work_id = ?);
+
+-- Import sessions and packs are history too: they keep their rows, no longer pointing at the album.
+-- name: DetachImportUnitsFromWork :exec
+UPDATE import_unit SET work_id = NULL, edition_id = NULL
+WHERE import_unit.work_id = sqlc.arg(work_id)
+   OR import_unit.edition_id IN (SELECT e.id FROM edition e WHERE e.work_id = sqlc.arg(work_id));
+
+-- name: DetachPackItemsFromWork :exec
+UPDATE pack_item SET work_id = NULL, edition_id = NULL
+WHERE pack_item.work_id = sqlc.arg(work_id)
+   OR pack_item.edition_id IN (SELECT e.id FROM edition e WHERE e.work_id = sqlc.arg(work_id));
+
 -- name: DeleteDesiredItemsForWork :exec
 DELETE FROM desired_item WHERE work_id = ?;
 

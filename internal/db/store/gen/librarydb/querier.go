@@ -155,8 +155,6 @@ type Querier interface {
 	// two admins, or a retried request -- reports that nothing changed rather than
 	// silently overwriting who decided it and when.
 	DecideRequest(ctx context.Context, arg DecideRequestParams) (int64, error)
-	// Every desired item for one work, however many profiles target it (F33
-	// widened the key). Removing an album is removing the intent to have it.
 	DeleteDesiredItemsForWork(ctx context.Context, workID int64) error
 	// Import revert's own use (todo 4.9): only ever called for an edition
 	// CommitUnit itself created (import_unit.edition_created), and only after
@@ -179,10 +177,17 @@ type Querier interface {
 	DeleteWork(ctx context.Context, id int64) error
 	DeleteWorkPart(ctx context.Context, id int64) error
 	DequeueReady(ctx context.Context, candidateID int64) error
+	// Every desired item for one work, however many profiles target it (F33
+	// widened the key). Removing an album is removing the intent to have it.
+	// A download's record outlives the want it served: history keeps its own copy of the names.
+	DetachAcquisitionsForWork(ctx context.Context, workID int64) error
 	// Removes the file from the item entirely, every part it covered with it.
 	DetachFile(ctx context.Context, arg DetachFileParams) error
 	// Removes one part's coverage, for a file that turned out to cover less than claimed.
 	DetachFilePart(ctx context.Context, arg DetachFilePartParams) error
+	// Import sessions and packs are history too: they keep their rows, no longer pointing at the album.
+	DetachImportUnitsFromWork(ctx context.Context, workID sql.NullInt64) error
+	DetachPackItemsFromWork(ctx context.Context, workID sql.NullInt64) error
 	// Hides a finished session from the Import screen without deleting anything:
 	// the row is still what a revert reads. Only from a state that has stopped,
 	// so a run in progress cannot be dismissed out from under itself. :execrows
