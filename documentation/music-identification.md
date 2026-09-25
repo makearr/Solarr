@@ -52,8 +52,10 @@ Per release: artist (3), album title (3), year (1, over ten years), each pair's 
 unmatched files (0.9), release type (3: album 0, EP 0.3, other 0.5, compilation or live 1).
 Missing tracks are never counted, so a partial album still matches its own release.
 
-A value read from the path instead of a tag counts at half strength; a placeholder such as
-"Unknown Artist" abstains.
+A value read from the path instead of a tag counts at half strength. The artist is read from the
+tags, then the file name ("Artist - 03 - Title"), then the folders. A value that says nothing —
+a placeholder such as "Unknown Artist", or a Windows short name such as "DORA9E~V" — gives way
+to the next source, and abstains only when no source says more.
 
 ## Decision
 

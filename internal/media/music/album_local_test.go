@@ -50,3 +50,23 @@ func TestReadLocalTrack_APlaceholderAbstains(t *testing.T) {
 		t.Errorf("from %q got disc %d track %d title %+v, want disc 1 track 3 \"Intro\"", "103 Intro.flac", file.Disc, file.Track, file.Title)
 	}
 }
+
+// A value that says nothing gives way to one that does: a Windows short name had replaced
+// Cibiz M. in the tags and the artist folder, but not in the file names (the main library).
+func TestReadLocalTrack_AMangledShortNameGivesWayToTheFileName(t *testing.T) {
+	got := music.ReadLocalTrack(mediatool.Tags{"artist": "DORA9E~V", "album": "Gold", "title": "Modamiku of Tivilute", "track": "12"},
+		mediatool.Measured{}, "DORA9E~V/Gold (2019)/Cibiz M. - 12 - Modamiku of Tivilute.m4a")
+
+	if want := (music.Claim{Value: "Cibiz M.", Provenance: music.ProvenanceParsed}); got.Artist != want {
+		t.Errorf("Artist = %+v, want %+v", got.Artist, want)
+	}
+}
+
+// With no artist anywhere else, a short name is still no artist.
+func TestReadLocalTrack_AShortNameAloneIsAPlaceholder(t *testing.T) {
+	got := music.ReadLocalTrack(mediatool.Tags{"artist": "DORA9E~V"}, mediatool.Measured{}, "Rips/12 Modamiku of Tivilute.m4a")
+
+	if want := (music.Claim{Value: "DORA9E~V", Provenance: music.ProvenancePlaceholder}); got.Artist != want {
+		t.Errorf("Artist = %+v, want %+v", got.Artist, want)
+	}
+}
