@@ -471,7 +471,8 @@ func DecideAlbum(locals []LocalTrack, candidates []AlbumCandidate) AlbumDecision
 	officialOverUnofficial := best.Candidate.Release.Status == "official" &&
 		runnerUp >= 0 && scores[runnerUp].Candidate.Release.Status != "official"
 	if runnerUp >= 0 && scores[runnerUp].Distance-best.Distance < winnerMargin && !officialOverUnofficial &&
-		!onlyCompleteFit(scores, len(locals)) && !rivalsAreTheSameMusic(scores) {
+		!onlyCompleteFit(scores, len(locals)) && !rivalsAreTheSameMusic(scores) &&
+		!onlyPerfectFit(best, scores[runnerUp]) {
 		decision.Outcome = AlbumAmbiguous
 		return decision
 	}
@@ -515,6 +516,12 @@ func withoutCollidingDiscs(locals []LocalTrack) []LocalTrack {
 		return cleared
 	}
 	return locals
+}
+
+// onlyPerfectFit is a best release every claim agrees with against a rival some claim contradicts:
+// "Dacapa Hivop Pibazi's Mepukafamo" at 0.000 against "Mepukafamo" at 0.042 is no coin flip.
+func onlyPerfectFit(best, runnerUp ReleaseScore) bool {
+	return best.Distance <= distanceEpsilon && runnerUp.Distance > distanceEpsilon
 }
 
 // onlyCompleteFit is the best release filled exactly by the folder while no rival group inside the
