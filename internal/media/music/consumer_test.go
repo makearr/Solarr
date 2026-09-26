@@ -1257,3 +1257,45 @@ func TestObserve_ASinglesRemixBesideItsAlbumIsNotAttachedToTheAlbum(t *testing.T
 		t.Errorf("queue = %+v, want only the remix, left for review", queue)
 	}
 }
+
+// The files an identified album leaves unplaced are matched against the other album the folder's
+// tagged files name: two untagged tracks of the "Rio EP" beside its six tagged ones and the album.
+func TestObserve_UnplacedFilesJoinTheOtherAlbumTheirSiblingsName(t *testing.T) {
+	single := "44444444-5555-6666-7777-888888888888"
+	singleTracks := []trackSpec{{"Kebilegev Bibihi (club mix)", 420}, {"Kebilegev Bibihi (dub)", 380}, {"Kebilegev Bibihi (night version)", 400}, {"Kebilegev Bibihi (album version)", 337}}
+	lookup := traumaLookup(releaseGroupMBID)
+	lookup.groups[single] = musicbrainz.ReleaseGroup{MBID: single, Title: "Kebilegev Bibihi EP", PrimaryType: "EP", ArtistCredit: []musicbrainz.ArtistCredit{{Name: "P!po"}}}
+	lookup.releases[single] = []musicbrainz.Release{recordedAs(releaseOf("release-of-ep", "Kebilegev Bibihi EP", "official", "2017-08-01", singleTracks), "ep")}
+	consumer, opened, fsys := newAlbumConsumer(t, lookup, nil)
+
+	batch := untaggedTraumaBatch(t, fsys)
+	for i, track := range singleTracks {
+		relPath := fmt.Sprintf("P!po/Kebilegev Bibihi (2017)/EP %d.m4a", i+1)
+		writeMusicFile(t, fsys, relPath, []byte(track.title))
+		tags := mediatool.Tags{"title": track.title, "album_artist": "P!po", "album": "Kebilegev Bibihi", "track": fmt.Sprint(i + 1)}
+		if i < 2 {
+			tags["musicbrainz_releasegroupid"] = single
+		}
+		file := observedFile(relPath, int64(len(track.title)), tags)
+		file.Probe.Measured.Duration = time.Duration(track.seconds) * time.Second
+		batch = append(batch, file)
+	}
+
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	queue, err := library.NewUnidentified(opened).List(t.Context(), nil, paginate.Cursor{}, 50)
+	if err != nil || len(queue) != 0 {
+		t.Fatalf("queue = %+v (err %v), want every file identified", queue, err)
+	}
+	work, err := librarydb.New(opened.Read()).GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: single,
+	})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v", err)
+	}
+	locations, err := library.NewIdentity(opened).WorkFileLocations(t.Context(), []int64{work.ID})
+	if err != nil || len(locations) != len(singleTracks) {
+		t.Errorf("EP holds %d files (err %v), want all %d", len(locations), err, len(singleTracks))
+	}
+}
