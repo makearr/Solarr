@@ -673,15 +673,45 @@ func (c Consumer) identifyAlbums(ctx context.Context, out *batchResult, files []
 					if decision, err := c.matchAlbum(ctx, out, part, seeds); err != nil {
 						pending = append(pending, part...)
 					} else {
-						pending = append(pending, applyAlbumDecision(out, PassAlbumMatch, part, decision)...)
+						pending = append(pending, c.settleAlbum(ctx, out, part, decision)...)
 					}
 				}
 				continue
 			}
 		}
-		pending = append(pending, applyAlbumDecision(out, PassAlbumMatch, group, decision)...)
+		pending = append(pending, c.settleAlbum(ctx, out, group, decision)...)
 	}
 	return pending
+}
+
+// settleAlbum applies an album decision; the files an identified album has no track for are
+// matched once more against the other albums the folder's identified files name -- Nofik Nofik's
+// "Rio" folder holds the album and six of the "Rio EP"'s eight tracks tagged, two untagged.
+func (c Consumer) settleAlbum(ctx context.Context, out *batchResult, group []pendingFile, decision AlbumDecision) []pendingFile {
+	left := applyAlbumDecision(out, PassAlbumMatch, group, decision)
+	if decision.Outcome != AlbumIdentified || len(left) == 0 {
+		return left
+	}
+	others := otherSiblingAlbums(out.links, decision.Best.Candidate.ReleaseGroup.MBID)
+	if len(others) == 0 {
+		return left
+	}
+	rematch, err := c.matchAlbum(ctx, out, left, others)
+	if err != nil || rematch.Outcome != AlbumIdentified {
+		return left
+	}
+	return applyAlbumDecision(out, PassAlbumMatch, left, rematch)
+}
+
+// otherSiblingAlbums is every release group the batch's identified files name, but the one given.
+func otherSiblingAlbums(links []library.WorkLink, except string) []string {
+	var others []string
+	for _, link := range links {
+		if link.Provider == ProviderReleaseGroup && link.ExternalID != except && !slices.Contains(others, link.ExternalID) {
+			others = append(others, link.ExternalID)
+		}
+	}
+	return others
 }
 
 // matchAlbum matches one group of files as an album, recording a failed lookup on each file.
