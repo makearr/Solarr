@@ -158,41 +158,47 @@ func recallAlbums(
 
 	artist := consensusClaim(locals, func(t LocalTrack) Claim { return t.Artist })
 	album := consensusClaim(locals, func(t LocalTrack) Claim { return t.Album })
+	search := func(title string) {
+		matches, err := lookup.Search(ctx, priority, artist.Value, title, albumSearchLimit)
+		if err != nil {
+			*failures = append(*failures, err)
+		}
+		for _, found := range matches {
+			add(recalled{
+				group: found.ReleaseGroup, credit: found.ArtistCredit, names: found.ArtistNames,
+				recall: RecallAlbumTags, known: true,
+			})
+		}
+	}
+	var titles []string
 	if artist.present() && album.present() {
 		// The raw tag is searched too: "(2008 mix)" is noise to cleanAlbumTag but part of a real title.
-		titles := []string{cleanAlbumTag(album.Value)}
+		titles = []string{cleanAlbumTag(album.Value)}
 		if raw := strings.TrimSpace(album.Value); !strings.EqualFold(raw, titles[0]) {
 			titles = append(titles, raw)
 		}
-		// A malformed tag ("Dee Gees / Sohe Basen - Gus Hogecuru / Live") hides the title the folder names.
-		if folder := cleanAlbumTag(folderAlbum(locals)); folder != "" &&
-			!slices.ContainsFunc(titles, func(title string) bool { return strings.EqualFold(title, folder) }) {
-			titles = append(titles, folder)
-		}
 		for _, title := range titles {
-			matches, err := lookup.Search(ctx, priority, artist.Value, title, albumSearchLimit)
-			if err != nil {
-				*failures = append(*failures, err)
-			}
-			for _, found := range matches {
-				add(recalled{
-					group: found.ReleaseGroup, credit: found.ArtistCredit, names: found.ArtistNames,
-					recall: RecallAlbumTags, known: true,
-				})
-			}
+			search(title)
 		}
 	}
 
-	fromTags := len(groups) - len(seeds)
-	if artist.present() && album.present() && fromTags >= 2 {
-		return groups
+	tagsRecalledEnough := artist.present() && album.present() && len(groups)-len(seeds) >= 2
+	if !tagsRecalledEnough {
+		sample := recordingSampleLimit
+		if artist.present() && album.present() {
+			sample = recordingSampleLimitStrong
+		}
+		for _, group := range recordingRecall(ctx, lookup, priority, locals, artist, sample, failures) {
+			add(group)
+		}
 	}
-	sample := recordingSampleLimit
-	if artist.present() && album.present() {
-		sample = recordingSampleLimitStrong
-	}
-	for _, group := range recordingRecall(ctx, lookup, priority, locals, artist, sample, failures) {
-		add(group)
+
+	// A malformed tag ("Dee Gees / Sohe Basen - Gus Hogecuru / Live") hides the title the folder
+	// names; searched last and never counted as the tags' recall, since a folder name misreads
+	// easily ("Mazotuz - The Remixes!" parses as artist "Runaway").
+	if folder := cleanAlbumTag(folderAlbum(locals)); artist.present() && folder != "" &&
+		!slices.ContainsFunc(titles, func(title string) bool { return strings.EqualFold(title, folder) }) {
+		search(folder)
 	}
 	return groups
 }
