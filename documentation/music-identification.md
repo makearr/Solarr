@@ -15,8 +15,11 @@ A scan batch is one directory's files. Each pass only sees what the previous one
 2. **Album matching**: the remaining files, grouped by album tag, scored together against
    whole release tracklists. A group that fits nothing as a whole while its track numbers
    collide is split by the track total each file claims ("3/10" against "3") and each part
-   matched alone: an album's first half and its single's remixes under one album tag. Identified → every file gets the release group *and* the release
-   (edition). Ambiguous → queued with the rival albums. Anything else → next pass.
+   matched alone: an album's first half and its single's remixes under one album tag.
+   Identified → every file the release has a track for gets the release group *and* the
+   release (edition); a file it has no track for is recorded `unplaced` and left to the later
+   passes, where the folder's siblings usually join it — unless they disagree, as beside a
+   single's own tagged files. Ambiguous → queued with the rival albums. Anything else → next pass.
 3. **Per-file text search** (`SearchIdentifier`): the older title-only match.
 4. **Fingerprints**: what is left is fingerprinted, named by AcoustID and matched as an album
    with those names (see below). Skipped, and recorded as skipped, with no API key configured.
