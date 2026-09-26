@@ -4376,7 +4376,7 @@ export interface components {
             confidence: number;
             evidence: components["schemas"]["IdentificationEvidence"][];
         };
-        /** @description One pass of a run. pass is embedded_tags, album_match, text_search or folder_siblings. outcome is identified, none or failed; embedded_tags also answers retired, an album ID MusicBrainz no longer knows; album_match answers no_candidate, insufficient_evidence, ambiguous or contradictory instead; folder_siblings answers joined, siblings_disagree or no_identified_sibling. */
+        /** @description One pass of a run. pass is embedded_tags, album_match, text_search or folder_siblings. outcome is identified, none or failed; embedded_tags also answers retired, an album ID MusicBrainz no longer knows; album_match answers no_candidate, insufficient_evidence, ambiguous or contradictory instead, and unplaced for a file the identified album has no track for; folder_siblings answers joined, siblings_disagree or no_identified_sibling. */
         IdentificationPass: {
             pass: string;
             outcome: string;

@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -1197,5 +1198,62 @@ func TestObserve_TwoReleasesUnderOneAlbumTagAreSplitByTrackTotal(t *testing.T) {
 		if err != nil || len(locations) != 3 {
 			t.Errorf("%s holds %d files (err %v), want 3", mbid, len(locations), err)
 		}
+	}
+}
+
+// A bonus track the album has no track for still joins it, through its folder's siblings.
+func TestObserve_AnUnplacedBonusTrackJoinsItsAlbumThroughItsSiblings(t *testing.T) {
+	consumer, opened, fsys := newAlbumConsumer(t, traumaLookup(releaseGroupMBID), nil)
+	batch := untaggedTraumaBatch(t, fsys)
+	relPath := "P!po/Kebilegev Bibihi (2017)/P!po - 14 - Hidden Bonus.m4a"
+	writeMusicFile(t, fsys, relPath, []byte("hidden bonus"))
+	bonus := observedFile(relPath, int64(len("hidden bonus")), mediatool.Tags{
+		"title": "Hidden Bonus", "album_artist": "P!po", "album": "Kebilegev Bibihi", "track": "14",
+	})
+	bonus.Probe.Measured.Duration = 400 * time.Second
+	batch = append(batch, bonus)
+
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	work, err := librarydb.New(opened.Read()).GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: releaseGroupMBID,
+	})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v", err)
+	}
+	locations, err := library.NewIdentity(opened).WorkFileLocations(t.Context(), []int64{work.ID})
+	if err != nil || len(locations) != len(traumaTracks)+1 {
+		t.Errorf("work files = %d (err %v), want the album's %d and the bonus track", len(locations), err, len(traumaTracks))
+	}
+}
+
+// A single's remix beside its album, the single's own files tagged, fits no album track: its
+// siblings disagree, so it goes to review instead of joining the album (Libirup's "Gada Fofu").
+func TestObserve_ASinglesRemixBesideItsAlbumIsNotAttachedToTheAlbum(t *testing.T) {
+	single := "33333333-4444-5555-6666-777777777777"
+	consumer, opened, fsys := newAlbumConsumer(t, traumaLookup(releaseGroupMBID), nil)
+	batch := untaggedTraumaBatch(t, fsys)
+	for _, name := range []string{"Single B-side", "Kebilegev Bibihi (club mix)"} {
+		relPath := "P!po/Kebilegev Bibihi (2017)/" + name + ".m4a"
+		writeMusicFile(t, fsys, relPath, []byte(name))
+		tags := mediatool.Tags{"title": name, "album_artist": "P!po", "album": "Kebilegev Bibihi"}
+		if name == "Single B-side" {
+			tags["musicbrainz_releasegroupid"] = single
+		}
+		file := observedFile(relPath, int64(len(name)), tags)
+		file.Probe.Measured.Duration = 420 * time.Second
+		batch = append(batch, file)
+	}
+
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	queue, err := library.NewUnidentified(opened).List(t.Context(), nil, paginate.Cursor{}, 50)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(queue) != 1 || !strings.Contains(queue[0].RelPath, "club mix") {
+		t.Errorf("queue = %+v, want only the remix, left for review", queue)
 	}
 }

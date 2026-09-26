@@ -749,17 +749,29 @@ func applyAlbumDecision(
 	out *batchResult, pass string, group []pendingFile, decision AlbumDecision,
 ) []pendingFile {
 	candidates := AlbumCandidates(decision)
-	for _, file := range group {
+	for i, file := range group {
+		outcome := string(decision.Outcome)
+		if decision.Outcome == AlbumIdentified && decision.Best.Tracks[i] == nil {
+			outcome = PassOutcomeUnplaced
+		}
 		out.note(file.index, library.AttemptPass{
-			Pass: pass, Outcome: string(decision.Outcome), Candidates: library.AttemptCandidatesFrom(candidates),
+			Pass: pass, Outcome: outcome, Candidates: library.AttemptCandidatesFrom(candidates),
 		})
 	}
 	switch decision.Outcome {
 	case AlbumIdentified:
+		// A file the album has no track for is no evidence it belongs: later passes, and at
+		// last the folder's siblings, decide it -- a single's remix beside its album goes to review.
+		var unplaced []pendingFile
 		for i, file := range group {
-			out.identify(file.index, albumLink(out, file.index, *decision.Best, decision.Best.Tracks[i]),
-				albumTrackFile(out, file.index, decision.Best.Tracks[i]))
+			track := decision.Best.Tracks[i]
+			if track == nil {
+				unplaced = append(unplaced, file)
+				continue
+			}
+			out.identify(file.index, albumLink(out, file.index, *decision.Best), albumTrackFile(out, file.index, track))
 		}
+		return unplaced
 	case AlbumAmbiguous:
 		for _, file := range group {
 			out.queue(file.index, candidates)
@@ -804,13 +816,9 @@ func groupByAlbum(observed []scan.Observed, files []pendingFile) [][]pendingFile
 	return result
 }
 
-// albumLink links one file of an identified album to its release group and release; a file
-// the release has no track for sits at sibling confidence, since only its folder says so.
-func albumLink(out *batchResult, index int, best ReleaseScore, track *ReleaseTrack) library.WorkLink {
+// albumLink links one placed file of an identified album to its release group and release.
+func albumLink(out *batchResult, index int, best ReleaseScore) library.WorkLink {
 	confidence := albumConfidence(best)
-	if track == nil {
-		confidence = siblingConfidence
-	}
 	release := best.Candidate.Release.MBID
 	return library.WorkLink{
 		Provider: ProviderReleaseGroup, ExternalID: best.Candidate.ReleaseGroup.MBID, Confidence: confidence,
@@ -827,11 +835,9 @@ func albumLink(out *batchResult, index int, best ReleaseScore, track *ReleaseTra
 // release's own position and recording rather than the file's possibly missing tags.
 func albumTrackFile(out *batchResult, index int, track *ReleaseTrack) TrackFile {
 	file := ReadTrackFile(out.mediaObjectIDs[index], out.observed[index].Probe.Tags)
-	if track != nil {
-		file.Disc, file.Track, file.RecordingMBID = track.Disc, track.Position, track.RecordingMBID
-		if file.Title == "" {
-			file.Title = track.Title
-		}
+	file.Disc, file.Track, file.RecordingMBID = track.Disc, track.Position, track.RecordingMBID
+	if file.Title == "" {
+		file.Title = track.Title
 	}
 	return file
 }
