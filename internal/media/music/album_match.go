@@ -473,8 +473,14 @@ func DecideAlbum(locals []LocalTrack, candidates []AlbumCandidate) AlbumDecision
 	if runnerUp >= 0 && scores[runnerUp].Distance-best.Distance < winnerMargin && !officialOverUnofficial &&
 		!onlyCompleteFit(scores, len(locals)) && !rivalsAreTheSameMusic(scores) &&
 		!onlyPerfectFit(best, scores[runnerUp]) {
-		decision.Outcome = AlbumAmbiguous
-		return decision
+		sibling := siblingsAlbumWithinMargin(scores)
+		if sibling < 0 {
+			decision.Outcome = AlbumAmbiguous
+			return decision
+		}
+		chosen := scores[sibling]
+		copy(scores[1:sibling+1], scores[:sibling])
+		scores[0] = chosen
 	}
 	decision.Outcome = AlbumIdentified
 	decision.Best = &decision.Scores[0]
@@ -521,6 +527,15 @@ func withoutCollidingDiscs(locals []LocalTrack) []LocalTrack {
 		cleared[i].Disc = 0
 	}
 	return cleared
+}
+
+// siblingsAlbumWithinMargin is the accepted release, inside the margin, of the album the folder's
+// identified files agree on: their embedded ids outweigh a close tracklist rival -- one untagged
+// remix beside seven tagged ones (Hazi Tufa's "Pakidoviv", the main library). -1 when none.
+func siblingsAlbumWithinMargin(scores []ReleaseScore) int {
+	return slices.IndexFunc(scores, func(score ReleaseScore) bool {
+		return score.Accepted && score.Candidate.Recall == RecallSibling && score.Distance-scores[0].Distance < winnerMargin
+	})
 }
 
 // onlyPerfectFit is a best release every claim agrees with against a rival some claim contradicts:
