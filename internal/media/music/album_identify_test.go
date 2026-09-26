@@ -248,3 +248,32 @@ func TestIdentifyAlbum_AFolderNameRecallDoesNotStandInForTheTags(t *testing.T) {
 		t.Errorf("decision = %s %q (asked %v), want identified rg-studio", decision.Outcome, bestReleaseGroup(decision), lookup.asked)
 	}
 }
+
+// The album a folder's identified files agree on decides a close tie for their untagged
+// neighbour: one remix beside seven tagged ones (Hazi Tufa's "Pakidoviv", the main library).
+func TestIdentifyAlbum_TheSiblingsAlbumDecidesACloseTie(t *testing.T) {
+	seedTracks, rivalTracks := slices.Clone(traumaTracks), slices.Clone(traumaTracks[:2])
+	seedTracks[0].seconds += 13 // both imperfect, the siblings' album a little behind
+	rivalTracks[0].seconds += 11
+	lookup := &fakeAlbumLookup{
+		searches: map[string][]musicbrainz.ReleaseGroupMatch{"P!po/Kebilegev Bibihi": {
+			{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg-rival", Title: "Kebilegev Bibihi", PrimaryType: "Album"}, ArtistCredit: "P!po"},
+		}},
+		groups: map[string]musicbrainz.ReleaseGroup{"rg-seed": {
+			MBID: "rg-seed", Title: "Kebilegev Bibihi", PrimaryType: "Album", ArtistCredit: []musicbrainz.ArtistCredit{{Name: "P!po"}},
+		}},
+		releases: map[string][]musicbrainz.Release{
+			"rg-seed":  {releaseOf("rel-seed", "Kebilegev Bibihi", "official", "2017-10-13", seedTracks)},
+			"rg-rival": {recordedAs(releaseOf("rel-rival", "Kebilegev Bibihi", "official", "2017-10-13", rivalTracks), "rival")},
+		},
+	}
+
+	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, folderOf(traumaTracks[:1]), []string{"rg-seed"})
+	if err != nil {
+		t.Fatalf("IdentifyAlbum: %v", err)
+	}
+	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-seed" {
+		t.Errorf("decision = %s %q (scores %.3f %s, %.3f %s), want identified rg-seed", decision.Outcome, bestReleaseGroup(decision),
+			decision.Scores[0].Distance, decision.Scores[0].Candidate.ReleaseGroup.MBID, decision.Scores[1].Distance, decision.Scores[1].Candidate.ReleaseGroup.MBID)
+	}
+}
