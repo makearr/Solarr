@@ -496,26 +496,31 @@ func folderAlbum(locals []LocalTrack) string {
 	return ""
 }
 
-// withoutCollidingDiscs drops every disc claim once two files claim the same disc and track: a
-// three-disc set tagged disc 3 throughout lost its first two discs' positions (NETA, the main library).
+// withoutCollidingDiscs drops every disc claim once at least half the files share their disc
+// and track with a different song: NETA' three-disc "Kick" is tagged disc 3 throughout. Copies
+// of one song collide too, and prove only duplicates ("Hazorihelo the Mahopep", the main library).
 func withoutCollidingDiscs(locals []LocalTrack) []LocalTrack {
-	claimed := make(map[[2]int]bool, len(locals))
+	titles := make(map[[2]int][]string, len(locals))
 	for _, local := range locals {
-		if local.Disc == 0 || local.Track == 0 {
-			continue
+		if local.Disc > 0 && local.Track > 0 {
+			key := [2]int{local.Disc, local.Track}
+			titles[key] = append(titles[key], strings.ToLower(strings.TrimSpace(local.Title.Value)))
 		}
-		key := [2]int{local.Disc, local.Track}
-		if !claimed[key] {
-			claimed[key] = true
-			continue
-		}
-		cleared := slices.Clone(locals)
-		for i := range cleared {
-			cleared[i].Disc = 0
-		}
-		return cleared
 	}
-	return locals
+	colliding := 0
+	for _, shared := range titles {
+		if slices.ContainsFunc(shared, func(title string) bool { return title != shared[0] }) {
+			colliding += len(shared)
+		}
+	}
+	if colliding == 0 || 2*colliding < len(locals) {
+		return locals
+	}
+	cleared := slices.Clone(locals)
+	for i := range cleared {
+		cleared[i].Disc = 0
+	}
+	return cleared
 }
 
 // onlyPerfectFit is a best release every claim agrees with against a rival some claim contradicts:
