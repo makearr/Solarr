@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -224,10 +225,36 @@ type ReleaseTrack struct {
 	RecordingMBID string
 }
 
-func scoreRelease(locals []LocalTrack, candidate AlbumCandidate) ReleaseScore {
+// tracklistFit is how a folder's files pair with one tracklist: the part of a release's score
+// that depends on its tracks alone, shared by every pressing that has the same ones.
+type tracklistFit struct {
+	tracks       []*ReleaseTrack
+	costs        []float64
+	mapped       int
+	supported    int
+	trackCount   int
+	contradicted bool
+}
+
+// tracklistKey identifies a tracklist by everything pairing reads: disc, position, title, length, recording.
+func tracklistKey(release musicbrainz.Release) string {
+	var key strings.Builder
+	for _, medium := range release.Media {
+		key.WriteString(strconv.Itoa(medium.Position))
+		for _, track := range medium.Tracks {
+			key.WriteString("\x1e" + strconv.Itoa(track.Position) + "\x1f" + track.Title + "\x1f" +
+				strconv.FormatInt(track.DurationMs, 10) + "\x1f" + track.RecordingMBID)
+		}
+		key.WriteString("\x1d")
+	}
+	return key.String()
+}
+
+// fitTracklist pairs the files with a release's tracks by optimal assignment.
+func fitTracklist(locals []LocalTrack, release musicbrainz.Release) tracklistFit {
 	var tracks []ReleaseTrack
 	var releaseTracks []musicbrainz.Track
-	for _, medium := range candidate.Release.Media {
+	for _, medium := range release.Media {
 		for _, track := range medium.Tracks {
 			tracks = append(tracks, ReleaseTrack{
 				Disc: medium.Position, Position: track.Position, Title: track.Title, RecordingMBID: track.RecordingMBID,
@@ -261,24 +288,46 @@ func scoreRelease(locals []LocalTrack, candidate AlbumCandidate) ReleaseScore {
 			contradictedFiles++
 		}
 	}
-	contradicted := float64(contradictedFiles) > maxContradictedShare*float64(len(locals))
 
-	var d distance
-	score := ReleaseScore{Candidate: candidate, Tracks: make([]*ReleaseTrack, len(locals)), Contradicted: contradicted}
+	fit := tracklistFit{
+		tracks: make([]*ReleaseTrack, len(locals)), trackCount: len(tracks),
+		contradicted: float64(contradictedFiles) > maxContradictedShare*float64(len(locals)),
+	}
 	for i, j := range match.Assign(cost) {
 		if i >= len(locals) || j >= len(tracks) || pairs[i][j].conflict {
 			continue
 		}
-		score.Tracks[i] = &tracks[j]
-		score.Mapped++
-		d.add(dimensionTracks, pairs[i][j].cost)
+		fit.tracks[i] = &tracks[j]
+		fit.mapped++
+		fit.costs = append(fit.costs, pairs[i][j].cost)
 		if pairs[i][j].supported() {
-			score.Supported++
+			fit.supported++
 		}
+	}
+	return fit
+}
+
+// scoreRelease scores one release, pairing its tracklist once per distinct tracklist in fits:
+// a group's pressings mostly share one, and pairing is the costly part (Kocose Cici, 2026-09-26).
+func scoreRelease(locals []LocalTrack, candidate AlbumCandidate, fits map[string]tracklistFit) ReleaseScore {
+	key := tracklistKey(candidate.Release)
+	fit, found := fits[key]
+	if !found {
+		fit = fitTracklist(locals, candidate.Release)
+		fits[key] = fit
+	}
+
+	var d distance
+	score := ReleaseScore{
+		Candidate: candidate, Tracks: slices.Clone(fit.tracks), Contradicted: fit.contradicted,
+		Mapped: fit.mapped, Supported: fit.supported,
+	}
+	for _, cost := range fit.costs {
+		d.add(dimensionTracks, cost)
 	}
 
 	artistOK := addAlbumDimensions(&d, locals, candidate)
-	for range min(len(tracks)-score.Mapped, len(locals)) {
+	for range min(fit.trackCount-score.Mapped, len(locals)) {
 		d.add(dimensionMissingTracks, 1)
 	}
 	for range len(locals) - score.Mapped {
@@ -290,7 +339,7 @@ func scoreRelease(locals []LocalTrack, candidate AlbumCandidate) ReleaseScore {
 	score.GateDistance = d.normalized(dimensionMissingTracks, dimensionReleaseType)
 	// Positions and lengths agree with too many albums; enough titles or recordings must too.
 	quorum := score.Supported >= min(2, len(locals))
-	score.Accepted = len(locals) > 0 && !contradicted && artistOK && quorum &&
+	score.Accepted = len(locals) > 0 && !score.Contradicted && artistOK && quorum &&
 		score.GateDistance <= albumAcceptDistance &&
 		float64(score.Mapped)/float64(len(locals)) >= minMappedFraction
 	return score
@@ -450,8 +499,9 @@ func DecideAlbum(locals []LocalTrack, candidates []AlbumCandidate) AlbumDecision
 	}
 	locals = withoutCollidingDiscs(locals)
 	scores := make([]ReleaseScore, len(candidates))
+	fits := make(map[string]tracklistFit)
 	for i, candidate := range candidates {
-		scores[i] = scoreRelease(locals, candidate)
+		scores[i] = scoreRelease(locals, candidate, fits)
 	}
 	slices.SortStableFunc(scores, func(a, b ReleaseScore) int { return compareScores(a, b, len(locals)) })
 	decision := AlbumDecision{Scores: scores}

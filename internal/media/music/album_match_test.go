@@ -377,3 +377,20 @@ func TestDecideAlbum_APerfectFitBeatsACloseImperfectRival(t *testing.T) {
 			decision.Scores[0].Distance, decision.Scores[1].Distance)
 	}
 }
+
+// Pressings sharing a tracklist share its pairing, never its title or date: each is still judged
+// on its own (the pairing is computed once per tracklist, 2026-09-26).
+func TestDecideAlbum_PressingsSharingATracklistKeepTheirOwnTitles(t *testing.T) {
+	right := candidateOf("rg-a", "Album", nil, releaseOf("rel-right", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks))
+	renamed := candidateOf("rg-a", "Album", nil, releaseOf("rel-renamed", "Something Else Entirely", "official", "2017-10-13", traumaTracks))
+	renamed.ReleaseGroup.Title = "Something Else Entirely"
+
+	scores := music.DecideAlbum(folderOf(traumaTracks), []music.AlbumCandidate{renamed, right}).Scores
+	if scores[0].Candidate.Release.MBID != "rel-right" || scores[0].Distance >= scores[1].Distance {
+		t.Errorf("scores = %s %.3f, %s %.3f; want rel-right first and closer",
+			scores[0].Candidate.Release.MBID, scores[0].Distance, scores[1].Candidate.Release.MBID, scores[1].Distance)
+	}
+	if scores[0].Mapped != len(traumaTracks) || scores[1].Mapped != len(traumaTracks) {
+		t.Errorf("mapped = %d, %d; want every file paired on both", scores[0].Mapped, scores[1].Mapped)
+	}
+}
