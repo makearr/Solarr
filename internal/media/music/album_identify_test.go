@@ -214,3 +214,37 @@ func TestIdentifyAlbum_TheFoldersAlbumNameRecallsWhatAMalformedTagHides(t *testi
 		t.Errorf("decision = %s %q (asked %v), want identified rg-studio", decision.Outcome, bestReleaseGroup(decision), lookup.asked)
 	}
 }
+
+// A misread folder name recalling wrong albums must not stop the recording search the tags left
+// to it: "Mazotuz - The Remixes!" reads as album "The Remixes!" (Tirah Fabekin, the main library).
+func TestIdentifyAlbum_AFolderNameRecallDoesNotStandInForTheTags(t *testing.T) {
+	studio := musicbrainz.ReleaseGroup{MBID: "rg-studio", Title: "Kebilegev Bibihi", PrimaryType: "Album"}
+	recordings := map[string][]musicbrainz.RecordingMatch{}
+	for _, track := range traumaTracks {
+		recordings[track.title] = []musicbrainz.RecordingMatch{{Title: track.title, ReleaseGroups: []musicbrainz.ReleaseGroup{studio}}}
+	}
+	other := func(mbid, title string) musicbrainz.ReleaseGroupMatch {
+		return musicbrainz.ReleaseGroupMatch{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: mbid, Title: title, PrimaryType: "Single"}, ArtistCredit: "P!po"}
+	}
+	lookup := &fakeAlbumLookup{
+		searches: map[string][]musicbrainz.ReleaseGroupMatch{"P!po/The Remixes!": {
+			other("rg-a", "Try: The Remixes"), other("rg-b", "So What: The Remixes"),
+		}},
+		recordings: recordings,
+		groups:     map[string]musicbrainz.ReleaseGroup{"rg-studio": {MBID: "rg-studio", Title: "Kebilegev Bibihi", PrimaryType: "Album", ArtistCredit: []musicbrainz.ArtistCredit{{Name: "P!po"}}}},
+		releases:   map[string][]musicbrainz.Release{"rg-studio": {studioRelease}},
+	}
+	locals := folderOf(traumaTracks)
+	for i := range locals {
+		locals[i].Album = tagged("Kebilegev Bibihi: The Remixes!")
+		locals[i].FolderAlbum = "The Remixes!"
+	}
+
+	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, nil)
+	if err != nil {
+		t.Fatalf("IdentifyAlbum: %v", err)
+	}
+	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-studio" {
+		t.Errorf("decision = %s %q (asked %v), want identified rg-studio", decision.Outcome, bestReleaseGroup(decision), lookup.asked)
+	}
+}

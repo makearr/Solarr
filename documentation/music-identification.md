@@ -33,10 +33,11 @@ without an edition uses the same scorer (`chooseRelease`).
 
 Up to 10 release groups per folder, in evidence order: the release group the identified
 siblings agree on; an artist + album search (the album tag cleaned of edition noise, and raw
-when that differs — "(2008 mix)" is part of a real title — and the album the folder names, when
-that differs again, since a malformed tag can hide the title); then, when the tags are missing or
+when that differs — "(2008 mix)" is part of a real title); then, when the tags are missing or
 recalled fewer than two groups, recording search on up to four track titles, keeping the five
-release groups most tracks appear on, studio albums before compilations. Every release of each
+release groups most tracks appear on, studio albums before compilations; last, the album the
+folder names, when it differs from the tag — a malformed tag can hide the title — never counted
+as the tags' recall, since a folder name misreads easily ("Mazotuz - The Remixes!"). Every release of each
 group is scored. Releases and recording searches are cached like everything else.
 
 The search index still lists merged release groups under their old ids, so one album can be
