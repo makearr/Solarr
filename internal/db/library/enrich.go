@@ -22,12 +22,12 @@ type PlaceholderEdition struct {
 	ExternalID string
 }
 
-// PlaceholderEditions returns up to limit editions still waiting on real metadata,
-// oldest first. There is no cursor: a successfully refined edition's kind moves
-// away from 'unknown', which is what makes the query's own result set shrink as
-// enrichment succeeds, so nothing needs remembering between calls.
-func (i Identity) PlaceholderEditions(ctx context.Context, limit int) ([]PlaceholderEdition, error) {
-	rows, err := librarydb.New(i.store.Read()).ListPlaceholderEditions(ctx, int64(limit))
+// PlaceholderEditions returns up to limit editions still waiting on real metadata after
+// afterEditionID, oldest first; the cursor walks past editions that failed, which stay placeholders.
+func (i Identity) PlaceholderEditions(ctx context.Context, afterEditionID int64, limit int) ([]PlaceholderEdition, error) {
+	rows, err := librarydb.New(i.store.Read()).ListPlaceholderEditions(ctx, librarydb.ListPlaceholderEditionsParams{
+		AfterID: afterEditionID, PageSize: int64(limit),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("library: placeholder editions: %w", err)
 	}

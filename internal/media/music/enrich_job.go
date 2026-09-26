@@ -187,12 +187,14 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 
 	total, failed := 0, 0
 	var refinedWorkIDs []int64
+	var afterEditionID int64
 	for {
 		if err := ctx.Err(); err != nil {
 			return jobs.Retryablef("enrich.context", string(EnrichJobType), err)
 		}
 
-		batch, err := j.identity.PlaceholderEditions(ctx, enrichBatchSize)
+		// The cursor, not the shrinking set: 20 editions failing for good once looped forever (2026-09-26).
+		batch, err := j.identity.PlaceholderEditions(ctx, afterEditionID, enrichBatchSize)
 		if err != nil {
 			return fmt.Errorf("music: enrich: %w", err)
 		}
@@ -201,6 +203,7 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 		}
 
 		for _, edition := range batch {
+			afterEditionID = edition.EditionID
 			total++
 			if err := j.enrichOne(ctx, edition); err == nil {
 				refinedWorkIDs = append(refinedWorkIDs, edition.WorkID)
@@ -208,7 +211,7 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 				failed++
 				// One placeholder edition failing (no data at the provider, a
 				// transient network error) is not a reason to stop the sweep --
-				// it simply stays a placeholder and is retried next run.
+				// it stays a placeholder, the cursor moves past it, and the next run retries it.
 				j.logger.WarnContext(ctx, "edition enrichment failed",
 					slog.Int64("edition_id", edition.EditionID), slog.Any("error", err))
 			}

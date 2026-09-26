@@ -211,7 +211,7 @@ func TestCategoryCounters_CountsPartsAndArtistCredits(t *testing.T) {
 	}
 	workID := workIDs[0]
 
-	placeholders, err := identity.PlaceholderEditions(t.Context(), 10)
+	placeholders, err := identity.PlaceholderEditions(t.Context(), 0, 10)
 	if err != nil || len(placeholders) != 1 {
 		t.Fatalf("PlaceholderEditions: %v, %+v", err, placeholders)
 	}

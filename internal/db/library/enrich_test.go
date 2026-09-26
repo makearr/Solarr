@@ -40,7 +40,7 @@ func TestPlaceholderEditions_ListsOnlyKindUnknown(t *testing.T) {
 	identity := library.NewIdentity(opened)
 	createPlaceholderEdition(t, queries, identity, "rg-1", "release-1")
 
-	found, err := identity.PlaceholderEditions(t.Context(), 10)
+	found, err := identity.PlaceholderEditions(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("PlaceholderEditions: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestPlaceholderEditions_ListsOnlyKindUnknown(t *testing.T) {
 
 	// A refined edition's kind is no longer 'unknown', so it must drop out of the
 	// set on its own -- the whole point of not needing a separate cursor.
-	remaining, err := identity.PlaceholderEditions(t.Context(), 10)
+	remaining, err := identity.PlaceholderEditions(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("PlaceholderEditions after refine: %v", err)
 	}
