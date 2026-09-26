@@ -25,7 +25,7 @@ func refineWithReleaseMBID(t *testing.T, identity library.Identity, releaseGroup
 	if err != nil {
 		t.Fatalf("ResolveWorks: %v", err)
 	}
-	found, err := identity.PlaceholderEditions(t.Context(), 10)
+	found, err := identity.PlaceholderEditions(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("PlaceholderEditions: %v", err)
 	}

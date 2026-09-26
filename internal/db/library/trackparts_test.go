@@ -29,7 +29,7 @@ func setUpAlbumWithParts(
 	}
 	workID := workIDs[0]
 
-	placeholders, err := identity.PlaceholderEditions(t.Context(), 10)
+	placeholders, err := identity.PlaceholderEditions(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("PlaceholderEditions: %v", err)
 	}

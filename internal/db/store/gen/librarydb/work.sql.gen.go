@@ -1116,8 +1116,14 @@ func (q *Queries) ListEditions(ctx context.Context, workID int64) ([]Edition, er
 const listPlaceholderEditions = `-- name: ListPlaceholderEditions :many
 SELECT id, work_id, kind, label, year, format, catalogue_number,
        barcode, runtime_ms, is_default
-FROM edition WHERE kind = 'unknown' ORDER BY id LIMIT ?1
+FROM edition WHERE kind = 'unknown' AND id > ?1
+ORDER BY id LIMIT ?2
 `
+
+type ListPlaceholderEditionsParams struct {
+	AfterID  int64
+	PageSize int64
+}
 
 // kind='unknown' is the cross-media-type placeholder marker an Identifier chain
 // leaves behind when it resolves an edition's external id but has no real
@@ -1126,8 +1132,8 @@ FROM edition WHERE kind = 'unknown' ORDER BY id LIMIT ?1
 // edition's UNIQUE(work_id, kind, label). Once refined, kind changes away from
 // 'unknown' and the row stops being returned here -- no separate cursor needed,
 // the query's own result set shrinks as enrichment succeeds.
-func (q *Queries) ListPlaceholderEditions(ctx context.Context, pageSize int64) ([]Edition, error) {
-	rows, err := q.db.QueryContext(ctx, listPlaceholderEditions, pageSize)
+func (q *Queries) ListPlaceholderEditions(ctx context.Context, arg ListPlaceholderEditionsParams) ([]Edition, error) {
+	rows, err := q.db.QueryContext(ctx, listPlaceholderEditions, arg.AfterID, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}

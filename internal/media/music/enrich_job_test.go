@@ -3,6 +3,7 @@ package music_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -640,7 +641,7 @@ func TestEnrichJob_ASourceFailureIsolatesToOneEdition(t *testing.T) {
 	}
 
 	identity := library.NewIdentity(opened)
-	remaining, err := identity.PlaceholderEditions(t.Context(), 10)
+	remaining, err := identity.PlaceholderEditions(t.Context(), 0, 10)
 	if err != nil {
 		t.Fatalf("PlaceholderEditions: %v", err)
 	}
@@ -664,6 +665,26 @@ func resolveBareArtist(t *testing.T, opened *store.Store, mbid, name string) int
 		t.Fatalf("ResolvePerson: %v", err)
 	}
 	return personID
+}
+
+// More editions failing for good than one batch holds are each tried once and the run ends: the
+// shrinking set without a cursor served the same 20 forever (the main library, 2026-09-26).
+func TestEnrichJob_AFullBatchOfFailuresEndsTheRun(t *testing.T) {
+	source := &fakeSource{err: errors.New("release retired")}
+	job, opened, _ := newEnrichJob(t, source)
+	const editions = 25
+	for i := range editions {
+		createPlaceholder(t, opened, fmt.Sprintf("rg-%d", i), fmt.Sprintf("rel-%d", i))
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	if err := job.Run(ctx, jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v, want the run to end once every edition was tried", err)
+	}
+	if source.calls != editions {
+		t.Errorf("source asked %d times, want each of the %d editions once", source.calls, editions)
+	}
 }
 
 func TestEnrichJob_BackfillsAnAlreadyResolvedArtistsImageAndBiography(t *testing.T) {

@@ -472,7 +472,7 @@ type Querier interface {
 	// edition's UNIQUE(work_id, kind, label). Once refined, kind changes away from
 	// 'unknown' and the row stops being returned here -- no separate cursor needed,
 	// the query's own result set shrinks as enrichment succeeds.
-	ListPlaceholderEditions(ctx context.Context, pageSize int64) ([]Edition, error)
+	ListPlaceholderEditions(ctx context.Context, arg ListPlaceholderEditionsParams) ([]Edition, error)
 	// One page of queued files with what their newest attempt concluded. The caller
 	// filters on the pass and outcome it cares about (D12's "re-run what a missing
 	// AcoustID key skipped"): sqlc's SQLite parser cannot model json_each's columns

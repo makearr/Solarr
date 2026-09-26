@@ -152,7 +152,8 @@ DELETE FROM edition WHERE id = ?;
 -- name: ListPlaceholderEditions :many
 SELECT id, work_id, kind, label, year, format, catalogue_number,
        barcode, runtime_ms, is_default
-FROM edition WHERE kind = 'unknown' ORDER BY id LIMIT sqlc.arg(page_size);
+FROM edition WHERE kind = 'unknown' AND id > sqlc.arg(after_id)
+ORDER BY id LIMIT sqlc.arg(page_size);
 
 -- name: UpdateEdition :exec
 UPDATE edition SET kind = ?, year = ?, format = ?, catalogue_number = ?,
