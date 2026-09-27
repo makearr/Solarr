@@ -73,9 +73,12 @@ func recordingOn(mbid, title string, seconds int, groups ...musicbrainz.ReleaseG
 }
 
 var (
-	rgTrue        = musicbrainz.ReleaseGroup{MBID: "rg-true", Title: "True", PrimaryType: "Album", FirstReleaseDate: "2013-09-13"}
-	rgWakeSingle  = musicbrainz.ReleaseGroup{MBID: "rg-wake-single", Title: "Budo Me Up", PrimaryType: "Single", FirstReleaseDate: "2013-06-17"}
-	rgBravo       = musicbrainz.ReleaseGroup{MBID: "rg-bravo", Title: "Bravo Hits 82", PrimaryType: "Album", SecondaryTypes: []string{"Compilation"}, FirstReleaseDate: "2013-08-01"}
+	rgTrue       = musicbrainz.ReleaseGroup{MBID: "rg-true", Title: "True", PrimaryType: "Album", FirstReleaseDate: "2013-09-13"}
+	rgWakeSingle = musicbrainz.ReleaseGroup{MBID: "rg-wake-single", Title: "Budo Me Up", PrimaryType: "Single", FirstReleaseDate: "2013-06-17"}
+	rgBravo      = musicbrainz.ReleaseGroup{MBID: "rg-bravo", Title: "Bravo Hits 82", PrimaryType: "Album", SecondaryTypes: []string{"Compilation"}, FirstReleaseDate: "2013-08-01"}
+	// rgClubClassics is a Various Artists album MusicBrainz never marked a compilation, dated first.
+	rgClubClassics = musicbrainz.ReleaseGroup{MBID: "rg-club-classics", Title: "Club Classics", PrimaryType: "Album", FirstReleaseDate: "2013-01-01",
+		ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "89ad4ac3-39f7-470e-963a-56509c546377", Name: "Various Artists", ArtistName: "Various Artists"}}}
 	rgStories     = musicbrainz.ReleaseGroup{MBID: "rg-stories", Title: "Stories", PrimaryType: "Album", FirstReleaseDate: "2015-10-02"}
 	rgLevels      = musicbrainz.ReleaseGroup{MBID: "rg-levels", Title: "Levels", PrimaryType: "Single", FirstReleaseDate: "2011-10-28"}
 	rgForever     = musicbrainz.ReleaseGroup{MBID: "rg-forever", Title: "Lefite Bacizil", PrimaryType: "Album", SecondaryTypes: []string{"Compilation"}, FirstReleaseDate: "2020"}
@@ -87,7 +90,7 @@ var (
 // studio album before the single before a compilation ("Essentials", the main library).
 func TestObserve_APlaylistFolderIsIdentifiedTrackByTrack(t *testing.T) {
 	tracks := fakeTrackLookup{searches: map[string][]musicbrainz.RecordingMatch{
-		"Lefite/Budo Me Up":  {recordingOn("rec-wake", "Budo Me Up", 247, rgWakeSingle, rgBravo, rgTrue)},
+		"Lefite/Budo Me Up":  {recordingOn("rec-wake", "Budo Me Up", 247, rgWakeSingle, rgBravo, rgClubClassics, rgTrue)},
 		"Lefite/Levels":      {recordingOn("rec-levels", "Levels", 200, rgForever, rgLevels)},
 		"Lefite/Caz Gotabam": {recordingOn("rec-brother", "Caz Gotabam", 255, rgStories, rgTrue)},
 	}}
@@ -150,5 +153,31 @@ func TestObserve_AMisfiledTrackGoesToItsOwnAlbumNotItsFolders(t *testing.T) {
 	}
 	if got := releaseGroupOf(t, opened, misfiled); got != "rg-looking-glass" {
 		t.Errorf("misfiled track identified as %q, want the album its recording is on", got)
+	}
+}
+
+// A recording id naming a song of another title is a wrong link: the file is found by its own title.
+func TestObserve_ARecordingOfAnotherTitleIsNotTheFile(t *testing.T) {
+	wrong := "0a1b2c3d-0000-4000-8000-000000000001"
+	rgPoints := musicbrainz.ReleaseGroup{MBID: "rg-hybrid", Title: "Nafazo Nohugu", PrimaryType: "Album", FirstReleaseDate: "2000-10-24"}
+	rgMidnight := musicbrainz.ReleaseGroup{MBID: "rg-midnight", Title: "Gasofum to Nodokiru", PrimaryType: "Album", FirstReleaseDate: "2007-05-14"}
+	tracks := fakeTrackLookup{
+		recordings: map[string]musicbrainz.RecordingMatch{
+			wrong: {RecordingMBID: wrong, Title: "Zacami of Lupidegep", ArtistCredit: "Zovoda Zita", DurationMs: 209000, ReleaseGroups: []musicbrainz.ReleaseGroup{rgPoints}},
+		},
+		searches: map[string][]musicbrainz.RecordingMatch{
+			"Zovoda Zita/Tusa I'fi Zoke": {{RecordingMBID: "rec-done", Title: "Tusa I'fi Zoke", ArtistCredit: "Zovoda Zita", DurationMs: 205000,
+				ReleaseGroups: []musicbrainz.ReleaseGroup{rgMidnight}}},
+		},
+	}
+	consumer, opened, fsys := newTrackConsumer(t, &fakeAlbumLookup{}, nil, tracks)
+	file := untaggedTrack(t, fsys, "Zovoda Zita/Essentials (2020)/11.m4a", "Zovoda Zita", "Essentials", "Tusa I'fi Zoke", 205)
+	file.Probe.Tags["musicbrainz_trackid"] = wrong
+
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, []scan.Observed{file}); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if got := releaseGroupOf(t, opened, "Zovoda Zita/Essentials (2020)/11.m4a"); got != "rg-midnight" {
+		t.Errorf("identified as %q, want rg-midnight by its own title", got)
 	}
 }

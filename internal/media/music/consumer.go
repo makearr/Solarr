@@ -12,6 +12,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/match"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
@@ -369,8 +370,9 @@ func (r *batchResult) attempts() []library.Attempt {
 type pendingFile struct {
 	index      int
 	candidates []model.Identification
-	// recording is what the file's own fingerprint named, kept for identifying it on its own.
-	recording string
+	// recordings are what the file's own fingerprint named: MusicBrainz often holds one audio as
+	// several recordings, some only on compilations, so every fitting one is kept.
+	recordings []string
 	// refuted are release groups the album pass placed this folder on without a track for this file.
 	refuted []string
 }
@@ -466,7 +468,7 @@ func (c Consumer) namesFromAudio(
 			pending = append(pending, file)
 			continue
 		}
-		file.recording = recording.MBID
+		file.recordings = sameAudio(recognised[i], recording)
 		named = append(named, file)
 		locals = append(locals, recordedTrack(one, recording, prints[i].Duration))
 		for _, group := range recording.ReleaseGroupMBIDs {
@@ -547,6 +549,20 @@ func chooseRecording(
 		}
 	}
 	return best, found
+}
+
+// sameAudio is the chosen recording first, then every other one of its title and artist within
+// trackLengthTolerance: AcoustID's crowd-sourced links also name other songs of the same length.
+func sameAudio(recordings []acoustid.Recording, chosen acoustid.Recording) []string {
+	mbids := []string{chosen.MBID}
+	for _, recording := range recordings {
+		if recording.MBID != chosen.MBID && !slices.Contains(mbids, recording.MBID) &&
+			strings.EqualFold(recording.Artist, chosen.Artist) && (recording.Duration-chosen.Duration).Abs() <= trackLengthTolerance &&
+			match.EditPenalty(recording.Title, chosen.Title) <= trackTitlePenalty {
+			mbids = append(mbids, recording.MBID)
+		}
+	}
+	return mbids
 }
 
 // closer reports whether candidate is nearer to want than incumbent is.

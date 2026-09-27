@@ -83,20 +83,27 @@ func (c Consumer) trackPass(ctx context.Context, out *batchResult, files []pendi
 	return pending
 }
 
-// recordingsFor answers what recording the file is: the one its fingerprint or embedded id names,
+// recordingsFor answers what recording the file is: every one its fingerprint or embedded id names,
 // else the recordings a search finds by its artist and title at its length.
 func (c Consumer) recordingsFor(ctx context.Context, file pendingFile, local LocalTrack) ([]musicbrainz.RecordingMatch, float64) {
-	for _, mbid := range []string{file.recording, local.RecordingMBID} {
-		if mbid == "" {
+	var known []musicbrainz.RecordingMatch
+	for _, mbid := range append(slices.Clone(file.recordings), local.RecordingMBID) {
+		if mbid == "" || slices.ContainsFunc(known, func(r musicbrainz.RecordingMatch) bool { return r.RecordingMBID == mbid }) {
 			continue
 		}
 		recording, err := c.tracks.Recording(ctx, musicbrainz.PriorityIdentify, mbid)
-		if err == nil && len(recording.ReleaseGroups) > 0 {
-			return []musicbrainz.RecordingMatch{recording}, trackKnownConfidence
-		}
 		if err != nil && !errors.Is(err, musicbrainz.ErrNotFound) {
 			return nil, 0
 		}
+		// A fingerprint's link to a song of another title is a wrong link, not this file (a live
+		// "Zacami of Lupidegep" named for "Tusa I'fi Zoke", 2026-09-27).
+		if err == nil && len(recording.ReleaseGroups) > 0 &&
+			(!local.Title.present() || match.EditPenalty(local.Title.Value, recording.Title) <= supportTitlePenalty) {
+			known = append(known, recording)
+		}
+	}
+	if len(known) > 0 {
+		return known, trackKnownConfidence
 	}
 	if !local.Title.present() || !local.Artist.present() || local.Duration <= 0 {
 		return nil, 0
@@ -146,9 +153,24 @@ func homeGroup(
 	if len(options) == 0 {
 		return musicbrainz.ReleaseGroup{}, musicbrainz.RecordingMatch{}, false
 	}
+	// A release group credited to someone else, Various Artists above all, is a compilation of the
+	// track whatever MusicBrainz calls it.
+	foreign := func(group musicbrainz.ReleaseGroup) int {
+		if len(group.ArtistCredit) == 0 {
+			return 0
+		}
+		for _, credit := range group.ArtistCredit {
+			if credit.MBID != variousArtistsMBID && local.Artist.present() &&
+				min(artistPenalty(local.Artist.Value, credit.Name), artistPenalty(local.Artist.Value, credit.ArtistName)) <= maxArtistPenalty {
+				return 0
+			}
+		}
+		return 1
+	}
 	best := slices.MinFunc(options, func(a, b option) int {
 		return cmp.Or(
 			cmp.Compare(hinted(a.group), hinted(b.group)),
+			cmp.Compare(foreign(a.group), foreign(b.group)),
 			cmp.Compare(releaseTypePenalty(a.group), releaseTypePenalty(b.group)),
 			compareDates(a.group.FirstReleaseDate, b.group.FirstReleaseDate),
 			strings.Compare(a.group.MBID, b.group.MBID),

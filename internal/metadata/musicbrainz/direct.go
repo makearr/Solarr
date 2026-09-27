@@ -1,7 +1,6 @@
 package musicbrainz
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -83,10 +82,11 @@ func wikidataQIDFromRelations(relations []directRelation) string {
 // WikidataQID need those incs, every other field is already in the default
 // response.
 type directReleaseGroup struct {
-	ID               string `json:"id"`
-	Title            string `json:"title"`
-	PrimaryType      string `json:"primary-type"`
-	FirstReleaseDate string `json:"first-release-date"`
+	ID               string   `json:"id"`
+	Title            string   `json:"title"`
+	PrimaryType      string   `json:"primary-type"`
+	SecondaryTypes   []string `json:"secondary-types"`
+	FirstReleaseDate string   `json:"first-release-date"`
 	ArtistCredit     []struct {
 		Name   string `json:"name"`
 		Artist struct {
@@ -119,7 +119,7 @@ func (d direct) releaseGroup(ctx context.Context, mbid string) (ReleaseGroup, er
 
 	return ReleaseGroup{
 		MBID: parsed.ID, Title: parsed.Title,
-		PrimaryType: parsed.PrimaryType, FirstReleaseDate: parsed.FirstReleaseDate,
+		PrimaryType: parsed.PrimaryType, SecondaryTypes: parsed.SecondaryTypes, FirstReleaseDate: parsed.FirstReleaseDate,
 		ArtistCredit: credits, Genres: genres,
 		WikidataQID: wikidataQIDFromRelations(parsed.Relations),
 	}, nil
@@ -307,13 +307,24 @@ type directRecording struct {
 		Name       string `json:"name"`
 		JoinPhrase string `json:"joinphrase"`
 	} `json:"artist-credit"`
-	Releases []struct {
-		Date         string                   `json:"date"`
-		ReleaseGroup directSearchReleaseGroup `json:"release-group"`
-	} `json:"releases"`
+	Releases []directRecordingRelease `json:"releases"`
 }
 
-// toMatch keeps each release group once, dated by the earliest of its releases the answer lists.
+// directRecordingRelease is one release a recording is on, with who that release credits.
+type directRecordingRelease struct {
+	Date         string                   `json:"date"`
+	ReleaseGroup directSearchReleaseGroup `json:"release-group"`
+	ArtistCredit []struct {
+		Name   string `json:"name"`
+		Artist struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"artist"`
+	} `json:"artist-credit"`
+}
+
+// toMatch keeps each release group once, dated by the earliest of its releases carrying this recording:
+// a group's own first date is its original's, and a 2020 reissue's bonus demo is not from 2000.
 func (recording directRecording) toMatch() RecordingMatch {
 	var credit strings.Builder
 	for _, name := range recording.ArtistCredit {
@@ -332,10 +343,14 @@ func (recording directRecording) toMatch() RecordingMatch {
 		at, seen := index[rg.ID]
 		if !seen {
 			index[rg.ID] = len(match.ReleaseGroups)
-			match.ReleaseGroups = append(match.ReleaseGroups, ReleaseGroup{
+			group := ReleaseGroup{
 				MBID: rg.ID, Title: rg.Title, PrimaryType: rg.PrimaryType, SecondaryTypes: rg.SecondaryTypes,
-				FirstReleaseDate: cmp.Or(rg.FirstReleaseDate, release.Date),
-			})
+				FirstReleaseDate: release.Date,
+			}
+			for _, credit := range release.ArtistCredit {
+				group.ArtistCredit = append(group.ArtistCredit, ArtistCredit{MBID: credit.Artist.ID, Name: credit.Name, ArtistName: credit.Artist.Name})
+			}
+			match.ReleaseGroups = append(match.ReleaseGroups, group)
 			continue
 		}
 		if dated := &match.ReleaseGroups[at]; release.Date != "" && (dated.FirstReleaseDate == "" || release.Date < dated.FirstReleaseDate) {
@@ -364,14 +379,32 @@ func (d direct) SearchRecordingReleaseGroups(ctx context.Context, artist, title 
 	return matches, nil
 }
 
-// Recording implements RecordingLookup: one recording by id, with every release group it is on.
+// recordingReleasePages bounds the releases read for one recording: a hit is on hundreds of
+// compilations, and a lookup lists only 25 of them -- the studio album not always among them.
+const recordingReleasePages = 3
+
+// Recording implements RecordingLookup: the recording itself, then every release it is on by browse.
 func (d direct) Recording(ctx context.Context, mbid string) (RecordingMatch, error) {
-	requestURL := fmt.Sprintf("%s/recording/%s?inc=releases+release-groups+artist-credits&fmt=json", d.baseURL, url.PathEscape(mbid))
-	var parsed directRecording
-	if err := getJSON(ctx, d.client, requestURL, &parsed); err != nil {
+	var recording directRecording
+	if err := getJSON(ctx, d.client, fmt.Sprintf("%s/recording/%s?inc=artist-credits&fmt=json", d.baseURL, url.PathEscape(mbid)), &recording); err != nil {
 		return RecordingMatch{}, fmt.Errorf("musicbrainz: recording %s: %w", mbid, err)
 	}
-	return parsed.toMatch(), nil
+	for page := range recordingReleasePages {
+		var parsed struct {
+			Count    int                      `json:"release-count"`
+			Releases []directRecordingRelease `json:"releases"`
+		}
+		requestURL := fmt.Sprintf("%s/release?recording=%s&inc=release-groups+artist-credits&limit=%d&offset=%d&fmt=json",
+			d.baseURL, url.QueryEscape(mbid), directReleaseBrowseLimit, page*directReleaseBrowseLimit)
+		if err := getJSON(ctx, d.client, requestURL, &parsed); err != nil {
+			return RecordingMatch{}, fmt.Errorf("musicbrainz: releases of recording %s: %w", mbid, err)
+		}
+		recording.Releases = append(recording.Releases, parsed.Releases...)
+		if len(parsed.Releases) < directReleaseBrowseLimit || len(recording.Releases) >= parsed.Count {
+			break
+		}
+	}
+	return recording.toMatch(), nil
 }
 
 // directBrowseResponse is musicbrainz.org's release-group browse JSON

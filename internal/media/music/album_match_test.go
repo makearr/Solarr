@@ -471,3 +471,32 @@ func TestWithin_TheSiblingsAlbumIsNotSentToReviewForAWeakFit(t *testing.T) {
 		t.Errorf("album recalled by its tags = %s, want ambiguous below the threshold", got.Outcome)
 	}
 }
+
+// A playlist holding a compilation's tracks in its own order is not that compilation: XT/QK's
+// "Essentials" fitted the box set "The Collection" 28 files of 30 (the main library, 2026-09-27).
+func TestDecideAlbum_APlaylistIsNotTheCompilationThatHoldsItsTracks(t *testing.T) {
+	names := []string{"Thunder", "Jailbreak", "Problem", "Legofebato", "Heatseeker", "Safe", "Rock", "Train",
+		"Shoot", "Whole", "Bells", "Highway", "Dirty", "Blood", "Flames", "Touch", "Hizeh", "Bust", "Jack", "Rosie"}
+	hits := make([]trackSpec, len(names))
+	for i, name := range names {
+		hits[i] = trackSpec{name, 150 + 13*i}
+	}
+	compilation := candidateOf("rg-collection", "Album", []string{"Compilation"},
+		releaseOf("rel-collection", "The Collection", "official", "2005", hits))
+	playlist := folderOf(hits)
+	for i := range playlist {
+		playlist[i].Album = tagged("Essentials")
+		playlist[i].Track = (i+1)%len(playlist) + 1
+	}
+
+	if decision := music.DecideAlbum(playlist, []music.AlbumCandidate{compilation}); decision.Outcome == music.AlbumIdentified {
+		t.Errorf("decision = %s %q, want the playlist left to be identified track by track", decision.Outcome, bestReleaseGroup(decision))
+	}
+	inOrder := folderOf(hits)
+	for i := range inOrder {
+		inOrder[i].Album = tagged("Essentials")
+	}
+	if decision := music.DecideAlbum(inOrder, []music.AlbumCandidate{compilation}); decision.Outcome != music.AlbumIdentified {
+		t.Errorf("in its own order = %s, want the compilation identified", decision.Outcome)
+	}
+}
