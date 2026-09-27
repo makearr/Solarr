@@ -27,7 +27,9 @@ A scan batch is one directory's files. Each pass only sees what the previous one
    an album the album pass found no track for this file on: that is the tag claim the tracklist
    already contradicted.
 4. **Fingerprints**: what is left is fingerprinted, named by AcoustID and matched as an album
-   with those names (see below). Skipped, and recorded as skipped, with no API key configured.
+   with those names (see below); a named file whose song is on the album the folder's identified
+   files agree on is left to the passes after, never matched alone to another album. Skipped,
+   and recorded as skipped, with no API key configured.
 5. **Track by track** (`track_match`, 2026-09-27): a file whose folder settled as no album --
    a playlist, a track Lidarr sorted into the wrong album folder -- is identified on its own.
    Its recording is the one its fingerprint or embedded recording id names, else a recording
