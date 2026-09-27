@@ -394,3 +394,31 @@ func TestDecideAlbum_PressingsSharingATracklistKeepTheirOwnTitles(t *testing.T) 
 		t.Errorf("mapped = %d, %d; want every file paired on both", scores[0].Mapped, scores[1].Mapped)
 	}
 }
+
+// A second copy of a track is placed on the track it copies, without counting toward the fit:
+// four duplicated "Buhobuv Rezid" tracks, left unplaced, went on to a demo bootleg.
+func TestDecideAlbum_ASecondCopyIsPlacedOnTheTrackItCopies(t *testing.T) {
+	candidates := []music.AlbumCandidate{candidateOf("rg-studio", "Album", nil, studioRelease)}
+	folder := append(folderOf(traumaTracks), folderOf(traumaTracks[:1])...)
+
+	decision := music.DecideAlbum(folder, candidates)
+	score := decision.Scores[0]
+	dup := len(folder) - 1
+	if score.Tracks[dup] == nil || score.Tracks[dup].Title != traumaTracks[0].title {
+		t.Errorf("second copy placed on %+v, want %q", score.Tracks[dup], traumaTracks[0].title)
+	}
+	if score.Mapped != len(traumaTracks) || decision.Outcome != music.AlbumIdentified {
+		t.Errorf("mapped %d, outcome %s; want %d mapped and the album identified", score.Mapped, decision.Outcome, len(traumaTracks))
+	}
+}
+
+// A file no track fits stays unplaced, second copies or not.
+func TestDecideAlbum_AFileNoTrackFitsStaysUnplaced(t *testing.T) {
+	candidates := []music.AlbumCandidate{candidateOf("rg-studio", "Album", nil, studioRelease)}
+	folder := append(folderOf(traumaTracks), folderOf([]trackSpec{{"Hidden Bonus", 400}})...)
+
+	score := music.DecideAlbum(folder, candidates).Scores[0]
+	if track := score.Tracks[len(folder)-1]; track != nil {
+		t.Errorf("bonus track placed on %+v, want unplaced", track)
+	}
+}
