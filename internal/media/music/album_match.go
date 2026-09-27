@@ -213,7 +213,7 @@ type ReleaseScore struct {
 	Accepted     bool
 	// Contradicted is a same-named track with a different recording or a length far off.
 	Contradicted bool
-	// Tracks maps each local file index to its release track, or nil when unpaired.
+	// Tracks maps each local file index to its release track, a second copy to the track it copies; nil is unplaced.
 	Tracks []*ReleaseTrack
 }
 
@@ -302,6 +302,22 @@ func fitTracklist(locals []LocalTrack, release musicbrainz.Release) tracklistFit
 		fit.costs = append(fit.costs, pairs[i][j].cost)
 		if pairs[i][j].supported() {
 			fit.supported++
+		}
+	}
+	// A file left over that plainly is a paired track -- a second copy -- is placed on it without
+	// scoring: four duplicated "Buhobuv Rezid" tracks otherwise went on to a demo bootleg.
+	for i, pairsOfFile := range pairs {
+		if fit.tracks[i] != nil {
+			continue
+		}
+		best := -1
+		for j, pair := range pairsOfFile {
+			if pair.supported() && !pair.conflict && (best < 0 || pair.cost < pairsOfFile[best].cost) {
+				best = j
+			}
+		}
+		if best >= 0 {
+			fit.tracks[i] = &tracks[best]
 		}
 	}
 	return fit

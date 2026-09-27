@@ -17,7 +17,8 @@ A scan batch is one directory's files. Each pass only sees what the previous one
    collide is split by the track total each file claims ("3/10" against "3") and each part
    matched alone: an album's first half and its single's remixes under one album tag.
    Identified → every file the release has a track for gets the release group *and* the
-   release (edition); a file it has no track for is recorded `unplaced`, matched once more
+   release (edition); a second copy of a track is placed on the track it copies, uncounted; a
+   file it has no track for is recorded `unplaced`, matched once more
    against the other albums the folder's identified files name, and otherwise left to the later
    passes, where the folder's siblings usually join it — unless they disagree, as beside a
    single's own tagged files. Ambiguous → queued with the rival albums. Anything else → next pass.
