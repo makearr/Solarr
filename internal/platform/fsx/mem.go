@@ -174,6 +174,15 @@ func (m *Mem) statLocked(op, path string) (FileInfo, error) {
 	return info, nil
 }
 
+func (m *Mem) ReadSpans(path string, spans []Span) ([][]byte, error) {
+	file, err := m.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	return spansFrom(file, spans)
+}
+
 func (m *Mem) Open(path string) (File, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

@@ -40,6 +40,7 @@ func TestConformance(t *testing.T) {
 		{"ResolveKeepsANonExistentTail", conformResolveTail},
 		{"ResolveFollowsASymlinkedDirectory", conformResolveSymlinkedDir},
 		{"OpenSupportsSeekAndReadAt", conformSeekAndReadAt},
+		{"ReadSpansReadsUnalignedSamplesAndStopsAtTheEnd", conformReadSpans},
 		{"SafeJoinRejectsTraversal", conformSafeJoinTraversal},
 		{"SafeJoinRejectsASymlinkEscape", conformSafeJoinSymlinkEscape},
 		{"SafeJoinAcceptsAContainedPath", conformSafeJoinContained},
@@ -336,6 +337,30 @@ func conformSeekAndReadAt(t *testing.T, fsys fsx.FS, root string) {
 	}
 	if string(middle) != "456" {
 		t.Errorf("ReadAt = %q, want %q", middle, "456")
+	}
+}
+
+func conformReadSpans(t *testing.T, fsys fsx.FS, root string) {
+	path := filepath.Join(root, "track.flac")
+	content := make([]byte, 10000)
+	for i := range content {
+		content[i] = byte(i % 251)
+	}
+	writeFile(t, fsys, path, string(content))
+
+	spans := []fsx.Span{{Offset: 0, Length: 100}, {Offset: 5000, Length: 3000}, {Offset: 9000, Length: 5000}, {Offset: 20000, Length: 10}}
+	read, err := fsys.ReadSpans(path, spans)
+	if err != nil {
+		t.Fatalf("ReadSpans: %v", err)
+	}
+	want := [][]byte{content[:100], content[5000:8000], content[9000:], {}}
+	if len(read) != len(want) {
+		t.Fatalf("read %d spans, want %d", len(read), len(want))
+	}
+	for i := range want {
+		if string(read[i]) != string(want[i]) {
+			t.Errorf("span %d: %d bytes, want %d matching the file", i, len(read[i]), len(want[i]))
+		}
 	}
 }
 
