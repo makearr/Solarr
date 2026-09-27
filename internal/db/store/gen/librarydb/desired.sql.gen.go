@@ -620,6 +620,44 @@ func (q *Queries) ListDirtyDesiredItems(ctx context.Context, arg ListDirtyDesire
 	return items, nil
 }
 
+const listFileTrackClaimsForWork = `-- name: ListFileTrackClaimsForWork :many
+SELECT c.media_object_id, c.disc, c.track, c.title, c.recording_mbid
+FROM work_file f
+JOIN file_track_claim c ON c.media_object_id = f.media_object_id
+WHERE f.work_id = ?
+ORDER BY c.media_object_id
+`
+
+// A work's files with where each claims to sit, for aligning them once its tracklist exists.
+func (q *Queries) ListFileTrackClaimsForWork(ctx context.Context, workID int64) ([]FileTrackClaim, error) {
+	rows, err := q.db.QueryContext(ctx, listFileTrackClaimsForWork, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FileTrackClaim{}
+	for rows.Next() {
+		var i FileTrackClaim
+		if err := rows.Scan(
+			&i.MediaObjectID,
+			&i.Disc,
+			&i.Track,
+			&i.Title,
+			&i.RecordingMbid,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFilesForDesiredItem = `-- name: ListFilesForDesiredItem :many
 SELECT desired_item_id, media_object_id, role, media_ref, added_at
 FROM desired_item_file WHERE desired_item_id = ? ORDER BY role, media_ref, media_object_id
@@ -1177,6 +1215,33 @@ func (q *Queries) UnmonitorDesiredItemsWithMissingFiles(ctx context.Context, arg
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const upsertFileTrackClaim = `-- name: UpsertFileTrackClaim :exec
+INSERT INTO file_track_claim (media_object_id, disc, track, title, recording_mbid)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (media_object_id) DO UPDATE SET
+  disc = excluded.disc, track = excluded.track, title = excluded.title,
+  recording_mbid = excluded.recording_mbid
+`
+
+type UpsertFileTrackClaimParams struct {
+	MediaObjectID int64
+	Disc          int64
+	Track         int64
+	Title         string
+	RecordingMbid string
+}
+
+func (q *Queries) UpsertFileTrackClaim(ctx context.Context, arg UpsertFileTrackClaimParams) error {
+	_, err := q.db.ExecContext(ctx, upsertFileTrackClaim,
+		arg.MediaObjectID,
+		arg.Disc,
+		arg.Track,
+		arg.Title,
+		arg.RecordingMbid,
+	)
+	return err
 }
 
 const upsertHuntQueueEntry = `-- name: UpsertHuntQueueEntry :exec

@@ -34,6 +34,7 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 		Provider: "wikimedia-image", UserAgent: httpx.UserAgent(p.build.Version), Proxy: p.liveProxyPolicy(),
 	})
 
+	desired := library.NewDesired(p.library)
 	job := music.NewEnrichJob(music.EnrichJobConfig{
 		Identity:        library.NewIdentity(p.library),
 		People:          library.NewPeople(p.library),
@@ -43,6 +44,7 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 		ArtistArt:       p.theAudioDBArtist(p.theAudioDB()),
 		Artworks:        library.NewArtworks(p.library),
 		Realigner:       realigner{p: p},
+		Desired:         &desired,
 		OnRefined:       func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		Tags:            mediatool.New(nil, 0),
 		Roots:           adapters.Roots{Cache: p.cache},

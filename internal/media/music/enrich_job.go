@@ -92,6 +92,7 @@ type EnrichJob struct {
 	biography       Biographer
 	artworks        library.Artworks
 	realigner       Realigner
+	desired         *library.Desired
 	onRefined       func(context.Context)
 	artistArt       ArtistArt
 	tags            TagReader
@@ -139,6 +140,9 @@ type EnrichJobConfig struct {
 	// Realigner is optional: without one, refined albums wait for the next
 	// scan that happens to revisit their directory.
 	Realigner Realigner
+	// Desired is optional: with it, a refined album's files are aligned to its new tracklist at once
+	// from what scan and import claimed for them.
+	Desired *library.Desired
 	// OnRefined is optional: told when a run refined any album, so its new tracks are counted at once.
 	OnRefined func(context.Context)
 	// Tags and Roots are optional: without both, an album identified only at
@@ -161,7 +165,7 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 	return &EnrichJob{
 		identity: config.Identity, people: config.People, provider: config.Provider,
 		biography: config.Biography, wikidataEnabled: config.WikidataEnabled,
-		artworks: config.Artworks, realigner: config.Realigner, onRefined: config.OnRefined,
+		artworks: config.Artworks, realigner: config.Realigner, desired: config.Desired, onRefined: config.OnRefined,
 		artistArt: config.ArtistArt,
 		tags:      config.Tags, roots: config.Roots, http: config.HTTP,
 		fs: config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
@@ -207,6 +211,7 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 			total++
 			if err := j.enrichOne(ctx, edition); err == nil {
 				refinedWorkIDs = append(refinedWorkIDs, edition.WorkID)
+				j.alignClaimed(ctx, edition.WorkID)
 			} else {
 				failed++
 				// One placeholder edition failing (no data at the provider, a
@@ -285,6 +290,7 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context) (withEdition []int64)
 			enriched++
 			if j.chooseEdition(ctx, work, rg) {
 				withEdition = append(withEdition, work.WorkID)
+				j.alignClaimed(ctx, work.WorkID)
 			}
 		}
 		if len(batch) < editionlessBatchSize {
@@ -296,6 +302,16 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context) (withEdition []int64)
 			slog.Int("editions_chosen", len(withEdition)))
 	}
 	return withEdition
+}
+
+// alignClaimed attaches a refined work's files to its new tracklist; best-effort, like the credits.
+func (j *EnrichJob) alignClaimed(ctx context.Context, workID int64) {
+	if j.desired == nil {
+		return
+	}
+	if err := AlignClaimedFiles(ctx, j.desired, j.clock, workID); err != nil {
+		j.logger.WarnContext(ctx, "align refined work failed", slog.Int64("work_id", workID), slog.Any("error", err))
+	}
 }
 
 // chooseEdition gives a work identified only at release-group level the

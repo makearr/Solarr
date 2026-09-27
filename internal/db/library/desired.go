@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -339,6 +340,61 @@ func (d Desired) RecordAlignment(ctx context.Context, itemID, workID int64, file
 		return fmt.Errorf("library: record alignment: %w", err)
 	}
 	return nil
+}
+
+// TrackClaim is where a scan or import placed one identified file on its album.
+type TrackClaim struct {
+	MediaObjectID int64
+	Disc, Track   int64
+	Title         string
+	RecordingMBID string
+}
+
+// RecordTrackClaims keeps where each file sits, replacing an earlier claim for the same file.
+func (d Desired) RecordTrackClaims(ctx context.Context, claims []TrackClaim) error {
+	for chunk := range slices.Chunk(claims, insertChunk) {
+		err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			queries := librarydb.New(tx)
+			for _, claim := range chunk {
+				if err := queries.UpsertFileTrackClaim(ctx, librarydb.UpsertFileTrackClaimParams{
+					MediaObjectID: claim.MediaObjectID, Disc: claim.Disc, Track: claim.Track,
+					Title: claim.Title, RecordingMbid: claim.RecordingMBID,
+				}); err != nil {
+					return fmt.Errorf("claim for media object %d: %w", claim.MediaObjectID, err)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("library: record track claims: %w", err)
+		}
+	}
+	return nil
+}
+
+// TrackClaimsForWork answers the claims of every file identified as workID.
+func (d Desired) TrackClaimsForWork(ctx context.Context, workID int64) ([]TrackClaim, error) {
+	rows, err := librarydb.New(d.store.Read()).ListFileTrackClaimsForWork(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: track claims for work %d: %w", workID, err)
+	}
+	claims := make([]TrackClaim, len(rows))
+	for i, row := range rows {
+		claims[i] = TrackClaim{
+			MediaObjectID: row.MediaObjectID, Disc: row.Disc, Track: row.Track,
+			Title: row.Title, RecordingMBID: row.RecordingMbid,
+		}
+	}
+	return claims, nil
+}
+
+// AlbumItemsForWork answers the album-level (SET) items of a work, one per category that wants it.
+func (d Desired) AlbumItemsForWork(ctx context.Context, workID int64) ([]librarydb.DesiredItem, error) {
+	items, err := librarydb.New(d.store.Read()).ListDesiredItemsForWork(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: album items for work %d: %w", workID, err)
+	}
+	return slices.DeleteFunc(items, func(item librarydb.DesiredItem) bool { return item.SatisfactionKind != "SET" }), nil
 }
 
 // FileMembership is one desired_item_file row: which item and role a file
