@@ -97,6 +97,30 @@ func TestClient_ProxiedRequestStillChecksItsOwnDestination(t *testing.T) {
 	}
 }
 
+// With no proxy in force the dial classifies the address itself; a second lookup per request timed
+// out against a flaky resolver and failed requests the dial would have allowed (2026-09-27).
+func TestClient_AnUnproxiedRequestIsNotResolvedTwice(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	guard := httpx.NewGuard(fakeResolver{}, refusingDial, nil)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 600}}, httpx.NoJitter)
+	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 2, Cooldown: time.Minute})
+	transport := &roundTripper{responses: []*http.Response{respond(http.StatusOK, nil)}}
+
+	client := httpx.NewClient(fake, guard, limiter, breaker, httpx.ClientConfig{
+		Provider: "indexer", Transport: transport,
+		Proxy: func() httpx.ProxyPolicy { return httpx.ProxyPolicy{} },
+	})
+
+	response, err := client.Get(t.Context(), "https://metadata.invalid/api")
+	if err != nil {
+		t.Fatalf("Get = %v, want the request sent unresolved for the dial to check", err)
+	}
+	_ = response.Body.Close()
+	if transport.calls != 1 {
+		t.Errorf("transport called %d times, want 1", transport.calls)
+	}
+}
+
 func mustParseAddr(t *testing.T, raw string) netip.Addr {
 	t.Helper()
 	addr, err := netip.ParseAddr(raw)
