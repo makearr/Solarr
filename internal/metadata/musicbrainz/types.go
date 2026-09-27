@@ -154,6 +154,11 @@ type RecordingSearcher interface {
 	SearchRecordingReleaseGroups(ctx context.Context, artist, title string, limit int) ([]RecordingMatch, error)
 }
 
+// RecordingLookup is an optional Source capability: one recording by id and the release groups it is on.
+type RecordingLookup interface {
+	Recording(ctx context.Context, mbid string) (RecordingMatch, error)
+}
+
 // RecordingMatch is one recording search result and every release group it appears on.
 type RecordingMatch struct {
 	RecordingMBID string

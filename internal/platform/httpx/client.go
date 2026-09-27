@@ -228,6 +228,10 @@ func (c *Client) checkProxiedDestination(ctx context.Context, request *http.Requ
 	if c.proxy == nil {
 		return nil
 	}
+	// A direct request's dial classifies the address it connects to; resolving here too cost a lookup per request.
+	if current := c.proxy(); current.URL == nil || bypassed(request.URL.Hostname(), current.Bypass) {
+		return nil
+	}
 	return c.guard.CheckDestination(ctx, request.URL.Hostname())
 }
 

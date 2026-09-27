@@ -22,6 +22,8 @@ const (
 	maxArtistPenalty = 0.4
 	// winnerMargin the best release must lead a different release group's best by.
 	winnerMargin = 0.05
+	// namedAlbumPenalty is how far an album title may be from the one the files give and still be named by them.
+	namedAlbumPenalty = 0.1
 	// supportTitlePenalty and supportPairDistance bound a pair that counts as supported.
 	supportTitlePenalty = 0.35
 	supportPairDistance = 0.40
@@ -355,10 +357,34 @@ func scoreRelease(locals []LocalTrack, candidate AlbumCandidate, fits map[string
 	score.GateDistance = d.normalized(dimensionMissingTracks, dimensionReleaseType)
 	// Positions and lengths agree with too many albums; enough titles or recordings must too.
 	quorum := score.Supported >= min(2, len(locals))
-	score.Accepted = len(locals) > 0 && !score.Contradicted && artistOK && quorum &&
+	score.Accepted = len(locals) > 0 && !score.Contradicted && artistOK && quorum && !playlistOnCompilation(locals, score) &&
 		score.GateDistance <= albumAcceptDistance &&
 		float64(score.Mapped)/float64(len(locals)) >= minMappedFraction
 	return score
+}
+
+// playlistOnCompilation is a compilation the folder does not name, holding its files in another
+// order than theirs: a playlist of hits it happens to contain, not the folder's album (XT/QK's
+// "Essentials" on the box set "The Collection", 2026-09-27). Its tracks are identified one by one.
+func playlistOnCompilation(locals []LocalTrack, score ReleaseScore) bool {
+	if releaseTypePenalty(score.Candidate.ReleaseGroup) < 1 {
+		return false
+	}
+	album := consensusClaim(locals, func(t LocalTrack) Claim { return t.Album })
+	if (album.present() || folderAlbum(locals) != "") && albumTitlePenalty(locals, album, score.Candidate) <= namedAlbumPenalty {
+		return false
+	}
+	claimed, agreeing := 0, 0
+	for i, track := range score.Tracks {
+		if track == nil || locals[i].Track == 0 {
+			continue
+		}
+		claimed++
+		if track.Position == locals[i].Track {
+			agreeing++
+		}
+	}
+	return claimed >= 3 && 2*agreeing < claimed
 }
 
 // addAlbumDimensions adds artist, album and year, answering whether the artist is plausible.

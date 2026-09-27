@@ -21,6 +21,7 @@ const PASS_LABELS: Record<string, string> = {
   album_match: "Whole album against MusicBrainz tracklists",
   text_search: "Title search per file",
   fingerprint: "Audio fingerprint (AcoustID)",
+  track_match: "The track on its own, then the album it comes from",
   folder_siblings: "Other files in the same folder",
 };
 

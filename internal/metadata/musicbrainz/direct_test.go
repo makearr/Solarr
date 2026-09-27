@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -155,6 +156,24 @@ func TestDirect_AlbumWithNoReleaseMBIDSkipsTheReleaseCall(t *testing.T) {
 	}
 	if release.MBID != "" || release.Title != "" || len(release.Media) != 0 {
 		t.Errorf("Release = %+v, want a zero value -- no /release/ URL was even stubbed", release)
+	}
+}
+
+// A release group looked up by id keeps its secondary types: without them XT/QK's 16-disc box
+// set "The Collection" ranked as a studio album and took a playlist folder (2026-09-27).
+func TestDirect_AlbumKeepsTheReleaseGroupsSecondaryTypes(t *testing.T) {
+	body := `{"id":"rg-collection","title":"The Collection","primary-type":"Album","secondary-types":["Compilation"],"first-release-date":"2012-11-19"}`
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://musicbrainz.invalid/release-group/rg-collection?fmt=json&inc=artist-credits+genres+url-rels": {status: http.StatusOK, body: body},
+	}}
+	source := musicbrainz.NewDirect(newTestClient(t, transport, musicbrainz.DirectName), "https://musicbrainz.invalid")
+
+	rg, _, err := source.Album(t.Context(), "rg-collection", "")
+	if err != nil {
+		t.Fatalf("Album: %v", err)
+	}
+	if !slices.Equal(rg.SecondaryTypes, []string{"Compilation"}) {
+		t.Errorf("SecondaryTypes = %v, want [Compilation]", rg.SecondaryTypes)
 	}
 }
 
@@ -563,5 +582,41 @@ func TestDirect_SearchRecordingReleaseGroupsParsesTheRealShape(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("matches = %+v\nwant %+v", got, want)
+	}
+}
+
+// A recording looked up by id lists each release; its release group is kept once, dated by the
+// earliest release -- what per-track identification ranks a recording's albums by.
+func TestDirect_RecordingKeepsEachReleaseGroupOnceAtItsEarliestDate(t *testing.T) {
+	recording := `{"id":"rec-wake","title":"Budo Me Up","length":247000,"artist-credit":[{"name":"Lefite","joinphrase":""}]}`
+	releases := `{"release-count":4,"releases":[
+	    {"date":"2013-09-13","artist-credit":[{"name":"Lefite","artist":{"id":"ar-lefite","name":"Lefite"}}],"release-group":{"id":"rg-true","title":"True","primary-type":"Album","secondary-types":[]}},
+	    {"date":"2013-06-17","artist-credit":[{"name":"Lefite","artist":{"id":"ar-lefite","name":"Lefite"}}],"release-group":{"id":"rg-single","title":"Budo Me Up","primary-type":"Single","secondary-types":[]}},
+	    {"date":"2013-09-16","artist-credit":[{"name":"Lefite","artist":{"id":"ar-lefite","name":"Lefite"}}],"release-group":{"id":"rg-true","title":"True","primary-type":"Album","secondary-types":[]}},
+	    {"date":"2013-09-10","artist-credit":[{"name":"Lefite","artist":{"id":"ar-lefite","name":"Lefite"}}],"release-group":{"id":"rg-true","title":"True","primary-type":"Album","secondary-types":[]}}]}`
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://musicbrainz.invalid/recording/rec-wake?inc=artist-credits&fmt=json":                                           {status: http.StatusOK, body: recording},
+		"https://musicbrainz.invalid/release?recording=rec-wake&inc=release-groups+artist-credits&limit=100&offset=0&fmt=json": {status: http.StatusOK, body: releases},
+	}}
+	source := musicbrainz.NewDirect(newTestClient(t, transport, musicbrainz.DirectName), "https://musicbrainz.invalid")
+	lookup, ok := source.(musicbrainz.RecordingLookup)
+	if !ok {
+		t.Fatal("direct does not implement RecordingLookup")
+	}
+
+	got, err := lookup.Recording(t.Context(), "rec-wake")
+	if err != nil {
+		t.Fatalf("Recording: %v", err)
+	}
+	lefite := []musicbrainz.ArtistCredit{{MBID: "ar-lefite", Name: "Lefite", ArtistName: "Lefite"}}
+	want := musicbrainz.RecordingMatch{
+		RecordingMBID: "rec-wake", Title: "Budo Me Up", ArtistCredit: "Lefite", DurationMs: 247000,
+		ReleaseGroups: []musicbrainz.ReleaseGroup{
+			{MBID: "rg-true", Title: "True", PrimaryType: "Album", SecondaryTypes: []string{}, FirstReleaseDate: "2013-09-10", ArtistCredit: lefite},
+			{MBID: "rg-single", Title: "Budo Me Up", PrimaryType: "Single", SecondaryTypes: []string{}, FirstReleaseDate: "2013-06-17", ArtistCredit: lefite},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("recording = %+v\nwant %+v", got, want)
 	}
 }
