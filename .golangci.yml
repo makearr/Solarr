@@ -70,7 +70,7 @@ linters:
       # The seams themselves are the one place the wrapped calls are legitimate.
       - path: internal/platform/clock/system\.go
         linters: [forbidigo]
-      - path: internal/platform/fsx/(os|reflink|spans)\.go
+      - path: internal/platform/fsx/(os|reflink)\.go
         linters: [forbidigo]
       # CLI commands write to stdout by definition.
       - path: cmd/solarr/

@@ -115,13 +115,7 @@ limit multiplied with them and thrashed the storage.
 | 16-32-way | | 7-12 files/s; beyond that READs took 1.2 s each |
 
 On a NAS the probe, not identification, is what bounds a first scan: plan on hours for a
-six-figure library.
-
-**The quick hash reads past the page cache** (`fsx.ReadSpans`, `O_DIRECT`). Its 64 KiB head
-and tail samples, read buffered over NFS, each fetched a whole 1 MiB `rsize` and more: 2 MiB a
-file, six times what ffprobe reads, and 54 s for 20 cold files against 5.7 s direct
-(2026-09-27). `posix_fadvise(RANDOM)` did not help. Where a filesystem refuses `O_DIRECT` the
-samples are read the ordinary way, which on a local disk costs nothing extra. A pure-Go tag reader would avoid the process spawns, but **ADR-39 needs
+six-figure library. A pure-Go tag reader would avoid the process spawns, but **ADR-39 needs
 ffprobe on every file regardless** — a release name states claims, a probe states
 facts — so reading tags from the same invocation is free and a second pass would
 not be.

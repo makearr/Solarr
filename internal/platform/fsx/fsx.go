@@ -54,21 +54,11 @@ type File interface {
 	io.ReaderAt
 }
 
-// Span is Length bytes of a file from Offset; fewer where the file ends first.
-type Span struct {
-	Offset int64
-	Length int
-}
-
 // FS is the filesystem.
 type FS interface {
 	Stat(path string) (FileInfo, error)
 	Lstat(path string) (FileInfo, error)
 	Open(path string) (File, error)
-
-	// ReadSpans reads a few samples of one file past the page cache where it can: over NFS a
-	// buffered 64 KiB read fetched a whole 1 MiB rsize and more (documentation/media-tools.md).
-	ReadSpans(path string, spans []Span) ([][]byte, error)
 	Create(path string) (io.WriteCloser, error)
 
 	// CreateSecret is Create for a credential. A separate method, not a mode

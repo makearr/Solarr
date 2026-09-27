@@ -25,23 +25,29 @@ const quickHashSampleBytes = 65536
 // point: it is cheap identity, not proof, and a hash collision only costs a wasted
 // dedupe lookup rather than a wrong one (size is checked too).
 func QuickHash(fsys fsx.FS, absolutePath string, size int64) (string, error) {
-	spans := []fsx.Span{{Offset: 0, Length: int(min(quickHashSampleBytes, size))}}
-	if size > quickHashSampleBytes {
-		spans = append(spans, fsx.Span{Offset: size - quickHashSampleBytes, Length: quickHashSampleBytes})
-	}
-	samples, err := fsys.ReadSpans(absolutePath, spans)
+	file, err := fsys.Open(absolutePath)
 	if err != nil {
 		return "", fmt.Errorf("library: quick hash %s: %w", absolutePath, err)
 	}
-	if len(samples) > 1 && len(samples[1]) < quickHashSampleBytes {
-		return "", fmt.Errorf("library: quick hash %s: %w", absolutePath, io.ErrUnexpectedEOF)
-	}
+	defer func() { _ = file.Close() }()
 
 	hash := sha256.New()
 	hash.Write(fmt.Appendf(nil, "%d:", size))
-	for _, sample := range samples {
-		hash.Write(sample)
+
+	head := make([]byte, min(int64(quickHashSampleBytes), size))
+	if _, err := io.ReadFull(file, head); err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return "", fmt.Errorf("library: quick hash %s: %w", absolutePath, err)
 	}
+	hash.Write(head)
+
+	if size > quickHashSampleBytes {
+		tail := make([]byte, quickHashSampleBytes)
+		if _, err := file.ReadAt(tail, size-quickHashSampleBytes); err != nil {
+			return "", fmt.Errorf("library: quick hash %s: %w", absolutePath, err)
+		}
+		hash.Write(tail)
+	}
+
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
