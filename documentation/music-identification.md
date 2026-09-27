@@ -31,11 +31,12 @@ A scan batch is one directory's files. Each pass only sees what the previous one
    a playlist, a track Lidarr sorted into the wrong album folder -- is identified on its own.
    Its recording is the one its fingerprint or embedded recording id names, else a recording
    search by artist and title within 5 s of its length. **The folder is a hint, never a
-   certainty**: of every release group that recording is on (never one the album pass refuted
-   for this file), the album the folder, the album tag or the identified siblings name wins
-   when the recording is on it; otherwise a studio album before an EP, a single, then a
-   compilation, live, remix or DJ-mix release, the earliest first. An ambiguous album is not
-   re-decided here; it stays queued.
+   certainty**: of every release group that recording is on -- the folder's own included, when
+   another of its editions carries the track the matched edition lacks -- the album the folder,
+   the album tag or the identified siblings name wins; otherwise a studio album before an EP, a
+   single, then a compilation, live, remix or DJ-mix release, the earliest first. Only a
+   fingerprint or an embedded recording id takes a file from the album its siblings agree on; a
+   title search alone does not (one standard, many takes). An ambiguous album stays queued.
 6. **Folder siblings**: an unresolved file joins the one album its identified siblings agree on,
    at a confidence of 0.5 -- with nothing contradicting it, the folder is the best hint left.
 

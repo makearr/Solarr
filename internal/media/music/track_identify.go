@@ -52,7 +52,11 @@ func (c Consumer) trackPass(ctx context.Context, out *batchResult, files []pendi
 		one := out.observed[file.index]
 		local := ReadLocalTrack(one.Probe.Tags, one.Probe.Measured, one.File.RelPath)
 		recordings, confidence := c.recordingsFor(ctx, file, local)
-		home, recording, found := homeGroup(recordings, local, hints, file.refuted)
+		home, recording, found := homeGroup(recordings, local, hints)
+		// Text alone does not outweigh a folder whose identified files agree: one song has many takes.
+		if found && confidence < trackKnownConfidence && len(hints) > 0 && !slices.Contains(hints, home.MBID) {
+			found = false
+		}
 		if !found {
 			out.note(file.index, library.AttemptPass{Pass: PassTrack, Outcome: PassOutcomeNone})
 			pending = append(pending, file)
@@ -137,10 +141,10 @@ func (c Consumer) searchedRecordings(ctx context.Context, local LocalTrack) []mu
 	return fitting
 }
 
-// homeGroup chooses the album among every release group the recordings are on, never one the album
-// pass already found no track for this file on, and answers the recording that is on it.
+// homeGroup chooses the album among every release group the recordings are on -- one the album pass
+// placed the folder on without this file counts too: another of its editions carries the recording.
 func homeGroup(
-	recordings []musicbrainz.RecordingMatch, local LocalTrack, hints, refuted []string,
+	recordings []musicbrainz.RecordingMatch, local LocalTrack, hints []string,
 ) (musicbrainz.ReleaseGroup, musicbrainz.RecordingMatch, bool) {
 	type option struct {
 		group     musicbrainz.ReleaseGroup
@@ -158,9 +162,7 @@ func homeGroup(
 	var options []option
 	for _, recording := range recordings {
 		for _, group := range recording.ReleaseGroups {
-			if !slices.Contains(refuted, group.MBID) {
-				options = append(options, option{group: group, recording: recording})
-			}
+			options = append(options, option{group: group, recording: recording})
 		}
 	}
 	if len(options) == 0 {

@@ -129,12 +129,12 @@ func TestObserve_ATrackGoesToTheAlbumItsFolderNamesWhenItIsOnIt(t *testing.T) {
 	}
 }
 
-// A file sorted into the wrong album folder keeps no track on that album: it goes to the album its
-// recording is on, never joined to its folder's by the siblings (Lidarr misfiles, the main library).
+// A file sorted into the wrong album folder goes to the album its recording is on, when its own
+// fingerprint or embedded id names that recording (Lidarr misfiles, the main library).
 func TestObserve_AMisfiledTrackGoesToItsOwnAlbumNotItsFolders(t *testing.T) {
-	tracks := fakeTrackLookup{searches: map[string][]musicbrainz.RecordingMatch{
-		"P!po/Just Like Tepa": {{RecordingMBID: "rec-fire", Title: "Just Like Tepa", ArtistCredit: "P!po", DurationMs: 215000,
-			ReleaseGroups: []musicbrainz.ReleaseGroup{rgLookingGlas}}},
+	fire := "0a1b2c3d-0000-4000-8000-000000000003"
+	tracks := fakeTrackLookup{recordings: map[string]musicbrainz.RecordingMatch{
+		fire: {RecordingMBID: fire, Title: "Just Like Tepa", ArtistCredit: "P!po", DurationMs: 215000, ReleaseGroups: []musicbrainz.ReleaseGroup{rgLookingGlas}},
 	}}
 	// Its tags still name the folder's album, which a title search alone would answer.
 	search := &fakeSearcher{matches: []musicbrainz.ReleaseGroupMatch{
@@ -142,8 +142,9 @@ func TestObserve_AMisfiledTrackGoesToItsOwnAlbumNotItsFolders(t *testing.T) {
 	}}
 	consumer, opened, fsys := newTrackConsumer(t, traumaLookup(releaseGroupMBID), search, tracks)
 	misfiled := "P!po/Kebilegev Bibihi (2017)/P!po - 07 - Just Like Tepa.m4a"
-	batch := append(untaggedTraumaBatch(t, fsys),
-		untaggedTrack(t, fsys, misfiled, "P!po", "Kebilegev Bibihi", "Just Like Tepa", 215))
+	file := untaggedTrack(t, fsys, misfiled, "P!po", "Kebilegev Bibihi", "Just Like Tepa", 215)
+	file.Probe.Tags["musicbrainz_trackid"] = fire
+	batch := append(untaggedTraumaBatch(t, fsys), file)
 
 	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, batch); err != nil {
 		t.Fatalf("Observe: %v", err)
@@ -153,6 +154,48 @@ func TestObserve_AMisfiledTrackGoesToItsOwnAlbumNotItsFolders(t *testing.T) {
 	}
 	if got := releaseGroupOf(t, opened, misfiled); got != "rg-looking-glass" {
 		t.Errorf("misfiled track identified as %q, want the album its recording is on", got)
+	}
+}
+
+// A title search alone does not take a file from the album its folder's files agree on: Dafof
+// Natuser recorded one standard many times (the main library, 2026-09-28).
+func TestObserve_ASearchedTakeElsewhereDoesNotOutweighAgreeingSiblings(t *testing.T) {
+	tracks := fakeTrackLookup{searches: map[string][]musicbrainz.RecordingMatch{
+		"P!po/Just Like Tepa": {{RecordingMBID: "rec-fire", Title: "Just Like Tepa", ArtistCredit: "P!po", DurationMs: 215000,
+			ReleaseGroups: []musicbrainz.ReleaseGroup{rgLookingGlas}}},
+	}}
+	consumer, opened, fsys := newTrackConsumer(t, traumaLookup(releaseGroupMBID), nil, tracks)
+	relPath := "P!po/Kebilegev Bibihi (2017)/P!po - 07 - Just Like Tepa.m4a"
+	batch := append(untaggedTraumaBatch(t, fsys), untaggedTrack(t, fsys, relPath, "P!po", "Kebilegev Bibihi", "Just Like Tepa", 215))
+
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if got := releaseGroupOf(t, opened, relPath); got != releaseGroupMBID {
+		t.Errorf("identified as %q, want the siblings' album %q", got, releaseGroupMBID)
+	}
+}
+
+// A track the matched edition lacks is still on the folder's album when another of its editions
+// carries the recording: "You Fic Do Heguz" on Gulofip's "The Kalezane Greatest Hits".
+func TestObserve_ATrackOnAnotherEditionStaysOnTheFoldersAlbum(t *testing.T) {
+	bonus := "0a1b2c3d-0000-4000-8000-000000000004"
+	trauma := musicbrainz.ReleaseGroup{MBID: releaseGroupMBID, Title: "Kebilegev Bibihi", PrimaryType: "Album", FirstReleaseDate: "2017-10-13"}
+	single := musicbrainz.ReleaseGroup{MBID: "rg-single", Title: "Secrets", PrimaryType: "Single", FirstReleaseDate: "2017-01-01"}
+	tracks := fakeTrackLookup{recordings: map[string]musicbrainz.RecordingMatch{
+		bonus: {RecordingMBID: bonus, Title: "Secrets", ArtistCredit: "P!po", DurationMs: 220000, ReleaseGroups: []musicbrainz.ReleaseGroup{single, trauma}},
+	}}
+	consumer, opened, fsys := newTrackConsumer(t, traumaLookup(releaseGroupMBID), nil, tracks)
+	relPath := "P!po/Kebilegev Bibihi (2017)/P!po - 13 - Secrets.m4a"
+	file := untaggedTrack(t, fsys, relPath, "P!po", "Kebilegev Bibihi", "Secrets", 220)
+	file.Probe.Tags["musicbrainz_trackid"] = bonus
+	batch := append(untaggedTraumaBatch(t, fsys), file)
+
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if got := releaseGroupOf(t, opened, relPath); got != releaseGroupMBID {
+		t.Errorf("identified as %q, want the folder's album %q", got, releaseGroupMBID)
 	}
 }
 
