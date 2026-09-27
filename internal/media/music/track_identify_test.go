@@ -305,7 +305,8 @@ func TestObserve_ASongOnTheSiblingsAlbumStaysThere(t *testing.T) {
 	relPath := "P!po/Kebilegev Bibihi (2017)/P!po - 02 - Semidos (single edit).m4a"
 	file := untaggedTrack(t, fsys, relPath, "P!po", "Kebilegev Bibihi", "Semidos (single edit)", 300)
 	file.Probe.Tags["musicbrainz_trackid"] = single
-	batch := append(untaggedTraumaBatch(t, fsys)[2:], file)
+	batch := untaggedTraumaBatch(t, fsys)[2:]
+	batch = append(batch, file)
 
 	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, batch); err != nil {
 		t.Fatalf("Observe: %v", err)
