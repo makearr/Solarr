@@ -273,6 +273,20 @@ func TestDecideAlbum_TheSupportedReleaseWinsOverACloserUnsupportedOne(t *testing
 	}
 }
 
+// A remix single titled like the original ranks below it, as a live release does: one file of
+// "Kamo Rigevo" is the single, not its remix release (the main library, 2026-09-27).
+func TestDecideAlbum_TheOriginalSingleBeatsARemixReleaseOfTheSameTitle(t *testing.T) {
+	locals := []music.LocalTrack{{Title: tagged("Kamo Rigevo"), Artist: tagged("P!po"), Album: tagged("Kamo Rigevo"), Track: 1, Duration: 194 * time.Second}}
+	original := candidateOf("rg-single", "Single", nil, releaseOf("rel-single", "Kamo Rigevo", "official", "2024", []trackSpec{{"Kamo Rigevo", 194}}))
+	remix := candidateOf("rg-remix", "Single", []string{"Remix"},
+		recordedAs(releaseOf("rel-remix", "Kamo Rigevo", "official", "2024", []trackSpec{{"Kamo Rigevo", 195}}), "remix"))
+
+	decision := music.DecideAlbum(locals, []music.AlbumCandidate{remix, original})
+	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-single" {
+		t.Errorf("decision = %s %q, want identified rg-single", decision.Outcome, bestReleaseGroup(decision))
+	}
+}
+
 // Two release groups fitting equally, one known only from a promotional release: the official one wins.
 func TestDecideAlbum_AnOfficialReleaseBeatsAnEquallyFittingPromo(t *testing.T) {
 	official := candidateOf("rg-official", "Album", nil, releaseOf("rel-official", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks))

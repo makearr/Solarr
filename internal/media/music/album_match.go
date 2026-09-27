@@ -431,11 +431,14 @@ func isVariousArtists(candidate AlbumCandidate) bool {
 	return strings.EqualFold(candidate.ArtistCredit, "Various Artists")
 }
 
+// derivedReleaseTypes are secondary types whose release re-presents music released first elsewhere.
+var derivedReleaseTypes = []string{"Compilation", "Live", "Remix", "DJ-mix"}
+
 // releaseTypePenalty prefers a studio album over an EP, then anything else, then a
-// compilation or live release carrying the same recordings.
+// compilation, live, remix or DJ-mix release carrying the same title.
 func releaseTypePenalty(rg musicbrainz.ReleaseGroup) float64 {
 	for _, secondary := range rg.SecondaryTypes {
-		if strings.EqualFold(secondary, "Compilation") || strings.EqualFold(secondary, "Live") {
+		if slices.ContainsFunc(derivedReleaseTypes, func(derived string) bool { return strings.EqualFold(secondary, derived) }) {
 			return 1
 		}
 	}
