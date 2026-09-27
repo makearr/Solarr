@@ -565,3 +565,38 @@ func TestDirect_SearchRecordingReleaseGroupsParsesTheRealShape(t *testing.T) {
 		t.Errorf("matches = %+v\nwant %+v", got, want)
 	}
 }
+
+// A recording looked up by id lists each release; its release group is kept once, dated by the
+// earliest release -- what per-track identification ranks a recording's albums by.
+func TestDirect_RecordingKeepsEachReleaseGroupOnceAtItsEarliestDate(t *testing.T) {
+	body := `{"id":"rec-wake","title":"Budo Me Up","length":247000,
+	  "artist-credit":[{"name":"Lefite","joinphrase":""}],
+	  "releases":[
+	    {"date":"2013-09-13","release-group":{"id":"rg-true","title":"True","primary-type":"Album","secondary-types":[]}},
+	    {"date":"2013-06-17","release-group":{"id":"rg-single","title":"Budo Me Up","primary-type":"Single","secondary-types":[]}},
+	    {"date":"2013-09-16","release-group":{"id":"rg-true","title":"True","primary-type":"Album","secondary-types":[]}},
+	    {"date":"2013-09-10","release-group":{"id":"rg-true","title":"True","primary-type":"Album","secondary-types":[]}}]}`
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://musicbrainz.invalid/recording/rec-wake?inc=releases+release-groups+artist-credits&fmt=json": {status: http.StatusOK, body: body},
+	}}
+	source := musicbrainz.NewDirect(newTestClient(t, transport, musicbrainz.DirectName), "https://musicbrainz.invalid")
+	lookup, ok := source.(musicbrainz.RecordingLookup)
+	if !ok {
+		t.Fatal("direct does not implement RecordingLookup")
+	}
+
+	got, err := lookup.Recording(t.Context(), "rec-wake")
+	if err != nil {
+		t.Fatalf("Recording: %v", err)
+	}
+	want := musicbrainz.RecordingMatch{
+		RecordingMBID: "rec-wake", Title: "Budo Me Up", ArtistCredit: "Lefite", DurationMs: 247000,
+		ReleaseGroups: []musicbrainz.ReleaseGroup{
+			{MBID: "rg-true", Title: "True", PrimaryType: "Album", SecondaryTypes: []string{}, FirstReleaseDate: "2013-09-10"},
+			{MBID: "rg-single", Title: "Budo Me Up", PrimaryType: "Single", SecondaryTypes: []string{}, FirstReleaseDate: "2013-06-17"},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("recording = %+v\nwant %+v", got, want)
+	}
+}

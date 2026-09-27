@@ -55,6 +55,8 @@ const (
 	cacheKindReleases = "musicbrainz:releases"
 	// cacheKindRecordingSearch is a recording search's result set, keyed like cacheKindSearch.
 	cacheKindRecordingSearch = "musicbrainz:recording-search"
+	// cacheKindRecording is one recording with the release groups it is on, keyed on its MBID.
+	cacheKindRecording = "musicbrainz:recording"
 	// cacheKindArtistSearch is an artist search's result set, keyed on query and limit.
 	cacheKindArtistSearch = "musicbrainz:artist-search"
 )
@@ -338,6 +340,40 @@ func (p Provider) SearchRecordings(ctx context.Context, priority Priority, artis
 		return nil, nil
 	}
 	return nil, fmt.Errorf("musicbrainz: no source answered recording search %q/%q: %w", artist, title, errors.Join(errs...))
+}
+
+// Recording answers one recording and the release groups it is on, cache first; ErrNotFound when
+// every source that can look recordings up answered 404. Only RecordingLookup sources are tried.
+func (p Provider) Recording(ctx context.Context, priority Priority, mbid string) (RecordingMatch, error) {
+	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
+	if recording, ok := cachedJSON[RecordingMatch](ctx, p, cacheKindRecording, mbid); ok {
+		return recording, nil
+	}
+	var errs []error
+	missing := 0
+	for _, source := range p.orderedSources() {
+		lookup, ok := source.(RecordingLookup)
+		if !ok {
+			continue
+		}
+		recording, err := lookup.Recording(ctx, mbid)
+		if err != nil {
+			if notFound(err) {
+				missing++
+			} else {
+				p.logger.WarnContext(ctx, "musicbrainz source recording lookup failed",
+					slog.String("source", source.Name()), slog.Any("error", err))
+			}
+			errs = append(errs, err)
+			continue
+		}
+		rememberJSON(ctx, p, source.Name(), cacheKindRecording, mbid, recording)
+		return recording, nil
+	}
+	if len(errs) > 0 && missing == len(errs) {
+		return RecordingMatch{}, ErrNotFound
+	}
+	return RecordingMatch{}, fmt.Errorf("musicbrainz: no source answered recording %s: %w", mbid, errors.Join(errs...))
 }
 
 func (p Provider) Artist(ctx context.Context, priority Priority, mbid string) (Artist, error) {

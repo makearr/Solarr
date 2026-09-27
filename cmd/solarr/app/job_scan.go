@@ -38,6 +38,7 @@ func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, 
 		Albums:       provider,
 		Fingerprints: tool,
 		AcoustID:     p.acoustIDLookup(),
+		Tracks:       provider,
 		Clock:        clock.NewSystem(),
 		Logger:       p.logger,
 		// One identification threshold for scan and import (2026-09-24).

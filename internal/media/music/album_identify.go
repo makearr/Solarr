@@ -389,6 +389,7 @@ const (
 	EvidenceContradicted   = "contradicted"
 	EvidenceRecall         = "recall"
 	EvidenceOutcome        = "outcome"
+	EvidenceRecording      = "recording"
 )
 
 func albumEvidence(outcome AlbumOutcome, score ReleaseScore) []model.MatchEvidence {

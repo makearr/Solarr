@@ -22,10 +22,25 @@ A scan batch is one directory's files. Each pass only sees what the previous one
    against the other albums the folder's identified files name, and otherwise left to the later
    passes, where the folder's siblings usually join it — unless they disagree, as beside a
    single's own tagged files. Ambiguous → queued with the rival albums. Anything else → next pass.
-3. **Per-file text search** (`SearchIdentifier`): the older title-only match.
+3. **Per-file text search** (`SearchIdentifier`): the older title-only match. It never answers
+   an album the album pass found no track for this file on: that is the tag claim the tracklist
+   already contradicted.
 4. **Fingerprints**: what is left is fingerprinted, named by AcoustID and matched as an album
    with those names (see below). Skipped, and recorded as skipped, with no API key configured.
-5. **Folder siblings**: an unresolved file joins the one album its identified siblings agree on.
+5. **Track by track** (`track_match`, 2026-09-27): a file whose folder settled as no album --
+   a playlist, a track Lidarr sorted into the wrong album folder -- is identified on its own.
+   Its recording is the one its fingerprint or embedded recording id names, else a recording
+   search by artist and title within 5 s of its length. **The folder is a hint, never a
+   certainty**: of every release group that recording is on (never one the album pass refuted
+   for this file), the album the folder, the album tag or the identified siblings name wins
+   when the recording is on it; otherwise a studio album before an EP, a single, then a
+   compilation, live, remix or DJ-mix release, the earliest first. An ambiguous album is not
+   re-decided here; it stays queued.
+6. **Folder siblings**: an unresolved file joins the one album its identified siblings agree on,
+   at a confidence of 0.5 -- with nothing contradicting it, the folder is the best hint left.
+
+A file identified to another album than its folder's is not moved by the scan: the library
+rename (Settings -> the library's naming, "apply to library") previews and moves it.
 
 Import runs the chain per unit, then `RefineUnitByAlbum`, which replaces anything but an
 embedded-MBID answer with an album match. Enrichment's edition choice for a work identified

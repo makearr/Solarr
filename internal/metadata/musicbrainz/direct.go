@@ -1,6 +1,7 @@
 package musicbrainz
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -294,18 +295,54 @@ func (d direct) searchReleaseGroups(ctx context.Context, luceneQuery string, lim
 
 // directRecordingSearchResponse is ws/2's recording search JSON, verified live 2026-09-17.
 type directRecordingSearchResponse struct {
-	Recordings []struct {
-		ID           string `json:"id"`
-		Title        string `json:"title"`
-		Length       *int64 `json:"length"`
-		ArtistCredit []struct {
-			Name       string `json:"name"`
-			JoinPhrase string `json:"joinphrase"`
-		} `json:"artist-credit"`
-		Releases []struct {
-			ReleaseGroup directSearchReleaseGroup `json:"release-group"`
-		} `json:"releases"`
-	} `json:"recordings"`
+	Recordings []directRecording `json:"recordings"`
+}
+
+// directRecording is one recording as both the search and the lookup (inc=releases+release-groups) answer it.
+type directRecording struct {
+	ID           string `json:"id"`
+	Title        string `json:"title"`
+	Length       *int64 `json:"length"`
+	ArtistCredit []struct {
+		Name       string `json:"name"`
+		JoinPhrase string `json:"joinphrase"`
+	} `json:"artist-credit"`
+	Releases []struct {
+		Date         string                   `json:"date"`
+		ReleaseGroup directSearchReleaseGroup `json:"release-group"`
+	} `json:"releases"`
+}
+
+// toMatch keeps each release group once, dated by the earliest of its releases the answer lists.
+func (recording directRecording) toMatch() RecordingMatch {
+	var credit strings.Builder
+	for _, name := range recording.ArtistCredit {
+		credit.WriteString(name.Name + name.JoinPhrase)
+	}
+	match := RecordingMatch{
+		RecordingMBID: recording.ID, Title: recording.Title, ArtistCredit: credit.String(),
+		DurationMs: firstNonNil(recording.Length),
+	}
+	index := make(map[string]int)
+	for _, release := range recording.Releases {
+		rg := release.ReleaseGroup
+		if rg.ID == "" {
+			continue
+		}
+		at, seen := index[rg.ID]
+		if !seen {
+			index[rg.ID] = len(match.ReleaseGroups)
+			match.ReleaseGroups = append(match.ReleaseGroups, ReleaseGroup{
+				MBID: rg.ID, Title: rg.Title, PrimaryType: rg.PrimaryType, SecondaryTypes: rg.SecondaryTypes,
+				FirstReleaseDate: cmp.Or(rg.FirstReleaseDate, release.Date),
+			})
+			continue
+		}
+		if dated := &match.ReleaseGroups[at]; release.Date != "" && (dated.FirstReleaseDate == "" || release.Date < dated.FirstReleaseDate) {
+			dated.FirstReleaseDate = release.Date
+		}
+	}
+	return match
 }
 
 // SearchRecordingReleaseGroups implements RecordingSearcher; an empty artist searches the title alone.
@@ -322,28 +359,19 @@ func (d direct) SearchRecordingReleaseGroups(ctx context.Context, artist, title 
 	}
 	matches := make([]RecordingMatch, len(parsed.Recordings))
 	for i, recording := range parsed.Recordings {
-		var credit strings.Builder
-		for _, name := range recording.ArtistCredit {
-			credit.WriteString(name.Name + name.JoinPhrase)
-		}
-		match := RecordingMatch{
-			RecordingMBID: recording.ID, Title: recording.Title, ArtistCredit: credit.String(),
-			DurationMs: firstNonNil(recording.Length),
-		}
-		seen := make(map[string]bool)
-		for _, release := range recording.Releases {
-			rg := release.ReleaseGroup
-			if rg.ID == "" || seen[rg.ID] {
-				continue
-			}
-			seen[rg.ID] = true
-			match.ReleaseGroups = append(match.ReleaseGroups, ReleaseGroup{
-				MBID: rg.ID, Title: rg.Title, PrimaryType: rg.PrimaryType, SecondaryTypes: rg.SecondaryTypes,
-			})
-		}
-		matches[i] = match
+		matches[i] = recording.toMatch()
 	}
 	return matches, nil
+}
+
+// Recording implements RecordingLookup: one recording by id, with every release group it is on.
+func (d direct) Recording(ctx context.Context, mbid string) (RecordingMatch, error) {
+	requestURL := fmt.Sprintf("%s/recording/%s?inc=releases+release-groups+artist-credits&fmt=json", d.baseURL, url.PathEscape(mbid))
+	var parsed directRecording
+	if err := getJSON(ctx, d.client, requestURL, &parsed); err != nil {
+		return RecordingMatch{}, fmt.Errorf("musicbrainz: recording %s: %w", mbid, err)
+	}
+	return parsed.toMatch(), nil
 }
 
 // directBrowseResponse is musicbrainz.org's release-group browse JSON

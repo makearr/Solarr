@@ -67,6 +67,7 @@ type Consumer struct {
 	albums       AlbumLookup
 	fingerprints Fingerprinter
 	acoustID     AcoustIDLookup
+	tracks       TrackLookup
 	clock        clock.Clock
 	chain        model.ChainConfig
 	logger       *slog.Logger
@@ -104,7 +105,9 @@ type ConsumerConfig struct {
 	// file every earlier pass left unnamed. Either one nil leaves it out.
 	Fingerprints Fingerprinter
 	AcoustID     AcoustIDLookup
-	Clock        clock.Clock
+	// Tracks identifies a file on its own when its folder settles as no album. Nil leaves it out.
+	Tracks TrackLookup
+	Clock  clock.Clock
 	// Chain tunes RunChain (model.ChainConfig). The zero value takes the package
 	// defaults above.
 	Chain model.ChainConfig
@@ -135,7 +138,7 @@ func NewConsumer(config ConsumerConfig) Consumer {
 	return Consumer{
 		fsys: config.FS, physical: config.Physical, identity: config.Identity,
 		unidentified: config.Unidentified, attempts: config.Attempts, search: config.Search, albums: config.Albums,
-		fingerprints: config.Fingerprints, acoustID: config.AcoustID,
+		fingerprints: config.Fingerprints, acoustID: config.AcoustID, tracks: config.Tracks,
 		clock: config.Clock, chain: chain, threshold: config.Threshold, logger: logger,
 		desired: config.Desired, categories: config.Categories, defaultProfileID: config.DefaultProfileID,
 	}
@@ -270,6 +273,9 @@ func (c Consumer) identifyBatch(
 	if len(passes.fingerprint) > 0 && len(pending) > 0 {
 		pending = c.fingerprintPass(ctx, out, passes.fingerprint, pending)
 	}
+	if c.tracks != nil && len(pending) > 0 {
+		pending = c.trackPass(ctx, out, pending)
+	}
 
 	// A file nothing could identify joins its folder's album when every
 	// identified file in the folder agreed on one (approved 2026-09-17: 127 of
@@ -363,6 +369,10 @@ func (r *batchResult) attempts() []library.Attempt {
 type pendingFile struct {
 	index      int
 	candidates []model.Identification
+	// recording is what the file's own fingerprint named, kept for identifying it on its own.
+	recording string
+	// refuted are release groups the album pass placed this folder on without a track for this file.
+	refuted []string
 }
 
 // fingerprintPass recovers names from the audio itself and matches the folder as an album
@@ -456,6 +466,7 @@ func (c Consumer) namesFromAudio(
 			pending = append(pending, file)
 			continue
 		}
+		file.recording = recording.MBID
 		named = append(named, file)
 		locals = append(locals, recordedTrack(one, recording, prints[i].Duration))
 		for _, group := range recording.ReleaseGroupMBIDs {
@@ -596,6 +607,9 @@ func (c Consumer) runChain(
 			c.logger.Warn("identify failed", slog.String("path", one.File.RelPath), slog.Any("error", err))
 			out.note(file.index, library.AttemptPass{Pass: pass, Outcome: PassOutcomeFailed})
 			continue
+		}
+		if result.Best != nil && result.Best.ExternalID != nil && slices.Contains(file.refuted, result.Best.ExternalID.ExternalID) {
+			result.Best = nil
 		}
 		if result.Best == nil || result.Best.ExternalID == nil {
 			if len(result.Candidates) > 0 {
@@ -790,12 +804,13 @@ func applyAlbumDecision(
 	}
 	switch decision.Outcome {
 	case AlbumIdentified:
-		// A file the album has no track for is no evidence it belongs: later passes, and at
-		// last the folder's siblings, decide it -- a single's remix beside its album goes to review.
+		// A file the album has no track for is evidence against it: text search may not put it back
+		// by its tags, and the track pass looks for the album its recording is really on.
 		var unplaced []pendingFile
 		for i, file := range group {
 			track := decision.Best.Tracks[i]
 			if track == nil {
+				file.refuted = append(file.refuted, decision.Best.Candidate.ReleaseGroup.MBID)
 				unplaced = append(unplaced, file)
 				continue
 			}
@@ -895,9 +910,8 @@ func soleSiblingIdentity(links []library.WorkLink) (library.WorkLink, bool) {
 // (per category.monitor_discovered policy) and align this batch's own files
 // against whatever parts are not yet covered (Align). A work whose tracklist
 // has not been enriched yet still gets its item -- required_count stays
-// unknown until EnrichJob adds parts, and a later full sweep re-attaches this
-// batch's files once it does (workdetail.go's OnDisk doc comment records the
-// same ordering dependency one level up).
+// unknown until EnrichJob adds parts, and AlignClaimedFiles attaches this
+// batch's files once it does.
 //
 // Skipped entirely when Desired/Categories were not configured, or when
 // categoryID is 0 (a caller with no category context, such as a test).
