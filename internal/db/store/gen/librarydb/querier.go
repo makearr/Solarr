@@ -707,8 +707,6 @@ type Querier interface {
 	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error
 	SetWorkClassification(ctx context.Context, arg SetWorkClassificationParams) error
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error
-	// Unlike year, unconditional: nothing else writes a work's description yet,
-	// so there is no earlier value worth protecting.
 	SetWorkDescription(ctx context.Context, arg SetWorkDescriptionParams) error
 	SetWorkField(ctx context.Context, arg SetWorkFieldParams) error
 	SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonitoredParams) error
@@ -716,6 +714,10 @@ type Querier interface {
 	// doc comment) -- written only by internal/db/library.People.AddCredit, the one place a
 	// role='artist' ord=0 credit is ever recorded.
 	SetWorkPrimaryArtist(ctx context.Context, arg SetWorkPrimaryArtistParams) error
+	// Unlike year, unconditional: nothing else writes a work's description yet,
+	// so there is no earlier value worth protecting.
+	// A work is named after its release group once enrichment has it, not after whichever file came first.
+	SetWorkTitle(ctx context.Context, arg SetWorkTitleParams) error
 	// A sweep that starts records only that it started: the watermark must not move
 	// until one finishes, or an interrupted scan would look complete.
 	StartScan(ctx context.Context, arg StartScanParams) error

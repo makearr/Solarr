@@ -75,6 +75,10 @@ UPDATE work SET primary_type = ?, updated_at = ? WHERE id = ? AND primary_type I
 
 -- Unlike year, unconditional: nothing else writes a work's description yet,
 -- so there is no earlier value worth protecting.
+-- A work is named after its release group once enrichment has it, not after whichever file came first.
+-- name: SetWorkTitle :exec
+UPDATE work SET canonical_title = ?, sort_title = ?, updated_at = ? WHERE id = ?;
+
 -- name: SetWorkDescription :exec
 UPDATE work SET description = ?, updated_at = ? WHERE id = ?;
 

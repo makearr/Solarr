@@ -285,6 +285,7 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context) (withEdition []int64)
 					slog.Int64("work_id", work.WorkID), slog.Any("error", err))
 				continue
 			}
+			j.retitle(ctx, work.WorkID, rg)
 			j.enrichCreditsAndGenres(ctx, work.WorkID, rg)
 			j.enrichDescription(ctx, work.WorkID, rg)
 			enriched++
@@ -302,6 +303,16 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context) (withEdition []int64)
 			slog.Int("editions_chosen", len(withEdition)))
 	}
 	return withEdition
+}
+
+// retitle names the work after its release group; best-effort, like the credits.
+func (j *EnrichJob) retitle(ctx context.Context, workID int64, rg musicbrainz.ReleaseGroup) {
+	if rg.Title == "" {
+		return
+	}
+	if err := j.identity.RetitleWork(ctx, j.clock.Now().Unix(), workID, rg.Title, SortTitle(rg.Title)); err != nil {
+		j.logger.WarnContext(ctx, "retitle work failed", slog.Int64("work_id", workID), slog.Any("error", err))
+	}
 }
 
 // alignClaimed attaches a refined work's files to its new tracklist; best-effort, like the credits.
@@ -518,6 +529,7 @@ func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEd
 	// Best-effort: a credit, genre or description that fails to resolve is not
 	// a reason to fail an edition that otherwise refined correctly. Logged,
 	// not returned.
+	j.retitle(ctx, edition.WorkID, rg)
 	j.enrichCreditsAndGenres(ctx, edition.WorkID, rg)
 	j.enrichDescription(ctx, edition.WorkID, rg)
 	return nil

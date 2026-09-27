@@ -1314,3 +1314,35 @@ func TestEnrichJob_AttachesTheFilesAScanPlacedOnceTheTracklistArrives(t *testing
 		t.Errorf("item state %s present %d, want COMPLETE with both files", item.State, item.PresentCount)
 	}
 }
+
+// A work is named after its release group, not after the album tag of whichever file a scan met
+// first: every night of "Live! At the Rainbow" was "Live at the Fikarak, 1et Fapo 1977" (2026-09-27).
+func TestEnrichJob_NamesTheWorkAfterItsReleaseGroup(t *testing.T) {
+	source := &fakeSource{
+		rg:      musicbrainz.ReleaseGroup{MBID: "rg-rainbow", Title: "Live! At the Rainbow", PrimaryType: "Album"},
+		release: musicbrainz.Release{MBID: "rel-2nd", Title: "Live at The Rainbow, 2nd June 1977", Status: "official"},
+	}
+	job, opened, queries := newEnrichJob(t, source)
+	workIDs, err := library.NewIdentity(opened).ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-rainbow", Confidence: 1,
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Live at the Fikarak, 1et Fapo 1977", SortTitle: "live at the fikarak, 1et fapo 1977"},
+		Edition: &library.EditionLink{
+			Provider: music.ProviderRelease, ExternalID: "rel-2nd", Confidence: 1,
+			Edition: library.EditionIdentity{Kind: "unknown", Label: "rel-2nd"},
+		},
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	work, err := queries.GetWork(t.Context(), workIDs[0])
+	if err != nil {
+		t.Fatalf("GetWork: %v", err)
+	}
+	if work.CanonicalTitle != "Live! At the Rainbow" || work.SortTitle != music.SortTitle("Live! At the Rainbow") {
+		t.Errorf("work titled %q / %q, want the release group's title", work.CanonicalTitle, work.SortTitle)
+	}
+}

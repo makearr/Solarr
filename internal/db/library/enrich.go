@@ -246,6 +246,20 @@ func (i Identity) SetWorkDescription(ctx context.Context, at, workID int64, desc
 	return nil
 }
 
+// RetitleWork names a work after its release group: a first scan names it after the album tag of
+// whichever file it met first, one pressing's or one night's title among several.
+func (i Identity) RetitleWork(ctx context.Context, at, workID int64, title, sortTitle string) error {
+	err := i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetWorkTitle(ctx, librarydb.SetWorkTitleParams{
+			CanonicalTitle: title, SortTitle: sortTitle, UpdatedAt: at, ID: workID,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: retitle work %d: %w", workID, err)
+	}
+	return nil
+}
+
 func resolvePart(ctx context.Context, queries *librarydb.Queries, workID int64, part PartIdentity) error {
 	partID, err := findOrCreatePart(ctx, queries, workID, part)
 	if err != nil {
