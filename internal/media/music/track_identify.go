@@ -3,7 +3,6 @@ package music
 import (
 	"cmp"
 	"context"
-	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -91,10 +90,8 @@ func (c Consumer) recordingsFor(ctx context.Context, file pendingFile, local Loc
 		if mbid == "" || slices.ContainsFunc(known, func(r musicbrainz.RecordingMatch) bool { return r.RecordingMBID == mbid }) {
 			continue
 		}
+		// One lookup failing, or 404 for a retired id, leaves the file's other names to answer.
 		recording, err := c.tracks.Recording(ctx, musicbrainz.PriorityIdentify, mbid)
-		if err != nil && !errors.Is(err, musicbrainz.ErrNotFound) {
-			return nil, 0
-		}
 		// A fingerprint's link to a song of another title is a wrong link, not this file (a live
 		// "Zacami of Lupidegep" named for "Tusa I'fi Zoke", 2026-09-27).
 		if err == nil && len(recording.ReleaseGroups) > 0 && (!local.Title.present() || sameTrackTitle(local.Title.Value, recording.Title)) {
@@ -166,11 +163,20 @@ func homeGroup(
 		}
 		return 1
 	}
+	// A recording titled exactly as the file beats one matching only without its qualifiers:
+	// "Masosa All the Sece" is not its instrumental.
+	qualified := func(recording musicbrainz.RecordingMatch) int {
+		if !local.Title.present() || match.EditPenalty(local.Title.Value, recording.Title) <= trackTitlePenalty {
+			return 0
+		}
+		return 1
+	}
 	best := slices.MinFunc(options, func(a, b option) int {
 		return cmp.Or(
 			cmp.Compare(hinted(a.group), hinted(b.group)),
 			cmp.Compare(foreign(a.group), foreign(b.group)),
 			cmp.Compare(releaseTypePenalty(a.group), releaseTypePenalty(b.group)),
+			cmp.Compare(qualified(a.recording), qualified(b.recording)),
 			compareDates(a.group.FirstReleaseDate, b.group.FirstReleaseDate),
 			strings.Compare(a.group.MBID, b.group.MBID),
 		)
