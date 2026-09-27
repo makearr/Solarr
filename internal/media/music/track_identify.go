@@ -98,15 +98,32 @@ func (c Consumer) recordingsFor(ctx context.Context, file pendingFile, local Loc
 			known = append(known, recording)
 		}
 	}
-	if len(known) > 0 {
+	exact := slices.ContainsFunc(known, func(r musicbrainz.RecordingMatch) bool {
+		return !local.Title.present() || match.EditPenalty(local.Title.Value, r.Title) <= trackTitlePenalty
+	})
+	if exact {
 		return known, trackKnownConfidence
 	}
+	// Named only as a qualified version -- an instrumental for a sung file -- the search may still
+	// find the exact song; both are ranked together.
+	searched := c.searchedRecordings(ctx, local)
+	switch {
+	case len(known) > 0:
+		return append(known, searched...), trackKnownConfidence
+	case len(searched) > 0:
+		return searched, trackSearchedConfidence
+	}
+	return nil, 0
+}
+
+// searchedRecordings are the recordings a search finds by the file's artist and title at its length.
+func (c Consumer) searchedRecordings(ctx context.Context, local LocalTrack) []musicbrainz.RecordingMatch {
 	if !local.Title.present() || !local.Artist.present() || local.Duration <= 0 {
-		return nil, 0
+		return nil
 	}
 	found, err := c.tracks.SearchRecordings(ctx, musicbrainz.PriorityIdentify, local.Artist.Value, local.Title.Value, trackSearchLimit)
 	if err != nil {
-		return nil, 0
+		return nil
 	}
 	var fitting []musicbrainz.RecordingMatch
 	for _, recording := range found {
@@ -117,7 +134,7 @@ func (c Consumer) recordingsFor(ctx context.Context, file pendingFile, local Loc
 			fitting = append(fitting, recording)
 		}
 	}
-	return fitting, trackSearchedConfidence
+	return fitting
 }
 
 // homeGroup chooses the album among every release group the recordings are on, never one the album

@@ -225,3 +225,27 @@ func TestObserve_TheExactlyTitledRecordingBeatsItsInstrumental(t *testing.T) {
 		t.Errorf("identified as %q, want rg-party", got)
 	}
 }
+
+// Named only as its instrumental, a sung file is still found as the song by its exact title.
+func TestObserve_AFileNamedOnlyAsItsInstrumentalIsSearchedForTheSong(t *testing.T) {
+	instrumental := "0a1b2c3d-0000-4000-8000-000000000002"
+	rgParty := musicbrainz.ReleaseGroup{MBID: "rg-party", Title: "The Togadok Mazar", PrimaryType: "Album", FirstReleaseDate: "2014-06-13"}
+	rgInstrumentals := musicbrainz.ReleaseGroup{MBID: "rg-instrumentals", Title: "The Togadok Mazar: Acapellas + Instrumentals", PrimaryType: "Album", FirstReleaseDate: "2014-06-01"}
+	tracks := fakeTrackLookup{
+		recordings: map[string]musicbrainz.RecordingMatch{instrumental: {RecordingMBID: instrumental, Title: "Masosa All the Sece (instrumental)",
+			ArtistCredit: "Zovoda Zita", DurationMs: 355000, ReleaseGroups: []musicbrainz.ReleaseGroup{rgInstrumentals}}},
+		searches: map[string][]musicbrainz.RecordingMatch{"Zovoda Zita/Masosa All the Sece": {{RecordingMBID: "rec-guilty", Title: "Masosa All the Sece",
+			ArtistCredit: "Zovoda Zita", DurationMs: 355000, ReleaseGroups: []musicbrainz.ReleaseGroup{rgParty}}}},
+	}
+	consumer, opened, fsys := newTrackConsumer(t, &fakeAlbumLookup{}, nil, tracks)
+	relPath := "Zovoda Zita/Essentials (2020)/20.m4a"
+	file := untaggedTrack(t, fsys, relPath, "Zovoda Zita", "Essentials", "Masosa All the Sece", 355)
+	file.Probe.Tags["musicbrainz_trackid"] = instrumental
+
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, []scan.Observed{file}); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if got := releaseGroupOf(t, opened, relPath); got != "rg-party" {
+		t.Errorf("identified as %q, want rg-party", got)
+	}
+}
