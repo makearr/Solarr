@@ -282,3 +282,18 @@ WHERE id IN (
   ORDER BY di.id
   LIMIT ?
 );
+
+-- name: UpsertFileTrackClaim :exec
+INSERT INTO file_track_claim (media_object_id, disc, track, title, recording_mbid)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (media_object_id) DO UPDATE SET
+  disc = excluded.disc, track = excluded.track, title = excluded.title,
+  recording_mbid = excluded.recording_mbid;
+
+-- A work's files with where each claims to sit, for aligning them once its tracklist exists.
+-- name: ListFileTrackClaimsForWork :many
+SELECT c.media_object_id, c.disc, c.track, c.title, c.recording_mbid
+FROM work_file f
+JOIN file_track_claim c ON c.media_object_id = f.media_object_id
+WHERE f.work_id = ?
+ORDER BY c.media_object_id;

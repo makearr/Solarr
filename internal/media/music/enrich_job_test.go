@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -1249,5 +1250,99 @@ func TestEnrichJob_FillsWhatWikidataLacksFromTheSecondSource(t *testing.T) {
 	}
 	if !strings.Contains(person.FieldsJson.String, "Heka is an Irish singer.") || !slices.Contains(asked, "artist-1") {
 		t.Errorf("fields_json = %q, asked %v; want the second source's biography", person.FieldsJson.String, asked)
+	}
+}
+
+// A first scan identifies an album before its tracklist exists; enrichment brings the tracklist and
+// must attach the files the scan placed, not leave every album on disk missing until a full rescan
+// (the main library, 2026-09-27: 189 of ~200,000 identified files were attached).
+func TestEnrichJob_AttachesTheFilesAScanPlacedOnceTheTracklistArrives(t *testing.T) {
+	source := &fakeSource{
+		rg: musicbrainz.ReleaseGroup{MBID: "rg-1", Title: "KI Pecezinu", PrimaryType: "Album"},
+		release: musicbrainz.Release{
+			MBID: "rel-1", Title: "KI Pecezinu", Status: "official",
+			Media: []musicbrainz.Medium{{Position: 1, Tracks: []musicbrainz.Track{
+				{Position: 1, Number: "1", Title: "Sesoge", DurationMs: 284400, RecordingMBID: "rec-1"},
+				{Position: 2, Number: "2", Title: "Zosidedu Bukerez", DurationMs: 383000, RecordingMBID: "rec-2"},
+			}}},
+		},
+	}
+	desired := new(library.Desired)
+	job, opened, queries := newEnrichJobRealigning(t, source, nil, nil, nil, func(config *music.EnrichJobConfig) {
+		config.Desired = desired
+	})
+	*desired = library.NewDesired(opened)
+
+	registered, err := library.NewPhysical(opened).RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "Katupoken/KI Pecezinu (1997)/01.flac", SizeBytes: 1, QuickHash: "h1", FirstSeenAt: firstSeen},
+		{RelPath: "Katupoken/KI Pecezinu (1997)/02.flac", SizeBytes: 1, QuickHash: "h2", FirstSeenAt: firstSeen},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	links := make([]library.WorkLink, len(registered))
+	for index, file := range registered {
+		links[index] = library.WorkLink{
+			Provider: music.ProviderReleaseGroup, ExternalID: "rg-1", Confidence: 1, RootFolderID: 1, MediaObjectID: file.MediaObjectID,
+			Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "KI Pecezinu", SortTitle: "ki pecezinu"},
+			Edition: &library.EditionLink{
+				Provider: music.ProviderRelease, ExternalID: "rel-1", Confidence: 1,
+				Edition: library.EditionIdentity{Kind: "unknown", Label: "rel-1"},
+			},
+		}
+	}
+	workIDs, err := library.NewIdentity(opened).ResolveWorks(t.Context(), firstSeen, links)
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+	categories := fakeCategories{discoveryCategoryID: {ID: discoveryCategoryID, MonitorDiscovered: settings.MonitorDiscoveredMonitored}}
+	if err := music.DiscoverWanted(t.Context(), desired, categories, clock.NewFakeAtEpoch(), 1, discoveryCategoryID, workIDs[0], []music.TrackFile{
+		{MediaObjectID: registered[0].MediaObjectID, Disc: 1, Track: 1, Title: "Sesoge", RecordingMBID: "rec-1"},
+		{MediaObjectID: registered[1].MediaObjectID, Disc: 1, Track: 2, Title: "Zosidedu Bukerez", RecordingMBID: "rec-2"},
+	}); err != nil {
+		t.Fatalf("DiscoverWanted: %v", err)
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	items, err := queries.ListDesiredItemsForWork(t.Context(), workIDs[0])
+	if err != nil || len(items) != 1 {
+		t.Fatalf("items = %v, %v; want the one album item", items, err)
+	}
+	if item := items[0]; item.State != "COMPLETE" || item.PresentCount != 2 {
+		t.Errorf("item state %s present %d, want COMPLETE with both files", item.State, item.PresentCount)
+	}
+}
+
+// A work is named after its release group, not after the album tag of whichever file a scan met
+// first: every night of "Live! At the Rainbow" was "Live at the Fikarak, 1et Fapo 1977" (2026-09-27).
+func TestEnrichJob_NamesTheWorkAfterItsReleaseGroup(t *testing.T) {
+	source := &fakeSource{
+		rg:      musicbrainz.ReleaseGroup{MBID: "rg-rainbow", Title: "Live! At the Rainbow", PrimaryType: "Album"},
+		release: musicbrainz.Release{MBID: "rel-2nd", Title: "Live at The Rainbow, 2nd June 1977", Status: "official"},
+	}
+	job, opened, queries := newEnrichJob(t, source)
+	workIDs, err := library.NewIdentity(opened).ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-rainbow", Confidence: 1,
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Live at the Fikarak, 1et Fapo 1977", SortTitle: "live at the fikarak, 1et fapo 1977"},
+		Edition: &library.EditionLink{
+			Provider: music.ProviderRelease, ExternalID: "rel-2nd", Confidence: 1,
+			Edition: library.EditionIdentity{Kind: "unknown", Label: "rel-2nd"},
+		},
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	work, err := queries.GetWork(t.Context(), workIDs[0])
+	if err != nil {
+		t.Fatalf("GetWork: %v", err)
+	}
+	if work.CanonicalTitle != "Live! At the Rainbow" || work.SortTitle != music.SortTitle("Live! At the Rainbow") {
+		t.Errorf("work titled %q / %q, want the release group's title", work.CanonicalTitle, work.SortTitle)
 	}
 }

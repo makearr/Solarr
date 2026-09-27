@@ -255,6 +255,14 @@ type EditionExternalID struct {
 	Confidence float64
 }
 
+type FileTrackClaim struct {
+	MediaObjectID int64
+	Disc          int64
+	Track         int64
+	Title         string
+	RecordingMbid string
+}
+
 type GroupObservation struct {
 	ID             int64
 	ReleaseGroup   string

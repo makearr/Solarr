@@ -229,6 +229,28 @@ func TestReadTags_RunsTheBatchConcurrentlyUpToTheLimit(t *testing.T) {
 	}
 }
 
+// Directories are scanned side by side; the limit is on the storage's load, so it holds across calls.
+func TestReadTags_ConcurrentBatchesShareTheLimit(t *testing.T) {
+	runner := &fakeRunner{respond: probeReplying(flacProbe)}
+	tool := mediatool.New(runner, 4)
+	var batches sync.WaitGroup
+	for batch := range 4 {
+		paths := make([]string, 10)
+		for index := range paths {
+			paths[index] = fmt.Sprintf("/m/%d/%d.flac", batch, index)
+		}
+		batches.Go(func() {
+			if _, err := tool.ReadTags(t.Context(), paths); err != nil {
+				t.Errorf("ReadTags: %v", err)
+			}
+		})
+	}
+	batches.Wait()
+	if peak := atomic.LoadInt32(&runner.peak); peak > 4 {
+		t.Errorf("peak concurrency %d across batches, want at most the configured 4", peak)
+	}
+}
+
 func TestReadTags_WithNoPathsRunsNothing(t *testing.T) {
 	runner := &fakeRunner{respond: probeReplying(flacProbe)}
 	probes, err := mediatool.New(runner, 4).ReadTags(t.Context(), nil)

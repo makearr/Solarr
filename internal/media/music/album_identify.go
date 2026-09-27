@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
@@ -66,22 +67,13 @@ func IdentifyAlbum(
 
 	var candidates []AlbumCandidate
 	groupOfRelease := make(map[string]string)
-	for _, group := range groups {
-		if !group.known {
-			rg, _, err := lookup.Album(ctx, priority, group.group.MBID, "")
-			calls++
-			if err != nil {
-				failures = append(failures, err)
-				continue
-			}
-			group.group, group.credit, group.names = rg, creditNames(rg.ArtistCredit), artistNames(rg.ArtistCredit)
-		}
-		releases, err := lookup.Releases(ctx, priority, group.group.MBID)
-		calls++
-		if err != nil {
-			failures = append(failures, err)
+	for _, fetched := range fetchGroups(ctx, lookup, priority, groups) {
+		calls += fetched.calls
+		if fetched.err != nil {
+			failures = append(failures, fetched.err)
 			continue
 		}
+		group, releases := fetched.group, fetched.releases
 		if earlier, merged := mergedGroup(groupOfRelease, releases); merged {
 			calls++
 			candidates = keepCurrentGroup(ctx, lookup, priority, candidates, earlier, group, &failures)
@@ -99,6 +91,53 @@ func IdentifyAlbum(
 		return AlbumDecision{}, fmt.Errorf("music: identify album: every lookup failed: %w", errors.Join(failures...))
 	}
 	return DecideAlbum(locals, candidates), nil
+}
+
+// albumFetchConcurrency is how many recalled groups are looked up at once: each lookup waits
+// 0.4-1.1s on BrainzMash (measured 2026-09-27), and a searched folder recalls up to ten.
+const albumFetchConcurrency = 4
+
+// fetchedGroup is one recalled group with its releases, or the lookup that failed.
+type fetchedGroup struct {
+	group    recalled
+	releases []musicbrainz.Release
+	calls    int
+	err      error
+}
+
+// fetchGroups looks every recalled group up concurrently, answering in recall order so the
+// decision stays a function of the evidence alone.
+func fetchGroups(
+	ctx context.Context, lookup AlbumLookup, priority musicbrainz.Priority, groups []recalled,
+) []fetchedGroup {
+	fetched := make([]fetchedGroup, len(groups))
+	slots := make(chan struct{}, albumFetchConcurrency)
+	var running sync.WaitGroup
+	for i, group := range groups {
+		running.Go(func() {
+			slots <- struct{}{}
+			defer func() { <-slots }()
+			fetched[i] = fetchGroup(ctx, lookup, priority, group)
+		})
+	}
+	running.Wait()
+	return fetched
+}
+
+func fetchGroup(ctx context.Context, lookup AlbumLookup, priority musicbrainz.Priority, group recalled) fetchedGroup {
+	out := fetchedGroup{group: group}
+	if !group.known {
+		rg, _, err := lookup.Album(ctx, priority, group.group.MBID, "")
+		out.calls++
+		if err != nil {
+			out.err = err
+			return out
+		}
+		out.group.group, out.group.credit, out.group.names = rg, creditNames(rg.ArtistCredit), artistNames(rg.ArtistCredit)
+	}
+	out.releases, out.err = lookup.Releases(ctx, priority, out.group.group.MBID)
+	out.calls++
+	return out
 }
 
 // mergedGroup answers the group already recalled with one of these releases: a release has one
@@ -296,9 +335,11 @@ func albumConfidence(score ReleaseScore) float64 {
 }
 
 // Within keeps an identified album only when it is at least threshold likely right; below it the
-// match goes to review like an ambiguous one -- the one threshold governs album matching too.
+// match goes to review like an ambiguous one. The album the folder's tagged files name is exempt:
+// their embedded ids already prove it, the fit only places the rest.
 func (d AlbumDecision) Within(threshold float64) AlbumDecision {
-	if d.Outcome == AlbumIdentified && d.Best != nil && albumConfidence(*d.Best) < threshold {
+	if d.Outcome == AlbumIdentified && d.Best != nil && d.Best.Candidate.Recall != RecallSibling &&
+		albumConfidence(*d.Best) < threshold {
 		d.Outcome = AlbumAmbiguous
 	}
 	return d

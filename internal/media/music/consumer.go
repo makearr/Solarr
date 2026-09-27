@@ -927,8 +927,8 @@ func (c Consumer) discoverWanted(ctx context.Context, categoryID int64, workIDs 
 // own batch of files, already known to belong to workID -- against whatever
 // parts are not yet covered (Align). A work whose tracklist has not been
 // enriched yet still gets its item -- required_count stays unknown until
-// EnrichJob adds parts, and a later full sweep re-attaches this batch's
-// files once it does.
+// EnrichJob adds parts, and AlignClaimedFiles attaches this batch's files
+// then, from the track claims recorded here.
 //
 // A no-op when desired/categories is nil, categoryID is 0, or the category
 // is not found or configured monitor_discovered=none.
@@ -956,8 +956,56 @@ func DiscoverWanted(
 	if err != nil {
 		return fmt.Errorf("ensure album item for work %d: %w", workID, err)
 	}
+	if err := desired.RecordTrackClaims(ctx, trackClaims(candidates)); err != nil {
+		return fmt.Errorf("track claims for work %d: %w", workID, err)
+	}
+	return alignAlbum(ctx, desired, item.ID, workID, candidates, now)
+}
 
-	unfilled, err := desired.UnfilledParts(ctx, item.ID, workID)
+// AlignClaimedFiles aligns a work's files, from what scan or import claimed for them, to its
+// tracklist: enrichment brings the tracklist after a first scan identified the album.
+func AlignClaimedFiles(ctx context.Context, desired *library.Desired, cl clock.Clock, workID int64) error {
+	items, err := desired.AlbumItemsForWork(ctx, workID)
+	if err != nil || len(items) == 0 {
+		return err
+	}
+	claims, err := desired.TrackClaimsForWork(ctx, workID)
+	if err != nil || len(claims) == 0 {
+		return err
+	}
+	candidates := make([]TrackFile, len(claims))
+	for i, claim := range claims {
+		candidates[i] = TrackFile{
+			MediaObjectID: claim.MediaObjectID, Disc: int(claim.Disc), Track: int(claim.Track),
+			Title: claim.Title, RecordingMBID: claim.RecordingMBID,
+		}
+	}
+	for _, item := range items {
+		if err := alignAlbum(ctx, desired, item.ID, workID, candidates, cl.Now().Unix()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func trackClaims(files []TrackFile) []library.TrackClaim {
+	claims := make([]library.TrackClaim, 0, len(files))
+	for _, file := range files {
+		if file.MediaObjectID != 0 {
+			claims = append(claims, library.TrackClaim{
+				MediaObjectID: file.MediaObjectID, Disc: int64(file.Disc), Track: int64(file.Track),
+				Title: file.Title, RecordingMBID: file.RecordingMBID,
+			})
+		}
+	}
+	return claims
+}
+
+// alignAlbum attaches candidates to whichever of the item's parts are not covered yet.
+func alignAlbum(
+	ctx context.Context, desired *library.Desired, itemID, workID int64, candidates []TrackFile, now int64,
+) error {
+	unfilled, err := desired.UnfilledParts(ctx, itemID, workID)
 	if err != nil {
 		return fmt.Errorf("unfilled parts for work %d: %w", workID, err)
 	}
@@ -987,7 +1035,7 @@ func DiscoverWanted(
 	if len(aligned) == 0 {
 		return nil
 	}
-	return desired.RecordAlignment(ctx, item.ID, workID, aligned, now)
+	return desired.RecordAlignment(ctx, itemID, workID, aligned, now)
 }
 
 // tagSourceFor answers the chain's tag lookups from what the scan already probed --

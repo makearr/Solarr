@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,21 +22,28 @@ type fakeAlbumLookup struct {
 	// missing are release groups every source answers 404 for.
 	missing map[string]bool
 	err     error
+	mu      sync.Mutex
 	asked   []string
 }
 
+func (f *fakeAlbumLookup) ask(what string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.asked = append(f.asked, what)
+}
+
 func (f *fakeAlbumLookup) Search(_ context.Context, _ musicbrainz.Priority, artist, title string, _ int) ([]musicbrainz.ReleaseGroupMatch, error) {
-	f.asked = append(f.asked, "search:"+artist+"/"+title)
+	f.ask("search:" + artist + "/" + title)
 	return f.searches[artist+"/"+title], f.err
 }
 
 func (f *fakeAlbumLookup) SearchRecordings(_ context.Context, _ musicbrainz.Priority, artist, title string, _ int) ([]musicbrainz.RecordingMatch, error) {
-	f.asked = append(f.asked, "recording:"+artist+"/"+title)
+	f.ask("recording:" + artist + "/" + title)
 	return f.recordings[title], f.err
 }
 
 func (f *fakeAlbumLookup) Album(_ context.Context, _ musicbrainz.Priority, rg, _ string) (musicbrainz.ReleaseGroup, musicbrainz.Release, error) {
-	f.asked = append(f.asked, "album:"+rg)
+	f.ask("album:" + rg)
 	if f.missing[rg] {
 		return musicbrainz.ReleaseGroup{}, musicbrainz.Release{}, musicbrainz.ErrNotFound
 	}
@@ -43,7 +51,7 @@ func (f *fakeAlbumLookup) Album(_ context.Context, _ musicbrainz.Priority, rg, _
 }
 
 func (f *fakeAlbumLookup) Releases(_ context.Context, _ musicbrainz.Priority, rg string) ([]musicbrainz.Release, error) {
-	f.asked = append(f.asked, "releases:"+rg)
+	f.ask("releases:" + rg)
 	return f.releases[rg], f.err
 }
 

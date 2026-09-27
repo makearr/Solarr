@@ -273,6 +273,20 @@ func TestDecideAlbum_TheSupportedReleaseWinsOverACloserUnsupportedOne(t *testing
 	}
 }
 
+// A remix single titled like the original ranks below it, as a live release does: one file of
+// "Kamo Rigevo" is the single, not its remix release (the main library, 2026-09-27).
+func TestDecideAlbum_TheOriginalSingleBeatsARemixReleaseOfTheSameTitle(t *testing.T) {
+	locals := []music.LocalTrack{{Title: tagged("Kamo Rigevo"), Artist: tagged("P!po"), Album: tagged("Kamo Rigevo"), Track: 1, Duration: 194 * time.Second}}
+	original := candidateOf("rg-single", "Single", nil, releaseOf("rel-single", "Kamo Rigevo", "official", "2024", []trackSpec{{"Kamo Rigevo", 194}}))
+	remix := candidateOf("rg-remix", "Single", []string{"Remix"},
+		recordedAs(releaseOf("rel-remix", "Kamo Rigevo", "official", "2024", []trackSpec{{"Kamo Rigevo", 195}}), "remix"))
+
+	decision := music.DecideAlbum(locals, []music.AlbumCandidate{remix, original})
+	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-single" {
+		t.Errorf("decision = %s %q, want identified rg-single", decision.Outcome, bestReleaseGroup(decision))
+	}
+}
+
 // Two release groups fitting equally, one known only from a promotional release: the official one wins.
 func TestDecideAlbum_AnOfficialReleaseBeatsAnEquallyFittingPromo(t *testing.T) {
 	official := candidateOf("rg-official", "Album", nil, releaseOf("rel-official", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks))
@@ -365,6 +379,24 @@ func TestDecideAlbum_TheFoldersAlbumNameFitsWhereTheTagDoesNot(t *testing.T) {
 	}
 }
 
+// The album the files name decides between close rivals: "Kerul of the Fofu" is not "1958 Bokuf",
+// however much a studio album is preferred to a compilation (the main library, 2026-09-27).
+func TestDecideAlbum_TheAlbumTheFilesNameWinsInsideTheMargin(t *testing.T) {
+	studio := candidateOf("rg-studio", "Album", nil, studioRelease)
+	named := candidateOf("rg-named", "Album", []string{"Compilation"},
+		recordedAs(releaseOf("rel-named", "Kuselobi You Pato", "official", "2017-10-13", traumaTracks), "named"))
+	locals := folderOf(traumaTracks)
+	for i := range locals {
+		locals[i].Album = tagged("Kuselobi You Pato")
+	}
+
+	decision := music.DecideAlbum(locals, []music.AlbumCandidate{studio, named})
+	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-named" {
+		t.Errorf("decision = %s %q (distances %.3f, %.3f), want identified rg-named", decision.Outcome,
+			bestReleaseGroup(decision), decision.Scores[0].Distance, decision.Scores[1].Distance)
+	}
+}
+
 // A release every claim agrees with beats a rival one claim contradicts, however small the gap
 // (Dacapa Hivop Pibazi's "Mepukafamo" at 0.000 against "Mepukafamo" at 0.042, the main library).
 func TestDecideAlbum_APerfectFitBeatsACloseImperfectRival(t *testing.T) {
@@ -420,5 +452,22 @@ func TestDecideAlbum_AFileNoTrackFitsStaysUnplaced(t *testing.T) {
 	score := music.DecideAlbum(folder, candidates).Scores[0]
 	if track := score.Tracks[len(folder)-1]; track != nil {
 		t.Errorf("bonus track placed on %+v, want unplaced", track)
+	}
+}
+
+// The untagged rest of a folder whose tagged files name the album only has to fit it, not prove it
+// again: one odd length among four files sent "Kab It for the Mazar" to review (the main library).
+func TestWithin_TheSiblingsAlbumIsNotSentToReviewForAWeakFit(t *testing.T) {
+	weak := func(recall string) music.AlbumDecision {
+		candidate := candidateOf("rg-studio", "Album", nil, studioRelease)
+		candidate.Recall = recall
+		best := music.ReleaseScore{Candidate: candidate, Accepted: true, Distance: 0.18, GateDistance: 0.19}
+		return music.AlbumDecision{Outcome: music.AlbumIdentified, Scores: []music.ReleaseScore{best}, Best: &best}
+	}
+	if got := weak(music.RecallSibling).Within(0.9); got.Outcome != music.AlbumIdentified {
+		t.Errorf("siblings' album = %s, want identified", got.Outcome)
+	}
+	if got := weak(music.RecallAlbumTags).Within(0.9); got.Outcome != music.AlbumAmbiguous {
+		t.Errorf("album recalled by its tags = %s, want ambiguous below the threshold", got.Outcome)
 	}
 }

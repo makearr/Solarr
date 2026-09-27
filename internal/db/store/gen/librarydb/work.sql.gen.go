@@ -1531,8 +1531,6 @@ type SetWorkDescriptionParams struct {
 	ID          int64
 }
 
-// Unlike year, unconditional: nothing else writes a work's description yet,
-// so there is no earlier value worth protecting.
 func (q *Queries) SetWorkDescription(ctx context.Context, arg SetWorkDescriptionParams) error {
 	_, err := q.db.ExecContext(ctx, setWorkDescription, arg.Description, arg.UpdatedAt, arg.ID)
 	return err
@@ -1594,6 +1592,30 @@ type SetWorkPrimaryArtistParams struct {
 // role='artist' ord=0 credit is ever recorded.
 func (q *Queries) SetWorkPrimaryArtist(ctx context.Context, arg SetWorkPrimaryArtistParams) error {
 	_, err := q.db.ExecContext(ctx, setWorkPrimaryArtist, arg.PrimaryArtistID, arg.PrimaryArtistSortName, arg.ID)
+	return err
+}
+
+const setWorkTitle = `-- name: SetWorkTitle :exec
+UPDATE work SET canonical_title = ?, sort_title = ?, updated_at = ? WHERE id = ?
+`
+
+type SetWorkTitleParams struct {
+	CanonicalTitle string
+	SortTitle      string
+	UpdatedAt      int64
+	ID             int64
+}
+
+// Unlike year, unconditional: nothing else writes a work's description yet,
+// so there is no earlier value worth protecting.
+// A work is named after its release group once enrichment has it, not after whichever file came first.
+func (q *Queries) SetWorkTitle(ctx context.Context, arg SetWorkTitleParams) error {
+	_, err := q.db.ExecContext(ctx, setWorkTitle,
+		arg.CanonicalTitle,
+		arg.SortTitle,
+		arg.UpdatedAt,
+		arg.ID,
+	)
 	return err
 }
 

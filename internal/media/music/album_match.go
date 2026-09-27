@@ -374,20 +374,25 @@ func addAlbumDimensions(d *distance, locals []LocalTrack, candidate AlbumCandida
 		d.add(dimensionArtist, dampened(penalty, artist.Provenance))
 	}
 	if album := consensusClaim(locals, func(t LocalTrack) Claim { return t.Album }); album.present() {
-		penalty := 1.0
-		for _, title := range []string{album.Value, cleanAlbumTag(album.Value), folderAlbum(locals)} {
-			if title == "" {
-				continue
-			}
-			penalty = min(penalty, match.EditPenalty(title, candidate.Release.Title), match.EditPenalty(title, candidate.ReleaseGroup.Title))
-		}
-		d.add(dimensionAlbum, dampened(penalty, album.Provenance))
+		d.add(dimensionAlbum, dampened(albumTitlePenalty(locals, album, candidate), album.Provenance))
 	}
 	if year, releaseYear := consensusYear(locals), yearOf(candidate.Release.Date); year > 0 && releaseYear > 0 {
 		gap := math.Abs(float64(year - releaseYear))
 		d.add(dimensionYear, min(1, gap/10))
 	}
 	return artistOK
+}
+
+// albumTitlePenalty is how far the closest title the files give for their album is from the candidate's.
+func albumTitlePenalty(locals []LocalTrack, album Claim, candidate AlbumCandidate) float64 {
+	penalty := 1.0
+	for _, title := range []string{album.Value, cleanAlbumTag(album.Value), folderAlbum(locals)} {
+		if title == "" {
+			continue
+		}
+		penalty = min(penalty, match.EditPenalty(title, candidate.Release.Title), match.EditPenalty(title, candidate.ReleaseGroup.Title))
+	}
+	return penalty
 }
 
 // artistPenalty is the closest of the whole credit and each credited name, so "A & B"
@@ -426,11 +431,14 @@ func isVariousArtists(candidate AlbumCandidate) bool {
 	return strings.EqualFold(candidate.ArtistCredit, "Various Artists")
 }
 
+// derivedReleaseTypes are secondary types whose release re-presents music released first elsewhere.
+var derivedReleaseTypes = []string{"Compilation", "Live", "Remix", "DJ-mix"}
+
 // releaseTypePenalty prefers a studio album over an EP, then anything else, then a
-// compilation or live release carrying the same recordings.
+// compilation, live, remix or DJ-mix release carrying the same title.
 func releaseTypePenalty(rg musicbrainz.ReleaseGroup) float64 {
 	for _, secondary := range rg.SecondaryTypes {
-		if strings.EqualFold(secondary, "Compilation") || strings.EqualFold(secondary, "Live") {
+		if slices.ContainsFunc(derivedReleaseTypes, func(derived string) bool { return strings.EqualFold(secondary, derived) }) {
 			return 1
 		}
 	}
@@ -539,13 +547,16 @@ func DecideAlbum(locals []LocalTrack, candidates []AlbumCandidate) AlbumDecision
 	if runnerUp >= 0 && scores[runnerUp].Distance-best.Distance < winnerMargin && !officialOverUnofficial &&
 		!onlyCompleteFit(scores, len(locals)) && !rivalsAreTheSameMusic(scores) &&
 		!onlyPerfectFit(best, scores[runnerUp]) {
-		sibling := siblingsAlbumWithinMargin(scores)
-		if sibling < 0 {
+		pick := siblingsAlbumWithinMargin(scores)
+		if pick < 0 {
+			pick = namedAlbumWithinMargin(locals, scores)
+		}
+		if pick < 0 {
 			decision.Outcome = AlbumAmbiguous
 			return decision
 		}
-		chosen := scores[sibling]
-		copy(scores[1:sibling+1], scores[:sibling])
+		chosen := scores[pick]
+		copy(scores[1:pick+1], scores[:pick])
 		scores[0] = chosen
 	}
 	decision.Outcome = AlbumIdentified
@@ -602,6 +613,30 @@ func siblingsAlbumWithinMargin(scores []ReleaseScore) int {
 	return slices.IndexFunc(scores, func(score ReleaseScore) bool {
 		return score.Accepted && score.Candidate.Recall == RecallSibling && score.Distance-scores[0].Distance < winnerMargin
 	})
+}
+
+// namedAlbumWithinMargin is the accepted release, inside the margin, of the one release group the
+// files' album tag or folder names exactly; -1 when none or several are ("Budof & Kata to Mifed").
+func namedAlbumWithinMargin(locals []LocalTrack, scores []ReleaseScore) int {
+	album := consensusClaim(locals, func(t LocalTrack) Claim { return t.Album })
+	if !album.present() && folderAlbum(locals) == "" {
+		return -1
+	}
+	pick, named := -1, ""
+	for i, score := range scores {
+		if !score.Accepted || score.Distance-scores[0].Distance >= winnerMargin ||
+			albumTitlePenalty(locals, album, score.Candidate) > distanceEpsilon {
+			continue
+		}
+		group := score.Candidate.ReleaseGroup.MBID
+		switch {
+		case pick < 0:
+			pick, named = i, group
+		case group != named:
+			return -1
+		}
+	}
+	return pick
 }
 
 // onlyPerfectFit is a best release every claim agrees with against a rival some claim contradicts:

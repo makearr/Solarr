@@ -382,6 +382,8 @@ type Querier interface {
 	ListEditions(ctx context.Context, workID int64) ([]Edition, error)
 	ListEnabledSubscriptions(ctx context.Context) ([]Subscription, error)
 	ListExpiredRecycleBin(ctx context.Context, arg ListExpiredRecycleBinParams) ([]RecycleBin, error)
+	// A work's files with where each claims to sit, for aligning them once its tracklist exists.
+	ListFileTrackClaimsForWork(ctx context.Context, workID int64) ([]FileTrackClaim, error)
 	ListFilesForDesiredItem(ctx context.Context, desiredItemID int64) ([]DesiredItemFile, error)
 	// Genre chips for the artist page (Lidarr-like): the union of every genre
 	// tagged on any work credited to this person -- Person itself carries no
@@ -705,8 +707,6 @@ type Querier interface {
 	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error
 	SetWorkClassification(ctx context.Context, arg SetWorkClassificationParams) error
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error
-	// Unlike year, unconditional: nothing else writes a work's description yet,
-	// so there is no earlier value worth protecting.
 	SetWorkDescription(ctx context.Context, arg SetWorkDescriptionParams) error
 	SetWorkField(ctx context.Context, arg SetWorkFieldParams) error
 	SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonitoredParams) error
@@ -714,6 +714,10 @@ type Querier interface {
 	// doc comment) -- written only by internal/db/library.People.AddCredit, the one place a
 	// role='artist' ord=0 credit is ever recorded.
 	SetWorkPrimaryArtist(ctx context.Context, arg SetWorkPrimaryArtistParams) error
+	// Unlike year, unconditional: nothing else writes a work's description yet,
+	// so there is no earlier value worth protecting.
+	// A work is named after its release group once enrichment has it, not after whichever file came first.
+	SetWorkTitle(ctx context.Context, arg SetWorkTitleParams) error
 	// A sweep that starts records only that it started: the watermark must not move
 	// until one finishes, or an interrupted scan would look complete.
 	StartScan(ctx context.Context, arg StartScanParams) error
@@ -741,6 +745,7 @@ type Querier interface {
 	UpsertArtwork(ctx context.Context, arg UpsertArtworkParams) error
 	// Candidates, decisions and provenance. Column lists follow table order.
 	UpsertCandidate(ctx context.Context, arg UpsertCandidateParams) (Candidate, error)
+	UpsertFileTrackClaim(ctx context.Context, arg UpsertFileTrackClaimParams) error
 	UpsertHuntQueueEntry(ctx context.Context, arg UpsertHuntQueueEntryParams) error
 	// F29: the manual identification queue (migration 0014). Column lists follow table
 	// order, or sqlc stops reusing models.
