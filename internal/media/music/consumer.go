@@ -12,7 +12,6 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
-	"github.com/makearr/Solarr/internal/identify/match"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
@@ -558,7 +557,7 @@ func sameAudio(recordings []acoustid.Recording, chosen acoustid.Recording) []str
 	for _, recording := range recordings {
 		if recording.MBID != chosen.MBID && !slices.Contains(mbids, recording.MBID) &&
 			strings.EqualFold(recording.Artist, chosen.Artist) && (recording.Duration-chosen.Duration).Abs() <= trackLengthTolerance &&
-			match.EditPenalty(recording.Title, chosen.Title) <= trackTitlePenalty {
+			sameTrackTitle(recording.Title, chosen.Title) {
 			mbids = append(mbids, recording.MBID)
 		}
 	}

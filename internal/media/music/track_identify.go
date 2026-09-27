@@ -97,8 +97,7 @@ func (c Consumer) recordingsFor(ctx context.Context, file pendingFile, local Loc
 		}
 		// A fingerprint's link to a song of another title is a wrong link, not this file (a live
 		// "Zacami of Lupidegep" named for "Tusa I'fi Zoke", 2026-09-27).
-		if err == nil && len(recording.ReleaseGroups) > 0 &&
-			(!local.Title.present() || match.EditPenalty(local.Title.Value, recording.Title) <= supportTitlePenalty) {
+		if err == nil && len(recording.ReleaseGroups) > 0 && (!local.Title.present() || sameTrackTitle(local.Title.Value, recording.Title)) {
 			known = append(known, recording)
 		}
 	}
@@ -116,7 +115,7 @@ func (c Consumer) recordingsFor(ctx context.Context, file pendingFile, local Loc
 	for _, recording := range found {
 		length := time.Duration(recording.DurationMs) * time.Millisecond
 		if recording.DurationMs > 0 && (length-local.Duration).Abs() <= trackLengthTolerance &&
-			match.EditPenalty(local.Title.Value, recording.Title) <= trackTitlePenalty &&
+			sameTrackTitle(local.Title.Value, recording.Title) &&
 			artistPenalty(local.Artist.Value, recording.ArtistCredit) <= maxArtistPenalty {
 			fitting = append(fitting, recording)
 		}
@@ -177,6 +176,34 @@ func homeGroup(
 		)
 	})
 	return best.group, best.recording, true
+}
+
+// sameTrackTitle is one song's title however it is qualified: "Pimeku (radio edit)" is "Levels".
+func sameTrackTitle(a, b string) bool {
+	if match.EditPenalty(a, b) <= trackTitlePenalty {
+		return true
+	}
+	coreA, coreB := titleCore(a), titleCore(b)
+	return coreA != "" && coreB != "" && match.EditPenalty(coreA, coreB) <= trackTitlePenalty
+}
+
+// titleCore is a title without its bracketed qualifiers.
+func titleCore(title string) string {
+	var core strings.Builder
+	depth := 0
+	for _, r := range title {
+		switch r {
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			depth = max(0, depth-1)
+		default:
+			if depth == 0 {
+				core.WriteRune(r)
+			}
+		}
+	}
+	return strings.TrimSpace(core.String())
 }
 
 // compareDates orders partial dates earliest first, an unknown date last.

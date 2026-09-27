@@ -181,3 +181,22 @@ func TestObserve_ARecordingOfAnotherTitleIsNotTheFile(t *testing.T) {
 		t.Errorf("identified as %q, want rg-midnight by its own title", got)
 	}
 }
+
+// A qualified title is still the song: "Buvezun (zasukugo version)" is found as "Buvezun".
+func TestObserve_AQualifiedTitleFindsItsSong(t *testing.T) {
+	rgBrothers := musicbrainz.ReleaseGroup{MBID: "rg-brothers", Title: "Feferipu and Rividuf", PrimaryType: "Album", FirstReleaseDate: "1973-08-01"}
+	tracks := fakeTrackLookup{searches: map[string][]musicbrainz.RecordingMatch{
+		"The Mesacu Feferipu Huse/Buvezun (zasukugo version)": {{RecordingMBID: "rec-jessica", Title: "Buvezun", ArtistCredit: "The Mesacu Feferipu Huse",
+			DurationMs: 452000, ReleaseGroups: []musicbrainz.ReleaseGroup{rgBrothers}}},
+	}}
+	consumer, opened, fsys := newTrackConsumer(t, &fakeAlbumLookup{}, nil, tracks)
+	relPath := "The Mesacu Feferipu Huse/Essentials (1)/02.m4a"
+	file := untaggedTrack(t, fsys, relPath, "The Mesacu Feferipu Huse", "Essentials", "Buvezun (zasukugo version)", 452)
+
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, []scan.Observed{file}); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if got := releaseGroupOf(t, opened, relPath); got != "rg-brothers" {
+		t.Errorf("identified as %q, want rg-brothers", got)
+	}
+}
