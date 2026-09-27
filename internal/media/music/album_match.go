@@ -564,6 +564,16 @@ func DecideAlbum(locals []LocalTrack, candidates []AlbumCandidate) AlbumDecision
 		}
 		return decision
 	}
+	// The release the files name beats one they do not, however much its type is preferred: a
+	// "50th Anniversary Remix" tag is not the 1969 original (Rehekan, the main library, 2026-09-28).
+	if !namesRelease(locals, best) {
+		if pick := namedAlbum(locals, scores, math.Inf(1)); pick > 0 {
+			chosen := scores[pick]
+			copy(scores[1:pick+1], scores[:pick])
+			scores[0] = chosen
+			best = chosen
+		}
+	}
 	runnerUp := slices.IndexFunc(scores, func(s ReleaseScore) bool {
 		return s.Accepted && s.Candidate.ReleaseGroup.MBID != best.Candidate.ReleaseGroup.MBID
 	})
@@ -644,14 +654,14 @@ func siblingsAlbumWithinMargin(scores []ReleaseScore) int {
 // namedAlbumWithinMargin is the accepted release, inside the margin, of the one release group the
 // files' album tag or folder names exactly; -1 when none or several are ("Budof & Kata to Mifed").
 func namedAlbumWithinMargin(locals []LocalTrack, scores []ReleaseScore) int {
-	album := consensusClaim(locals, func(t LocalTrack) Claim { return t.Album })
-	if !album.present() && folderAlbum(locals) == "" {
-		return -1
-	}
+	return namedAlbum(locals, scores, winnerMargin)
+}
+
+// namedAlbum is namedAlbumWithinMargin for any margin.
+func namedAlbum(locals []LocalTrack, scores []ReleaseScore, margin float64) int {
 	pick, named := -1, ""
 	for i, score := range scores {
-		if !score.Accepted || score.Distance-scores[0].Distance >= winnerMargin ||
-			albumTitlePenalty(locals, album, score.Candidate) > distanceEpsilon {
+		if !score.Accepted || score.Distance-scores[0].Distance >= margin || !namesRelease(locals, score) {
 			continue
 		}
 		group := score.Candidate.ReleaseGroup.MBID
@@ -663,6 +673,15 @@ func namedAlbumWithinMargin(locals []LocalTrack, scores []ReleaseScore) int {
 		}
 	}
 	return pick
+}
+
+// namesRelease is a release whose title the files' album tag or folder gives exactly.
+func namesRelease(locals []LocalTrack, score ReleaseScore) bool {
+	album := consensusClaim(locals, func(t LocalTrack) Claim { return t.Album })
+	if !album.present() && folderAlbum(locals) == "" {
+		return false
+	}
+	return albumTitlePenalty(locals, album, score.Candidate) <= distanceEpsilon
 }
 
 // onlyPerfectFit is a best release every claim agrees with against a rival some claim contradicts:

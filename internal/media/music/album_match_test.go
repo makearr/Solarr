@@ -500,3 +500,21 @@ func TestDecideAlbum_APlaylistIsNotTheCompilationThatHoldsItsTracks(t *testing.T
 		t.Errorf("in its own order = %s, want the compilation identified", decision.Outcome)
 	}
 }
+
+// The release the files name beats one they do not beyond the margin too: two files of a
+// "50th Anniversary Remix" went to the 1969 original on release type alone (Rehekan, 2026-09-28).
+func TestDecideAlbum_TheNamedReleaseBeatsAnUnnamedPreferredOne(t *testing.T) {
+	original := candidateOf("rg-original", "Album", nil, studioRelease)
+	remix := candidateOf("rg-remix", "Album", []string{"Remix"},
+		recordedAs(releaseOf("rel-remix", "Kebilegev Bibihi: 50th Anniversary Remix", "official", "2019", traumaTracks), "remix"))
+	locals := folderOf(traumaTracks[:2])
+	for i := range locals {
+		locals[i].Album = tagged("Kebilegev Bibihi: 50th Anniversary Remix")
+	}
+
+	decision := music.DecideAlbum(locals, []music.AlbumCandidate{original, remix})
+	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-remix" {
+		t.Errorf("decision = %s %q (distances %.3f, %.3f), want identified rg-remix", decision.Outcome, bestReleaseGroup(decision),
+			decision.Scores[0].Distance, decision.Scores[1].Distance)
+	}
+}

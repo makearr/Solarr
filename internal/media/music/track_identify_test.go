@@ -292,3 +292,25 @@ func TestObserve_AFileNamedOnlyAsItsInstrumentalIsSearchedForTheSong(t *testing.
 		t.Errorf("identified as %q, want rg-party", got)
 	}
 }
+
+// A file whose song is on the album its folder's files agree on stays there, though its fingerprint
+// names only the single's entry: "VAHE 4 FUP" on "The Ratu King: The Gift" (2026-09-28).
+func TestObserve_ASongOnTheSiblingsAlbumStaysThere(t *testing.T) {
+	single := "0a1b2c3d-0000-4000-8000-000000000005"
+	rgSingle := musicbrainz.ReleaseGroup{MBID: "rg-revenge-single", Title: "Semidos", PrimaryType: "Single", FirstReleaseDate: "2017-01-01"}
+	tracks := fakeTrackLookup{recordings: map[string]musicbrainz.RecordingMatch{
+		single: {RecordingMBID: single, Title: "Semidos", ArtistCredit: "P!po", DurationMs: 300000, ReleaseGroups: []musicbrainz.ReleaseGroup{rgSingle}},
+	}}
+	consumer, opened, fsys := newTrackConsumer(t, traumaLookup(releaseGroupMBID), nil, tracks)
+	relPath := "P!po/Kebilegev Bibihi (2017)/P!po - 02 - Semidos (single edit).m4a"
+	file := untaggedTrack(t, fsys, relPath, "P!po", "Kebilegev Bibihi", "Semidos (single edit)", 300)
+	file.Probe.Tags["musicbrainz_trackid"] = single
+	batch := append(untaggedTraumaBatch(t, fsys)[2:], file)
+
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if got := releaseGroupOf(t, opened, relPath); got != releaseGroupMBID {
+		t.Errorf("identified as %q, want the siblings' album %q", got, releaseGroupMBID)
+	}
+}

@@ -12,7 +12,8 @@ A scan batch is one directory's files. Each pass only sees what the previous one
    per folder (cached; enrichment needs it anyway): a merged id is stored as the group it was
    merged into; a retired one, 404 at every source, is recorded `retired` and the files go on to
    album matching like untagged ones. An unreachable source trusts the tags.
-2. **Album matching**: the remaining files, grouped by album tag, scored together against
+2. **Album matching** (a release the files' album tag or folder names exactly beats one they do
+   not, whatever its release type): the remaining files, grouped by album tag, scored together against
    whole release tracklists. A group that fits nothing as a whole while its track numbers
    collide is split by the track total each file claims ("3/10" against "3") and each part
    matched alone: an album's first half and its single's remixes under one album tag.
@@ -34,9 +35,10 @@ A scan batch is one directory's files. Each pass only sees what the previous one
    certainty**: of every release group that recording is on -- the folder's own included, when
    another of its editions carries the track the matched edition lacks -- the album the folder,
    the album tag or the identified siblings name wins; otherwise a studio album before an EP, a
-   single, then a compilation, live, remix or DJ-mix release, the earliest first. Only a
-   fingerprint or an embedded recording id takes a file from the album its siblings agree on; a
-   title search alone does not (one standard, many takes). An ambiguous album stays queued.
+   single, then a compilation, live, remix or DJ-mix release, the earliest first. A file stays
+   with the album its siblings agree on when that album has its song, or when only a title
+   search points elsewhere (one standard, many takes); a fingerprint or an embedded recording id
+   of a song the album lacks moves it. An ambiguous album stays queued.
 6. **Folder siblings**: an unresolved file joins the one album its identified siblings agree on,
    at a confidence of 0.5 -- with nothing contradicting it, the folder is the best hint left.
 

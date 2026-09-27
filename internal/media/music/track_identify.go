@@ -47,14 +47,19 @@ func (c Consumer) trackPass(ctx context.Context, out *batchResult, files []pendi
 	if sibling, agreed := soleSiblingIdentity(out.links); agreed && sibling.Provider == ProviderReleaseGroup {
 		hints = append(hints, sibling.ExternalID)
 	}
+	siblingTitles := c.albumTitles(ctx, hints)
 	var pending []pendingFile
 	for _, file := range files {
 		one := out.observed[file.index]
 		local := ReadLocalTrack(one.Probe.Tags, one.Probe.Measured, one.File.RelPath)
 		recordings, confidence := c.recordingsFor(ctx, file, local)
 		home, recording, found := homeGroup(recordings, local, hints)
-		// Text alone does not outweigh a folder whose identified files agree: one song has many takes.
-		if found && confidence < trackKnownConfidence && len(hints) > 0 && !slices.Contains(hints, home.MBID) {
+		// A file stays with the album its folder's files agree on when that album has its song, or
+		// when only a title search points elsewhere: one song has many takes and many entries.
+		if found && len(hints) > 0 && !slices.Contains(hints, home.MBID) &&
+			(confidence < trackKnownConfidence || slices.ContainsFunc(siblingTitles, func(title string) bool {
+				return local.Title.present() && sameTrackTitle(local.Title.Value, title)
+			})) {
 			found = false
 		}
 		if !found {
@@ -84,6 +89,29 @@ func (c Consumer) trackPass(ctx context.Context, out *batchResult, files []pendi
 		}, TrackFile{MediaObjectID: out.mediaObjectIDs[file.index], Title: local.Title.Value, RecordingMBID: recording.RecordingMBID})
 	}
 	return pending
+}
+
+// albumTitles are the track titles of every release of the given release groups, from the cache
+// album matching filled; nil without an album lookup.
+func (c Consumer) albumTitles(ctx context.Context, groups []string) []string {
+	if c.albums == nil {
+		return nil
+	}
+	var titles []string
+	for _, group := range groups {
+		releases, err := c.albums.Releases(ctx, musicbrainz.PriorityIdentify, group)
+		if err != nil {
+			continue
+		}
+		for _, release := range releases {
+			for _, medium := range release.Media {
+				for _, track := range medium.Tracks {
+					titles = append(titles, track.Title)
+				}
+			}
+		}
+	}
+	return titles
 }
 
 // recordingsFor answers what recording the file is: every one its fingerprint or embedded id names,
