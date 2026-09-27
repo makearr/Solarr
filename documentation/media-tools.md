@@ -104,15 +104,18 @@ kid3 and its Qt, or linking taglib — which means CGO and is what ADR-30 exists
 **ffprobe takes one file per invocation**, so ADR-30's "one invocation per import
 batch" cannot be met literally. What ADR-28 actually rules out — a synchronous
 subprocess round trip on the caller's hot path — is met instead: the batch is one
-call, and inside it invocations run with bounded concurrency, eight by default.
+call, and inside it invocations run with bounded concurrency, **sixteen per tool across
+every concurrent call**. The scan identifies several directories at once; a per-call
+limit multiplied with them and thrashed the storage.
 
-| | 200 files |
-|---|---|
-| Sequential | 8 s (40 ms each) |
-| 8-way | 1 s (5 ms each) |
+| | 200 files, local disk | cold files, NAS over NFS (2026-09-27) |
+|---|---|---|
+| Sequential | 8 s (40 ms each) | 2 files/s |
+| 8-way | 1 s (5 ms each) | 7 files/s |
+| 16-32-way | | 7-12 files/s; beyond that READs took 1.2 s each |
 
-At ADR-22's 500k that is about 42 minutes of background scanning, against 5.5 hours
-sequential. A pure-Go tag reader would avoid the process spawns, but **ADR-39 needs
+On a NAS the probe, not identification, is what bounds a first scan: plan on hours for a
+six-figure library. A pure-Go tag reader would avoid the process spawns, but **ADR-39 needs
 ffprobe on every file regardless** — a release name states claims, a probe states
 facts — so reading tags from the same invocation is free and a second pass would
 not be.

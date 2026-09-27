@@ -87,3 +87,61 @@ func TestPipeline_AFailureStopsTheCursorBeforeIt(t *testing.T) {
 		t.Errorf("advanced %q, want only a and b", advanced)
 	}
 }
+
+// A slow directory holds only its own slot: the ones after it keep being observed while the
+// cursor waits for it.
+func TestPipeline_ASlowDirectoryDoesNotIdleTheOtherSlots(t *testing.T) {
+	later := 2 * observeConcurrency
+	var observed atomic.Int32
+	release := make(chan struct{})
+	var advanced []string
+	flow := pipeline{
+		observe: func(_ context.Context, batch Batch) error {
+			if batch.Directory == "slow" {
+				<-release
+				return nil
+			}
+			if int(observed.Add(1)) == later {
+				close(release)
+			}
+			return nil
+		},
+		advance: func(_ context.Context, directory string) error {
+			advanced = append(advanced, directory)
+			return nil
+		},
+	}
+	done := make(chan error, 1)
+	go func() {
+		want := []string{"slow"}
+		if err := flow.submit(t.Context(), Batch{Directory: "slow"}); err != nil {
+			done <- err
+			return
+		}
+		for i := range later {
+			directory := fmt.Sprintf("d%02d", i)
+			want = append(want, directory)
+			if err := flow.submit(t.Context(), Batch{Directory: directory}); err != nil {
+				done <- err
+				return
+			}
+		}
+		if err := flow.wait(t.Context()); err != nil {
+			done <- err
+			return
+		}
+		if !slices.Equal(advanced, want) {
+			done <- fmt.Errorf("advanced %q, want %q", advanced, want)
+			return
+		}
+		done <- nil
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("stalled behind the slow directory after %d others", observed.Load())
+	}
+}

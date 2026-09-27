@@ -365,6 +365,24 @@ func TestDecideAlbum_TheFoldersAlbumNameFitsWhereTheTagDoesNot(t *testing.T) {
 	}
 }
 
+// The album the files name decides between close rivals: "Kerul of the Fofu" is not "1958 Bokuf",
+// however much a studio album is preferred to a compilation (the main library, 2026-09-27).
+func TestDecideAlbum_TheAlbumTheFilesNameWinsInsideTheMargin(t *testing.T) {
+	studio := candidateOf("rg-studio", "Album", nil, studioRelease)
+	named := candidateOf("rg-named", "Album", []string{"Compilation"},
+		recordedAs(releaseOf("rel-named", "Kuselobi You Pato", "official", "2017-10-13", traumaTracks), "named"))
+	locals := folderOf(traumaTracks)
+	for i := range locals {
+		locals[i].Album = tagged("Kuselobi You Pato")
+	}
+
+	decision := music.DecideAlbum(locals, []music.AlbumCandidate{studio, named})
+	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-named" {
+		t.Errorf("decision = %s %q (distances %.3f, %.3f), want identified rg-named", decision.Outcome,
+			bestReleaseGroup(decision), decision.Scores[0].Distance, decision.Scores[1].Distance)
+	}
+}
+
 // A release every claim agrees with beats a rival one claim contradicts, however small the gap
 // (Dacapa Hivop Pibazi's "Mepukafamo" at 0.000 against "Mepukafamo" at 0.042, the main library).
 func TestDecideAlbum_APerfectFitBeatsACloseImperfectRival(t *testing.T) {

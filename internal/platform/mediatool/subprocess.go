@@ -25,10 +25,9 @@ const (
 // artwork jobs put on a downloaded image.
 const maxEmbeddedPictureBytes = 20 << 20
 
-// defaultParallelism is how many probes run at once. ffprobe takes one file per
-// invocation, so a batch is only as fast as this: measured at 40 ms per file
-// sequential and 5 ms at eight, against a 500k library (documentation/media-tools.md).
-const defaultParallelism = 8
+// defaultParallelism is how many tool processes one Subprocess runs at once, across every
+// concurrent call: a NAS served 7-12 cold probes a second at 8-32 and thrashed beyond (2026-09-27).
+const defaultParallelism = 16
 
 // perFileTimeout bounds one invocation. A file on a stalled network mount must not
 // hold the batch open indefinitely -- section 15.2's shutdown deadline is 30s.
@@ -36,8 +35,9 @@ const perFileTimeout = 20 * time.Second
 
 // Subprocess is the ADR-30 Tool backed by the tools the image carries.
 type Subprocess struct {
-	runner      Runner
-	parallelism int
+	runner Runner
+	// slots bound the processes running at once, shared by concurrent calls: storage pays per file.
+	slots chan struct{}
 }
 
 // New builds it. A nil runner takes the real one; parallelism at or below zero takes
@@ -49,7 +49,7 @@ func New(runner Runner, parallelism int) *Subprocess {
 	if parallelism <= 0 {
 		parallelism = defaultParallelism
 	}
-	return &Subprocess{runner: runner, parallelism: parallelism}
+	return &Subprocess{runner: runner, slots: make(chan struct{}, parallelism)}
 }
 
 // Available reports every missing tool at once rather than the first, so an operator
@@ -106,35 +106,22 @@ func (s *Subprocess) WriteTags(_ context.Context, edits []TagEdit) error {
 	return ErrWriteUnsupported
 }
 
-// eachInParallel runs work over count indices, at most parallelism at a time. The
-// results slice is preallocated and each call writes its own index, so no lock is
-// needed for the results themselves.
+// eachInParallel runs work over count indices, at most the Subprocess's slots at a time across
+// every call. Each call writes its own index, so the results need no lock.
 func (s *Subprocess) eachInParallel(ctx context.Context, count int, work func(index int)) {
-	limit := min(s.parallelism, count)
-	indices := make(chan int)
 	var running sync.WaitGroup
-
-	for range limit {
-		running.Add(1)
-		go func() {
-			defer running.Done()
-			for index := range indices {
-				work(index)
-			}
-		}()
-	}
-
+	defer running.Wait()
 	for index := range count {
 		select {
-		case indices <- index:
+		case s.slots <- struct{}{}:
 		case <-ctx.Done():
-			close(indices)
-			running.Wait()
 			return
 		}
+		running.Go(func() {
+			defer func() { <-s.slots }()
+			work(index)
+		})
 	}
-	close(indices)
-	running.Wait()
 }
 
 func (s *Subprocess) probeOne(ctx context.Context, path string) Probe {
