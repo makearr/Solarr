@@ -335,9 +335,11 @@ func albumConfidence(score ReleaseScore) float64 {
 }
 
 // Within keeps an identified album only when it is at least threshold likely right; below it the
-// match goes to review like an ambiguous one -- the one threshold governs album matching too.
+// match goes to review like an ambiguous one. The album the folder's tagged files name is exempt:
+// their embedded ids already prove it, the fit only places the rest.
 func (d AlbumDecision) Within(threshold float64) AlbumDecision {
-	if d.Outcome == AlbumIdentified && d.Best != nil && albumConfidence(*d.Best) < threshold {
+	if d.Outcome == AlbumIdentified && d.Best != nil && d.Best.Candidate.Recall != RecallSibling &&
+		albumConfidence(*d.Best) < threshold {
 		d.Outcome = AlbumAmbiguous
 	}
 	return d

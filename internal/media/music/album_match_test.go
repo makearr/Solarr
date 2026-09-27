@@ -440,3 +440,20 @@ func TestDecideAlbum_AFileNoTrackFitsStaysUnplaced(t *testing.T) {
 		t.Errorf("bonus track placed on %+v, want unplaced", track)
 	}
 }
+
+// The untagged rest of a folder whose tagged files name the album only has to fit it, not prove it
+// again: one odd length among four files sent "Kab It for the Mazar" to review (the main library).
+func TestWithin_TheSiblingsAlbumIsNotSentToReviewForAWeakFit(t *testing.T) {
+	weak := func(recall string) music.AlbumDecision {
+		candidate := candidateOf("rg-studio", "Album", nil, studioRelease)
+		candidate.Recall = recall
+		best := music.ReleaseScore{Candidate: candidate, Accepted: true, Distance: 0.18, GateDistance: 0.19}
+		return music.AlbumDecision{Outcome: music.AlbumIdentified, Scores: []music.ReleaseScore{best}, Best: &best}
+	}
+	if got := weak(music.RecallSibling).Within(0.9); got.Outcome != music.AlbumIdentified {
+		t.Errorf("siblings' album = %s, want identified", got.Outcome)
+	}
+	if got := weak(music.RecallAlbumTags).Within(0.9); got.Outcome != music.AlbumAmbiguous {
+		t.Errorf("album recalled by its tags = %s, want ambiguous below the threshold", got.Outcome)
+	}
+}
