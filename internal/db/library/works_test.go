@@ -400,9 +400,11 @@ func TestListWorks_WantedFiltersToMonitoredIncompleteDesiredItems(t *testing.T) 
 	works := library.NewWorks(opened)
 
 	missing := createWork(t, opened, "music", "Missing Album")
+	addTrack(t, opened, missing.ID)
 	createDesired(t, opened, missing.ID, "SET", 10)
 
 	complete := createWork(t, opened, "music", "Complete Album")
+	addTrack(t, opened, complete.ID)
 	completeItem := createDesired(t, opened, complete.ID, "SET", 10)
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		return q.SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{
@@ -411,6 +413,7 @@ func TestListWorks_WantedFiltersToMonitoredIncompleteDesiredItems(t *testing.T) 
 	})
 
 	unmonitored := createWork(t, opened, "music", "Unmonitored Album")
+	addTrack(t, opened, unmonitored.ID)
 	unmonitoredItem := createDesired(t, opened, unmonitored.ID, "SET", 10)
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		return q.SetDesiredItemMonitored(ctx, librarydb.SetDesiredItemMonitoredParams{
@@ -439,6 +442,7 @@ func TestListWorks_SortBySearchedPutsNeverSearchedFirst(t *testing.T) {
 	desired := library.NewDesired(opened)
 	for _, title := range []string{"Searched Late", "Never Searched", "Searched Early"} {
 		work := createWork(t, opened, "music", title)
+		addTrack(t, opened, work.ID)
 		item := createDesired(t, opened, work.ID, "SET", 10)
 		switch title {
 		case "Searched Late":
@@ -660,5 +664,32 @@ func TestResolveWorksDetailed_CreatedOnlyForTheFirstLinkOfANewWork(t *testing.T)
 		if len(work.ExternalIDs) != 1 {
 			t.Errorf("work %d has external ids %+v, want its own one", r.WorkID, work.ExternalIDs)
 		}
+	}
+}
+
+// An album whose tracks are not known yet may be complete on disk: it is not wanted and never
+// searched until enrichment gives it a tracklist (answered 2026-09-28).
+func TestWanted_AnAlbumWithoutATracklistIsWaitingNotMissing(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	waiting := createWork(t, opened, "music", "Waiting Album")
+	createDesired(t, opened, waiting.ID, "SET", 10)
+	missing := createWork(t, opened, "music", "Missing Album")
+	addTrack(t, opened, missing.ID)
+	createDesired(t, opened, missing.ID, "SET", 10)
+
+	page, err := works.List(t.Context(), library.WorkFilter{WantedOnly: true}, library.WorkCursor{}, 100)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(page) != 1 || page[0].ID != missing.ID {
+		t.Errorf("wanted page = %+v, want only the album with a tracklist", page)
+	}
+	items, err := library.NewDesired(opened).IncompleteItems(t.Context(), 0, 0, 0, 100)
+	if err != nil {
+		t.Fatalf("IncompleteItems: %v", err)
+	}
+	if len(items) != 1 || items[0].WorkID != missing.ID {
+		t.Errorf("searched items = %+v, want only the album with a tracklist", items)
 	}
 }

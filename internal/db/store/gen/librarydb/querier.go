@@ -95,7 +95,7 @@ type Querier interface {
 	// shape as ListUnidentified below, a count rather than a page.
 	CountUnidentified(ctx context.Context, arg CountUnidentifiedParams) (int64, error)
 	// The Wanted page's total for one category: the works CountWorksVisibleToCategory counts that
-	// have a monitored item not yet complete, the same condition the wanted list filters on.
+	// have a monitored item not yet complete and a tracklist, the wanted list's own condition.
 	CountWantedWorksVisibleToCategory(ctx context.Context, arg CountWantedWorksVisibleToCategoryParams) (int64, error)
 	// How many files the library actually holds for one work. Removing an album
 	// deletes the work row only when this is zero: with files on disk the work

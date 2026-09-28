@@ -197,7 +197,7 @@ export function WorkDetail() {
               <p className="text-sm text-ink-muted">
                 {work.year ? `Released ${work.year}` : "Release date unknown"}
               </p>
-              <WantedBadge wanted={work.wanted} onDisk={work.on_disk} />
+              <WantedBadge wanted={work.wanted} onDisk={work.on_disk} hasTracklist={work.parts.length > 0} />
             </div>
             <button
               type="button"
@@ -392,14 +392,18 @@ export function WorkDetail() {
 function WantedBadge({
   wanted,
   onDisk,
+  hasTracklist,
 }: {
   wanted: Wanted | null | undefined;
   onDisk: boolean;
+  hasTracklist: boolean;
 }) {
   if (!wanted) return <OnDiskBadge onDisk={onDisk} />;
 
-  const label =
-    wanted.required_count != null
+  // No tracks known yet: the album may well be complete on disk, so it is not called missing.
+  const label = !hasTracklist && wanted.state !== "COMPLETE"
+    ? "Waiting for metadata"
+    : wanted.required_count != null
       ? `${wanted.present_count} of ${wanted.required_count} tracks`
       : wanted.state === "COMPLETE"
         ? "Complete"

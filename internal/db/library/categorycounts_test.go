@@ -332,6 +332,7 @@ func TestCategoryCounters_CountsWantedWorks(t *testing.T) {
 			t.Fatalf("ResolveWorks: %v", err)
 		}
 		ids = append(ids, resolved[0])
+		addTrack(t, opened, resolved[0])
 		if _, err := desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{
 			WorkID: resolved[0], CategoryID: 1, ProfileID: 1, Monitored: name != "unmonitored",
 		}); err != nil {

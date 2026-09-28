@@ -105,12 +105,20 @@ func (env *searchTestEnv) createWork(t *testing.T, title string, year int64) int
 	t.Helper()
 	var created librarydb.Work
 	err := env.library.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		row, err := librarydb.New(tx).CreateWork(ctx, librarydb.CreateWorkParams{
+		queries := librarydb.New(tx)
+		row, err := queries.CreateWork(ctx, librarydb.CreateWorkParams{
 			MediaType: "music", CanonicalTitle: title, SortTitle: title,
 			Year:    sql.NullInt64{Int64: year, Valid: year > 0},
 			AddedAt: env.clock.Now().Unix(), UpdatedAt: env.clock.Now().Unix(),
 		})
+		if err != nil {
+			return err
+		}
 		created = row
+		// Only an album with a known tracklist is searched.
+		_, err = queries.CreateWorkPart(ctx, librarydb.CreateWorkPartParams{
+			WorkID: row.ID, MediaRef: "disc1:track1", SortKey: "0001", Monitored: 1,
+		})
 		return err
 	})
 	if err != nil {
