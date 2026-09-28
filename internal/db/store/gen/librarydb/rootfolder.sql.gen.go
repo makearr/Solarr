@@ -45,6 +45,31 @@ func (q *Queries) CountArtistCreditsVisibleToCategory(ctx context.Context, arg C
 	return total, err
 }
 
+const countWantedWorksVisibleToCategory = `-- name: CountWantedWorksVisibleToCategory :one
+SELECT CAST(COUNT(DISTINCT visible.work_id) AS INTEGER) AS total FROM (
+  SELECT wrf.work_id FROM work_root_folder wrf
+  WHERE wrf.root_folder_id IN (SELECT value FROM json_each(?1))
+  UNION
+  SELECT own.work_id FROM desired_item own WHERE own.category_id = ?2
+) AS visible
+WHERE EXISTS (SELECT 1 FROM desired_item di
+              WHERE di.work_id = visible.work_id AND di.monitored = 1 AND di.state != 'COMPLETE')
+`
+
+type CountWantedWorksVisibleToCategoryParams struct {
+	RootFolderIds interface{}
+	CategoryID    int64
+}
+
+// The Wanted page's total for one category: the works CountWorksVisibleToCategory counts that
+// have a monitored item not yet complete, the same condition the wanted list filters on.
+func (q *Queries) CountWantedWorksVisibleToCategory(ctx context.Context, arg CountWantedWorksVisibleToCategoryParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countWantedWorksVisibleToCategory, arg.RootFolderIds, arg.CategoryID)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const countWorkPartsVisibleToCategory = `-- name: CountWorkPartsVisibleToCategory :one
 SELECT CAST(COUNT(*) AS INTEGER) AS total FROM work_part
 WHERE work_id IN (

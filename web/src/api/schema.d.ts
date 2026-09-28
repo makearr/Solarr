@@ -4932,6 +4932,8 @@ export interface components {
             levels: components["schemas"]["LibraryLevel"][];
             /** @description The level key the caller last visited in this library (user_preference), absent if never visited. */
             last_level?: string;
+            /** @description Albums (works) in this library with a monitored item not yet complete: the Wanted page's total. From the counter table, never a live COUNT; absent until first counted. */
+            wanted?: number;
         };
         /** @description One browsable entity level a media type declares (ADR-23's NavigationLevels extension point). Core never learns what an album or a season is -- key, label and entity are entirely the media type's own vocabulary. */
         LibraryLevel: {

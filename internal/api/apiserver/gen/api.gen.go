@@ -1824,6 +1824,9 @@ type Library struct {
 	Levels    []LibraryLevel `json:"levels"`
 	MediaType string         `json:"media_type"`
 	Name      string         `json:"name"`
+
+	// Wanted Albums (works) in this library with a monitored item not yet complete: the Wanted page's total. From the counter table, never a live COUNT; absent until first counted.
+	Wanted *int `json:"wanted,omitempty"`
 }
 
 // LibraryCategory A category as a navigation target: no `permission` field, since the list is already narrowed to what the caller may read (unlike `Me`'s `categories`, which reports the caller's level on each).

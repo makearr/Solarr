@@ -26,7 +26,7 @@ type CategoryScope struct {
 	OfflineRootFolderIDs []int64
 }
 
-// CategoryCounters recomputes "works", "files", "files_offline", "parts" and
+// CategoryCounters recomputes "works", "works_wanted", "files", "files_offline", "parts" and
 // "artists" per category. "files" is library_path grouped by root folder --
 // a file only ever exists on disk, under a root folder, so that half needs
 // no desired_item involvement; "files_offline" is the same grouping summed
@@ -97,6 +97,12 @@ func (c CategoryCounters) reconcileScope(
 	if err != nil {
 		return nil, fmt.Errorf("count parts: %w", err)
 	}
+	wanted, err := reader.CountWantedWorksVisibleToCategory(ctx, librarydb.CountWantedWorksVisibleToCategoryParams{
+		RootFolderIds: string(encodedRootFolderIDs), CategoryID: scope.CategoryID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("count wanted works: %w", err)
+	}
 	artists, err := reader.CountArtistCreditsVisibleToCategory(ctx, librarydb.CountArtistCreditsVisibleToCategoryParams{
 		RootFolderIds: string(encodedRootFolderIDs), CategoryID: scope.CategoryID,
 	})
@@ -105,6 +111,7 @@ func (c CategoryCounters) reconcileScope(
 	}
 	truth := map[string]int64{
 		"works":         works,
+		"works_wanted":  wanted,
 		"files":         sumFor(filesByRoot, scope.RootFolderIDs),
 		"files_offline": sumFor(filesByRoot, scope.OfflineRootFolderIDs),
 		"parts":         parts,

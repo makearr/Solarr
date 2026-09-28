@@ -41,10 +41,15 @@ func (s *Server) ListLibraries(w http.ResponseWriter, r *http.Request) {
 	visible := access.Categories(settings.PermissionRead)
 	views := make([]gen.Library, len(visible))
 	for index, category := range visible {
+		values := s.counterValues(r.Context(), category.ID)
 		views[index] = gen.Library{
 			Id: category.ID, MediaType: category.MediaType, Name: category.Name,
-			Levels:    s.libraryLevels(r.Context(), category),
+			Levels:    s.libraryLevels(category, values),
 			LastLevel: s.lastLibraryLevel(r.Context(), access.UserID(), category.ID),
+		}
+		if wanted, ok := values["works_wanted"]; ok {
+			count := int(wanted)
+			views[index].Wanted = &count
 		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)
@@ -136,7 +141,7 @@ func (s *Server) SetLibraryLastLevel(w http.ResponseWriter, r *http.Request, id 
 // libraryLevels renders one category's declared levels with their counts.
 // Never errors: an unavailable counter or an unregistered media type both
 // degrade to an absent/empty answer rather than failing navigation entirely.
-func (s *Server) libraryLevels(ctx context.Context, category settings.Category) []gen.LibraryLevel {
+func (s *Server) libraryLevels(category settings.Category, values map[string]int64) []gen.LibraryLevel {
 	if s.navigation == nil {
 		return []gen.LibraryLevel{}
 	}
@@ -145,7 +150,6 @@ func (s *Server) libraryLevels(ctx context.Context, category settings.Category) 
 		return []gen.LibraryLevel{}
 	}
 
-	values := s.counterValues(ctx, category.ID)
 	views := make([]gen.LibraryLevel, len(levels))
 	for index, level := range levels {
 		views[index] = gen.LibraryLevel{

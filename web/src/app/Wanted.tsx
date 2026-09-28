@@ -62,6 +62,18 @@ export function Wanted() {
     },
   });
 
+  // The total comes from the library's counter, as every count does (section 21.12).
+  const libraries = useQuery({
+    queryKey: ["libraries"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/libraries");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const total = libraries.data?.find((library) => String(library.id) === categoryId)?.wanted;
+  const pages = total === undefined ? undefined : Math.max(1, Math.ceil(total / size));
+
   const setView = (next: { sort?: Sort; dir?: "asc" | "desc"; size?: number }) =>
     void navigate({ to: ".", search: { sort, dir, size, ...next }, replace: true });
 
@@ -203,7 +215,11 @@ export function Wanted() {
         >
           Previous
         </button>
-        <span>Page {page + 1}</span>
+        <span>
+          Page {page + 1}
+          {pages !== undefined && ` of ${pages}`}
+          {total !== undefined && ` · ${total.toLocaleString()} ${total === 1 ? "album" : "albums"}`}
+        </span>
         <button
           type="button"
           disabled={!nextCursor}

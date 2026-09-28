@@ -7492,6 +7492,12 @@ components:
           description: >-
             The level key the caller last visited in this library
             (user_preference), absent if never visited.
+        wanted:
+          type: integer
+          description: >-
+            Albums (works) in this library with a monitored item not yet
+            complete: the Wanted page's total. From the counter table, never
+            a live COUNT; absent until first counted.
 
     LibraryLevel:
       type: object
