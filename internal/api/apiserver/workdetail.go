@@ -298,7 +298,8 @@ func (s *Server) SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 
-	if !s.workVisible(w, r, access, id) {
+	// Monitoring decides what is searched and downloaded: request, as search itself (2026-09-28).
+	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
 		return
 	}
 
@@ -347,7 +348,8 @@ func (s *Server) SetPartMonitored(w http.ResponseWriter, r *http.Request, id, pa
 		return
 	}
 
-	if !s.workVisible(w, r, access, id) {
+	// Monitoring decides what is searched and downloaded: request, as search itself (2026-09-28).
+	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
 		return
 	}
 
@@ -401,7 +403,8 @@ func (s *Server) SetTrackWanted(w http.ResponseWriter, r *http.Request, id, part
 		return
 	}
 
-	if !s.workVisible(w, r, access, id) {
+	// Monitoring decides what is searched and downloaded: request, as search itself (2026-09-28).
+	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
 		return
 	}
 

@@ -47,6 +47,7 @@ type fakePeopleSubscriber struct {
 	called                 bool
 	lastPersonID           int64
 	lastUserID             int64
+	lastCategoryID         int64
 	lastMediaTypes         []string
 	lastRoles              []string
 	lastMonitorBack        bool
@@ -65,10 +66,11 @@ func (f *fakePeopleSubscriber) Remove(_ context.Context, personID, userID int64)
 }
 
 func (f *fakePeopleSubscriber) Subscribe(
-	_ context.Context, personID, userID int64, mediaTypes, roles []string,
+	_ context.Context, personID, userID, categoryID int64, mediaTypes, roles []string,
 	monitorBackCatalogue bool, includePrimaryTypes, excludeSecondaryTypes *[]string,
 ) error {
 	f.called = true
+	f.lastCategoryID = categoryID
 	f.lastIncludePrimaries = includePrimaryTypes
 	f.lastPersonID = personID
 	f.lastUserID = userID
@@ -248,10 +250,37 @@ func TestGetPerson_NonNumericIDAnswers400(t *testing.T) {
 	}
 }
 
-func TestSubscribePerson_ReachesTheSubscriberWithTheCallersUserID(t *testing.T) {
+// requestingListener signs in a user holding permission in the one music library.
+func requestingListener(t *testing.T, permission settings.Permission) (worksFixture, settings.User, []*http.Cookie) {
+	t.Helper()
 	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
 	user := fixture.createUser(t, "listener", settings.RoleReadonly)
-	cookies := fixture.signIn(t, "listener")
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, permission); err != nil {
+		t.Fatalf("SetCategoryAccess: %v", err)
+	}
+	return fixture, user, fixture.signIn(t, "listener")
+}
+
+// Subscribing makes an artist's albums wanted: it needs request, and the albums go to that library.
+func TestSubscribePerson_NeedsRequestInALibraryOfTheMediaType(t *testing.T) {
+	fixture, _, cookies := requestingListener(t, settings.PermissionRead)
+	body := `{"media_types":["music"],"roles":["artist"]}`
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe", body)); recorder.Code != http.StatusForbidden ||
+		fixture.subscriber.called {
+		t.Errorf("read only: status %d, subscribed %v; want 403 and nothing subscribed", recorder.Code, fixture.subscriber.called)
+	}
+
+	fixture, _, cookies = requestingListener(t, settings.PermissionRequest)
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe", body))
+	music := fixture.cache.Snapshot().Categories()[0]
+	if recorder.Code != http.StatusNoContent || fixture.subscriber.lastCategoryID != music.ID {
+		t.Errorf("request: status %d, library %d; want 204 into library %d", recorder.Code, fixture.subscriber.lastCategoryID, music.ID)
+	}
+}
+
+func TestSubscribePerson_ReachesTheSubscriberWithTheCallersUserID(t *testing.T) {
+	fixture, user, cookies := requestingListener(t, settings.PermissionRequest)
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe",
 		`{"media_types":["music"],"roles":["artist"],"monitor_back_catalogue":true}`))
@@ -279,9 +308,7 @@ func TestSubscribePerson_ReachesTheSubscriberWithTheCallersUserID(t *testing.T) 
 }
 
 func TestSubscribePerson_EmptyMediaTypesAnswers400(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
-	cookies := fixture.signIn(t, "listener")
+	fixture, _, cookies := requestingListener(t, settings.PermissionRequest)
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe", `{"media_types":[]}`))
 	if recorder.Code != http.StatusBadRequest {
@@ -293,9 +320,7 @@ func TestSubscribePerson_EmptyMediaTypesAnswers400(t *testing.T) {
 }
 
 func TestSubscribePerson_MissingPersonAnswers404(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
-	cookies := fixture.signIn(t, "listener")
+	fixture, _, cookies := requestingListener(t, settings.PermissionRequest)
 
 	fixture.subscriber.err = sql.ErrNoRows
 
@@ -309,9 +334,7 @@ func TestSubscribePerson_MissingPersonAnswers404(t *testing.T) {
 // (todo 4.4: "use the media type's own default"), not an empty slice --
 // music.SubscriptionFilters treats the two very differently.
 func TestSubscribePerson_AbsentExcludeSecondaryTypesReachesTheSubscriberAsNil(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
-	cookies := fixture.signIn(t, "listener")
+	fixture, _, cookies := requestingListener(t, settings.PermissionRequest)
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe", `{"media_types":["music"]}`))
 	if recorder.Code != http.StatusNoContent {
@@ -325,9 +348,7 @@ func TestSubscribePerson_AbsentExcludeSecondaryTypesReachesTheSubscriberAsNil(t 
 // An explicit empty list ("exclude nothing") must reach the subscriber as a
 // non-nil pointer to an empty slice, distinct from the absent case above.
 func TestSubscribePerson_ExplicitEmptyExcludeSecondaryTypesReachesTheSubscriberAsEmptySlice(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
-	cookies := fixture.signIn(t, "listener")
+	fixture, _, cookies := requestingListener(t, settings.PermissionRequest)
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe",
 		`{"media_types":["music"],"exclude_secondary_types":[]}`))
@@ -343,9 +364,7 @@ func TestSubscribePerson_ExplicitEmptyExcludeSecondaryTypesReachesTheSubscriberA
 }
 
 func TestSubscribePerson_ExcludeSecondaryTypesWithValuesReachesTheSubscriber(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
-	cookies := fixture.signIn(t, "listener")
+	fixture, _, cookies := requestingListener(t, settings.PermissionRequest)
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe",
 		`{"media_types":["music"],"exclude_secondary_types":["live","remix"]}`))
@@ -475,9 +494,7 @@ func TestRemovePerson_MissingPersonIsNotFound(t *testing.T) {
 // the request reaches the subscriber, and naming none leaves it to resolve
 // the library's own setting.
 func TestSubscribePerson_CarriesThePrimaryTypeOverride(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "admin", settings.RoleAdmin)
-	cookies := fixture.signIn(t, "admin")
+	fixture, _, cookies := requestingListener(t, settings.PermissionRequest)
 
 	request := authedPost(t, cookies, "/api/v1/people/7/subscribe",
 		`{"media_types":["music"],"include_primary_types":["Album"]}`)

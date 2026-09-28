@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
@@ -127,7 +129,7 @@ type PeopleSubscriber interface {
 	// -- and non-nil (however short, including empty) for an explicit
 	// per-artist override, which todo 4.4's filter preview needs.
 	Subscribe(
-		ctx context.Context, personID, userID int64, mediaTypes, roles []string,
+		ctx context.Context, personID, userID, categoryID int64, mediaTypes, roles []string,
 		monitorBackCatalogue bool, includePrimaryTypes, excludeSecondaryTypes *[]string,
 	) error
 	// Remove unsubscribes, unmonitors and deletes the person. It never
@@ -352,8 +354,29 @@ func (s *Server) SubscribePerson(w http.ResponseWriter, r *http.Request, id int6
 		return
 	}
 
+	// The artist's albums become wanted in the first library of the media type the caller may
+	// request in; none is 403, as searching there would be (2026-09-28).
+	mediaType := "music"
+	for _, named := range body.MediaTypes {
+		if named != "" {
+			mediaType = named
+			break
+		}
+	}
+	var categoryID int64
+	for _, category := range access.Categories(settings.PermissionRequest) {
+		if category.MediaType == mediaType {
+			categoryID = category.ID
+			break
+		}
+	}
+	if categoryID == 0 {
+		writeError(w, s.logger, fmt.Errorf("%w: no %s library allows requests", authz.ErrInsufficientPermission, mediaType))
+		return
+	}
+
 	roles := derefOr(body.Roles, nil)
-	err = s.peopleSubscriber.Subscribe(r.Context(), id, access.UserID(),
+	err = s.peopleSubscriber.Subscribe(r.Context(), id, access.UserID(), categoryID,
 		body.MediaTypes, roles, derefOr(body.MonitorBackCatalogue, false),
 		body.IncludePrimaryTypes, body.ExcludeSecondaryTypes)
 	if errors.Is(err, sql.ErrNoRows) {

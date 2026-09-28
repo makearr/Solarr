@@ -93,7 +93,7 @@ func visibleWorksFixture(t *testing.T) (worksFixture, []*http.Cookie) {
 	fixture := newWorksFixture(t)
 	category, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
 	user := fixture.createUser(t, "listener", settings.RoleReadonly)
-	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, settings.PermissionRead); err != nil {
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, settings.PermissionRequest); err != nil {
 		t.Fatalf("SetCategoryAccess: %v", err)
 	}
 	cookies := fixture.signIn(t, "listener")
@@ -503,5 +503,28 @@ func TestRemovePart_MissingPartIsNotFound(t *testing.T) {
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/3/parts/999/remove", ""))
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+// Monitoring decides what is searched and downloaded: a reader sees the album but may not monitor it.
+func TestSetWorkMonitored_NeedsRequestNotRead(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	user := fixture.createUser(t, "reader", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, settings.PermissionRead); err != nil {
+		t.Fatalf("SetCategoryAccess: %v", err)
+	}
+	fixture.workDetail.row = apiserver.WorkDetailRow{
+		ID: 1, MediaType: "music", Title: "KI Pecezinu", SortTitle: "ki pecezinu", RootFolderIDs: []int64{root.ID},
+	}
+	cookies := fixture.signIn(t, "reader")
+	for _, path := range []string{"/api/v1/works/1/monitor", "/api/v1/works/1/parts/2/monitor", "/api/v1/works/1/parts/2/wanted"} {
+		recorder := fixture.do(authedPost(t, cookies, path, `{"monitored":true}`))
+		if recorder.Code != http.StatusForbidden {
+			t.Errorf("%s: status %d, want 403", path, recorder.Code)
+		}
+	}
+	if fixture.worksMonitor.setWorkCalls != 0 {
+		t.Error("a reader's request reached SetWorkMonitored")
 	}
 }

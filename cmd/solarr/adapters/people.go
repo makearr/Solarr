@@ -157,13 +157,13 @@ func (a People) GetPersonDetail(ctx context.Context, id int64) (apiserver.Person
 }
 
 func (a People) Subscribe(
-	ctx context.Context, personID, userID int64, mediaTypes, roles []string,
+	ctx context.Context, personID, userID, categoryID int64, mediaTypes, roles []string,
 	monitorBackCatalogue bool, includePrimaryTypes, excludeSecondaryTypes *[]string,
 ) error {
 	// Absent primary types mean the library's own setting, resolved here and
 	// stored on the subscription: the artist keeps what was chosen when they
 	// were added, even if the library's default moves later.
-	category, haveCategory := a.Categories.CategoryForMediaType(mediaTypeOrMusic(mediaTypes))
+	category, haveCategory := a.Categories.Category(categoryID)
 	if includePrimaryTypes == nil && haveCategory {
 		types := category.MonitorReleaseTypes
 		includePrimaryTypes = &types
@@ -232,16 +232,4 @@ func (a People) Preview(ctx context.Context, personID int64) (apiserver.Subscrip
 	return apiserver.SubscriptionPreviewRow{
 		ReleaseGroups: rows, DefaultExcludedSecondaryTypes: music.DefaultExcludedSecondaryTypes,
 	}, nil
-}
-
-// mediaTypeOrMusic picks the media type whose library setting a subscription
-// takes its release types from. One subscription can name several; music is
-// the only one with a release-type vocabulary today.
-func mediaTypeOrMusic(mediaTypes []string) string {
-	for _, mediaType := range mediaTypes {
-		if mediaType != "" {
-			return mediaType
-		}
-	}
-	return "music"
 }
