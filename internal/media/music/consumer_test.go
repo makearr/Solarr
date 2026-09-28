@@ -1299,3 +1299,46 @@ func TestObserve_UnplacedFilesJoinTheOtherAlbumTheirSiblingsName(t *testing.T) {
 		t.Errorf("EP holds %d files (err %v), want all %d", len(locations), err, len(singleTracks))
 	}
 }
+
+// One leftover file whose song is on the album its folder's files agree on is not matched alone to
+// another album its fingerprint names: "Beginnings" on Rehekan's "Ultimate Collection" (2026-09-28).
+func TestObserve_AFingerprintedSongOfTheSiblingsAlbumStaysWithThem(t *testing.T) {
+	prints := &fakeFingerprinter{byPath: map[string]mediatool.Fingerprint{}}
+	lookup := &fakeLookup{enabled: true, byPrint: map[string][]acoustid.Match{}}
+	albums := traumaLookup(releaseGroupMBID)
+	// Another compilation titled like the folder's album, the way "The Collection" is like "Ultimate Collection".
+	albums.groups["rg-hits"] = musicbrainz.ReleaseGroup{MBID: "rg-hits", Title: "Kebilegev Bibihi", PrimaryType: "Album", SecondaryTypes: []string{"Compilation"}}
+	albums.releases["rg-hits"] = []musicbrainz.Release{releaseOf("rel-hits", "Kebilegev Bibihi", "official", "2019", []trackSpec{{"Semidos", 300}})}
+
+	opened, fsys, fake := newTestLibrary(t)
+	var batch []scan.Observed
+	for i, track := range traumaTracks {
+		relPath := fmt.Sprintf("P!po/Kebilegev Bibihi (2017)/%02d.m4a", i+1)
+		content := []byte("tagged " + track.title)
+		writeMusicFile(t, fsys, relPath, content)
+		tags := mediatool.Tags{"title": track.title, "album": "Kebilegev Bibihi", "musicbrainz_releasegroupid": releaseGroupMBID}
+		if track.title == "Semidos" {
+			tags = mediatool.Tags{"title": "Semidos", "album": "Kebilegev Bibihi"}
+			prints.byPath[path.Join(testRoot, relPath)] = mediatool.Fingerprint{Chromaprint: "AQAD-revenge", Duration: 300 * time.Second}
+			lookup.byPrint["AQAD-revenge"] = []acoustid.Match{{Score: 0.97, Recordings: []acoustid.Recording{{
+				MBID: "recording-revenge-hits", Title: "Semidos", Artist: "P!po", Duration: 300 * time.Second, ReleaseGroupMBIDs: []string{"rg-hits"},
+			}}}}
+		}
+		observed := observedFile(relPath, int64(len(content)), tags)
+		observed.Probe.Measured.Duration = 300 * time.Second
+		batch = append(batch, observed)
+	}
+	attempts := library.NewAttempts(opened)
+	consumer := music.NewConsumer(music.ConsumerConfig{
+		FS: fsys, Physical: library.NewPhysical(opened), Identity: library.NewIdentity(opened),
+		Unidentified: library.NewUnidentified(opened), Attempts: &attempts, Albums: albums,
+		Fingerprints: prints, AcoustID: lookup, Clock: fake, Logger: slog.New(slog.DiscardHandler),
+	})
+
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if got := releaseGroupOf(t, opened, "P!po/Kebilegev Bibihi (2017)/02.m4a"); got != releaseGroupMBID {
+		t.Errorf("the leftover song went to %q, want its siblings' album %q", got, releaseGroupMBID)
+	}
+}

@@ -400,6 +400,7 @@ func (c Consumer) fingerprintPass(
 	}
 
 	named, locals, seeds, pending := c.namesFromAudio(ctx, out, files)
+	named, locals, pending = c.withoutSiblingsSongs(ctx, out, named, locals, pending)
 	if len(named) == 0 {
 		return pending
 	}
@@ -413,6 +414,29 @@ func (c Consumer) fingerprintPass(
 		return append(pending, named...)
 	}
 	return append(pending, applyAlbumDecision(out, PassFingerprint, named, decision.Within(c.chainConfig().AmbiguityThreshold))...)
+}
+
+// withoutSiblingsSongs leaves pending every named file whose song is on the album the folder's
+// identified files agree on: one leftover file matched alone took "Beginnings" from Rehekan's
+// "Ultimate Collection" to another compilation (2026-09-28). The track pass keeps it with them.
+func (c Consumer) withoutSiblingsSongs(
+	ctx context.Context, out *batchResult, named []pendingFile, locals []LocalTrack, pending []pendingFile,
+) ([]pendingFile, []LocalTrack, []pendingFile) {
+	sibling, agreed := soleSiblingIdentity(out.links)
+	if !agreed || sibling.Provider != ProviderReleaseGroup {
+		return named, locals, pending
+	}
+	titles := c.albumTitles(ctx, []string{sibling.ExternalID})
+	var keptNamed []pendingFile
+	var keptLocals []LocalTrack
+	for i, file := range named {
+		if slices.ContainsFunc(titles, func(title string) bool { return sameTrackTitle(locals[i].Title.Value, title) }) {
+			pending = append(pending, file)
+			continue
+		}
+		keptNamed, keptLocals = append(keptNamed, file), append(keptLocals, locals[i])
+	}
+	return keptNamed, keptLocals, pending
 }
 
 // namesFromAudio fingerprints every still-unidentified file in one call and asks AcoustID
