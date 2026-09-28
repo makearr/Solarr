@@ -338,3 +338,28 @@ func TestObserve_AMixOfTheSiblingsSongGoesToItsOwnRelease(t *testing.T) {
 		t.Errorf("identified as %q, want the single the mix is on", got)
 	}
 }
+
+// A descriptive qualifier, in whatever place, leaves the song the album's: "A Mobanif Finuv (You
+// Rinu Me Nucu Like)" is the album's "(You Rinu Me Nucu Like) A Mobanif Finuv" (Boruse Somakica).
+func TestObserve_ADescriptivelyQualifiedSongStaysOnTheSiblingsAlbum(t *testing.T) {
+	compilationTake := "0a1b2c3d-0000-4000-8000-000000000007"
+	rgQueen := musicbrainz.ReleaseGroup{MBID: "rg-queen", Title: "The Vemum of Nima", PrimaryType: "Album", SecondaryTypes: []string{"Compilation"}, FirstReleaseDate: "1994"}
+	tracks := fakeTrackLookup{recordings: map[string]musicbrainz.RecordingMatch{
+		compilationTake: {RecordingMBID: compilationTake, Title: "Semidos (Say It Loud)", ArtistCredit: "P!po", DurationMs: 300000, ReleaseGroups: []musicbrainz.ReleaseGroup{rgQueen}},
+	}}
+	lookup := traumaLookup(releaseGroupMBID)
+	lookup.releases[releaseGroupMBID][0].Media[0].Tracks[1].Title = "(Say It Loud) Semidos"
+	consumer, opened, fsys := newTrackConsumer(t, lookup, nil, tracks)
+	relPath := "P!po/Kebilegev Bibihi (2017)/P!po - 02 - Semidos (Say It Loud).m4a"
+	file := untaggedTrack(t, fsys, relPath, "P!po", "Kebilegev Bibihi", "Semidos (Say It Loud)", 300)
+	file.Probe.Tags["musicbrainz_trackid"] = compilationTake
+	batch := untaggedTraumaBatch(t, fsys)[2:]
+	batch = append(batch, file)
+
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if got := releaseGroupOf(t, opened, relPath); got != releaseGroupMBID {
+		t.Errorf("identified as %q, want the siblings' album %q", got, releaseGroupMBID)
+	}
+}
