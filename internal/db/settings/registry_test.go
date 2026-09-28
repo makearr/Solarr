@@ -112,6 +112,7 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 		settings.KeyBrainzMashUserAgent, settings.KeyMetadataSourceOrder,
 		settings.KeyMetadataCoverSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID,
 		settings.KeyAcoustIDAPIKey, settings.KeyMetadataTheAudioDB, settings.KeyTheAudioDBAPIKey,
+		settings.KeyMetadataPeopleBackfillPerRun,
 		// The non-scalar audit's own KindEntity additions (2026-09-12): each
 		// names a whole settings surface, never an instance_setting row, but
 		// belongs in this same "nothing is registered by accident or left

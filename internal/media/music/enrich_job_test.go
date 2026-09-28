@@ -183,7 +183,7 @@ func newEnrichJobRealigning(
 // nil, biographyFor's own tests never noticed).
 func newEnrichJobWithImageFetch(
 	t *testing.T, source musicbrainz.Source, biographer music.Biographer, imageServerURL string,
-	wikidataEnabled ...func() bool,
+	options ...func(*music.EnrichJobConfig),
 ) (*music.EnrichJob, *store.Store, *librarydb.Queries, *fsx.Mem) {
 	t.Helper()
 	directory := t.TempDir()
@@ -244,17 +244,16 @@ func newEnrichJobWithImageFetch(
 		Provider: "test-image-server", UserAgent: "test",
 	})
 	memFS := fsx.NewMem(fake)
-	var enabled func() bool
-	if len(wikidataEnabled) > 0 {
-		enabled = wikidataEnabled[0]
-	}
-
-	job := music.NewEnrichJob(music.EnrichJobConfig{
+	config := music.EnrichJobConfig{
 		Identity: identity, People: library.NewPeople(libraryStore), Provider: provider,
 		Biography: biographer, Artworks: library.NewArtworks(libraryStore),
-		HTTP: client, FS: memFS, ImagesDir: "/cache/images", WikidataEnabled: enabled,
+		HTTP: client, FS: memFS, ImagesDir: "/cache/images",
 		Clock: fake, Logger: slog.New(slog.DiscardHandler),
-	})
+	}
+	for _, option := range options {
+		option(&config)
+	}
+	job := music.NewEnrichJob(config)
 	return job, libraryStore, librarydb.New(libraryStore.Read()), memFS
 }
 
@@ -869,7 +868,8 @@ func TestEnrichJob_BackfillRecordsNothingWithWikidataSwitchedOff(t *testing.T) {
 	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{
 		"Q5": {Description: "American singer", ImageURL: server.URL + "/cover.png"},
 	}}
-	job, opened, _, _ := newEnrichJobWithImageFetch(t, source, biographer, server.URL, func() bool { return false })
+	job, opened, _, _ := newEnrichJobWithImageFetch(t, source, biographer, server.URL,
+		func(config *music.EnrichJobConfig) { config.WikidataEnabled = func() bool { return false } })
 	resolveBareArtist(t, opened, "artist-5", "Pevilodon")
 
 	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
@@ -915,6 +915,39 @@ func TestEnrichJob_BackfillReachesPastAFullPageOfFailures(t *testing.T) {
 	}
 	if !recorded.Found {
 		t.Fatal("the artist after a full page of failures was never reached")
+	}
+}
+
+// The configured budget bounds one run: of five artists waiting, each run looks up two.
+func TestEnrichJob_BackfillStopsAtTheConfiguredBudget(t *testing.T) {
+	server := testImageServer(t)
+	artists := map[string]musicbrainz.Artist{}
+	biographies := map[string]wikidata.Biography{}
+	for index := range 5 {
+		mbid, qid := "artist-"+strconv.Itoa(index), "Q"+strconv.Itoa(index)
+		artists[mbid] = musicbrainz.Artist{MBID: mbid, Name: mbid, SortName: mbid, WikidataQID: qid}
+		// No photo: a download would wait on the fake clock, and "none" is recorded all the same.
+		biographies[qid] = wikidata.Biography{Description: "singer"}
+	}
+	job, opened, _, _ := newEnrichJobWithImageFetch(t, &fakeArtistSource{artists: artists},
+		&fakeBiographer{biographies: biographies}, server.URL,
+		func(config *music.EnrichJobConfig) { config.PeopleBackfillPerRun = func() int { return 2 } })
+	for index := range 5 {
+		resolveBareArtist(t, opened, "artist-"+strconv.Itoa(index), "artist-"+strconv.Itoa(index))
+	}
+
+	artworks := library.NewArtworks(opened)
+	for run, want := range []int{3, 1} {
+		if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		waiting, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 50)
+		if err != nil {
+			t.Fatalf("PeopleNeedingArtwork: %v", err)
+		}
+		if len(waiting) != want {
+			t.Errorf("after run %d: %d artists still waiting, want %d", run+1, len(waiting), want)
+		}
 	}
 }
 

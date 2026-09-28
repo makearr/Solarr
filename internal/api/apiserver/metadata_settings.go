@@ -39,14 +39,14 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 
 	if err := s.auth.Registry.LookupAll(settings.KeyBrainzMashUserAgent, settings.KeyMetadataSourceOrder,
 		settings.KeyMetadataCoverSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID,
-		settings.KeyMetadataTheAudioDB); err != nil {
+		settings.KeyMetadataTheAudioDB, settings.KeyMetadataPeopleBackfillPerRun); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
 
 	wanted := settings.MetadataSettings{
 		BrainzMashUserAgent: body.BrainzmashUserAgent, Wikidata: body.Wikidata, AcoustID: body.Acoustid,
-		TheAudioDB: body.Theaudiodb,
+		TheAudioDB: body.Theaudiodb, PeopleBackfillPerRun: body.PeopleBackfillPerRun,
 	}
 	if body.CoverSources != nil {
 		wanted.CoverSources = make([]string, 0, len(*body.CoverSources))
@@ -148,9 +148,10 @@ func (s *Server) metadataSettingsView() gen.MetadataSettings {
 	return gen.MetadataSettings{
 		BrainzmashUserAgent: stored.BrainzMashUserAgent, SourceOrder: &order,
 		CoverSources: &covers, Wikidata: stored.Wikidata, Acoustid: stored.AcoustID,
-		AcoustidApiKey:   &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().AcoustIDConfigured()},
-		Theaudiodb:       stored.TheAudioDB,
-		TheaudiodbApiKey: &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().TheAudioDBConfigured()},
+		AcoustidApiKey:       &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().AcoustIDConfigured()},
+		Theaudiodb:           stored.TheAudioDB,
+		TheaudiodbApiKey:     &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().TheAudioDBConfigured()},
+		PeopleBackfillPerRun: stored.PeopleBackfillPerRun,
 	}
 }
 

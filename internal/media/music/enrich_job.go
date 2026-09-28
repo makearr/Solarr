@@ -70,14 +70,12 @@ const enrichBatchSize = 20
 // 10 req/s, so one at a time left enrichment at a tenth of its budget (measured 2026-09-28).
 const enrichLookupWorkers = 8
 
-// personBackfillBatchSize and personBackfillBudget bound the artist image and
-// biography sweep. Each person costs a MusicBrainz lookup plus a Wikidata one,
-// and MusicBrainz is 1 req/s shared with everything else (ADR-13), so the
-// sweep takes a slice per run rather than the whole backlog at once.
-const (
-	personBackfillBatchSize = 20
-	personBackfillBudget    = 60
-)
+// personBackfillBatchSize is one page of the artist image and biography sweep; the sweep's
+// per-run budget is a setting (EnrichJobConfig.PeopleBackfillPerRun).
+const personBackfillBatchSize = 20
+
+// defaultPeopleBackfillPerRun is the budget when none is configured.
+const defaultPeopleBackfillPerRun = 200
 
 // editionlessBatchSize and editionlessBudget bound the pass over works the
 // text search identified: one release-group lookup each, on the same shared
@@ -108,6 +106,7 @@ type EnrichJob struct {
 	clock           clock.Clock
 	logger          *slog.Logger
 	wikidataEnabled func() bool
+	backfillPerRun  func() int
 }
 
 // TagReader reads the tags a set of files carry -- mediatool.Tool's own
@@ -139,6 +138,8 @@ type EnrichJobConfig struct {
 	Biography Biographer
 	// WikidataEnabled is the configured switch, read per artist; nil is on.
 	WikidataEnabled func() bool
+	// PeopleBackfillPerRun is the configured budget, read per run; nil is 200.
+	PeopleBackfillPerRun func() int
 	// ArtistArt is optional: without it an artist Wikidata has no photo for keeps none.
 	ArtistArt ArtistArt
 	Artworks  library.Artworks
@@ -170,7 +171,8 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 	return &EnrichJob{
 		identity: config.Identity, people: config.People, provider: config.Provider,
 		biography: config.Biography, wikidataEnabled: config.WikidataEnabled,
-		artworks: config.Artworks, realigner: config.Realigner, desired: config.Desired, onRefined: config.OnRefined,
+		backfillPerRun: config.PeopleBackfillPerRun,
+		artworks:       config.Artworks, realigner: config.Realigner, desired: config.Desired, onRefined: config.OnRefined,
 		artistArt: config.ArtistArt,
 		tags:      config.Tags, roots: config.Roots, http: config.HTTP,
 		fs: config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
@@ -407,7 +409,7 @@ func (j *EnrichJob) chooseEdition(ctx context.Context, work library.EditionlessW
 // person is created, and findOrCreatePerson returns an existing person
 // untouched, so without this pass an artist already in the library never
 // gained either -- which is why no artist picture had ever appeared
-// (found 2026-09-13). Bounded per run by personBackfillBudget.
+// (found 2026-09-13). Bounded per run by the configured budget.
 func (j *EnrichJob) backfillPeople(ctx context.Context) {
 	// Without a Wikidata source every artist would look imageless and be
 	// recorded so, permanently.
@@ -415,9 +417,13 @@ func (j *EnrichJob) backfillPeople(ctx context.Context) {
 		return
 	}
 
+	budget := defaultPeopleBackfillPerRun
+	if j.backfillPerRun != nil {
+		budget = j.backfillPerRun()
+	}
 	filled, absent, failed := 0, 0, 0
 	var afterPersonID int64
-	for filled+absent+failed < personBackfillBudget {
+	for filled+absent+failed < budget {
 		if ctx.Err() != nil {
 			return
 		}
@@ -432,7 +438,7 @@ func (j *EnrichJob) backfillPeople(ctx context.Context) {
 		}
 
 		for _, candidate := range batch {
-			if filled+absent+failed >= personBackfillBudget {
+			if filled+absent+failed >= budget {
 				break
 			}
 			afterPersonID = candidate.PersonID

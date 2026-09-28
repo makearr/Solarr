@@ -4614,6 +4614,11 @@ export interface components {
             theaudiodb?: boolean;
             /** @description Whether an own TheAudioDB key is stored; without one the public key is used. Read-only here. */
             theaudiodb_api_key?: components["schemas"]["SecretMask"];
+            /**
+             * Format: int64
+             * @description How many artists one enrichment run gives a photo and biography. Default 200. Omitted on a PATCH leaves it alone.
+             */
+            people_backfill_per_run?: number;
         };
         /** @description Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's recycle bin: nothing is deleted directly, so only how long it keeps what this library removes is set here. */
         FileManagement: {

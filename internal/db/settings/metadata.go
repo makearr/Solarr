@@ -58,7 +58,15 @@ const (
 	KeyMetadataAcoustID = "metadata.acoustid"
 	// KeyMetadataTheAudioDB turns TheAudioDB's artist photos and biographies on or off (2026-09-25).
 	KeyMetadataTheAudioDB = "metadata.theaudiodb"
+	// KeyMetadataPeopleBackfillPerRun bounds how many artists one enrichment run gives a photo and biography.
+	KeyMetadataPeopleBackfillPerRun = "metadata.people_backfill_per_run"
 )
+
+// DefaultPeopleBackfillPerRun suits BrainzMash's 10 req/s; the old 60 was sized for MusicBrainz's 1.
+const DefaultPeopleBackfillPerRun = 200
+
+// maxPeopleBackfillPerRun keeps one run from holding the metadata bucket for hours.
+const maxPeopleBackfillPerRun = 10000
 
 // The cover sources, in the artwork job's terms.
 const (
@@ -91,6 +99,8 @@ type MetadataSettings struct {
 	Wikidata   *bool
 	AcoustID   *bool
 	TheAudioDB *bool
+	// PeopleBackfillPerRun is how many artists one run backfills; nil on a write leaves it alone.
+	PeopleBackfillPerRun *int64
 }
 
 // MetadataSettings reads the configured policy; an absent or empty agent is the shipped default.
@@ -105,10 +115,12 @@ func (s *Snapshot) MetadataSettings() MetadataSettings {
 	}
 	wikidata, acoustID := s.policyBool(KeyMetadataWikidata, true), s.policyBool(KeyMetadataAcoustID, true)
 	theAudioDB := s.policyBool(KeyMetadataTheAudioDB, true)
+	backfill := s.policyInt(KeyMetadataPeopleBackfillPerRun, DefaultPeopleBackfillPerRun)
 	return MetadataSettings{
 		BrainzMashUserAgent: agent, SourceOrder: order,
 		CoverSources: s.policyStringListOr(KeyMetadataCoverSources, DefaultCoverSources),
 		Wikidata:     &wikidata, AcoustID: &acoustID, TheAudioDB: &theAudioDB,
+		PeopleBackfillPerRun: &backfill,
 	}
 }
 
@@ -136,6 +148,12 @@ func (c *Cache) SetMetadataSettings(ctx context.Context, cl clock.Clock, ms Meta
 			continue
 		}
 		if err := c.setPolicy(ctx, cl, key, strconv.FormatBool(*value)); err != nil {
+			return err
+		}
+	}
+	if ms.PeopleBackfillPerRun != nil {
+		if err := c.setPolicy(ctx, cl, KeyMetadataPeopleBackfillPerRun,
+			strconv.FormatInt(*ms.PeopleBackfillPerRun, 10)); err != nil {
 			return err
 		}
 	}
@@ -183,6 +201,12 @@ func validateMetadataSettings(ms MetadataSettings) config.Problems {
 			})
 		}
 		coverSeen[name] = true
+	}
+	if perRun := ms.PeopleBackfillPerRun; perRun != nil && (*perRun < 1 || *perRun > maxPeopleBackfillPerRun) {
+		problems = append(problems, config.Problem{
+			Path: KeyMetadataPeopleBackfillPerRun, Value: strconv.FormatInt(*perRun, 10),
+			Expectation: "1 to " + strconv.Itoa(maxPeopleBackfillPerRun),
+		})
 	}
 	agent := ms.BrainzMashUserAgent
 	valid := agent != "" && len(agent) <= maxUserAgentLength

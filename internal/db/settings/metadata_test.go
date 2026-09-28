@@ -128,3 +128,34 @@ func TestSetMetadataSettings_EnrichmentSwitches(t *testing.T) {
 		t.Errorf("an unknown cover source: err = %v, want a problem", err)
 	}
 }
+
+// The artist backfill's per-run budget: 200 by default, any write from 1 to 10,000 kept, nil untouched.
+func TestSetMetadataSettings_PeopleBackfillPerRun(t *testing.T) {
+	cache, cl := newCache(t)
+	if got := *cache.Snapshot().MetadataSettings().PeopleBackfillPerRun; got != settings.DefaultPeopleBackfillPerRun {
+		t.Errorf("default = %d, want %d", got, settings.DefaultPeopleBackfillPerRun)
+	}
+	perRun := int64(500)
+	if err := cache.SetMetadataSettings(t.Context(), cl, settings.MetadataSettings{
+		BrainzMashUserAgent: settings.DefaultBrainzMashUserAgent, PeopleBackfillPerRun: &perRun,
+	}); err != nil {
+		t.Fatalf("SetMetadataSettings: %v", err)
+	}
+	if err := cache.SetMetadataSettings(t.Context(), cl, settings.MetadataSettings{
+		BrainzMashUserAgent: settings.DefaultBrainzMashUserAgent,
+	}); err != nil {
+		t.Fatalf("SetMetadataSettings without it: %v", err)
+	}
+	if got := *cache.Snapshot().MetadataSettings().PeopleBackfillPerRun; got != 500 {
+		t.Errorf("stored = %d, want 500 kept across a write that left it out", got)
+	}
+	for _, refused := range []int64{0, -1, 10001} {
+		err := cache.SetMetadataSettings(t.Context(), cl, settings.MetadataSettings{
+			BrainzMashUserAgent: settings.DefaultBrainzMashUserAgent, PeopleBackfillPerRun: &refused,
+		})
+		var problems config.Problems
+		if !errors.As(err, &problems) || len(problems) != 1 || problems[0].Path != settings.KeyMetadataPeopleBackfillPerRun {
+			t.Errorf("%d: err = %v, want one problem on %s", refused, err, settings.KeyMetadataPeopleBackfillPerRun)
+		}
+	}
+}

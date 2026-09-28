@@ -173,6 +173,12 @@ export function MetadataSettings() {
             busy={patch.isPending}
             onChange={(theaudiodb) => patch.mutate({ theaudiodb })}
           />
+          <BackfillForm
+            key={settings.people_backfill_per_run ?? 200}
+            stored={settings.people_backfill_per_run ?? 200}
+            onSave={(perRun) => patch.mutate({ people_backfill_per_run: perRun })}
+            busy={patch.isPending}
+          />
           <Switch
             label="AcoustID fingerprints"
             note="Identifies a file by its sound when its tags and folder name cannot. Needs the key below."
@@ -513,6 +519,59 @@ function UserAgentForm({
         <button
           type="submit"
           disabled={busy || agent.trim() === ""}
+          className="w-fit rounded-md bg-accent px-2 py-1 text-accent-ink disabled:opacity-50
+                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          Save
+        </button>
+      )}
+    </form>
+  );
+}
+
+/** How many artists one enrichment run gives a photo and biography. */
+function BackfillForm({
+  stored,
+  onSave,
+  busy,
+}: {
+  stored: number;
+  onSave: (perRun: number) => void;
+  busy: boolean;
+}) {
+  const [perRun, setPerRun] = useState(String(stored));
+  const value = Number(perRun);
+  const valid = Number.isInteger(value) && value >= 1 && value <= 10000;
+
+  return (
+    <form
+      className="flex flex-col gap-3 text-xs text-ink-muted"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (valid) onSave(value);
+      }}
+    >
+      <label className="flex flex-col gap-1">
+        Artists filled per run
+        <input
+          type="number"
+          min={1}
+          max={10000}
+          value={perRun}
+          disabled={busy}
+          onChange={(event) => setPerRun(event.target.value)}
+          className={`${inputStyle} w-28`}
+        />
+        <span className="text-[0.6875rem]">
+          How many artists each metadata refresh gives a photo and biography. Higher fills a new
+          library sooner; each artist costs a few requests. Default 200, at most 10,000.
+        </span>
+      </label>
+
+      {value !== stored && (
+        <button
+          type="submit"
+          disabled={busy || !valid}
           className="w-fit rounded-md bg-accent px-2 py-1 text-accent-ink disabled:opacity-50
                      focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
