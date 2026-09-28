@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, ListFilter, Search } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { useCanRequest } from "@/lib/useLibraryPermission";
 
 import { InteractiveSearch } from "./InteractiveSearch";
 
@@ -74,6 +75,8 @@ export function Wanted() {
   const total = libraries.data?.find((library) => String(library.id) === categoryId)?.wanted;
   const pages = total === undefined ? undefined : Math.max(1, Math.ceil(total / size));
 
+  const canRequest = useCanRequest((library) => String(library.id) === categoryId);
+
   const setView = (next: { sort?: Sort; dir?: "asc" | "desc"; size?: number }) =>
     void navigate({ to: ".", search: { sort, dir, size, ...next }, replace: true });
 
@@ -125,6 +128,9 @@ export function Wanted() {
           {searchLibrary.isSuccess &&
             (searchLibrary.data?.duplicate ? "That search is already running." : "Searching in the background.")}
           {searchLibrary.isError && <span className="text-danger">The search could not start.</span>}
+          {!canRequest && <span>Searching needs request access to this library.</span>}
+          {canRequest && (
+          <>
           <button
             type="button"
             disabled={searchLibrary.isPending || items.length === 0}
@@ -143,6 +149,8 @@ export function Wanted() {
             <Search aria-hidden className="size-3.5" />
             Search all
           </button>
+          </>
+          )}
         </span>
       </div>
 
@@ -182,6 +190,8 @@ export function Wanted() {
             <StateBadge state={work.wanted_state} />
             <span className="flex items-center justify-end gap-2 text-xs text-ink-muted">
               <span className="truncate">{rowResult[work.id]}</span>
+              {canRequest && (
+              <>
               <button
                 type="button"
                 title="Search: send the best release"
@@ -201,6 +211,8 @@ export function Wanted() {
               >
                 <ListFilter aria-hidden className="size-3.5" />
               </button>
+              </>
+              )}
             </span>
           </div>
         ))}

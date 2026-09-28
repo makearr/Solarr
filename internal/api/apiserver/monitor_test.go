@@ -93,7 +93,7 @@ func visibleWorksFixture(t *testing.T) (worksFixture, []*http.Cookie) {
 	fixture := newWorksFixture(t)
 	category, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
 	user := fixture.createUser(t, "listener", settings.RoleReadonly)
-	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, settings.PermissionRead); err != nil {
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, settings.PermissionRequest); err != nil {
 		t.Fatalf("SetCategoryAccess: %v", err)
 	}
 	cookies := fixture.signIn(t, "listener")
@@ -503,5 +503,69 @@ func TestRemovePart_MissingPartIsNotFound(t *testing.T) {
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/3/parts/999/remove", ""))
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+// Monitoring decides what is searched and downloaded: a reader sees the album but may not monitor it.
+func TestSetWorkMonitored_NeedsRequestNotRead(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	user := fixture.createUser(t, "reader", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, settings.PermissionRead); err != nil {
+		t.Fatalf("SetCategoryAccess: %v", err)
+	}
+	fixture.workDetail.row = apiserver.WorkDetailRow{
+		ID: 1, MediaType: "music", Title: "KI Pecezinu", SortTitle: "ki pecezinu", RootFolderIDs: []int64{root.ID},
+	}
+	cookies := fixture.signIn(t, "reader")
+	for _, path := range []string{"/api/v1/works/1/monitor", "/api/v1/works/1/parts/2/monitor", "/api/v1/works/1/parts/2/wanted"} {
+		recorder := fixture.do(authedPost(t, cookies, path, `{"monitored":true}`))
+		if recorder.Code != http.StatusForbidden {
+			t.Errorf("%s: status %d, want 403", path, recorder.Code)
+		}
+	}
+	if fixture.worksMonitor.setWorkCalls != 0 {
+		t.Error("a reader's request reached SetWorkMonitored")
+	}
+}
+
+// The album page offers search and monitoring only to a caller the server would accept them from.
+func TestGetWork_SaysWhetherTheCallerMayRequest(t *testing.T) {
+	for permission, want := range map[settings.Permission]bool{settings.PermissionRead: false, settings.PermissionRequest: true} {
+		fixture := newWorksFixture(t)
+		category, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+		user := fixture.createUser(t, "member", settings.RoleReadonly)
+		if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, permission); err != nil {
+			t.Fatalf("SetCategoryAccess: %v", err)
+		}
+		fixture.workDetail.row = apiserver.WorkDetailRow{
+			ID: 1, MediaType: "music", Title: "KI Pecezinu", SortTitle: "ki pecezinu", RootFolderIDs: []int64{root.ID},
+		}
+		recorder := fixture.do(authedGet(t, fixture.signIn(t, "member"), "/api/v1/works/1"))
+		var body struct {
+			CanRequest bool `json:"can_request"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil || recorder.Code != http.StatusOK || body.CanRequest != want {
+			t.Errorf("%s: status %d, can_request %v; want %v", permission, recorder.Code, body.CanRequest, want)
+		}
+	}
+}
+
+// Each library tells the caller what they may do there, so screens offer only accepted actions.
+func TestListLibraries_CarriesTheCallersPermission(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	user := fixture.createUser(t, "member", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, settings.PermissionRead); err != nil {
+		t.Fatalf("SetCategoryAccess: %v", err)
+	}
+	recorder := fixture.do(authedGet(t, fixture.signIn(t, "member"), "/api/v1/libraries"))
+	var body []struct {
+		ID         int64  `json:"id"`
+		Permission string `json:"permission"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil || len(body) != 1 ||
+		body[0].ID != category.ID || body[0].Permission != "read" {
+		t.Errorf("status %d, body %s; want the one library with permission read", recorder.Code, recorder.Body)
 	}
 }

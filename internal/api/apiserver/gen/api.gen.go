@@ -1825,6 +1825,9 @@ type Library struct {
 	MediaType string         `json:"media_type"`
 	Name      string         `json:"name"`
 
+	// Permission What the caller may do here, so a screen offers only the actions the server would accept: searching and monitoring need request.
+	Permission Permission `json:"permission"`
+
 	// Wanted Albums (works) in this library with a monitored item not yet complete: the Wanted page's total. From the counter table, never a live COUNT; absent until first counted.
 	Wanted *int `json:"wanted,omitempty"`
 }
@@ -2906,7 +2909,10 @@ type WorkWantedState string
 // WorkDetail defines model for WorkDetail.
 type WorkDetail struct {
 	AddedAt time.Time `json:"added_at"`
-	Credits []Credit  `json:"credits"`
+
+	// CanRequest Whether the caller holds request in one of the album's libraries: searching, sending and monitoring it would be accepted.
+	CanRequest bool     `json:"can_request"`
+	Credits    []Credit `json:"credits"`
 
 	// Description A Wikidata-sourced summary, when the work has a linked Wikidata entity (ADR-8). Absent otherwise -- MusicBrainz itself carries no such field.
 	Description *string      `json:"description,omitempty"`

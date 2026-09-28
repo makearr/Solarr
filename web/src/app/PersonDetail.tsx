@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import { useIsAdministrator } from "@/lib/useAdministrator";
+import { useCanRequest } from "@/lib/useLibraryPermission";
 import type { components } from "@/api/schema";
 import { albumStatusLabel, albumStatusText } from "@/lib/albumStatus";
 import { discCountOf, formatTrackNumber } from "@/lib/trackNumber";
@@ -134,6 +135,8 @@ export function PersonDetail() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["person", id] }),
   });
   const administrator = useIsAdministrator();
+  // Artists are music today: following one or searching their albums needs request in a music library.
+  const canRequest = useCanRequest((library) => library.media_type === "music");
 
   const remove = useMutation({
     mutationFn: async () => {
@@ -199,7 +202,7 @@ export function PersonDetail() {
                 </div>
               )}
             </div>
-            {!person.monitored && (
+            {!person.monitored && canRequest && (
               <button
                 type="button"
                 disabled={subscribing}
@@ -215,6 +218,7 @@ export function PersonDetail() {
                 Monitored
               </span>
             )}
+            {administrator && (
             <button
               type="button"
               disabled={remove.isPending}
@@ -233,18 +237,21 @@ export function PersonDetail() {
             >
               Remove
             </button>
+            )}
           </div>
         </header>
 
         <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-          <button
-            type="button"
-            disabled={searchMissing.isPending}
-            onClick={() => searchMissing.mutate()}
-            className="flex items-center gap-1 rounded-md border border-border-subtle px-2 py-1 hover:text-ink disabled:opacity-50"
-          >
-            Search all missing
-          </button>
+          {canRequest && (
+            <button
+              type="button"
+              disabled={searchMissing.isPending}
+              onClick={() => searchMissing.mutate()}
+              className="flex items-center gap-1 rounded-md border border-border-subtle px-2 py-1 hover:text-ink disabled:opacity-50"
+            >
+              Search all missing
+            </button>
+          )}
           <button
             type="button"
             disabled={refresh.isPending}

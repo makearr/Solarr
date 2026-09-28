@@ -216,6 +216,8 @@ func (s *Server) GetWork(w http.ResponseWriter, r *http.Request, id int64) {
 	}
 
 	view := buildWorkDetailView(row)
+	requestRoots, requestCategories := s.visibleAt(access, settings.PermissionRequest)
+	view.CanRequest = workDetailVisible(requestRoots, requestCategories, row)
 	annotateFileQuality(access, row.CategoryIDs, view.Parts)
 	writeJSON(w, s.logger, http.StatusOK, view)
 }
@@ -298,7 +300,8 @@ func (s *Server) SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 
-	if !s.workVisible(w, r, access, id) {
+	// Monitoring decides what is searched and downloaded: request, as search itself (2026-09-28).
+	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
 		return
 	}
 
@@ -347,7 +350,8 @@ func (s *Server) SetPartMonitored(w http.ResponseWriter, r *http.Request, id, pa
 		return
 	}
 
-	if !s.workVisible(w, r, access, id) {
+	// Monitoring decides what is searched and downloaded: request, as search itself (2026-09-28).
+	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
 		return
 	}
 
@@ -401,7 +405,8 @@ func (s *Server) SetTrackWanted(w http.ResponseWriter, r *http.Request, id, part
 		return
 	}
 
-	if !s.workVisible(w, r, access, id) {
+	// Monitoring decides what is searched and downloaded: request, as search itself (2026-09-28).
+	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
 		return
 	}
 

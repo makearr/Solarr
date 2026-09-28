@@ -44,8 +44,9 @@ func (s *Server) ListLibraries(w http.ResponseWriter, r *http.Request) {
 		values := s.counterValues(r.Context(), category.ID)
 		views[index] = gen.Library{
 			Id: category.ID, MediaType: category.MediaType, Name: category.Name,
-			Levels:    s.libraryLevels(category, values),
-			LastLevel: s.lastLibraryLevel(r.Context(), access.UserID(), category.ID),
+			Permission: gen.Permission(access.Permission(category.ID)),
+			Levels:     s.libraryLevels(category, values),
+			LastLevel:  s.lastLibraryLevel(r.Context(), access.UserID(), category.ID),
 		}
 		if wanted, ok := values["works_wanted"]; ok {
 			count := int(wanted)
