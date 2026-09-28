@@ -89,12 +89,31 @@ func (c Consumer) trackPass(ctx context.Context, out *batchResult, files []pendi
 	return pending
 }
 
-// onAlbum is a file titled exactly as a track of the album: "Tanup de Becifon (Club Mix)" is a
-// different recording from the album's "Tanup de Becifon", and its single is its album (Hafenav).
+// onAlbum is a file titled as a track of the album, qualifiers aside unless they name another
+// recording: "Tanup de Becifon (Club Mix)" is not the album's "Tanup de Becifon" (Hafenav), while
+// "A Mobanif Finuv (You Rinu Me Nucu Like)" is its "(You Rinu Me Nucu Like) A Mobanif Finuv".
 func onAlbum(title Claim, albumTitles []string) bool {
 	return title.present() && slices.ContainsFunc(albumTitles, func(track string) bool {
-		return match.EditPenalty(title.Value, track) <= trackTitlePenalty
+		return match.EditPenalty(title.Value, track) <= trackTitlePenalty ||
+			sameTrackTitle(title.Value, track) && versionOf(title.Value) == versionOf(track)
 	})
+}
+
+// versionWords mark a bracketed qualifier as another recording of the song, not a description of it.
+var versionWords = []string{"mix", "remix", "live", "instrumental", "acapella", "a cappella", "demo", "karaoke", "dub", "acoustic", "unplugged"}
+
+// versionOf is the version words a title's qualifiers carry, sorted, "" for the song itself.
+func versionOf(title string) string {
+	_, qualifiers := splitQualifiers(title)
+	qualifiers = strings.ToLower(qualifiers)
+	var found []string
+	for _, word := range versionWords {
+		if strings.Contains(qualifiers, word) && !slices.Contains(found, word) {
+			found = append(found, word)
+		}
+	}
+	slices.Sort(found)
+	return strings.Join(found, " ")
 }
 
 // albumTitles are the track titles of every release of the given release groups, from the cache
@@ -248,21 +267,30 @@ func sameTrackTitle(a, b string) bool {
 
 // titleCore is a title without its bracketed qualifiers.
 func titleCore(title string) string {
-	var core strings.Builder
+	core, _ := splitQualifiers(title)
+	return core
+}
+
+// splitQualifiers separates a title from the text inside its brackets.
+func splitQualifiers(title string) (core, qualifiers string) {
+	var outside, inside strings.Builder
 	depth := 0
 	for _, r := range title {
 		switch r {
 		case '(', '[', '{':
 			depth++
+			inside.WriteRune(' ')
 		case ')', ']', '}':
 			depth = max(0, depth-1)
 		default:
 			if depth == 0 {
-				core.WriteRune(r)
+				outside.WriteRune(r)
+			} else {
+				inside.WriteRune(r)
 			}
 		}
 	}
-	return strings.TrimSpace(core.String())
+	return strings.TrimSpace(outside.String()), strings.TrimSpace(inside.String())
 }
 
 // compareDates orders partial dates earliest first, an unknown date last.
