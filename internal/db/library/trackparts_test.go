@@ -82,7 +82,7 @@ func TestTrackParts_ListsTracksGroupedByArtistThenAlbum(t *testing.T) {
 	setUpAlbumWithParts(t, identity, people, "b-album", "B Album", "b album",
 		"artist-b", "Bravo", 1, "B1", "B2")
 	setUpAlbumWithParts(t, identity, people, "a-album", "A Album", "a album",
-		"artist-a", "Zemih", 1, "A1", "A2", "A3")
+		"artist-a", "Aleph", 1, "A1", "A2", "A3")
 
 	rows, _, hasMore, err := tracks.List(t.Context(),
 		library.TrackFilter{RootFolderIDs: []int64{1}}, library.TrackAlbumCursor{}, 10)
@@ -101,8 +101,8 @@ func TestTrackParts_ListsTracksGroupedByArtistThenAlbum(t *testing.T) {
 			t.Errorf("row %d title = %+v, want %q", index, row.Title, wantTitles[index])
 		}
 	}
-	if rows[0].ArtistName.String != "Zemih" || rows[4].ArtistName.String != "Bravo" {
-		t.Errorf("artist names = %q / %q, want Zemih then Bravo", rows[0].ArtistName.String, rows[4].ArtistName.String)
+	if rows[0].ArtistName.String != "Aleph" || rows[4].ArtistName.String != "Bravo" {
+		t.Errorf("artist names = %q / %q, want Aleph then Bravo", rows[0].ArtistName.String, rows[4].ArtistName.String)
 	}
 }
 
@@ -115,7 +115,7 @@ func TestTrackParts_PaginatesAtTheAlbumBoundaryNeverSplittingOneAlbum(t *testing
 	tracks := library.NewTrackParts(opened)
 
 	setUpAlbumWithParts(t, identity, people, "a-album", "A Album", "a album",
-		"artist-a", "Zemih", 1, "A1", "A2", "A3")
+		"artist-a", "Aleph", 1, "A1", "A2", "A3")
 	setUpAlbumWithParts(t, identity, people, "b-album", "B Album", "b album",
 		"artist-b", "Bravo", 1, "B1", "B2")
 
@@ -128,7 +128,7 @@ func TestTrackParts_PaginatesAtTheAlbumBoundaryNeverSplittingOneAlbum(t *testing
 		t.Fatal("hasMore = false, want true: a second album remains")
 	}
 	if len(firstPage) != 3 {
-		t.Fatalf("first page = %+v, want all 3 of Zemih's tracks, none of Bravo's", firstPage)
+		t.Fatalf("first page = %+v, want all 3 of Aleph's tracks, none of Bravo's", firstPage)
 	}
 
 	secondPage, _, hasMore, err := tracks.List(t.Context(),
@@ -155,7 +155,7 @@ func TestTrackParts_DescendingReversesTheAlbumsNotTheirTracks(t *testing.T) {
 	identity := library.NewIdentity(opened)
 	people := library.NewPeople(opened)
 	tracks := library.NewTrackParts(opened)
-	setUpAlbumWithParts(t, identity, people, "a-album", "A Album", "a album", "artist-a", "Zemih", 1, "A1", "A2")
+	setUpAlbumWithParts(t, identity, people, "a-album", "A Album", "a album", "artist-a", "Aleph", 1, "A1", "A2")
 	setUpAlbumWithParts(t, identity, people, "b-album", "B Album", "b album", "artist-b", "Bravo", 1, "B1", "B2")
 
 	filter := library.TrackFilter{RootFolderIDs: []int64{1}, Descending: true}

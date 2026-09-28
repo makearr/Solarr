@@ -62,7 +62,7 @@ func TestSearch_MatchesAPartTitle(t *testing.T) {
 		return err
 	})
 
-	results, err := library.NewSearch(opened).Works(t.Context(), "mercy seat", "", nil, nil, 10)
+	results, err := library.NewSearch(opened).Works(t.Context(), "furab keke", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}

@@ -29,7 +29,7 @@ func TestListPeople_OrdersBySortNameThenID(t *testing.T) {
 	people := library.NewPeople(opened)
 	resolvePersonNamed(t, people, "artist-1", "Katupoken", "Katupoken")
 	resolvePersonNamed(t, people, "artist-2", "Vutu Doci", "Bush, Vutu")
-	resolvePersonNamed(t, people, "artist-3", "CEHA", "CEHA")
+	resolvePersonNamed(t, people, "artist-3", "AVEX", "AVEX")
 
 	got, err := people.ListPeople(t.Context(), library.PersonFilter{}, library.PersonCursor{}, 50)
 	if err != nil {
@@ -38,8 +38,8 @@ func TestListPeople_OrdersBySortNameThenID(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("ListPeople = %+v, want 3 people", got)
 	}
-	if got[0].SortName != "CEHA" || got[1].SortName != "Bush, Vutu" || got[2].SortName != "Katupoken" {
-		t.Errorf("order = %q, %q, %q, want CEHA, Bush Vutu, Katupoken by sort_name", got[0].SortName, got[1].SortName, got[2].SortName)
+	if got[0].SortName != "AVEX" || got[1].SortName != "Bush, Vutu" || got[2].SortName != "Katupoken" {
+		t.Errorf("order = %q, %q, %q, want AVEX, Bush Vutu, Katupoken by sort_name", got[0].SortName, got[1].SortName, got[2].SortName)
 	}
 }
 
@@ -139,12 +139,12 @@ func TestListPeople_NamePrefixNarrows(t *testing.T) {
 	resolvePersonNamed(t, people, "artist-1", "Katupoken", "Katupoken")
 	resolvePersonNamed(t, people, "artist-2", "Vutu Doci", "Bush, Vutu")
 
-	got, err := people.ListPeople(t.Context(), library.PersonFilter{NamePrefix: "Rad"}, library.PersonCursor{}, 50)
+	got, err := people.ListPeople(t.Context(), library.PersonFilter{NamePrefix: "Kat"}, library.PersonCursor{}, 50)
 	if err != nil {
 		t.Fatalf("ListPeople: %v", err)
 	}
 	if len(got) != 1 || got[0].SortName != "Katupoken" {
-		t.Errorf("ListPeople(prefix Rad) = %+v, want only Katupoken", got)
+		t.Errorf("ListPeople(prefix Kat) = %+v, want only Katupoken", got)
 	}
 }
 
@@ -333,7 +333,7 @@ func TestListPeople_DescendingPagesZToA(t *testing.T) {
 	people := library.NewPeople(opened)
 	resolvePersonNamed(t, people, "artist-1", "Katupoken", "Katupoken")
 	resolvePersonNamed(t, people, "artist-2", "Vutu Doci", "Bush, Vutu")
-	resolvePersonNamed(t, people, "artist-3", "CEHA", "CEHA")
+	resolvePersonNamed(t, people, "artist-3", "AVEX", "AVEX")
 
 	var got []string
 	var after library.PersonCursor
@@ -348,7 +348,7 @@ func TestListPeople_DescendingPagesZToA(t *testing.T) {
 		got = append(got, page[0].SortName)
 		after = library.PersonCursor{SortName: page[0].SortName, ID: page[0].ID}
 	}
-	if want := []string{"Katupoken", "Bush, Vutu", "CEHA"}; !slices.Equal(got, want) {
+	if want := []string{"Katupoken", "Bush, Vutu", "AVEX"}; !slices.Equal(got, want) {
 		t.Errorf("order = %q, want %q", got, want)
 	}
 }

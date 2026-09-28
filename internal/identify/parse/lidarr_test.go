@@ -73,8 +73,8 @@ func TestRemoveAfterDash(t *testing.T) {
 
 func TestNormalizeTitle(t *testing.T) {
 	got := parse.NormalizeTitle("The Very Best Of, The Cimuhon Tozali!")
-	if got != "very best rolling stones" {
-		t.Errorf("NormalizeTitle = %q, want \"very best rolling stones\"", got)
+	if got != "very best cimuhon tozali" {
+		t.Errorf("NormalizeTitle = %q, want \"very best cimuhon tozali\"", got)
 	}
 }
 
@@ -85,11 +85,11 @@ func TestCleanArtistName(t *testing.T) {
 	// "the" leading the whole name sits at the string's own edge, which the
 	// original's (?<!^)/(?!$) guard excludes from stripping -- only a filler
 	// word strictly inside the name is dropped.
-	if got := parse.CleanArtistName("The Cimuhon Tozali"); got != "therollingstones" {
-		t.Errorf("CleanArtistName(%q) = %q, want %q", "The Cimuhon Tozali", got, "therollingstones")
+	if got := parse.CleanArtistName("The Cimuhon Tozali"); got != "thecimuhontozali" {
+		t.Errorf("CleanArtistName(%q) = %q, want %q", "The Cimuhon Tozali", got, "thecimuhontozali")
 	}
-	if got := parse.CleanArtistName("Rarul the Vamofu"); got != "underbridge" {
-		t.Errorf("CleanArtistName(%q) = %q, want %q -- a filler word in the middle is stripped", "Rarul the Vamofu", got, "underbridge")
+	if got := parse.CleanArtistName("Rarul the Vamofu"); got != "rarulvamofu" {
+		t.Errorf("CleanArtistName(%q) = %q, want %q -- a filler word in the middle is stripped", "Rarul the Vamofu", got, "rarulvamofu")
 	}
 	if got := parse.CleanArtistName("The The"); got != "thethe" {
 		t.Errorf("CleanArtistName(%q) = %q, want %q -- a filler word at either edge is never stripped", "The The", got, "thethe")

@@ -170,13 +170,13 @@ func TestTitleForms(t *testing.T) {
 	}{
 		{naming.TitleThe, "The Kokopob", "Kokopob, The"},
 		{naming.TitleThe, "A Fivatad Novinu", "Fivatad Novinu, A"},
-		{naming.TitleThe, "The Gupe (1979)", "Wall, The (1979)"},
+		{naming.TitleThe, "The Gupe (1979)", "Gupe, The (1979)"},
 		{naming.TitleThe, "Theatre", "Theatre"},
 		{naming.CleanTitle, "Guns N' Roses", "Guns N Roses"},
 		{naming.CleanTitle, "Batel & Nihirekuh", "Batel and Nihirekuh"},
 		{naming.CleanTitle, "XT/QK - Live: 1992 (Remastered)", "XT QK Live 1992 Remastered"},
-		{naming.FirstCharacter, "The Kokopob", "B"},
-		{naming.FirstCharacter, "pióurazo", "B"},
+		{naming.FirstCharacter, "The Kokopob", "K"},
+		{naming.FirstCharacter, "pióurazo", "P"},
 		{naming.FirstCharacter, "!!!", "_"},
 		{naming.FirstCharacter, "'68 Comeback", "6"},
 	} {

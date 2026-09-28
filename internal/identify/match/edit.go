@@ -3,7 +3,7 @@ package match
 import "strings"
 
 // EditPenalty is normalised Levenshtein distance (0 identical, 1 nothing shared) over normalized
-// titles; unlike TitleSimilarity a shared prefix earns nothing, so "Voca Pebu a Maha" stays far from "Just Like Tepa".
+// titles; unlike TitleSimilarity a shared prefix earns nothing, so "Voca Pebu a Maha" stays far from "Voca Pebu Tepa".
 func EditPenalty(a, b string) float64 {
 	left := []rune(strings.ReplaceAll(normalizeTitle(a), " ", ""))
 	right := []rune(strings.ReplaceAll(normalizeTitle(b), " ", ""))
