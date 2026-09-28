@@ -64,7 +64,9 @@ func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, 
 			Affinity: p.cache, Desired: &desired, Subscriptions: library.NewSubscriptions(p.library),
 			People: library.NewPeople(p.library), GroupID: lookupGroupID,
 		}),
-		OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+		// Enrichment follows at once, not at the next hourly run: a new library had no tracklists,
+		// photos or Wanted for up to an hour (found 2026-09-28).
+		OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx); _, _ = p.enqueueEnrichment(ctx) },
 	})
 	executor.Handle(scan.JobType, job)
 	return nil

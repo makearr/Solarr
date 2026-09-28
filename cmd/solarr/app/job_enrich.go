@@ -48,7 +48,8 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 		Artworks:  library.NewArtworks(p.library),
 		Realigner: realigner{p: p},
 		Desired:   &desired,
-		OnRefined: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+		// Covers follow at once rather than at the six-hourly sweep (found 2026-09-28).
+		OnRefined: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx); _, _ = p.enqueueArtwork(ctx) },
 		Tags:      mediatool.New(nil, 0),
 		Roots:     adapters.Roots{Cache: p.cache},
 		HTTP:      imageClient,

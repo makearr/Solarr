@@ -287,7 +287,23 @@ func (s *Server) AttachRootFolderToCategory(w http.ResponseWriter, r *http.Reque
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such root folder")
 		return
 	}
+	s.scanAttachedRoot(r.Context(), body.RootFolderId)
 	writeJSON(w, s.logger, http.StatusOK, s.rootFolderView(folder))
+}
+
+// scanTaskKey is the library scan's key in the scheduler (cmd/solarr/app/scheduler.go).
+const scanTaskKey = "scan"
+
+// scanAttachedRoot starts the library scan now: a new folder otherwise showed nothing until the
+// six-hourly scan (found 2026-09-28). Best-effort; a scan already queued is logged, not an error.
+func (s *Server) scanAttachedRoot(ctx context.Context, rootFolderID int64) {
+	if s.scheduler == nil {
+		return
+	}
+	if err := s.scheduler.RunNow(ctx, scanTaskKey, false); err != nil {
+		s.logger.WarnContext(ctx, "scan after attaching a root folder not started",
+			"root_folder_id", rootFolderID, "error", err)
+	}
 }
 
 // DetachRootFolderFromCategory takes a root folder out of a category.
