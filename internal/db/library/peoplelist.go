@@ -83,12 +83,12 @@ func composePeopleList(filter PersonFilter, after PersonCursor, pageSize int) (s
 		operator, direction = "<", " DESC"
 	}
 	predicates.AddIf(after.SortName != "" || after.ID != 0,
-		"(sort_name "+operator+" ? OR (sort_name = ? AND id "+operator+" ?))",
+		"(sort_name COLLATE NOCASE "+operator+" ? OR (sort_name COLLATE NOCASE = ? AND id "+operator+" ?))",
 		after.SortName, after.SortName, after.ID)
 
 	query := "SELECT " + personColumns + ",\n       " + personCoverageColumns +
 		"\nFROM person" + predicates.Where() +
-		"\nORDER BY sort_name" + direction + ", id" + direction + "\nLIMIT ?"
+		"\nORDER BY sort_name COLLATE NOCASE" + direction + ", id" + direction + "\nLIMIT ?"
 	return query, predicates.Args(pageSize)
 }
 
@@ -131,10 +131,10 @@ func addNamePrefix(predicates *store.Predicates, prefix string) {
 	}
 	upper, bounded := prefixUpperBound(prefix)
 	if !bounded {
-		predicates.Add("sort_name >= ?", prefix)
+		predicates.Add("sort_name COLLATE NOCASE >= ?", prefix)
 		return
 	}
-	predicates.Add("(sort_name >= ? AND sort_name < ?)", prefix, upper)
+	predicates.Add("(sort_name COLLATE NOCASE >= ? AND sort_name COLLATE NOCASE < ?)", prefix, upper)
 }
 
 // ListPeople returns one page of the people list. Filtering by media type
@@ -173,24 +173,5 @@ func (p People) ListPeople(ctx context.Context, filter PersonFilter, after Perso
 // index instead of only that it returns the right rows).
 func (p People) ExplainPeopleList(ctx context.Context, filter PersonFilter, after PersonCursor, pageSize int) (string, error) {
 	query, arguments := composePeopleList(filter, after, pageSize)
-
-	rows, err := p.store.Read().QueryContext(ctx, "EXPLAIN QUERY PLAN "+query, arguments...)
-	if err != nil {
-		return "", fmt.Errorf("library: explain: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	plan := ""
-	for rows.Next() {
-		var id, parent, unused int
-		var detail string
-		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
-			return "", fmt.Errorf("library: scan plan: %w", err)
-		}
-		plan += detail + "\n"
-	}
-	if err := rows.Err(); err != nil {
-		return "", fmt.Errorf("library: explain: %w", err)
-	}
-	return plan, nil
+	return p.store.ExplainQueryPlan(ctx, query, arguments...)
 }

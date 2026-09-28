@@ -204,3 +204,12 @@ So: a list surface — anything where the filters *are* the query — composes i
 Go with `store.Predicates`, adding only what is set. `internal/db/library/works.go` is the
 worked example, and `ExplainList` beside it exists so a test can assert the plan rather
 than the timing. Everything else stays sqlc.
+
+**Assert plans through `store.ExplainQueryPlan`, never a bare `EXPLAIN QUERY PLAN`.** EXPLAIN
+does not check the schema cookie, so a pooled connection that read the schema mid-migration
+explains against indexes that no longer exist; the plan tests passed that way until 2026-09-28.
+It indents each step by depth: a temp b-tree inside a correlated subquery is not the list's sort.
+
+**A case-insensitive order needs a matching index.** `ORDER BY sort_name COLLATE NOCASE` is
+served only by an index declared `COLLATE NOCASE` (migration 0046), and the cursor and prefix
+comparisons must carry the same collation or pages disagree with the order.
