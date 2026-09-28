@@ -213,6 +213,8 @@ export function WorkDetail() {
                   ? "…"
                   : "Monitor"}
             </button>
+            {administrator && (
+            <>
             <button
               type="button"
               disabled={remove.isPending}
@@ -251,6 +253,8 @@ export function WorkDetail() {
             >
               Delete files
             </button>
+            </>
+            )}
           </div>
         </header>
 
@@ -364,9 +368,9 @@ export function WorkDetail() {
               setPartMonitored.mutate({ partId, monitored })
             }
             searchPending={searchTrack.isPending ? searchTrack.variables : undefined}
-            onSearch={(partId) => searchTrack.mutate(partId)}
+            onSearch={administrator ? (partId) => searchTrack.mutate(partId) : undefined}
             removePending={removeTrack.isPending ? removeTrack.variables.partId : undefined}
-            onRemove={(partId, deleteFiles) => removeTrack.mutate({ partId, deleteFiles })}
+            onRemove={administrator ? (partId, deleteFiles) => removeTrack.mutate({ partId, deleteFiles }) : undefined}
           />
         )}
 
@@ -515,9 +519,9 @@ function PartsSection({
   monitorPending: boolean;
   onToggleMonitored: (partId: number, monitored: boolean) => void;
   searchPending: number | undefined;
-  onSearch: (partId: number) => void;
+  onSearch?: (partId: number) => void;
   removePending: number | undefined;
-  onRemove: (partId: number, deleteFiles: boolean) => void;
+  onRemove?: (partId: number, deleteFiles: boolean) => void;
 }) {
   const [columns, setColumns] = usePreference<ColumnKey[]>("album.columns", []);
   const present = parts.filter((part) => part.file != null).length;
@@ -550,9 +554,9 @@ function PartsSection({
             pending={monitorPending}
             onToggleMonitored={(monitored) => onToggleMonitored(part.id, monitored)}
             searching={searchPending === part.id}
-            onSearch={() => onSearch(part.id)}
+            onSearch={onSearch && (() => onSearch(part.id))}
             removing={removePending === part.id}
-            onRemove={(deleteFiles) => onRemove(part.id, deleteFiles)}
+            onRemove={onRemove && ((deleteFiles) => onRemove(part.id, deleteFiles))}
           />
         ))}
       </ul>
@@ -577,9 +581,10 @@ function PartRow({
   pending: boolean;
   onToggleMonitored: (monitored: boolean) => void;
   searching: boolean;
-  onSearch: () => void;
+  /** Absent for a caller the server would refuse: searching and deleting a track are administrator-only. */
+  onSearch?: () => void;
   removing: boolean;
-  onRemove: (deleteFiles: boolean) => void;
+  onRemove?: (deleteFiles: boolean) => void;
 }) {
   const file = part.file;
   const title = part.title ?? part.media_ref;
@@ -637,6 +642,7 @@ function PartRow({
           )}
         </span>
 
+        {onSearch && (
         <button
           type="button"
           aria-label={`Search for ${part.title ?? part.media_ref}`}
@@ -649,6 +655,8 @@ function PartRow({
           <SearchIcon aria-hidden className="size-3" />
           {searching ? "Searching…" : "Search"}
         </button>
+        )}
+        {onRemove && (
         <button
           type="button"
           aria-label={`Delete ${title}`}
@@ -659,8 +667,9 @@ function PartRow({
         >
           <TrashIcon aria-hidden className="size-3.5" />
         </button>
+        )}
       </div>
-      {confirming && (
+      {confirming && onRemove && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border-subtle bg-canvas px-3 py-2 text-xs">
           <span>Stop wanting {title}?</span>
           <label className="flex items-center gap-1">
