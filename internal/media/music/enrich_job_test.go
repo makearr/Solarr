@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -40,11 +41,14 @@ type fakeSource struct {
 	rg      musicbrainz.ReleaseGroup
 	release musicbrainz.Release
 	err     error
+	mu      sync.Mutex
 	calls   int
 }
 
 func (f *fakeSource) Name() string { return "fake" }
 func (f *fakeSource) Album(context.Context, string, string) (musicbrainz.ReleaseGroup, musicbrainz.Release, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.calls++
 	return f.rg, f.release, f.err
 }
@@ -1344,5 +1348,52 @@ func TestEnrichJob_NamesTheWorkAfterItsReleaseGroup(t *testing.T) {
 	}
 	if work.CanonicalTitle != "Live! At the Rainbow" || work.SortTitle != music.SortTitle("Live! At the Rainbow") {
 		t.Errorf("work titled %q / %q, want the release group's title", work.CanonicalTitle, work.SortTitle)
+	}
+}
+
+// overlapSource holds each lookup until another is in flight, recording the most at once.
+type overlapSource struct {
+	fakeSource
+	lock      sync.Mutex
+	inFlight  int
+	most      int
+	arrived   chan struct{}
+	arrivedAt sync.Once
+}
+
+func (o *overlapSource) Album(ctx context.Context, rg, release string) (musicbrainz.ReleaseGroup, musicbrainz.Release, error) {
+	o.lock.Lock()
+	o.inFlight++
+	o.most = max(o.most, o.inFlight)
+	if o.inFlight >= 2 {
+		o.arrivedAt.Do(func() { close(o.arrived) })
+	}
+	o.lock.Unlock()
+	select {
+	case <-o.arrived:
+	case <-time.After(2 * time.Second):
+	}
+	o.lock.Lock()
+	o.inFlight--
+	o.lock.Unlock()
+	return o.fakeSource.Album(ctx, rg, release)
+}
+
+// BrainzMash answers in about a second but allows ten a second: a batch's lookups must overlap.
+func TestEnrichJob_LooksUpABatchsAlbumsConcurrently(t *testing.T) {
+	source := &overlapSource{
+		fakeSource: fakeSource{rg: musicbrainz.ReleaseGroup{MBID: "rg-1", Title: "KI Pecezinu", PrimaryType: "Album"}},
+		arrived:    make(chan struct{}),
+	}
+	job, opened, _ := newEnrichJob(t, source)
+	for index := range 4 {
+		createPlaceholder(t, opened, fmt.Sprintf("rg-%d", index), fmt.Sprintf("rel-%d", index))
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if source.most < 2 || source.calls != 4 {
+		t.Errorf("at most %d lookups at once over %d calls, want overlapping lookups, each album once", source.most, source.calls)
 	}
 }

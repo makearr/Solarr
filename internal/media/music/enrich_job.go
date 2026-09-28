@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"sync"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -64,6 +65,10 @@ var EnrichDefinition = jobs.Definition{
 // worth of otherwise-committed progress -- each batch's writes are already their
 // own transaction (library.RefineEdition), so nothing partial survives either way.
 const enrichBatchSize = 20
+
+// enrichLookupWorkers overlaps a batch's album lookups: BrainzMash answers in ~1 s but allows
+// 10 req/s, so one at a time left enrichment at a tenth of its budget (measured 2026-09-28).
+const enrichLookupWorkers = 8
 
 // personBackfillBatchSize and personBackfillBudget bound the artist image and
 // biography sweep. Each person costs a MusicBrainz lookup plus a Wikidata one,
@@ -206,10 +211,15 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 			break
 		}
 
-		for _, edition := range batch {
+		albums := make([]albumKey, len(batch))
+		for index, edition := range batch {
+			albums[index] = j.placeholderAlbum(ctx, edition)
+		}
+		answers := j.lookupAlbums(ctx, albums)
+		for index, edition := range batch {
 			afterEditionID = edition.EditionID
 			total++
-			if err := j.enrichOne(ctx, edition); err == nil {
+			if err := j.enrichOne(ctx, edition, answers[index]); err == nil {
 				refinedWorkIDs = append(refinedWorkIDs, edition.WorkID)
 				j.alignClaimed(ctx, edition.WorkID)
 			} else {
@@ -265,12 +275,15 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context) (withEdition []int64)
 		if len(batch) == 0 {
 			break
 		}
-		for _, work := range batch {
-			if enriched+failed >= editionlessBudget {
-				break
-			}
+		batch = batch[:min(len(batch), editionlessBudget-enriched-failed)]
+		albums := make([]albumKey, len(batch))
+		for index, work := range batch {
+			albums[index] = albumKey{releaseGroup: work.ReleaseGroupMBID}
+		}
+		answers := j.lookupAlbums(ctx, albums)
+		for index, work := range batch {
 			afterWorkID = work.WorkID
-			rg, _, err := j.provider.Album(ctx, musicbrainz.PriorityEnrich, work.ReleaseGroupMBID, "")
+			rg, err := answers[index].rg, answers[index].err
 			if err != nil {
 				failed++
 				j.logger.WarnContext(ctx, "editionless work enrichment failed",
@@ -379,9 +392,10 @@ func (j *EnrichJob) chooseEdition(ctx context.Context, work library.EditionlessW
 		j.logger.WarnContext(ctx, "edition choice resolve failed", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
 		return false
 	}
+	chosen := albumKey{releaseGroup: work.ReleaseGroupMBID, release: release.MBID}
 	if err := j.enrichOne(ctx, library.PlaceholderEdition{
 		EditionID: *resolutions[0].EditionID, WorkID: work.WorkID, ExternalID: release.MBID,
-	}); err != nil {
+	}, j.lookupAlbums(ctx, []albumKey{chosen})[0]); err != nil {
 		j.logger.WarnContext(ctx, "chosen edition refine failed", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
 		return false
 	}
@@ -502,22 +516,63 @@ func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArt
 	}
 }
 
-func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEdition) error {
+// albumKey is one album lookup; err set means there is nothing to look up.
+type albumKey struct {
+	releaseGroup, release string
+	err                   error
+}
+
+// albumAnswer is what Provider.Album answered for one albumKey.
+type albumAnswer struct {
+	rg      musicbrainz.ReleaseGroup
+	release musicbrainz.Release
+	err     error
+}
+
+// placeholderAlbum names the lookup a placeholder edition needs.
+func (j *EnrichJob) placeholderAlbum(ctx context.Context, edition library.PlaceholderEdition) albumKey {
 	releaseGroupMBID, ok, err := j.identity.WorkExternalID(ctx, edition.WorkID, ProviderReleaseGroup)
 	if err != nil {
-		return fmt.Errorf("release group id: %w", err)
+		return albumKey{err: fmt.Errorf("release group id: %w", err)}
 	}
 	if !ok {
-		// A placeholder edition always comes from newEditionLink, which links
-		// the release-group id in the same transaction -- this should not
-		// happen, but an edition missing its work's identity is not this job's
-		// to invent, so it is skipped rather than guessed at.
-		return fmt.Errorf("work %d has no %s external id", edition.WorkID, ProviderReleaseGroup)
+		// newEditionLink links the release group in the same transaction; a missing one is not ours to guess.
+		return albumKey{err: fmt.Errorf("work %d has no %s external id", edition.WorkID, ProviderReleaseGroup)}
 	}
+	return albumKey{releaseGroup: releaseGroupMBID, release: edition.ExternalID}
+}
 
-	rg, release, err := j.provider.Album(ctx, musicbrainz.PriorityEnrich, releaseGroupMBID, edition.ExternalID)
+// lookupAlbums asks the provider for every album at once, enrichLookupWorkers at a time; the
+// rate-limit bucket still paces them. Answers keep the order of albums.
+func (j *EnrichJob) lookupAlbums(ctx context.Context, albums []albumKey) []albumAnswer {
+	answers := make([]albumAnswer, len(albums))
+	slots := make(chan struct{}, enrichLookupWorkers)
+	var wait sync.WaitGroup
+	for index, album := range albums {
+		if album.err != nil {
+			answers[index].err = album.err
+			continue
+		}
+		slots <- struct{}{}
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			defer func() { <-slots }()
+			rg, release, err := j.provider.Album(ctx, musicbrainz.PriorityEnrich, album.releaseGroup, album.release)
+			if err != nil {
+				err = fmt.Errorf("musicbrainz: %w", err)
+			}
+			answers[index] = albumAnswer{rg: rg, release: release, err: err}
+		}()
+	}
+	wait.Wait()
+	return answers
+}
+
+func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEdition, album albumAnswer) error {
+	rg, release, err := album.rg, album.release, album.err
 	if err != nil {
-		return fmt.Errorf("musicbrainz: %w", err)
+		return err
 	}
 
 	workYear, workReleaseDate, workPrimaryType, refinement, parts := refinementFor(rg, release)
