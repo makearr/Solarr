@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/jobs"
 )
 
 func authedDelete(t *testing.T, cookies []*http.Cookie, target string) *http.Request {
@@ -532,6 +533,32 @@ func TestAttachRootFolderToCategory_PutsTheRootIntoTheCategory(t *testing.T) {
 	attached := fixture.cache.Snapshot().CategoriesForRootFolder(root.ID)
 	if len(attached) != 1 || attached[0] != category.ID {
 		t.Errorf("CategoriesForRootFolder = %v, want [%d]", attached, category.ID)
+	}
+}
+
+// A folder attached to a library is scanned at once, not at the next six-hourly scan: the setup
+// wizard's library showed nothing for hours (found 2026-09-28).
+func TestAttachRootFolderToCategory_StartsTheLibraryScan(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.scheduler.tasks = []jobs.Task{{Key: "scan", DefaultCadence: "0 */6 * * *"}}
+	category, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 1)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	root, err := fixture.cache.CreateRootFolder(t.Context(), "/media/music", "")
+	if err != nil {
+		t.Fatalf("CreateRootFolder: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	target := "/api/v1/categories/" + strconv.FormatInt(category.ID, 10) + "/rootfolders"
+	recorder := fixture.do(authedPost(t, cookies, target, `{"root_folder_id":`+strconv.FormatInt(root.ID, 10)+`}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if fixture.scheduler.lastRunKey != "scan" || fixture.scheduler.lastRunFull {
+		t.Errorf("ran %q (full=%v), want an ordinary scan", fixture.scheduler.lastRunKey, fixture.scheduler.lastRunFull)
 	}
 }
 
