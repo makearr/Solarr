@@ -181,8 +181,8 @@ export function Sidebar() {
         collapsed ? "w-14" : "w-48"
       }`}
     >
-      <div className={`flex items-center px-4 py-3 ${collapsed ? "justify-center" : ""}`}>
-        <Logo showName={!collapsed} />
+      <div className={`flex items-center py-3 ${collapsed ? "justify-center px-2" : "px-3"}`}>
+        <Logo showName={!collapsed} size="lg" />
       </div>
 
       <ul className="flex flex-col gap-0.5 px-2">

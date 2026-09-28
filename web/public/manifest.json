@@ -1,0 +1,14 @@
+{
+  "name": "Solarr",
+  "short_name": "Solarr",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#120e1c",
+  "theme_color": "#120e1c",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
