@@ -57,9 +57,7 @@ func (c Consumer) trackPass(ctx context.Context, out *batchResult, files []pendi
 		// A file stays with the album its folder's files agree on when that album has its song, or
 		// when only a title search points elsewhere: one song has many takes and many entries.
 		if found && len(hints) > 0 && !slices.Contains(hints, home.MBID) &&
-			(confidence < trackKnownConfidence || slices.ContainsFunc(siblingTitles, func(title string) bool {
-				return local.Title.present() && sameTrackTitle(local.Title.Value, title)
-			})) {
+			(confidence < trackKnownConfidence || onAlbum(local.Title, siblingTitles)) {
 			found = false
 		}
 		if !found {
@@ -89,6 +87,14 @@ func (c Consumer) trackPass(ctx context.Context, out *batchResult, files []pendi
 		}, TrackFile{MediaObjectID: out.mediaObjectIDs[file.index], Title: local.Title.Value, RecordingMBID: recording.RecordingMBID})
 	}
 	return pending
+}
+
+// onAlbum is a file titled exactly as a track of the album: "Tanup de Becifon (Club Mix)" is a
+// different recording from the album's "Tanup de Becifon", and its single is its album (Hafenav).
+func onAlbum(title Claim, albumTitles []string) bool {
+	return title.present() && slices.ContainsFunc(albumTitles, func(track string) bool {
+		return match.EditPenalty(title.Value, track) <= trackTitlePenalty
+	})
 }
 
 // albumTitles are the track titles of every release of the given release groups, from the cache
