@@ -40,6 +40,7 @@ type Job struct {
 	CreatedAt      int64
 	UpdatedAt      int64
 	CategoryID     sql.NullInt64
+	Reclaims       int64
 }
 
 type JobAttempt struct {

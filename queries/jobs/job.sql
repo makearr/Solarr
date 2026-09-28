@@ -6,18 +6,18 @@ INSERT INTO job (
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, type, pool, action_key, priority, payload_json, state, mutating,
           attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-          depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id;
+          depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims;
 
 -- name: GetJob :one
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
+       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims
 FROM job WHERE id = ?;
 
 -- name: FindActiveJobByActionKey :one
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
+       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims
 FROM job
 WHERE action_key = ?
   AND state IN ('PENDING', 'PENDING_RETRY', 'LEASED', 'RUNNING');
@@ -44,7 +44,7 @@ WHERE id IN (
 )
 RETURNING id, type, pool, action_key, priority, payload_json, state, mutating,
           attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-          depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id;
+          depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims;
 
 -- name: StartJob :exec
 UPDATE job
@@ -86,13 +86,21 @@ WHERE id = sqlc.arg(id)
 
 -- The reaper returns abandoned work to the queue. A crashed process therefore
 -- self-heals with no manual cleanup, which is what makes restart recovery real.
+-- The abandoned run gives its attempt back; a job reaped max_reclaims times fails.
 
 -- name: ReclaimExpiredLeases :many
 UPDATE job
-SET state = 'PENDING_RETRY', lease_owner = NULL, lease_expires_at = NULL,
+SET state = CASE WHEN reclaims + 1 >= sqlc.arg(max_reclaims) THEN 'FAILED' ELSE 'PENDING_RETRY' END,
+    attempts = CASE WHEN state = 'RUNNING' AND attempts > 0 THEN attempts - 1 ELSE attempts END,
+    reclaims = reclaims + 1,
+    lease_owner = NULL, lease_expires_at = NULL,
     last_error = sqlc.arg(reason), updated_at = sqlc.arg(now)
 WHERE state IN ('LEASED', 'RUNNING') AND lease_expires_at <= sqlc.arg(now)
-RETURNING id, type, pool, attempts, max_attempts;
+RETURNING id, type, pool, state, attempts, max_attempts, reclaims;
+
+-- name: CloseReclaimedAttempts :exec
+UPDATE job_attempt SET finished_at = sqlc.arg(now), outcome = 'reclaimed', error = sqlc.arg(reason)
+WHERE finished_at IS NULL AND job_id IN (SELECT value FROM json_each(sqlc.arg(job_ids)));
 
 -- Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
 -- updated_at is not unique. A zero cursor is the start, hence the guarded comparison.
@@ -100,7 +108,7 @@ RETURNING id, type, pool, attempts, max_attempts;
 -- name: ListJobsPage :many
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
+       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims
 FROM job
 WHERE (sqlc.arg(state) = '' OR state = sqlc.arg(state))
   -- In the query, not afterwards: filtering results returns short pages and

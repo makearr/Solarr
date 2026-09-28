@@ -172,9 +172,13 @@ func (d *Dispatcher) reclaim(ctx context.Context) {
 		return
 	}
 	for _, job := range reclaimed {
-		d.logger.Warn("reclaimed an abandoned job",
+		message := "reclaimed an abandoned job"
+		if job.State == StateFailed {
+			message = "abandoned job failed: reclaimed too often"
+		}
+		d.logger.Warn(message,
 			slog.Int64("job_id", job.ID), slog.String("type", string(job.Type)),
-			slog.Int("attempts", job.Attempts))
+			slog.Int("attempts", job.Attempts), slog.Int("reclaims", job.Reclaims))
 	}
 }
 

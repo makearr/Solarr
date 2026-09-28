@@ -16,6 +16,7 @@ type Querier interface {
 	// One conditional UPDATE ... RETURNING, so two dispatchers cannot hand the same
 	// job to two workers. depends_on keeps a job unclaimable until its parent succeeds.
 	ClaimJobs(ctx context.Context, arg ClaimJobsParams) ([]Job, error)
+	CloseReclaimedAttempts(ctx context.Context, arg CloseReclaimedAttemptsParams) error
 	CompleteJob(ctx context.Context, arg CompleteJobParams) (int64, error)
 	CountJobsByState(ctx context.Context) ([]CountJobsByStateRow, error)
 	DeleteFinishedJobsBefore(ctx context.Context, updatedAt int64) (int64, error)
@@ -46,6 +47,7 @@ type Querier interface {
 	PruneEventsBefore(ctx context.Context, arg PruneEventsBeforeParams) (int64, error)
 	// The reaper returns abandoned work to the queue. A crashed process therefore
 	// self-heals with no manual cleanup, which is what makes restart recovery real.
+	// The abandoned run gives its attempt back; a job reaped max_reclaims times fails.
 	ReclaimExpiredLeases(ctx context.Context, arg ReclaimExpiredLeasesParams) ([]ReclaimExpiredLeasesRow, error)
 	RecordAttemptFinish(ctx context.Context, arg RecordAttemptFinishParams) error
 	RecordAttemptStart(ctx context.Context, arg RecordAttemptStartParams) (JobAttempt, error)
