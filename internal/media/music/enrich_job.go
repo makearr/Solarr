@@ -79,6 +79,10 @@ const personBackfillBatchSize = 20
 // defaultPeopleBackfillPerRun is the budget when none is configured.
 const defaultPeopleBackfillPerRun = 200
 
+// defaultCheckpointBatches is how often a run hands its progress on: realigned files, fresh counts
+// and a slice of artist backfill. On a fresh library a run lasts hours; all three used to wait for its end.
+const defaultCheckpointBatches = 10
+
 // editionlessBatchSize and editionlessBudget bound the pass over works the
 // text search identified: one release-group lookup each, on the same shared
 // MusicBrainz budget.
@@ -109,6 +113,7 @@ type EnrichJob struct {
 	logger          *slog.Logger
 	wikidataEnabled func() bool
 	backfillPerRun  func() int
+	checkpointEvery int
 }
 
 // TagReader reads the tags a set of files carry -- mediatool.Tool's own
@@ -153,6 +158,8 @@ type EnrichJobConfig struct {
 	Desired *library.Desired
 	// OnRefined is optional: told when a run refined any album, so its new tracks are counted at once.
 	OnRefined func(context.Context)
+	// CheckpointBatches is how many batches pass between checkpoints; zero is 10.
+	CheckpointBatches int
 	// Tags and Roots are optional: without both, an album identified only at
 	// release-group level gets no edition chosen and so no tracklist.
 	Tags      TagReader
@@ -173,8 +180,8 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 	return &EnrichJob{
 		identity: config.Identity, people: config.People, provider: config.Provider,
 		biography: config.Biography, wikidataEnabled: config.WikidataEnabled,
-		backfillPerRun: config.PeopleBackfillPerRun,
-		artworks:       config.Artworks, realigner: config.Realigner, desired: config.Desired, onRefined: config.OnRefined,
+		backfillPerRun: config.PeopleBackfillPerRun, checkpointEvery: config.CheckpointBatches,
+		artworks: config.Artworks, realigner: config.Realigner, desired: config.Desired, onRefined: config.OnRefined,
 		artistArt: config.ArtistArt,
 		tags:      config.Tags, roots: config.Roots, http: config.HTTP,
 		fs: config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
@@ -198,7 +205,15 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 		}
 	}
 
-	total, failed := 0, 0
+	checkpointEvery := j.checkpointEvery
+	if checkpointEvery <= 0 {
+		checkpointEvery = defaultCheckpointBatches
+	}
+	backfill := backfillProgress{budget: defaultPeopleBackfillPerRun}
+	if j.backfillPerRun != nil {
+		backfill.budget = j.backfillPerRun()
+	}
+	total, failed, batches := 0, 0, 0
 	var refinedWorkIDs []int64
 	var afterEditionID int64
 	for {
@@ -238,24 +253,34 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 		if len(batch) < enrichBatchSize {
 			break
 		}
+		if batches++; batches%checkpointEvery == 0 {
+			j.handOn(ctx, refinedWorkIDs, payload.Manual)
+			refinedWorkIDs = nil
+			j.backfillPeople(ctx, &backfill, personBackfillBatchSize)
+		}
 	}
 	j.logger.Info("music enrichment finished", slog.Int("processed", total), slog.Int("failed", failed))
 
 	refinedWorkIDs = append(refinedWorkIDs, j.enrichEditionless(ctx)...)
+	j.handOn(ctx, refinedWorkIDs, payload.Manual)
+	j.backfillPeople(ctx, &backfill, backfill.budget)
+	return nil
+}
 
-	if j.realigner != nil && len(refinedWorkIDs) > 0 {
-		if err := j.realigner.RealignWorks(ctx, refinedWorkIDs, payload.Manual); err != nil {
+// handOn gives refined works to the realigner, so their files meet the new tracklist, and has them counted.
+func (j *EnrichJob) handOn(ctx context.Context, refinedWorkIDs []int64, manual bool) {
+	if len(refinedWorkIDs) == 0 {
+		return
+	}
+	if j.realigner != nil {
+		if err := j.realigner.RealignWorks(ctx, refinedWorkIDs, manual); err != nil {
 			j.logger.WarnContext(ctx, "realign refined works failed",
 				slog.Int("works", len(refinedWorkIDs)), slog.Any("error", err))
 		}
 	}
-
-	if j.onRefined != nil && len(refinedWorkIDs) > 0 {
+	if j.onRefined != nil {
 		j.onRefined(ctx)
 	}
-
-	j.backfillPeople(ctx)
-	return nil
 }
 
 // enrichEditionless gives works identified at release-group level -- the text
@@ -406,31 +431,30 @@ func (j *EnrichJob) chooseEdition(ctx context.Context, work library.EditionlessW
 	return true
 }
 
-// backfillPeople fills in the image and biography of people resolved before
-// those had a source. resolveArtist only ever fetches them the first time a
-// person is created, and findOrCreatePerson returns an existing person
-// untouched, so without this pass an artist already in the library never
-// gained either -- which is why no artist picture had ever appeared
-// (found 2026-09-13). Bounded per run by the configured budget.
-func (j *EnrichJob) backfillPeople(ctx context.Context) {
+// backfillProgress is one run's artist backfill: what it may still spend, and where it stopped,
+// so a later slice moves on past artists that failed rather than retrying them.
+type backfillProgress struct {
+	budget                 int
+	afterPersonID          int64
+	filled, absent, failed int
+}
+
+// backfillPeople gives artists resolved before their image and biography had a source both
+// (found 2026-09-13), at most slice of them now and never past the run's budget.
+func (j *EnrichJob) backfillPeople(ctx context.Context, progress *backfillProgress, slice int) {
 	// Without a Wikidata source every artist would look imageless and be
 	// recorded so, permanently.
 	if j.artworks == (library.Artworks{}) || !j.wikidataOn() {
 		return
 	}
 
-	budget := defaultPeopleBackfillPerRun
-	if j.backfillPerRun != nil {
-		budget = j.backfillPerRun()
-	}
-	filled, absent, failed := 0, 0, 0
-	var afterPersonID int64
-	for filled+absent+failed < budget {
+	spent := 0
+	for spent < slice && progress.budget > 0 {
 		if ctx.Err() != nil {
 			return
 		}
 
-		batch, err := j.artworks.PeopleNeedingArtwork(ctx, afterPersonID, personBackfillBatchSize)
+		batch, err := j.artworks.PeopleNeedingArtwork(ctx, progress.afterPersonID, personBackfillBatchSize)
 		if err != nil {
 			j.logger.WarnContext(ctx, "people needing artwork failed", slog.Any("error", err))
 			return
@@ -440,17 +464,19 @@ func (j *EnrichJob) backfillPeople(ctx context.Context) {
 		}
 
 		for _, candidate := range batch {
-			if filled+absent+failed >= budget {
+			if spent >= slice || progress.budget <= 0 {
 				break
 			}
-			afterPersonID = candidate.PersonID
+			progress.afterPersonID = candidate.PersonID
+			spent++
+			progress.budget--
 			switch outcome := j.backfillOne(ctx, candidate); outcome {
 			case backfillFilled:
-				filled++
+				progress.filled++
 			case backfillAbsent:
-				absent++
+				progress.absent++
 			default:
-				failed++
+				progress.failed++
 			}
 		}
 		if len(batch) < personBackfillBatchSize {
@@ -458,9 +484,9 @@ func (j *EnrichJob) backfillPeople(ctx context.Context) {
 		}
 	}
 
-	if filled+absent+failed > 0 {
+	if spent > 0 {
 		j.logger.Info("artist backfill finished",
-			slog.Int("filled", filled), slog.Int("no_image", absent), slog.Int("failed", failed))
+			slog.Int("filled", progress.filled), slog.Int("no_image", progress.absent), slog.Int("failed", progress.failed))
 	}
 }
 

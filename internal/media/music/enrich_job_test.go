@@ -1470,3 +1470,26 @@ func TestEnrichJob_DescribesABatchsAlbumsInOneCall(t *testing.T) {
 		}
 	}
 }
+
+// A run on a fresh library lasts hours: every checkpoint hands refined albums on to be realigned
+// and counted, rather than all of them at the very end.
+func TestEnrichJob_HandsRefinedWorksOnAtEveryCheckpoint(t *testing.T) {
+	source := &fakeSource{rg: musicbrainz.ReleaseGroup{MBID: "rg-0", Title: "Gone", PrimaryType: "Album"}}
+	realigner := &fakeRealigner{}
+	job, opened, _ := newEnrichJobRealigning(t, source, nil, realigner, nil,
+		func(config *music.EnrichJobConfig) { config.CheckpointBatches = 1 })
+	for index := range 21 {
+		createPlaceholder(t, opened, fmt.Sprintf("rg-%d", index), fmt.Sprintf("rel-%d", index))
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	sizes := make([]int, len(realigner.batches))
+	for index, batch := range realigner.batches {
+		sizes[index] = len(batch)
+	}
+	if !slices.Equal(sizes, []int{20, 1}) || realigner.refined != 2 {
+		t.Errorf("handed on in batches of %v, counted %d times; want [20 1] and 2", sizes, realigner.refined)
+	}
+}
