@@ -19,6 +19,7 @@ func convertJob(row jobsdb.Job) Job {
 		Mutating:       row.Mutating != 0,
 		Attempts:       int(row.Attempts),
 		MaxAttempts:    int(row.MaxAttempts),
+		Reclaims:       int(row.Reclaims),
 		RunAfter:       time.Unix(row.RunAfter, 0).UTC(),
 		LeaseOwner:     row.LeaseOwner.String,
 		LeaseExpiresAt: unixOrZero(row.LeaseExpiresAt),

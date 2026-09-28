@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -494,6 +495,63 @@ func TestReclaimExpired_ReturnsAbandonedWork(t *testing.T) {
 	}
 	if back.LastError == "" {
 		t.Error("LastError is empty; the reason the work reappeared is not recorded")
+	}
+}
+
+// A suspended host outlives a lease: the reaped run gives its attempt back and says why it ended.
+func TestReclaimExpired_GivesTheAttemptBack(t *testing.T) {
+	queue, fake := newQueue(t)
+	enqueued := mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+
+	claimed := claimOne(t, queue, jobs.PoolMaintenance, "suspended-worker")
+	startJob(t, queue, claimed, "suspended-worker")
+	fake.Advance(2 * time.Minute)
+	reclaimed, err := queue.ReclaimExpired(t.Context())
+	if err != nil {
+		t.Fatalf("ReclaimExpired: %v", err)
+	}
+	want := []jobs.Reclaimed{{
+		ID: enqueued.ID, Type: typeBackup, Pool: jobs.PoolMaintenance, State: jobs.StatePendingRetry,
+		Attempts: 0, MaxAttempts: enqueued.MaxAttempts, Reclaims: 1,
+	}}
+	if !slices.Equal(reclaimed, want) {
+		t.Fatalf("reclaimed %+v, want %+v", reclaimed, want)
+	}
+
+	attempts, err := queue.Attempts(t.Context(), enqueued.ID)
+	if err != nil {
+		t.Fatalf("Attempts: %v", err)
+	}
+	if len(attempts) != 1 || attempts[0].Outcome != string(jobs.OutcomeReclaimed) || attempts[0].FinishedAt.IsZero() {
+		t.Errorf("attempts = %+v, want the abandoned one closed as reclaimed", attempts)
+	}
+}
+
+// A job that kills its process every time is reaped every time; its own budget stops it.
+func TestReclaimExpired_FailsAJobReclaimedTooOften(t *testing.T) {
+	queue, fake := newQueue(t)
+	enqueued := mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+
+	for reap := 1; reap <= jobs.MaxReclaims; reap++ {
+		claimed := claimOne(t, queue, jobs.PoolMaintenance, "crashing-worker")
+		startJob(t, queue, claimed, "crashing-worker")
+		fake.Advance(2 * time.Minute)
+		if _, err := queue.ReclaimExpired(t.Context()); err != nil {
+			t.Fatalf("ReclaimExpired: %v", err)
+		}
+		back, err := queue.Get(t.Context(), enqueued.ID)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		wantState := jobs.StatePendingRetry
+		if reap == jobs.MaxReclaims {
+			wantState = jobs.StateFailed
+		}
+		if back.State != wantState || back.Reclaims != reap || back.Attempts != 0 {
+			t.Fatalf("after reap %d: state %q, reclaims %d, attempts %d; want %q, %d, 0",
+				reap, back.State, back.Reclaims, back.Attempts, wantState, reap)
+		}
+		fake.Advance(time.Hour)
 	}
 }
 

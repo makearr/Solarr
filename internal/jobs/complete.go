@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math/rand/v2"
 	"time"
@@ -163,27 +164,46 @@ func (q *Queue) CancelWithReason(ctx context.Context, id int64, reason string) e
 	return nil
 }
 
+// MaxReclaims bounds reaped leases, so a job that kills its process every time still stops.
+const MaxReclaims = 10
+
 // Reclaimed describes one job the reaper took back.
 type Reclaimed struct {
 	ID          int64
 	Type        Type
 	Pool        Pool
+	State       State
 	Attempts    int
 	MaxAttempts int
+	Reclaims    int
 }
 
-// ReclaimExpired returns abandoned jobs to the queue.
+// ReclaimExpired returns abandoned jobs to the queue, or fails one reaped MaxReclaims times.
 func (q *Queue) ReclaimExpired(ctx context.Context) ([]Reclaimed, error) {
 	now := q.clock.Now()
+	reason := nullString("lease expired; the worker holding it stopped without reporting")
 
 	var rows []jobsdb.ReclaimExpiredLeasesRow
 	err := q.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
-		reclaimed, err := q.queries.WithTx(tx).ReclaimExpiredLeases(ctx, jobsdb.ReclaimExpiredLeasesParams{
-			Reason: nullString("lease expired; the worker holding it stopped without reporting"),
-			Now:    now.Unix(),
+		queries := q.queries.WithTx(tx)
+		reclaimed, err := queries.ReclaimExpiredLeases(ctx, jobsdb.ReclaimExpiredLeasesParams{
+			MaxReclaims: MaxReclaims, Reason: reason, Now: now.Unix(),
 		})
+		if err != nil || len(reclaimed) == 0 {
+			return err
+		}
 		rows = reclaimed
-		return err
+		ids := make([]int64, 0, len(reclaimed))
+		for _, row := range reclaimed {
+			ids = append(ids, row.ID)
+		}
+		jobIDs, err := json.Marshal(ids)
+		if err != nil {
+			return err
+		}
+		return queries.CloseReclaimedAttempts(ctx, jobsdb.CloseReclaimedAttemptsParams{
+			Now: sql.NullInt64{Int64: now.Unix(), Valid: true}, Reason: reason, JobIds: string(jobIDs),
+		})
 	})
 	if err != nil {
 		return nil, fmt.Errorf("jobs: reclaim expired leases: %w", err)
@@ -195,8 +215,10 @@ func (q *Queue) ReclaimExpired(ctx context.Context) ([]Reclaimed, error) {
 			ID:          row.ID,
 			Type:        Type(row.Type),
 			Pool:        Pool(row.Pool),
+			State:       State(row.State),
 			Attempts:    int(row.Attempts),
 			MaxAttempts: int(row.MaxAttempts),
+			Reclaims:    int(row.Reclaims),
 		})
 	}
 	return reclaimed, nil

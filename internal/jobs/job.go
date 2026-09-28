@@ -72,6 +72,8 @@ type Job struct {
 	Mutating    bool
 	Attempts    int
 	MaxAttempts int
+	// Reclaims counts reaped leases, which give their attempt back (MaxReclaims bounds them).
+	Reclaims int
 	// RunAfter is the earliest time this may be claimed: backoff, or a delay.
 	RunAfter       time.Time
 	LeaseOwner     string

@@ -85,7 +85,7 @@ WHERE id IN (
 )
 RETURNING id, type, pool, action_key, priority, payload_json, state, mutating,
           attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-          depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
+          depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims
 `
 
 type ClaimJobsParams struct {
@@ -134,6 +134,7 @@ func (q *Queries) ClaimJobs(ctx context.Context, arg ClaimJobsParams) ([]Job, er
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CategoryID,
+			&i.Reclaims,
 		); err != nil {
 			return nil, err
 		}
@@ -146,6 +147,22 @@ func (q *Queries) ClaimJobs(ctx context.Context, arg ClaimJobsParams) ([]Job, er
 		return nil, err
 	}
 	return items, nil
+}
+
+const closeReclaimedAttempts = `-- name: CloseReclaimedAttempts :exec
+UPDATE job_attempt SET finished_at = ?1, outcome = 'reclaimed', error = ?2
+WHERE finished_at IS NULL AND job_id IN (SELECT value FROM json_each(?3))
+`
+
+type CloseReclaimedAttemptsParams struct {
+	Now    sql.NullInt64
+	Reason sql.NullString
+	JobIds interface{}
+}
+
+func (q *Queries) CloseReclaimedAttempts(ctx context.Context, arg CloseReclaimedAttemptsParams) error {
+	_, err := q.db.ExecContext(ctx, closeReclaimedAttempts, arg.Now, arg.Reason, arg.JobIds)
+	return err
 }
 
 const completeJob = `-- name: CompleteJob :execrows
@@ -223,7 +240,7 @@ INSERT INTO job (
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, type, pool, action_key, priority, payload_json, state, mutating,
           attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-          depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
+          depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims
 `
 
 type EnqueueJobParams struct {
@@ -284,6 +301,7 @@ func (q *Queries) EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, er
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CategoryID,
+		&i.Reclaims,
 	)
 	return i, err
 }
@@ -346,7 +364,7 @@ func (q *Queries) FailUnfinishedJobsBatch(ctx context.Context, arg FailUnfinishe
 const findActiveJobByActionKey = `-- name: FindActiveJobByActionKey :one
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
+       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims
 FROM job
 WHERE action_key = ?
   AND state IN ('PENDING', 'PENDING_RETRY', 'LEASED', 'RUNNING')
@@ -376,6 +394,7 @@ func (q *Queries) FindActiveJobByActionKey(ctx context.Context, actionKey sql.Nu
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CategoryID,
+		&i.Reclaims,
 	)
 	return i, err
 }
@@ -383,7 +402,7 @@ func (q *Queries) FindActiveJobByActionKey(ctx context.Context, actionKey sql.Nu
 const getJob = `-- name: GetJob :one
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
+       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims
 FROM job WHERE id = ?
 `
 
@@ -411,6 +430,7 @@ func (q *Queries) GetJob(ctx context.Context, id int64) (Job, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CategoryID,
+		&i.Reclaims,
 	)
 	return i, err
 }
@@ -628,7 +648,7 @@ const listJobsPage = `-- name: ListJobsPage :many
 
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        attempts, max_attempts, run_after, lease_owner, lease_expires_at,
-       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id
+       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims
 FROM job
 WHERE (?1 = '' OR state = ?1)
   -- In the query, not afterwards: filtering results returns short pages and
@@ -690,6 +710,7 @@ func (q *Queries) ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]J
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CategoryID,
+			&i.Reclaims,
 		); err != nil {
 			return nil, err
 		}
@@ -729,29 +750,36 @@ func (q *Queries) PruneEventsBefore(ctx context.Context, arg PruneEventsBeforePa
 const reclaimExpiredLeases = `-- name: ReclaimExpiredLeases :many
 
 UPDATE job
-SET state = 'PENDING_RETRY', lease_owner = NULL, lease_expires_at = NULL,
-    last_error = ?1, updated_at = ?2
-WHERE state IN ('LEASED', 'RUNNING') AND lease_expires_at <= ?2
-RETURNING id, type, pool, attempts, max_attempts
+SET state = CASE WHEN reclaims + 1 >= ?1 THEN 'FAILED' ELSE 'PENDING_RETRY' END,
+    attempts = CASE WHEN state = 'RUNNING' AND attempts > 0 THEN attempts - 1 ELSE attempts END,
+    reclaims = reclaims + 1,
+    lease_owner = NULL, lease_expires_at = NULL,
+    last_error = ?2, updated_at = ?3
+WHERE state IN ('LEASED', 'RUNNING') AND lease_expires_at <= ?3
+RETURNING id, type, pool, state, attempts, max_attempts, reclaims
 `
 
 type ReclaimExpiredLeasesParams struct {
-	Reason sql.NullString
-	Now    int64
+	MaxReclaims int64
+	Reason      sql.NullString
+	Now         int64
 }
 
 type ReclaimExpiredLeasesRow struct {
 	ID          int64
 	Type        string
 	Pool        string
+	State       string
 	Attempts    int64
 	MaxAttempts int64
+	Reclaims    int64
 }
 
 // The reaper returns abandoned work to the queue. A crashed process therefore
 // self-heals with no manual cleanup, which is what makes restart recovery real.
+// The abandoned run gives its attempt back; a job reaped max_reclaims times fails.
 func (q *Queries) ReclaimExpiredLeases(ctx context.Context, arg ReclaimExpiredLeasesParams) ([]ReclaimExpiredLeasesRow, error) {
-	rows, err := q.db.QueryContext(ctx, reclaimExpiredLeases, arg.Reason, arg.Now)
+	rows, err := q.db.QueryContext(ctx, reclaimExpiredLeases, arg.MaxReclaims, arg.Reason, arg.Now)
 	if err != nil {
 		return nil, err
 	}
@@ -763,8 +791,10 @@ func (q *Queries) ReclaimExpiredLeases(ctx context.Context, arg ReclaimExpiredLe
 			&i.ID,
 			&i.Type,
 			&i.Pool,
+			&i.State,
 			&i.Attempts,
 			&i.MaxAttempts,
+			&i.Reclaims,
 		); err != nil {
 			return nil, err
 		}
