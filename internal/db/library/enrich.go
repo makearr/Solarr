@@ -246,6 +246,17 @@ func (i Identity) SetWorkDescription(ctx context.Context, at, workID int64, desc
 	return nil
 }
 
+// WithdrawEdition retires a placeholder edition whose release no longer exists; any other edition is left alone.
+func (i Identity) WithdrawEdition(ctx context.Context, editionID int64) error {
+	err := i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).WithdrawEdition(ctx, editionID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: withdraw edition %d: %w", editionID, err)
+	}
+	return nil
+}
+
 // RetitleWork names a work after its release group: a first scan names it after the album tag of
 // whichever file it met first, one pressing's or one night's title among several.
 func (i Identity) RetitleWork(ctx context.Context, at, workID int64, title, sortTitle string) error {

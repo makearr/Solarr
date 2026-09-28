@@ -1700,3 +1700,14 @@ func (q *Queries) UpdateWorkYearIfNull(ctx context.Context, arg UpdateWorkYearIf
 	_, err := q.db.ExecContext(ctx, updateWorkYearIfNull, arg.Year, arg.UpdatedAt, arg.ID)
 	return err
 }
+
+const withdrawEdition = `-- name: WithdrawEdition :exec
+UPDATE edition SET kind = 'withdrawn' WHERE id = ? AND kind = 'unknown'
+`
+
+// A placeholder whose release no source knows any more, replaced by one chosen from the files:
+// no longer a placeholder, so enrichment stops asking about it.
+func (q *Queries) WithdrawEdition(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, withdrawEdition, id)
+	return err
+}

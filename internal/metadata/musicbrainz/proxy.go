@@ -106,7 +106,7 @@ func (p proxy) Album(ctx context.Context, releaseGroupMBID, releaseMBID string) 
 		}
 	}
 	return ReleaseGroup{}, Release{}, fmt.Errorf(
-		"musicbrainz-proxy: release %s is not under release group %s", releaseMBID, releaseGroupMBID)
+		"musicbrainz-proxy: release %s is not under release group %s: %w", releaseMBID, releaseGroupMBID, errReleaseNotInGroup)
 }
 
 // proxyArtistCredit is the album's artists, its own primary artist (artistid)
