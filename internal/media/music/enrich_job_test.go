@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -40,11 +41,14 @@ type fakeSource struct {
 	rg      musicbrainz.ReleaseGroup
 	release musicbrainz.Release
 	err     error
+	mu      sync.Mutex
 	calls   int
 }
 
 func (f *fakeSource) Name() string { return "fake" }
 func (f *fakeSource) Album(context.Context, string, string) (musicbrainz.ReleaseGroup, musicbrainz.Release, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.calls++
 	return f.rg, f.release, f.err
 }
@@ -71,6 +75,18 @@ func (f *fakeArtistSource) Artist(_ context.Context, mbid string) (musicbrainz.A
 type fakeBiographer struct {
 	biographies map[string]wikidata.Biography
 	calls       int
+	batches     int
+}
+
+func (f *fakeBiographer) Biographies(ctx context.Context, qids []string) (map[string]wikidata.Biography, error) {
+	f.batches++
+	found := map[string]wikidata.Biography{}
+	for _, qid := range qids {
+		if bio, err := f.Biography(ctx, qid); err == nil {
+			found[qid] = bio
+		}
+	}
+	return found, nil
 }
 
 func (f *fakeBiographer) Biography(_ context.Context, qid string) (wikidata.Biography, error) {
@@ -179,7 +195,7 @@ func newEnrichJobRealigning(
 // nil, biographyFor's own tests never noticed).
 func newEnrichJobWithImageFetch(
 	t *testing.T, source musicbrainz.Source, biographer music.Biographer, imageServerURL string,
-	wikidataEnabled ...func() bool,
+	options ...func(*music.EnrichJobConfig),
 ) (*music.EnrichJob, *store.Store, *librarydb.Queries, *fsx.Mem) {
 	t.Helper()
 	directory := t.TempDir()
@@ -240,17 +256,16 @@ func newEnrichJobWithImageFetch(
 		Provider: "test-image-server", UserAgent: "test",
 	})
 	memFS := fsx.NewMem(fake)
-	var enabled func() bool
-	if len(wikidataEnabled) > 0 {
-		enabled = wikidataEnabled[0]
-	}
-
-	job := music.NewEnrichJob(music.EnrichJobConfig{
+	config := music.EnrichJobConfig{
 		Identity: identity, People: library.NewPeople(libraryStore), Provider: provider,
 		Biography: biographer, Artworks: library.NewArtworks(libraryStore),
-		HTTP: client, FS: memFS, ImagesDir: "/cache/images", WikidataEnabled: enabled,
+		HTTP: client, FS: memFS, ImagesDir: "/cache/images",
 		Clock: fake, Logger: slog.New(slog.DiscardHandler),
-	})
+	}
+	for _, option := range options {
+		option(&config)
+	}
+	job := music.NewEnrichJob(config)
 	return job, libraryStore, librarydb.New(libraryStore.Read()), memFS
 }
 
@@ -865,7 +880,8 @@ func TestEnrichJob_BackfillRecordsNothingWithWikidataSwitchedOff(t *testing.T) {
 	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{
 		"Q5": {Description: "American singer", ImageURL: server.URL + "/cover.png"},
 	}}
-	job, opened, _, _ := newEnrichJobWithImageFetch(t, source, biographer, server.URL, func() bool { return false })
+	job, opened, _, _ := newEnrichJobWithImageFetch(t, source, biographer, server.URL,
+		func(config *music.EnrichJobConfig) { config.WikidataEnabled = func() bool { return false } })
 	resolveBareArtist(t, opened, "artist-5", "Pevilodon")
 
 	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
@@ -911,6 +927,39 @@ func TestEnrichJob_BackfillReachesPastAFullPageOfFailures(t *testing.T) {
 	}
 	if !recorded.Found {
 		t.Fatal("the artist after a full page of failures was never reached")
+	}
+}
+
+// The configured budget bounds one run: of five artists waiting, each run looks up two.
+func TestEnrichJob_BackfillStopsAtTheConfiguredBudget(t *testing.T) {
+	server := testImageServer(t)
+	artists := map[string]musicbrainz.Artist{}
+	biographies := map[string]wikidata.Biography{}
+	for index := range 5 {
+		mbid, qid := "artist-"+strconv.Itoa(index), "Q"+strconv.Itoa(index)
+		artists[mbid] = musicbrainz.Artist{MBID: mbid, Name: mbid, SortName: mbid, WikidataQID: qid}
+		// No photo: a download would wait on the fake clock, and "none" is recorded all the same.
+		biographies[qid] = wikidata.Biography{Description: "singer"}
+	}
+	job, opened, _, _ := newEnrichJobWithImageFetch(t, &fakeArtistSource{artists: artists},
+		&fakeBiographer{biographies: biographies}, server.URL,
+		func(config *music.EnrichJobConfig) { config.PeopleBackfillPerRun = func() int { return 2 } })
+	for index := range 5 {
+		resolveBareArtist(t, opened, "artist-"+strconv.Itoa(index), "artist-"+strconv.Itoa(index))
+	}
+
+	artworks := library.NewArtworks(opened)
+	for run, want := range []int{3, 1} {
+		if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		waiting, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 50)
+		if err != nil {
+			t.Fatalf("PeopleNeedingArtwork: %v", err)
+		}
+		if len(waiting) != want {
+			t.Errorf("after run %d: %d artists still waiting, want %d", run+1, len(waiting), want)
+		}
 	}
 }
 
@@ -1344,5 +1393,139 @@ func TestEnrichJob_NamesTheWorkAfterItsReleaseGroup(t *testing.T) {
 	}
 	if work.CanonicalTitle != "Live! At the Rainbow" || work.SortTitle != music.SortTitle("Live! At the Rainbow") {
 		t.Errorf("work titled %q / %q, want the release group's title", work.CanonicalTitle, work.SortTitle)
+	}
+}
+
+// overlapSource holds each lookup until another is in flight, recording the most at once.
+type overlapSource struct {
+	fakeSource
+	lock      sync.Mutex
+	inFlight  int
+	most      int
+	arrived   chan struct{}
+	arrivedAt sync.Once
+}
+
+func (o *overlapSource) Album(ctx context.Context, rg, release string) (musicbrainz.ReleaseGroup, musicbrainz.Release, error) {
+	o.lock.Lock()
+	o.inFlight++
+	o.most = max(o.most, o.inFlight)
+	if o.inFlight >= 2 {
+		o.arrivedAt.Do(func() { close(o.arrived) })
+	}
+	o.lock.Unlock()
+	select {
+	case <-o.arrived:
+	case <-time.After(2 * time.Second):
+	}
+	o.lock.Lock()
+	o.inFlight--
+	o.lock.Unlock()
+	return o.fakeSource.Album(ctx, rg, release)
+}
+
+// BrainzMash answers in about a second but allows ten a second: a batch's lookups must overlap.
+func TestEnrichJob_LooksUpABatchsAlbumsConcurrently(t *testing.T) {
+	source := &overlapSource{
+		fakeSource: fakeSource{rg: musicbrainz.ReleaseGroup{MBID: "rg-1", Title: "KI Pecezinu", PrimaryType: "Album"}},
+		arrived:    make(chan struct{}),
+	}
+	job, opened, _ := newEnrichJob(t, source)
+	for index := range 4 {
+		createPlaceholder(t, opened, fmt.Sprintf("rg-%d", index), fmt.Sprintf("rel-%d", index))
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if source.most < 2 || source.calls != 4 {
+		t.Errorf("at most %d lookups at once over %d calls, want overlapping lookups, each album once", source.most, source.calls)
+	}
+}
+
+// Wikidata paces one request a second: a batch of albums is described in one call, not one each.
+func TestEnrichJob_DescribesABatchsAlbumsInOneCall(t *testing.T) {
+	source := &fakeSource{rg: musicbrainz.ReleaseGroup{MBID: "rg-0", Title: "Gone", PrimaryType: "Album", WikidataQID: "Q7"}}
+	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{"Q7": {Description: "1997 studio album"}}}
+	job, opened, queries := newEnrichJobWithBiographer(t, source, biographer)
+	for index := range 3 {
+		createPlaceholder(t, opened, fmt.Sprintf("rg-%d", index), fmt.Sprintf("rel-%d", index))
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if biographer.batches != 1 {
+		t.Errorf("described in %d calls, want 1 for the whole batch", biographer.batches)
+	}
+	for index := range 3 {
+		work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+			Provider: music.ProviderReleaseGroup, ExternalID: fmt.Sprintf("rg-%d", index),
+		})
+		if err != nil {
+			t.Fatalf("GetWorkByExternalID: %v", err)
+		}
+		if work.Description.String != "1997 studio album" {
+			t.Errorf("work %d description = %q, want the batch's answer", work.ID, work.Description.String)
+		}
+	}
+}
+
+// A run on a fresh library lasts hours: every checkpoint hands refined albums on to be realigned
+// and counted, rather than all of them at the very end.
+func TestEnrichJob_HandsRefinedWorksOnAtEveryCheckpoint(t *testing.T) {
+	source := &fakeSource{rg: musicbrainz.ReleaseGroup{MBID: "rg-0", Title: "Gone", PrimaryType: "Album"}}
+	realigner := &fakeRealigner{}
+	job, opened, _ := newEnrichJobRealigning(t, source, nil, realigner, nil,
+		func(config *music.EnrichJobConfig) { config.CheckpointBatches = 1 })
+	for index := range 21 {
+		createPlaceholder(t, opened, fmt.Sprintf("rg-%d", index), fmt.Sprintf("rel-%d", index))
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	sizes := make([]int, len(realigner.batches))
+	for index, batch := range realigner.batches {
+		sizes[index] = len(batch)
+	}
+	if !slices.Equal(sizes, []int{20, 1}) || realigner.refined != 2 {
+		t.Errorf("handed on in batches of %v, counted %d times; want [20 1] and 2", sizes, realigner.refined)
+	}
+}
+
+// An artist's biography costs a Wikidata request: one run asks once per artist, not once per album.
+func TestEnrichJob_ResolvesEachArtistOncePerRun(t *testing.T) {
+	source := &fakeArtistSource{
+		fakeSource: fakeSource{rg: musicbrainz.ReleaseGroup{
+			MBID: "rg-0", Title: "Gone", PrimaryType: "Album",
+			ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "artist-1", Name: "Katupoken"}},
+		}},
+		artists: map[string]musicbrainz.Artist{
+			"artist-1": {MBID: "artist-1", Name: "Katupoken", SortName: "Katupoken", WikidataQID: "Q1"},
+		},
+	}
+	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{"Q1": {Description: "English band"}}}
+	job, opened, queries := newEnrichJobWithBiographer(t, source, biographer)
+	for index := range 3 {
+		createPlaceholder(t, opened, fmt.Sprintf("rg-%d", index), fmt.Sprintf("rel-%d", index))
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if biographer.calls != 1 {
+		t.Errorf("artist biography fetched %d times, want once for three albums", biographer.calls)
+	}
+	for index := range 3 {
+		work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+			Provider: music.ProviderReleaseGroup, ExternalID: fmt.Sprintf("rg-%d", index),
+		})
+		if err != nil {
+			t.Fatalf("GetWorkByExternalID: %v", err)
+		}
+		if !work.PrimaryArtistID.Valid {
+			t.Errorf("work %d has no artist; every album must still be credited", work.ID)
+		}
 	}
 }

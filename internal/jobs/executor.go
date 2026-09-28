@@ -44,6 +44,10 @@ func (f HandlerFunc) Run(ctx context.Context, job Job) error { return f(ctx, job
 // wiring mistake, so it fails fatally rather than retrying five times.
 var ErrNoHandler = errors.New("jobs: no handler registered")
 
+// ErrYield is a handler stopping early with work left, so a one-slot pool is shared: the job
+// succeeds and an identical continuation queues behind whatever was already waiting.
+var ErrYield = errors.New("jobs: yielded with work left")
+
 // Executor runs claimed jobs (ADR-20, Invariant 31).
 type Executor struct {
 	queue    *Queue
@@ -137,9 +141,13 @@ func (e *Executor) Execute(ctx context.Context, job Job) {
 
 	// Completion and failure are recorded against the parent context: the running context has just
 	// been cancelled, and a finished job must be recorded even so.
-	if runErr == nil {
+	if runErr == nil || errors.Is(runErr, ErrYield) {
 		if err := e.queue.Complete(ctx, job, e.owner, attempt); err != nil {
 			logger.Warn("could not record success", slog.Any("error", err))
+			return
+		}
+		if runErr != nil {
+			e.continueAfterYield(ctx, job, logger)
 		}
 		return
 	}
@@ -153,6 +161,16 @@ func (e *Executor) Execute(ctx context.Context, job Job) {
 		slog.String("class", string(resolution.Class)),
 		slog.Bool("retrying", resolution.Retrying),
 		slog.Any("error", runErr))
+}
+
+// continueAfterYield queues the rest of a yielded job; its action key is free again once it succeeded.
+func (e *Executor) continueAfterYield(ctx context.Context, job Job, logger *slog.Logger) {
+	if _, err := e.queue.Enqueue(ctx, Request{
+		Type: job.Type, ActionKey: job.ActionKey, Priority: job.Priority, Payload: job.Payload,
+		CorrelationID: job.CorrelationID, UserID: job.UserID, CategoryID: job.CategoryID,
+	}); err != nil {
+		logger.Warn("could not queue the rest of a yielded job", slog.Any("error", err))
+	}
 }
 
 // refuse cancels a mutating job in a dry-run mode (ADR-20).

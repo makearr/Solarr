@@ -24,6 +24,18 @@ SELECT CAST(COUNT(DISTINCT work_id) AS INTEGER) AS total FROM (
   SELECT work_id FROM desired_item WHERE category_id = sqlc.arg(category_id)
 );
 
+-- The Wanted page's total for one category: the works CountWorksVisibleToCategory counts that
+-- have a monitored item not yet complete, the same condition the wanted list filters on.
+-- name: CountWantedWorksVisibleToCategory :one
+SELECT CAST(COUNT(DISTINCT visible.work_id) AS INTEGER) AS total FROM (
+  SELECT wrf.work_id FROM work_root_folder wrf
+  WHERE wrf.root_folder_id IN (SELECT value FROM json_each(sqlc.arg(root_folder_ids)))
+  UNION
+  SELECT own.work_id FROM desired_item own WHERE own.category_id = sqlc.arg(category_id)
+) AS visible
+WHERE EXISTS (SELECT 1 FROM desired_item di
+              WHERE di.work_id = visible.work_id AND di.monitored = 1 AND di.state != 'COMPLETE');
+
 -- The "parts" count for one category (ADR-54's work_part-entity navigation levels,
 -- e.g. music's Tracks): every work_part belonging to a work visible to the
 -- category, by the same on-disk-or-desired union CountWorksVisibleToCategory uses.

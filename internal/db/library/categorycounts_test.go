@@ -1,9 +1,12 @@
 package library_test
 
 import (
+	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -49,8 +52,8 @@ func TestCategoryCounters_CountsWorksAndFilesForTheScopedRoots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
-	if len(corrections) != 10 {
-		t.Fatalf("corrections = %+v, want 10 (works+files+files_offline+parts+artists for each of 2 categories)", corrections)
+	if len(corrections) != 12 {
+		t.Fatalf("corrections = %+v, want 12 (works+works_wanted+files+files_offline+parts+artists for each of 2 categories)", corrections)
 	}
 
 	if v, ok := correctionFor(corrections, "works"); !ok || v.Now != 2 || v.Scope != "category:1" {
@@ -308,5 +311,45 @@ func TestArtists_AMonitoredArtistBelongsToTheirLibraryAtOnce(t *testing.T) {
 		if len(page) != want {
 			t.Errorf("library %d lists %d artists, want %d", categoryID, len(page), want)
 		}
+	}
+}
+
+// The Wanted page's total counts an album once it has a monitored item not yet complete -- the
+// wanted list's own condition -- and no complete or unmonitored one.
+func TestCategoryCounters_CountsWantedWorks(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	desired := library.NewDesired(opened)
+	counters := library.NewCategoryCounters(opened, clock.NewFakeAtEpoch())
+
+	var ids []int64
+	for _, name := range []string{"missing", "complete", "unmonitored"} {
+		resolved, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+			Provider: "test", ExternalID: name, Confidence: 1, RootFolderID: 1,
+			Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: name, SortTitle: name},
+		}})
+		if err != nil {
+			t.Fatalf("ResolveWorks: %v", err)
+		}
+		ids = append(ids, resolved[0])
+		if _, err := desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{
+			WorkID: resolved[0], CategoryID: 1, ProfileID: 1, Monitored: name != "unmonitored",
+		}); err != nil {
+			t.Fatalf("EnsureAlbumItem: %v", err)
+		}
+	}
+	if err := opened.Write(t.Context(), store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "UPDATE desired_item SET state = 'COMPLETE' WHERE work_id = ?", ids[1])
+		return err
+	}); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+
+	corrections, err := counters.Reconcile(t.Context(), []library.CategoryScope{{CategoryID: 1, RootFolderIDs: []int64{1}}})
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if v, ok := correctionFor(corrections, "works_wanted"); !ok || v.Now != 1 {
+		t.Errorf("works_wanted = %+v, ok=%v, want 1 of 3 albums", v, ok)
 	}
 }

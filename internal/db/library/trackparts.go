@@ -65,9 +65,8 @@ func composeAlbumPage(filter TrackFilter, after TrackAlbumCursor, albumPageSize 
 	var predicates store.Predicates
 	addVisibility(&predicates, filter.RootFolderIDs, filter.CategoryIDs)
 
-	// COALESCE matches the expression index (migration 0022) exactly, so a
-	// work with no artist credit yet sorts first rather than arbitrarily.
-	artistExpr := "COALESCE(primary_artist_sort_name, '')"
+	// Matches the expression index (migration 0046) exactly; a work with no artist sorts first.
+	artistExpr := "COALESCE(primary_artist_sort_name, '') COLLATE NOCASE"
 	operator, direction := ">", ""
 	if filter.Descending {
 		operator, direction = "<", " DESC"
@@ -143,24 +142,5 @@ func (t TrackParts) List(
 // same shape Works.ExplainList already gives the Albums level).
 func (t TrackParts) ExplainAlbumPage(ctx context.Context, filter TrackFilter, after TrackAlbumCursor, albumPageSize int) (string, error) {
 	query, arguments := composeAlbumPage(filter, after, albumPageSize)
-
-	rows, err := t.store.Read().QueryContext(ctx, "EXPLAIN QUERY PLAN "+query, arguments...)
-	if err != nil {
-		return "", fmt.Errorf("library: explain: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	plan := ""
-	for rows.Next() {
-		var id, parent, unused int
-		var detail string
-		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
-			return "", fmt.Errorf("library: scan plan: %w", err)
-		}
-		plan += detail + "\n"
-	}
-	if err := rows.Err(); err != nil {
-		return "", fmt.Errorf("library: explain: %w", err)
-	}
-	return plan, nil
+	return t.store.ExplainQueryPlan(ctx, query, arguments...)
 }

@@ -1824,6 +1824,9 @@ type Library struct {
 	Levels    []LibraryLevel `json:"levels"`
 	MediaType string         `json:"media_type"`
 	Name      string         `json:"name"`
+
+	// Wanted Albums (works) in this library with a monitored item not yet complete: the Wanted page's total. From the counter table, never a live COUNT; absent until first counted.
+	Wanted *int `json:"wanted,omitempty"`
 }
 
 // LibraryCategory A category as a navigation target: no `permission` field, since the list is already narrowed to what the caller may read (unlike `Me`'s `categories`, which reports the caller's level on each).
@@ -2018,6 +2021,9 @@ type MetadataSettings struct {
 
 	// CoverSources Where album covers come from, in order; each fills only covers the earlier ones left missing. A source left out is not used. Omitted on a PATCH leaves it alone.
 	CoverSources *[]MetadataSettingsCoverSources `json:"cover_sources,omitempty"`
+
+	// PeopleBackfillPerRun How many artists one enrichment run gives a photo and biography. Default 200. Omitted on a PATCH leaves it alone.
+	PeopleBackfillPerRun *int64 `json:"people_backfill_per_run,omitempty"`
 
 	// SourceOrder Which metadata sources are tried, in order. A source left out is not consulted at all, except musicbrainz, which always answers as a last resort. Omitted on a PATCH leaves the stored order alone.
 	SourceOrder *[]MetadataSource `json:"source_order,omitempty"`

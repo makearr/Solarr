@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -40,6 +41,10 @@ var Definition = jobs.Definition{
 // already their own transaction per file, so a shutdown mid-run loses at most
 // one batch's worth of otherwise-committed progress.
 const batchSize = 100
+
+// yieldAfter bounds one run: the maintenance pool has one slot, and a first sweep of a 200,000-file
+// library held it for hours while download polling and rescans waited (found 2026-09-28).
+const yieldAfter = 2 * time.Minute
 
 // Roots resolves a root folder by id. They are settings.db policy (ADR-25),
 // so the job asks rather than reading the table -- the same interface
@@ -87,6 +92,7 @@ func NewJob(config Config) *Job {
 // (there is no scheduler yet, so today that means the next process restart)
 // simply asks the same question again.
 func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
+	started := j.clock.Now()
 	var afterID int64
 	total, failed := 0, 0
 	for {
@@ -116,6 +122,10 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 		}
 		if len(batch) < batchSize {
 			break
+		}
+		if j.clock.Now().Sub(started) >= yieldAfter {
+			j.logger.Info("probe sweep yielding", slog.Int("processed", total), slog.Int("failed", failed))
+			return fmt.Errorf("probe: %d files in %s: %w", total, yieldAfter, jobs.ErrYield)
 		}
 	}
 	j.logger.Info("probe sweep finished", slog.Int("processed", total), slog.Int("failed", failed))

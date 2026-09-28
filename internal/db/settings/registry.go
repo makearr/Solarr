@@ -343,6 +343,12 @@ func NewDefaultRegistry() *Registry {
 		Default:  "true",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyMetadataPeopleBackfillPerRun, Kind: KindInt, Tier: TierAdvanced,
+		Name:     "Artists filled per run",
+		HelpText: "How many artists one enrichment run gives a photo and biography. Higher fills a new library sooner.",
+		Default:  fmt.Sprintf("%d", DefaultPeopleBackfillPerRun),
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyTheAudioDBAPIKey, Kind: KindString, Tier: TierAdvanced,
 		Name:     "TheAudioDB API key",
 		HelpText: "Optional: a supporter key from theaudiodb.com. Without one the free public key is used.",

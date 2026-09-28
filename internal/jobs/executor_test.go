@@ -3,6 +3,7 @@ package jobs_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"testing"
 	"time"
@@ -42,6 +43,38 @@ func TestExecute_RunsAHandlerAndRecordsSuccess(t *testing.T) {
 	}
 	if finished.State != jobs.StateSucceeded {
 		t.Errorf("State = %q, want SUCCEEDED", finished.State)
+	}
+}
+
+// A long sweep yields its one-slot pool: it succeeds, and its continuation runs after the job
+// that was already waiting rather than ahead of it.
+func TestExecute_AYieldedJobContinuesBehindTheWaitingOnes(t *testing.T) {
+	queue, fake := newQueue(t)
+	executor := newExecutor(t, queue, fake, jobs.ModeNormal)
+	executor.Handle(typeBackup, jobs.HandlerFunc(func(context.Context, jobs.Job) error {
+		return fmt.Errorf("probe: 2 minutes spent: %w", jobs.ErrYield)
+	}))
+
+	sweep := mustEnqueue(t, queue, jobs.Request{Type: typeBackup, ActionKey: "sweep", Payload: []byte(`{"root":1}`)})
+	fake.Advance(time.Second)
+	waiting := mustEnqueue(t, queue, jobs.Request{Type: typeBackup, ActionKey: "waiting"})
+	fake.Advance(time.Second)
+	executor.Execute(t.Context(), claimOne(t, queue, jobs.PoolMaintenance, "worker-1"))
+
+	finished, err := queue.Get(t.Context(), sweep.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if finished.State != jobs.StateSucceeded {
+		t.Errorf("yielded job state = %q, want SUCCEEDED", finished.State)
+	}
+	next := claimOne(t, queue, jobs.PoolMaintenance, "worker-1")
+	if next.ID != waiting.ID {
+		t.Fatalf("claimed job %d next, want the waiting job %d", next.ID, waiting.ID)
+	}
+	continuation := claimOne(t, queue, jobs.PoolMaintenance, "worker-1")
+	if continuation.ActionKey != "sweep" || string(continuation.Payload) != `{"root":1}` || continuation.ID == sweep.ID {
+		t.Errorf("continuation = %+v, want a new job carrying the sweep's key and payload", continuation)
 	}
 }
 

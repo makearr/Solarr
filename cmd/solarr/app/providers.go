@@ -49,9 +49,9 @@ func (p *process) wikidataFetcher() music.Biographer {
 	guard := httpx.NewGuard(nil, nil, nil)
 	agent := httpx.UserAgent(p.build.Version)
 
-	newHostClient := func(providerName string) *httpx.Client {
+	newHostClient := func(providerName string, minInterval time.Duration) *httpx.Client {
 		limiter := httpx.NewLimiter(wall, httpx.Config{
-			Providers: map[string]httpx.Limits{providerName: {MinInterval: time.Second}},
+			Providers: map[string]httpx.Limits{providerName: {MinInterval: minInterval}},
 		}, nil)
 		breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
 		return httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
@@ -60,8 +60,9 @@ func (p *process) wikidataFetcher() music.Biographer {
 	}
 
 	return wikidata.New(wikidata.Config{
-		WikidataClient:  newHostClient("wikidata"),
-		WikipediaClient: newHostClient("wikipedia"),
+		// Wikidata's action API asks for serial requests, so it takes batches; Wikipedia's REST API allows 200/s.
+		WikidataClient:  newHostClient("wikidata", time.Second),
+		WikipediaClient: newHostClient("wikipedia", 100*time.Millisecond),
 	})
 }
 

@@ -68,6 +68,8 @@ type ScalarSettingsEntry struct {
 	MetadataWikidata     *bool     `yaml:"metadata_wikidata,omitempty"`
 	MetadataAcoustID     *bool     `yaml:"metadata_acoustid,omitempty"`
 	MetadataTheAudioDB   *bool     `yaml:"metadata_theaudiodb,omitempty"`
+	// MetadataPeopleBackfillPerRun is how many artists one run backfills; absent keeps the stored value.
+	MetadataPeopleBackfillPerRun *int64 `yaml:"metadata_people_backfill_per_run,omitempty"`
 	// UsersNewLibraryPermission is what new accounts are granted on later libraries; empty keeps it.
 	UsersNewLibraryPermission Permission `yaml:"users_new_library_permission,omitempty"`
 	// Backup retention; an empty mode keeps all three as stored.
@@ -286,37 +288,38 @@ func (c *Cache) Export() Document {
 	metadata := snapshot.MetadataSettings()
 	extras := snapshot.ImportExtraFiles()
 	settingsEntry := ScalarSettingsEntry{
-		AuthRequired:               snapshot.AuthRequired(),
-		ImportAutoCommitConfidence: snapshot.ImportAutoCommitConfidence(),
-		ImportTransferLadder:       snapshot.ImportTransferLadder(),
-		ImportRenameOnImport:       snapshot.ImportRenameOnImport(),
-		ImportExtraFiles:           &extras.Enabled,
-		ImportExtraFileExtensions:  extras.Extensions,
-		NetworkPort:                network.Port,
-		NetworkProxyEnabled:        network.ProxyEnabled,
-		NetworkProxyURL:            network.ProxyURL,
-		NetworkProxyBypass:         network.ProxyBypass,
-		NetworkAllowCIDRsEnabled:   network.AllowCIDRsEnabled,
-		NetworkAllowCIDRs:          network.AllowCIDRs,
-		CacheMaxBytes:              cacheBudget.MaxBytes,
-		CacheMaxAgeDays:            cacheBudget.MaxAgeDays,
-		CacheImagesSharePercent:    cacheBudget.ImagesSharePercent,
-		CacheMetadataSharePercent:  cacheBudget.MetadataSharePercent,
-		PriorityUserRequestWeight:  priority.UserRequestWeight,
-		PriorityNewReleaseWeight:   priority.NewReleaseWeight,
-		PriorityGapWeight:          priority.GapWeight,
-		PriorityUpgradeWeight:      priority.UpgradeWeight,
-		PriorityNewReleaseDays:     priority.NewReleaseDays,
-		BrainzMashUserAgent:        snapshot.MetadataSettings().BrainzMashUserAgent,
-		MetadataSourceOrder:        snapshot.MetadataSettings().SourceOrder,
-		MetadataCoverSources:       &metadata.CoverSources,
-		MetadataWikidata:           metadata.Wikidata,
-		UsersNewLibraryPermission:  snapshot.NewLibraryPermission(),
-		BackupRetention:            snapshot.BackupRetention().Mode,
-		BackupKeepCount:            snapshot.BackupRetention().KeepCount,
-		BackupKeepDays:             snapshot.BackupRetention().KeepDays,
-		MetadataAcoustID:           metadata.AcoustID,
-		MetadataTheAudioDB:         metadata.TheAudioDB,
+		AuthRequired:                 snapshot.AuthRequired(),
+		ImportAutoCommitConfidence:   snapshot.ImportAutoCommitConfidence(),
+		ImportTransferLadder:         snapshot.ImportTransferLadder(),
+		ImportRenameOnImport:         snapshot.ImportRenameOnImport(),
+		ImportExtraFiles:             &extras.Enabled,
+		ImportExtraFileExtensions:    extras.Extensions,
+		NetworkPort:                  network.Port,
+		NetworkProxyEnabled:          network.ProxyEnabled,
+		NetworkProxyURL:              network.ProxyURL,
+		NetworkProxyBypass:           network.ProxyBypass,
+		NetworkAllowCIDRsEnabled:     network.AllowCIDRsEnabled,
+		NetworkAllowCIDRs:            network.AllowCIDRs,
+		CacheMaxBytes:                cacheBudget.MaxBytes,
+		CacheMaxAgeDays:              cacheBudget.MaxAgeDays,
+		CacheImagesSharePercent:      cacheBudget.ImagesSharePercent,
+		CacheMetadataSharePercent:    cacheBudget.MetadataSharePercent,
+		PriorityUserRequestWeight:    priority.UserRequestWeight,
+		PriorityNewReleaseWeight:     priority.NewReleaseWeight,
+		PriorityGapWeight:            priority.GapWeight,
+		PriorityUpgradeWeight:        priority.UpgradeWeight,
+		PriorityNewReleaseDays:       priority.NewReleaseDays,
+		BrainzMashUserAgent:          snapshot.MetadataSettings().BrainzMashUserAgent,
+		MetadataSourceOrder:          snapshot.MetadataSettings().SourceOrder,
+		MetadataCoverSources:         &metadata.CoverSources,
+		MetadataWikidata:             metadata.Wikidata,
+		UsersNewLibraryPermission:    snapshot.NewLibraryPermission(),
+		BackupRetention:              snapshot.BackupRetention().Mode,
+		BackupKeepCount:              snapshot.BackupRetention().KeepCount,
+		BackupKeepDays:               snapshot.BackupRetention().KeepDays,
+		MetadataAcoustID:             metadata.AcoustID,
+		MetadataTheAudioDB:           metadata.TheAudioDB,
+		MetadataPeopleBackfillPerRun: metadata.PeopleBackfillPerRun,
 	}
 
 	roots := snapshot.RootFolders()
@@ -514,6 +517,12 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 			}
 			for _, problem := range validateMetadataSettings(MetadataSettings{
 				BrainzMashUserAgent: d.Settings.BrainzMashUserAgent, SourceOrder: order}) {
+				problems = append(problems, prefixed("settings", problem))
+			}
+		}
+		if perRun := d.Settings.MetadataPeopleBackfillPerRun; perRun != nil {
+			for _, problem := range validateMetadataSettings(MetadataSettings{
+				BrainzMashUserAgent: DefaultBrainzMashUserAgent, PeopleBackfillPerRun: perRun}) {
 				problems = append(problems, prefixed("settings", problem))
 			}
 		}
@@ -1037,6 +1046,9 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 	}
 	if entry.MetadataTheAudioDB != nil {
 		values[KeyMetadataTheAudioDB] = strconv.FormatBool(*entry.MetadataTheAudioDB)
+	}
+	if entry.MetadataPeopleBackfillPerRun != nil {
+		values[KeyMetadataPeopleBackfillPerRun] = strconv.FormatInt(*entry.MetadataPeopleBackfillPerRun, 10)
 	}
 	if entry.ImportExtraFiles != nil {
 		values[KeyImportExtraFiles] = strconv.FormatBool(*entry.ImportExtraFiles)

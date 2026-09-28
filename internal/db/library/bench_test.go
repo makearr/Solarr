@@ -488,6 +488,17 @@ var planCases = []struct {
 		library.WorkCursor{SortArtist: "artist 50", SortTitle: "silver signals 50", ID: 100}, "work_primary_artist_sort"},
 }
 
+// sortsOuterResult reports a temp b-tree at the plan's top level; a correlated subquery's own,
+// indented, sorts a handful of rows per work and is not the list's order.
+func sortsOuterResult(plan string) bool {
+	for _, line := range strings.Split(plan, "\n") {
+		if strings.HasPrefix(line, "USE TEMP B-TREE") {
+			return true
+		}
+	}
+	return false
+}
+
 // A list whose ordering the index cannot supply degrades as filters change,
 // whatever the measured p99 says at a smaller scale. Note the assertion is
 // about the plan, not about a full sort: under LIMIT a temp b-tree is bounded
@@ -510,7 +521,7 @@ func TestADR28_ListPlansReachAnIndexAndNeverSort(t *testing.T) {
 		// index cannot supply is a plan that degrades as filters change -- but
 		// the old wording sent a reader hunting for a full sort that was never
 		// happening.
-		if strings.Contains(plan, "TEMP B-TREE") {
+		if sortsOuterResult(plan) {
 			t.Errorf("%s uses a temp b-tree for ORDER BY rather than an index:\n%s", item.name, plan)
 		}
 	}
@@ -530,7 +541,7 @@ func TestADR28_TrackAlbumPagePlanReachesTheIndexAndNeverSorts(t *testing.T) {
 	if !strings.Contains(plan, "work_primary_artist_sort") {
 		t.Errorf("plan does not reach work_primary_artist_sort:\n%s", plan)
 	}
-	if strings.Contains(plan, "TEMP B-TREE") {
+	if sortsOuterResult(plan) {
 		t.Errorf("plan uses a temp b-tree for ORDER BY rather than an index:\n%s", plan)
 	}
 }

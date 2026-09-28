@@ -4614,6 +4614,11 @@ export interface components {
             theaudiodb?: boolean;
             /** @description Whether an own TheAudioDB key is stored; without one the public key is used. Read-only here. */
             theaudiodb_api_key?: components["schemas"]["SecretMask"];
+            /**
+             * Format: int64
+             * @description How many artists one enrichment run gives a photo and biography. Default 200. Omitted on a PATCH leaves it alone.
+             */
+            people_backfill_per_run?: number;
         };
         /** @description Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's recycle bin: nothing is deleted directly, so only how long it keeps what this library removes is set here. */
         FileManagement: {
@@ -4927,6 +4932,8 @@ export interface components {
             levels: components["schemas"]["LibraryLevel"][];
             /** @description The level key the caller last visited in this library (user_preference), absent if never visited. */
             last_level?: string;
+            /** @description Albums (works) in this library with a monitored item not yet complete: the Wanted page's total. From the counter table, never a live COUNT; absent until first counted. */
+            wanted?: number;
         };
         /** @description One browsable entity level a media type declares (ADR-23's NavigationLevels extension point). Core never learns what an album or a season is -- key, label and entity are entirely the media type's own vocabulary. */
         LibraryLevel: {

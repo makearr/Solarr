@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"sync"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -33,6 +34,8 @@ const maxPersonImageBytes = 20 << 20
 // than the one type its return value needs.
 type Biographer interface {
 	Biography(ctx context.Context, qid string) (wikidata.Biography, error)
+	// Biographies answers many QIDs at once; a QID it has nothing for is absent.
+	Biographies(ctx context.Context, qids []string) (map[string]wikidata.Biography, error)
 }
 
 // ArtistArt is a second source of an artist's photo and biography, by MusicBrainz artist id
@@ -65,14 +68,20 @@ var EnrichDefinition = jobs.Definition{
 // own transaction (library.RefineEdition), so nothing partial survives either way.
 const enrichBatchSize = 20
 
-// personBackfillBatchSize and personBackfillBudget bound the artist image and
-// biography sweep. Each person costs a MusicBrainz lookup plus a Wikidata one,
-// and MusicBrainz is 1 req/s shared with everything else (ADR-13), so the
-// sweep takes a slice per run rather than the whole backlog at once.
-const (
-	personBackfillBatchSize = 20
-	personBackfillBudget    = 60
-)
+// enrichLookupWorkers overlaps a batch's album lookups: BrainzMash answers in ~1 s but allows
+// 10 req/s, so one at a time left enrichment at a tenth of its budget (measured 2026-09-28).
+const enrichLookupWorkers = 8
+
+// personBackfillBatchSize is one page of the artist image and biography sweep; the sweep's
+// per-run budget is a setting (EnrichJobConfig.PeopleBackfillPerRun).
+const personBackfillBatchSize = 20
+
+// defaultPeopleBackfillPerRun is the budget when none is configured.
+const defaultPeopleBackfillPerRun = 200
+
+// defaultCheckpointBatches is how often a run hands its progress on: realigned files, fresh counts
+// and a slice of artist backfill. On a fresh library a run lasts hours; all three used to wait for its end.
+const defaultCheckpointBatches = 10
 
 // editionlessBatchSize and editionlessBudget bound the pass over works the
 // text search identified: one release-group lookup each, on the same shared
@@ -103,6 +112,8 @@ type EnrichJob struct {
 	clock           clock.Clock
 	logger          *slog.Logger
 	wikidataEnabled func() bool
+	backfillPerRun  func() int
+	checkpointEvery int
 }
 
 // TagReader reads the tags a set of files carry -- mediatool.Tool's own
@@ -134,6 +145,8 @@ type EnrichJobConfig struct {
 	Biography Biographer
 	// WikidataEnabled is the configured switch, read per artist; nil is on.
 	WikidataEnabled func() bool
+	// PeopleBackfillPerRun is the configured budget, read per run; nil is 200.
+	PeopleBackfillPerRun func() int
 	// ArtistArt is optional: without it an artist Wikidata has no photo for keeps none.
 	ArtistArt ArtistArt
 	Artworks  library.Artworks
@@ -145,6 +158,8 @@ type EnrichJobConfig struct {
 	Desired *library.Desired
 	// OnRefined is optional: told when a run refined any album, so its new tracks are counted at once.
 	OnRefined func(context.Context)
+	// CheckpointBatches is how many batches pass between checkpoints; zero is 10.
+	CheckpointBatches int
 	// Tags and Roots are optional: without both, an album identified only at
 	// release-group level gets no edition chosen and so no tracklist.
 	Tags      TagReader
@@ -165,6 +180,7 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 	return &EnrichJob{
 		identity: config.Identity, people: config.People, provider: config.Provider,
 		biography: config.Biography, wikidataEnabled: config.WikidataEnabled,
+		backfillPerRun: config.PeopleBackfillPerRun, checkpointEvery: config.CheckpointBatches,
 		artworks: config.Artworks, realigner: config.Realigner, desired: config.Desired, onRefined: config.OnRefined,
 		artistArt: config.ArtistArt,
 		tags:      config.Tags, roots: config.Roots, http: config.HTTP,
@@ -189,7 +205,16 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 		}
 	}
 
-	total, failed := 0, 0
+	checkpointEvery := j.checkpointEvery
+	if checkpointEvery <= 0 {
+		checkpointEvery = defaultCheckpointBatches
+	}
+	backfill := backfillProgress{budget: defaultPeopleBackfillPerRun}
+	if j.backfillPerRun != nil {
+		backfill.budget = j.backfillPerRun()
+	}
+	artists := artistMemo{}
+	total, failed, batches := 0, 0, 0
 	var refinedWorkIDs []int64
 	var afterEditionID int64
 	for {
@@ -206,10 +231,15 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 			break
 		}
 
-		for _, edition := range batch {
+		albums := make([]albumKey, len(batch))
+		for index, edition := range batch {
+			albums[index] = j.placeholderAlbum(ctx, edition)
+		}
+		answers := j.lookupAlbums(ctx, albums)
+		for index, edition := range batch {
 			afterEditionID = edition.EditionID
 			total++
-			if err := j.enrichOne(ctx, edition); err == nil {
+			if err := j.enrichOne(ctx, edition, answers[index], artists); err == nil {
 				refinedWorkIDs = append(refinedWorkIDs, edition.WorkID)
 				j.alignClaimed(ctx, edition.WorkID)
 			} else {
@@ -224,24 +254,34 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 		if len(batch) < enrichBatchSize {
 			break
 		}
+		if batches++; batches%checkpointEvery == 0 {
+			j.handOn(ctx, refinedWorkIDs, payload.Manual)
+			refinedWorkIDs = nil
+			j.backfillPeople(ctx, &backfill, personBackfillBatchSize)
+		}
 	}
 	j.logger.Info("music enrichment finished", slog.Int("processed", total), slog.Int("failed", failed))
 
-	refinedWorkIDs = append(refinedWorkIDs, j.enrichEditionless(ctx)...)
+	refinedWorkIDs = append(refinedWorkIDs, j.enrichEditionless(ctx, artists)...)
+	j.handOn(ctx, refinedWorkIDs, payload.Manual)
+	j.backfillPeople(ctx, &backfill, backfill.budget)
+	return nil
+}
 
-	if j.realigner != nil && len(refinedWorkIDs) > 0 {
-		if err := j.realigner.RealignWorks(ctx, refinedWorkIDs, payload.Manual); err != nil {
+// handOn gives refined works to the realigner, so their files meet the new tracklist, and has them counted.
+func (j *EnrichJob) handOn(ctx context.Context, refinedWorkIDs []int64, manual bool) {
+	if len(refinedWorkIDs) == 0 {
+		return
+	}
+	if j.realigner != nil {
+		if err := j.realigner.RealignWorks(ctx, refinedWorkIDs, manual); err != nil {
 			j.logger.WarnContext(ctx, "realign refined works failed",
 				slog.Int("works", len(refinedWorkIDs)), slog.Any("error", err))
 		}
 	}
-
-	if j.onRefined != nil && len(refinedWorkIDs) > 0 {
+	if j.onRefined != nil {
 		j.onRefined(ctx)
 	}
-
-	j.backfillPeople(ctx)
-	return nil
 }
 
 // enrichEditionless gives works identified at release-group level -- the text
@@ -250,7 +290,7 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 // they sat under "Unknown artist" (found 2026-09-17). No tracklist: that needs
 // an edition, which choosing is not this pass's call. Walked by work id within
 // a run and bounded by editionlessBudget.
-func (j *EnrichJob) enrichEditionless(ctx context.Context) (withEdition []int64) {
+func (j *EnrichJob) enrichEditionless(ctx context.Context, artists artistMemo) (withEdition []int64) {
 	enriched, failed := 0, 0
 	var afterWorkID int64
 	for enriched+failed < editionlessBudget {
@@ -265,12 +305,15 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context) (withEdition []int64)
 		if len(batch) == 0 {
 			break
 		}
-		for _, work := range batch {
-			if enriched+failed >= editionlessBudget {
-				break
-			}
+		batch = batch[:min(len(batch), editionlessBudget-enriched-failed)]
+		albums := make([]albumKey, len(batch))
+		for index, work := range batch {
+			albums[index] = albumKey{releaseGroup: work.ReleaseGroupMBID}
+		}
+		answers := j.lookupAlbums(ctx, albums)
+		for index, work := range batch {
 			afterWorkID = work.WorkID
-			rg, _, err := j.provider.Album(ctx, musicbrainz.PriorityEnrich, work.ReleaseGroupMBID, "")
+			rg, err := answers[index].rg, answers[index].err
 			if err != nil {
 				failed++
 				j.logger.WarnContext(ctx, "editionless work enrichment failed",
@@ -286,10 +329,10 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context) (withEdition []int64)
 				continue
 			}
 			j.retitle(ctx, work.WorkID, rg)
-			j.enrichCreditsAndGenres(ctx, work.WorkID, rg)
-			j.enrichDescription(ctx, work.WorkID, rg)
+			j.enrichCreditsAndGenres(ctx, work.WorkID, rg, artists)
+			j.enrichDescription(ctx, work.WorkID, answers[index].description)
 			enriched++
-			if j.chooseEdition(ctx, work, rg) {
+			if j.chooseEdition(ctx, work, rg, artists) {
 				withEdition = append(withEdition, work.WorkID)
 				j.alignClaimed(ctx, work.WorkID)
 			}
@@ -329,7 +372,9 @@ func (j *EnrichJob) alignClaimed(ctx context.Context, workID int64) {
 // edition its files fit best (chooseRelease, approved 2026-09-17), then refines
 // it like any placeholder edition, which builds the tracklist. True when an
 // edition was chosen and refined, so the work's files can be matched to it.
-func (j *EnrichJob) chooseEdition(ctx context.Context, work library.EditionlessWork, group musicbrainz.ReleaseGroup) bool {
+func (j *EnrichJob) chooseEdition(
+	ctx context.Context, work library.EditionlessWork, group musicbrainz.ReleaseGroup, artists artistMemo,
+) bool {
 	if j.tags == nil || j.roots == nil {
 		return false
 	}
@@ -379,36 +424,40 @@ func (j *EnrichJob) chooseEdition(ctx context.Context, work library.EditionlessW
 		j.logger.WarnContext(ctx, "edition choice resolve failed", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
 		return false
 	}
+	chosen := albumKey{releaseGroup: work.ReleaseGroupMBID, release: release.MBID}
 	if err := j.enrichOne(ctx, library.PlaceholderEdition{
 		EditionID: *resolutions[0].EditionID, WorkID: work.WorkID, ExternalID: release.MBID,
-	}); err != nil {
+	}, j.lookupAlbums(ctx, []albumKey{chosen})[0], artists); err != nil {
 		j.logger.WarnContext(ctx, "chosen edition refine failed", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
 		return false
 	}
 	return true
 }
 
-// backfillPeople fills in the image and biography of people resolved before
-// those had a source. resolveArtist only ever fetches them the first time a
-// person is created, and findOrCreatePerson returns an existing person
-// untouched, so without this pass an artist already in the library never
-// gained either -- which is why no artist picture had ever appeared
-// (found 2026-09-13). Bounded per run by personBackfillBudget.
-func (j *EnrichJob) backfillPeople(ctx context.Context) {
+// backfillProgress is one run's artist backfill: what it may still spend, and where it stopped,
+// so a later slice moves on past artists that failed rather than retrying them.
+type backfillProgress struct {
+	budget                 int
+	afterPersonID          int64
+	filled, absent, failed int
+}
+
+// backfillPeople gives artists resolved before their image and biography had a source both
+// (found 2026-09-13), at most slice of them now and never past the run's budget.
+func (j *EnrichJob) backfillPeople(ctx context.Context, progress *backfillProgress, slice int) {
 	// Without a Wikidata source every artist would look imageless and be
 	// recorded so, permanently.
 	if j.artworks == (library.Artworks{}) || !j.wikidataOn() {
 		return
 	}
 
-	filled, absent, failed := 0, 0, 0
-	var afterPersonID int64
-	for filled+absent+failed < personBackfillBudget {
+	spent := 0
+	for spent < slice && progress.budget > 0 {
 		if ctx.Err() != nil {
 			return
 		}
 
-		batch, err := j.artworks.PeopleNeedingArtwork(ctx, afterPersonID, personBackfillBatchSize)
+		batch, err := j.artworks.PeopleNeedingArtwork(ctx, progress.afterPersonID, personBackfillBatchSize)
 		if err != nil {
 			j.logger.WarnContext(ctx, "people needing artwork failed", slog.Any("error", err))
 			return
@@ -418,17 +467,19 @@ func (j *EnrichJob) backfillPeople(ctx context.Context) {
 		}
 
 		for _, candidate := range batch {
-			if filled+absent+failed >= personBackfillBudget {
+			if spent >= slice || progress.budget <= 0 {
 				break
 			}
-			afterPersonID = candidate.PersonID
+			progress.afterPersonID = candidate.PersonID
+			spent++
+			progress.budget--
 			switch outcome := j.backfillOne(ctx, candidate); outcome {
 			case backfillFilled:
-				filled++
+				progress.filled++
 			case backfillAbsent:
-				absent++
+				progress.absent++
 			default:
-				failed++
+				progress.failed++
 			}
 		}
 		if len(batch) < personBackfillBatchSize {
@@ -436,9 +487,9 @@ func (j *EnrichJob) backfillPeople(ctx context.Context) {
 		}
 	}
 
-	if filled+absent+failed > 0 {
+	if spent > 0 {
 		j.logger.Info("artist backfill finished",
-			slog.Int("filled", filled), slog.Int("no_image", absent), slog.Int("failed", failed))
+			slog.Int("filled", progress.filled), slog.Int("no_image", progress.absent), slog.Int("failed", progress.failed))
 	}
 }
 
@@ -502,22 +553,94 @@ func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArt
 	}
 }
 
-func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEdition) error {
+// albumKey is one album lookup; err set means there is nothing to look up.
+type albumKey struct {
+	releaseGroup, release string
+	err                   error
+}
+
+// albumAnswer is what Provider.Album answered for one albumKey, with the album's description.
+type albumAnswer struct {
+	rg          musicbrainz.ReleaseGroup
+	release     musicbrainz.Release
+	err         error
+	description wikidata.Biography
+}
+
+// placeholderAlbum names the lookup a placeholder edition needs.
+func (j *EnrichJob) placeholderAlbum(ctx context.Context, edition library.PlaceholderEdition) albumKey {
 	releaseGroupMBID, ok, err := j.identity.WorkExternalID(ctx, edition.WorkID, ProviderReleaseGroup)
 	if err != nil {
-		return fmt.Errorf("release group id: %w", err)
+		return albumKey{err: fmt.Errorf("release group id: %w", err)}
 	}
 	if !ok {
-		// A placeholder edition always comes from newEditionLink, which links
-		// the release-group id in the same transaction -- this should not
-		// happen, but an edition missing its work's identity is not this job's
-		// to invent, so it is skipped rather than guessed at.
-		return fmt.Errorf("work %d has no %s external id", edition.WorkID, ProviderReleaseGroup)
+		// newEditionLink links the release group in the same transaction; a missing one is not ours to guess.
+		return albumKey{err: fmt.Errorf("work %d has no %s external id", edition.WorkID, ProviderReleaseGroup)}
 	}
+	return albumKey{releaseGroup: releaseGroupMBID, release: edition.ExternalID}
+}
 
-	rg, release, err := j.provider.Album(ctx, musicbrainz.PriorityEnrich, releaseGroupMBID, edition.ExternalID)
+// lookupAlbums asks the provider for every album at once, enrichLookupWorkers at a time; the
+// rate-limit bucket still paces them. Answers keep the order of albums.
+func (j *EnrichJob) lookupAlbums(ctx context.Context, albums []albumKey) []albumAnswer {
+	answers := make([]albumAnswer, len(albums))
+	slots := make(chan struct{}, enrichLookupWorkers)
+	var wait sync.WaitGroup
+	for index, album := range albums {
+		if album.err != nil {
+			answers[index].err = album.err
+			continue
+		}
+		slots <- struct{}{}
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			defer func() { <-slots }()
+			rg, release, err := j.provider.Album(ctx, musicbrainz.PriorityEnrich, album.releaseGroup, album.release)
+			if err != nil {
+				err = fmt.Errorf("musicbrainz: %w", err)
+			}
+			answers[index] = albumAnswer{rg: rg, release: release, err: err}
+		}()
+	}
+	wait.Wait()
+	j.describeAlbums(ctx, answers)
+	return answers
+}
+
+// describeAlbums fetches every answered album's Wikidata description in one batch: one album at a
+// time, Wikidata's 1 req/s capped enrichment at ~1,800 albums an hour (measured 2026-09-28).
+func (j *EnrichJob) describeAlbums(ctx context.Context, answers []albumAnswer) {
+	if j.biography == nil {
+		return
+	}
+	var qids []string
+	for _, answer := range answers {
+		if answer.err == nil && answer.rg.WikidataQID != "" {
+			qids = append(qids, answer.rg.WikidataQID)
+		}
+	}
+	if len(qids) == 0 {
+		return
+	}
+	descriptions, err := j.biography.Biographies(ctx, qids)
 	if err != nil {
-		return fmt.Errorf("musicbrainz: %w", err)
+		j.logger.WarnContext(ctx, "work descriptions lookup failed", slog.Int("albums", len(qids)), slog.Any("error", err))
+		return
+	}
+	for index := range answers {
+		if answers[index].err == nil {
+			answers[index].description = descriptions[answers[index].rg.WikidataQID]
+		}
+	}
+}
+
+func (j *EnrichJob) enrichOne(
+	ctx context.Context, edition library.PlaceholderEdition, album albumAnswer, artists artistMemo,
+) error {
+	rg, release, err := album.rg, album.release, album.err
+	if err != nil {
+		return err
 	}
 
 	workYear, workReleaseDate, workPrimaryType, refinement, parts := refinementFor(rg, release)
@@ -530,8 +653,8 @@ func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEd
 	// a reason to fail an edition that otherwise refined correctly. Logged,
 	// not returned.
 	j.retitle(ctx, edition.WorkID, rg)
-	j.enrichCreditsAndGenres(ctx, edition.WorkID, rg)
-	j.enrichDescription(ctx, edition.WorkID, rg)
+	j.enrichCreditsAndGenres(ctx, edition.WorkID, rg, artists)
+	j.enrichDescription(ctx, edition.WorkID, album.description)
 	return nil
 }
 
@@ -541,9 +664,11 @@ func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEd
 // more request per distinct artist for their own bio facts (Provider.Artist
 // caches permanently, so a prolific artist only ever costs one real lookup
 // across every edition of theirs this sweep touches).
-func (j *EnrichJob) enrichCreditsAndGenres(ctx context.Context, workID int64, rg musicbrainz.ReleaseGroup) {
+func (j *EnrichJob) enrichCreditsAndGenres(
+	ctx context.Context, workID int64, rg musicbrainz.ReleaseGroup, artists artistMemo,
+) {
 	for index, credit := range rg.ArtistCredit {
-		personID, err := j.resolveArtist(ctx, credit)
+		personID, err := j.resolveArtist(ctx, credit, artists)
 		if err != nil {
 			j.logger.WarnContext(ctx, "artist credit resolve failed",
 				slog.String("mbid", credit.MBID), slog.Any("error", err))
@@ -575,16 +700,7 @@ func (j *EnrichJob) enrichCreditsAndGenres(ctx context.Context, workID int64, rg
 // entity -- MusicBrainz's release-group annotation, checked as an
 // alternative source, turned out empty for every real album tested while
 // building this, so it is not used.
-func (j *EnrichJob) enrichDescription(ctx context.Context, workID int64, rg musicbrainz.ReleaseGroup) {
-	if j.biography == nil || rg.WikidataQID == "" {
-		return
-	}
-	bio, err := j.biography.Biography(ctx, rg.WikidataQID)
-	if err != nil {
-		j.logger.WarnContext(ctx, "work description lookup failed",
-			slog.String("qid", rg.WikidataQID), slog.Any("error", err))
-		return
-	}
+func (j *EnrichJob) enrichDescription(ctx context.Context, workID int64, bio wikidata.Biography) {
 	description := bio.Extract
 	if description == "" {
 		description = bio.Description
@@ -601,9 +717,16 @@ func (j *EnrichJob) enrichDescription(ctx context.Context, workID int64, rg musi
 // A failed Artist lookup still resolves a person from the name and id the
 // artist-credit itself already carries -- thinner than a full bio, but a
 // credit worth having is worth having even without one.
-func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.ArtistCredit) (int64, error) {
+// artistMemo is the artists one run has already resolved, by MusicBrainz id: their biography and
+// photo cost a Wikidata request each, once per album before, ~1.2 s an album (measured 2026-09-28).
+type artistMemo map[string]int64
+
+func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.ArtistCredit, artists artistMemo) (int64, error) {
 	if credit.MBID == "" {
 		return 0, fmt.Errorf("artist credit %q has no id", credit.Name)
+	}
+	if personID, done := artists[credit.MBID]; done {
+		return personID, nil
 	}
 
 	artist, err := j.provider.Artist(ctx, musicbrainz.PriorityEnrich, credit.MBID)
@@ -645,6 +768,7 @@ func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.Artist
 	// it here, rather than only when someone opens the Artists screen, worth
 	// doing proactively.
 	_ = j.fetchPersonImage(ctx, personID, bio.ImageURL)
+	artists[credit.MBID] = personID
 	return personID, nil
 }
 

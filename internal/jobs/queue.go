@@ -88,6 +88,16 @@ func (q *Queue) Enqueue(ctx context.Context, request Request) (EnqueueResult, er
 				String: request.ActionKey, Valid: true,
 			})
 			if err == nil {
+				// "Run now" on a job queued at low priority, or a caller asking more urgently, moves it up.
+				if err := queries.RaiseWaitingJobPriority(ctx, jobsdb.RaiseWaitingJobPriorityParams{
+					Priority: int64(priority), Now: now.Unix(), ID: existing.ID,
+				}); err != nil {
+					return fmt.Errorf("raise priority: %w", err)
+				}
+				waiting := State(existing.State) == StatePending || State(existing.State) == StatePendingRetry
+				if waiting && existing.Priority < int64(priority) {
+					existing.Priority = int64(priority)
+				}
 				result = EnqueueResult{Job: convertJob(existing), Duplicate: true}
 				return nil
 			}

@@ -444,7 +444,7 @@ SELECT p.id, p.name, p.sort_name, p.disambiguation, p.kind, p.gender, p.country,
        p.born, p.died, p.fields_json, p.monitored, p.added_at
 FROM person p
 JOIN person_alias a ON a.person_id = p.id
-WHERE a.normalized = ? ORDER BY p.sort_name, p.id
+WHERE a.normalized = ? ORDER BY p.sort_name COLLATE NOCASE, p.id
 `
 
 // A stage name is often the only way to connect a release to a person (ADR-32).
@@ -875,7 +875,7 @@ SELECT c.person_id, c.role, c.ord, p.name AS person_name
 FROM credit c
 JOIN person p ON p.id = c.person_id
 WHERE c.work_id = ? AND c.edition_id = 0 AND c.part_id = 0
-ORDER BY c.role, c.ord, p.sort_name
+ORDER BY c.role, c.ord, p.sort_name COLLATE NOCASE
 `
 
 type ListCreditsForWorkWithPersonRow struct {
@@ -1001,7 +1001,7 @@ WITH RECURSIVE subtree(org_id) AS (
 )
 SELECT o.id, o.name, o.sort_name, o.kind, o.parent_id, o.country, o.fields_json, o.monitored
 FROM organisation o JOIN subtree ON subtree.org_id = o.id
-ORDER BY o.sort_name, o.id
+ORDER BY o.sort_name COLLATE NOCASE, o.id
 `
 
 // "Monitor this studio and everything beneath it" needs the whole subtree, and

@@ -923,3 +923,30 @@ func TestListPage_EmptyVisibilitySeesNothing(t *testing.T) {
 		t.Errorf("the zero visibility saw %+v", page.Items)
 	}
 }
+
+// "Run now" on a job queued at low priority must move it up, not answer "already queued" and leave
+// it behind everything else; a running job and a less urgent request change nothing.
+func TestEnqueue_ADuplicateRaisesAWaitingJobsPriority(t *testing.T) {
+	queue, _ := newQueue(t)
+	low := mustEnqueue(t, queue, jobs.Request{Type: typeBackup, ActionKey: "counts", Priority: jobs.PriorityLow})
+
+	result, err := queue.Enqueue(t.Context(), jobs.Request{Type: typeBackup, ActionKey: "counts", Priority: jobs.PriorityNormal})
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	stored, err := queue.Get(t.Context(), low.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if !result.Duplicate || result.Job.Priority != jobs.PriorityNormal || stored.Priority != jobs.PriorityNormal {
+		t.Errorf("duplicate %v answered priority %d, stored %d; want both raised to normal",
+			result.Duplicate, result.Job.Priority, stored.Priority)
+	}
+
+	if _, err := queue.Enqueue(t.Context(), jobs.Request{Type: typeBackup, ActionKey: "counts", Priority: jobs.PriorityLow}); err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	if stored, _ = queue.Get(t.Context(), low.ID); stored.Priority != jobs.PriorityNormal {
+		t.Errorf("a less urgent duplicate lowered the job to %d", stored.Priority)
+	}
+}

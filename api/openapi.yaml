@@ -7046,6 +7046,14 @@ components:
         theaudiodb_api_key:
           allOf: [{ $ref: "#/components/schemas/SecretMask" }]
           description: Whether an own TheAudioDB key is stored; without one the public key is used. Read-only here.
+        people_backfill_per_run:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 10000
+          description: >-
+            How many artists one enrichment run gives a photo and biography.
+            Default 200. Omitted on a PATCH leaves it alone.
 
     FileManagement:
       type: object
@@ -7484,6 +7492,12 @@ components:
           description: >-
             The level key the caller last visited in this library
             (user_preference), absent if never visited.
+        wanted:
+          type: integer
+          description: >-
+            Albums (works) in this library with a monitored item not yet
+            complete: the Wanted page's total. From the counter table, never
+            a live COUNT; absent until first counted.
 
     LibraryLevel:
       type: object

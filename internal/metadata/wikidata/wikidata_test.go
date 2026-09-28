@@ -3,8 +3,10 @@ package wikidata_test
 import (
 	"errors"
 	"io"
+	"maps"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -229,5 +231,52 @@ func TestBiography_UnknownQIDErrors(t *testing.T) {
 
 	if _, err := fetcher.Biography(t.Context(), "Q999"); err == nil {
 		t.Fatal("Biography succeeded for a QID Wikidata reports as missing")
+	}
+}
+
+// countingTransport is fakeTransport that also counts requests per host.
+type countingTransport struct {
+	fakeTransport
+	lock  sync.Mutex
+	hosts map[string]int
+}
+
+func (c *countingTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	c.lock.Lock()
+	c.hosts[request.URL.Host]++
+	c.lock.Unlock()
+	return c.fakeTransport.RoundTrip(request)
+}
+
+// A batch of albums costs one Wikidata request, not one each; a QID that does not exist is absent.
+func TestBiographies_AskWikidataOnceForTheWholeBatch(t *testing.T) {
+	entities := `{"entities":{
+	  "Q636": {"descriptions":{"en":{"value":"English singer"}},"sitelinks":{"enwiki":{"title":"Vutu Doci"}},"claims":{}},
+	  "Q2": {"descriptions":{"en":{"value":"a minor artist"}},"sitelinks":{},"claims":{}},
+	  "Q404": {"id":"Q404","missing":""}}}`
+	transport := &countingTransport{hosts: map[string]int{}, fakeTransport: fakeTransport{responses: map[string]fakeResponse{
+		"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q636%7CQ2%7CQ404&languages=en&props=descriptions%7Csitelinks%7Cclaims": {
+			status: http.StatusOK, body: entities,
+		},
+		"https://en.wikipedia.org/api/rest_v1/page/summary/Vutu_Doci": {status: http.StatusOK, body: wikipediaSummaryBody},
+	}}}
+	fetcher := wikidata.New(wikidata.Config{
+		WikidataClient: newTestClient(t, transport, "wikidata"), WikipediaClient: newTestClient(t, transport, "wikipedia"),
+	})
+
+	got, err := fetcher.Biographies(t.Context(), []string{"Q636", "Q2", "Q636", "Q404"})
+	if err != nil {
+		t.Fatalf("Biographies: %v", err)
+	}
+	want := map[string]wikidata.Biography{
+		"Q636": {Description: "English singer",
+			Extract: "Catherine Bush is an English singer, songwriter, musician, dancer and record producer."},
+		"Q2": {Description: "a minor artist"},
+	}
+	if !maps.Equal(got, want) {
+		t.Errorf("Biographies = %+v, want %+v", got, want)
+	}
+	if want := map[string]int{"www.wikidata.org": 1, "en.wikipedia.org": 1}; !maps.Equal(transport.hosts, want) {
+		t.Errorf("requests per host = %v, want %v", transport.hosts, want)
 	}
 }

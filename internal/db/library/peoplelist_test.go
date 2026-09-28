@@ -43,6 +43,43 @@ func TestListPeople_OrdersBySortNameThenID(t *testing.T) {
 	}
 }
 
+// Lidarr ignores case: "bumble" sorts after "Bush" and before "Ahei", on every page and either way.
+func TestListPeople_OrderIgnoresCase(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	resolvePersonNamed(t, people, "artist-1", "Ahei", "Ahei")
+	resolvePersonNamed(t, people, "artist-2", "bumble", "bumble")
+	resolvePersonNamed(t, people, "artist-3", "Vutu Doci", "Bush, Vutu")
+	resolvePersonNamed(t, people, "artist-4", "BUMBLE", "BUMBLE")
+	resolvePersonNamed(t, people, "artist-5", "avex", "avex")
+
+	for _, descending := range []bool{false, true} {
+		var got []string
+		var after library.PersonCursor
+		for {
+			page, err := people.ListPeople(t.Context(), library.PersonFilter{Descending: descending}, after, 2)
+			if err != nil {
+				t.Fatalf("ListPeople: %v", err)
+			}
+			if len(page) == 0 {
+				break
+			}
+			for _, person := range page {
+				got = append(got, person.SortName)
+			}
+			last := page[len(page)-1]
+			after = library.PersonCursor{SortName: last.SortName, ID: last.ID}
+		}
+		want := []string{"avex", "bumble", "BUMBLE", "Bush, Vutu", "Ahei"}
+		if descending {
+			slices.Reverse(want)
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("descending %v: order = %q, want %q", descending, got, want)
+		}
+	}
+}
+
 // ADR-54's Artists level: only persons credited role="artist" on a work
 // visible to the category appear, and a person credited only in a role that
 // isn't "artist" (a producer, say) never does.
@@ -107,7 +144,7 @@ func TestListPeople_ArtistFilterPlanReachesTheIndexAndNeverSorts(t *testing.T) {
 	if !strings.Contains(plan, "person_sort") {
 		t.Errorf("plan does not reach person_sort:\n%s", plan)
 	}
-	if strings.Contains(plan, "TEMP B-TREE") {
+	if sortsOuterResult(plan) {
 		t.Errorf("plan sorts the whole result:\n%s", plan)
 	}
 }

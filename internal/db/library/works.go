@@ -181,8 +181,8 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	// seek. The OR form this replaced could not be seeked at all.
 	var orderBy string
 	if filter.Sort == WorkSortArtist {
-		// Exactly the expression migration 0022 indexes, so the order stays indexed.
-		artist := "COALESCE(primary_artist_sort_name, '')"
+		// Exactly the expression migration 0046 indexes, so the order stays indexed.
+		artist := "COALESCE(primary_artist_sort_name, '') COLLATE NOCASE"
 		predicates.AddIf(after.ID != 0,
 			"("+artist+", work.sort_title, work.id) "+operator+" (?, ?, ?)",
 			after.SortArtist, after.SortTitle, after.ID)
@@ -349,26 +349,7 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 // that a filter reaches an index rather than only that it returns the right rows.
 func (w Works) ExplainList(ctx context.Context, filter WorkFilter, after WorkCursor, pageSize int) (string, error) {
 	query, arguments := composeList(filter, after, pageSize)
-
-	rows, err := w.store.Read().QueryContext(ctx, "EXPLAIN QUERY PLAN "+query, arguments...)
-	if err != nil {
-		return "", fmt.Errorf("library: explain: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	plan := ""
-	for rows.Next() {
-		var id, parent, unused int
-		var detail string
-		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
-			return "", fmt.Errorf("library: scan plan: %w", err)
-		}
-		plan += detail + "\n"
-	}
-	if err := rows.Err(); err != nil {
-		return "", fmt.Errorf("library: explain: %w", err)
-	}
-	return plan, nil
+	return w.store.ExplainQueryPlan(ctx, query, arguments...)
 }
 
 // AlternateTitles answers a work's own alias/original/translit titles

@@ -76,10 +76,54 @@ func (f *fakeCandidateSearcher) GrabWork(_ context.Context, workID int64) (apise
 	return f.grabResult, f.searchErr
 }
 
-func TestSearchWork_ReturnsWhatThePipelineFound(t *testing.T) {
+// searchableWorkFixture signs in a user holding permission in the one library work 42 is in.
+func searchableWorkFixture(t *testing.T, permission settings.Permission) (worksFixture, []*http.Cookie) {
+	t.Helper()
 	fixture := newWorksFixture(t)
-	fixture.createUser(t, "admin", settings.RoleAdmin)
-	cookies := fixture.signIn(t, "admin")
+	category, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	user := fixture.createUser(t, "member", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, permission); err != nil {
+		t.Fatalf("SetCategoryAccess: %v", err)
+	}
+	fixture.workDetail.row = apiserver.WorkDetailRow{
+		ID: 42, MediaType: "music", Title: "KI Pecezinu", SortTitle: "ki pecezinu", RootFolderIDs: []int64{root.ID},
+	}
+	return fixture, fixture.signIn(t, "member")
+}
+
+// Searching, grabbing and sending can start a download: the album's library decides, at request
+// (2026-09-25 review). Read shows the candidates; none or another library's album is 404.
+func TestWorkAcquisition_NeedsRequestOnTheAlbumsLibrary(t *testing.T) {
+	for _, tc := range []struct {
+		permission settings.Permission
+		method     string
+		path       string
+		want       int
+	}{
+		{settings.PermissionRead, http.MethodPost, "/api/v1/works/42/search", http.StatusForbidden},
+		{settings.PermissionRead, http.MethodPost, "/api/v1/works/42/grab", http.StatusForbidden},
+		{settings.PermissionRead, http.MethodPost, "/api/v1/works/42/candidates/7/send", http.StatusForbidden},
+		{settings.PermissionRead, http.MethodGet, "/api/v1/works/42/candidates", http.StatusOK},
+		{settings.PermissionRequest, http.MethodPost, "/api/v1/works/42/search", http.StatusOK},
+		{settings.PermissionRequest, http.MethodPost, "/api/v1/works/42/grab", http.StatusOK},
+		{settings.PermissionRequest, http.MethodPost, "/api/v1/works/42/candidates/7/send", http.StatusOK},
+		{settings.PermissionNone, http.MethodPost, "/api/v1/works/42/search", http.StatusNotFound},
+		{settings.PermissionNone, http.MethodGet, "/api/v1/works/42/candidates", http.StatusNotFound},
+	} {
+		fixture, cookies := searchableWorkFixture(t, tc.permission)
+		request := authedPost(t, cookies, tc.path, "")
+		request.Method = tc.method
+		recorder := fixture.do(request)
+		searched := fixture.candidateSearcher.lastSearchWorkID + fixture.candidateSearcher.lastSendWorkID
+		if recorder.Code != tc.want || (tc.want != http.StatusOK && searched != 0) {
+			t.Errorf("%s %s %s: status %d, reached work %d; want %d", tc.permission, tc.method, tc.path,
+				recorder.Code, searched, tc.want)
+		}
+	}
+}
+
+func TestSearchWork_ReturnsWhatThePipelineFound(t *testing.T) {
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
 
 	tier := 0
 	fixture.candidateSearcher.searchResult = apiserver.SearchItemResult{
@@ -117,9 +161,7 @@ func TestSearchWork_ReturnsWhatThePipelineFound(t *testing.T) {
 }
 
 func TestSearchWork_NotWantedAnswers409(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "admin", settings.RoleAdmin)
-	cookies := fixture.signIn(t, "admin")
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
 	fixture.candidateSearcher.searchErr = apiserver.ErrWorkNotWanted
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/search", ""))
@@ -129,9 +171,7 @@ func TestSearchWork_NotWantedAnswers409(t *testing.T) {
 }
 
 func TestSearchWork_NoIndexersConfiguredAnswers409(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "admin", settings.RoleAdmin)
-	cookies := fixture.signIn(t, "admin")
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
 	fixture.candidateSearcher.searchErr = apiserver.ErrNoIndexersConfigured
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/search", ""))
@@ -150,9 +190,7 @@ func TestSearchWork_RequiresAuthentication(t *testing.T) {
 }
 
 func TestListWorkCandidates_ReturnsTheHistory(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "admin", settings.RoleAdmin)
-	cookies := fixture.signIn(t, "admin")
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
 	fixture.candidateSearcher.candidates = []apiserver.CandidateDecision{
 		{ID: 1, Outcome: "REJECT", Title: "old one"},
 	}
@@ -176,9 +214,7 @@ func TestListWorkCandidates_ReturnsTheHistory(t *testing.T) {
 }
 
 func TestListWorkCandidates_EmptyIsNotAnError(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "admin", settings.RoleAdmin)
-	cookies := fixture.signIn(t, "admin")
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/42/candidates"))
 	if recorder.Code != http.StatusOK {
@@ -219,9 +255,7 @@ func TestSearchCategory_EnqueuesAndAnswers202(t *testing.T) {
 }
 
 func TestSendCandidate_ReturnsTheCreatedAcquisition(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "admin", settings.RoleAdmin)
-	cookies := fixture.signIn(t, "admin")
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
 	fixture.candidateSearcher.acquisition = apiserver.Acquisition{
 		ID: 1, DownloaderID: 5, DownloadClientRef: "nzo-123", Protocol: "usenet", State: "QUEUED",
 	}
@@ -247,9 +281,7 @@ func TestSendCandidate_ReturnsTheCreatedAcquisition(t *testing.T) {
 }
 
 func TestSendCandidate_NotAcceptedAnswers409(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "admin", settings.RoleAdmin)
-	cookies := fixture.signIn(t, "admin")
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
 	fixture.candidateSearcher.sendErr = apiserver.ErrDecisionNotAccepted
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/candidates/7/send", ""))
@@ -259,9 +291,7 @@ func TestSendCandidate_NotAcceptedAnswers409(t *testing.T) {
 }
 
 func TestSendCandidate_NoDownloaderAnswers409(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "admin", settings.RoleAdmin)
-	cookies := fixture.signIn(t, "admin")
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
 	fixture.candidateSearcher.sendErr = apiserver.ErrNoDownloaderForProtocol
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/candidates/7/send", ""))
@@ -271,9 +301,7 @@ func TestSendCandidate_NoDownloaderAnswers409(t *testing.T) {
 }
 
 func TestSendCandidate_AlreadyInFlightAnswers409(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "admin", settings.RoleAdmin)
-	cookies := fixture.signIn(t, "admin")
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
 	fixture.candidateSearcher.sendErr = apiserver.ErrAcquisitionAlreadyInFlight
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/candidates/7/send", ""))
@@ -283,9 +311,7 @@ func TestSendCandidate_AlreadyInFlightAnswers409(t *testing.T) {
 }
 
 func TestSendCandidate_UnknownDecisionAnswers404(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "admin", settings.RoleAdmin)
-	cookies := fixture.signIn(t, "admin")
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
 	fixture.candidateSearcher.sendErr = apiserver.ErrCandidateDecisionNotFound
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/candidates/999/send", ""))
@@ -346,9 +372,7 @@ func TestSearchTrack_ReachesTheSearcherWithBothIDs(t *testing.T) {
 
 // "Search with different terms": the typed artist and album reach the pipeline; half a pair is refused.
 func TestSearchWork_ForwardsDifferentTerms(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "admin", settings.RoleAdmin)
-	cookies := fixture.signIn(t, "admin")
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/search", `{"artist":" Heka ","album":"Watermark"}`))
 	if recorder.Code != http.StatusOK {
@@ -412,9 +436,7 @@ func TestSearchCategory_SearchesTheNamedAlbumsAndNeedsRequestPermission(t *testi
 
 // The automatic search answers what it sent.
 func TestGrabWork_AnswersWhatWasSent(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "admin", settings.RoleAdmin)
-	cookies := fixture.signIn(t, "admin")
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
 	fixture.candidateSearcher.grabResult = apiserver.GrabResult{
 		Found: 4, Sent: &apiserver.Acquisition{ID: 9, State: "QUEUED", DownloadClientRef: "nzo-9"},
 	}

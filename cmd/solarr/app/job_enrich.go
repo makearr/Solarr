@@ -41,18 +41,21 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 		Provider:        p.musicBrainzProvider(),
 		Biography:       p.wikidataFetcher(),
 		WikidataEnabled: func() bool { return *p.cache.Snapshot().MetadataSettings().Wikidata },
-		ArtistArt:       p.theAudioDBArtist(p.theAudioDB()),
-		Artworks:        library.NewArtworks(p.library),
-		Realigner:       realigner{p: p},
-		Desired:         &desired,
-		OnRefined:       func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
-		Tags:            mediatool.New(nil, 0),
-		Roots:           adapters.Roots{Cache: p.cache},
-		HTTP:            imageClient,
-		FS:              p.fsys,
-		ImagesDir:       filepath.Join(p.config.Paths.CacheDir, "images"),
-		Clock:           wall,
-		Logger:          p.logger,
+		PeopleBackfillPerRun: func() int {
+			return int(*p.cache.Snapshot().MetadataSettings().PeopleBackfillPerRun)
+		},
+		ArtistArt: p.theAudioDBArtist(p.theAudioDB()),
+		Artworks:  library.NewArtworks(p.library),
+		Realigner: realigner{p: p},
+		Desired:   &desired,
+		OnRefined: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+		Tags:      mediatool.New(nil, 0),
+		Roots:     adapters.Roots{Cache: p.cache},
+		HTTP:      imageClient,
+		FS:        p.fsys,
+		ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"),
+		Clock:     wall,
+		Logger:    p.logger,
 	})
 	executor.Handle(music.EnrichJobType, job)
 	if err := registry.Register(music.RefreshArtistDefinition); err != nil {
