@@ -2,6 +2,8 @@ package probe_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -157,5 +159,57 @@ func TestJob_RunSurvivesAMissingRootFolder(t *testing.T) {
 	// A file whose root vanished must not fail the whole sweep.
 	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
 		t.Fatalf("Run: %v", err)
+	}
+}
+
+// slowTool is fakeTool taking a minute of the fake clock per file.
+type slowTool struct {
+	fakeTool
+	clock *clock.Fake
+}
+
+func (s *slowTool) ReadTags(ctx context.Context, paths []string) ([]mediatool.Probe, error) {
+	s.clock.Advance(time.Minute)
+	return s.fakeTool.ReadTags(ctx, paths)
+}
+
+// A first sweep of a large library must not hold the one-slot maintenance pool for hours: after
+// a batch past its time budget the run yields, keeping what it measured.
+func TestJob_RunYieldsOnceItsTimeIsSpent(t *testing.T) {
+	opened := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	root := t.TempDir()
+	files := make([]library.PhysicalFile, 150)
+	for index := range files {
+		name := fmt.Sprintf("track-%03d.flac", index)
+		if err := os.WriteFile(filepath.Join(root, name), []byte("faked"), 0o644); err != nil {
+			t.Fatalf("write fixture file: %v", err)
+		}
+		files[index] = library.PhysicalFile{RelPath: name, SizeBytes: 5, QuickHash: name, FirstSeenAt: time.Unix(0, 0)}
+	}
+	if _, err := physical.RegisterBatch(t.Context(), 1, files); err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	fake := clock.NewFakeAtEpoch()
+	job := probe.NewJob(probe.Config{
+		Physical: physical,
+		Coverage: library.NewProbeCoverage(opened, fake),
+		Roots:    fakeRoots{1: settings.RootFolder{ID: 1, Path: root, Online: true}},
+		Tool: &slowTool{clock: fake, fakeTool: fakeTool{measured: mediatool.Measured{
+			FormatName: "flac", AudioCodec: "flac", SampleRate: 44100, Duration: time.Second,
+		}}},
+		Clock:  fake,
+		Logger: slog.New(slog.DiscardHandler),
+	})
+
+	if err := job.Run(t.Context(), jobs.Job{}); !errors.Is(err, jobs.ErrYield) {
+		t.Fatalf("Run = %v, want it to yield", err)
+	}
+	left, err := physical.ListUnmeasured(t.Context(), 0, 200)
+	if err != nil {
+		t.Fatalf("ListUnmeasured: %v", err)
+	}
+	if len(left) != 50 {
+		t.Errorf("%d files left unmeasured, want the 50 past the first batch", len(left))
 	}
 }
