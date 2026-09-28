@@ -43,14 +43,14 @@ func TestListPeople_OrdersBySortNameThenID(t *testing.T) {
 	}
 }
 
-// Lidarr ignores case: "bumble" sorts after "Bush" and before "Ahei", on every page and either way.
+// Lidarr ignores case: "bokaru" sorts after "Bush" and before "Ubra", on every page and either way.
 func TestListPeople_OrderIgnoresCase(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
-	resolvePersonNamed(t, people, "artist-1", "Ahei", "Ahei")
-	resolvePersonNamed(t, people, "artist-2", "bumble", "bumble")
+	resolvePersonNamed(t, people, "artist-1", "Ubra", "Ubra")
+	resolvePersonNamed(t, people, "artist-2", "bokaru", "bokaru")
 	resolvePersonNamed(t, people, "artist-3", "Vutu Doci", "Bush, Vutu")
-	resolvePersonNamed(t, people, "artist-4", "BUMBLE", "BUMBLE")
+	resolvePersonNamed(t, people, "artist-4", "BOKARU", "BOKARU")
 	resolvePersonNamed(t, people, "artist-5", "avex", "avex")
 
 	for _, descending := range []bool{false, true} {
@@ -70,7 +70,7 @@ func TestListPeople_OrderIgnoresCase(t *testing.T) {
 			last := page[len(page)-1]
 			after = library.PersonCursor{SortName: last.SortName, ID: last.ID}
 		}
-		want := []string{"avex", "bumble", "BUMBLE", "Bush, Vutu", "Ahei"}
+		want := []string{"avex", "bokaru", "BOKARU", "Bush, Vutu", "Ubra"}
 		if descending {
 			slices.Reverse(want)
 		}
