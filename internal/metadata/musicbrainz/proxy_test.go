@@ -1,6 +1,7 @@
 package musicbrainz_test
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"testing"
@@ -99,6 +100,12 @@ func TestProxy_AlbumErrorsWhenTheReleaseIsNotUnderTheGroup(t *testing.T) {
 
 	if _, _, err := source.Album(t.Context(), okComputerRG, "00000000-0000-0000-0000-000000000000"); err == nil {
 		t.Fatal("Album succeeded for a release MBID the response never mentions")
+	}
+	// The proxy's way of saying a retired release does not exist; direct MusicBrainz answers 404.
+	provider := newProvider(t, source)
+	_, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, okComputerRG, "00000000-0000-0000-0000-000000000000")
+	if !errors.Is(err, musicbrainz.ErrNotFound) {
+		t.Errorf("Provider.Album = %v, want ErrNotFound", err)
 	}
 }
 

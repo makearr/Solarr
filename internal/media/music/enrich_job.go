@@ -3,6 +3,7 @@ package music
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -239,7 +240,11 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 		for index, edition := range batch {
 			afterEditionID = edition.EditionID
 			total++
-			if err := j.enrichOne(ctx, edition, answers[index], artists); err == nil {
+			err := j.enrichOne(ctx, edition, answers[index], artists)
+			if errors.Is(err, musicbrainz.ErrNotFound) && j.replaceRetiredRelease(ctx, edition, albums[index], artists) {
+				err = nil
+			}
+			if err == nil {
 				refinedWorkIDs = append(refinedWorkIDs, edition.WorkID)
 				j.alignClaimed(ctx, edition.WorkID)
 			} else {
@@ -380,6 +385,7 @@ func (j *EnrichJob) chooseEdition(
 	}
 	locations, err := j.identity.WorkFileLocations(ctx, []int64{work.WorkID})
 	if err != nil || len(locations) == 0 {
+		j.logger.InfoContext(ctx, "edition choice: no files to choose by", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
 		return false
 	}
 	paths := make([]string, 0, min(len(locations), maxEditionChoiceFiles))
@@ -409,6 +415,9 @@ func (j *EnrichJob) chooseEdition(
 	}
 	release, ok := chooseRelease(group, releases, locals)
 	if !ok {
+		// Without this the album waits for metadata with nothing saying why (found 2026-09-28).
+		j.logger.InfoContext(ctx, "edition choice: no release fits the files", slog.Int64("work_id", work.WorkID),
+			slog.Int("files", len(locals)), slog.Int("tags_read", len(probes)), slog.Int("releases", len(releases)))
 		return false
 	}
 
@@ -551,6 +560,32 @@ func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArt
 	default:
 		return backfillFailed
 	}
+}
+
+// replaceRetiredRelease handles an edition whose release no source knows any more: while its
+// release group lives, an edition is chosen by the files, as for a text-search match, and the
+// dead one withdrawn. A retired release group is only reported: its files need identifying again.
+func (j *EnrichJob) replaceRetiredRelease(
+	ctx context.Context, edition library.PlaceholderEdition, album albumKey, artists artistMemo,
+) bool {
+	if album.releaseGroup == "" {
+		return false
+	}
+	group, _, err := j.provider.Album(ctx, musicbrainz.PriorityEnrich, album.releaseGroup, "")
+	if errors.Is(err, musicbrainz.ErrNotFound) {
+		j.logger.WarnContext(ctx, "release group retired: the album's files need identifying again",
+			slog.Int64("work_id", edition.WorkID), slog.String("release_group", album.releaseGroup))
+		return false
+	}
+	if err != nil || !j.chooseEdition(ctx, library.EditionlessWork{WorkID: edition.WorkID, ReleaseGroupMBID: album.releaseGroup}, group, artists) {
+		return false
+	}
+	if err := j.identity.WithdrawEdition(ctx, edition.EditionID); err != nil {
+		j.logger.WarnContext(ctx, "withdraw retired edition failed", slog.Int64("edition_id", edition.EditionID), slog.Any("error", err))
+	}
+	j.logger.InfoContext(ctx, "retired release replaced by one chosen from the files",
+		slog.Int64("work_id", edition.WorkID), slog.String("retired_release", edition.ExternalID))
+	return true
 }
 
 // albumKey is one album lookup; err set means there is nothing to look up.

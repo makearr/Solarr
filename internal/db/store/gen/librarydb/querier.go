@@ -755,6 +755,9 @@ type Querier interface {
 	// A file marked "not media" is never queued again, nor one that already belongs to a work: a
 	// person's resolve survives a full rescan the chain still cannot decide (found 2026-09-24).
 	UpsertUnidentified(ctx context.Context, arg UpsertUnidentifiedParams) error
+	// A placeholder whose release no source knows any more, replaced by one chosen from the files:
+	// no longer a placeholder, so enrichment stops asking about it.
+	WithdrawEdition(ctx context.Context, id int64) error
 }
 
 var _ Querier = (*Queries)(nil)

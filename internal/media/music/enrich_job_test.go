@@ -1529,3 +1529,73 @@ func TestEnrichJob_ResolvesEachArtistOncePerRun(t *testing.T) {
 		}
 	}
 }
+
+// retiredReleaseSource answers 404 for a release it no longer lists, as MusicBrainz does for a
+// retired one, while its release group and the other releases stay.
+type retiredReleaseSource struct{ releaseListingSource }
+
+func (f *retiredReleaseSource) Album(ctx context.Context, rg, releaseMBID string) (musicbrainz.ReleaseGroup, musicbrainz.Release, error) {
+	if releaseMBID != "" && !slices.ContainsFunc(f.releases, func(r musicbrainz.Release) bool { return r.MBID == releaseMBID }) {
+		return musicbrainz.ReleaseGroup{}, musicbrainz.Release{}, &httpx.StatusError{Provider: "fake", Status: http.StatusNotFound}
+	}
+	return f.releaseListingSource.Album(ctx, rg, releaseMBID)
+}
+
+// A release MBID in the tags that MusicBrainz has since retired left its edition a placeholder
+// forever. While the release group lives, an edition is chosen by the files instead, and the dead
+// placeholder is withdrawn so it is not asked about every run.
+func TestEnrichJob_ReplacesARetiredReleaseByOneTheFilesFit(t *testing.T) {
+	source := &retiredReleaseSource{releaseListingSource{
+		fakeArtistSource: fakeArtistSource{fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{MBID: "rg-shepherd", Title: "Detisisu Binip", PrimaryType: "Album"},
+		}},
+		releases: []musicbrainz.Release{{MBID: "rel-current", Title: "Detisisu Binip", Status: "official", Media: []musicbrainz.Medium{{
+			Position: 1, Tracks: []musicbrainz.Track{{Position: 1, Title: "Detisisu Binip"}, {Position: 2, Title: "Covabapoz Fofu"}},
+		}}}},
+	}}
+	tags := fakeTags{
+		"01.m4a": {"title": "Detisisu Binip", "track": "1", "disc": "1"},
+		"02.m4a": {"title": "Covabapoz Fofu", "track": "2", "disc": "1"},
+	}
+	job, opened, queries := newEnrichJobRealigning(t, source, nil, &fakeRealigner{}, tags)
+	registered, err := library.NewPhysical(opened).RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "Heka/Detisisu Binip (1991)/01.m4a", SizeBytes: 1, QuickHash: "h1", FirstSeenAt: firstSeen},
+		{RelPath: "Heka/Detisisu Binip (1991)/02.m4a", SizeBytes: 1, QuickHash: "h2", FirstSeenAt: firstSeen},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	links := make([]library.WorkLink, len(registered))
+	for index, file := range registered {
+		links[index] = library.WorkLink{
+			Provider: music.ProviderReleaseGroup, ExternalID: "rg-shepherd", Confidence: 1, RootFolderID: 1,
+			Work:          library.WorkIdentity{MediaType: "music", CanonicalTitle: "Detisisu Binip", SortTitle: "detisisu binip"},
+			MediaObjectID: file.MediaObjectID,
+			Edition: &library.EditionLink{Provider: music.ProviderRelease, ExternalID: "rel-retired", Confidence: 1,
+				Edition: library.EditionIdentity{Kind: "unknown", Label: "rel-retired"}},
+		}
+	}
+	if _, err := library.NewIdentity(opened).ResolveWorks(t.Context(), firstSeen, links); err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	current, err := queries.GetEditionByExternalID(t.Context(), librarydb.GetEditionByExternalIDParams{
+		Provider: music.ProviderRelease, ExternalID: "rel-current",
+	})
+	if err != nil || current.Kind != "official" {
+		t.Fatalf("current edition = %+v, %v; want it chosen and refined", current, err)
+	}
+	retired, err := queries.GetEditionByExternalID(t.Context(), librarydb.GetEditionByExternalIDParams{
+		Provider: music.ProviderRelease, ExternalID: "rel-retired",
+	})
+	if err != nil || retired.Kind != "withdrawn" {
+		t.Errorf("retired edition = %+v, %v; want withdrawn", retired, err)
+	}
+	placeholders, err := library.NewIdentity(opened).PlaceholderEditions(t.Context(), 0, 10)
+	if err != nil || len(placeholders) != 0 {
+		t.Errorf("placeholders left = %+v, %v; want none to ask about again", placeholders, err)
+	}
+}

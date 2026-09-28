@@ -167,10 +167,14 @@ func (p Provider) Album(
 		releaseGroupMBID, releaseMBID, errors.Join(errs...))
 }
 
-// notFound reports a source answering 404 for the id itself.
+// errReleaseNotInGroup is the proxy's own way of saying a release does not exist: it answers the
+// release group and leaves the release out, where direct MusicBrainz answers 404.
+var errReleaseNotInGroup = errors.New("release not under its release group")
+
+// notFound reports a source answering that the id itself does not exist.
 func notFound(err error) bool {
 	var statusErr *httpx.StatusError
-	return errors.As(err, &statusErr) && statusErr.Status == http.StatusNotFound
+	return errors.As(err, &statusErr) && statusErr.Status == http.StatusNotFound || errors.Is(err, errReleaseNotInGroup)
 }
 
 // Search answers a text search for release groups matching artist and title,

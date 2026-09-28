@@ -159,6 +159,11 @@ SELECT id, work_id, kind, label, year, format, catalogue_number,
 FROM edition WHERE kind = 'unknown' AND id > sqlc.arg(after_id)
 ORDER BY id LIMIT sqlc.arg(page_size);
 
+-- A placeholder whose release no source knows any more, replaced by one chosen from the files:
+-- no longer a placeholder, so enrichment stops asking about it.
+-- name: WithdrawEdition :exec
+UPDATE edition SET kind = 'withdrawn' WHERE id = ? AND kind = 'unknown';
+
 -- name: UpdateEdition :exec
 UPDATE edition SET kind = ?, year = ?, format = ?, catalogue_number = ?,
        barcode = ?, runtime_ms = ?
