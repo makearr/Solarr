@@ -12,8 +12,8 @@ A scan batch is one directory's files. Each pass only sees what the previous one
    per folder (cached; enrichment needs it anyway): a merged id is stored as the group it was
    merged into; a retired one, 404 at every source, is recorded `retired` and the files go on to
    album matching like untagged ones. An unreachable source trusts the tags.
-2. **Album matching** (a release the files' album tag or folder names exactly beats one they do
-   not, whatever its release type): the remaining files, grouped by album tag, scored together against
+2. **Album matching** (a release the files name -- their album tag as written, else their
+   folder -- beats one they do not, whatever its release type): the remaining files, grouped by album tag, scored together against
    whole release tracklists. A group that fits nothing as a whole while its track numbers
    collide is split by the track total each file claims ("3/10" against "3") and each part
    matched alone: an album's first half and its single's remixes under one album tag.

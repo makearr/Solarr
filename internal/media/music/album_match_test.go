@@ -518,3 +518,21 @@ func TestDecideAlbum_TheNamedReleaseBeatsAnUnnamedPreferredOne(t *testing.T) {
 			decision.Scores[0].Distance, decision.Scores[1].Distance)
 	}
 }
+
+// An album tag names the release it spells out, never one its cleaned form happens to spell: "LESA:
+// Vs." is Safav Jam's 2023 remix, not the 1993 "Vs." the cleaned "Vs." would name (2026-09-28).
+func TestDecideAlbum_TheTagAsWrittenNamesTheRelease(t *testing.T) {
+	original := candidateOf("rg-original", "Album", nil, releaseOf("rel-original", "Vs.", "official", "1993", traumaTracks))
+	remix := candidateOf("rg-deep", "Album", []string{"Compilation", "Live"},
+		recordedAs(releaseOf("rel-deep", "LESA: Vs.", "official", "2023", traumaTracks), "deep"))
+	locals := folderOf(traumaTracks[:2])
+	for i := range locals {
+		locals[i].Album = tagged("LESA: Vs.")
+		locals[i].FolderAlbum = "Vs." // "LESA - Vs. (2023)" parses as artist "DEEP", album "Vs."
+	}
+
+	decision := music.DecideAlbum(locals, []music.AlbumCandidate{original, remix})
+	if decision.Outcome != music.AlbumIdentified || bestReleaseGroup(decision) != "rg-deep" {
+		t.Errorf("decision = %s %q, want identified rg-deep", decision.Outcome, bestReleaseGroup(decision))
+	}
+}

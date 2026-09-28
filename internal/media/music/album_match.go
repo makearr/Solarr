@@ -675,13 +675,18 @@ func namedAlbum(locals []LocalTrack, scores []ReleaseScore, margin float64) int 
 	return pick
 }
 
-// namesRelease is a release whose title the files' album tag or folder gives exactly.
+// namesRelease is a release whose title the files' album tag gives exactly as written, or, untagged,
+// their folder: cleaning "LESA: Vs." to "Vs." named the 1993 original too (Safav Jam, 2026-09-28).
 func namesRelease(locals []LocalTrack, score ReleaseScore) bool {
-	album := consensusClaim(locals, func(t LocalTrack) Claim { return t.Album })
-	if !album.present() && folderAlbum(locals) == "" {
+	name := folderAlbum(locals)
+	if album := consensusClaim(locals, func(t LocalTrack) Claim { return t.Album }); album.present() {
+		name = album.Value
+	}
+	if name == "" {
 		return false
 	}
-	return albumTitlePenalty(locals, album, score.Candidate) <= distanceEpsilon
+	candidate := score.Candidate
+	return min(match.EditPenalty(name, candidate.Release.Title), match.EditPenalty(name, candidate.ReleaseGroup.Title)) <= distanceEpsilon
 }
 
 // onlyPerfectFit is a best release every claim agrees with against a rival some claim contradicts:
