@@ -27,8 +27,8 @@ A scan batch is one directory's files. Each pass only sees what the previous one
    an album the album pass found no track for this file on: that is the tag claim the tracklist
    already contradicted.
 4. **Fingerprints**: what is left is fingerprinted, named by AcoustID and matched as an album
-   with those names (see below); a named file whose song is on the album the folder's identified
-   files agree on is left to the passes after, never matched alone to another album. Skipped,
+   with those names (see below); a named file titled exactly as a track of the album the folder's
+   identified files agree on is left to the passes after, never matched alone to another album. Skipped,
    and recorded as skipped, with no API key configured.
 5. **Track by track** (`track_match`, 2026-09-27): a file whose folder settled as no album --
    a playlist, a track Lidarr sorted into the wrong album folder -- is identified on its own.
@@ -38,8 +38,8 @@ A scan batch is one directory's files. Each pass only sees what the previous one
    another of its editions carries the track the matched edition lacks -- the album the folder,
    the album tag or the identified siblings name wins; otherwise a studio album before an EP, a
    single, then a compilation, live, remix or DJ-mix release, the earliest first. A file stays
-   with the album its siblings agree on when that album has its song, or when only a title
-   search points elsewhere (one standard, many takes); a fingerprint or an embedded recording id
+   with the album its siblings agree on when that album has a track of exactly its title (a mix
+   or live take is a different recording), or when only a title search points elsewhere (one standard, many takes); a fingerprint or an embedded recording id
    of a song the album lacks moves it. An ambiguous album stays queued.
 6. **Folder siblings**: an unresolved file joins the one album its identified siblings agree on,
    at a confidence of 0.5 -- with nothing contradicting it, the folder is the best hint left.

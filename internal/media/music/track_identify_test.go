@@ -302,8 +302,8 @@ func TestObserve_ASongOnTheSiblingsAlbumStaysThere(t *testing.T) {
 		single: {RecordingMBID: single, Title: "Semidos", ArtistCredit: "P!po", DurationMs: 300000, ReleaseGroups: []musicbrainz.ReleaseGroup{rgSingle}},
 	}}
 	consumer, opened, fsys := newTrackConsumer(t, traumaLookup(releaseGroupMBID), nil, tracks)
-	relPath := "P!po/Kebilegev Bibihi (2017)/P!po - 02 - Semidos (single edit).m4a"
-	file := untaggedTrack(t, fsys, relPath, "P!po", "Kebilegev Bibihi", "Semidos (single edit)", 300)
+	relPath := "P!po/Kebilegev Bibihi (2017)/P!po - 02 - Semidos.m4a"
+	file := untaggedTrack(t, fsys, relPath, "P!po", "Kebilegev Bibihi", "Semidos", 300)
 	file.Probe.Tags["musicbrainz_trackid"] = single
 	batch := untaggedTraumaBatch(t, fsys)[2:]
 	batch = append(batch, file)
@@ -313,5 +313,28 @@ func TestObserve_ASongOnTheSiblingsAlbumStaysThere(t *testing.T) {
 	}
 	if got := releaseGroupOf(t, opened, relPath); got != releaseGroupMBID {
 		t.Errorf("identified as %q, want the siblings' album %q", got, releaseGroupMBID)
+	}
+}
+
+// A mix of the album's song is a different recording: named on its single by its fingerprint, it goes
+// there, not to its siblings' album ("Tanup de Becifon (Club Mix)", Hafenav, 2026-09-28).
+func TestObserve_AMixOfTheSiblingsSongGoesToItsOwnRelease(t *testing.T) {
+	mix := "0a1b2c3d-0000-4000-8000-000000000006"
+	rgSingle := musicbrainz.ReleaseGroup{MBID: "rg-revenge-single", Title: "Semidos", PrimaryType: "Single", FirstReleaseDate: "2017-01-01"}
+	tracks := fakeTrackLookup{recordings: map[string]musicbrainz.RecordingMatch{
+		mix: {RecordingMBID: mix, Title: "Semidos (club mix)", ArtistCredit: "P!po", DurationMs: 400000, ReleaseGroups: []musicbrainz.ReleaseGroup{rgSingle}},
+	}}
+	consumer, opened, fsys := newTrackConsumer(t, traumaLookup(releaseGroupMBID), nil, tracks)
+	relPath := "P!po/Kebilegev Bibihi (2017)/P!po - 07 - Semidos (club mix).m4a"
+	file := untaggedTrack(t, fsys, relPath, "P!po", "Kebilegev Bibihi", "Semidos (club mix)", 400)
+	file.Probe.Tags["musicbrainz_trackid"] = mix
+	batch := untaggedTraumaBatch(t, fsys)
+	batch = append(batch, file)
+
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if got := releaseGroupOf(t, opened, relPath); got != "rg-revenge-single" {
+		t.Errorf("identified as %q, want the single the mix is on", got)
 	}
 }

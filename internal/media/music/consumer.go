@@ -430,7 +430,7 @@ func (c Consumer) withoutSiblingsSongs(
 	var keptNamed []pendingFile
 	var keptLocals []LocalTrack
 	for i, file := range named {
-		if slices.ContainsFunc(titles, func(title string) bool { return sameTrackTitle(locals[i].Title.Value, title) }) {
+		if onAlbum(locals[i].Title, titles) {
 			pending = append(pending, file)
 			continue
 		}
