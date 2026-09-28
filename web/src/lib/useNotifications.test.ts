@@ -6,11 +6,23 @@ const base = { id: 1, topic: "acquisition", entity: "work:7", at: "2026-09-25T10
 
 test("a download reads as a sentence naming the album", () => {
   expect(
-    describeEvent({ ...base, kind: "download.imported", data: { artist: "Heka", album: "Watermark", release_title: "x" } }),
-  ).toBe("Imported: Heka — Watermark");
+    describeEvent({ ...base, kind: "download.imported", data: { artist: "Heka", album: "Zanuvode", release_title: "x" } }),
+  ).toBe("Imported: Heka — Zanuvode");
   expect(
-    describeEvent({ ...base, kind: "download.failed", data: { release_title: "Heka-Watermark", detail: "Repair failed" } }),
-  ).toBe("Download failed: Heka-Watermark (Repair failed)");
+    describeEvent({ ...base, kind: "download.failed", data: { release_title: "Heka-Zanuvode", detail: "Repair failed" } }),
+  ).toBe("Download failed: Heka-Zanuvode (Repair failed)");
+});
+
+test("an import reads as its progress, then its outcome", () => {
+  const importing = { ...base, topic: "job", entity: "import_session:1", kind: "progress" };
+  expect(
+    describeEvent({ ...importing, data: { phase: "walking", current_unit: "Heka/Zanuvode", units_total: 3, units_committed: 1 } }),
+  ).toBe("Importing Heka/Zanuvode (1 of 3 added)");
+  expect(
+    describeEvent({ ...importing, data: { phase: "done", units_total: 3, units_committed: 1, units_queued: 1, units_failed: 1 } }),
+  ).toBe("Import finished: 1 of 3 added, 1 waiting for review, 1 failed");
+  expect(describeEvent({ ...importing, data: { phase: "walking", units_total: 0 } })).toBe("Importing…");
+  expect(describeEvent({ ...importing, data: { phase: "cancelled" } })).toBe("Import cancelled");
 });
 
 test("anything else keeps the entity and kind", () => {

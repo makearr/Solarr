@@ -11,12 +11,18 @@ export interface Notification {
   readonly entity: string;
   readonly kind: string;
   readonly at: string;
-  /** Present on download history events: what was grabbed, imported or failed. */
+  /** Download history events carry what was grabbed, imported or failed; import progress its counts. */
   readonly data?: {
     readonly release_title?: string;
     readonly album?: string;
     readonly artist?: string;
     readonly detail?: string;
+    readonly phase?: string;
+    readonly current_unit?: string;
+    readonly units_total?: number;
+    readonly units_committed?: number;
+    readonly units_queued?: number;
+    readonly units_failed?: number;
   };
 }
 
@@ -81,7 +87,7 @@ export function useNotifications(): Stream {
   return { recent, unread, connection, markRead };
 }
 
-/** Plain language for the bar: a download reads as a sentence, anything else as "job:42 updated". */
+/** Plain language for the bar: downloads and imports read as sentences, anything else as "job:42 updated". */
 export function describe(event: Notification): string {
   const verb = DOWNLOAD_VERBS[event.kind];
   if (verb !== undefined && event.data) {
@@ -89,7 +95,25 @@ export function describe(event: Notification): string {
     const what = album || event.data.release_title || event.entity;
     return event.data.detail ? `${verb}: ${what} (${event.data.detail})` : `${verb}: ${what}`;
   }
+  if (event.entity.startsWith("import_session:") && event.kind === "progress" && event.data) {
+    return describeImport(event.data);
+  }
   return `${event.entity} ${event.kind}`;
+}
+
+// The raw "import_session:1 progress" reached the bar (found 2026-09-28).
+function describeImport(data: NonNullable<Notification["data"]>): string {
+  const total = data.units_total ?? 0;
+  const committed = data.units_committed ?? 0;
+  if (data.phase === "cancelled") return "Import cancelled";
+  if (data.phase === "done") {
+    const parts = [`${committed} of ${total} added`];
+    if (data.units_queued) parts.push(`${data.units_queued} waiting for review`);
+    if (data.units_failed) parts.push(`${data.units_failed} failed`);
+    return `Import finished: ${parts.join(", ")}`;
+  }
+  const where = data.current_unit ? ` ${data.current_unit}` : "";
+  return total > 0 ? `Importing${where} (${committed} of ${total} added)` : `Importing${where}…`;
 }
 
 /** A stored history entry, shaped like the live event that announced it. */
