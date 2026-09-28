@@ -64,6 +64,7 @@ type worksFixture struct {
 	artwork              *fakeArtworkReader
 	people               *fakePeopleReader
 	subscriber           *fakePeopleSubscriber
+	artistActions        *fakeArtistActions
 	subscriptionPreview  *fakeSubscriptionPreviewer
 	blockedContent       *fakeBlockedContentLister
 	packs                *fakePackLister
@@ -227,6 +228,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	artwork := &fakeArtworkReader{}
 	people := &fakePeopleReader{}
 	subscriber := &fakePeopleSubscriber{}
+	artistActions := &fakeArtistActions{}
 	subscriptionPreview := &fakeSubscriptionPreviewer{}
 	blockedContent := &fakeBlockedContentLister{}
 	packs := &fakePackLister{}
@@ -261,6 +263,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		Artwork:               artwork,
 		People:                people,
 		PeopleSubscriber:      subscriber,
+		ArtistActions:         artistActions,
 		SubscriptionPreviewer: subscriptionPreview,
 		BlockedContent:        blockedContent,
 		Packs:                 packs,
@@ -305,8 +308,9 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	return worksFixture{
 		server: server, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor,
 		search: search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,
-		artwork: artwork, people: people, subscriber: subscriber, subscriptionPreview: subscriptionPreview,
-		blockedContent: blockedContent, packs: packs, removeAndBlocker: removeAndBlocker,
+		artwork: artwork, people: people, subscriber: subscriber, artistActions: artistActions,
+		subscriptionPreview: subscriptionPreview,
+		blockedContent:      blockedContent, packs: packs, removeAndBlocker: removeAndBlocker,
 		importSessions: importSessions, importInspector: importInspector,
 		fingerprintRetrier: fingerprintRetrier,
 		drainStarter:       drainStarter, moveJobs: moveJobs, renameStarter: renameStarter, namingSchemes: namingSchemes, calendar: calendar,

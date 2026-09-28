@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -513,5 +514,31 @@ func TestSubscribePerson_CarriesThePrimaryTypeOverride(t *testing.T) {
 	if fixture.subscriber.lastIncludePrimaries != nil {
 		t.Errorf("lastIncludePrimaries = %v, want nil so the library's own setting is used",
 			*fixture.subscriber.lastIncludePrimaries)
+	}
+}
+
+// fakeArtistActions records which libraries an artist search named.
+type fakeArtistActions struct{ searchedCategories []int64 }
+
+func (f *fakeArtistActions) SearchMissing(_ context.Context, _ int64, categoryIDs []int64) (bool, error) {
+	f.searchedCategories = categoryIDs
+	return false, nil
+}
+func (f *fakeArtistActions) Refresh(context.Context, int64) (bool, error)     { return false, nil }
+func (f *fakeArtistActions) MonitorAll(context.Context, int64) (int64, error) { return 0, nil }
+
+// "Search all missing" sends downloads: only the libraries the caller may request in are searched.
+func TestSearchPersonMissing_SearchesOnlyTheLibrariesTheCallerMayRequestIn(t *testing.T) {
+	fixture, _, cookies := requestingListener(t, settings.PermissionRead)
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/search", "")); recorder.Code != http.StatusForbidden ||
+		fixture.artistActions.searchedCategories != nil {
+		t.Errorf("read only: status %d, searched %v; want 403 and nothing searched", recorder.Code, fixture.artistActions.searchedCategories)
+	}
+
+	fixture, _, cookies = requestingListener(t, settings.PermissionRequest)
+	music := fixture.cache.Snapshot().Categories()[0]
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/search", ""))
+	if recorder.Code != http.StatusAccepted || !slices.Equal(fixture.artistActions.searchedCategories, []int64{music.ID}) {
+		t.Errorf("request: status %d, searched %v; want 202 in library %d", recorder.Code, fixture.artistActions.searchedCategories, music.ID)
 	}
 }

@@ -216,6 +216,8 @@ func (s *Server) GetWork(w http.ResponseWriter, r *http.Request, id int64) {
 	}
 
 	view := buildWorkDetailView(row)
+	requestRoots, requestCategories := s.visibleAt(access, settings.PermissionRequest)
+	view.CanRequest = workDetailVisible(requestRoots, requestCategories, row)
 	annotateFileQuality(access, row.CategoryIDs, view.Parts)
 	writeJSON(w, s.logger, http.StatusOK, view)
 }

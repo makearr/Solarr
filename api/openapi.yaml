@@ -6605,6 +6605,7 @@ components:
     WorkDetail:
       type: object
       required:
+        - can_request
         - id
         - media_type
         - title
@@ -6618,6 +6619,11 @@ components:
         - credits
         - genres
       properties:
+        can_request:
+          type: boolean
+          description: >-
+            Whether the caller holds request in one of the album's libraries:
+            searching, sending and monitoring it would be accepted.
         id: { type: integer, format: int64 }
         media_type: { type: string, example: "music" }
         title: { type: string }
@@ -7479,11 +7485,16 @@ components:
       description: >-
         A category as a navigation root (ADR-54): its declared entity levels
         replace the old flat works/files pair -- see LibraryLevel.
-      required: [id, media_type, name, levels]
+      required: [id, media_type, name, levels, permission]
       properties:
         id: { type: integer, format: int64 }
         media_type: { type: string, example: "music" }
         name: { type: string }
+        permission:
+          allOf: [{ $ref: "#/components/schemas/Permission" }]
+          description: >-
+            What the caller may do here, so a screen offers only the actions
+            the server would accept: searching and monitoring need request.
         levels:
           type: array
           items: { $ref: "#/components/schemas/LibraryLevel" }

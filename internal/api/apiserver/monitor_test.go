@@ -528,3 +528,44 @@ func TestSetWorkMonitored_NeedsRequestNotRead(t *testing.T) {
 		t.Error("a reader's request reached SetWorkMonitored")
 	}
 }
+
+// The album page offers search and monitoring only to a caller the server would accept them from.
+func TestGetWork_SaysWhetherTheCallerMayRequest(t *testing.T) {
+	for permission, want := range map[settings.Permission]bool{settings.PermissionRead: false, settings.PermissionRequest: true} {
+		fixture := newWorksFixture(t)
+		category, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+		user := fixture.createUser(t, "member", settings.RoleReadonly)
+		if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, permission); err != nil {
+			t.Fatalf("SetCategoryAccess: %v", err)
+		}
+		fixture.workDetail.row = apiserver.WorkDetailRow{
+			ID: 1, MediaType: "music", Title: "KI Pecezinu", SortTitle: "ki pecezinu", RootFolderIDs: []int64{root.ID},
+		}
+		recorder := fixture.do(authedGet(t, fixture.signIn(t, "member"), "/api/v1/works/1"))
+		var body struct {
+			CanRequest bool `json:"can_request"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil || recorder.Code != http.StatusOK || body.CanRequest != want {
+			t.Errorf("%s: status %d, can_request %v; want %v", permission, recorder.Code, body.CanRequest, want)
+		}
+	}
+}
+
+// Each library tells the caller what they may do there, so screens offer only accepted actions.
+func TestListLibraries_CarriesTheCallersPermission(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	user := fixture.createUser(t, "member", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, settings.PermissionRead); err != nil {
+		t.Fatalf("SetCategoryAccess: %v", err)
+	}
+	recorder := fixture.do(authedGet(t, fixture.signIn(t, "member"), "/api/v1/libraries"))
+	var body []struct {
+		ID         int64  `json:"id"`
+		Permission string `json:"permission"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil || len(body) != 1 ||
+		body[0].ID != category.ID || body[0].Permission != "read" {
+		t.Errorf("status %d, body %s; want the one library with permission read", recorder.Code, recorder.Body)
+	}
+}

@@ -4311,6 +4311,8 @@ export interface components {
             state: "MISSING" | "PARTIAL" | "COMPLETE" | "UPGRADABLE";
         };
         WorkDetail: {
+            /** @description Whether the caller holds request in one of the album's libraries: searching, sending and monitoring it would be accepted. */
+            can_request: boolean;
             /** Format: int64 */
             id: number;
             /** @example music */
@@ -4929,6 +4931,8 @@ export interface components {
             /** @example music */
             media_type: string;
             name: string;
+            /** @description What the caller may do here, so a screen offers only the actions the server would accept: searching and monitoring need request. */
+            permission: components["schemas"]["Permission"];
             levels: components["schemas"]["LibraryLevel"][];
             /** @description The level key the caller last visited in this library (user_preference), absent if never visited. */
             last_level?: string;

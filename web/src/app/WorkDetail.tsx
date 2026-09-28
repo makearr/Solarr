@@ -201,7 +201,8 @@ export function WorkDetail() {
             </div>
             <button
               type="button"
-              disabled={setMonitored.isPending}
+              disabled={setMonitored.isPending || !work.can_request}
+              title={work.can_request ? undefined : "Monitoring needs request access to this library"}
               onClick={() => setMonitored.mutate(!(work.wanted?.monitored ?? false))}
               className="shrink-0 rounded-md border border-border-subtle px-3 py-1.5 text-sm
                          enabled:hover:bg-surface disabled:cursor-default disabled:text-ink-muted"
@@ -253,7 +254,12 @@ export function WorkDetail() {
           </div>
         </header>
 
-        {work.wanted && (
+        {work.wanted && !work.can_request && (
+          <Section title="Search">
+            <p className="text-sm text-ink-muted">Searching needs request access to this library.</p>
+          </Section>
+        )}
+        {work.wanted && work.can_request && (
           <Section title="Search">
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -353,7 +359,7 @@ export function WorkDetail() {
           <PartsSection
             parts={work.parts}
             discCount={discCount}
-            monitorPending={setPartMonitored.isPending}
+            monitorPending={setPartMonitored.isPending || !work.can_request}
             onToggleMonitored={(partId, monitored) =>
               setPartMonitored.mutate({ partId, monitored })
             }

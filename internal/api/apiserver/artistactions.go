@@ -4,17 +4,20 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // ArtistActions are the artist page's bulk verbs (asked for 2026-09-19). A missing person answers
 // an error wrapping sql.ErrNoRows.
 type ArtistActions interface {
 	// SearchMissing searches the artist's monitored, incomplete albums in the background.
-	SearchMissing(ctx context.Context, personID int64) (duplicate bool, err error)
+	// SearchMissing searches the artist's missing albums in each of categoryIDs.
+	SearchMissing(ctx context.Context, personID int64, categoryIDs []int64) (duplicate bool, err error)
 	// Refresh fetches the artist's metadata again in the background.
 	Refresh(ctx context.Context, personID int64) (duplicate bool, err error)
 	// MonitorAll monitors every album of the artist's discography and answers how many.
@@ -56,16 +59,23 @@ func (s *Server) routeMonitorPersonAll(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// SearchPersonMissing is the artist page's "Search all missing"; any signed-in user, like a library search.
+// SearchPersonMissing is the artist page's "Search all missing": it sends downloads, so it searches
+// only the libraries the caller may request in, and none is 403 (2026-09-28).
 func (s *Server) SearchPersonMissing(w http.ResponseWriter, r *http.Request, id int64) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
 	if !s.artistActionsAvailable(w) {
 		return
 	}
-	duplicate, err := s.artistActions.SearchMissing(r.Context(), id)
+	categoryIDs := access.VisibleCategoryIDs(settings.PermissionRequest)
+	if len(categoryIDs) == 0 {
+		writeError(w, s.logger, fmt.Errorf("%w: no library allows requests", authz.ErrInsufficientPermission))
+		return
+	}
+	duplicate, err := s.artistActions.SearchMissing(r.Context(), id, categoryIDs)
 	if err != nil {
 		s.writeArtistActionError(w, err)
 		return

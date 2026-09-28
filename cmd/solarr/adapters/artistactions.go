@@ -16,16 +16,21 @@ type ArtistActions struct {
 	Queue   *jobs.Queue
 }
 
-// SearchMissing searches the artist's missing albums in every library.
-func (a ArtistActions) SearchMissing(ctx context.Context, personID int64) (bool, error) {
+// SearchMissing searches the artist's missing albums in each library named; duplicate when every
+// one of those searches was already queued.
+func (a ArtistActions) SearchMissing(ctx context.Context, personID int64, categoryIDs []int64) (bool, error) {
 	if _, err := a.People.Person(ctx, personID); err != nil {
 		return false, err
 	}
-	result, err := music.EnqueueSearchArtist(ctx, a.Queue, 0, personID)
-	if err != nil {
-		return false, err
+	duplicate := true
+	for _, categoryID := range categoryIDs {
+		result, err := music.EnqueueSearchArtist(ctx, a.Queue, categoryID, personID)
+		if err != nil {
+			return false, err
+		}
+		duplicate = duplicate && result.Duplicate
 	}
-	return result.Duplicate, nil
+	return duplicate, nil
 }
 
 // Refresh enqueues the artist's refresh.
