@@ -1212,6 +1212,63 @@ func TestEnrichJob_ChoosesTheBestFittingEditionForAnAlbumWithoutOne(t *testing.T
 	}
 }
 
+// The user's answer (b), 2026-09-28: a file that fits no release still gives its album the
+// best-ranked tracklist, so the album stops waiting for metadata.
+func TestEnrichJob_TakesTheBestRankedEditionWhenNoFileFits(t *testing.T) {
+	source := &releaseListingSource{
+		fakeArtistSource: fakeArtistSource{fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{MBID: "rg-single", Title: "Detisisu Binip", PrimaryType: "Single"},
+		}},
+		releases: []musicbrainz.Release{
+			{MBID: "rel-single", Title: "Detisisu Binip", Status: "official", Date: "1991", Media: []musicbrainz.Medium{{
+				Position: 1, Tracks: []musicbrainz.Track{{Position: 1, Title: "Detisisu Binip"}},
+			}}},
+		},
+	}
+	tags := fakeTags{"01.m4a": {"title": "Sifa Rebup Live", "track": "7", "disc": "2"}}
+	realigner := &fakeRealigner{}
+	job, opened, queries := newEnrichJobRealigning(t, source, nil, realigner, tags)
+
+	registered, err := library.NewPhysical(opened).RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "Heka/Detisisu Binip/01.m4a", SizeBytes: 1, QuickHash: "h1", FirstSeenAt: firstSeen},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	workIDs, err := library.NewIdentity(opened).ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-single", Confidence: 0.65, RootFolderID: 1,
+		Work:          library.WorkIdentity{MediaType: "music", CanonicalTitle: "Detisisu Binip", SortTitle: "detisisu binip"},
+		MediaObjectID: registered[0].MediaObjectID,
+	}})
+	if err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	edition, err := queries.GetEditionByExternalID(t.Context(), librarydb.GetEditionByExternalIDParams{
+		Provider: music.ProviderRelease, ExternalID: "rel-single",
+	})
+	if err != nil {
+		t.Fatalf("GetEditionByExternalID(rel-single): %v -- want the best-ranked release taken", err)
+	}
+	if edition.WorkID != workIDs[0] {
+		t.Errorf("edition under work %d, want %d", edition.WorkID, workIDs[0])
+	}
+	parts, err := queries.ListWorkParts(t.Context(), workIDs[0])
+	if err != nil {
+		t.Fatalf("ListWorkParts: %v", err)
+	}
+	if len(parts) != 1 {
+		t.Errorf("parts = %d, want the single's one track", len(parts))
+	}
+	if len(realigner.batches) != 1 || !slices.Contains(realigner.batches[0], workIDs[0]) {
+		t.Errorf("realigned %v, want work %d handed on", realigner.batches, workIDs[0])
+	}
+}
+
 // "Refresh metadata" asks the source again past the cache, rewrites the album's genres, and has
 // the artist's folders rescanned as a manual refresh.
 func TestEnrichJob_RefreshArtistFetchesAgainAndRescans(t *testing.T) {

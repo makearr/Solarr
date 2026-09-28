@@ -1,6 +1,7 @@
 package music
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
@@ -33,8 +34,8 @@ func TestChooseRelease_PrefersTheTracklistClosestToTheFilesPresent(t *testing.T)
 	}
 
 	chosen, ok := chooseRelease(trauma, releases, files("Kebilegev Bibihi", "Semidos", "Kuselobi You Pato"))
-	if !ok || chosen.MBID != "standard" {
-		t.Errorf("chose %q (ok=%v), want the standard edition", chosen.MBID, ok)
+	if want := (editionChoice{Release: releases[1], Fits: true}); !ok || !reflect.DeepEqual(chosen, want) {
+		t.Errorf("chose %+v (ok=%v), want the standard edition", chosen, ok)
 	}
 }
 
@@ -46,8 +47,8 @@ func TestChooseRelease_MostFilesAlignedWins(t *testing.T) {
 	}
 
 	chosen, ok := chooseRelease(trauma, releases, files("Detisisu Binip", "Covabapoz Fofu", "Pugabup"))
-	if !ok || chosen.MBID != "right" {
-		t.Errorf("chose %q (ok=%v), want the release all three files fit", chosen.MBID, ok)
+	if want := (editionChoice{Release: releases[1], Fits: true}); !ok || !reflect.DeepEqual(chosen, want) {
+		t.Errorf("chose %+v (ok=%v), want the release all three files fit", chosen, ok)
 	}
 }
 
@@ -59,15 +60,29 @@ func TestChooseRelease_PrefersAnOfficialReleaseAndThenTheEarliest(t *testing.T) 
 	}
 
 	chosen, ok := chooseRelease(trauma, releases, files("Pihudoc Zaze"))
-	if !ok || chosen.MBID != "original" {
-		t.Errorf("chose %q (ok=%v), want the earliest official release", chosen.MBID, ok)
+	if want := (editionChoice{Release: releases[2], Fits: true}); !ok || !reflect.DeepEqual(chosen, want) {
+		t.Errorf("chose %+v (ok=%v), want the earliest official release", chosen, ok)
 	}
 }
 
-func TestChooseRelease_NothingWhenNoFileFits(t *testing.T) {
-	releases := []musicbrainz.Release{release("unrelated", "official", "2000", "Completely Different")}
+// The user's answer (b), 2026-09-28: a name-only match whose file fits no release still gets the
+// best-ranked tracklist, marked as not fitting, rather than waiting for metadata for ever.
+func TestChooseRelease_BestRankedWhenNoFileFits(t *testing.T) {
+	releases := []musicbrainz.Release{
+		release("bootleg", "bootleg", "2000", "Completely Different"),
+		release("official", "official", "2001", "Completely Different"),
+	}
+
+	chosen, ok := chooseRelease(trauma, releases, files("Detisisu Binip"))
+	if want := (editionChoice{Release: releases[1]}); !ok || !reflect.DeepEqual(chosen, want) {
+		t.Errorf("chose %+v (ok=%v), want the official release, not fitting", chosen, ok)
+	}
+}
+
+func TestChooseRelease_NothingWithoutATracklist(t *testing.T) {
+	releases := []musicbrainz.Release{{MBID: "empty", Status: "official"}}
 
 	if chosen, ok := chooseRelease(trauma, releases, files("Detisisu Binip")); ok {
-		t.Errorf("chose %q, want no choice when no file fits", chosen.MBID)
+		t.Errorf("chose %+v, want no choice when no release has tracks", chosen)
 	}
 }
