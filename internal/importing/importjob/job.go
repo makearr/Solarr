@@ -34,11 +34,11 @@ import (
 // JobType is the registered type of an import inspection run.
 const JobType = jobs.Type("import.inspect")
 
-// Definition declares how the job behaves. It is bulk work: potentially long
-// (a whole-library adoption), resumable, and it must never sit in front of
-// anything a user is waiting on.
+// Definition declares how the job behaves: potentially long (a whole-library adoption) and
+// resumable, in the import pool, whose one slot is ADR-3's fixed import concurrency. In
+// maintenance a finished download waited behind every rescan (found 2026-09-28).
 var Definition = jobs.Definition{
-	Type: JobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3,
+	Type: JobType, Pool: jobs.PoolImport, Mutating: true, MaxAttempts: 3,
 }
 
 // ActionKeyFor deduplicates concurrent submissions of the same source path.

@@ -24,8 +24,8 @@ const JobType = jobs.Type("import.download_watch")
 // ActionKey makes a pass global: one pass covers every folder.
 const ActionKey = "import.download_watch"
 
-// Definition runs a pass in the background; it only lists and enqueues.
-var Definition = jobs.Definition{Type: JobType, Pool: jobs.PoolMaintenance, Mutating: false, MaxAttempts: 3}
+// Definition runs a pass in the background; it only lists and enqueues. Acquire pool, as the poll.
+var Definition = jobs.Definition{Type: JobType, Pool: jobs.PoolAcquire, Mutating: false, MaxAttempts: 3}
 
 // DefaultSettle is how long nothing in an entry may change before it is imported, so a
 // download still being written is never taken half-finished.

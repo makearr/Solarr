@@ -23,8 +23,9 @@ import (
 // JobType is one poll of every download client.
 const JobType = jobs.Type("downloads.poll")
 
-// Definition runs one poll at a time; the next scheduled poll is its retry.
-var Definition = jobs.Definition{Type: JobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 1}
+// Definition runs one poll at a time; the next scheduled poll is its retry. The acquire pool, so a
+// long scan or probe in maintenance never stops downloads moving (found 2026-09-28).
+var Definition = jobs.Definition{Type: JobType, Pool: jobs.PoolAcquire, Mutating: true, MaxAttempts: 1}
 
 // Acquisition states this package moves between (section 10.3).
 const (
