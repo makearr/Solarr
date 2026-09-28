@@ -45,6 +45,8 @@ type Querier interface {
 	// Pruning is bounded per pass and resumable, so retention never becomes one enormous
 	// transaction (Invariant 2).
 	PruneEventsBefore(ctx context.Context, arg PruneEventsBeforeParams) (int64, error)
+	// A duplicate request more urgent than the job it joins raises that job, while it still waits.
+	RaiseWaitingJobPriority(ctx context.Context, arg RaiseWaitingJobPriorityParams) error
 	// The reaper returns abandoned work to the queue. A crashed process therefore
 	// self-heals with no manual cleanup, which is what makes restart recovery real.
 	// The abandoned run gives its attempt back; a job reaped max_reclaims times fails.

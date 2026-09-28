@@ -22,6 +22,11 @@ FROM job
 WHERE action_key = ?
   AND state IN ('PENDING', 'PENDING_RETRY', 'LEASED', 'RUNNING');
 
+-- A duplicate request more urgent than the job it joins raises that job, while it still waits.
+-- name: RaiseWaitingJobPriority :exec
+UPDATE job SET priority = sqlc.arg(priority), updated_at = sqlc.arg(now)
+WHERE id = sqlc.arg(id) AND priority < sqlc.arg(priority) AND state IN ('PENDING', 'PENDING_RETRY');
+
 -- One conditional UPDATE ... RETURNING, so two dispatchers cannot hand the same
 -- job to two workers. depends_on keeps a job unclaimable until its parent succeeds.
 

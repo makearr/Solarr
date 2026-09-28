@@ -747,6 +747,23 @@ func (q *Queries) PruneEventsBefore(ctx context.Context, arg PruneEventsBeforePa
 	return result.RowsAffected()
 }
 
+const raiseWaitingJobPriority = `-- name: RaiseWaitingJobPriority :exec
+UPDATE job SET priority = ?1, updated_at = ?2
+WHERE id = ?3 AND priority < ?1 AND state IN ('PENDING', 'PENDING_RETRY')
+`
+
+type RaiseWaitingJobPriorityParams struct {
+	Priority int64
+	Now      int64
+	ID       int64
+}
+
+// A duplicate request more urgent than the job it joins raises that job, while it still waits.
+func (q *Queries) RaiseWaitingJobPriority(ctx context.Context, arg RaiseWaitingJobPriorityParams) error {
+	_, err := q.db.ExecContext(ctx, raiseWaitingJobPriority, arg.Priority, arg.Now, arg.ID)
+	return err
+}
+
 const reclaimExpiredLeases = `-- name: ReclaimExpiredLeases :many
 
 UPDATE job
