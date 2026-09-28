@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,9 +37,17 @@ type fakeCoverArt struct {
 	urlByReleaseGroup map[string]string
 	calls             int
 	releaseGroupCalls int
+	lock              sync.Mutex
+	// arrived, when set, holds each Fetch until another is in flight; most records the peak.
+	arrived   chan struct{}
+	arrivedAt sync.Once
+	inFlight  int
+	most      int
 }
 
 func (f *fakeCoverArt) FetchReleaseGroup(_ context.Context, releaseGroupMBID string) (string, error) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
 	f.releaseGroupCalls++
 	url, ok := f.urlByReleaseGroup[releaseGroupMBID]
 	if !ok {
@@ -48,6 +57,24 @@ func (f *fakeCoverArt) FetchReleaseGroup(_ context.Context, releaseGroupMBID str
 }
 
 func (f *fakeCoverArt) Fetch(_ context.Context, releaseMBID string) (string, error) {
+	if f.arrived != nil {
+		f.lock.Lock()
+		f.inFlight++
+		f.most = max(f.most, f.inFlight)
+		if f.inFlight >= 2 {
+			f.arrivedAt.Do(func() { close(f.arrived) })
+		}
+		f.lock.Unlock()
+		select {
+		case <-f.arrived:
+		case <-time.After(2 * time.Second):
+		}
+		f.lock.Lock()
+		f.inFlight--
+		f.lock.Unlock()
+	}
+	f.lock.Lock()
+	defer f.lock.Unlock()
 	f.calls++
 	url, ok := f.urlByMBID[releaseMBID]
 	if !ok {
@@ -435,5 +462,24 @@ func TestArtworkJob_FollowsTheConfiguredCoverSources(t *testing.T) {
 	}
 	if len(pictures.asked) != 1 {
 		t.Errorf("embedded pictures read for %v, want the one file", pictures.asked)
+	}
+}
+
+// Each cover is a lookup and a download of several megabytes: a batch's lookups overlap.
+func TestArtworkJob_FetchesABatchsCoversConcurrently(t *testing.T) {
+	server := testImageServer(t)
+	// No archive art: the lookups overlap without downloads, which would wait on the fake clock.
+	coverArt := &fakeCoverArt{urlByMBID: map[string]string{}, arrived: make(chan struct{})}
+	job, opened, _ := newArtworkJob(t, coverArt, server.URL)
+	identity := library.NewIdentity(opened)
+	for index := range 4 {
+		refineWithReleaseMBIDForArtworkJob(t, identity, fmt.Sprintf("rg-%d", index), fmt.Sprintf("release-%d", index))
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.ArtworkJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if coverArt.most < 2 || coverArt.calls != 4 {
+		t.Errorf("at most %d lookups at once over %d calls, want overlapping lookups, each release once", coverArt.most, coverArt.calls)
 	}
 }
