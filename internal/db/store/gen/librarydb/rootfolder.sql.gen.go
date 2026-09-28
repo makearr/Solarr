@@ -54,6 +54,7 @@ SELECT CAST(COUNT(DISTINCT visible.work_id) AS INTEGER) AS total FROM (
 ) AS visible
 WHERE EXISTS (SELECT 1 FROM desired_item di
               WHERE di.work_id = visible.work_id AND di.monitored = 1 AND di.state != 'COMPLETE')
+  AND EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = visible.work_id)
 `
 
 type CountWantedWorksVisibleToCategoryParams struct {
@@ -62,7 +63,7 @@ type CountWantedWorksVisibleToCategoryParams struct {
 }
 
 // The Wanted page's total for one category: the works CountWorksVisibleToCategory counts that
-// have a monitored item not yet complete, the same condition the wanted list filters on.
+// have a monitored item not yet complete and a tracklist, the wanted list's own condition.
 func (q *Queries) CountWantedWorksVisibleToCategory(ctx context.Context, arg CountWantedWorksVisibleToCategoryParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countWantedWorksVisibleToCategory, arg.RootFolderIds, arg.CategoryID)
 	var total int64

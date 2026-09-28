@@ -222,6 +222,7 @@ func TestCountersCanBeCheckedAgainstTheRealCount(t *testing.T) {
 func TestDesired_CountIncompleteAndIncompleteItems(t *testing.T) {
 	opened, _ := newLibrary(t)
 	work := createWork(t, opened, "music", "Zor A")
+	addTrack(t, opened, work.ID)
 
 	missing := createDesired(t, opened, work.ID, "SET", 10)
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
@@ -497,6 +498,7 @@ func TestDesired_IncompleteItemsForOnePerson(t *testing.T) {
 	people := library.NewPeople(opened)
 	heka := resolvePersonNamed(t, people, "artist-1", "Heka", "Heka")
 	hers := createWork(t, opened, "music", "Watermark")
+	addTrack(t, opened, hers.ID)
 	other := createWork(t, opened, "music", "Zor A")
 	if err := people.AddCredit(t.Context(), hers.ID, heka, "artist", 0); err != nil {
 		t.Fatalf("AddCredit: %v", err)

@@ -67,6 +67,17 @@ func createWork(t *testing.T, opened *store.Store, mediaType, title string) libr
 	return created
 }
 
+// addTrack gives a work one track: only an album whose tracklist is known can be wanted or searched.
+func addTrack(t *testing.T, opened *store.Store, workID int64) {
+	t.Helper()
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		_, err := q.CreateWorkPart(ctx, librarydb.CreateWorkPartParams{
+			WorkID: workID, MediaRef: "disc1:track1", SortKey: "0001", Monitored: 1,
+		})
+		return err
+	})
+}
+
 // ADR-8: the internal id is permanent and a work carries many external ids.
 // Resolving one back to its work is the first step of the Identifier chain.
 func TestExternalIDResolvesToItsWork(t *testing.T) {
