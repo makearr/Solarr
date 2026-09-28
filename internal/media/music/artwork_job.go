@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"sync"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -38,6 +39,10 @@ var ArtworkDefinition = jobs.Definition{
 // shutdown between batches loses at most one batch's worth of otherwise-committed
 // progress.
 const artworkBatchSize = 20
+
+// artworkWorkers overlaps a batch's covers: each is a lookup plus a download of several megabytes,
+// and one at a time the full library gained ~500 covers an hour (measured 2026-09-28).
+const artworkWorkers = 4
 
 // maxImageBytes bounds one fetched cover image. Cover Art Archive uploads are
 // typically well under this; a provider serving something far larger is a
@@ -233,10 +238,23 @@ func (j *ArtworkJob) sweep(ctx context.Context, kind string, page artworkPage, l
 			break
 		}
 
-		for _, candidate := range batch {
+		outcomes := make([]error, len(batch))
+		slots := make(chan struct{}, artworkWorkers)
+		var wait sync.WaitGroup
+		for index, candidate := range batch {
+			slots <- struct{}{}
+			wait.Add(1)
+			go func() {
+				defer wait.Done()
+				defer func() { <-slots }()
+				outcomes[index] = j.processOne(ctx, candidate, lookup)
+			}()
+		}
+		wait.Wait()
+		for index, candidate := range batch {
 			total++
 			afterWorkID = candidate.WorkID
-			switch err := j.processOne(ctx, candidate, lookup); {
+			switch err := outcomes[index]; {
 			case errors.Is(err, musicbrainz.ErrNoCoverArt):
 				// Not a failure: nothing in the archive. Asked again next sweep,
 				// which is cheap and right if art is added later.
