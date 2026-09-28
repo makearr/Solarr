@@ -353,7 +353,7 @@ export function WorkDetail() {
           <Section title={`Editions (${work.editions.length})`}>
             <ul className="flex flex-col gap-2">
               {work.editions.map((edition) => (
-                <EditionCard key={edition.id} edition={edition} />
+                <EditionCard key={edition.id} edition={edition} workTitle={work.title} />
               ))}
             </ul>
           </Section>
@@ -471,7 +471,9 @@ function CreditList({ credits }: { credits: readonly Credit[] }) {
   );
 }
 
-function EditionCard({ edition }: { edition: Edition }) {
+function EditionCard({ edition, workTitle }: { edition: Edition; workTitle: string }) {
+  // A label that is only the provider's id is an identity key, not a name (found 2026-09-28).
+  const labelIsID = edition.external_ids.some((id) => id.external_id === edition.label);
   const fields = [
     edition.format,
     edition.catalogue_number,
@@ -482,7 +484,7 @@ function EditionCard({ edition }: { edition: Edition }) {
   return (
     <li className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3">
       <div className="flex items-center gap-2">
-        <span className="font-medium">{edition.label}</span>
+        <span className="font-medium">{labelIsID ? workTitle : edition.label}</span>
         <span className="text-xs text-ink-muted">{edition.kind}</span>
         {edition.is_default && (
           <span className="rounded-full border border-current px-1.5 py-px text-xs text-accent">
