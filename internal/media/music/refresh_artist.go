@@ -109,6 +109,7 @@ func (j *EnrichJob) RefreshArtist(ctx context.Context, personID int64, manual bo
 	}
 	var refreshed []int64
 	var answers []albumAnswer
+	artists := artistMemo{}
 	for _, work := range works {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -122,7 +123,7 @@ func (j *EnrichJob) RefreshArtist(ctx context.Context, personID int64, manual bo
 			j.logger.WarnContext(ctx, "artist refresh: album not refreshed", slog.Int64("work_id", work.ID), slog.Any("error", err))
 			continue
 		}
-		j.enrichCreditsAndGenres(ctx, work.ID, rg)
+		j.enrichCreditsAndGenres(ctx, work.ID, rg, artists)
 		refreshed = append(refreshed, work.ID)
 		answers = append(answers, albumAnswer{rg: rg})
 	}

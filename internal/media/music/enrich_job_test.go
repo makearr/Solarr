@@ -1493,3 +1493,39 @@ func TestEnrichJob_HandsRefinedWorksOnAtEveryCheckpoint(t *testing.T) {
 		t.Errorf("handed on in batches of %v, counted %d times; want [20 1] and 2", sizes, realigner.refined)
 	}
 }
+
+// An artist's biography costs a Wikidata request: one run asks once per artist, not once per album.
+func TestEnrichJob_ResolvesEachArtistOncePerRun(t *testing.T) {
+	source := &fakeArtistSource{
+		fakeSource: fakeSource{rg: musicbrainz.ReleaseGroup{
+			MBID: "rg-0", Title: "Gone", PrimaryType: "Album",
+			ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "artist-1", Name: "Katupoken"}},
+		}},
+		artists: map[string]musicbrainz.Artist{
+			"artist-1": {MBID: "artist-1", Name: "Katupoken", SortName: "Katupoken", WikidataQID: "Q1"},
+		},
+	}
+	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{"Q1": {Description: "English band"}}}
+	job, opened, queries := newEnrichJobWithBiographer(t, source, biographer)
+	for index := range 3 {
+		createPlaceholder(t, opened, fmt.Sprintf("rg-%d", index), fmt.Sprintf("rel-%d", index))
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if biographer.calls != 1 {
+		t.Errorf("artist biography fetched %d times, want once for three albums", biographer.calls)
+	}
+	for index := range 3 {
+		work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+			Provider: music.ProviderReleaseGroup, ExternalID: fmt.Sprintf("rg-%d", index),
+		})
+		if err != nil {
+			t.Fatalf("GetWorkByExternalID: %v", err)
+		}
+		if !work.PrimaryArtistID.Valid {
+			t.Errorf("work %d has no artist; every album must still be credited", work.ID)
+		}
+	}
+}

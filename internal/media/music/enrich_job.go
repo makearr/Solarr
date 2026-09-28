@@ -213,6 +213,7 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 	if j.backfillPerRun != nil {
 		backfill.budget = j.backfillPerRun()
 	}
+	artists := artistMemo{}
 	total, failed, batches := 0, 0, 0
 	var refinedWorkIDs []int64
 	var afterEditionID int64
@@ -238,7 +239,7 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 		for index, edition := range batch {
 			afterEditionID = edition.EditionID
 			total++
-			if err := j.enrichOne(ctx, edition, answers[index]); err == nil {
+			if err := j.enrichOne(ctx, edition, answers[index], artists); err == nil {
 				refinedWorkIDs = append(refinedWorkIDs, edition.WorkID)
 				j.alignClaimed(ctx, edition.WorkID)
 			} else {
@@ -261,7 +262,7 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 	}
 	j.logger.Info("music enrichment finished", slog.Int("processed", total), slog.Int("failed", failed))
 
-	refinedWorkIDs = append(refinedWorkIDs, j.enrichEditionless(ctx)...)
+	refinedWorkIDs = append(refinedWorkIDs, j.enrichEditionless(ctx, artists)...)
 	j.handOn(ctx, refinedWorkIDs, payload.Manual)
 	j.backfillPeople(ctx, &backfill, backfill.budget)
 	return nil
@@ -289,7 +290,7 @@ func (j *EnrichJob) handOn(ctx context.Context, refinedWorkIDs []int64, manual b
 // they sat under "Unknown artist" (found 2026-09-17). No tracklist: that needs
 // an edition, which choosing is not this pass's call. Walked by work id within
 // a run and bounded by editionlessBudget.
-func (j *EnrichJob) enrichEditionless(ctx context.Context) (withEdition []int64) {
+func (j *EnrichJob) enrichEditionless(ctx context.Context, artists artistMemo) (withEdition []int64) {
 	enriched, failed := 0, 0
 	var afterWorkID int64
 	for enriched+failed < editionlessBudget {
@@ -328,10 +329,10 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context) (withEdition []int64)
 				continue
 			}
 			j.retitle(ctx, work.WorkID, rg)
-			j.enrichCreditsAndGenres(ctx, work.WorkID, rg)
+			j.enrichCreditsAndGenres(ctx, work.WorkID, rg, artists)
 			j.enrichDescription(ctx, work.WorkID, answers[index].description)
 			enriched++
-			if j.chooseEdition(ctx, work, rg) {
+			if j.chooseEdition(ctx, work, rg, artists) {
 				withEdition = append(withEdition, work.WorkID)
 				j.alignClaimed(ctx, work.WorkID)
 			}
@@ -371,7 +372,9 @@ func (j *EnrichJob) alignClaimed(ctx context.Context, workID int64) {
 // edition its files fit best (chooseRelease, approved 2026-09-17), then refines
 // it like any placeholder edition, which builds the tracklist. True when an
 // edition was chosen and refined, so the work's files can be matched to it.
-func (j *EnrichJob) chooseEdition(ctx context.Context, work library.EditionlessWork, group musicbrainz.ReleaseGroup) bool {
+func (j *EnrichJob) chooseEdition(
+	ctx context.Context, work library.EditionlessWork, group musicbrainz.ReleaseGroup, artists artistMemo,
+) bool {
 	if j.tags == nil || j.roots == nil {
 		return false
 	}
@@ -424,7 +427,7 @@ func (j *EnrichJob) chooseEdition(ctx context.Context, work library.EditionlessW
 	chosen := albumKey{releaseGroup: work.ReleaseGroupMBID, release: release.MBID}
 	if err := j.enrichOne(ctx, library.PlaceholderEdition{
 		EditionID: *resolutions[0].EditionID, WorkID: work.WorkID, ExternalID: release.MBID,
-	}, j.lookupAlbums(ctx, []albumKey{chosen})[0]); err != nil {
+	}, j.lookupAlbums(ctx, []albumKey{chosen})[0], artists); err != nil {
 		j.logger.WarnContext(ctx, "chosen edition refine failed", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
 		return false
 	}
@@ -632,7 +635,9 @@ func (j *EnrichJob) describeAlbums(ctx context.Context, answers []albumAnswer) {
 	}
 }
 
-func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEdition, album albumAnswer) error {
+func (j *EnrichJob) enrichOne(
+	ctx context.Context, edition library.PlaceholderEdition, album albumAnswer, artists artistMemo,
+) error {
 	rg, release, err := album.rg, album.release, album.err
 	if err != nil {
 		return err
@@ -648,7 +653,7 @@ func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEd
 	// a reason to fail an edition that otherwise refined correctly. Logged,
 	// not returned.
 	j.retitle(ctx, edition.WorkID, rg)
-	j.enrichCreditsAndGenres(ctx, edition.WorkID, rg)
+	j.enrichCreditsAndGenres(ctx, edition.WorkID, rg, artists)
 	j.enrichDescription(ctx, edition.WorkID, album.description)
 	return nil
 }
@@ -659,9 +664,11 @@ func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEd
 // more request per distinct artist for their own bio facts (Provider.Artist
 // caches permanently, so a prolific artist only ever costs one real lookup
 // across every edition of theirs this sweep touches).
-func (j *EnrichJob) enrichCreditsAndGenres(ctx context.Context, workID int64, rg musicbrainz.ReleaseGroup) {
+func (j *EnrichJob) enrichCreditsAndGenres(
+	ctx context.Context, workID int64, rg musicbrainz.ReleaseGroup, artists artistMemo,
+) {
 	for index, credit := range rg.ArtistCredit {
-		personID, err := j.resolveArtist(ctx, credit)
+		personID, err := j.resolveArtist(ctx, credit, artists)
 		if err != nil {
 			j.logger.WarnContext(ctx, "artist credit resolve failed",
 				slog.String("mbid", credit.MBID), slog.Any("error", err))
@@ -710,9 +717,16 @@ func (j *EnrichJob) enrichDescription(ctx context.Context, workID int64, bio wik
 // A failed Artist lookup still resolves a person from the name and id the
 // artist-credit itself already carries -- thinner than a full bio, but a
 // credit worth having is worth having even without one.
-func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.ArtistCredit) (int64, error) {
+// artistMemo is the artists one run has already resolved, by MusicBrainz id: their biography and
+// photo cost a Wikidata request each, once per album before, ~1.2 s an album (measured 2026-09-28).
+type artistMemo map[string]int64
+
+func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.ArtistCredit, artists artistMemo) (int64, error) {
 	if credit.MBID == "" {
 		return 0, fmt.Errorf("artist credit %q has no id", credit.Name)
+	}
+	if personID, done := artists[credit.MBID]; done {
+		return personID, nil
 	}
 
 	artist, err := j.provider.Artist(ctx, musicbrainz.PriorityEnrich, credit.MBID)
@@ -754,6 +768,7 @@ func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.Artist
 	// it here, rather than only when someone opens the Artists screen, worth
 	// doing proactively.
 	_ = j.fetchPersonImage(ctx, personID, bio.ImageURL)
+	artists[credit.MBID] = personID
 	return personID, nil
 }
 
