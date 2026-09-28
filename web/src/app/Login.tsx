@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
 
 /** Shown when there is an account but no session. Never shown when the server
@@ -26,13 +25,15 @@ export function Login() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex shrink-0 items-center justify-between border-b border-border-subtle
-                         bg-surface px-4 py-3">
-        <Logo />
+      <header className="flex shrink-0 items-center justify-end px-4 py-3">
         <ThemeToggle />
       </header>
 
-      <main className="flex min-h-0 flex-1 items-center justify-center p-6">
+      <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 p-6">
+        <div className="flex flex-col items-center gap-3">
+          <img src="/favicon.svg" alt="" className="size-24" />
+          <span className="text-2xl font-semibold tracking-tight">Solarr</span>
+        </div>
         <form
           className="flex w-full max-w-sm flex-col gap-3 rounded-lg border border-border-subtle
                      bg-surface p-5"

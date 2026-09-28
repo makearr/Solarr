@@ -37,6 +37,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
     <Centered>
       <div className="w-full max-w-md space-y-6">
         <header className="space-y-1">
+          <img src="/favicon.svg" alt="" className="mb-3 size-16" />
           <h1 className="text-lg font-semibold tracking-tight">Set up Solarr</h1>
           <p className="text-sm text-ink-muted">
             Three steps. You can skip any of them and change it later.
