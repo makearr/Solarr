@@ -380,6 +380,7 @@ func (j *EnrichJob) chooseEdition(
 	}
 	locations, err := j.identity.WorkFileLocations(ctx, []int64{work.WorkID})
 	if err != nil || len(locations) == 0 {
+		j.logger.InfoContext(ctx, "edition choice: no files to choose by", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
 		return false
 	}
 	paths := make([]string, 0, min(len(locations), maxEditionChoiceFiles))
@@ -409,6 +410,9 @@ func (j *EnrichJob) chooseEdition(
 	}
 	release, ok := chooseRelease(group, releases, locals)
 	if !ok {
+		// Without this the album waits for metadata with nothing saying why (found 2026-09-28).
+		j.logger.InfoContext(ctx, "edition choice: no release fits the files", slog.Int64("work_id", work.WorkID),
+			slog.Int("files", len(locals)), slog.Int("tags_read", len(probes)), slog.Int("releases", len(releases)))
 		return false
 	}
 
