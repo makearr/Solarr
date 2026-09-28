@@ -413,13 +413,18 @@ func (j *EnrichJob) chooseEdition(
 		j.logger.WarnContext(ctx, "edition choice release listing failed", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
 		return false
 	}
-	release, ok := chooseRelease(group, releases, locals)
+	choice, ok := chooseRelease(group, releases, locals)
 	if !ok {
 		// Without this the album waits for metadata with nothing saying why (found 2026-09-28).
-		j.logger.InfoContext(ctx, "edition choice: no release fits the files", slog.Int64("work_id", work.WorkID),
+		j.logger.InfoContext(ctx, "edition choice: no release has a tracklist", slog.Int64("work_id", work.WorkID),
 			slog.Int("files", len(locals)), slog.Int("tags_read", len(probes)), slog.Int("releases", len(releases)))
 		return false
 	}
+	if !choice.Fits {
+		j.logger.InfoContext(ctx, "edition choice: no release fits the files, best ranked taken", slog.Int64("work_id", work.WorkID),
+			slog.Int("files", len(locals)), slog.String("release", choice.Release.MBID))
+	}
+	release := choice.Release
 
 	resolutions, err := j.identity.ResolveWorksDetailed(ctx, j.clock.Now(), []library.WorkLink{{
 		Provider: ProviderReleaseGroup, ExternalID: work.ReleaseGroupMBID, Confidence: siblingConfidence,

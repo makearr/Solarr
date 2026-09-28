@@ -49,7 +49,9 @@ rename (Settings -> the library's naming, "apply to library") previews and moves
 
 Import runs the chain per unit, then `RefineUnitByAlbum`, which replaces anything but an
 embedded-MBID answer with an album match. Enrichment's edition choice for a work identified
-without an edition uses the same scorer (`chooseRelease`).
+without an edition uses the same scorer (`chooseRelease`): the best release a file fits, else
+the best-ranked release with a tracklist, logged as not fitting, so the album never waits for
+metadata for ever.
 
 ## Recall
 
