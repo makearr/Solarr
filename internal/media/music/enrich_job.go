@@ -34,6 +34,8 @@ const maxPersonImageBytes = 20 << 20
 // than the one type its return value needs.
 type Biographer interface {
 	Biography(ctx context.Context, qid string) (wikidata.Biography, error)
+	// Biographies answers many QIDs at once; a QID it has nothing for is absent.
+	Biographies(ctx context.Context, qids []string) (map[string]wikidata.Biography, error)
 }
 
 // ArtistArt is a second source of an artist's photo and biography, by MusicBrainz artist id
@@ -302,7 +304,7 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context) (withEdition []int64)
 			}
 			j.retitle(ctx, work.WorkID, rg)
 			j.enrichCreditsAndGenres(ctx, work.WorkID, rg)
-			j.enrichDescription(ctx, work.WorkID, rg)
+			j.enrichDescription(ctx, work.WorkID, answers[index].description)
 			enriched++
 			if j.chooseEdition(ctx, work, rg) {
 				withEdition = append(withEdition, work.WorkID)
@@ -528,11 +530,12 @@ type albumKey struct {
 	err                   error
 }
 
-// albumAnswer is what Provider.Album answered for one albumKey.
+// albumAnswer is what Provider.Album answered for one albumKey, with the album's description.
 type albumAnswer struct {
-	rg      musicbrainz.ReleaseGroup
-	release musicbrainz.Release
-	err     error
+	rg          musicbrainz.ReleaseGroup
+	release     musicbrainz.Release
+	err         error
+	description wikidata.Biography
 }
 
 // placeholderAlbum names the lookup a placeholder edition needs.
@@ -572,7 +575,35 @@ func (j *EnrichJob) lookupAlbums(ctx context.Context, albums []albumKey) []album
 		}()
 	}
 	wait.Wait()
+	j.describeAlbums(ctx, answers)
 	return answers
+}
+
+// describeAlbums fetches every answered album's Wikidata description in one batch: one album at a
+// time, Wikidata's 1 req/s capped enrichment at ~1,800 albums an hour (measured 2026-09-28).
+func (j *EnrichJob) describeAlbums(ctx context.Context, answers []albumAnswer) {
+	if j.biography == nil {
+		return
+	}
+	var qids []string
+	for _, answer := range answers {
+		if answer.err == nil && answer.rg.WikidataQID != "" {
+			qids = append(qids, answer.rg.WikidataQID)
+		}
+	}
+	if len(qids) == 0 {
+		return
+	}
+	descriptions, err := j.biography.Biographies(ctx, qids)
+	if err != nil {
+		j.logger.WarnContext(ctx, "work descriptions lookup failed", slog.Int("albums", len(qids)), slog.Any("error", err))
+		return
+	}
+	for index := range answers {
+		if answers[index].err == nil {
+			answers[index].description = descriptions[answers[index].rg.WikidataQID]
+		}
+	}
 }
 
 func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEdition, album albumAnswer) error {
@@ -592,7 +623,7 @@ func (j *EnrichJob) enrichOne(ctx context.Context, edition library.PlaceholderEd
 	// not returned.
 	j.retitle(ctx, edition.WorkID, rg)
 	j.enrichCreditsAndGenres(ctx, edition.WorkID, rg)
-	j.enrichDescription(ctx, edition.WorkID, rg)
+	j.enrichDescription(ctx, edition.WorkID, album.description)
 	return nil
 }
 
@@ -636,16 +667,7 @@ func (j *EnrichJob) enrichCreditsAndGenres(ctx context.Context, workID int64, rg
 // entity -- MusicBrainz's release-group annotation, checked as an
 // alternative source, turned out empty for every real album tested while
 // building this, so it is not used.
-func (j *EnrichJob) enrichDescription(ctx context.Context, workID int64, rg musicbrainz.ReleaseGroup) {
-	if j.biography == nil || rg.WikidataQID == "" {
-		return
-	}
-	bio, err := j.biography.Biography(ctx, rg.WikidataQID)
-	if err != nil {
-		j.logger.WarnContext(ctx, "work description lookup failed",
-			slog.String("qid", rg.WikidataQID), slog.Any("error", err))
-		return
-	}
+func (j *EnrichJob) enrichDescription(ctx context.Context, workID int64, bio wikidata.Biography) {
 	description := bio.Extract
 	if description == "" {
 		description = bio.Description

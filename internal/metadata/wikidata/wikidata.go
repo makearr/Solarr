@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
@@ -133,44 +134,88 @@ func New(config Config) Fetcher {
 	return Fetcher{wikidataClient: config.WikidataClient, wikipediaClient: config.WikipediaClient}
 }
 
+// maxEntitiesPerRequest is wbgetentities' own limit on ids in one call.
+const maxEntitiesPerRequest = 50
+
+// summaryWorkers overlaps Wikipedia summaries; its REST API allows far more than the client paces.
+const summaryWorkers = 8
+
 // Biography answers qid's description and Wikipedia extract. A QID with no
 // English Wikipedia sitelink still answers its description with Extract
 // empty -- not an error, since a description alone is still worth having.
 func (f Fetcher) Biography(ctx context.Context, qid string) (Biography, error) {
-	query := url.Values{
-		"action": {"wbgetentities"}, "ids": {qid}, "props": {"descriptions|sitelinks|claims"},
-		"languages": {"en"}, "format": {"json"},
+	biographies, err := f.Biographies(ctx, []string{qid})
+	if err != nil {
+		return Biography{}, err
 	}
-	entitiesURL := "https://www.wikidata.org/w/api.php?" + query.Encode()
-	var entities entitiesResponse
-	if err := getJSON(ctx, f.wikidataClient, entitiesURL, &entities); err != nil {
-		return Biography{}, fmt.Errorf("wikidata: entity %s: %w", qid, err)
-	}
-
-	entity, ok := entities.Entities[qid]
-	if !ok || entity.Missing != nil {
+	biography, ok := biographies[qid]
+	if !ok {
 		return Biography{}, fmt.Errorf("wikidata: entity %s not found", qid)
 	}
-
-	biography := Biography{
-		Description: entity.Descriptions["en"].Value,
-		ImageURL:    imageURLFor(entity.Claims),
-	}
-
-	sitelink, ok := entity.Sitelinks["enwiki"]
-	if !ok || sitelink.Title == "" {
-		return biography, nil
-	}
-
-	summaryURL := "https://en.wikipedia.org/api/rest_v1/page/summary/" + pathEscape(sitelink.Title)
-	var summary summaryResponse
-	if err := getJSON(ctx, f.wikipediaClient, summaryURL, &summary); err != nil {
-		// The description alone is still a real answer -- a Wikipedia hiccup
-		// should not discard it.
-		return biography, nil //nolint:nilerr
-	}
-	biography.Extract = summary.Extract
 	return biography, nil
+}
+
+// Biographies answers many QIDs with one Wikidata request per maxEntitiesPerRequest: Wikimedia
+// asks for serial requests, and batching is how it wants volume. A QID that does not exist is
+// absent from the answer; a Wikipedia summary that fails leaves that Extract empty.
+func (f Fetcher) Biographies(ctx context.Context, qids []string) (map[string]Biography, error) {
+	unique := make([]string, 0, len(qids))
+	seen := make(map[string]bool, len(qids))
+	for _, qid := range qids {
+		if qid != "" && !seen[qid] {
+			seen[qid] = true
+			unique = append(unique, qid)
+		}
+	}
+	biographies := make(map[string]Biography, len(unique))
+	titles := make(map[string]string)
+	for start := 0; start < len(unique); start += maxEntitiesPerRequest {
+		chunk := unique[start:min(start+maxEntitiesPerRequest, len(unique))]
+		query := url.Values{
+			"action": {"wbgetentities"}, "ids": {strings.Join(chunk, "|")}, "props": {"descriptions|sitelinks|claims"},
+			"languages": {"en"}, "format": {"json"},
+		}
+		var entities entitiesResponse
+		if err := getJSON(ctx, f.wikidataClient, "https://www.wikidata.org/w/api.php?"+query.Encode(), &entities); err != nil {
+			return nil, fmt.Errorf("wikidata: entities %s: %w", strings.Join(chunk, ","), err)
+		}
+		for _, qid := range chunk {
+			entity, ok := entities.Entities[qid]
+			if !ok || entity.Missing != nil {
+				continue
+			}
+			biographies[qid] = Biography{Description: entity.Descriptions["en"].Value, ImageURL: imageURLFor(entity.Claims)}
+			if sitelink, ok := entity.Sitelinks["enwiki"]; ok && sitelink.Title != "" {
+				titles[qid] = sitelink.Title
+			}
+		}
+	}
+
+	extracts := make(chan [2]string, len(titles))
+	slots := make(chan struct{}, summaryWorkers)
+	var wait sync.WaitGroup
+	for qid, title := range titles {
+		slots <- struct{}{}
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			defer func() { <-slots }()
+			var summary summaryResponse
+			// A Wikipedia hiccup keeps the description, which is still a real answer.
+			if err := getJSON(ctx, f.wikipediaClient,
+				"https://en.wikipedia.org/api/rest_v1/page/summary/"+pathEscape(title), &summary); err == nil {
+				extracts <- [2]string{qid, summary.Extract}
+			}
+		}()
+	}
+	wait.Wait()
+	close(extracts)
+	for extract := range extracts {
+		biography := biographies[extract[0]]
+		biography.Extract = extract[1]
+		biographies[extract[0]] = biography
+	}
+	return biographies, nil
 }
 
 // pathEscape turns a Wikipedia page title into its URL path segment: spaces

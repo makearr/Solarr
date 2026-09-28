@@ -108,6 +108,7 @@ func (j *EnrichJob) RefreshArtist(ctx context.Context, personID int64, manual bo
 		return fmt.Errorf("music: refresh artist %d: discography: %w", personID, err)
 	}
 	var refreshed []int64
+	var answers []albumAnswer
 	for _, work := range works {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -122,8 +123,12 @@ func (j *EnrichJob) RefreshArtist(ctx context.Context, personID int64, manual bo
 			continue
 		}
 		j.enrichCreditsAndGenres(ctx, work.ID, rg)
-		j.enrichDescription(ctx, work.ID, rg)
 		refreshed = append(refreshed, work.ID)
+		answers = append(answers, albumAnswer{rg: rg})
+	}
+	j.describeAlbums(ctx, answers)
+	for index, workID := range refreshed {
+		j.enrichDescription(ctx, workID, answers[index].description)
 	}
 
 	if j.realigner != nil && len(refreshed) > 0 {

@@ -75,6 +75,18 @@ func (f *fakeArtistSource) Artist(_ context.Context, mbid string) (musicbrainz.A
 type fakeBiographer struct {
 	biographies map[string]wikidata.Biography
 	calls       int
+	batches     int
+}
+
+func (f *fakeBiographer) Biographies(ctx context.Context, qids []string) (map[string]wikidata.Biography, error) {
+	f.batches++
+	found := map[string]wikidata.Biography{}
+	for _, qid := range qids {
+		if bio, err := f.Biography(ctx, qid); err == nil {
+			found[qid] = bio
+		}
+	}
+	return found, nil
 }
 
 func (f *fakeBiographer) Biography(_ context.Context, qid string) (wikidata.Biography, error) {
@@ -1428,5 +1440,33 @@ func TestEnrichJob_LooksUpABatchsAlbumsConcurrently(t *testing.T) {
 	}
 	if source.most < 2 || source.calls != 4 {
 		t.Errorf("at most %d lookups at once over %d calls, want overlapping lookups, each album once", source.most, source.calls)
+	}
+}
+
+// Wikidata paces one request a second: a batch of albums is described in one call, not one each.
+func TestEnrichJob_DescribesABatchsAlbumsInOneCall(t *testing.T) {
+	source := &fakeSource{rg: musicbrainz.ReleaseGroup{MBID: "rg-0", Title: "Gone", PrimaryType: "Album", WikidataQID: "Q7"}}
+	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{"Q7": {Description: "1997 studio album"}}}
+	job, opened, queries := newEnrichJobWithBiographer(t, source, biographer)
+	for index := range 3 {
+		createPlaceholder(t, opened, fmt.Sprintf("rg-%d", index), fmt.Sprintf("rel-%d", index))
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if biographer.batches != 1 {
+		t.Errorf("described in %d calls, want 1 for the whole batch", biographer.batches)
+	}
+	for index := range 3 {
+		work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+			Provider: music.ProviderReleaseGroup, ExternalID: fmt.Sprintf("rg-%d", index),
+		})
+		if err != nil {
+			t.Fatalf("GetWorkByExternalID: %v", err)
+		}
+		if work.Description.String != "1997 studio album" {
+			t.Errorf("work %d description = %q, want the batch's answer", work.ID, work.Description.String)
+		}
 	}
 }

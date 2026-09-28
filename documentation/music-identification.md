@@ -213,7 +213,9 @@ enrichment, backfill and refresh. A user's lookup therefore never queues behind 
 
 A bucket paces requests; it does not overlap them. BrainzMash answers in about a second, so a
 sweep asking one album at a time reached under 1 req/s of its 10. Enrichment therefore asks a
-batch's albums eight at a time and applies the answers one by one. The artist photo and
+batch's albums eight at a time and applies the answers one by one; their descriptions come from one
+Wikidata request per batch (its action API wants serial requests, so volume goes in batches) and
+Wikipedia summaries fetched in parallel. The artist photo and
 biography backfill takes a configurable number of artists per run (Settings -> Metadata,
 default 200).
 
