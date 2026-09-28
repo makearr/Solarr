@@ -315,17 +315,17 @@ func TestListWorks_SortByArtistGroupsThenOrdersByTitleAcrossPages(t *testing.T) 
 			t.Fatalf("SetWorkPrimaryArtist: %v", err)
 		}
 	}
-	pinkB := createWork(t, opened, "music", "Kebilegev Bibihi")
-	enyaW := createWork(t, opened, "music", "Watermark")
-	pinkA := createWork(t, opened, "music", "Attention")
-	enyaA := createWork(t, opened, "music", "Dumucamoko")
+	pipoB := createWork(t, opened, "music", "Kebilegev Bibihi")
+	hekaW := createWork(t, opened, "music", "Zanuvode")
+	pipoA := createWork(t, opened, "music", "Aretimok")
+	hekaA := createWork(t, opened, "music", "Dumucamoko")
 	unknown := createWork(t, opened, "music", "Zebra")
-	lower := createWork(t, opened, "music", "Honey")
-	setArtist(lower.ID, "bumble")
-	setArtist(pinkB.ID, "P!po")
-	setArtist(enyaW.ID, "Heka")
-	setArtist(pinkA.ID, "P!po")
-	setArtist(enyaA.ID, "Heka")
+	lower := createWork(t, opened, "music", "Tavel")
+	setArtist(lower.ID, "bokaru")
+	setArtist(pipoB.ID, "P!po")
+	setArtist(hekaW.ID, "Heka")
+	setArtist(pipoA.ID, "P!po")
+	setArtist(hekaA.ID, "Heka")
 
 	filter := library.WorkFilter{Sort: library.WorkSortArtist}
 	var seen []int64
@@ -344,7 +344,7 @@ func TestListWorks_SortByArtistGroupsThenOrdersByTitleAcrossPages(t *testing.T) 
 	}
 
 	// A work with no artist sorts first, as the Tracks view already orders it; case is ignored.
-	want := []int64{unknown.ID, lower.ID, enyaA.ID, enyaW.ID, pinkA.ID, pinkB.ID}
+	want := []int64{unknown.ID, lower.ID, hekaA.ID, hekaW.ID, pipoA.ID, pipoB.ID}
 	if !slices.Equal(seen, want) {
 		t.Errorf("order = %v, want %v", seen, want)
 	}

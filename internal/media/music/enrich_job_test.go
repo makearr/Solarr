@@ -1445,7 +1445,7 @@ func TestEnrichJob_LooksUpABatchsAlbumsConcurrently(t *testing.T) {
 
 // Wikidata paces one request a second: a batch of albums is described in one call, not one each.
 func TestEnrichJob_DescribesABatchsAlbumsInOneCall(t *testing.T) {
-	source := &fakeSource{rg: musicbrainz.ReleaseGroup{MBID: "rg-0", Title: "Gone", PrimaryType: "Album", WikidataQID: "Q7"}}
+	source := &fakeSource{rg: musicbrainz.ReleaseGroup{MBID: "rg-0", Title: "Vorn", PrimaryType: "Album", WikidataQID: "Q7"}}
 	biographer := &fakeBiographer{biographies: map[string]wikidata.Biography{"Q7": {Description: "1997 studio album"}}}
 	job, opened, queries := newEnrichJobWithBiographer(t, source, biographer)
 	for index := range 3 {
@@ -1474,7 +1474,7 @@ func TestEnrichJob_DescribesABatchsAlbumsInOneCall(t *testing.T) {
 // A run on a fresh library lasts hours: every checkpoint hands refined albums on to be realigned
 // and counted, rather than all of them at the very end.
 func TestEnrichJob_HandsRefinedWorksOnAtEveryCheckpoint(t *testing.T) {
-	source := &fakeSource{rg: musicbrainz.ReleaseGroup{MBID: "rg-0", Title: "Gone", PrimaryType: "Album"}}
+	source := &fakeSource{rg: musicbrainz.ReleaseGroup{MBID: "rg-0", Title: "Vorn", PrimaryType: "Album"}}
 	realigner := &fakeRealigner{}
 	job, opened, _ := newEnrichJobRealigning(t, source, nil, realigner, nil,
 		func(config *music.EnrichJobConfig) { config.CheckpointBatches = 1 })
@@ -1498,7 +1498,7 @@ func TestEnrichJob_HandsRefinedWorksOnAtEveryCheckpoint(t *testing.T) {
 func TestEnrichJob_ResolvesEachArtistOncePerRun(t *testing.T) {
 	source := &fakeArtistSource{
 		fakeSource: fakeSource{rg: musicbrainz.ReleaseGroup{
-			MBID: "rg-0", Title: "Gone", PrimaryType: "Album",
+			MBID: "rg-0", Title: "Vorn", PrimaryType: "Album",
 			ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "artist-1", Name: "Katupoken"}},
 		}},
 		artists: map[string]musicbrainz.Artist{
