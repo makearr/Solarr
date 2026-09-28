@@ -183,13 +183,23 @@ func (s *Server) visibility(access authz.Access, categoryID *int64) (rootFolderI
 			return nil, nil, err
 		}
 		categoryIDs = []int64{*categoryID}
-	} else {
-		categoryIDs = access.VisibleCategoryIDs(settings.PermissionRead)
+		return s.rootsOf(categoryIDs), categoryIDs, nil
 	}
+	rootFolderIDs, categoryIDs = s.visibleAt(access, settings.PermissionRead)
+	return rootFolderIDs, categoryIDs, nil
+}
+
+// visibleAt is every library the caller holds required in, and those libraries' root folders.
+func (s *Server) visibleAt(access authz.Access, required settings.Permission) (rootFolderIDs, categoryIDs []int64) {
+	categoryIDs = access.VisibleCategoryIDs(required)
 	if categoryIDs == nil {
 		categoryIDs = []int64{}
 	}
+	return s.rootsOf(categoryIDs), categoryIDs
+}
 
+// rootsOf is the root folders of categoryIDs.
+func (s *Server) rootsOf(categoryIDs []int64) (rootFolderIDs []int64) {
 	visible := make(map[int64]struct{}, len(categoryIDs))
 	for _, id := range categoryIDs {
 		visible[id] = struct{}{}
@@ -204,7 +214,7 @@ func (s *Server) visibility(access authz.Access, categoryID *int64) (rootFolderI
 			rootFolderIDs = append(rootFolderIDs, root.RootFolderID)
 		}
 	}
-	return rootFolderIDs, categoryIDs, nil
+	return rootFolderIDs
 }
 
 // buildWorkPage trims the probe row (one more than pageSize) and, if present,

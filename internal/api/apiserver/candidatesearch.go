@@ -133,12 +133,15 @@ func (s *Server) routeSearchWork(w http.ResponseWriter, r *http.Request) {
 	s.SearchWork(w, r, id)
 }
 
-// SearchWork runs stage 5's candidate pipeline against one work's own
-// wanted album. Any signed-in user may trigger it -- the same access level
-// ArrSync's own sync already keeps.
+// SearchWork runs stage 5's candidate pipeline against one work's own wanted album. It can send
+// a download, so it needs request on the album's library, as the library-wide search does.
 func (s *Server) SearchWork(w http.ResponseWriter, r *http.Request, id int64) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
 		writeError(w, s.logger, err)
+		return
+	}
+	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
 		return
 	}
 	var terms *SearchTerms
@@ -204,8 +207,12 @@ func (s *Server) routeListWorkCandidates(w http.ResponseWriter, r *http.Request)
 // work's own wanted album, newest first -- empty, never 404, for a work
 // nobody has searched.
 func (s *Server) ListWorkCandidates(w http.ResponseWriter, r *http.Request, id int64) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
 		writeError(w, s.logger, err)
+		return
+	}
+	if !s.workVisible(w, r, access, id) {
 		return
 	}
 	decisions, err := s.candidateSearcher.ListWorkCandidates(r.Context(), id)
@@ -233,13 +240,15 @@ func (s *Server) routeSendCandidate(w http.ResponseWriter, r *http.Request) {
 	s.SendCandidate(w, r, id, decisionID)
 }
 
-// SendCandidate dispatches one ACCEPTed decision to a matching downloader
-// (ADR-57's acquire.send). Any signed-in user may trigger it -- the same
-// access level SearchWork already keeps; per-user dispatch approval is not
-// a distinction this project draws.
+// SendCandidate dispatches one ACCEPTed decision to a matching downloader (ADR-57's
+// acquire.send); request on the album's library, as SearchWork.
 func (s *Server) SendCandidate(w http.ResponseWriter, r *http.Request, id, decisionID int64) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
 		writeError(w, s.logger, err)
+		return
+	}
+	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
 		return
 	}
 	acquisition, err := s.candidateSearcher.SendCandidate(r.Context(), id, decisionID)
@@ -331,10 +340,14 @@ func (s *Server) routeGrabWork(w http.ResponseWriter, r *http.Request) {
 	s.GrabWork(w, r, id)
 }
 
-// GrabWork is Lidarr's automatic search of one album; any signed-in user, as SearchWork.
+// GrabWork is Lidarr's automatic search of one album; request on its library, as SearchWork.
 func (s *Server) GrabWork(w http.ResponseWriter, r *http.Request, id int64) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
 		writeError(w, s.logger, err)
+		return
+	}
+	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
 		return
 	}
 	result, err := s.candidateSearcher.GrabWork(r.Context(), id)

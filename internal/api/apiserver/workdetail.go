@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -460,6 +461,14 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 // when the work is not visible to the caller -- shared so a mutation can
 // never be reached for a work the caller could not even read.
 func (s *Server) workVisible(w http.ResponseWriter, r *http.Request, access authz.Access, id int64) bool {
+	return s.workPermitted(w, r, access, id, settings.PermissionRead)
+}
+
+// workPermitted is workVisible for an action needing more than read: a work the caller can read
+// but not act on answers 403, one they cannot read 404. The work's libraries decide, not the login.
+func (s *Server) workPermitted(
+	w http.ResponseWriter, r *http.Request, access authz.Access, id int64, required settings.Permission,
+) bool {
 	row, err := s.workDetail.GetWorkDetail(r.Context(), id)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
@@ -469,13 +478,17 @@ func (s *Server) workVisible(w http.ResponseWriter, r *http.Request, access auth
 		writeError(w, s.logger, err)
 		return false
 	}
-	rootFolderIDs, categoryIDs, err := s.visibility(access, nil)
-	if err != nil {
-		writeError(w, s.logger, err)
-		return false
-	}
+	rootFolderIDs, categoryIDs := s.visibleAt(access, settings.PermissionRead)
 	if !workDetailVisible(rootFolderIDs, categoryIDs, row) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
+		return false
+	}
+	if required == settings.PermissionRead {
+		return true
+	}
+	rootFolderIDs, categoryIDs = s.visibleAt(access, required)
+	if !workDetailVisible(rootFolderIDs, categoryIDs, row) {
+		writeError(w, s.logger, fmt.Errorf("%w: work %d needs %s", authz.ErrInsufficientPermission, id, required))
 		return false
 	}
 	return true
