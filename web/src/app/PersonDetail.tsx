@@ -218,6 +218,7 @@ export function PersonDetail() {
                 Monitored
               </span>
             )}
+            {administrator && (
             <button
               type="button"
               disabled={remove.isPending}
@@ -236,6 +237,7 @@ export function PersonDetail() {
             >
               Remove
             </button>
+            )}
           </div>
         </header>
 
