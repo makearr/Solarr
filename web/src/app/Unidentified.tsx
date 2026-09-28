@@ -10,10 +10,8 @@ import type { components } from "@/api/schema";
 
 type UnidentifiedFile = components["schemas"]["UnidentifiedFile"];
 
-// F29: everything a scan recorded that the ADR-24 chain could not confidently
-// resolve. Confirm takes the best candidate here; the Review page picks another,
-// applies it to the whole folder, or marks the file not media. Searching a
-// provider beyond the chain's candidates is still open.
+// F29: what a scan could not confidently resolve. Confirm takes the best candidate here; the
+// Review page picks another, searches for the album by hand, or marks the file not media.
 const FILTER_KEYS: readonly string[] = ["category_id"];
 
 export function Unidentified() {

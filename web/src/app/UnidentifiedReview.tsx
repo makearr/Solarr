@@ -7,6 +7,7 @@ import type { components } from "@/api/schema";
 import { attemptLabel, outcomeLabel, passLabel } from "@/lib/identificationEvidence";
 
 import { IdentificationCandidates, type IdentificationCandidateView } from "./IdentificationCandidates";
+import { ManualAlbumSearch } from "./ManualAlbumSearch";
 
 type IdentificationAttempt = components["schemas"]["IdentificationAttempt"];
 
@@ -33,7 +34,7 @@ export function UnidentifiedReview() {
   });
 
   const choose = useMutation({
-    mutationFn: async (candidate: IdentificationCandidateView) => {
+    mutationFn: async (candidate: { provider?: string; external_id?: string }) => {
       if (candidate.provider === undefined || candidate.external_id === undefined) return;
       const { error } = await api.POST("/library/unidentified/{mediaObjectId}/resolve", {
         params: { path: { mediaObjectId: mediaObjectId as number } },
@@ -66,9 +67,6 @@ export function UnidentifiedReview() {
   }
 
   const [latest, ...older] = review.data.items;
-  const anyChoice = latest?.passes.some((pass) =>
-    pass.candidates.some((candidate) => candidate.provider === "musicbrainz:release-group"),
-  );
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-6xl flex-col gap-5 p-6">
@@ -84,12 +82,10 @@ export function UnidentifiedReview() {
         </header>
 
         <div className="flex flex-wrap items-center gap-3 text-xs">
-          {anyChoice && (
-            <label className="flex items-center gap-1.5 text-ink">
-              <input type="checkbox" checked={wholeFolder} onChange={(event) => setWholeFolder(event.target.checked)} />
-              Use the album I pick for every file waiting in this folder
-            </label>
-          )}
+          <label className="flex items-center gap-1.5 text-ink">
+            <input type="checkbox" checked={wholeFolder} onChange={(event) => setWholeFolder(event.target.checked)} />
+            Use the album I pick for every file waiting in this folder
+          </label>
           <span className="ml-auto flex items-center gap-1.5">
             {confirmingNotMedia ? (
               <>
@@ -125,6 +121,12 @@ export function UnidentifiedReview() {
 
         {choose.isError && <p className="text-xs text-danger">That album could not be applied.</p>}
         {notMedia.isError && <p className="text-xs text-danger">The file could not be marked.</p>}
+
+        <ManualAlbumSearch
+          relPath={review.data.file.rel_path}
+          onChoose={(result) => choose.mutate(result)}
+          busy={choose.isPending}
+        />
 
         {latest === undefined ? (
           <p className="text-xs text-ink-muted">
