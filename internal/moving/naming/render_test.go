@@ -67,6 +67,21 @@ func TestRenderPath_IllegalCharacters(t *testing.T) {
 	}
 }
 
+// An SMB share turned "*" and a trailing dot into 8.3 names; symbols such as "★" it keeps.
+func TestRenderPath_NamesAnSMBShareKeeps(t *testing.T) {
+	for artist, want := range map[string]string{
+		"C*Bomlbor": "C-Bomlbor/C-Bomlbor - Rollercoaster.flac",
+		"Cibiz M.":  "Cibiz M/Cibiz M. - Rollercoaster.flac",
+		"A★Teens":   "A★Teens/A★Teens - Rollercoaster.flac",
+		"Cibiz M. ": "Cibiz M/Cibiz M. - Rollercoaster.flac",
+	} {
+		ctx := naming.Context{"Artist Name": artist, "Track Title": "Rollercoaster"}
+		if got := renderPath(t, "{Artist Name}/{Artist Name} - {Track Title}", ctx, naming.DefaultOptions); got != want {
+			t.Errorf("%q: got %q, want %q", artist, got, want)
+		}
+	}
+}
+
 func TestRenderPath_AValueSlashNeverAddsAFolder(t *testing.T) {
 	ctx := naming.Context{"Artist Name": "XT/QK", "Track Title": "Metup Nagug"}
 	if got := renderPath(t, "{Artist Name}/{Track Title}", ctx, naming.DefaultOptions); got != "XT+QK/Metup Nagug.flac" {
