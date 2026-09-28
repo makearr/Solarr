@@ -28,6 +28,9 @@ Then a doubled separator (`  `, `--`, `..`, `__`) becomes one and trailing separ
 what an empty token leaves behind. The default multi-disc template writes `{medium:0}-{track:00}`
 (`2-05`) itself since 2026-09-25, so no colon reaches the replacement.
 
+These are exactly the characters an SMB share turns into 8.3 names (`C*Bomlbor`, a trailing dot
+as in `Cibiz M.`); symbols such as `★` are valid there and kept.
+
 ## Token spellings
 
 As Lidarr: `{Artist.Name}` / `{Artist_Name}` / `{Artist-Name}` put that separator between the
