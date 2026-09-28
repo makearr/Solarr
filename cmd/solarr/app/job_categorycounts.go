@@ -81,10 +81,11 @@ func (p *process) registerCategoryCountsJob(registry *jobs.Registry, executor *j
 
 // enqueueCategoryCounts submits one sweep. Registered as a task with
 // internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
-// schedule, not only once at startup.
+// schedule, not only once at startup. Normal priority: a few seconds of work that every count on
+// screen waits for, which at low priority queued behind every pending rescan (2026-09-28).
 func (p *process) enqueueCategoryCounts(ctx context.Context) (jobs.EnqueueResult, error) {
 	result, err := p.queue.Enqueue(ctx, jobs.Request{
-		Type: categoryCountsJobType, ActionKey: categoryCountsActionKey, Priority: jobs.PriorityLow,
+		Type: categoryCountsJobType, ActionKey: categoryCountsActionKey, Priority: jobs.PriorityNormal,
 		Payload: []byte("{}"),
 	})
 	if err != nil {
