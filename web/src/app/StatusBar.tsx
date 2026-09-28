@@ -51,7 +51,7 @@ export function StatusBar() {
   });
 
   const latest = recent[0];
-  const idle = lastDownload.data ? describe(historyNotification(lastDownload.data)) : "Nothing has happened yet";
+  const idle = lastDownload.data ? describe(historyNotification(lastDownload.data)) : "No downloads yet";
 
   return (
     <footer className="relative shrink-0 border-t border-border-subtle bg-surface">
