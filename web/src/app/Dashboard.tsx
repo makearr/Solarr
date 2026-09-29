@@ -4,11 +4,12 @@ import { AlertTriangle, Plus, XCircle } from "lucide-react";
 
 import { api } from "@/api/client";
 import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
+import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
 import { Poster } from "./Poster";
 import { SearchBox } from "./SearchBox";
-import { defaultLevelKey } from "./Sidebar";
+import { defaultLevelKey, pageTier } from "./Sidebar";
 
 type LibraryEntry = components["schemas"]["Library"];
 
@@ -58,6 +59,9 @@ export function Dashboard() {
   });
 
   const firstLibrary = libraries.data?.[0];
+  // A warning whose fix lives on a page this tier hides is not shown (2026-09-29).
+  const tier = useTier();
+  const checks = health.data?.filter((check) => check.link == null || isTierVisible(tier, pageTier(check.link)));
 
   return (
     <div className="h-full overflow-y-auto">
@@ -87,10 +91,10 @@ export function Dashboard() {
           </div>
         </section>
 
-        {health.data && health.data.length > 0 && (
+        {checks && checks.length > 0 && (
           <Section title="Needs attention">
             <ul className="flex flex-col gap-1">
-              {health.data.map((check) => (
+              {checks.map((check) => (
                 <li
                   key={`${check.id}:${check.message}`}
                   className="flex items-start gap-2 rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm"
