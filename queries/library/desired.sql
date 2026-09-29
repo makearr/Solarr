@@ -348,3 +348,14 @@ ON CONFLICT (desired_item_id) DO UPDATE SET
 -- name: SetHuntEligibleAfter :exec
 UPDATE hunt_queue SET eligible_after = ? WHERE desired_item_id = ?;
 
+
+-- RSS sync: the monitored, incomplete albums credited to an artist of this name, ignoring case.
+-- name: ListWantedAlbumsByArtistName :many
+SELECT DISTINCT di.id
+FROM person p
+JOIN credit c ON c.person_id = p.id AND c.role = 'artist' AND c.edition_id = 0 AND c.part_id = 0
+JOIN desired_item di ON di.work_id = c.work_id
+WHERE p.name = sqlc.arg(name) COLLATE NOCASE
+  AND di.monitored = 1 AND di.state IN ('MISSING', 'PARTIAL') AND di.satisfaction_kind = 'SET'
+ORDER BY di.id
+LIMIT sqlc.arg(page_size);

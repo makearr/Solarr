@@ -534,6 +534,8 @@ type Querier interface {
 	// what distinguishes the two, since nothing sets it before the IMPORTING
 	// phase runs.
 	ListUnplacedCommitUnits(ctx context.Context, sessionID int64) ([]ImportUnit, error)
+	// RSS sync: the monitored, incomplete albums credited to an artist of this name, ignoring case.
+	ListWantedAlbumsByArtistName(ctx context.Context, arg ListWantedAlbumsByArtistNameParams) ([]int64, error)
 	ListWorkClassifications(ctx context.Context, workID int64) ([]WorkClassification, error)
 	ListWorkDates(ctx context.Context, workID int64) ([]WorkDate, error)
 	ListWorkExternalIDs(ctx context.Context, workID int64) ([]WorkExternalID, error)

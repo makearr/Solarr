@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
+	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
 )
@@ -44,7 +45,29 @@ func (g Grab) SearchAndSend(
 	if err != nil {
 		return GrabResult{Search: found}, err
 	}
-	// SearchItem persists best first.
+	return g.sendBest(ctx, itemID, found, origin, at)
+}
+
+// JudgeFeedAndSend is RSS sync's grab: releases a feed listed are judged against a wanted album,
+// and the best accepted one is sent as an RSS grab. Nothing is searched.
+func (g Grab) JudgeFeedAndSend(
+	ctx context.Context, itemID int64, conn IndexerConn, raws []indexer.RawItem, at time.Time,
+) (GrabResult, error) {
+	if _, inFlight, err := g.Dispatch.Acquisitions.InFlightForItem(ctx, itemID); err != nil {
+		return GrabResult{}, fmt.Errorf("music: rss grab item %d: %w", itemID, err)
+	} else if inFlight {
+		return GrabResult{AlreadyInFlight: true}, nil
+	}
+	found, err := g.Search.JudgeFeed(ctx, itemID, conn, raws, at)
+	if err != nil {
+		return GrabResult{Search: found}, err
+	}
+	return g.sendBest(ctx, itemID, found, GrabRSS, at)
+}
+
+// sendBest sends found's best accepted release, or holds it when origin may wait; SearchItem
+// persists best first. Finding nothing acceptable is not an error.
+func (g Grab) sendBest(ctx context.Context, itemID int64, found ItemSearchResult, origin GrabOrigin, at time.Time) (GrabResult, error) {
 	refused := 0
 	for _, detail := range found.Decisions {
 		if detail.Decision.Outcome != string(model.OutcomeAccept) {
