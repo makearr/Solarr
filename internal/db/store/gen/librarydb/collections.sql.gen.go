@@ -167,11 +167,12 @@ func (q *Queries) DequeueReadyForItem(ctx context.Context, desiredItemID int64) 
 
 const enqueueReady = `-- name: EnqueueReady :exec
 INSERT INTO ready_queue (candidate_id, desired_item_id, priority, queued_at,
-                         expires_at, size_bytes)
-VALUES (?, ?, ?, ?, ?, ?)
+                         expires_at, size_bytes, origin)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (candidate_id) DO UPDATE SET
   priority = excluded.priority,
-  expires_at = excluded.expires_at
+  expires_at = excluded.expires_at,
+  origin = excluded.origin
 `
 
 type EnqueueReadyParams struct {
@@ -181,6 +182,7 @@ type EnqueueReadyParams struct {
 	QueuedAt      int64
 	ExpiresAt     int64
 	SizeBytes     sql.NullInt64
+	Origin        string
 }
 
 // Primed so something dispatches the instant a slot frees (section 10.5).
@@ -192,6 +194,7 @@ func (q *Queries) EnqueueReady(ctx context.Context, arg EnqueueReadyParams) erro
 		arg.QueuedAt,
 		arg.ExpiresAt,
 		arg.SizeBytes,
+		arg.Origin,
 	)
 	return err
 }
@@ -650,7 +653,7 @@ func (q *Queries) ListWorksNeedingReleaseGroupArtwork(ctx context.Context, arg L
 }
 
 const nextReady = `-- name: NextReady :many
-SELECT candidate_id, desired_item_id, priority, queued_at, expires_at, size_bytes
+SELECT candidate_id, desired_item_id, priority, queued_at, expires_at, size_bytes, origin
 FROM ready_queue
 WHERE expires_at > ?1
 ORDER BY priority DESC, queued_at ASC
@@ -679,6 +682,7 @@ func (q *Queries) NextReady(ctx context.Context, arg NextReadyParams) ([]ReadyQu
 			&i.QueuedAt,
 			&i.ExpiresAt,
 			&i.SizeBytes,
+			&i.Origin,
 		); err != nil {
 			return nil, err
 		}

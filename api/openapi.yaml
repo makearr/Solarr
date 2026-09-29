@@ -6039,13 +6039,21 @@ components:
 
     HeldRelease:
       type: object
-      required: [release_title, held_at]
+      description: >-
+        A release found and held for room in its client's queue (ADR-57), in the order held
+        releases are sent: a user's own grabs, then RSS, then new albums, then backfill.
+      required: [release_title, held_at, origin]
       properties:
         work_id: { type: integer, format: int64 }
         album: { type: string }
         artist: { type: string }
         release_title: { type: string }
         indexer: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        origin:
+          type: string
+          enum: [user, rss, automatic]
+          description: Who asked for it.
         held_at: { type: string, format: date-time }
 
     QueueClient:
@@ -6442,6 +6450,12 @@ components:
           description: >-
             How many of Solarr's downloads this client may hold at once before
             further automatic sends are held (ADR-57). Absent means 10.
+        always_send_user_grabs:
+          type: boolean
+          description: A user's own grab goes to this client even when it is full. Absent means yes.
+        always_send_rss_grabs:
+          type: boolean
+          description: An RSS grab goes to this client even when it is full. Absent means yes.
 
     TestDownloaderRequest:
       type: object

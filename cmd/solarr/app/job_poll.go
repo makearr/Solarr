@@ -9,6 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -117,7 +118,7 @@ func (p *process) searchAgain(ctx context.Context, desiredItemID int64) error {
 	if err != nil || len(indexers) == 0 {
 		return err
 	}
-	result, err := p.musicGrab().SearchAndSend(ctx, desiredItemID, indexers, clock.NewSystem().Now())
+	result, err := p.musicGrab().SearchAndSend(ctx, desiredItemID, indexers, music.GrabAutomatic, clock.NewSystem().Now())
 	if err == nil {
 		p.logger.Info("searched again after a failed download", slog.Int64("desired_item_id", desiredItemID),
 			slog.Int("found", len(result.Search.Decisions)), slog.Bool("sent", result.Sent != nil))

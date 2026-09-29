@@ -236,7 +236,8 @@ func optionsJSON(options *gen.DownloaderOptions) string {
 	stored := settings.DownloaderOptions{
 		RemoveCompleted: options.RemoveCompleted, Category: derefOr(options.Category, ""),
 		RemotePath: derefOr(options.RemotePath, ""), LocalPath: derefOr(options.LocalPath, ""),
-		MaxQueued: options.MaxQueued,
+		MaxQueued: options.MaxQueued, AlwaysSendUserGrabs: options.AlwaysSendUserGrabs,
+		AlwaysSendRSSGrabs: options.AlwaysSendRssGrabs,
 	}
 	encoded, err := json.Marshal(stored)
 	if err != nil || string(encoded) == "{}" {
@@ -277,7 +278,8 @@ func downloaderOptionsView(options settings.DownloaderOptions) *gen.DownloaderOp
 	return &gen.DownloaderOptions{
 		Category: strPtr(options.Category), RemoveCompleted: options.RemoveCompleted,
 		RemotePath: strPtr(options.RemotePath), LocalPath: strPtr(options.LocalPath),
-		MaxQueued: options.MaxQueued,
+		MaxQueued: options.MaxQueued, AlwaysSendUserGrabs: options.AlwaysSendUserGrabs,
+		AlwaysSendRssGrabs: options.AlwaysSendRSSGrabs,
 	}
 }
 

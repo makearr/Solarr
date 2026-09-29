@@ -96,7 +96,8 @@ func (a Queue) held(ctx context.Context) ([]apiserver.HeldRow, error) {
 		})
 		row := apiserver.HeldRow{
 			CategoryID: data.CategoryID, Album: data.Album, Artist: data.Artist, ReleaseTitle: candidate.Title,
-			Indexer: data.Indexer, HeldAt: time.Unix(entry.QueuedAt, 0).UTC(),
+			Indexer: data.Indexer, HeldAt: time.Unix(entry.QueuedAt, 0).UTC(), SizeBytes: candidate.SizeBytes,
+			Origin: entry.Origin,
 		}
 		if workID != 0 {
 			row.WorkID = &workID

@@ -73,8 +73,10 @@ func (p *process) downloaderConns(ctx context.Context) ([]music.DownloaderConn, 
 		}
 		conns = append(conns, music.DownloaderConn{
 			ID: downloader.ID, Protocol: downloader.Protocol, Category: downloader.Options().CategoryFor("music"),
-			MaxQueued: downloader.Options().MaxQueuedDownloads(),
-			Client:    sabnzbd.Downloader{Client: factory(downloader.ID, downloader.BaseURL, credentials.Reveal())},
+			MaxQueued:      downloader.Options().MaxQueuedDownloads(),
+			AlwaysSendUser: downloader.Options().SendsUserGrabs(),
+			AlwaysSendRSS:  downloader.Options().SendsRSSGrabs(),
+			Client:         sabnzbd.Downloader{Client: factory(downloader.ID, downloader.BaseURL, credentials.Reveal())},
 		})
 	}
 	return conns, nil

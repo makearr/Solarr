@@ -35,6 +35,34 @@ type DownloaderConn struct {
 	Category string
 	// MaxQueued is ADR-57's queue depth: an automatic send beyond it is held. 0 means no limit.
 	MaxQueued int
+	// AlwaysSendUser and AlwaysSendRSS let those grabs past a full queue (2026-09-29).
+	AlwaysSendUser bool
+	AlwaysSendRSS  bool
+}
+
+// GrabOrigin is who asked for a grab; it decides whether a full client holds it and in what order.
+type GrabOrigin string
+
+// The origins, in the order held releases are sent (2026-09-29: user > RSS > new > backfill).
+const (
+	// GrabUser is a person's own ask: an album's Search, an interactive pick, a request.
+	GrabUser GrabOrigin = "user"
+	// GrabRSS is a release an RSS sync found for a wanted album.
+	GrabRSS GrabOrigin = "rss"
+	// GrabAutomatic is Solarr searching on its own, or Wanted's Search all.
+	GrabAutomatic GrabOrigin = "automatic"
+)
+
+// alwaysSent reports whether downloader takes a grab of origin even when its queue is full.
+func (d DownloaderConn) alwaysSent(origin GrabOrigin) bool {
+	switch origin {
+	case GrabUser:
+		return d.AlwaysSendUser
+	case GrabRSS:
+		return d.AlwaysSendRSS
+	default:
+		return false
+	}
 }
 
 // ReleaseFetcher downloads a release's file (an NZB) from the indexer that listed it.

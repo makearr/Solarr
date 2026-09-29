@@ -58,7 +58,10 @@ type HeldRow struct {
 	Artist       string
 	ReleaseTitle string
 	Indexer      string
-	HeldAt       time.Time
+	SizeBytes    *int64
+	// Origin is who asked: "user", "rss" or "automatic".
+	Origin string
+	HeldAt time.Time
 }
 
 // QueueSnapshot is the whole queue at one moment.
@@ -116,6 +119,7 @@ func (s *Server) ListQueue(w http.ResponseWriter, r *http.Request, params gen.Li
 		body.Held = append(body.Held, gen.HeldRelease{
 			WorkId: held.WorkID, Album: strPtr(held.Album), Artist: strPtr(held.Artist),
 			ReleaseTitle: held.ReleaseTitle, Indexer: strPtr(held.Indexer), HeldAt: held.HeldAt,
+			SizeBytes: held.SizeBytes, Origin: gen.HeldReleaseOrigin(held.Origin),
 		})
 	}
 	for i, client := range clients {

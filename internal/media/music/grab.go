@@ -31,8 +31,10 @@ type GrabResult struct {
 }
 
 // SearchAndSend searches itemID unless a download for it is already on its way, and sends the
-// best accepted release. Finding nothing acceptable is not an error.
-func (g Grab) SearchAndSend(ctx context.Context, itemID int64, indexers []IndexerConn, at time.Time) (GrabResult, error) {
+// best accepted release, or holds it when origin may wait. Finding nothing acceptable is not an error.
+func (g Grab) SearchAndSend(
+	ctx context.Context, itemID int64, indexers []IndexerConn, origin GrabOrigin, at time.Time,
+) (GrabResult, error) {
 	if _, inFlight, err := g.Dispatch.Acquisitions.InFlightForItem(ctx, itemID); err != nil {
 		return GrabResult{}, fmt.Errorf("music: grab item %d: %w", itemID, err)
 	} else if inFlight {
@@ -48,7 +50,7 @@ func (g Grab) SearchAndSend(ctx context.Context, itemID int64, indexers []Indexe
 		if detail.Decision.Outcome != string(model.OutcomeAccept) {
 			continue
 		}
-		if held, err := g.Dispatch.holdIfFull(ctx, itemID, detail, at); err != nil {
+		if held, err := g.Dispatch.holdIfFull(ctx, itemID, detail, origin, at); err != nil {
 			return GrabResult{Search: found}, fmt.Errorf("music: grab item %d: %w", itemID, err)
 		} else if held {
 			return GrabResult{Search: found, Held: true}, nil

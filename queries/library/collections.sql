@@ -35,15 +35,16 @@ WHERE m.work_id = ? ORDER BY c.name;
 -- Primed so something dispatches the instant a slot frees (section 10.5).
 -- name: EnqueueReady :exec
 INSERT INTO ready_queue (candidate_id, desired_item_id, priority, queued_at,
-                         expires_at, size_bytes)
-VALUES (?, ?, ?, ?, ?, ?)
+                         expires_at, size_bytes, origin)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (candidate_id) DO UPDATE SET
   priority = excluded.priority,
-  expires_at = excluded.expires_at;
+  expires_at = excluded.expires_at,
+  origin = excluded.origin;
 
 -- Revalidated at dispatch, so an expired entry is never handed to a downloader.
 -- name: NextReady :many
-SELECT candidate_id, desired_item_id, priority, queued_at, expires_at, size_bytes
+SELECT candidate_id, desired_item_id, priority, queued_at, expires_at, size_bytes, origin
 FROM ready_queue
 WHERE expires_at > sqlc.arg(now)
 ORDER BY priority DESC, queued_at ASC

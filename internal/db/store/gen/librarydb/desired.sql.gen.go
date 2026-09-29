@@ -417,6 +417,25 @@ func (q *Queries) GetHuntPriority(ctx context.Context, desiredItemID int64) (int
 	return priority, err
 }
 
+const getItemReleaseDate = `-- name: GetItemReleaseDate :one
+SELECT CAST(COALESCE((SELECT MIN(wd.date) FROM work_date wd
+  WHERE wd.work_id = di.work_id AND wd.kind = ?1), '') AS TEXT) AS release_date
+FROM desired_item di WHERE di.id = ?2
+`
+
+type GetItemReleaseDateParams struct {
+	Kind   string
+	ItemID int64
+}
+
+// An item's release date of the given kind, empty when unknown: held releases rank new before backfill.
+func (q *Queries) GetItemReleaseDate(ctx context.Context, arg GetItemReleaseDateParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, getItemReleaseDate, arg.Kind, arg.ItemID)
+	var release_date string
+	err := row.Scan(&release_date)
+	return release_date, err
+}
+
 const listCountersForScope = `-- name: ListCountersForScope :many
 SELECT scope, metric, value, updated_at FROM counter WHERE scope = ? ORDER BY metric
 `

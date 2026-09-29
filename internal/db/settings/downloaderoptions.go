@@ -19,6 +19,10 @@ type DownloaderOptions struct {
 	Category string `json:"category,omitempty"`
 	// MaxQueued is ADR-57's queue depth: automatic sends beyond it are held, not sent.
 	MaxQueued *int `json:"max_queued,omitempty"`
+	// AlwaysSendUserGrabs and AlwaysSendRSSGrabs let a user's own grabs and RSS grabs past a full
+	// queue (2026-09-29, default on); off, they are held too, ahead of automatic ones.
+	AlwaysSendUserGrabs *bool `json:"always_send_user_grabs,omitempty"`
+	AlwaysSendRSSGrabs  *bool `json:"always_send_rss_grabs,omitempty"`
 }
 
 // DefaultMaxQueued is ADR-57's default queue depth per client.
@@ -44,6 +48,16 @@ func (o DownloaderOptions) MaxQueuedDownloads() int {
 		return DefaultMaxQueued
 	}
 	return *o.MaxQueued
+}
+
+// SendsUserGrabs is AlwaysSendUserGrabs with its default.
+func (o DownloaderOptions) SendsUserGrabs() bool {
+	return o.AlwaysSendUserGrabs == nil || *o.AlwaysSendUserGrabs
+}
+
+// SendsRSSGrabs is AlwaysSendRSSGrabs with its default.
+func (o DownloaderOptions) SendsRSSGrabs() bool {
+	return o.AlwaysSendRSSGrabs == nil || *o.AlwaysSendRSSGrabs
 }
 
 // CategoryFor is the client category a download of mediaType is sent under.

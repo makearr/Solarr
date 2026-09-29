@@ -193,6 +193,13 @@ const (
 	HealthStatusStatusOk HealthStatusStatus = "ok"
 )
 
+// Defines values for HeldReleaseOrigin.
+const (
+	HeldReleaseOriginAutomatic HeldReleaseOrigin = "automatic"
+	HeldReleaseOriginRss       HeldReleaseOrigin = "rss"
+	HeldReleaseOriginUser      HeldReleaseOrigin = "user"
+)
+
 // Defines values for HistoryEntryKind.
 const (
 	HistoryEntryKindFailed   HistoryEntryKind = "failed"
@@ -1252,6 +1259,12 @@ type DownloaderProtocol string
 
 // DownloaderOptions Lidarr's download client options.
 type DownloaderOptions struct {
+	// AlwaysSendRssGrabs An RSS grab goes to this client even when it is full. Absent means yes.
+	AlwaysSendRssGrabs *bool `json:"always_send_rss_grabs,omitempty"`
+
+	// AlwaysSendUserGrabs A user's own grab goes to this client even when it is full. Absent means yes.
+	AlwaysSendUserGrabs *bool `json:"always_send_user_grabs,omitempty"`
+
 	// Category The client category downloads are sent under; empty means "music" for music.
 	Category *string `json:"category,omitempty"`
 
@@ -1455,15 +1468,22 @@ type HealthStatus struct {
 // HealthStatusStatus defines model for HealthStatus.Status.
 type HealthStatusStatus string
 
-// HeldRelease defines model for HeldRelease.
+// HeldRelease A release found and held for room in its client's queue (ADR-57), in the order held releases are sent: a user's own grabs, then RSS, then new albums, then backfill.
 type HeldRelease struct {
-	Album        *string   `json:"album,omitempty"`
-	Artist       *string   `json:"artist,omitempty"`
-	HeldAt       time.Time `json:"held_at"`
-	Indexer      *string   `json:"indexer,omitempty"`
-	ReleaseTitle string    `json:"release_title"`
-	WorkId       *int64    `json:"work_id,omitempty"`
+	Album   *string   `json:"album,omitempty"`
+	Artist  *string   `json:"artist,omitempty"`
+	HeldAt  time.Time `json:"held_at"`
+	Indexer *string   `json:"indexer,omitempty"`
+
+	// Origin Who asked for it.
+	Origin       HeldReleaseOrigin `json:"origin"`
+	ReleaseTitle string            `json:"release_title"`
+	SizeBytes    *int64            `json:"size_bytes,omitempty"`
+	WorkId       *int64            `json:"work_id,omitempty"`
 }
+
+// HeldReleaseOrigin Who asked for it.
+type HeldReleaseOrigin string
 
 // HistoryEntry One thing that happened to a download, as it was known then.
 type HistoryEntry struct {

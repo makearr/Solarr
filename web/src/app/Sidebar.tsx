@@ -68,6 +68,15 @@ const CONNECTIONS_SECTIONS: readonly { to: string; label: string; icon: LucideIc
   { to: "/connections/arr", label: "Arr", icon: Share2, tier: "expert" },
 ];
 
+/** The tier at which the sidebar shows the page at `path`; "normal" for a page it does not list. */
+export function pageTier(path: string): Tier {
+  const entry = [...SECTIONS, ...ACTIVITY_SECTIONS, ...CONNECTIONS_SECTIONS].find((section) => section.to === path);
+  if (entry) return entry.tier;
+  const storage = STORAGE_SECTIONS.find((section) => section.to === path);
+  if (storage) return storage.tier ?? "advanced";
+  return SETTINGS_SECTIONS.find((section) => section.to === path)?.tier ?? "normal";
+}
+
 // tier is the whole section's own floor (ADR-26): a page mixing tiers always shows and hides
 // its own advanced parts, but Cache's entire content is expert-only.
 const SETTINGS_SECTIONS: readonly { to: string; label: string; tier?: Tier }[] = [

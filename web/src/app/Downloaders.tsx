@@ -178,6 +178,8 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
   const [category, setCategory] = useState("");
   const [removeCompleted, setRemoveCompleted] = useState(true);
   const [maxQueued, setMaxQueued] = useState(DEFAULT_MAX_QUEUED);
+  const [sendUser, setSendUser] = useState(true);
+  const [sendRSS, setSendRSS] = useState(true);
   const [addFolder, setAddFolder] = useState(true);
   const [localFolder, setLocalFolder] = useState("");
 
@@ -201,6 +203,8 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
         category: category || undefined,
         remove_completed: removeCompleted,
         max_queued: maxQueued,
+        always_send_user_grabs: sendUser,
+        always_send_rss_grabs: sendRSS,
         remote_path: mapped ? reported : undefined,
         local_path: mapped ? localFolder : undefined,
       };
@@ -257,6 +261,10 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
         onRemoveCompleted={setRemoveCompleted}
         maxQueued={maxQueued}
         onMaxQueued={setMaxQueued}
+        sendUser={sendUser}
+        onSendUser={setSendUser}
+        sendRSS={sendRSS}
+        onSendRSS={setSendRSS}
       />
       {test.data && (
         <p className={`text-xs ${test.data.ok ? "text-ok" : "text-danger"}`}>{test.data.message}</p>
@@ -311,6 +319,10 @@ function OptionFields({
   onRemoveCompleted,
   maxQueued,
   onMaxQueued,
+  sendUser,
+  onSendUser,
+  sendRSS,
+  onSendRSS,
 }: {
   category: string;
   onCategory: (value: string) => void;
@@ -318,6 +330,10 @@ function OptionFields({
   onRemoveCompleted: (value: boolean) => void;
   maxQueued: number;
   onMaxQueued: (value: number) => void;
+  sendUser: boolean;
+  onSendUser: (value: boolean) => void;
+  sendRSS: boolean;
+  onSendRSS: (value: boolean) => void;
 }) {
   return (
     <div className="flex flex-wrap items-end gap-3 text-xs">
@@ -331,7 +347,7 @@ function OptionFields({
       </label>
       <label
         className="flex w-36 flex-col gap-1 text-ink-muted"
-        title="Searches beyond this wait in Solarr, best first, and go as downloads finish"
+        title="Automatic searches beyond this wait in Solarr, best first, and go as downloads finish"
       >
         Downloads at once
         <input
@@ -342,6 +358,20 @@ function OptionFields({
           value={maxQueued}
           onChange={(event) => onMaxQueued(Math.max(1, Math.min(1000, Number(event.target.value) || 1)))}
         />
+      </label>
+      <label
+        className="flex items-center gap-2 pb-2 text-ink-muted"
+        title="An album's Search, a release you pick, or a request goes to the client even when it is full"
+      >
+        <input type="checkbox" checked={sendUser} onChange={(event) => onSendUser(event.target.checked)} />
+        Always send my grabs
+      </label>
+      <label
+        className="flex items-center gap-2 pb-2 text-ink-muted"
+        title="A release RSS finds for a wanted album goes to the client even when it is full"
+      >
+        <input type="checkbox" checked={sendRSS} onChange={(event) => onSendRSS(event.target.checked)} />
+        Always send RSS grabs
       </label>
     </div>
   );
@@ -355,6 +385,8 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
   const [remotePath, setRemotePath] = useState(current.remote_path ?? "");
   const [localPath, setLocalPath] = useState(current.local_path ?? "");
   const [maxQueued, setMaxQueued] = useState(current.max_queued ?? DEFAULT_MAX_QUEUED);
+  const [sendUser, setSendUser] = useState(current.always_send_user_grabs ?? true);
+  const [sendRSS, setSendRSS] = useState(current.always_send_rss_grabs ?? true);
   const save = useMutation({
     mutationFn: async () => {
       const { error } = await api.PATCH("/downloaders/{id}", {
@@ -364,6 +396,7 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
           enabled: downloader.enabled,
           options: {
             category: category || undefined, remove_completed: removeCompleted, max_queued: maxQueued,
+            always_send_user_grabs: sendUser, always_send_rss_grabs: sendRSS,
             remote_path: remotePath || undefined, local_path: localPath || undefined,
           },
         },
@@ -381,6 +414,10 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
         onRemoveCompleted={setRemoveCompleted}
         maxQueued={maxQueued}
         onMaxQueued={setMaxQueued}
+        sendUser={sendUser}
+        onSendUser={setSendUser}
+        sendRSS={sendRSS}
+        onSendRSS={setSendRSS}
       />
       <div className="flex flex-wrap items-end gap-3 text-xs">
         <label className="flex min-w-48 flex-1 flex-col gap-1 text-ink-muted">
@@ -409,6 +446,9 @@ function describeOptions(options: DownloaderOptions | undefined): string {
   const parts = [`category ${options?.category || "music"}`];
   parts.push(options?.remove_completed === false ? "keeps completed downloads" : "removes completed downloads");
   if (options?.remote_path && options.local_path) parts.push(`${options.remote_path} is ${options.local_path} here`);
+  parts.push(`${options?.max_queued ?? DEFAULT_MAX_QUEUED} at once`);
+  if (options?.always_send_user_grabs === false) parts.push("holds your grabs when full");
+  if (options?.always_send_rss_grabs === false) parts.push("holds RSS grabs when full");
   return parts.join(" · ");
 }
 

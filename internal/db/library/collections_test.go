@@ -84,7 +84,7 @@ func TestReadyQueueSkipsExpiredEntries(t *testing.T) {
 		}{{fresh.ID, 9_000}, {stale.ID, 100}} {
 			if err := q.EnqueueReady(ctx, librarydb.EnqueueReadyParams{
 				CandidateID: entry.candidate, DesiredItemID: item.ID,
-				Priority: 50, QueuedAt: 1, ExpiresAt: entry.expires,
+				Priority: 50, QueuedAt: 1, ExpiresAt: entry.expires, Origin: "automatic",
 			}); err != nil {
 				return err
 			}
@@ -123,7 +123,7 @@ func TestReadyQueueOrdersByPriorityThenAge(t *testing.T) {
 			}
 			if err := q.EnqueueReady(ctx, librarydb.EnqueueReadyParams{
 				CandidateID: candidate.ID, DesiredItemID: item.ID,
-				Priority: entry.priority, QueuedAt: entry.queued, ExpiresAt: 9_000,
+				Priority: entry.priority, QueuedAt: entry.queued, ExpiresAt: 9_000, Origin: "automatic",
 			}); err != nil {
 				return err
 			}
