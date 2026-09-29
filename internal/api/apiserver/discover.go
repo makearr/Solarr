@@ -76,7 +76,8 @@ type Discover interface {
 	// Add resolves-or-creates the work behind (provider, externalID) and
 	// ensures a monitored album-level desired_item for it, idempotently
 	// (Invariant 71 -- re-adding an existing result is not an error).
-	Add(ctx context.Context, categoryID, userID int64, provider, externalID string, monitored bool) (DiscoverAddResult, error)
+	// search starts looking for what was added: an album at once, an artist once their albums are in.
+	Add(ctx context.Context, categoryID, userID int64, provider, externalID string, monitored, search bool) (DiscoverAddResult, error)
 }
 
 // routeDiscoverSearch parses category_id/q/limit into gen.DiscoverSearchParams
@@ -193,7 +194,7 @@ func (s *Server) DiscoverAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := s.discover.Add(r.Context(), body.CategoryId, access.UserID(), body.Provider,
-		body.ExternalId, derefOr(body.Monitored, true))
+		body.ExternalId, derefOr(body.Monitored, true), derefOr(body.Search, false))
 	if err != nil {
 		writeError(w, s.logger, err)
 		return

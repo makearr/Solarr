@@ -2,10 +2,12 @@ package music_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -68,6 +70,13 @@ func newSubscriptionExpandJobIn(t *testing.T, source musicbrainz.Source, categor
 	*music.SubscriptionExpandJob, *store.Store, *librarydb.Queries,
 ) {
 	t.Helper()
+	return newSubscriptionExpandJobSearching(t, source, categories, nil)
+}
+
+func newSubscriptionExpandJobSearching(
+	t *testing.T, source musicbrainz.Source, categories music.CategoryFinder, search music.ArtistSearch,
+) (*music.SubscriptionExpandJob, *store.Store, *librarydb.Queries) {
+	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
 	if err := os.MkdirAll(backups, 0o755); err != nil {
@@ -117,7 +126,7 @@ func newSubscriptionExpandJobIn(t *testing.T, source musicbrainz.Source, categor
 		Identity: library.NewIdentity(libraryStore), Desired: &desired,
 		Categories:       categories,
 		Provider:         provider,
-		DefaultProfileID: 99, Clock: fake, Logger: slog.New(slog.DiscardHandler),
+		DefaultProfileID: 99, Clock: fake, Logger: slog.New(slog.DiscardHandler), Search: search,
 	})
 	return job, libraryStore, librarydb.New(libraryStore.Read())
 }
@@ -307,5 +316,38 @@ func TestSubscriptionExpandJob_ExpandsIntoTheLibraryTheArtistWasAddedTo(t *testi
 	}
 	if len(items) != 1 || items[0].CategoryID != 2 {
 		t.Fatalf("want one item in library 2, got %+v", items)
+	}
+}
+
+// The add dialog's "Start search for missing albums" (D13): one artist's albums added at once, then
+// searched -- the search only once the albums exist, and never for another subscription.
+func TestSubscriptionExpandJob_AddsOneArtistsAlbumsThenSearchesThem(t *testing.T) {
+	source := &fakeDiscographySource{groups: []musicbrainz.ReleaseGroup{{MBID: "rg-album", Title: "KI Pecezinu"}}}
+	var searched [][2]int64
+	var queries *librarydb.Queries
+	job, opened, queries := newSubscriptionExpandJobSearching(t, source, fixedCategory{ID: 1, MediaType: "music"},
+		func(ctx context.Context, categoryID, personID int64) error {
+			if _, err := queries.GetWorkByExternalID(ctx, librarydb.GetWorkByExternalIDParams{
+				Provider: "musicbrainz:release-group", ExternalID: "rg-album",
+			}); err != nil {
+				t.Errorf("searched before the album was added: %v", err)
+			}
+			searched = append(searched, [2]int64{categoryID, personID})
+			return nil
+		})
+	personID := subscribedArtist(t, opened, "katupoken-mbid")
+	subscriptions, err := library.NewSubscriptions(opened).ListEnabled(t.Context())
+	if err != nil || len(subscriptions) != 1 {
+		t.Fatalf("ListEnabled = %v, %v", subscriptions, err)
+	}
+
+	for _, search := range []bool{false, true} {
+		payload, _ := json.Marshal(music.SubscriptionExpandPayload{SubscriptionID: subscriptions[0].ID, Search: search})
+		if err := job.Run(t.Context(), jobs.Job{Type: music.SubscriptionExpandJobType, Payload: payload}); err != nil {
+			t.Fatalf("Run(search=%v): %v", search, err)
+		}
+	}
+	if want := [][2]int64{{subscriptions[0].CategoryID, personID}}; !slices.Equal(searched, want) {
+		t.Errorf("searched %v, want once for the artist, and only when asked", searched)
 	}
 }

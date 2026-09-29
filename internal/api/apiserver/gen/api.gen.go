@@ -1184,6 +1184,9 @@ type DiscoverAddRequest struct {
 	ExternalId string `json:"external_id"`
 	Monitored  *bool  `json:"monitored,omitempty"`
 	Provider   string `json:"provider"`
+
+	// Search Lidarr's "Start search for missing albums": an album is searched at once, an artist's albums are added now and then searched. Ignored when monitored is false.
+	Search *bool `json:"search,omitempty"`
 }
 
 // DiscoverAddResult What an add produced. kind says which ids are populated: an album carries work_id and desired_item_id, an artist person_id and subscription_id.

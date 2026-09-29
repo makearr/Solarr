@@ -31,6 +31,10 @@ func (p *process) registerSubscriptionExpandJob(registry *jobs.Registry, executo
 		DefaultProfileID: p.defaultQualityProfileID,
 		Clock:            clock.NewSystem(),
 		Logger:           p.logger,
+		Search: func(ctx context.Context, categoryID, personID int64) error {
+			_, err := music.EnqueueSearchArtist(ctx, p.queue, categoryID, personID)
+			return err
+		},
 	})
 	executor.Handle(music.SubscriptionExpandJobType, job)
 	return nil
