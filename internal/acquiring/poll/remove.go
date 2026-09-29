@@ -61,3 +61,31 @@ func (j *Job) Remove(ctx context.Context, acquisitionID int64, blocklist bool) e
 	}
 	return nil
 }
+
+// SetPaused pauses or resumes Solarr's own downloads in one client that are still downloading,
+// never the client itself: other apps share it (section 10.9, only its own categories).
+func (j *Job) SetPaused(ctx context.Context, downloaderID int64, paused bool) error {
+	clients, err := j.config.Clients(ctx)
+	if err != nil {
+		return err
+	}
+	client, found := clients[downloaderID]
+	if !found {
+		return fmt.Errorf("poll: download client %d is not enabled", downloaderID)
+	}
+	active, err := j.config.Acquisitions.ListActive(ctx)
+	if err != nil {
+		return err
+	}
+	var refs []string
+	for _, acquisition := range active {
+		if acquisition.DownloaderID == downloaderID &&
+			(acquisition.State == StateQueued || acquisition.State == StateDownloading) {
+			refs = append(refs, acquisition.DownloadClientRef)
+		}
+	}
+	if paused {
+		return client.Client.Pause(ctx, refs)
+	}
+	return client.Client.Resume(ctx, refs)
+}

@@ -57,3 +57,27 @@ func TestRemove_DeletesFromQueueAndHistoryWithFiles(t *testing.T) {
 		}
 	}
 }
+
+// Only the named downloads are paused or resumed: other apps share the client.
+func TestSetPaused_ActsOnTheNamedDownloadsOnly(t *testing.T) {
+	transport := &recordingTransport{body: `{"status": true}`}
+	client := sabnzbd.NewClient(newTestClient(t, transport), "http://sabnzbd.local:8080", "key")
+
+	if err := client.SetPaused(t.Context(), []string{"nzo_a", "nzo_b"}, true); err != nil {
+		t.Fatalf("SetPaused: %v", err)
+	}
+	if err := client.SetPaused(t.Context(), []string{"nzo_a"}, false); err != nil {
+		t.Fatalf("SetPaused: %v", err)
+	}
+	if err := client.SetPaused(t.Context(), nil, true); err != nil {
+		t.Fatalf("SetPaused(nil): %v", err)
+	}
+	var got []string
+	for _, request := range transport.requested {
+		query := request.URL.Query()
+		got = append(got, query.Get("mode")+" "+query.Get("name")+" "+query.Get("value"))
+	}
+	if want := []string{"queue pause nzo_a,nzo_b", "queue resume nzo_a"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("requests = %q, want %q (nothing sent for no downloads)", got, want)
+	}
+}

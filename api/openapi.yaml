@@ -4605,6 +4605,29 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
 
+  /queue/clients/{id}/{action}:
+    post:
+      operationId: setQueueClientPaused
+      tags: [library]
+      summary: Pause or resume Solarr's own downloads in one client. Administrator only.
+      description: >-
+        Only the downloads Solarr sent that are still queued or downloading;
+        the client itself and anything other apps sent carry on.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: action
+          in: path
+          required: true
+          schema: { type: string, enum: [pause, resume] }
+      responses:
+        "204": { description: Done. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /blocklist/{id}:
     delete:
       operationId: removeBlocklistEntry

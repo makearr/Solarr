@@ -76,6 +76,16 @@ func (d Downloader) Remove(ctx context.Context, clientRef string, deleteFiles bo
 	return d.Client.Remove(ctx, clientRef, deleteFiles)
 }
 
+// Pause pauses the named downloads in SABnzbd's queue; the rest of its queue carries on.
+func (d Downloader) Pause(ctx context.Context, clientRefs []string) error {
+	return d.Client.SetPaused(ctx, clientRefs, true)
+}
+
+// Resume resumes the named downloads.
+func (d Downloader) Resume(ctx context.Context, clientRefs []string) error {
+	return d.Client.SetPaused(ctx, clientRefs, false)
+}
+
 const statusGrabbing = "Grabbing"
 
 func queueState(status string) download.State {

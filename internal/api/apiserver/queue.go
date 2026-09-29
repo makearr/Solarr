@@ -75,6 +75,8 @@ type QueueSnapshot struct {
 type Queue interface {
 	List(ctx context.Context) (QueueSnapshot, error)
 	Remove(ctx context.Context, id int64, blocklist bool) error
+	// SetClientPaused pauses or resumes Solarr's own downloads in one client.
+	SetClientPaused(ctx context.Context, downloaderID int64, paused bool) error
 }
 
 func (s *Server) routeListQueue(w http.ResponseWriter, r *http.Request) {
@@ -150,6 +152,34 @@ func (s *Server) ListQueue(w http.ResponseWriter, r *http.Request, params gen.Li
 		body.Items = append(body.Items, item)
 	}
 	writeJSON(w, s.logger, http.StatusOK, body)
+}
+
+func (s *Server) routeSetQueueClientPaused(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	action := gen.SetQueueClientPausedParamsAction(chi.URLParam(r, "action"))
+	if err != nil || (action != gen.SetQueueClientPausedParamsActionPause && action != gen.SetQueueClientPausedParamsActionResume) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such client action")
+		return
+	}
+	s.SetQueueClientPaused(w, r, id, action)
+}
+
+// SetQueueClientPaused pauses or resumes Solarr's own downloads in one client.
+func (s *Server) SetQueueClientPaused(
+	w http.ResponseWriter, r *http.Request, id int64, action gen.SetQueueClientPausedParamsAction,
+) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.queue == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "the queue is not available")
+		return
+	}
+	if err := s.queue.SetClientPaused(r.Context(), id, action == gen.SetQueueClientPausedParamsActionPause); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) routeRemoveQueueItem(w http.ResponseWriter, r *http.Request) {

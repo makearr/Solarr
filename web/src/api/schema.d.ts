@@ -2885,6 +2885,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/queue/clients/{id}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause or resume Solarr's own downloads in one client. Administrator only.
+         * @description Only the downloads Solarr sent that are still queued or downloading; the client itself and anything other apps sent carry on.
+         */
+        post: operations["setQueueClientPaused"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/blocklist/{id}": {
         parameters: {
             query?: never;
@@ -10228,6 +10248,30 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    setQueueClientPaused: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                action: "pause" | "resume";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     removeBlocklistEntry: {

@@ -26,6 +26,8 @@ type fakeClient struct {
 	downloads []download.Download
 	status    download.QueueStatus
 	removed   []string
+	paused    []string
+	resumed   []string
 }
 
 func (f *fakeClient) Downloads(context.Context, string) ([]download.Download, error) {
@@ -34,6 +36,16 @@ func (f *fakeClient) Downloads(context.Context, string) ([]download.Download, er
 
 func (f *fakeClient) QueueStatus(context.Context) (download.QueueStatus, error) {
 	return f.status, nil
+}
+
+func (f *fakeClient) Pause(_ context.Context, clientRefs []string) error {
+	f.paused = append(f.paused, clientRefs...)
+	return nil
+}
+
+func (f *fakeClient) Resume(_ context.Context, clientRefs []string) error {
+	f.resumed = append(f.resumed, clientRefs...)
+	return nil
 }
 
 func (f *fakeClient) Remove(_ context.Context, clientRef string, deleteFiles bool) error {

@@ -414,6 +414,7 @@ func New(config Config) (*Server, error) {
 			secured.Delete("/blocklist/{id}", server.routeRemoveBlocklistEntry)
 			secured.Get("/queue", server.routeListQueue)
 			secured.Delete("/queue/{id}", server.routeRemoveQueueItem)
+			secured.Post("/queue/clients/{id}/{action}", server.routeSetQueueClientPaused)
 			secured.Get("/system/egress", server.GetEgress)
 			secured.Get("/system/activity", server.GetActivity)
 			secured.Get("/jobs", server.routeListJobs)
