@@ -19,6 +19,10 @@ var ErrDecisionNotFound = errors.New("music: dispatch: decision not found for th
 // is not something to hand to a download client.
 var ErrDecisionNotAccepted = errors.New("music: dispatch: decision is not ACCEPT")
 
+// ErrContentBlocklisted is a release whose content failed before, found again under another
+// listing (section 10.11); refused before the client sees it, and the next best is tried.
+var ErrContentBlocklisted = errors.New("music: dispatch: the same content failed before and is blocklisted")
+
 // ErrNoDownloaderForProtocol reports no enabled downloader matching the
 // candidate's own protocol -- a usenet release with only a torrent client
 // configured, for instance.
@@ -129,6 +133,17 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 	if err != nil {
 		return library.Acquisition{}, fmt.Errorf("music: dispatch: fetch release: %w", err)
 	}
+	contentHash := ""
+	if detail.ReleaseCandidate.Protocol == "usenet" {
+		contentHash = download.NZBContentHash(file)
+	}
+	if contentHash != "" && d.Blocklist != nil {
+		if blocked, err := d.Blocklist.IsBlocked(ctx, nil, "", contentHash, at.Unix()); err != nil {
+			return library.Acquisition{}, fmt.Errorf("music: dispatch: %w", err)
+		} else if blocked {
+			return library.Acquisition{}, ErrContentBlocklisted
+		}
+	}
 	clientRef, err := downloader.Client.Add(ctx, download.AddRequest{
 		Name: detail.ReleaseCandidate.Title, File: file, Category: category,
 	})
@@ -156,7 +171,7 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 		// that distinction needs client polling (section 10.9), not built
 		// this pass.
 		State:     "QUEUED",
-		CreatedAt: at.Unix(), UpdatedAt: at.Unix(),
+		CreatedAt: at.Unix(), UpdatedAt: at.Unix(), ContentHash: contentHash,
 	})
 	if err != nil {
 		return library.Acquisition{}, fmt.Errorf("music: dispatch: %w", err)

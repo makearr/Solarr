@@ -32,6 +32,8 @@ type Acquisition struct {
 	LastError         string
 	CreatedAt         int64
 	UpdatedAt         int64
+	// ContentHash identifies what was sent wherever it is listed; empty when unknown.
+	ContentHash string
 }
 
 // NewAcquisition is what Create needs to record one dispatch (ADR-57's own
@@ -52,6 +54,7 @@ type NewAcquisition struct {
 	State             string
 	CreatedAt         int64
 	UpdatedAt         int64
+	ContentHash       string
 }
 
 // ErrAcquisitionAlreadyInFlight reports a desired item that already has a
@@ -92,7 +95,7 @@ func (a Acquisitions) Create(ctx context.Context, req NewAcquisition) (Acquisiti
 			DownloaderID: req.DownloaderID, DownloadClientRef: req.DownloadClientRef,
 			ClientCategory: nullString(req.ClientCategory), ClientFingerprint: nullString(req.ClientFingerprint),
 			Protocol: req.Protocol, State: req.State,
-			CreatedAt: req.CreatedAt, UpdatedAt: req.UpdatedAt,
+			CreatedAt: req.CreatedAt, UpdatedAt: req.UpdatedAt, ContentHash: nullString(req.ContentHash),
 		})
 		row = created
 		return err
@@ -184,5 +187,6 @@ func acquisitionFromRow(row librarydb.Acquisition) Acquisition {
 		DownloadDir: row.DownloadDir.String, ClientCategory: row.ClientCategory.String,
 		ClientFingerprint: row.ClientFingerprint.String, Protocol: row.Protocol, State: row.State,
 		LastError: row.LastError.String, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+		ContentHash: row.ContentHash.String,
 	}
 }

@@ -162,6 +162,8 @@ func translateDispatchError(err error) error {
 		return apiserver.ErrNoDownloaderForProtocol
 	case errors.Is(err, library.ErrAcquisitionAlreadyInFlight):
 		return apiserver.ErrAcquisitionAlreadyInFlight
+	case errors.Is(err, music.ErrContentBlocklisted):
+		return apiserver.ErrContentBlocklisted
 	case errors.Is(err, download.ErrRefused):
 		return fmt.Errorf("%w: %s", apiserver.ErrDownloadClientRefused, err.Error())
 	default:

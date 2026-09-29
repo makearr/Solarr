@@ -330,10 +330,11 @@ func (j *Job) failed(
 	ctx context.Context, client Client, acquisition library.Acquisition, reason library.BlocklistReason, detail string,
 ) error {
 	now := j.config.Clock.Now()
-	if acquisition.CandidateGUID != "" {
+	if acquisition.CandidateGUID != "" || acquisition.ContentHash != "" {
 		expires := now.Add(failureMemory).Unix()
 		if _, err := j.config.Blocklist.Create(ctx, library.NewBlocklistEntry{
-			IndexerID: acquisition.IndexerID, GUID: acquisition.CandidateGUID, Title: acquisition.CandidateTitle,
+			IndexerID: acquisition.IndexerID, GUID: acquisition.CandidateGUID, ContentHash: acquisition.ContentHash,
+			Title:         acquisition.CandidateTitle,
 			DesiredItemID: acquisition.DesiredItemID, Reason: reason, Source: library.BlocklistSourceAuto,
 			ExpiresAt: &expires, CreatedAt: now.Unix(),
 		}); err != nil {

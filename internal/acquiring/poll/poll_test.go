@@ -141,7 +141,7 @@ func (e *env) send(t *testing.T, ref string) library.Acquisition {
 	acquisition, err := e.acquisitions.Create(t.Context(), library.NewAcquisition{
 		DesiredItemID: &item.ID, IndexerID: &indexerID, CandidateGUID: "guid-" + ref, CandidateTitle: "Heka - Zanuvode",
 		DownloaderID: 1, DownloadClientRef: ref, Protocol: "usenet", State: poll.StateQueued,
-		CreatedAt: 1, UpdatedAt: 1,
+		CreatedAt: 1, UpdatedAt: 1, ContentHash: "nzb:content-" + ref,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -208,6 +208,10 @@ func TestPoll_AFailedDownloadIsBlocklistedAndSearchedAgain(t *testing.T) {
 	blocked, err := e.blocklist.IsBlocked(t.Context(), &indexerID, "guid-nzo-1", "", e.clock.Now().Unix())
 	if err != nil || !blocked {
 		t.Errorf("blocklisted = %v, %v; want the release blocked", blocked, err)
+	}
+	// The content too, so the same upload listed elsewhere is refused (section 10.11).
+	if byContent, err := e.blocklist.IsBlocked(t.Context(), nil, "", "nzb:content-nzo-1", e.clock.Now().Unix()); err != nil || !byContent {
+		t.Errorf("blocklisted by content = %v, %v; want blocked", byContent, err)
 	}
 	later := e.clock.Now().Add(31 * 24 * time.Hour).Unix()
 	if still, _ := e.blocklist.IsBlocked(t.Context(), &indexerID, "guid-nzo-1", "", later); still {
