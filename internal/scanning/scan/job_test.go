@@ -64,8 +64,8 @@ func (f *fakeTool) ReadTags(_ context.Context, paths []string) ([]mediatool.Prob
 	return probes, nil
 }
 
-func (f *fakeTool) WriteTags(context.Context, []mediatool.TagEdit) error {
-	return mediatool.ErrWriteUnsupported
+func (f *fakeTool) WriteTags(context.Context, []mediatool.TagEdit) ([]error, error) {
+	return nil, nil
 }
 
 func (f *fakeTool) Fingerprint(context.Context, []string) ([]mediatool.Fingerprint, error) {

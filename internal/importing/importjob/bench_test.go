@@ -65,8 +65,8 @@ func (z *zeroCostTool) ReadTags(_ context.Context, paths []string) ([]mediatool.
 	return probes, nil
 }
 
-func (z *zeroCostTool) WriteTags(context.Context, []mediatool.TagEdit) error {
-	return mediatool.ErrWriteUnsupported
+func (z *zeroCostTool) WriteTags(context.Context, []mediatool.TagEdit) ([]error, error) {
+	return nil, nil
 }
 
 func (z *zeroCostTool) Fingerprint(context.Context, []string) ([]mediatool.Fingerprint, error) {

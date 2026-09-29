@@ -19,6 +19,8 @@ const (
 	// DroppedNeedle's recipe both use two minutes).
 	fpcalcSeconds = "120"
 	ffmpegBinary  = "ffmpeg"
+	// tagBinary is the mutagen helper the image carries (revision D3, solarr-tag beside this file).
+	tagBinary = "solarr-tag"
 )
 
 // maxEmbeddedPictureBytes bounds one extracted picture, the same ceiling the
@@ -98,12 +100,67 @@ func (s *Subprocess) Fingerprint(ctx context.Context, paths []string) ([]Fingerp
 	return results, ctx.Err()
 }
 
-// WriteTags is not implemented. See ErrWriteUnsupported.
-func (s *Subprocess) WriteTags(_ context.Context, edits []TagEdit) error {
+// maxTagBatch bounds one helper run: its edits travel as one argument, and one stalled file
+// holds the whole run.
+const maxTagBatch = 200
+
+type tagResult struct {
+	Path  string `json:"path"`
+	Error string `json:"error,omitempty"`
+}
+
+// WriteTags sets tags through the helper, maxTagBatch files per run.
+func (s *Subprocess) WriteTags(ctx context.Context, edits []TagEdit) ([]error, error) {
 	if len(edits) == 0 {
-		return nil
+		return nil, nil
 	}
-	return ErrWriteUnsupported
+	if err := s.runner.Lookup(tagBinary); err != nil {
+		return nil, err
+	}
+	failures := make([]error, 0, len(edits))
+	for start := 0; start < len(edits); start += maxTagBatch {
+		batch := edits[start:min(start+maxTagBatch, len(edits))]
+		results, err := s.writeBatch(ctx, batch)
+		if err != nil {
+			return nil, err
+		}
+		failures = append(failures, results...)
+	}
+	return failures, nil
+}
+
+func (s *Subprocess) writeBatch(ctx context.Context, edits []TagEdit) ([]error, error) {
+	type edit struct {
+		Path string `json:"path"`
+		Set  Tags   `json:"set"`
+	}
+	payload := make([]edit, len(edits))
+	for i, one := range edits {
+		payload[i] = edit(one)
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	runCtx, cancel := context.WithTimeout(ctx, time.Duration(len(edits))*perFileTimeout)
+	defer cancel()
+	s.slots <- struct{}{}
+	output, err := s.runner.Run(runCtx, tagBinary, string(encoded))
+	<-s.slots
+	if err != nil {
+		return nil, err
+	}
+	var results []tagResult
+	if err := json.Unmarshal(output, &results); err != nil || len(results) != len(edits) {
+		return nil, fmt.Errorf("mediatool: %s answered %d results for %d files: %w", tagBinary, len(results), len(edits), err)
+	}
+	failures := make([]error, len(edits))
+	for i, result := range results {
+		if result.Error != "" {
+			failures[i] = fmt.Errorf("mediatool: write tags to %s: %s", result.Path, result.Error)
+		}
+	}
+	return failures, nil
 }
 
 // eachInParallel runs work over count indices, at most the Subprocess's slots at a time across
@@ -256,7 +313,7 @@ func mergeTags(into Tags, from map[string]string) {
 }
 
 // ToolNames is what the image must carry and what readiness names when it does not.
-func ToolNames() []string { return []string{ffprobeBinary, fpcalcBinary, ffmpegBinary} }
+func ToolNames() []string { return []string{ffprobeBinary, fpcalcBinary, ffmpegBinary, tagBinary} }
 
 // EmbeddedPicture copies the first picture stream a file carries (its cover art)
 // out unchanged, as the JPEG or PNG it was stored as. ErrNoEmbeddedPicture means

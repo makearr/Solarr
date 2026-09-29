@@ -95,8 +95,8 @@ func (t *pathTagTool) ReadTags(ctx context.Context, paths []string) ([]mediatool
 	return probes, nil
 }
 
-func (t *pathTagTool) WriteTags(context.Context, []mediatool.TagEdit) error {
-	return mediatool.ErrWriteUnsupported
+func (t *pathTagTool) WriteTags(context.Context, []mediatool.TagEdit) ([]error, error) {
+	return nil, nil
 }
 
 func (t *pathTagTool) Fingerprint(_ context.Context, paths []string) ([]mediatool.Fingerprint, error) {

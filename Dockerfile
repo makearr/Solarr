@@ -57,10 +57,10 @@ FROM alpine:3
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
 
-# fpcalc (chromaprint) and ffprobe (ffmpeg) for MediaTool (ADR-30); the tagging
-# helper stays out, still deferred (documentation/media-tools.md). Reintroduces
-# the RUN the comment above avoided -- no way to apk-install without one.
-RUN apk add --no-cache ffmpeg chromaprint
+# fpcalc (chromaprint) and ffprobe (ffmpeg) for MediaTool (ADR-30), and mutagen for
+# the tag writer (revision D3, +57 MB). Reintroduces the RUN the comment above avoided.
+RUN apk add --no-cache ffmpeg chromaprint py3-mutagen
+COPY --chmod=0755 internal/platform/mediatool/solarr-tag /usr/local/bin/solarr-tag
 
 COPY --from=build /out/solarr /usr/local/bin/solarr
 
