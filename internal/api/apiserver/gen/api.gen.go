@@ -689,6 +689,11 @@ type Acquisition struct {
 // AcquisitionProtocol defines model for Acquisition.Protocol.
 type AcquisitionProtocol string
 
+// Activity defines model for Activity.
+type Activity struct {
+	Running []RunningJob `json:"running"`
+}
+
 // AddArrInstanceRequest defines model for AddArrInstanceRequest.
 type AddArrInstanceRequest struct {
 	ApiKey string `json:"api_key"`
@@ -2716,6 +2721,26 @@ type RootRenamePlan struct {
 	RootFolderId int64     `json:"root_folder_id"`
 }
 
+// RunningJob defines model for RunningJob.
+type RunningJob struct {
+	Done int64 `json:"done"`
+
+	// EtaSeconds Time left at that rate; absent when unknown.
+	EtaSeconds *int64 `json:"eta_seconds,omitempty"`
+	JobId      int64  `json:"job_id"`
+
+	// Name What the job is doing, as the status bar says it.
+	Name string `json:"name"`
+
+	// PerMinute Items a minute over the last one to five minutes; absent until measured.
+	PerMinute *float32  `json:"per_minute,omitempty"`
+	StartedAt time.Time `json:"started_at"`
+
+	// Total How much there is; absent when the job does not know.
+	Total *int64 `json:"total,omitempty"`
+	Type  string `json:"type"`
+}
+
 // Schedule One registered periodic task (ADR-59), its effective settings and run-state.
 type Schedule struct {
 	// Cadences Effective cadences -- a stored override if one exists, [default_cadence] otherwise.
@@ -4314,6 +4339,9 @@ type ServerInterface interface {
 	// List a directory, for picking a path by hand. Administrator only.
 	// (GET /storage/browse)
 	BrowsePath(w http.ResponseWriter, r *http.Request, params BrowsePathParams)
+	// The jobs running now, with progress and an estimate of the time left.
+	// (GET /system/activity)
+	GetActivity(w http.ResponseWriter, r *http.Request)
 	// The backup files on disk, newest first.
 	// (GET /system/backups)
 	ListBackups(w http.ResponseWriter, r *http.Request)
@@ -5376,6 +5404,12 @@ func (_ Unimplemented) CreateFirstAdministrator(w http.ResponseWriter, r *http.R
 // List a directory, for picking a path by hand. Administrator only.
 // (GET /storage/browse)
 func (_ Unimplemented) BrowsePath(w http.ResponseWriter, r *http.Request, params BrowsePathParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The jobs running now, with progress and an estimate of the time left.
+// (GET /system/activity)
+func (_ Unimplemented) GetActivity(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10578,6 +10612,28 @@ func (siw *ServerInterfaceWrapper) BrowsePath(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetActivity operation middleware
+func (siw *ServerInterfaceWrapper) GetActivity(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetActivity(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListBackups operation middleware
 func (siw *ServerInterfaceWrapper) ListBackups(w http.ResponseWriter, r *http.Request) {
 
@@ -12063,6 +12119,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/storage/browse", wrapper.BrowsePath)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/system/activity", wrapper.GetActivity)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/system/backups", wrapper.ListBackups)

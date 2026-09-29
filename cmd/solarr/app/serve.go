@@ -62,11 +62,14 @@ type process struct {
 	// settings.db, so the Network screen has to be able to update it.
 	configPath string
 	queue      *jobs.Queue
-	cache      *settings.Cache
-	bus        *events.Bus
-	dispatcher *jobs.Dispatcher
-	server     *apiserver.Server
-	timezone   string
+	// running is every job the executor works on now, for the status bar.
+	running     *jobs.Running
+	jobRegistry *jobs.Registry
+	cache       *settings.Cache
+	bus         *events.Bus
+	dispatcher  *jobs.Dispatcher
+	server      *apiserver.Server
+	timezone    string
 	// defaultQualityProfileID is ensureDefaultQualityProfile's fallback,
 	// used when a category has none of its own configured (todo 4.4).
 	defaultQualityProfileID int64
@@ -370,10 +373,12 @@ func (p *process) startJobs(ctx context.Context) error {
 	// a stale lease from a live one after a restart.
 	owner := fmt.Sprintf("%s-%d-%d", hostname(), os.Getpid(), time.Now().UnixNano())
 
+	p.running, p.jobRegistry = jobs.NewRunning(wall), registry
 	executor := jobs.NewExecutor(queue, wall, jobs.ExecutorConfig{
-		Owner:  owner,
-		Mode:   jobs.Mode(p.config.Mode),
-		Logger: p.logger,
+		Owner:   owner,
+		Mode:    jobs.Mode(p.config.Mode),
+		Logger:  p.logger,
+		Running: p.running,
 	})
 	if err := p.registerScanJob(ctx, registry, executor); err != nil {
 		return err
@@ -499,6 +504,8 @@ func (p *process) startServer(ctx context.Context) error {
 		Checker:       health.New(p.settings, p.jobs, p.library),
 		Auth:          authConfig,
 		Jobs:          p.queue,
+		Running:       p.running,
+		JobRegistry:   p.jobRegistry,
 		Events:        p.bus,
 		Clock:         clock.NewSystem(),
 		Logger:        p.logger,

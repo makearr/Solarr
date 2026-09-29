@@ -23,8 +23,8 @@ const (
 )
 
 var maintenanceDefinitions = []jobs.Definition{
-	{Type: databaseMaintenanceJobType, Pool: jobs.PoolMaintenance, Mutating: false, MaxAttempts: 1},
-	{Type: backupJobType, Pool: jobs.PoolMaintenance, Mutating: false, MaxAttempts: 3},
+	{Type: databaseMaintenanceJobType, Name: "Maintaining the databases", Pool: jobs.PoolMaintenance, Mutating: false, MaxAttempts: 1},
+	{Type: backupJobType, Name: "Backing up", Pool: jobs.PoolMaintenance, Mutating: false, MaxAttempts: 3},
 	{Type: backupCleanupJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3},
 	{Type: recycleBinCleanupJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3},
 }

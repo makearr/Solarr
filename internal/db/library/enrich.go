@@ -22,6 +22,11 @@ type PlaceholderEdition struct {
 	ExternalID string
 }
 
+// CountPlaceholderEditions is how many editions still wait on real metadata.
+func (i Identity) CountPlaceholderEditions(ctx context.Context) (int64, error) {
+	return librarydb.New(i.store.Read()).CountPlaceholderEditions(ctx)
+}
+
 // PlaceholderEditions returns up to limit editions still waiting on real metadata after
 // afterEditionID, oldest first; the cursor walks past editions that failed, which stay placeholders.
 func (i Identity) PlaceholderEditions(ctx context.Context, afterEditionID int64, limit int) ([]PlaceholderEdition, error) {

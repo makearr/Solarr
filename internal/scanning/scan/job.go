@@ -25,6 +25,7 @@ const JobType = jobs.Type("library.scan")
 // Definition declares how a scan behaves. It is bulk work: long, resumable, and it
 // must never sit in front of anything a user is waiting on.
 var Definition = jobs.Definition{
+	Name: "Scanning the library",
 	Type: JobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3,
 }
 
@@ -165,7 +166,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	}
 
 	if len(payload.Directories) > 0 {
-		return j.rescanDirectories(ctx, root, payload)
+		return j.rescanDirectories(ctx, root, payload, job.Progress)
 	}
 
 	progress, err := j.scans.Progress(ctx, root.ID)
@@ -177,8 +178,18 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	}
 
 	state := State{SweptThrough: progress.SweptThrough, Cursor: progress.Cursor}
+	if payload.Full {
+		// The last sweep's count is the best estimate of this one's, for the status bar's ETA.
+		job.Progress.SetTotal(progress.FilesFound)
+	}
 	flow := pipeline{
-		observe: func(ctx context.Context, batch Batch) error { return j.observe(ctx, root, payload.CategoryID, batch) },
+		observe: func(ctx context.Context, batch Batch) error {
+			if err := j.observe(ctx, root, payload.CategoryID, batch); err != nil {
+				return err
+			}
+			job.Progress.Add(int64(len(batch.Files)))
+			return nil
+		},
 		advance: func(ctx context.Context, directory string) error { return j.scans.Advance(ctx, root.ID, directory) },
 	}
 	result, err := j.sweeper.Sweep(ctx, root.Path, state,
@@ -230,9 +241,13 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 // rescanDirectories reads and observes only the named directories. It records
 // no scan progress: it did not walk the root, so it is no evidence about the
 // rest of it, and marks nothing missing.
-func (j *Job) rescanDirectories(ctx context.Context, root settings.RootFolder, payload Payload) error {
+func (j *Job) rescanDirectories(
+	ctx context.Context, root settings.RootFolder, payload Payload, progress *jobs.Progress,
+) error {
 	files := 0
+	progress.SetTotal(int64(len(payload.Directories)))
 	for _, directory := range payload.Directories {
+		progress.Add(1)
 		if err := ctx.Err(); err != nil {
 			return jobs.Retryablef("scan.context", string(JobType), err)
 		}

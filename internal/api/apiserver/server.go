@@ -45,6 +45,9 @@ type Config struct {
 	Auth    AuthConfig
 	// Jobs is optional: a CLI command that only serves health has no queue.
 	Jobs *jobs.Queue
+	// Running and JobRegistry are optional: the running jobs the status bar shows, and their names.
+	Running     *jobs.Running
+	JobRegistry *jobs.Registry
 	// Events is optional for the same reason.
 	Events *events.Bus
 	// Clock drives the SSE flush tick. Injected so a test can advance it
@@ -207,6 +210,8 @@ type Server struct {
 	checker Checker
 	auth    AuthConfig
 	jobs    *jobs.Queue
+	running *jobs.Running
+	jobDefs *jobs.Registry
 	events  *events.Bus
 	wall    clock.Clock
 	webui   http.Handler
@@ -295,6 +300,8 @@ func New(config Config) (*Server, error) {
 		checker: config.Checker,
 		auth:    config.Auth,
 		jobs:    config.Jobs,
+		running: config.Running,
+		jobDefs: config.JobRegistry,
 		events:  config.Events,
 		wall:    config.Clock,
 		webui:   config.WebUI,
@@ -408,6 +415,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/queue", server.routeListQueue)
 			secured.Delete("/queue/{id}", server.routeRemoveQueueItem)
 			secured.Get("/system/egress", server.GetEgress)
+			secured.Get("/system/activity", server.GetActivity)
 			secured.Get("/jobs", server.routeListJobs)
 			secured.Get("/works", server.routeListWorks)
 			secured.Get("/works/{id}", server.routeGetWork)

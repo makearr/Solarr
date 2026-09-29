@@ -30,6 +30,7 @@ const JobType = jobs.Type("move.apply")
 // front of anything interactive, the same reasoning importjob.Definition
 // already gives.
 var Definition = jobs.Definition{
+	Name: "Moving files",
 	Type: JobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3,
 }
 

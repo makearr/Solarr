@@ -36,6 +36,16 @@ light flash on every load for anyone who chose dark.
 This is the one thing kept in browser storage, because it is needed before any request can be
 made. View state stays server-side per architecture section 21.2.
 
+## Status bar
+
+Left: the latest event (downloads, imports). Beside it, what is running now, from
+`GET /system/activity`, polled every 3 s: the executor lists each job while it runs
+(`jobs.Running`), and a handler reports through `job.Progress` (`Set`, `Add`, `SetTotal`). The
+rate is measured over the last one to five minutes and the estimate is the rest at that rate;
+without a total (a first scan, the cover sweep) the count is shown alone. Only job types with a
+`Definition.Name` appear, so a one-second housekeeping job does not flicker in the bar; a
+library's job is shown only to those who can see that library.
+
 ## The navigation tree (ADR-54)
 
 The sidebar reads `GET /libraries`: each category the caller may see, with the entity levels

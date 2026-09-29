@@ -56,6 +56,7 @@ type Executor struct {
 	owner    string
 	mode     Mode
 	leaseTTL time.Duration
+	running  *Running
 
 	mu       sync.RWMutex
 	handlers map[Type]Handler
@@ -69,6 +70,8 @@ type ExecutorConfig struct {
 	Mode     Mode
 	LeaseTTL time.Duration
 	Logger   *slog.Logger
+	// Running is optional: told of every job while it runs, with its progress.
+	Running *Running
 }
 
 // NewExecutor builds an executor.
@@ -89,6 +92,7 @@ func NewExecutor(queue *Queue, cl clock.Clock, config ExecutorConfig) *Executor 
 		owner:    config.Owner,
 		mode:     config.Mode,
 		leaseTTL: config.LeaseTTL,
+		running:  config.Running,
 		handlers: make(map[Type]Handler),
 	}
 }
@@ -134,7 +138,9 @@ func (e *Executor) Execute(ctx context.Context, job Job) {
 	running, stopRenewing := context.WithCancel(ctx)
 	renewalDone := e.renewUntilDone(running, stopRenewing, job, logger)
 
+	job.Progress = e.running.Start(job)
 	runErr := runWithRecovery(running, handler, job)
+	e.running.Finish(job.ID)
 
 	stopRenewing()
 	<-renewalDone

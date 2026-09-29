@@ -88,6 +88,15 @@ type Querier interface {
 	// What a SET requires follows the monitored parts, so unmonitoring an episode
 	// shrinks the season rather than leaving it permanently incomplete (Appendix E, D3).
 	CountMonitoredParts(ctx context.Context, workID int64) (int64, error)
+	// kind='unknown' is the cross-media-type placeholder marker an Identifier chain
+	// leaves behind when it resolves an edition's external id but has no real
+	// metadata yet (internal/db/library.EditionLink, internal/media/music's newEditionLink):
+	// label is that external id itself, chosen so it can never collide with a real
+	// edition's UNIQUE(work_id, kind, label). Once refined, kind changes away from
+	// 'unknown' and the row stops being returned here -- no separate cursor needed,
+	// the query's own result set shrinks as enrichment succeeds.
+	// How many editions still wait on real metadata: an enrichment run's total, for the status bar.
+	CountPlaceholderEditions(ctx context.Context) (int64, error)
 	// Only 'primary' counts: a trailer belongs to the work without satisfying it.
 	CountPrimaryFiles(ctx context.Context, desiredItemID int64) (int64, error)
 	// A client's queue as Solarr fills it: sent and not finished downloading (ADR-57).
@@ -478,13 +487,6 @@ type Querier interface {
 	// What subscription.expand needs to go from a subscribed person back to the
 	// provider id their discography is browsed by.
 	ListPersonExternalIDs(ctx context.Context, personID int64) ([]PersonExternalID, error)
-	// kind='unknown' is the cross-media-type placeholder marker an Identifier chain
-	// leaves behind when it resolves an edition's external id but has no real
-	// metadata yet (internal/db/library.EditionLink, internal/media/music's newEditionLink):
-	// label is that external id itself, chosen so it can never collide with a real
-	// edition's UNIQUE(work_id, kind, label). Once refined, kind changes away from
-	// 'unknown' and the row stops being returned here -- no separate cursor needed,
-	// the query's own result set shrinks as enrichment succeeds.
 	ListPlaceholderEditions(ctx context.Context, arg ListPlaceholderEditionsParams) ([]Edition, error)
 	// One page of queued files with what their newest attempt concluded. The caller
 	// filters on the pass and outcome it cares about (D12's "re-run what a missing

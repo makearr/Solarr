@@ -29,6 +29,7 @@ const TagWritebackActionKey = "music.tag_writeback"
 
 // TagWritebackDefinition runs in maintenance: it rewrites files, and nothing waits on it.
 var TagWritebackDefinition = jobs.Definition{
+	Name: "Writing tags into files",
 	Type: TagWritebackJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 1,
 }
 
@@ -104,15 +105,17 @@ type tagRun struct {
 	roots                    map[int64]TagRoot
 	covers                   map[string]string
 	written, current, failed int
+	// progress counts files sent to the helper, for the status bar.
+	progress *jobs.Progress
 }
 
 // Run writes up to tagWritebackPerRun files, library by library; the next run carries on.
-func (j *TagWritebackJob) Run(ctx context.Context, _ jobs.Job) error {
+func (j *TagWritebackJob) Run(ctx context.Context, job jobs.Job) error {
 	roots, err := j.config.Roots(ctx)
 	if err != nil {
 		return err
 	}
-	run := &tagRun{roots: map[int64]TagRoot{}, covers: map[string]string{}}
+	run := &tagRun{roots: map[int64]TagRoot{}, covers: map[string]string{}, progress: job.Progress}
 	var ids []int64
 	for _, root := range roots {
 		if root.Options.any() {
@@ -178,6 +181,7 @@ func (j *TagWritebackJob) writePage(ctx context.Context, run *tagRun, candidates
 	if err != nil {
 		return err
 	}
+	run.progress.Add(int64(len(results)))
 	now := j.config.Clock.Now().Unix()
 	for k, result := range results {
 		failure := ""

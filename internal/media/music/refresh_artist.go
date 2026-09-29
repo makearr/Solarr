@@ -17,6 +17,7 @@ const RefreshArtistJobType = jobs.Type("music.refresh_artist")
 
 // RefreshArtistDefinition runs beside enrichment: the same provider, the refresh lane.
 var RefreshArtistDefinition = jobs.Definition{
+	Name: "Refreshing an artist",
 	Type: RefreshArtistJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 2,
 }
 
@@ -53,6 +54,7 @@ const RefreshArtistsJobType = jobs.Type("music.refresh_artists")
 
 // RefreshArtistsDefinition is background work on the refresh lane.
 var RefreshArtistsDefinition = jobs.Definition{
+	Name: "Refreshing artists",
 	Type: RefreshArtistsJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 1,
 }
 

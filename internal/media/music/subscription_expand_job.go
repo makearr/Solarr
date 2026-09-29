@@ -25,6 +25,7 @@ const SubscriptionExpandActionKey = "music.subscription_expand"
 // SubscriptionExpandDefinition declares how expansion behaves: background,
 // low priority, retried on transient failure, never blocking a user.
 var SubscriptionExpandDefinition = jobs.Definition{
+	Name: "Adding an artist's albums",
 	Type: SubscriptionExpandJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 3,
 }
 

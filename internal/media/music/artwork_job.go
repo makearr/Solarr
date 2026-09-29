@@ -32,6 +32,7 @@ const ArtworkActionKey = "music.artwork"
 // ArtworkDefinition is LOW priority (section 21.6): it must never compete with
 // import or acquisition for the write queue or the network.
 var ArtworkDefinition = jobs.Definition{
+	Name: "Fetching cover art",
 	Type: ArtworkJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 3,
 }
 
@@ -126,7 +127,7 @@ func NewArtworkJob(config ArtworkJobConfig) *ArtworkJob {
 // until none remain or the context is cancelled. No persisted cursor: a
 // recorded work stops being returned by NeedingArtwork, so a restart simply
 // asks the same question again (EnrichJob's Run doc comment, same reasoning).
-func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
+func (j *ArtworkJob) Run(ctx context.Context, job jobs.Job) error {
 	if err := j.fs.MkdirAll(j.imagesDir, 0o755); err != nil {
 		return fmt.Errorf("music: artwork: create %s: %w", j.imagesDir, err)
 	}
@@ -141,22 +142,22 @@ func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
 		case settings.CoverSourceArchive:
 			// Releases first, as the more exact image; then release groups, for wanted albums with
 			// no edition and releases the archive had nothing for.
-			if err := j.sweep(ctx, "release", j.artworks.NeedingArtwork, j.coverArt.Fetch); err != nil {
+			if err := j.sweep(ctx, job.Progress, "release", j.artworks.NeedingArtwork, j.coverArt.Fetch); err != nil {
 				return err
 			}
-			if err := j.sweep(ctx, "release-group", j.artworks.NeedingReleaseGroupArtwork,
+			if err := j.sweep(ctx, job.Progress, "release-group", j.artworks.NeedingReleaseGroupArtwork,
 				j.coverArt.FetchReleaseGroup); err != nil {
 				return err
 			}
 		case settings.CoverSourceEmbedded:
-			if err := j.sweepEmbedded(ctx); err != nil {
+			if err := j.sweepEmbedded(ctx, job.Progress); err != nil {
 				return err
 			}
 		case settings.CoverSourceTheAudioDB:
 			if j.theAudioDBCover == nil {
 				continue
 			}
-			if err := j.sweep(ctx, "theaudiodb", j.artworks.NeedingReleaseGroupArtwork, j.theAudioDBCover); err != nil {
+			if err := j.sweep(ctx, job.Progress, "theaudiodb", j.artworks.NeedingReleaseGroupArtwork, j.theAudioDBCover); err != nil {
 				return err
 			}
 		}
@@ -169,7 +170,7 @@ func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
 
 // sweepEmbedded reads cover art out of one known file per work still without
 // a cover, walked by work id for the same reason sweep is.
-func (j *ArtworkJob) sweepEmbedded(ctx context.Context) error {
+func (j *ArtworkJob) sweepEmbedded(ctx context.Context, progress *jobs.Progress) error {
 	if j.pictures == nil || j.roots == nil {
 		return nil
 	}
@@ -200,6 +201,7 @@ func (j *ArtworkJob) sweepEmbedded(ctx context.Context) error {
 					slog.Int64("work_id", candidate.WorkID), slog.Any("error", err))
 			}
 		}
+		progress.Add(int64(len(batch)))
 		if len(batch) < artworkBatchSize {
 			break
 		}
@@ -228,7 +230,9 @@ type artworkSource func(ctx context.Context, mbid string) (string, error)
 // sweep walks one kind of candidate by work id. A work with no archive art
 // records nothing, so re-reading from the top would return the same page
 // indefinitely.
-func (j *ArtworkJob) sweep(ctx context.Context, kind string, page artworkPage, lookup artworkSource) error {
+func (j *ArtworkJob) sweep(
+	ctx context.Context, progress *jobs.Progress, kind string, page artworkPage, lookup artworkSource,
+) error {
 	total, failed, skipped := 0, 0, 0
 	var afterWorkID int64
 	for {
@@ -257,6 +261,7 @@ func (j *ArtworkJob) sweep(ctx context.Context, kind string, page artworkPage, l
 			}()
 		}
 		wait.Wait()
+		progress.Add(int64(len(batch)))
 		for index, candidate := range batch {
 			total++
 			afterWorkID = candidate.WorkID

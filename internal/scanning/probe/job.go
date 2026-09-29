@@ -32,6 +32,7 @@ const ActionKey = "library.probe"
 // Definition declares how probing behaves: background, lowest priority,
 // retried on transient failure, never blocking anything a user is waiting on.
 var Definition = jobs.Definition{
+	Name: "Reading audio details",
 	Type: JobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3,
 }
 

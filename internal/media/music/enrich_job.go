@@ -59,6 +59,7 @@ const CreditRoleArtist = "artist"
 // EnrichDefinition declares how enrichment behaves: background, low priority,
 // retried on transient failure, never blocking anything a user is waiting on.
 var EnrichDefinition = jobs.Definition{
+	Name: "Enriching metadata",
 	Type: EnrichJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 3,
 }
 
@@ -215,6 +216,9 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 		backfill.budget = j.backfillPerRun()
 	}
 	artists := artistMemo{}
+	if waiting, err := j.identity.CountPlaceholderEditions(ctx); err == nil {
+		job.Progress.Set(0, waiting)
+	}
 	total, failed, batches := 0, 0, 0
 	var refinedWorkIDs []int64
 	var afterEditionID int64
@@ -240,6 +244,7 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 		for index, edition := range batch {
 			afterEditionID = edition.EditionID
 			total++
+			job.Progress.Add(1)
 			err := j.enrichOne(ctx, edition, answers[index], artists)
 			if errors.Is(err, musicbrainz.ErrNotFound) && j.replaceRetiredRelease(ctx, edition, albums[index], artists) {
 				err = nil

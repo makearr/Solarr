@@ -121,6 +121,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The jobs running now, with progress and an estimate of the time left.
+         * @description For the status bar (2026-09-29). The rate is measured over the last one to five minutes; a job that does not know how much there is has no total and no estimate. Jobs of a library the caller cannot see are left out.
+         */
+        get: operations["getActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dashboard": {
         parameters: {
             query?: never;
@@ -3838,6 +3858,32 @@ export interface components {
             clients: components["schemas"]["QueueClient"][];
             items: components["schemas"]["QueueItem"][];
         };
+        Activity: {
+            running: components["schemas"]["RunningJob"][];
+        };
+        RunningJob: {
+            /** Format: int64 */
+            job_id: number;
+            type: string;
+            /** @description What the job is doing, as the status bar says it. */
+            name: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: int64 */
+            done: number;
+            /**
+             * Format: int64
+             * @description How much there is; absent when the job does not know.
+             */
+            total?: number;
+            /** @description Items a minute over the last one to five minutes; absent until measured. */
+            per_minute?: number;
+            /**
+             * Format: int64
+             * @description Time left at that rate; absent when unknown.
+             */
+            eta_seconds?: number;
+        };
         /** @description A release found and held for room in its client's queue (ADR-57), in the order held releases are sent: a user's own grabs, then RSS, then new albums, then backfill. */
         HeldRelease: {
             /** Format: int64 */
@@ -5452,6 +5498,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Egress"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    getActivity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Running jobs, longest running first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Activity"];
                 };
             };
             401: components["responses"]["Problem"];

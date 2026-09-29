@@ -22,6 +22,7 @@ const SearchCategoryJobType = jobs.Type("music.search_category")
 // transient failure -- a whole category re-search is not cheap enough to
 // retry as aggressively as a single item would be.
 var SearchCategoryDefinition = jobs.Definition{
+	Name: "Searching wanted albums",
 	Type: SearchCategoryJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 2,
 }
 
@@ -134,8 +135,9 @@ func (j *SearchCategoryJob) Run(ctx context.Context, job jobs.Job) error {
 	}
 
 	now := j.clock.Now()
-	var tally searchTally
+	tally := searchTally{progress: job.Progress}
 	if len(payload.ItemIDs) > 0 {
+		job.Progress.SetTotal(int64(len(payload.ItemIDs)))
 		for _, itemID := range payload.ItemIDs {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -153,7 +155,11 @@ func (j *SearchCategoryJob) Run(ctx context.Context, job jobs.Job) error {
 }
 
 // searchTally is what one run did, for its log line.
-type searchTally struct{ searched, found, sent, skipped, failed int }
+type searchTally struct {
+	searched, found, sent, skipped, failed int
+	// progress counts albums searched for the status bar.
+	progress *jobs.Progress
+}
 
 func (j *SearchCategoryJob) grabIncomplete(
 	ctx context.Context, payload SearchCategoryPayload, indexers []IndexerConn, now time.Time, tally *searchTally,
@@ -181,6 +187,7 @@ func (j *SearchCategoryJob) grabOne(
 	ctx context.Context, categoryID, itemID int64, indexers []IndexerConn, now time.Time, tally *searchTally,
 ) {
 	result, err := j.grab.SearchAndSend(ctx, itemID, indexers, GrabAutomatic, now)
+	tally.progress.Add(1)
 	switch {
 	case errors.Is(err, ErrTrackSearchNotSupported), result.AlreadyInFlight:
 		tally.skipped++
