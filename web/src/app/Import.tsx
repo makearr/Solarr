@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Ban, HelpCircle, Undo2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Ban, ChevronDown, ChevronRight, HelpCircle, Undo2, X } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { factsOf } from "@/lib/identificationEvidence";
 
 import { IdentificationCandidates } from "./IdentificationCandidates";
 import { PathPicker, useRecentPaths } from "./PathPicker";
@@ -840,6 +841,9 @@ function SessionRow({
             <span className="text-ink-muted">{describeProgress(session)}</span>
           )}
           {session.error && <span className="text-danger">{session.error}</span>}
+          {!selected && session.units_total > 0 && (
+            <span className="text-accent">Show what was found →</span>
+          )}
         </button>
         {RUNNING_STATES.has(session.state) && (
           <button
@@ -1061,7 +1065,13 @@ function UnitRow({ sessionId, unit }: { sessionId: number; unit: ImportUnit }) {
           className="flex flex-1 flex-wrap items-center gap-2 text-left focus-visible:outline-2
                      focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
-          <span className="font-mono text-sm text-ink">{unit.rel_path}</span>
+          {expanded ? (
+            <ChevronDown aria-hidden className="size-3.5 shrink-0 text-ink-muted" />
+          ) : (
+            <ChevronRight aria-hidden className="size-3.5 shrink-0 text-ink-muted" />
+          )}
+          <span className="font-mono text-sm text-ink">{unit.rel_path || "(this folder)"}</span>
+          {matchedAlbum(unit) && <span className="text-ink">→ {matchedAlbum(unit)}</span>}
           <ShapeBadge shape={unit.shape} />
           <DecisionBadge decision={unit.decision} />
           <span className="text-ink-muted">
@@ -1109,6 +1119,12 @@ function UnitRow({ sessionId, unit }: { sessionId: number; unit: ImportUnit }) {
       )}
     </li>
   );
+}
+
+// What the unit was matched to, visible without expanding: a preview that hides the album is no preview (2026-09-29).
+function matchedAlbum(unit: ImportUnit): string | undefined {
+  const facts = factsOf(unit.candidates?.[0]?.evidence);
+  return [facts.artist, facts.title].filter(Boolean).join(" — ") || undefined;
 }
 
 function StateBadge({ state }: { state: ImportSession["state"] }) {
