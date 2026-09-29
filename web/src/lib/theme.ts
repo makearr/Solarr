@@ -17,6 +17,12 @@ export const THEMES = [
   { id: "arr", label: "Arr", base: "dark" },
   { id: "nord", label: "Nord", base: "dark" },
   { id: "paper", label: "Paper", base: "light" },
+  { id: "lidarr", label: "Lidarr", base: "light" },
+  { id: "lidarr-dark", label: "Lidarr dark", base: "dark" },
+  { id: "sonarr", label: "Sonarr", base: "light" },
+  { id: "sonarr-dark", label: "Sonarr dark", base: "dark" },
+  { id: "radarr", label: "Radarr", base: "light" },
+  { id: "radarr-dark", label: "Radarr dark", base: "dark" },
 ] as const satisfies readonly ThemeDefinition[];
 
 /** "system" follows the OS and resolves to light or dark, never to a named theme:

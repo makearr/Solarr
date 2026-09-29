@@ -36,6 +36,13 @@ light flash on every load for anyone who chose dark.
 This is the one thing kept in browser storage, because it is needed before any request can be
 made. View state stays server-side per architecture section 21.2.
 
+A scheme is a block of token values in `src/index.css`, an entry in `THEMES` (`src/lib/theme.ts`)
+and, if dark, a name in `index.html`'s pre-paint list. The Lidarr, Sonarr and Radarr schemes
+(2026-09-29) come light and dark; the light ones colour the sidebar and header differently from
+the page. Those two elements carry `data-region="sidebar"` / `"header"`, and a scheme redefines
+the same tokens inside that scope (plus `--color-header`, the header bar's ground, which is the
+page's own everywhere else). No component names a scheme.
+
 ## Status bar
 
 Left: the latest event (downloads, imports). Beside it, what is running now, from

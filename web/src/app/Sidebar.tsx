@@ -186,6 +186,7 @@ export function Sidebar() {
 
   return (
     <nav
+      data-region="sidebar"
       aria-label="Sections"
       className={`flex shrink-0 flex-col overflow-y-auto border-r border-border-subtle bg-surface ${
         collapsed ? "w-14" : "w-48"
