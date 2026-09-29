@@ -108,6 +108,8 @@ type Job struct {
 	search music.Searcher
 	// albums is optional: when set, a unit its embedded MBIDs did not identify is matched as an album.
 	albums music.AlbumLookup
+	// provenance answers the release groups a download was grabbed for; nil without one.
+	provenance func(ctx context.Context, acquisitionID int64) ([]string, error)
 	// acoustID is optional: when set, a unit nothing else named is fingerprinted
 	// and looked up (ADR-29's own last rung). Disabled without a key of its own.
 	acoustID music.AcoustIDLookup
@@ -132,12 +134,15 @@ type Job struct {
 // Config is what a Job needs. Every field is required except Search,
 // Committer, Events, OnCommitted and Logger.
 type Config struct {
-	FS          fsx.FS
-	Sessions    library.ImportSessions
-	Policy      Policy
-	Tool        mediatool.Tool
-	Search      music.Searcher
-	Albums      music.AlbumLookup
+	FS       fsx.FS
+	Sessions library.ImportSessions
+	Policy   Policy
+	Tool     mediatool.Tool
+	Search   music.Searcher
+	Albums   music.AlbumLookup
+	// Provenance is optional: the release groups an acquisition was grabbed for, which album
+	// identification always scores a download's files against (section 12).
+	Provenance  func(ctx context.Context, acquisitionID int64) ([]string, error)
 	AcoustID    music.AcoustIDLookup
 	Committer   Committer
 	Packs       library.Packs
@@ -155,7 +160,8 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		fsys: config.FS, sessions: config.Sessions, policy: config.Policy,
-		tool: config.Tool, search: config.Search, albums: config.Albums, acoustID: config.AcoustID,
+		tool: config.Tool, search: config.Search, albums: config.Albums, provenance: config.Provenance,
+		acoustID:  config.AcoustID,
 		committer: config.Committer, packs: config.Packs,
 		events: config.Events, onCommitted: config.OnCommitted, clock: config.Clock, logger: logger,
 	}
@@ -193,11 +199,12 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	identifyCfg := model.ChainConfig{
 		AcceptThreshold: music.DefaultAcceptThreshold, AmbiguityThreshold: threshold,
 	}
+	seeds := j.provenanceSeeds(ctx, payload.AcquisitionID)
 	result, err := inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{Cursor: cursor},
 		inspect.WalkOptions{},
 		func(ctx context.Context, batch []inspect.Unit) error {
 			err := j.commitCluster(ctx, sessionID, payload.SourcePath, identifyCfg, payload.Preview,
-				payload.TransferLadder, batch)
+				payload.TransferLadder, seeds, batch)
 			j.reportProgress(ctx, sessionID, job.Progress)
 			return err
 		})
@@ -444,8 +451,22 @@ func identifyUnit(
 // refineUnit improves one unit's chain result; it must be safe to call concurrently.
 type refineUnit func(ctx context.Context, unit inspect.Unit, result model.ChainResult) (model.ChainResult, *music.AlbumPlacement)
 
+// provenanceSeeds are the release groups a download was grabbed for, empty for any other import;
+// best-effort, since identification works without them.
+func (j *Job) provenanceSeeds(ctx context.Context, acquisitionID *int64) []string {
+	if j.provenance == nil || acquisitionID == nil {
+		return nil
+	}
+	seeds, err := j.provenance(ctx, *acquisitionID)
+	if err != nil {
+		j.logger.Warn("import provenance unreadable", slog.Int64("acquisition_id", *acquisitionID), slog.Any("error", err))
+	}
+	return seeds
+}
+
 // albumRefiner matches units as albums over the cluster's probes, or nil when no lookup is configured.
-func (j *Job) albumRefiner(relPaths []string, probes []mediatool.Probe, threshold float64) refineUnit {
+// seeds are release groups always scored, whatever the files' names recall.
+func (j *Job) albumRefiner(relPaths []string, probes []mediatool.Probe, threshold float64, seeds []string) refineUnit {
 	if j.albums == nil {
 		return nil
 	}
@@ -454,7 +475,7 @@ func (j *Job) albumRefiner(relPaths []string, probes []mediatool.Probe, threshol
 		byPath[relPaths[i]] = probe
 	}
 	return func(ctx context.Context, unit inspect.Unit, result model.ChainResult) (model.ChainResult, *music.AlbumPlacement) {
-		refined, placement, err := music.RefineUnitByAlbum(ctx, j.albums, unit, byPath, result, threshold)
+		refined, placement, err := music.RefineUnitByAlbum(ctx, j.albums, unit, byPath, result, threshold, seeds)
 		if err != nil {
 			j.logger.Warn("import album identification failed", slog.String("unit", unit.Directory), slog.Any("error", err))
 		}
@@ -504,7 +525,7 @@ func (j *Job) poisonedByExclusion(batch []inspect.Unit, categoryID *int64) []str
 // per-run read already follows.
 func (j *Job) commitCluster(
 	ctx context.Context, sessionID int64, sourcePath string, cfg model.ChainConfig, preview bool, ladder []string,
-	batch []inspect.Unit,
+	seeds []string, batch []inspect.Unit,
 ) error {
 	session, err := j.sessions.Get(ctx, sessionID)
 	if err != nil {
@@ -566,7 +587,7 @@ func (j *Job) commitCluster(
 
 	poisonReasons := j.poisonedByExclusion(batch, categoryID)
 
-	decisions, results, placements := identifyCluster(ctx, ids, batch, identifiers, cfg, j.albumRefiner(relPaths, probes, cfg.AmbiguityThreshold))
+	decisions, results, placements := identifyCluster(ctx, ids, batch, identifiers, cfg, j.albumRefiner(relPaths, probes, cfg.AmbiguityThreshold, seeds))
 	for i, reason := range poisonReasons {
 		if reason != "" {
 			// Overrides whatever IDENTIFY decided -- ADR-53's refuse action

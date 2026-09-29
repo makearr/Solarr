@@ -41,16 +41,17 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		return err
 	}
 	job := importjob.NewJob(importjob.Config{
-		FS:        p.fsys,
-		Sessions:  library.NewImportSessions(p.library),
-		Policy:    adapters.ImportPolicy{Cache: p.cache},
-		Tool:      p.mediaTool(),
-		Search:    p.musicBrainzProvider(),
-		Albums:    p.musicBrainzProvider(),
-		AcoustID:  p.acoustIDLookup(),
-		Committer: p.importCommitter(),
-		Packs:     library.NewPacks(p.library),
-		Events:    p.bus,
+		FS:         p.fsys,
+		Sessions:   library.NewImportSessions(p.library),
+		Policy:     adapters.ImportPolicy{Cache: p.cache},
+		Tool:       p.mediaTool(),
+		Search:     p.musicBrainzProvider(),
+		Albums:     p.musicBrainzProvider(),
+		Provenance: p.acquisitionReleaseGroups,
+		AcoustID:   p.acoustIDLookup(),
+		Committer:  p.importCommitter(),
+		Packs:      library.NewPacks(p.library),
+		Events:     p.bus,
 		// A new edition's tracklist is what lets the placed files count towards the album.
 		OnCommitted: func(ctx context.Context) {
 			_, _ = p.enqueueEnrichment(ctx)
@@ -61,6 +62,29 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 	})
 	executor.Handle(importjob.JobType, job)
 	return nil
+}
+
+// acquisitionReleaseGroups are the release groups of the album a download was grabbed for.
+func (p *process) acquisitionReleaseGroups(ctx context.Context, acquisitionID int64) ([]string, error) {
+	acquisition, err := library.NewAcquisitions(p.library).Get(ctx, acquisitionID)
+	if err != nil || acquisition.DesiredItemID == nil {
+		return nil, err
+	}
+	item, err := library.NewDesired(p.library).Get(ctx, *acquisition.DesiredItemID)
+	if err != nil {
+		return nil, err
+	}
+	detail, err := library.NewWorks(p.library).Detail(ctx, item.WorkID)
+	if err != nil {
+		return nil, err
+	}
+	var groups []string
+	for _, external := range detail.ExternalIDs {
+		if external.Provider == music.ProviderReleaseGroup {
+			groups = append(groups, external.ExternalID)
+		}
+	}
+	return groups, nil
 }
 
 // importCommitter builds ADR-48's own COMMIT step. A fresh instance each

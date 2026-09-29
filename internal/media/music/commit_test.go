@@ -290,6 +290,12 @@ func TestCommitUnit_PlacesFilesRegistersAndDiscoversWithoutTouchingTheSource(t *
 	if len(placed.MediaObjectIDs) != 2 {
 		t.Fatalf("len(MediaObjectIDs) = %d, want 2", len(placed.MediaObjectIDs))
 	}
+	// Every placed file is the work's, so a rescan that cannot recognise one leaves it (2026-09-29).
+	var linked int
+	if err := opened.Read().QueryRowContext(t.Context(),
+		"SELECT COUNT(*) FROM work_file WHERE work_id = ?", placed.WorkID).Scan(&linked); err != nil || linked != 2 {
+		t.Errorf("files linked to the work = %d (%v), want both", linked, err)
+	}
 
 	// The source must be untouched -- PlaceOne never deletes or renames it.
 	if readAt(t, fsys, path.Join(commitSourceRoot, "Katupoken/KI Pecezinu/01 Sesoge.flac")) != string(track1) {

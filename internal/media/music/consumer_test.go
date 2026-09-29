@@ -1342,3 +1342,41 @@ func TestObserve_AFingerprintedSongOfTheSiblingsAlbumStaysWithThem(t *testing.T)
 		t.Errorf("the leftover song went to %q, want its siblings' album %q", got, releaseGroupMBID)
 	}
 }
+
+// 2026-09-29: a file an import placed and linked stays its work's when a rescan cannot recognise it
+// from its tags; the review queue is for files nothing has identified.
+func TestObserve_ALinkedFileARescanCannotRecogniseIsNotQueued(t *testing.T) {
+	consumer, opened, fsys := newConsumer(t)
+	content := []byte("an imported file, tagged with nothing useful")
+	writeMusicFile(t, fsys, "Heka/Zanuvode/01.mp3", content)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+	batch := []scan.Observed{observedFile("Heka/Zanuvode/01.mp3", int64(len(content)), mediatool.Tags{})}
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	unidentified := library.NewUnidentified(opened)
+	rows, err := unidentified.List(t.Context(), nil, paginate.Cursor{}, 50)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("first sweep queue = %+v (%v), want the file", rows, err)
+	}
+
+	// An import identifies and links it, as CommitUnit does.
+	id := rows[0].MediaObjectID
+	if _, err := library.NewIdentity(opened).ResolveWorksDetailed(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-imported", Confidence: 0.94,
+		Work:         library.WorkIdentity{MediaType: "music", CanonicalTitle: "Zanuvode", SortTitle: "Zanuvode"},
+		RootFolderID: 1, MediaObjectID: id,
+	}}); err != nil {
+		t.Fatalf("ResolveWorksDetailed: %v", err)
+	}
+	if err := unidentified.Clear(t.Context(), []int64{id}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := consumer.Observe(t.Context(), root, 0, batch); err != nil {
+		t.Fatalf("second Observe: %v", err)
+	}
+	if rows, err := unidentified.List(t.Context(), nil, paginate.Cursor{}, 50); err != nil || len(rows) != 0 {
+		t.Errorf("after the rescan queue = %+v (%v), want nothing", rows, err)
+	}
+}
