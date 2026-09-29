@@ -15,6 +15,11 @@ Two scheduled tasks (Settings -> Scheduler) do what Lidarr leaves to a person pr
   download already on its way costs nothing and is looked at again in an hour. Every search counts
   toward the backoff, whoever started it.
 
+Adding from **Discover** with **Start search for missing albums** ticked (on by default, remembered
+per person) searches an album at once, as Lidarr does. For an artist it adds their albums now rather
+than at the 12-hourly subscription expansion, then searches the missing ones. Monitoring an album
+from its page does not search; the hunt picks it up within 15 minutes.
+
 Once a release is in a download client, the client decides the order. So Solarr sends each client
 only as many releases as its **Downloads at once** (per client, default 10; ADR-57) and keeps the
 rest **held**, in its own order, until a download finishes or is removed.

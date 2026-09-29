@@ -549,6 +549,16 @@ func (p *process) startServer(ctx context.Context) error {
 			DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(),
 			// A failed enqueue is logged by enqueueEnrichment; the hourly sweep still picks the album up.
 			Enrich: func(ctx context.Context) { _, _ = p.enqueueEnrichment(ctx) },
+			SearchAlbum: func(ctx context.Context, categoryID, itemID int64) {
+				if _, err := music.EnqueueSearchItems(ctx, p.queue, categoryID, []int64{itemID}); err != nil {
+					p.logger.Warn("search added album", slog.Any("error", err))
+				}
+			},
+			ExpandArtist: func(ctx context.Context, subscriptionID int64, search bool) {
+				if _, err := music.EnqueueExpandSubscription(ctx, p.queue, subscriptionID, search); err != nil {
+					p.logger.Warn("add artist's albums", slog.Any("error", err))
+				}
+			},
 		},
 		ArrSync: adapters.ArrSync{
 			Cache: p.cache, Identity: library.NewIdentity(p.library), People: library.NewPeople(p.library),

@@ -4103,6 +4103,11 @@ export interface components {
             external_id: string;
             /** @default true */
             monitored: boolean;
+            /**
+             * @description Lidarr's "Start search for missing albums": an album is searched at once, an artist's albums are added now and then searched. Ignored when monitored is false.
+             * @default false
+             */
+            search: boolean;
         };
         /** @description What an add produced. kind says which ids are populated: an album carries work_id and desired_item_id, an artist person_id and subscription_id. */
         DiscoverAddResult: {

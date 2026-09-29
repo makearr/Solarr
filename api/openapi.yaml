@@ -6345,6 +6345,12 @@ components:
         provider: { type: string }
         external_id: { type: string }
         monitored: { type: boolean, default: true }
+        search:
+          type: boolean
+          default: false
+          description: >-
+            Lidarr's "Start search for missing albums": an album is searched at once, an artist's
+            albums are added now and then searched. Ignored when monitored is false.
 
     DiscoverAddResult:
       type: object

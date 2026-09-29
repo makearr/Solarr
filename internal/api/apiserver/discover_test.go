@@ -14,9 +14,10 @@ import (
 // fakeDiscover records what it was called with and answers canned results,
 // the same shape fakeWorksMonitor already uses.
 type fakeDiscover struct {
-	results []apiserver.DiscoverResult
-	add     apiserver.DiscoverAddResult
-	err     error
+	lastAddSearch bool
+	results       []apiserver.DiscoverResult
+	add           apiserver.DiscoverAddResult
+	err           error
 
 	lastSearchCategoryID int64
 	lastSearchQuery      string
@@ -45,9 +46,10 @@ func (f *fakeDiscover) Search(
 }
 
 func (f *fakeDiscover) Add(
-	_ context.Context, categoryID, userID int64, provider, externalID string, monitored bool,
+	_ context.Context, categoryID, userID int64, provider, externalID string, monitored, search bool,
 ) (apiserver.DiscoverAddResult, error) {
 	f.addCalls++
+	f.lastAddSearch = search
 	f.lastAddCategoryID, f.lastAddProvider, f.lastAddExternalID, f.lastAddMonitored =
 		categoryID, provider, externalID, monitored
 	f.lastAddUserID = userID

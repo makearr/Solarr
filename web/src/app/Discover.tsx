@@ -6,6 +6,7 @@ import { Check, Search } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { usePreference } from "@/lib/usePreference";
 
 import { useDebouncedValue } from "./useDebouncedValue";
 
@@ -45,6 +46,8 @@ export function Discover() {
   // On by default, and a choice: adding an artist without following them is
   // "have them in the library, do not watch them" (asked for 2026-09-19).
   const [monitor, setMonitor] = useState(true);
+  // Lidarr's "Start search for missing albums", on by default and remembered per person (D13).
+  const [searchOnAdd, setSearchOnAdd] = usePreference("discover.search_on_add", true);
 
   const add = useMutation({
     mutationFn: async (result: DiscoverResult) => {
@@ -56,6 +59,7 @@ export function Discover() {
           // openapi-typescript makes a field with a `default` non-optional
           // even when not `required` (CLAUDE.md's own documented gotcha).
           monitored: monitor,
+          search: monitor && searchOnAdd,
         },
       });
       if (error) throw error;
@@ -75,6 +79,15 @@ export function Discover() {
         <label className="order-last ml-auto flex items-center gap-1.5 text-xs text-ink-muted">
           <input type="checkbox" checked={monitor} onChange={(e) => setMonitor(e.target.checked)} />
           Monitor what I add
+        </label>
+        <label className="order-last flex items-center gap-1.5 text-xs text-ink-muted">
+          <input
+            type="checkbox"
+            checked={monitor && searchOnAdd}
+            disabled={!monitor}
+            onChange={(e) => setSearchOnAdd(e.target.checked)}
+          />
+          Start search for missing albums
         </label>
         <div className="flex gap-1" role="group" aria-label="What to search for">
           {(["album", "artist"] as const).map((option) => (
@@ -160,16 +173,21 @@ export function Discover() {
 
       {add.isSuccess && add.data?.kind === "artist" && (
         <p className="text-xs text-ink-muted">
-          {monitor
-            ? "Artist added and monitored. Their albums appear as the subscription expands, which runs " +
-              "on its own schedule rather than immediately."
-            : "Artist added, not monitored. Nothing of theirs will be looked for until you monitor them."}
+          {!monitor
+            ? "Artist added, not monitored. Nothing of theirs will be looked for until you monitor them."
+            : searchOnAdd
+              ? "Artist added and monitored. Their albums are being added now, then searched for."
+              : "Artist added and monitored. Their albums are being added now; missing ones are " +
+                "searched for automatically over the next hours."}
         </p>
       )}
       {add.isSuccess && add.data?.kind === "album" && (
         <p className="text-xs text-ink-muted">
-          Added with priority {add.data.priority}. There is no acquisition queue yet (stage 5) to show a
-          position within — the score alone is what will decide it once one exists.
+          {!monitor
+            ? "Album added, not monitored. It will not be looked for until you monitor it."
+            : searchOnAdd
+              ? "Album added. Searching for it now; Activity → Queue shows the download."
+              : "Album added. It will be searched for automatically within the hour."}
         </p>
       )}
       {add.isError && (

@@ -30,6 +30,9 @@ type Discover struct {
 	Clock            clock.Clock
 	// Enrich starts fetching an added album's tracklist now rather than at the next hourly sweep.
 	Enrich func(context.Context)
+	// SearchAlbum searches one added album at once; ExpandArtist adds a new artist's albums now.
+	SearchAlbum  func(ctx context.Context, categoryID, itemID int64)
+	ExpandArtist func(ctx context.Context, subscriptionID int64, search bool)
 }
 
 // Search resolves categoryID to its media type and, for music, runs a
@@ -112,14 +115,14 @@ func (a Discover) searchArtists(ctx context.Context, query string, limit int) ([
 // same accepted gap subscription-discovered works already carry (no
 // enrichment or artwork until something else gives one an edition).
 func (a Discover) Add(
-	ctx context.Context, categoryID, userID int64, provider, externalID string, monitored bool,
+	ctx context.Context, categoryID, userID int64, provider, externalID string, monitored, search bool,
 ) (apiserver.DiscoverAddResult, error) {
 	category, ok := a.Categories.Category(categoryID)
 	if !ok || category.MediaType != "music" {
 		return apiserver.DiscoverAddResult{}, apiserver.ErrDiscoverUnsupportedMediaType
 	}
 	if provider == music.ProviderArtist {
-		return a.addArtist(ctx, category, userID, externalID, monitored)
+		return a.addArtist(ctx, category, userID, externalID, monitored, search)
 	}
 	if provider != music.ProviderReleaseGroup {
 		return apiserver.DiscoverAddResult{}, apiserver.ErrDiscoverUnsupportedMediaType
@@ -163,6 +166,9 @@ func (a Discover) Add(
 	if a.Enrich != nil {
 		a.Enrich(ctx)
 	}
+	if monitored && search && a.SearchAlbum != nil {
+		a.SearchAlbum(ctx, category.ID, item.ID)
+	}
 	return apiserver.DiscoverAddResult{
 		Kind: apiserver.DiscoverAlbum, WorkID: workIDs[0], DesiredItemID: item.ID, Priority: score,
 	}, nil
@@ -175,7 +181,7 @@ func (a Discover) Add(
 // twice over -- ResolvePerson returns an existing person untouched and
 // Subscribe returns an existing subscription's id (Invariant 80).
 func (a Discover) addArtist(
-	ctx context.Context, category settings.Category, userID int64, externalID string, monitored bool,
+	ctx context.Context, category settings.Category, userID int64, externalID string, monitored, search bool,
 ) (apiserver.DiscoverAddResult, error) {
 	// Re-fetched rather than trusted from the request, the same rule the album
 	// path follows: an external id names identity, the provider says the rest.
@@ -211,6 +217,9 @@ func (a Discover) addArtist(
 		})
 		if err != nil {
 			return apiserver.DiscoverAddResult{}, fmt.Errorf("subscribe: %w", err)
+		}
+		if a.ExpandArtist != nil {
+			a.ExpandArtist(ctx, subscriptionID, search)
 		}
 	}
 

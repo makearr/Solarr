@@ -2,6 +2,7 @@ package music
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -47,6 +48,17 @@ type SubscriptionExpandJob struct {
 	defaultProfileID int64
 	clock            clock.Clock
 	logger           *slog.Logger
+	search           ArtistSearch
+}
+
+// ArtistSearch searches one artist's missing albums in one library, after their albums were added.
+type ArtistSearch func(ctx context.Context, categoryID, personID int64) error
+
+// SubscriptionExpandPayload scopes a run to one subscription, the artist just added; empty is the sweep.
+type SubscriptionExpandPayload struct {
+	SubscriptionID int64 `json:"subscription_id,omitempty"`
+	// Search is the add dialog's "Start search for missing albums" (D13).
+	Search bool `json:"search,omitempty"`
 }
 
 // SubscriptionExpandConfig is what a SubscriptionExpandJob needs. Every
@@ -61,6 +73,8 @@ type SubscriptionExpandConfig struct {
 	DefaultProfileID int64
 	Clock            clock.Clock
 	Logger           *slog.Logger
+	// Search is optional; without it a payload asking for a search only expands.
+	Search ArtistSearch
 }
 
 // NewSubscriptionExpandJob builds the handler.
@@ -72,7 +86,7 @@ func NewSubscriptionExpandJob(config SubscriptionExpandConfig) *SubscriptionExpa
 	return &SubscriptionExpandJob{
 		subscriptions: config.Subscriptions, people: config.People, identity: config.Identity,
 		desired: config.Desired, categories: config.Categories, provider: config.Provider,
-		defaultProfileID: config.DefaultProfileID, clock: config.Clock, logger: logger,
+		defaultProfileID: config.DefaultProfileID, clock: config.Clock, logger: logger, search: config.Search,
 	}
 }
 
@@ -80,10 +94,19 @@ func NewSubscriptionExpandJob(config SubscriptionExpandConfig) *SubscriptionExpa
 // external id yet, the provider unavailable) does not stop the sweep -- it
 // simply produces nothing this run and is retried the next one, the same
 // per-item isolation EnrichJob's own Run already uses.
-func (j *SubscriptionExpandJob) Run(ctx context.Context, _ jobs.Job) error {
+func (j *SubscriptionExpandJob) Run(ctx context.Context, job jobs.Job) error {
+	var payload SubscriptionExpandPayload
+	if len(job.Payload) > 0 {
+		if err := json.Unmarshal(job.Payload, &payload); err != nil {
+			return jobs.Terminalf("subscription_expand.payload", string(SubscriptionExpandJobType), err)
+		}
+	}
 	subscriptions, err := j.subscriptions.ListEnabled(ctx)
 	if err != nil {
 		return fmt.Errorf("music: subscription expand: %w", err)
+	}
+	if payload.SubscriptionID != 0 {
+		return j.expandAndSearch(ctx, subscriptions, payload)
 	}
 
 	var admittedTotal, skippedTotal, failed int
@@ -106,6 +129,26 @@ func (j *SubscriptionExpandJob) Run(ctx context.Context, _ jobs.Job) error {
 	j.logger.Info("subscription expand finished",
 		slog.Int("admitted", admittedTotal), slog.Int("skipped", skippedTotal), slog.Int("failed", failed))
 	return nil
+}
+
+// expandAndSearch expands the one subscription payload names, then searches its artist if asked.
+func (j *SubscriptionExpandJob) expandAndSearch(
+	ctx context.Context, subscriptions []library.Subscription, payload SubscriptionExpandPayload,
+) error {
+	index := slices.IndexFunc(subscriptions, func(s library.Subscription) bool { return s.ID == payload.SubscriptionID })
+	if index < 0 {
+		return nil
+	}
+	subscription := subscriptions[index]
+	admitted, _, err := j.expandOne(ctx, subscription)
+	if err != nil {
+		return fmt.Errorf("music: expand subscription %d: %w", subscription.ID, err)
+	}
+	j.logger.Info("artist's albums added", slog.Int64("person_id", subscription.SubjectID), slog.Int("albums", admitted))
+	if !payload.Search || j.search == nil {
+		return nil
+	}
+	return j.search(ctx, subscription.CategoryID, subscription.SubjectID)
 }
 
 // expandOne browses one subscribed artist's discography and creates an album
@@ -181,6 +224,18 @@ func (j *SubscriptionExpandJob) ensureItemFor(
 		return fmt.Errorf("ensure album item: %w", err)
 	}
 	return nil
+}
+
+// EnqueueExpandSubscription adds one just-subscribed artist's albums now, rather than at the next sweep.
+func EnqueueExpandSubscription(ctx context.Context, queue *jobs.Queue, subscriptionID int64, search bool) (jobs.EnqueueResult, error) {
+	payload, err := json.Marshal(SubscriptionExpandPayload{SubscriptionID: subscriptionID, Search: search})
+	if err != nil {
+		return jobs.EnqueueResult{}, err
+	}
+	return queue.Enqueue(ctx, jobs.Request{
+		Type: SubscriptionExpandJobType, ActionKey: fmt.Sprintf("%s:%d", SubscriptionExpandActionKey, subscriptionID),
+		Priority: jobs.PriorityNormal, Payload: payload,
+	})
 }
 
 // EnqueueSubscriptionExpand submits one subscription expand sweep,
