@@ -10,6 +10,7 @@ import { api } from "@/api/client";
 
 import { Activity } from "./Activity";
 import { History } from "./History";
+import { Queue } from "./Queue";
 import { ArrImport } from "./ArrImport";
 import { Dashboard } from "./Dashboard";
 import { Discover } from "./Discover";
@@ -202,6 +203,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/arr", component: ArrImport }),
   // Activity holds History and Jobs, as Lidarr's holds Queue and History (2026-09-25).
   createRoute({ getParentRoute: () => rootRoute, path: "/quality-profiles", component: QualityProfilesPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/activity/queue", component: Queue }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity/history", component: History }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity/jobs", component: Activity }),
   // Settings split into General/User/Scheduler/Cache 2026-09-11 (asked for
@@ -219,7 +221,7 @@ const routes = [
     ["/settings/general", "/settings/libraries"],
     ["/settings/blocklist", "/settings/blocklists"],
     ["/settings/arr", "/connections/arr"],
-    ["/activity", "/activity/history"],
+    ["/activity", "/activity/queue"],
   ].map(([from, to]) =>
     createRoute({
       getParentRoute: () => rootRoute,

@@ -4505,6 +4505,50 @@ paths:
               schema: { $ref: "#/components/schemas/HistoryPage" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /queue:
+    get:
+      operationId: listQueue
+      tags: [library]
+      summary: Downloads in flight and every enabled download client's own queue, read live.
+      description: >-
+        Lidarr's Activity -> Queue. Only downloads for libraries the caller can
+        read; clients are listed for everyone who can see any. With work_id, one
+        album's downloads.
+      parameters:
+        - name: work_id
+          in: query
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: The queue.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Queue" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /queue/{id}:
+    delete:
+      operationId: removeQueueItem
+      tags: [library]
+      summary: Remove a download from its client with its files; manage on its library.
+      description: >-
+        With blocklist the release is never grabbed again and the album is
+        searched for another. A download already being imported is refused.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: blocklist
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
   /blocklist/{id}:
     delete:
       operationId: removeBlocklistEntry
@@ -5929,6 +5973,58 @@ components:
           format: int64
           description: Absent on the last page.
 
+    Queue:
+      type: object
+      required: [clients, items]
+      properties:
+        clients:
+          type: array
+          items: { $ref: "#/components/schemas/QueueClient" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/QueueItem" }
+
+    QueueClient:
+      type: object
+      description: One download client's own queue, or why it could not be read.
+      required: [id, name, paused, speed_bytes_per_sec, items, size_left_bytes]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        paused: { type: boolean }
+        speed_bytes_per_sec: { type: integer, format: int64 }
+        items: { type: integer }
+        size_left_bytes: { type: integer, format: int64 }
+        error: { type: string }
+
+    QueueItem:
+      type: object
+      description: One download in flight.
+      required: [id, release_title, client, state, added_at]
+      properties:
+        id: { type: integer, format: int64, description: The acquisition id. }
+        work_id: { type: integer, format: int64 }
+        album: { type: string }
+        artist: { type: string }
+        release_title: { type: string }
+        indexer: { type: string }
+        client: { type: string }
+        state:
+          type: string
+          enum: [QUEUED, DOWNLOADING, COMPLETED, IMPORTING]
+        client_state:
+          type: string
+          description: The client's own view; absent while the client does not list it.
+          enum: [queued, downloading, paused, processing, completed, failed]
+        size_bytes: { type: integer, format: int64 }
+        size_left_bytes: { type: integer, format: int64 }
+        eta_seconds:
+          type: integer
+          format: int64
+          description: At the client's current speed; absent when paused, stopped or unknown.
+        error: { type: string }
+        added_at: { type: string, format: date-time }
+
     HistoryEntry:
       type: object
       description: One thing that happened to a download, as it was known then.
@@ -5938,7 +6034,7 @@ components:
         at: { type: string, format: date-time }
         kind:
           type: string
-          enum: [grabbed, imported, failed]
+          enum: [grabbed, imported, failed, removed]
         work_id: { type: integer, format: int64 }
         album: { type: string }
         artist: { type: string }

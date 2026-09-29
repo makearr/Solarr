@@ -17,14 +17,19 @@ func (p *process) registerPollJob(registry *jobs.Registry, executor *jobs.Execut
 	if err := registry.Register(poll.Definition); err != nil {
 		return err
 	}
-	executor.Handle(poll.JobType, poll.NewJob(poll.Config{
+	executor.Handle(poll.JobType, p.pollJob())
+	return nil
+}
+
+// pollJob is the download poll; the Downloads queue reads and removes through the same one.
+func (p *process) pollJob() *poll.Job {
+	return poll.NewJob(poll.Config{
 		Acquisitions: library.NewAcquisitions(p.library), Sessions: library.NewImportSessions(p.library),
 		Blocklist: library.NewBlocklistStore(p.library), FS: p.fsys,
 		Clients: p.pollClients, DownloadFolders: p.pollDownloadFolders,
 		Import: p.importAcquisition, Search: p.searchAgain, History: p.recordDownloadHistory,
 		Clock: clock.NewSystem(), Logger: p.logger,
-	}))
-	return nil
+	})
 }
 
 func (p *process) enqueuePoll(ctx context.Context) (jobs.EnqueueResult, error) {
@@ -51,6 +56,7 @@ func (p *process) pollClients(ctx context.Context) (map[int64]poll.Client, error
 		}
 		options := downloader.Options()
 		clients[downloader.ID] = poll.Client{
+			Name:            downloader.Name,
 			Client:          sabnzbd.Downloader{Client: factory(downloader.ID, downloader.BaseURL, credentials.Reveal())},
 			RemoveCompleted: options.RemovesCompleted(),
 			LocalPath:       options.LocalPathFor,

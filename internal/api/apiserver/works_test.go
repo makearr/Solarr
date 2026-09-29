@@ -78,6 +78,7 @@ type worksFixture struct {
 	namingSchemes        *fakeNamingSchemes
 	calendar             *fakeCalendar
 	history              *fakeHistory
+	queue                *fakeQueue
 	libraryTracks        *fakeLibraryTracksReader
 	scheduler            *fakeScheduler
 	cacheManager         *fakeCacheManager
@@ -242,6 +243,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	namingSchemes := &fakeNamingSchemes{}
 	calendar := &fakeCalendar{}
 	history := &fakeHistory{}
+	queue := &fakeQueue{}
 	libraryTracks := &fakeLibraryTracksReader{}
 	scheduler := &fakeScheduler{states: map[string]jobs.ScheduleRun{}}
 	cacheManager := &fakeCacheManager{}
@@ -277,6 +279,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		NamingSchemes:         namingSchemes,
 		Calendar:              calendar,
 		History:               history,
+		Queue:                 queue,
 		FS:                    fsys,
 		ConfigPath:            configPath,
 		DownloadRoots:         apiserver.FilesystemRoots{FS: fsys},
@@ -315,6 +318,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		fingerprintRetrier: fingerprintRetrier,
 		drainStarter:       drainStarter, moveJobs: moveJobs, renameStarter: renameStarter, namingSchemes: namingSchemes, calendar: calendar,
 		history:       history,
+		queue:         queue,
 		libraryTracks: libraryTracks, scheduler: scheduler, cacheManager: cacheManager, discover: discover,
 		arrSync: arrSync, indexerTester: indexerTester, downloaderTester: downloaderTester,
 		candidateSearcher: candidateSearcher, fsys: fsys, clock: fake,

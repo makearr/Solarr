@@ -24,11 +24,16 @@ import (
 type fakeClient struct {
 	download.Client
 	downloads []download.Download
+	status    download.QueueStatus
 	removed   []string
 }
 
 func (f *fakeClient) Downloads(context.Context, string) ([]download.Download, error) {
 	return f.downloads, nil
+}
+
+func (f *fakeClient) QueueStatus(context.Context) (download.QueueStatus, error) {
+	return f.status, nil
 }
 
 func (f *fakeClient) Remove(_ context.Context, clientRef string, deleteFiles bool) error {
@@ -89,7 +94,7 @@ func (e *env) job() *poll.Job {
 	return poll.NewJob(poll.Config{
 		Acquisitions: e.acquisitions, Sessions: e.sessions, Blocklist: e.blocklist, FS: e.fsys,
 		Clients: func(context.Context) (map[int64]poll.Client, error) {
-			return map[int64]poll.Client{1: {Client: e.client, RemoveCompleted: e.removeDone,
+			return map[int64]poll.Client{1: {Name: "Home SABnzbd", Client: e.client, RemoveCompleted: e.removeDone,
 				LocalPath: func(reported string) string { return reported }}}, nil
 		},
 		DownloadFolders: func(context.Context) ([]string, error) { return []string{"/downloads"}, nil },

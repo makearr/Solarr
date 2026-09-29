@@ -47,6 +47,7 @@ const SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier: Ti
 
 // Lidarr's Activity: what happened to downloads at normal, the job queue behind them advanced.
 const ACTIVITY_SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier: Tier }[] = [
+  { to: "/activity/queue", label: "Queue", icon: Download, tier: "normal" },
   { to: "/activity/history", label: "History", icon: HistoryIcon, tier: "normal" },
   { to: "/activity/jobs", label: "Jobs", icon: ListChecks, tier: "advanced" },
 ];
@@ -254,7 +255,7 @@ export function Sidebar() {
       <CollapsibleSection
         label="Activity"
         icon={Activity}
-        to="/activity/history"
+        to="/activity/queue"
         collapsed={collapsed}
         active={path.startsWith("/activity")}
         isOpen={sections.isOpen("activity")}

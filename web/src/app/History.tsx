@@ -27,7 +27,9 @@ const COLUMNS: readonly Column<HistoryEntry>[] = [
     render: (entry) => (
       <span className="block truncate" title={[entry.release_title, entry.detail].filter(Boolean).join("\n")}>
         {entry.release_title}
-        {entry.detail && <span className="text-danger"> — {entry.detail}</span>}
+        {entry.detail && (
+          <span className={entry.kind === "failed" ? "text-danger" : "text-ink-muted"}> — {entry.detail}</span>
+        )}
       </span>
     ),
   },
