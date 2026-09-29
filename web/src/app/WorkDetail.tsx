@@ -295,7 +295,11 @@ export function WorkDetail() {
                       ? "Already downloading."
                       : grab.data.held
                         ? "Found; waiting until the download client has room."
-                        : grab.data.sent
+                        : grab.data.sent && grab.data.refused
+                          ? `Sent to the download client (it refused ${grab.data.refused} better release${grab.data.refused > 1 ? "s" : ""} first).`
+                          : !grab.data.sent && grab.data.refused
+                            ? "The download client refused every release found -- often because it downloaded them before."
+                            : grab.data.sent
                         ? "Sent to the download client."
                         : grab.data.found > 0
                           ? `${grab.data.found} found, none acceptable.`
@@ -320,6 +324,7 @@ export function WorkDetail() {
                 onSend={(decisionId) => send.mutate(decisionId)}
                 sendPendingId={send.isPending ? send.variables : undefined}
                 sendError={send.isError ? send.variables : undefined}
+                sendErrorDetail={send.isError ? (send.error as { detail?: string }).detail : undefined}
                 onBlocklist={administrator ? (decisionId) => blocklist.mutate(decisionId) : undefined}
               />
             </div>

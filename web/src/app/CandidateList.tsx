@@ -10,6 +10,7 @@ export function CandidateList({
   onSend,
   sendPendingId,
   sendError,
+  sendErrorDetail,
   onBlocklist,
 }: {
   decisions: CandidateDecision[];
@@ -17,6 +18,8 @@ export function CandidateList({
   onSend: (decisionId: number) => void;
   sendPendingId: number | undefined;
   sendError: number | undefined;
+  /** The server's own reason, e.g. the download client refusing the release. */
+  sendErrorDetail?: string;
   onBlocklist?: (decisionId: number) => void;
 }) {
   if (loading) return <p className="text-xs text-ink-muted">Loading…</p>;
@@ -66,7 +69,7 @@ export function CandidateList({
           </div>
           {sendError === decision.id && (
             <p className="text-xs text-danger">
-              That could not be sent -- check that a matching download client is connected.
+              {sendErrorDetail ?? "That could not be sent -- check that a matching download client is connected."}
             </p>
           )}
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/makearr/Solarr/internal/acquiring/download"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -72,11 +73,11 @@ func (c Client) AddFile(ctx context.Context, request AddFileRequest) (clientRef 
 		return "", fmt.Errorf("sabnzbd: add file: decode response: %w", err)
 	}
 	if !parsed.Status {
-		message := parsed.Error
-		if message == "" {
-			message = "SABnzbd refused the request"
+		if parsed.Error == "" {
+			return "", fmt.Errorf("sabnzbd: add file: %w (SABnzbd gave no reason; often it has downloaded it before)",
+				download.ErrRefused)
 		}
-		return "", fmt.Errorf("sabnzbd: add file: %s", message)
+		return "", fmt.Errorf("sabnzbd: add file: %w: %s", download.ErrRefused, parsed.Error)
 	}
 	if len(parsed.NzoIDs) == 0 {
 		return "", fmt.Errorf("sabnzbd: add file: accepted but returned no nzo_id")

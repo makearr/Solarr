@@ -93,7 +93,9 @@ export function Wanted() {
         ? "Already downloading"
         : data.held
           ? "Waiting for room in the download client"
-          : data.sent
+          : !data.sent && data.refused
+            ? "The download client refused every release found"
+            : data.sent
           ? "Sent to the download client"
           : data.found > 0
             ? `${data.found} found, none acceptable`

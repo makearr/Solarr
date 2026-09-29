@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
 )
 
@@ -87,7 +88,8 @@ func (d Dispatch) SendHeld(ctx context.Context, at time.Time) (int, error) {
 			continue
 		}
 		_, err = d.Send(ctx, entry.DesiredItemID, detail.Decision.ID, at)
-		if err != nil && !errors.Is(err, library.ErrAcquisitionAlreadyInFlight) {
+		// Declined by the client: dropped, and the album searched afresh on its next turn.
+		if err != nil && !errors.Is(err, library.ErrAcquisitionAlreadyInFlight) && !errors.Is(err, download.ErrRefused) {
 			return sent, fmt.Errorf("music: send held release %d: %w", entry.CandidateID, err)
 		}
 		if err := d.Ready.Remove(ctx, entry.CandidateID); err != nil {
