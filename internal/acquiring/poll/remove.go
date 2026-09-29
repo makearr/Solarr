@@ -28,9 +28,10 @@ func (j *Job) Remove(ctx context.Context, acquisitionID int64, blocklist bool) e
 	}
 	now := j.config.Clock.Now().Unix()
 	detail, historyDetail := "removed from the queue", ""
-	if blocklist && acquisition.CandidateGUID != "" {
+	if blocklist && (acquisition.CandidateGUID != "" || acquisition.ContentHash != "") {
 		if _, err := j.config.Blocklist.Create(ctx, library.NewBlocklistEntry{
-			IndexerID: acquisition.IndexerID, GUID: acquisition.CandidateGUID, Title: acquisition.CandidateTitle,
+			IndexerID: acquisition.IndexerID, GUID: acquisition.CandidateGUID, ContentHash: acquisition.ContentHash,
+			Title:         acquisition.CandidateTitle,
 			DesiredItemID: acquisition.DesiredItemID, Reason: library.BlocklistManual, Source: library.BlocklistSourceUser,
 			CreatedAt: now,
 		}); err != nil {

@@ -50,6 +50,9 @@ func TestRemove_WithBlocklistBlocksTheReleaseAndSearchesAgain(t *testing.T) {
 	if err != nil || !blocked {
 		t.Errorf("IsBlocked = %v (%v), want blocked for good", blocked, err)
 	}
+	if byContent, err := e.blocklist.IsBlocked(t.Context(), nil, "", sent.ContentHash, 1<<40); err != nil || !byContent {
+		t.Errorf("IsBlocked by content = %v (%v), want blocked", byContent, err)
+	}
 	if !slices.Equal(e.searched, []int64{*sent.DesiredItemID}) {
 		t.Errorf("searched = %v, want the album searched again", e.searched)
 	}

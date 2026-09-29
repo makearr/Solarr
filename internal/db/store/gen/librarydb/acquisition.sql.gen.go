@@ -81,13 +81,13 @@ INSERT INTO acquisition (desired_item_id, candidate_id, indexer_id, candidate_gu
                          download_client_ref, download_dir, client_category,
                          client_fingerprint, protocol, ddl_resolved_url,
                          ddl_bytes_done, ddl_resumable, state, last_error,
-                         created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         created_at, updated_at, content_hash)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, desired_item_id, candidate_id, indexer_id, candidate_guid,
           candidate_title, search_terms, downloader_id, download_client_ref,
           download_dir, client_category, client_fingerprint, protocol,
           ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-          created_at, updated_at
+          created_at, updated_at, content_hash
 `
 
 type CreateAcquisitionParams struct {
@@ -110,6 +110,7 @@ type CreateAcquisitionParams struct {
 	LastError         sql.NullString
 	CreatedAt         int64
 	UpdatedAt         int64
+	ContentHash       sql.NullString
 }
 
 func (q *Queries) CreateAcquisition(ctx context.Context, arg CreateAcquisitionParams) (Acquisition, error) {
@@ -133,6 +134,7 @@ func (q *Queries) CreateAcquisition(ctx context.Context, arg CreateAcquisitionPa
 		arg.LastError,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+		arg.ContentHash,
 	)
 	var i Acquisition
 	err := row.Scan(
@@ -156,6 +158,7 @@ func (q *Queries) CreateAcquisition(ctx context.Context, arg CreateAcquisitionPa
 		&i.LastError,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ContentHash,
 	)
 	return i, err
 }
@@ -184,7 +187,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at
+       created_at, updated_at, content_hash
 FROM acquisition WHERE id = ?
 `
 
@@ -212,6 +215,7 @@ func (q *Queries) GetAcquisition(ctx context.Context, id int64) (Acquisition, er
 		&i.LastError,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ContentHash,
 	)
 	return i, err
 }
@@ -221,7 +225,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at
+       created_at, updated_at, content_hash
 FROM acquisition WHERE downloader_id = ? AND download_client_ref = ?
 `
 
@@ -255,6 +259,7 @@ func (q *Queries) GetAcquisitionByClientRef(ctx context.Context, arg GetAcquisit
 		&i.LastError,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ContentHash,
 	)
 	return i, err
 }
@@ -264,7 +269,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at
+       created_at, updated_at, content_hash
 FROM acquisition
 WHERE desired_item_id = ? AND state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')
 `
@@ -297,6 +302,7 @@ func (q *Queries) GetActiveAcquisitionForItem(ctx context.Context, desiredItemID
 		&i.LastError,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ContentHash,
 	)
 	return i, err
 }
@@ -423,7 +429,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at
+       created_at, updated_at, content_hash
 FROM acquisition
 WHERE state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')
 ORDER BY id
@@ -460,6 +466,7 @@ func (q *Queries) ListActiveAcquisitions(ctx context.Context) ([]Acquisition, er
 			&i.LastError,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ContentHash,
 		); err != nil {
 			return nil, err
 		}

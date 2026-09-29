@@ -29,6 +29,7 @@ type Acquisition struct {
 	LastError         sql.NullString
 	CreatedAt         int64
 	UpdatedAt         int64
+	ContentHash       sql.NullString
 }
 
 type AcquisitionFile struct {

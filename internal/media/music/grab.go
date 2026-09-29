@@ -64,7 +64,7 @@ func (g Grab) SearchAndSend(
 			continue
 		}
 		// The client declined this one (a duplicate, a broken NZB): Lidarr moves on to the next.
-		if errors.Is(err, download.ErrRefused) {
+		if errors.Is(err, download.ErrRefused) || errors.Is(err, ErrContentBlocklisted) {
 			refused++
 			continue
 		}
