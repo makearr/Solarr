@@ -86,8 +86,10 @@ type SearchTerms struct {
 
 // IndexerSearchError records one indexer's own search failure within a run.
 type IndexerSearchError struct {
-	IndexerID int64
-	Error     string
+	IndexerID   int64
+	IndexerName string
+	Error       string
+	TooSlow     bool
 }
 
 // SearchItemResult is one work's own search run.
@@ -423,7 +425,10 @@ func searchItemResultView(result SearchItemResult) gen.SearchItemResult {
 	}
 	indexerErrors := make([]gen.IndexerSearchError, len(result.IndexerErrors))
 	for index, indexerError := range result.IndexerErrors {
-		indexerErrors[index] = gen.IndexerSearchError{IndexerId: indexerError.IndexerID, Error: indexerError.Error}
+		indexerErrors[index] = gen.IndexerSearchError{
+			IndexerId: indexerError.IndexerID, IndexerName: indexerError.IndexerName,
+			Error: indexerError.Error, TooSlow: indexerError.TooSlow,
+		}
 	}
 	return gen.SearchItemResult{TierUsed: result.TierUsed, Decisions: decisions, IndexerErrors: indexerErrors}
 }

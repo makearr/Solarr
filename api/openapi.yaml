@@ -8037,10 +8037,14 @@ components:
 
     IndexerSearchError:
       type: object
-      required: [indexer_id, error]
+      required: [indexer_id, indexer_name, error, too_slow]
       properties:
         indexer_id: { type: integer, format: int64 }
+        indexer_name: { type: string }
         error: { type: string }
+        too_slow:
+          type: boolean
+          description: The indexer had not answered when the search's 20-second deadline passed (ADR-37).
 
     Acquisition:
       type: object

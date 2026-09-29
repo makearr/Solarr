@@ -5340,7 +5340,10 @@ export interface components {
         IndexerSearchError: {
             /** Format: int64 */
             indexer_id: number;
+            indexer_name: string;
             error: string;
+            /** @description The indexer had not answered when the search's 20-second deadline passed (ADR-37). */
+            too_slow: boolean;
         };
         /** @description One dispatch to a download client (ADR-57, section 12) -- denormalised from the candidate it came from, since a candidate can expire while this row must outlive it. */
         Acquisition: {

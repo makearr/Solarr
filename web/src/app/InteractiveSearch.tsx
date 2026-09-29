@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { api } from "@/api/client";
 
 import { CandidateList } from "./CandidateList";
+import { IndexerProblems } from "./IndexerProblems";
 
 /** Lidarr's Interactive Search: search now, list what was found best first, the person sends one. */
 export function InteractiveSearch({
@@ -56,6 +57,7 @@ export function InteractiveSearch({
           <Dialog.Description className="text-xs text-ink-muted">
             Best first. Send puts a release in the download client's queue.
           </Dialog.Description>
+          <IndexerProblems problems={found.data?.indexer_errors} />
           <div className="min-h-0 overflow-y-auto">
             {found.isError ? (
               <p className="text-xs text-danger">The search could not run -- is an indexer connected and enabled?</p>
@@ -76,3 +78,4 @@ export function InteractiveSearch({
     </Dialog.Root>
   );
 }
+
