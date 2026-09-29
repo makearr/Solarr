@@ -2805,6 +2805,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Downloads in flight and every enabled download client's own queue, read live.
+         * @description Lidarr's Activity -> Queue. Only downloads for libraries the caller can read; clients are listed for everyone who can see any. With work_id, one album's downloads.
+         */
+        get: operations["listQueue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queue/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a download from its client with its files; manage on its library.
+         * @description With blocklist the release is never grabbed again and the album is searched for another. A download already being imported is refused.
+         */
+        delete: operations["removeQueueItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/blocklist/{id}": {
         parameters: {
             query?: never;
@@ -3768,6 +3808,57 @@ export interface components {
              */
             next_cursor?: number;
         };
+        Queue: {
+            clients: components["schemas"]["QueueClient"][];
+            items: components["schemas"]["QueueItem"][];
+        };
+        /** @description One download client's own queue, or why it could not be read. */
+        QueueClient: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            paused: boolean;
+            /** Format: int64 */
+            speed_bytes_per_sec: number;
+            items: number;
+            /** Format: int64 */
+            size_left_bytes: number;
+            error?: string;
+        };
+        /** @description One download in flight. */
+        QueueItem: {
+            /**
+             * Format: int64
+             * @description The acquisition id.
+             */
+            id: number;
+            /** Format: int64 */
+            work_id?: number;
+            album?: string;
+            artist?: string;
+            release_title: string;
+            indexer?: string;
+            client: string;
+            /** @enum {string} */
+            state: "QUEUED" | "DOWNLOADING" | "COMPLETED" | "IMPORTING";
+            /**
+             * @description The client's own view; absent while the client does not list it.
+             * @enum {string}
+             */
+            client_state?: "queued" | "downloading" | "paused" | "processing" | "completed" | "failed";
+            /** Format: int64 */
+            size_bytes?: number;
+            /** Format: int64 */
+            size_left_bytes?: number;
+            /**
+             * Format: int64
+             * @description At the client's current speed; absent when paused, stopped or unknown.
+             */
+            eta_seconds?: number;
+            error?: string;
+            /** Format: date-time */
+            added_at: string;
+        };
         /** @description One thing that happened to a download, as it was known then. */
         HistoryEntry: {
             /** Format: int64 */
@@ -3775,7 +3866,7 @@ export interface components {
             /** Format: date-time */
             at: string;
             /** @enum {string} */
-            kind: "grabbed" | "imported" | "failed";
+            kind: "grabbed" | "imported" | "failed" | "removed";
             /** Format: int64 */
             work_id?: number;
             album?: string;
@@ -9905,6 +9996,55 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+        };
+    };
+    listQueue: {
+        parameters: {
+            query?: {
+                work_id?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The queue. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Queue"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    removeQueueItem: {
+        parameters: {
+            query?: {
+                blocklist?: boolean;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     removeBlocklistEntry: {

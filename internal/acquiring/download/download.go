@@ -22,15 +22,17 @@ const (
 // HistoryKind is what happened to a download, as History and an album's page show it (section 5.7).
 type HistoryKind string
 
-// The history kinds M1's acceptance test names: "grabbed" and "imported", and a failure.
+// The history kinds M1's acceptance test names: "grabbed" and "imported", a failure, and a removal
+// from the queue by a person.
 const (
 	HistoryGrabbed  HistoryKind = "download.grabbed"
 	HistoryImported HistoryKind = "download.imported"
 	HistoryFailed   HistoryKind = "download.failed"
+	HistoryRemoved  HistoryKind = "download.removed"
 )
 
 // HistoryKinds are every download history kind, newest-first listings read all of them.
-var HistoryKinds = []HistoryKind{HistoryGrabbed, HistoryImported, HistoryFailed}
+var HistoryKinds = []HistoryKind{HistoryGrabbed, HistoryImported, HistoryFailed, HistoryRemoved}
 
 // HistoryData is a history entry's payload: what was known when it happened, kept as it was.
 type HistoryData struct {

@@ -6,12 +6,14 @@ const KIND_LABEL: Record<HistoryEntry["kind"], string> = {
   grabbed: "Grabbed",
   imported: "Imported",
   failed: "Failed",
+  removed: "Removed",
 };
 
 const KIND_TONE: Record<HistoryEntry["kind"], string> = {
   grabbed: "text-accent",
   imported: "text-ok",
   failed: "text-danger",
+  removed: "text-ink-muted",
 };
 
 /** What happened to a download, in the words Lidarr's history uses. */

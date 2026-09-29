@@ -19,9 +19,31 @@ import (
 func (p *process) recordDownloadHistory(
 	ctx context.Context, kind download.HistoryKind, acquisition library.Acquisition, detail string,
 ) {
-	data := download.HistoryData{
-		AcquisitionID: acquisition.ID, ReleaseTitle: acquisition.CandidateTitle, Detail: detail,
+	data, workID := p.describeAcquisition(ctx, acquisition)
+	data.Detail = detail
+
+	encoded, err := json.Marshal(data)
+	if err == nil {
+		event := jobs.Event{Kind: string(kind), Data: string(encoded)}
+		if workID != 0 {
+			event.SubjectType, event.SubjectID = "work", workID
+		}
+		_, err = jobs.NewHistory(p.jobs, clock.NewSystem()).Append(ctx, event)
 	}
+	if err != nil {
+		p.logger.Warn("download history not recorded", slog.String("kind", string(kind)),
+			slog.Int64("acquisition_id", acquisition.ID), slog.Any("error", err))
+	}
+	p.bus.Publish(events.Event{
+		Topic: events.TopicAcquisition, Entity: fmt.Sprintf("work:%d", workID), CategoryID: data.CategoryID,
+		Kind: string(kind), Data: data,
+	})
+}
+
+// describeAcquisition names what a download is for: its album, artist and library, and the indexer
+// and client by name. Best-effort: whatever cannot be read is left empty.
+func (p *process) describeAcquisition(ctx context.Context, acquisition library.Acquisition) (download.HistoryData, int64) {
+	data := download.HistoryData{AcquisitionID: acquisition.ID, ReleaseTitle: acquisition.CandidateTitle}
 	if indexers, err := p.cache.Indexers(ctx); err == nil && acquisition.IndexerID != nil {
 		for _, indexer := range indexers {
 			if indexer.ID == *acquisition.IndexerID {
@@ -51,21 +73,5 @@ func (p *process) recordDownloadHistory(
 			}
 		}
 	}
-
-	encoded, err := json.Marshal(data)
-	if err == nil {
-		event := jobs.Event{Kind: string(kind), Data: string(encoded)}
-		if workID != 0 {
-			event.SubjectType, event.SubjectID = "work", workID
-		}
-		_, err = jobs.NewHistory(p.jobs, clock.NewSystem()).Append(ctx, event)
-	}
-	if err != nil {
-		p.logger.Warn("download history not recorded", slog.String("kind", string(kind)),
-			slog.Int64("acquisition_id", acquisition.ID), slog.Any("error", err))
-	}
-	p.bus.Publish(events.Event{
-		Topic: events.TopicAcquisition, Entity: fmt.Sprintf("work:%d", workID), CategoryID: data.CategoryID,
-		Kind: string(kind), Data: data,
-	})
+	return data, workID
 }

@@ -36,6 +36,7 @@ const (
 	StateImported    = "IMPORTED"
 	StateCleaned     = "CLEANED"
 	StateFailed      = "FAILED"
+	StateCancelled   = "CANCELLED"
 )
 
 // failureMemory is how long an automatic blocklist entry lasts (section 10.11).
@@ -47,6 +48,7 @@ const massVanishFloor = 3
 
 // Client is one configured download client as a poll needs it.
 type Client struct {
+	Name            string
 	Client          download.Client
 	RemoveCompleted bool
 	// LocalPath maps a path the client reports to where Solarr sees it.

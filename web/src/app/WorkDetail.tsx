@@ -12,6 +12,7 @@ import { usePreference } from "@/lib/usePreference";
 
 import { CandidateList } from "./CandidateList";
 import { CoverArt } from "./CoverArt";
+import { statusLabel, useQueue } from "./Queue";
 
 type Edition = components["schemas"]["Edition"];
 type WorkPart = components["schemas"]["WorkPart"];
@@ -198,6 +199,7 @@ export function WorkDetail() {
                 {work.year ? `Released ${work.year}` : "Release date unknown"}
               </p>
               <WantedBadge wanted={work.wanted} onDisk={work.on_disk} hasTracklist={work.parts.length > 0} />
+              <DownloadingBadge workId={work.id} />
             </div>
             <button
               type="button"
@@ -826,7 +828,9 @@ function WorkHistory({ workId }: { workId: number }) {
             </span>
             <span className="min-w-0 truncate" title={entry.release_title}>
               {entry.release_title}
-              {entry.detail && <span className="text-danger"> — {entry.detail}</span>}
+              {entry.detail && (
+                <span className={entry.kind === "failed" ? "text-danger" : "text-ink-muted"}> — {entry.detail}</span>
+              )}
             </span>
             <span className="ml-auto shrink-0 text-xs text-ink-muted">{historySource(entry)}</span>
           </li>
@@ -847,4 +851,22 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Message({ children }: { children: React.ReactNode }) {
   return <p className="p-6 text-sm text-ink-muted">{children}</p>;
+}
+
+/** "Downloading 42%" while a release for this album is in a client, as Lidarr's album page shows it. */
+function DownloadingBadge({ workId }: { workId: number }) {
+  const queue = useQueue(workId);
+  const item = queue.data?.items[0];
+  if (!item) return null;
+  const done = item.size_bytes ? Math.round((1 - (item.size_left_bytes ?? 0) / item.size_bytes) * 100) : undefined;
+  return (
+    <Link
+      to="/activity/queue"
+      className="w-fit rounded-full border border-accent px-2 py-px text-xs text-accent hover:underline"
+      title={item.release_title}
+    >
+      {statusLabel(item)}
+      {item.state !== "IMPORTING" && done !== undefined ? ` ${done}%` : ""}
+    </Link>
+  );
 }

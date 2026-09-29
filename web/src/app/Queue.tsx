@@ -1,0 +1,246 @@
+import { useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { api } from "@/api/client";
+import type { components } from "@/api/schema";
+
+type QueueItem = components["schemas"]["QueueItem"];
+type QueueClient = components["schemas"]["QueueClient"];
+
+// Read live from the clients, so refreshed as Lidarr's queue is rather than on events alone.
+const REFRESH_MS = 5_000;
+
+/** Activity → Queue, as in Lidarr: what is downloading now, and each client's own state. */
+export function Queue() {
+  const queue = useQueue();
+
+  return (
+    <div className="flex h-full flex-col overflow-y-auto">
+      <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
+        <h2 className="text-sm font-medium">Queue</h2>
+      </div>
+      <div className="flex flex-col gap-4 p-4">
+        {queue.isLoading && <Message>Loading the queue…</Message>}
+        {queue.error !== null && <Message>The queue could not be read.</Message>}
+        {queue.data && (
+          <>
+            <ClientList clients={queue.data.clients} />
+            {queue.data.items.length === 0 ? (
+              <Message>Nothing is downloading. Albums sent to a download client appear here until imported.</Message>
+            ) : (
+              <QueueTable items={queue.data.items} />
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The queue, or one album's part of it. */
+export function useQueue(workId?: number) {
+  return useQuery({
+    queryKey: ["queue", workId],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/queue", { params: { query: { work_id: workId } } });
+      if (error) throw error;
+      return data;
+    },
+    refetchInterval: REFRESH_MS,
+  });
+}
+
+function ClientList({ clients }: { clients: readonly QueueClient[] }) {
+  if (clients.length === 0) {
+    return <Message>No download client is enabled, so nothing can be downloaded.</Message>;
+  }
+  return (
+    <ul className="flex flex-wrap gap-2 text-xs">
+      {clients.map((client) => (
+        <li key={client.id} className="flex items-center gap-2 rounded-md border border-border-subtle bg-surface px-3 py-2">
+          <span className="font-medium text-ink">{client.name}</span>
+          {client.error ? (
+            <span className="text-danger" title={client.error}>
+              not reachable
+            </span>
+          ) : client.paused ? (
+            <span className="text-warn">paused -- nothing downloads until it is resumed in the client</span>
+          ) : (
+            <span className="text-ink-muted">
+              {client.speed_bytes_per_sec > 0 ? `${formatBytes(client.speed_bytes_per_sec)}/s` : "idle"} ·{" "}
+              {client.items} in its queue · {formatBytes(client.size_left_bytes)} left
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function QueueTable({ items }: { items: readonly QueueItem[] }) {
+  return (
+    <table className="w-full text-left text-xs">
+      <thead className="text-ink-muted">
+        <tr className="border-b border-border-subtle">
+          <th className="px-2 py-1.5 font-medium">Album</th>
+          <th className="px-2 py-1.5 font-medium">Release</th>
+          <th className="px-2 py-1.5 font-medium">Status</th>
+          <th className="px-2 py-1.5 font-medium">Progress</th>
+          <th className="px-2 py-1.5 font-medium">Time left</th>
+          <th className="px-2 py-1.5 font-medium">From → to</th>
+          <th className="px-2 py-1.5" />
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((item) => (
+          <QueueRow key={item.id} item={item} />
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function QueueRow({ item }: { item: QueueItem }) {
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const [blocklist, setBlocklist] = useState(false);
+  const remove = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.DELETE("/queue/{id}", {
+        params: { path: { id: item.id }, query: { blocklist } },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setConfirming(false);
+      void queryClient.invalidateQueries({ queryKey: ["queue"] });
+      void queryClient.invalidateQueries({ queryKey: ["history"] });
+    },
+  });
+  const removable = item.state !== "IMPORTING";
+
+  return (
+    <tr className="border-b border-border-subtle align-top">
+      <td className="px-2 py-2">
+        {item.work_id != null ? (
+          <Link to="/works/$id" params={{ id: String(item.work_id) }} className="text-ink hover:underline">
+            {[item.artist, item.album].filter(Boolean).join(" — ") || "Album"}
+          </Link>
+        ) : (
+          (item.album ?? "")
+        )}
+      </td>
+      <td className="max-w-80 px-2 py-2">
+        <span className="block truncate" title={item.release_title}>
+          {item.release_title}
+        </span>
+        {item.error && <span className="block text-danger">{item.error}</span>}
+      </td>
+      <td className="px-2 py-2">{statusLabel(item)}</td>
+      <td className="w-40 px-2 py-2">
+        <ProgressBar item={item} />
+      </td>
+      <td className="px-2 py-2 text-ink-muted">{item.eta_seconds != null ? formatDuration(item.eta_seconds) : ""}</td>
+      <td className="px-2 py-2 text-ink-muted">{[item.indexer, item.client].filter(Boolean).join(" → ")}</td>
+      <td className="px-2 py-2 text-right">
+        {confirming ? (
+          <span className="flex flex-col items-end gap-1">
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={blocklist} onChange={(event) => setBlocklist(event.target.checked)} />
+              Blocklist this release and search for another
+            </label>
+            <span className="flex gap-1.5">
+              <button
+                type="button"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate()}
+                className="rounded-md bg-danger px-2 py-0.5 text-accent-ink disabled:opacity-50"
+              >
+                Remove
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                className="rounded-md border border-border-subtle px-2 py-0.5 text-ink-muted hover:text-ink"
+              >
+                Cancel
+              </button>
+            </span>
+            {remove.isError && <span className="text-danger">It could not be removed.</span>}
+          </span>
+        ) : (
+          removable && (
+            <button
+              type="button"
+              onClick={() => setConfirming(true)}
+              title="Remove from the download client, with its files"
+              className="rounded-md border border-border-subtle px-2 py-0.5 text-ink-muted hover:text-danger"
+            >
+              Remove
+            </button>
+          )
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function ProgressBar({ item }: { item: QueueItem }) {
+  if (!item.size_bytes) return null;
+  const done = Math.max(0, Math.min(1, 1 - (item.size_left_bytes ?? 0) / item.size_bytes));
+  return (
+    <div className="flex items-center gap-2" title={`${formatBytes(item.size_bytes)}`}>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-border-subtle">
+        <div className="h-full bg-accent" style={{ width: `${Math.round(done * 100)}%` }} />
+      </div>
+      <span className="w-9 text-right text-ink-muted">{Math.round(done * 100)}%</span>
+    </div>
+  );
+}
+
+/** Solarr's state, sharpened by the client's own where it says more. */
+export function statusLabel(item: QueueItem): string {
+  switch (item.state) {
+    case "IMPORTING":
+      return "Importing";
+    case "COMPLETED":
+      return item.error ? "Downloaded, waiting" : "Downloaded";
+  }
+  switch (item.client_state) {
+    case "paused":
+      return "Paused";
+    case "downloading":
+      return "Downloading";
+    case "processing":
+      return "Unpacking";
+    case "completed":
+      return "Downloaded";
+    case "failed":
+      return "Failed";
+    default:
+      return "Queued";
+  }
+}
+
+export function formatBytes(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${value < 10 && unit > 0 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
+}
+
+export function formatDuration(seconds: number): string {
+  if (seconds < 60) return "under a minute";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+}
+
+function Message({ children }: { children: React.ReactNode }) {
+  return <p className="text-sm text-ink-muted">{children}</p>;
+}

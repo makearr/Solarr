@@ -16,10 +16,12 @@ retention-bounded, and not authoritative for library correctness. Under ADR-3's 
 file, putting the event log in `library.db` would queue every append against a library commit,
 and an event is lossy notification data (ADR-9) that must never block one.
 
-Download history is `event_log` rows of kind `download.grabbed`, `download.imported` and
-`download.failed`, subject `work`, with `download.HistoryData` as the payload: album, artist,
+Download history is `event_log` rows of kind `download.grabbed`, `download.imported`,
+`download.failed` and `download.removed` (taken out of the queue by a person), subject `work`, with `download.HistoryData` as the payload: album, artist,
 release, indexer and client as they were at the time. Activity → History and an album's page
 read them; the library each belongs to is in the payload, and the API filters on it.
+Activity → Queue is not stored: `GET /queue` joins the in-flight `acquisition` rows to each
+download client's live answer on every request, as Lidarr's queue does.
 
 ## Which database a table belongs in
 

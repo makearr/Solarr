@@ -30,6 +30,7 @@ const DOWNLOAD_VERBS: Record<string, string> = {
   "download.grabbed": "Grabbed",
   "download.imported": "Imported",
   "download.failed": "Download failed",
+  "download.removed": "Removed from the queue",
 };
 
 /** How much scrollback the bar keeps. Enough to answer "what just happened",

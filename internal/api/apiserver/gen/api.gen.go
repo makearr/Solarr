@@ -198,6 +198,7 @@ const (
 	HistoryEntryKindFailed   HistoryEntryKind = "failed"
 	HistoryEntryKindGrabbed  HistoryEntryKind = "grabbed"
 	HistoryEntryKindImported HistoryEntryKind = "imported"
+	HistoryEntryKindRemoved  HistoryEntryKind = "removed"
 )
 
 // Defines values for IdentificationAttemptOutcome.
@@ -421,6 +422,24 @@ const (
 const (
 	ProwlarrIndexerImplNewznab ProwlarrIndexerImpl = "newznab"
 	ProwlarrIndexerImplTorznab ProwlarrIndexerImpl = "torznab"
+)
+
+// Defines values for QueueItemClientState.
+const (
+	QueueItemClientStateCompleted   QueueItemClientState = "completed"
+	QueueItemClientStateDownloading QueueItemClientState = "downloading"
+	QueueItemClientStateFailed      QueueItemClientState = "failed"
+	QueueItemClientStatePaused      QueueItemClientState = "paused"
+	QueueItemClientStateProcessing  QueueItemClientState = "processing"
+	QueueItemClientStateQueued      QueueItemClientState = "queued"
+)
+
+// Defines values for QueueItemState.
+const (
+	QueueItemStateCOMPLETED   QueueItemState = "COMPLETED"
+	QueueItemStateDOWNLOADING QueueItemState = "DOWNLOADING"
+	QueueItemStateIMPORTING   QueueItemState = "IMPORTING"
+	QueueItemStateQUEUED      QueueItemState = "QUEUED"
 )
 
 // Defines values for ReadyStatusStatus.
@@ -2458,6 +2477,53 @@ type QualityTarget struct {
 	TolerancePct int64  `json:"tolerance_pct"`
 }
 
+// Queue defines model for Queue.
+type Queue struct {
+	Clients []QueueClient `json:"clients"`
+	Items   []QueueItem   `json:"items"`
+}
+
+// QueueClient One download client's own queue, or why it could not be read.
+type QueueClient struct {
+	Error            *string `json:"error,omitempty"`
+	Id               int64   `json:"id"`
+	Items            int     `json:"items"`
+	Name             string  `json:"name"`
+	Paused           bool    `json:"paused"`
+	SizeLeftBytes    int64   `json:"size_left_bytes"`
+	SpeedBytesPerSec int64   `json:"speed_bytes_per_sec"`
+}
+
+// QueueItem One download in flight.
+type QueueItem struct {
+	AddedAt time.Time `json:"added_at"`
+	Album   *string   `json:"album,omitempty"`
+	Artist  *string   `json:"artist,omitempty"`
+	Client  string    `json:"client"`
+
+	// ClientState The client's own view; absent while the client does not list it.
+	ClientState *QueueItemClientState `json:"client_state,omitempty"`
+	Error       *string               `json:"error,omitempty"`
+
+	// EtaSeconds At the client's current speed; absent when paused, stopped or unknown.
+	EtaSeconds *int64 `json:"eta_seconds,omitempty"`
+
+	// Id The acquisition id.
+	Id            int64          `json:"id"`
+	Indexer       *string        `json:"indexer,omitempty"`
+	ReleaseTitle  string         `json:"release_title"`
+	SizeBytes     *int64         `json:"size_bytes,omitempty"`
+	SizeLeftBytes *int64         `json:"size_left_bytes,omitempty"`
+	State         QueueItemState `json:"state"`
+	WorkId        *int64         `json:"work_id,omitempty"`
+}
+
+// QueueItemClientState The client's own view; absent while the client does not list it.
+type QueueItemClientState string
+
+// QueueItemState defines model for QueueItem.State.
+type QueueItemState string
+
 // ReadyStatus defines model for ReadyStatus.
 type ReadyStatus struct {
 	Status ReadyStatusStatus `json:"status"`
@@ -3268,6 +3334,16 @@ type SubscribePersonJSONBody struct {
 
 	// Roles Empty or absent means any role.
 	Roles *[]string `json:"roles,omitempty"`
+}
+
+// ListQueueParams defines parameters for ListQueue.
+type ListQueueParams struct {
+	WorkId *int64 `form:"work_id,omitempty" json:"work_id,omitempty"`
+}
+
+// RemoveQueueItemParams defines parameters for RemoveQueueItem.
+type RemoveQueueItemParams struct {
+	Blocklist *bool `form:"blocklist,omitempty" json:"blocklist,omitempty"`
 }
 
 // AddRootFolderJSONBody defines parameters for AddRootFolder.
@@ -4088,6 +4164,12 @@ type ServerInterface interface {
 	// Replace a quality profile's policy. Administrator only.
 	// (PATCH /qualityprofiles/{id})
 	UpdateQualityProfile(w http.ResponseWriter, r *http.Request, id int64)
+	// Downloads in flight and every enabled download client's own queue, read live.
+	// (GET /queue)
+	ListQueue(w http.ResponseWriter, r *http.Request, params ListQueueParams)
+	// Remove a download from its client with its files; manage on its library.
+	// (DELETE /queue/{id})
+	RemoveQueueItem(w http.ResponseWriter, r *http.Request, id int64, params RemoveQueueItemParams)
 	// Readiness.
 	// (GET /ready)
 	GetReady(w http.ResponseWriter, r *http.Request)
@@ -5048,6 +5130,18 @@ func (_ Unimplemented) DeleteQualityProfile(w http.ResponseWriter, r *http.Reque
 // Replace a quality profile's policy. Administrator only.
 // (PATCH /qualityprofiles/{id})
 func (_ Unimplemented) UpdateQualityProfile(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Downloads in flight and every enabled download client's own queue, read live.
+// (GET /queue)
+func (_ Unimplemented) ListQueue(w http.ResponseWriter, r *http.Request, params ListQueueParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a download from its client with its files; manage on its library.
+// (DELETE /queue/{id})
+func (_ Unimplemented) RemoveQueueItem(w http.ResponseWriter, r *http.Request, id int64, params RemoveQueueItemParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9565,6 +9659,85 @@ func (siw *ServerInterfaceWrapper) UpdateQualityProfile(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ListQueue operation middleware
+func (siw *ServerInterfaceWrapper) ListQueue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListQueueParams
+
+	// ------------- Optional query parameter "work_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "work_id", r.URL.Query(), &params.WorkId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "work_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListQueue(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveQueueItem operation middleware
+func (siw *ServerInterfaceWrapper) RemoveQueueItem(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveQueueItemParams
+
+	// ------------- Optional query parameter "blocklist" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "blocklist", r.URL.Query(), &params.Blocklist)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "blocklist", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveQueueItem(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetReady operation middleware
 func (siw *ServerInterfaceWrapper) GetReady(w http.ResponseWriter, r *http.Request) {
 
@@ -11656,6 +11829,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/qualityprofiles/{id}", wrapper.UpdateQualityProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/queue", wrapper.ListQueue)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/queue/{id}", wrapper.RemoveQueueItem)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/ready", wrapper.GetReady)

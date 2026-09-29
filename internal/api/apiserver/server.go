@@ -171,6 +171,8 @@ type Config struct {
 	Blocklist Blocklist
 	// History reads what happened to downloads: grabbed, imported, failed.
 	History History
+	// Queue is optional: nil answers the queue as unavailable.
+	Queue Queue
 
 	// Backups lists and takes backups (ADR-15). Restoring stays offline.
 	Backups Backups
@@ -250,6 +252,7 @@ type Server struct {
 	systemHealth          SystemHealthSource
 	blocklist             Blocklist
 	history               History
+	queue                 Queue
 	backups               Backups
 	logReader             LogReader
 	calendar              CalendarReader
@@ -336,6 +339,7 @@ func New(config Config) (*Server, error) {
 		systemHealth:          config.SystemHealth,
 		blocklist:             config.Blocklist,
 		history:               config.History,
+		queue:                 config.Queue,
 		backups:               config.Backups,
 		logReader:             config.LogReader,
 		calendar:              config.Calendar,
@@ -401,6 +405,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/blocklist", server.routeListBlocklist)
 			secured.Get("/history", server.routeListHistory)
 			secured.Delete("/blocklist/{id}", server.routeRemoveBlocklistEntry)
+			secured.Get("/queue", server.routeListQueue)
+			secured.Delete("/queue/{id}", server.routeRemoveQueueItem)
 			secured.Get("/system/egress", server.GetEgress)
 			secured.Get("/jobs", server.routeListJobs)
 			secured.Get("/works", server.routeListWorks)
