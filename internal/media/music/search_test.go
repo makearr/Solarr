@@ -275,6 +275,7 @@ func TestSearchItem_AnotherAlbumByTheSameArtistIsNoMatch(t *testing.T) {
 				rawItem("guid-live", "Kavelori-Roseland NYC Live 25-REMASTERED-24BIT-48KHZ-WEB-FLAC-2023-GROUP"),
 				rawItem("guid-own", "Kavelori-Kavelori-1997-GROUP"),
 				rawItem("guid-dotted", "Kavelori-Kavelori.1997"),
+				rawItem("guid-unsplit", "Kavelori2005RemixesVol.1+2FLAC"),
 			}, nil
 		},
 	}
@@ -291,6 +292,37 @@ func TestSearchItem_AnotherAlbumByTheSameArtistIsNoMatch(t *testing.T) {
 	slices.Sort(guids)
 	if want := []string{"guid-dotted", "guid-own"}; !slices.Equal(guids, want) {
 		t.Errorf("decided on %v, want %v: another album of the artist is no candidate", guids, want)
+	}
+}
+
+// A concert video named like the album is no album: a DVD rip was accepted live (2026-09-29).
+func TestSearchItem_AVideoReleaseIsNoMatch(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Kavelori", "Roseland", 1998, alwaysAcceptRules)
+	searcher := &fakeIndexerSearcher{
+		responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+			return []indexer.RawItem{
+				rawItem("guid-dvd", "Kavelori-Roseland.1998.DVDRip.x264.AC3-GROUP"),
+				rawItem("guid-bluray", "Kavelori - Roseland (1998) 1080p BluRay"),
+				rawItem("guid-webdl", "Kavelori.Roseland.1998.WEB-DL.H.264-GROUP"),
+				rawItem("guid-web", "Kavelori-Roseland-WEB-1998-GROUP"),
+				rawItem("guid-hires", "Kavelori-Roseland-24BIT-48KHZ-WEB-FLAC-1998-GROUP"),
+			}, nil
+		},
+	}
+
+	result, err := env.search().SearchItem(t.Context(), item.ID,
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, env.clock.Now())
+	if err != nil {
+		t.Fatalf("SearchItem: %v", err)
+	}
+	var guids []string
+	for _, decision := range result.Decisions {
+		guids = append(guids, decision.ReleaseCandidate.GUID)
+	}
+	slices.Sort(guids)
+	if want := []string{"guid-hires", "guid-web"}; !slices.Equal(guids, want) {
+		t.Errorf("decided on %v, want %v: a video is no candidate for an album", guids, want)
 	}
 }
 
