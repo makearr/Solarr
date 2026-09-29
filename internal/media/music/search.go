@@ -203,6 +203,11 @@ func (s Search) SearchItemWithTerms(
 		}
 	}
 
+	wantedArtist := artistName
+	if custom != nil {
+		wantedArtist = custom.Artist
+	}
+
 	result := ItemSearchResult{}
 	for tierIndex, terms := range tiers {
 		var accepted []acceptedFind
@@ -222,7 +227,7 @@ func (s Search) SearchItemWithTerms(
 				if err != nil {
 					return result, fmt.Errorf("music: search item %d: %w", itemID, err)
 				}
-				accepted = append(accepted, evaluateRawItems(raws, conn, target, rules, languagePolicy, preferPropers)...)
+				accepted = append(accepted, evaluateRawItems(raws, conn, target, wantedArtist, rules, languagePolicy, preferPropers)...)
 			}
 		}
 		if len(accepted) == 0 {
@@ -335,12 +340,15 @@ type acceptedFind struct {
 // never persisted (section 10.1: module.Evaluate produces Matches, not raw
 // items).
 func evaluateRawItems(
-	raws []indexer.RawItem, conn IndexerConn, target match.Candidate,
+	raws []indexer.RawItem, conn IndexerConn, target match.Candidate, wantedArtist string,
 	rules []rankedProfile, languagePolicy *score.LanguagePolicy, preferPropers bool,
 ) []acceptedFind {
 	var accepted []acceptedFind
 	for _, raw := range raws {
 		parsed := parse.Parse(raw.Title)
+		if !sameArtist(parsed.Identity.Artist, wantedArtist) {
+			continue
+		}
 		claimed := match.Claimed{Identity: match.Identity{
 			Title: combinedTitle(parsed.Identity.Artist, parsed.Identity.Album),
 			Year:  parsed.Identity.Year,
@@ -355,6 +363,23 @@ func evaluateRawItems(
 		accepted = append(accepted, acceptedFind{conn: conn, raw: raw, parsed: parsed, distance: distance, decision: decision})
 	}
 	return accepted
+}
+
+// minArtistSimilarity is how alike a release's artist must be to the album's; the combined
+// "artist album" distance alone let another artist's same-named single through (2026-09-29).
+const minArtistSimilarity = 0.5
+
+// sameArtist: a release naming no artist, or an album without one, passes; so does a
+// compilation, and an artist named inside the other ("feat.", "&").
+func sameArtist(released, wanted string) bool {
+	if released == "" || wanted == "" || strings.EqualFold(strings.TrimSpace(wanted), "Various Artists") {
+		return true
+	}
+	a, b := strings.ToLower(released), strings.ToLower(wanted)
+	if strings.Contains(a, b) || strings.Contains(b, a) {
+		return true
+	}
+	return match.TitleSimilarity(released, wanted) >= minArtistSimilarity
 }
 
 // persist upserts the release and records the decision against itemID,
