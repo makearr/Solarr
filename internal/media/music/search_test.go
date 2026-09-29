@@ -232,6 +232,36 @@ func TestSearchItem_ExactTierAcceptsAMatchingRelease(t *testing.T) {
 	}
 }
 
+// Another artist's release of a same-named song is not this album, however close the combined
+// title reads: a single by another artist was accepted and held for download (found 2026-09-29).
+func TestSearchItem_AReleaseByAnotherArtistIsNoMatch(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Feels So Kazepo", 2002, alwaysAcceptRules)
+	searcher := &fakeIndexerSearcher{
+		responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+			return []indexer.RawItem{
+				rawItem("guid-other", "Pevulimo-It Feels So Kazepo-CDM-2003-GROUP"),
+				rawItem("guid-own", "Nosi Zada-Feels So Kazepo-2002-FLAC-GROUP"),
+				rawItem("guid-feat", "Nosi Zada feat. Pevulimo-Feels So Kazepo-2002-FLAC-GROUP"),
+			}, nil
+		},
+	}
+
+	result, err := env.search().SearchItem(t.Context(), item.ID,
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, env.clock.Now())
+	if err != nil {
+		t.Fatalf("SearchItem: %v", err)
+	}
+	var guids []string
+	for _, decision := range result.Decisions {
+		guids = append(guids, decision.ReleaseCandidate.GUID)
+	}
+	slices.Sort(guids)
+	if want := []string{"guid-feat", "guid-own"}; !slices.Equal(guids, want) {
+		t.Errorf("decided on %v, want %v: the other artist's release is no candidate", guids, want)
+	}
+}
+
 func TestSearchItem_WidensToTheYearTierWhenExactFindsNothing(t *testing.T) {
 	env := newSearchTestEnv(t)
 	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
