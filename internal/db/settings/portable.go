@@ -187,7 +187,10 @@ type FileManagementEntry struct {
 	ChmodFolder              string             `yaml:"chmod_folder"`
 	ChownGroup               string             `yaml:"chown_group,omitempty"`
 	// WriteIDsToTags is optional so an export from before it existed keeps the default, on.
-	WriteIDsToTags *bool `yaml:"write_ids_to_tags,omitempty"`
+	WriteIDsToTags      *bool `yaml:"write_ids_to_tags,omitempty"`
+	ReplaceIDsInTags    bool  `yaml:"replace_ids_in_tags,omitempty"`
+	WriteMetadataToTags bool  `yaml:"write_metadata_to_tags,omitempty"`
+	EmbedCoverInTags    bool  `yaml:"embed_cover_in_tags,omitempty"`
 }
 
 func (e FileManagementEntry) fileManagement() FileManagement {
@@ -196,17 +199,22 @@ func (e FileManagementEntry) fileManagement() FileManagement {
 		RecycleRetentionDays: e.RecycleRetentionDays, DeleteEmptyFolders: e.DeleteEmptyFolders,
 		CreateEmptyArtistFolders: e.CreateEmptyArtistFolders, UnmonitorDeleted: e.UnmonitorDeleted,
 		SetPermissions: e.SetPermissions, ChmodFolder: e.ChmodFolder, ChownGroup: e.ChownGroup,
-		WriteIDsToTags: e.WriteIDsToTags == nil || *e.WriteIDsToTags,
+		Tagging: Tagging{
+			WriteIDs: e.WriteIDsToTags == nil || *e.WriteIDsToTags, ReplaceIDs: e.ReplaceIDsInTags,
+			WriteMetadata: e.WriteMetadataToTags, EmbedCover: e.EmbedCoverInTags,
+		},
 	}
 }
 
 func fileManagementEntry(f FileManagement) FileManagementEntry {
-	writeIDs := f.WriteIDsToTags
+	writeIDs := f.Tagging.WriteIDs
 	return FileManagementEntry{
 		PropersRepacks: f.PropersRepacks, RescanAfterRefresh: f.RescanAfterRefresh, ChangeFileDate: f.ChangeFileDate,
 		RecycleRetentionDays: f.RecycleRetentionDays, DeleteEmptyFolders: f.DeleteEmptyFolders,
 		CreateEmptyArtistFolders: f.CreateEmptyArtistFolders, UnmonitorDeleted: f.UnmonitorDeleted,
 		SetPermissions: f.SetPermissions, ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup, WriteIDsToTags: &writeIDs,
+		ReplaceIDsInTags: f.Tagging.ReplaceIDs, WriteMetadataToTags: f.Tagging.WriteMetadata,
+		EmbedCoverInTags: f.Tagging.EmbedCover,
 	}
 }
 

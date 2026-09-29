@@ -669,6 +669,7 @@ type TagWriteback struct {
 	AttemptedAt   int64
 	Written       string
 	Error         sql.NullString
+	Digest        string
 }
 
 type TitleSearch struct {

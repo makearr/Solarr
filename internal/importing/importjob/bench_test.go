@@ -65,7 +65,7 @@ func (z *zeroCostTool) ReadTags(_ context.Context, paths []string) ([]mediatool.
 	return probes, nil
 }
 
-func (z *zeroCostTool) WriteTags(context.Context, []mediatool.TagEdit) ([]error, error) {
+func (z *zeroCostTool) WriteTags(context.Context, []mediatool.TagEdit) ([]mediatool.TagResult, error) {
 	return nil, nil
 }
 

@@ -1,13 +1,21 @@
 #!/usr/bin/env python3
 # solarr-tag: sets tags in audio files for mediatool.WriteTags (ADR-30, revision D3).
-# Argument: a JSON list of {"path": ..., "set": {key: value}}; keys are Picard's names.
-# Output: one {"path": ..., "error": ...} per edit, in order; error absent on success.
-# Fill-only is the caller's rule, enforced in Go; this sets exactly what it is given.
+# Argument: a JSON list of {"path", "fill": {key: value}, "set": {key: value}, "cover": jpeg path};
+# keys are Picard's names. "fill" writes only where the file has no value, "set" wherever it
+# differs, "cover" only when the file has no picture. A file with nothing to change is not saved.
+# Output: one {"path", "changed": [keys], "error"} per edit, in order; error absent on success.
+import base64
 import json
 import sys
 
 import mutagen
 from mutagen.easymp4 import EasyMP4Tags
+from mutagen.flac import FLAC, Picture
+from mutagen.id3 import APIC
+from mutagen.mp3 import MP3
+from mutagen.mp4 import MP4, MP4Cover
+from mutagen.oggopus import OggOpus
+from mutagen.oggvorbis import OggVorbis
 
 # The ids MP4's easy interface lacks, under the freeform names Picard writes.
 for key, name in (
@@ -16,26 +24,101 @@ for key, name in (
 ):
     EasyMP4Tags.RegisterFreeformKey(key, name)
 
+FRONT_COVER = 3
 
-def write(edit):
+
+def present(audio, key):
+    try:
+        values = audio.get(key) or []
+    except (KeyError, ValueError):
+        return []
+    return [str(value) for value in values if str(value)]
+
+
+def same(key, have, want):
+    """Whether the file already says what is wanted, never losing detail the file has more of."""
+    if not have:
+        return False
+    if key in ("tracknumber", "discnumber"):  # "3/12" says 3, and keeps its total
+        return have[0].split("/")[0].strip().lstrip("0") == want.split("/")[0].strip().lstrip("0")
+    if key == "date":  # "2018-10-05" says 2018, and keeps its day
+        return have[0].startswith(want)
+    if key == "genre":  # MusicBrainz genres are lowercase; a file's "Country" is the same genre
+        return "; ".join(have).casefold() == want.casefold()
+    return have == [want]
+
+
+def write_text(edit):
     audio = mutagen.File(edit["path"], easy=True)
     if audio is None:
         raise ValueError("not an audio format this tool can tag")
     if audio.tags is None:
         audio.add_tags()
-    for key, value in edit["set"].items():
-        audio[key] = value
+    changed = []
+    for key, value in (edit.get("fill") or {}).items():
+        if not present(audio, key):
+            audio[key] = value
+            changed.append(key)
+    for key, value in (edit.get("set") or {}).items():
+        if not same(key, present(audio, key), value):
+            audio[key] = value
+            changed.append(key)
+    if changed:
+        audio.save()
+    return changed
+
+
+def embed_cover(path, cover):
+    """Embeds the JPEG at cover unless the file already carries a picture; True when it did."""
+    audio = mutagen.File(path)
+    with open(cover, "rb") as source:
+        data = source.read()
+    if isinstance(audio, FLAC):
+        if audio.pictures:
+            return False
+        audio.add_picture(picture(data))
+    elif isinstance(audio, MP3):
+        if audio.tags is None:
+            audio.add_tags()
+        if audio.tags.getall("APIC"):
+            return False
+        audio.tags.add(APIC(encoding=3, mime="image/jpeg", type=FRONT_COVER, desc="Cover", data=data))
+    elif isinstance(audio, MP4):
+        if audio.tags is None:
+            audio.add_tags()
+        if audio.tags.get("covr"):
+            return False
+        audio.tags["covr"] = [MP4Cover(data, imageformat=MP4Cover.FORMAT_JPEG)]
+    elif isinstance(audio, (OggVorbis, OggOpus)):
+        if audio.get("metadata_block_picture"):
+            return False
+        audio["metadata_block_picture"] = [base64.b64encode(picture(data).write()).decode("ascii")]
+    else:
+        return False  # a format with no picture convention keeps its text tags only
     audio.save()
+    return True
+
+
+def picture(data):
+    embedded = Picture()
+    embedded.type = FRONT_COVER
+    embedded.mime = "image/jpeg"
+    embedded.desc = "Cover"
+    embedded.data = data
+    return embedded
 
 
 def main():
     results = []
     for edit in json.loads(sys.argv[1]):
+        changed = []
         try:
-            write(edit)
-            results.append({"path": edit["path"]})
+            changed = write_text(edit)
+            if edit.get("cover") and embed_cover(edit["path"], edit["cover"]):
+                changed.append("cover")
+            results.append({"path": edit["path"], "changed": changed})
         except Exception as error:  # one bad file must not fail the batch
-            results.append({"path": edit["path"], "error": f"{type(error).__name__}: {error}"})
+            results.append({"path": edit["path"], "changed": changed, "error": f"{type(error).__name__}: {error}"})
     json.dump(results, sys.stdout)
 
 

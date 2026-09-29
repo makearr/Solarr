@@ -2599,6 +2599,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/tagging": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** What the tag writer puts into a library's files. Administrator only. */
+        get: operations["getLibraryTagging"];
+        /** Save a library's tagging; the tag writer runs at once. Administrator only. */
+        put: operations["setLibraryTagging"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/naming/examples": {
         parameters: {
             query?: never;
@@ -4750,8 +4770,17 @@ export interface components {
             chmod_folder: string;
             /** @description A group name or number; empty leaves the group alone. */
             chown_group: string;
-            /** @description Fill identified files' tags with their MusicBrainz ids (revision D3): never overwriting a value, never on a read-only root. Absent means yes. */
-            write_ids_to_tags?: boolean;
+        };
+        /** @description What the tag writer puts into this library's files once enrichment has identified them (revision D3, widened 2026-09-29). Only the library's own root folders are written, never a read-only one and never a download folder. */
+        Tagging: {
+            /** @description Fill the MusicBrainz ids a file lacks. */
+            write_ids: boolean;
+            /** @description Overwrite ids a file carries that differ from the current ones. */
+            replace_ids: boolean;
+            /** @description Write album, album artist, track title, track and disc number, date and genre. */
+            write_metadata: boolean;
+            /** @description Embed the fetched cover into files that carry no picture. */
+            embed_cover: boolean;
         };
         /** @description ADR-48's commit-line knob (import.auto_commit_confidence) and the transfer ladder import walks when it places a file. */
         ImportSettings: {
@@ -9720,6 +9749,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileManagement"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getLibraryTagging: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The library's tagging, ids only when never saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tagging"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setLibraryTagging: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Tagging"];
+            };
+        };
+        responses: {
+            /** @description The saved tagging. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tagging"];
                 };
             };
             400: components["responses"]["Problem"];

@@ -105,34 +105,37 @@ func (s *Subprocess) Fingerprint(ctx context.Context, paths []string) ([]Fingerp
 const maxTagBatch = 200
 
 type tagResult struct {
-	Path  string `json:"path"`
-	Error string `json:"error,omitempty"`
+	Path    string   `json:"path"`
+	Changed []string `json:"changed"`
+	Error   string   `json:"error,omitempty"`
 }
 
 // WriteTags sets tags through the helper, maxTagBatch files per run.
-func (s *Subprocess) WriteTags(ctx context.Context, edits []TagEdit) ([]error, error) {
+func (s *Subprocess) WriteTags(ctx context.Context, edits []TagEdit) ([]TagResult, error) {
 	if len(edits) == 0 {
 		return nil, nil
 	}
 	if err := s.runner.Lookup(tagBinary); err != nil {
 		return nil, err
 	}
-	failures := make([]error, 0, len(edits))
+	outcomes := make([]TagResult, 0, len(edits))
 	for start := 0; start < len(edits); start += maxTagBatch {
 		batch := edits[start:min(start+maxTagBatch, len(edits))]
 		results, err := s.writeBatch(ctx, batch)
 		if err != nil {
 			return nil, err
 		}
-		failures = append(failures, results...)
+		outcomes = append(outcomes, results...)
 	}
-	return failures, nil
+	return outcomes, nil
 }
 
-func (s *Subprocess) writeBatch(ctx context.Context, edits []TagEdit) ([]error, error) {
+func (s *Subprocess) writeBatch(ctx context.Context, edits []TagEdit) ([]TagResult, error) {
 	type edit struct {
-		Path string `json:"path"`
-		Set  Tags   `json:"set"`
+		Path  string `json:"path"`
+		Fill  Tags   `json:"fill,omitempty"`
+		Set   Tags   `json:"set,omitempty"`
+		Cover string `json:"cover,omitempty"`
 	}
 	payload := make([]edit, len(edits))
 	for i, one := range edits {
@@ -154,13 +157,14 @@ func (s *Subprocess) writeBatch(ctx context.Context, edits []TagEdit) ([]error, 
 	if err := json.Unmarshal(output, &results); err != nil || len(results) != len(edits) {
 		return nil, fmt.Errorf("mediatool: %s answered %d results for %d files: %w", tagBinary, len(results), len(edits), err)
 	}
-	failures := make([]error, len(edits))
+	outcomes := make([]TagResult, len(edits))
 	for i, result := range results {
+		outcomes[i].Changed = result.Changed
 		if result.Error != "" {
-			failures[i] = fmt.Errorf("mediatool: write tags to %s: %s", result.Path, result.Error)
+			outcomes[i].Err = fmt.Errorf("mediatool: write tags to %s: %s", result.Path, result.Error)
 		}
 	}
-	return failures, nil
+	return outcomes, nil
 }
 
 // eachInParallel runs work over count indices, at most the Subprocess's slots at a time across

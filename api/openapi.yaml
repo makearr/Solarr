@@ -4199,6 +4199,45 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /categories/{id}/tagging:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getLibraryTagging
+      tags: [settings]
+      summary: What the tag writer puts into a library's files. Administrator only.
+      responses:
+        "200":
+          description: The library's tagging, ids only when never saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tagging" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setLibraryTagging
+      tags: [settings]
+      summary: Save a library's tagging; the tag writer runs at once. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Tagging" }
+      responses:
+        "200":
+          description: The saved tagging.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tagging" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/naming/examples:
     parameters:
       - name: id
@@ -7221,11 +7260,27 @@ components:
         chown_group:
           type: string
           description: A group name or number; empty leaves the group alone.
-        write_ids_to_tags:
+
+    Tagging:
+      type: object
+      description: >-
+        What the tag writer puts into this library's files once enrichment has
+        identified them (revision D3, widened 2026-09-29). Only the library's own
+        root folders are written, never a read-only one and never a download folder.
+      required: [write_ids, replace_ids, write_metadata, embed_cover]
+      properties:
+        write_ids:
           type: boolean
-          description: >-
-            Fill identified files' tags with their MusicBrainz ids (revision D3):
-            never overwriting a value, never on a read-only root. Absent means yes.
+          description: Fill the MusicBrainz ids a file lacks.
+        replace_ids:
+          type: boolean
+          description: Overwrite ids a file carries that differ from the current ones.
+        write_metadata:
+          type: boolean
+          description: Write album, album artist, track title, track and disc number, date and genre.
+        embed_cover:
+          type: boolean
+          description: Embed the fetched cover into files that carry no picture.
 
     ImportSettings:
       type: object

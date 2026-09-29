@@ -56,15 +56,27 @@ type FileManagement struct {
 	ChmodFolder string
 	// ChownGroup is a group name or number; empty leaves the group alone.
 	ChownGroup string
-	// WriteIDsToTags fills identified files' tags with their provider ids (revision D3), never
-	// overwriting and never on a read-only root.
-	WriteIDsToTags bool
+	// Tagging is what the tag writer puts into this library's files; shown beside naming.
+	Tagging Tagging
+}
+
+// Tagging is one library's tag writing (revision D3, widened 2026-09-29). Nothing is written on a
+// read-only root, and nothing outside the library's own root folders.
+type Tagging struct {
+	// WriteIDs fills the provider ids a file lacks.
+	WriteIDs bool
+	// ReplaceIDs overwrites ids a file carries that differ from the current ones.
+	ReplaceIDs bool
+	// WriteMetadata writes the providers' album, album artist, title, numbering, date and genre.
+	WriteMetadata bool
+	// EmbedCover embeds the fetched cover into a file that carries no picture.
+	EmbedCover bool
 }
 
 // DefaultFileManagement is Sonarr's defaults, with Solarr's 7-day recycle bin as the bin.
 var DefaultFileManagement = FileManagement{
 	PropersRepacks: PropersPreferAndUpgrade, RescanAfterRefresh: RescanAlways, ChangeFileDate: FileDateNone,
-	RecycleRetentionDays: 7, ChmodFolder: "755", WriteIDsToTags: true,
+	RecycleRetentionDays: 7, ChmodFolder: "755", Tagging: Tagging{WriteIDs: true},
 }
 
 var (
@@ -142,7 +154,8 @@ func writeCategoryFileManagement(ctx context.Context, queries *settingsdb.Querie
 		RecycleRetentionDays: f.RecycleRetentionDays, DeleteEmptyFolders: boolToInt(f.DeleteEmptyFolders),
 		CreateEmptyArtistFolders: boolToInt(f.CreateEmptyArtistFolders), UnmonitorDeleted: boolToInt(f.UnmonitorDeleted),
 		SetPermissions: boolToInt(f.SetPermissions), ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup,
-		WriteIdsToTags: boolToInt(f.WriteIDsToTags),
+		WriteIdsToTags: boolToInt(f.Tagging.WriteIDs), ReplaceIdsInTags: boolToInt(f.Tagging.ReplaceIDs),
+		WriteMetadataToTags: boolToInt(f.Tagging.WriteMetadata), EmbedCoverInTags: boolToInt(f.Tagging.EmbedCover),
 	})
 }
 
@@ -163,7 +176,11 @@ func withFileManagement(categories []Category, rows []settingsdb.CategoryFileMan
 			ChangeFileDate: ChangeFileDate(row.ChangeFileDate), RecycleRetentionDays: row.RecycleRetentionDays,
 			DeleteEmptyFolders: row.DeleteEmptyFolders != 0, CreateEmptyArtistFolders: row.CreateEmptyArtistFolders != 0,
 			UnmonitorDeleted: row.UnmonitorDeleted != 0, SetPermissions: row.SetPermissions != 0,
-			ChmodFolder: row.ChmodFolder, ChownGroup: row.ChownGroup, WriteIDsToTags: row.WriteIdsToTags != 0,
+			ChmodFolder: row.ChmodFolder, ChownGroup: row.ChownGroup,
+			Tagging: Tagging{
+				WriteIDs: row.WriteIdsToTags != 0, ReplaceIDs: row.ReplaceIdsInTags != 0,
+				WriteMetadata: row.WriteMetadataToTags != 0, EmbedCover: row.EmbedCoverInTags != 0,
+			},
 		}
 	}
 	return categories

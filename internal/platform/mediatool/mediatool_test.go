@@ -343,23 +343,26 @@ func TestWriteTags_ReportsEachFileOnItsOwn(t *testing.T) {
 			if name != "solarr-tag" {
 				return nil, fmt.Errorf("unexpected tool %s", name)
 			}
-			return []byte(`[{"path":"/m/a.m4a"},{"path":"/m/b.txt","error":"ValueError: not audio"}]`), nil
+			return []byte(`[{"path":"/m/a.m4a","changed":["musicbrainz_releasegroupid","cover"]},` +
+				`{"path":"/m/b.txt","changed":[],"error":"ValueError: not audio"}]`), nil
 		},
 	}
-	failures, err := mediatool.New(runner, 1).WriteTags(t.Context(), []mediatool.TagEdit{
-		{Path: "/m/a.m4a", Set: mediatool.Tags{"musicbrainz_releasegroupid": "rg-1"}},
+	results, err := mediatool.New(runner, 1).WriteTags(t.Context(), []mediatool.TagEdit{
+		{Path: "/m/a.m4a", Fill: mediatool.Tags{"musicbrainz_releasegroupid": "rg-1"}, Cover: "/c/work-1.jpg"},
 		{Path: "/m/b.txt", Set: mediatool.Tags{"musicbrainz_albumid": "rel-1"}},
 	})
 	if err != nil {
 		t.Fatalf("WriteTags: %v", err)
 	}
-	want := `[{"path":"/m/a.m4a","set":{"musicbrainz_releasegroupid":"rg-1"}},{"path":"/m/b.txt","set":{"musicbrainz_albumid":"rel-1"}}]`
+	want := `[{"path":"/m/a.m4a","fill":{"musicbrainz_releasegroupid":"rg-1"},"cover":"/c/work-1.jpg"},` +
+		`{"path":"/m/b.txt","set":{"musicbrainz_albumid":"rel-1"}}]`
 	if len(sent) != 1 || sent[0] != want {
 		t.Errorf("sent %q, want %q", sent, want)
 	}
-	if len(failures) != 2 || failures[0] != nil ||
-		failures[1] == nil || failures[1].Error() != "mediatool: write tags to /m/b.txt: ValueError: not audio" {
-		t.Errorf("failures = %v, want only the second file", failures)
+	if len(results) != 2 || results[0].Err != nil ||
+		fmt.Sprint(results[0].Changed) != "[musicbrainz_releasegroupid cover]" ||
+		results[1].Err == nil || results[1].Err.Error() != "mediatool: write tags to /m/b.txt: ValueError: not audio" {
+		t.Errorf("results = %+v, want the first changed and only the second failed", results)
 	}
 }
 
@@ -370,8 +373,8 @@ func TestWriteTags_MissingHelperFailsTheBatch(t *testing.T) {
 	if !errors.Is(err, mediatool.ErrToolMissing) {
 		t.Errorf("WriteTags = %v, want ErrToolMissing", err)
 	}
-	if failures, err := tool.WriteTags(t.Context(), nil); err != nil || failures != nil {
-		t.Errorf("WriteTags(nil) = %v, %v; want nothing", failures, err)
+	if results, err := tool.WriteTags(t.Context(), nil); err != nil || results != nil {
+		t.Errorf("WriteTags(nil) = %v, %v; want nothing", results, err)
 	}
 }
 

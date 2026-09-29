@@ -1392,9 +1392,6 @@ type FileManagement struct {
 
 	// UnmonitorDeleted Lidarr's "Ignore Deleted Tracks" -- an album losing a file is unmonitored.
 	UnmonitorDeleted bool `json:"unmonitor_deleted"`
-
-	// WriteIdsToTags Fill identified files' tags with their MusicBrainz ids (revision D3): never overwriting a value, never on a read-only root. Absent means yes.
-	WriteIdsToTags *bool `json:"write_ids_to_tags,omitempty"`
 }
 
 // FileManagementChangeFileDate defines model for FileManagement.ChangeFileDate.
@@ -2828,6 +2825,21 @@ type SubscriptionPreview struct {
 	ReleaseGroups                 []PreviewReleaseGroup `json:"release_groups"`
 }
 
+// Tagging What the tag writer puts into this library's files once enrichment has identified them (revision D3, widened 2026-09-29). Only the library's own root folders are written, never a read-only one and never a download folder.
+type Tagging struct {
+	// EmbedCover Embed the fetched cover into files that carry no picture.
+	EmbedCover bool `json:"embed_cover"`
+
+	// ReplaceIds Overwrite ids a file carries that differ from the current ones.
+	ReplaceIds bool `json:"replace_ids"`
+
+	// WriteIds Fill the MusicBrainz ids a file lacks.
+	WriteIds bool `json:"write_ids"`
+
+	// WriteMetadata Write album, album artist, track title, track and disc number, date and genre.
+	WriteMetadata bool `json:"write_metadata"`
+}
+
 // TestDownloaderRequest defines model for TestDownloaderRequest.
 type TestDownloaderRequest struct {
 	BaseUrl     string  `json:"base_url"`
@@ -3614,6 +3626,9 @@ type AttachRootFolderToCategoryJSONRequestBody AttachRootFolderToCategoryJSONBod
 // SearchCategoryJSONRequestBody defines body for SearchCategory for application/json ContentType.
 type SearchCategoryJSONRequestBody SearchCategoryJSONBody
 
+// SetLibraryTaggingJSONRequestBody defines body for SetLibraryTagging for application/json ContentType.
+type SetLibraryTaggingJSONRequestBody = Tagging
+
 // DiscoverAddJSONRequestBody defines body for DiscoverAdd for application/json ContentType.
 type DiscoverAddJSONRequestBody = DiscoverAddRequest
 
@@ -3910,6 +3925,12 @@ type ServerInterface interface {
 	// Automatic search of every monitored, incomplete album in one library, or of the albums named in work_ids ("search this page"). Each album's best release is sent. Runs as a background job; GET /jobs shows its progress.
 	// (POST /categories/{id}/search)
 	SearchCategory(w http.ResponseWriter, r *http.Request, id int64)
+	// What the tag writer puts into a library's files. Administrator only.
+	// (GET /categories/{id}/tagging)
+	GetLibraryTagging(w http.ResponseWriter, r *http.Request, id int64)
+	// Save a library's tagging; the tag writer runs at once. Administrator only.
+	// (PUT /categories/{id}/tagging)
+	SetLibraryTagging(w http.ResponseWriter, r *http.Request, id int64)
 	// Configured libraries and current state, for the landing page.
 	// (GET /dashboard)
 	GetDashboard(w http.ResponseWriter, r *http.Request)
@@ -4597,6 +4618,18 @@ func (_ Unimplemented) DetachRootFolderFromCategory(w http.ResponseWriter, r *ht
 // Automatic search of every monitored, incomplete album in one library, or of the albums named in work_ids ("search this page"). Each album's best release is sent. Runs as a background job; GET /jobs shows its progress.
 // (POST /categories/{id}/search)
 func (_ Unimplemented) SearchCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What the tag writer puts into a library's files. Administrator only.
+// (GET /categories/{id}/tagging)
+func (_ Unimplemented) GetLibraryTagging(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Save a library's tagging; the tag writer runs at once. Administrator only.
+// (PUT /categories/{id}/tagging)
+func (_ Unimplemented) SetLibraryTagging(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6768,6 +6801,72 @@ func (siw *ServerInterfaceWrapper) SearchCategory(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SearchCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetLibraryTagging operation middleware
+func (siw *ServerInterfaceWrapper) GetLibraryTagging(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLibraryTagging(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetLibraryTagging operation middleware
+func (siw *ServerInterfaceWrapper) SetLibraryTagging(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetLibraryTagging(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11575,6 +11674,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/search", wrapper.SearchCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/tagging", wrapper.GetLibraryTagging)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/categories/{id}/tagging", wrapper.SetLibraryTagging)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/dashboard", wrapper.GetDashboard)

@@ -62,7 +62,7 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Enqueue: p.enqueueArtwork,
 	})
 	registry.MustRegister(jobs.Task{
-		Key: "tag_writeback", Name: "Write MusicBrainz ids into files", DefaultCadence: tagWritebackScheduleCron,
+		Key: "tag_writeback", Name: "Write tags into files", DefaultCadence: tagWritebackScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueTagWriteback,
 	})

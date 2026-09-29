@@ -95,7 +95,7 @@ func (t *pathTagTool) ReadTags(ctx context.Context, paths []string) ([]mediatool
 	return probes, nil
 }
 
-func (t *pathTagTool) WriteTags(context.Context, []mediatool.TagEdit) ([]error, error) {
+func (t *pathTagTool) WriteTags(context.Context, []mediatool.TagEdit) ([]mediatool.TagResult, error) {
 	return nil, nil
 }
 

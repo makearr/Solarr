@@ -499,8 +499,8 @@ type Querier interface {
 	ListStatRollup(ctx context.Context, arg ListStatRollupParams) ([]StatRollup, error)
 	// "This tag or any descendant" is one join because the closure is materialised.
 	ListSubjectsForTagTree(ctx context.Context, arg ListSubjectsForTagTreeParams) ([]ListSubjectsForTagTreeRow, error)
-	// Files whose work and edition carry the given providers' ids and that were never written,
-	// with each id the tags could take. Providers are arguments: the query knows no media type.
+	// Identified files under the given roots with everything their tags could take and the digest
+	// of what was last written. Providers are arguments: the query knows no media type.
 	ListTagWritebackCandidates(ctx context.Context, arg ListTagWritebackCandidatesParams) ([]ListTagWritebackCandidatesRow, error)
 	ListTagsForSubject(ctx context.Context, arg ListTagsForSubjectParams) ([]TagAssignment, error)
 	// The work detail page's own need, same reasoning as ListCreditsForWorkWithPerson.

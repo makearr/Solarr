@@ -92,15 +92,18 @@ identity from embedded MBIDs, which is a read, **stage 3 needs no tagging helper
 waits for section 19.5's write-back at stage 5.
 
 **The write-back tool is mutagen** (revision D3): `solarr-tag`
-(`internal/platform/mediatool/solarr-tag`, ~40 lines of Python) takes a JSON list of
-`{path, set}` as its one argument, sets exactly those keys through mutagen's "easy" interface
-and answers one result per file; `WriteTags` batches 200 files a run and returns one error per
-file. Keys are Picard's (`musicbrainz_releasegroupid`, `musicbrainz_albumid`, ...); MP4's easy
-interface lacks the release group and release track ids, which the helper registers under
-Picard's freeform names. Fill-only is enforced by the Go caller, never by the helper. Verified
-on M4A, FLAC and MP3 and read back through ffprobe -- except an MP3's recording id, which
-mutagen writes as a UFID frame ffprobe does not show. A pure-Go writer per format can replace
-the helper later behind the same interface.
+(`internal/platform/mediatool/solarr-tag`, ~110 lines of Python) takes a JSON list of
+`{path, fill, set, cover}` as its one argument: `fill` keys are written only where the file has
+no value, `set` keys wherever the value differs -- a track or disc number is compared without its total,
+a date by the year asked for, a genre ignoring case, so a file never loses detail it has -- and `cover` (a JPEG path) is embedded only when
+the file carries no picture (FLAC picture block, ID3 `APIC`, MP4 `covr`, Ogg
+`METADATA_BLOCK_PICTURE`). A file with nothing to change is not saved. It answers per file with
+the keys it changed; `WriteTags` batches 200 files a run. Keys are Picard's; MP4's easy interface
+lacks the release group and release track ids, which the helper registers under Picard's
+freeform names. Because the helper reads through mutagen, it sees an MP3's recording id (a UFID
+frame ffprobe does not show). Verified 2026-09-29 on FLAC, MP3, M4A and Opus: a second run
+changes nothing. A pure-Go writer per format can replace the helper later behind the same
+interface.
 
 ## How the tools are called
 
