@@ -90,6 +90,8 @@ type Querier interface {
 	CountMonitoredParts(ctx context.Context, workID int64) (int64, error)
 	// Only 'primary' counts: a trailer belongs to the work without satisfying it.
 	CountPrimaryFiles(ctx context.Context, desiredItemID int64) (int64, error)
+	// A client's queue as Solarr fills it: sent and not finished downloading (ADR-57).
+	CountQueuedOnDownloader(ctx context.Context, downloaderID int64) (int64, error)
 	CountRollupOutcomes(ctx context.Context, since int64) ([]CountRollupOutcomesRow, error)
 	// Library health's own "unmatched files" figure (todo 4.8) -- same filter
 	// shape as ListUnidentified below, a count rather than a page.
@@ -180,6 +182,8 @@ type Querier interface {
 	DeleteWork(ctx context.Context, id int64) error
 	DeleteWorkPart(ctx context.Context, id int64) error
 	DequeueReady(ctx context.Context, candidateID int64) error
+	// One held release per album: a later decision replaces the earlier one.
+	DequeueReadyForItem(ctx context.Context, desiredItemID int64) error
 	// Every desired item for one work, however many profiles target it (F33
 	// widened the key). Removing an album is removing the intent to have it.
 	// A download's record outlives the want it served: history keeps its own copy of the names.
@@ -244,6 +248,8 @@ type Querier interface {
 	GetEditionByExternalID(ctx context.Context, arg GetEditionByExternalIDParams) (Edition, error)
 	// Scoring reads the bounded value, never the raw rate (ADR-45).
 	GetGroupReputation(ctx context.Context, releaseGroup string) (GroupReputation, error)
+	// The composite priority a held release goes out in (ADR-36).
+	GetHuntPriority(ctx context.Context, desiredItemID int64) (int64, error)
 	GetImportSession(ctx context.Context, id int64) (ImportSession, error)
 	GetImportUnit(ctx context.Context, id int64) (ImportUnit, error)
 	// The newest import a download's poll started, to follow it to IMPORTED.

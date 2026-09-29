@@ -50,9 +50,27 @@ type QueueClientRow struct {
 	Error            string
 }
 
+// HeldRow is one release held for room in its client's queue (ADR-57).
+type HeldRow struct {
+	WorkID       *int64
+	CategoryID   int64
+	Album        string
+	Artist       string
+	ReleaseTitle string
+	Indexer      string
+	HeldAt       time.Time
+}
+
+// QueueSnapshot is the whole queue at one moment.
+type QueueSnapshot struct {
+	Rows    []QueueRow
+	Clients []QueueClientRow
+	Held    []HeldRow
+}
+
 // Queue reads the downloads in flight live from their clients, and removes one.
 type Queue interface {
-	List(ctx context.Context) ([]QueueRow, []QueueClientRow, error)
+	List(ctx context.Context) (QueueSnapshot, error)
 	Remove(ctx context.Context, id int64, blocklist bool) error
 }
 
@@ -80,13 +98,26 @@ func (s *Server) ListQueue(w http.ResponseWriter, r *http.Request, params gen.Li
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "the queue is not available")
 		return
 	}
-	rows, clients, err := s.queue.List(r.Context())
+	snapshot, err := s.queue.List(r.Context())
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
+	rows, clients := snapshot.Rows, snapshot.Clients
 
-	body := gen.Queue{Clients: make([]gen.QueueClient, len(clients)), Items: []gen.QueueItem{}}
+	body := gen.Queue{Clients: make([]gen.QueueClient, len(clients)), Items: []gen.QueueItem{}, Held: []gen.HeldRelease{}}
+	for _, held := range snapshot.Held {
+		if !canReadHistory(access, held.CategoryID) {
+			continue
+		}
+		if params.WorkId != nil && (held.WorkID == nil || *held.WorkID != *params.WorkId) {
+			continue
+		}
+		body.Held = append(body.Held, gen.HeldRelease{
+			WorkId: held.WorkID, Album: strPtr(held.Album), Artist: strPtr(held.Artist),
+			ReleaseTitle: held.ReleaseTitle, Indexer: strPtr(held.Indexer), HeldAt: held.HeldAt,
+		})
+	}
 	for i, client := range clients {
 		body.Clients[i] = gen.QueueClient{
 			Id: client.ID, Name: client.Name, Paused: client.Paused, SpeedBytesPerSec: client.SpeedBytesPerSec,
@@ -146,11 +177,12 @@ func (s *Server) RemoveQueueItem(w http.ResponseWriter, r *http.Request, id int6
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "the queue is not available")
 		return
 	}
-	rows, _, err := s.queue.List(r.Context())
+	snapshot, err := s.queue.List(r.Context())
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
+	rows := snapshot.Rows
 	var found *QueueRow
 	for i := range rows {
 		if rows[i].ID == id {

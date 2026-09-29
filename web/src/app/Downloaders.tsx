@@ -177,6 +177,7 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
   const [credentials, setCredentials] = useState("");
   const [category, setCategory] = useState("");
   const [removeCompleted, setRemoveCompleted] = useState(true);
+  const [maxQueued, setMaxQueued] = useState(DEFAULT_MAX_QUEUED);
   const [addFolder, setAddFolder] = useState(true);
   const [localFolder, setLocalFolder] = useState("");
 
@@ -199,6 +200,7 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
       const options: DownloaderOptions = {
         category: category || undefined,
         remove_completed: removeCompleted,
+        max_queued: maxQueued,
         remote_path: mapped ? reported : undefined,
         local_path: mapped ? localFolder : undefined,
       };
@@ -253,6 +255,8 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
         onCategory={setCategory}
         removeCompleted={removeCompleted}
         onRemoveCompleted={setRemoveCompleted}
+        maxQueued={maxQueued}
+        onMaxQueued={setMaxQueued}
       />
       {test.data && (
         <p className={`text-xs ${test.data.ok ? "text-ok" : "text-danger"}`}>{test.data.message}</p>
@@ -297,16 +301,23 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
   );
 }
 
+// ADR-57's default: once sent, the client decides the order, so Solarr sends only a few at a time.
+const DEFAULT_MAX_QUEUED = 10;
+
 function OptionFields({
   category,
   onCategory,
   removeCompleted,
   onRemoveCompleted,
+  maxQueued,
+  onMaxQueued,
 }: {
   category: string;
   onCategory: (value: string) => void;
   removeCompleted: boolean;
   onRemoveCompleted: (value: boolean) => void;
+  maxQueued: number;
+  onMaxQueued: (value: number) => void;
 }) {
   return (
     <div className="flex flex-wrap items-end gap-3 text-xs">
@@ -317,6 +328,20 @@ function OptionFields({
       <label className="flex items-center gap-2 pb-2 text-ink-muted">
         <input type="checkbox" checked={removeCompleted} onChange={(event) => onRemoveCompleted(event.target.checked)} />
         Remove completed downloads once imported
+      </label>
+      <label
+        className="flex w-36 flex-col gap-1 text-ink-muted"
+        title="Searches beyond this wait in Solarr, best first, and go as downloads finish"
+      >
+        Downloads at once
+        <input
+          className={inputStyle}
+          type="number"
+          min={1}
+          max={1000}
+          value={maxQueued}
+          onChange={(event) => onMaxQueued(Math.max(1, Math.min(1000, Number(event.target.value) || 1)))}
+        />
       </label>
     </div>
   );
@@ -329,6 +354,7 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
   const [removeCompleted, setRemoveCompleted] = useState(current.remove_completed ?? true);
   const [remotePath, setRemotePath] = useState(current.remote_path ?? "");
   const [localPath, setLocalPath] = useState(current.local_path ?? "");
+  const [maxQueued, setMaxQueued] = useState(current.max_queued ?? DEFAULT_MAX_QUEUED);
   const save = useMutation({
     mutationFn: async () => {
       const { error } = await api.PATCH("/downloaders/{id}", {
@@ -337,7 +363,7 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
           name: downloader.name, impl: downloader.impl, base_url: downloader.base_url, protocol: downloader.protocol,
           enabled: downloader.enabled,
           options: {
-            category: category || undefined, remove_completed: removeCompleted,
+            category: category || undefined, remove_completed: removeCompleted, max_queued: maxQueued,
             remote_path: remotePath || undefined, local_path: localPath || undefined,
           },
         },
@@ -348,7 +374,14 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
   });
   return (
     <div className="flex flex-col gap-2 border-t border-border-subtle pt-2">
-      <OptionFields category={category} onCategory={setCategory} removeCompleted={removeCompleted} onRemoveCompleted={setRemoveCompleted} />
+      <OptionFields
+        category={category}
+        onCategory={setCategory}
+        removeCompleted={removeCompleted}
+        onRemoveCompleted={setRemoveCompleted}
+        maxQueued={maxQueued}
+        onMaxQueued={setMaxQueued}
+      />
       <div className="flex flex-wrap items-end gap-3 text-xs">
         <label className="flex min-w-48 flex-1 flex-col gap-1 text-ink-muted">
           The client says its downloads are in

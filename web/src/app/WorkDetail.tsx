@@ -293,7 +293,9 @@ export function WorkDetail() {
                   <span className="text-xs text-ink-muted">
                     {grab.data.already_downloading
                       ? "Already downloading."
-                      : grab.data.sent
+                      : grab.data.held
+                        ? "Found; waiting until the download client has room."
+                        : grab.data.sent
                         ? "Sent to the download client."
                         : grab.data.found > 0
                           ? `${grab.data.found} found, none acceptable.`
@@ -857,7 +859,13 @@ function Message({ children }: { children: React.ReactNode }) {
 function DownloadingBadge({ workId }: { workId: number }) {
   const queue = useQueue(workId);
   const item = queue.data?.items[0];
-  if (!item) return null;
+  if (!item) {
+    return queue.data?.held.length ? (
+      <Link to="/activity/queue" className="w-fit rounded-full border border-border-subtle px-2 py-px text-xs text-ink-muted hover:underline">
+        Waiting for room in the download client
+      </Link>
+    ) : null;
+  }
   const done = item.size_bytes ? Math.round((1 - (item.size_left_bytes ?? 0) / item.size_bytes) * 100) : undefined;
   return (
     <Link

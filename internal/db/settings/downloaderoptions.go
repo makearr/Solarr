@@ -17,7 +17,12 @@ type DownloaderOptions struct {
 	LocalPath  string `json:"local_path,omitempty"`
 	// Category is Lidarr's client category; empty means the media type's own name ("music").
 	Category string `json:"category,omitempty"`
+	// MaxQueued is ADR-57's queue depth: automatic sends beyond it are held, not sent.
+	MaxQueued *int `json:"max_queued,omitempty"`
 }
+
+// DefaultMaxQueued is ADR-57's default queue depth per client.
+const DefaultMaxQueued = 10
 
 // Options reads a downloader's options; unreadable or absent means the defaults.
 func (d Downloader) Options() DownloaderOptions {
@@ -31,6 +36,14 @@ func (d Downloader) Options() DownloaderOptions {
 // RemovesCompleted is RemoveCompleted with its default.
 func (o DownloaderOptions) RemovesCompleted() bool {
 	return o.RemoveCompleted == nil || *o.RemoveCompleted
+}
+
+// MaxQueuedDownloads is MaxQueued with its default.
+func (o DownloaderOptions) MaxQueuedDownloads() int {
+	if o.MaxQueued == nil {
+		return DefaultMaxQueued
+	}
+	return *o.MaxQueued
 }
 
 // CategoryFor is the client category a download of mediaType is sent under.

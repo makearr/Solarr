@@ -52,6 +52,10 @@ LIMIT sqlc.arg(page_size);
 -- name: DequeueReady :exec
 DELETE FROM ready_queue WHERE candidate_id = ?;
 
+-- One held release per album: a later decision replaces the earlier one.
+-- name: DequeueReadyForItem :exec
+DELETE FROM ready_queue WHERE desired_item_id = ?;
+
 -- name: PurgeExpiredReady :exec
 DELETE FROM ready_queue WHERE expires_at <= ?;
 

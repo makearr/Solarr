@@ -516,9 +516,12 @@ func (p *process) startServer(ctx context.Context) error {
 		SystemHealth: adapters.SystemHealth{Cache: p.cache},
 		Blocklist:    adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
 		History:      adapters.History{Log: jobs.NewHistory(p.jobs, clock.NewSystem())},
-		Queue:        adapters.Queue{Poll: p.pollJob(), Describe: p.describeAcquisition},
-		LogReader:    logSource{ring: p.logRing},
-		Calendar:     adapters.Calendar{Calendar: library.NewCalendar(p.library)},
+		Queue: adapters.Queue{
+			Poll: p.pollJob(), Ready: library.NewReadyQueue(p.library), Candidates: library.NewCandidates(p.library),
+			Describe: p.describeAcquisition, Clock: clock.NewSystem(),
+		},
+		LogReader: logSource{ring: p.logRing},
+		Calendar:  adapters.Calendar{Calendar: library.NewCalendar(p.library)},
 		Backups: backupSource{
 			FS: p.fsys, Directory: p.config.Paths.BackupDir,
 			Stores: []*store.Store{p.library, p.jobs, p.settings},

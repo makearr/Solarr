@@ -1258,6 +1258,9 @@ type DownloaderOptions struct {
 	// LocalPath Where Solarr sees that same folder.
 	LocalPath *string `json:"local_path,omitempty"`
 
+	// MaxQueued How many of Solarr's downloads this client may hold at once before further automatic sends are held (ADR-57). Absent means 10.
+	MaxQueued *int `json:"max_queued,omitempty"`
+
 	// RemotePath Where the client says its downloads are (remote path mapping).
 	RemotePath *string `json:"remote_path,omitempty"`
 
@@ -1416,6 +1419,9 @@ type GrabResult struct {
 	// Found How many releases matched the album.
 	Found int `json:"found"`
 
+	// Held The best release waits for room: its client already holds as many of Solarr's downloads as it may (ADR-57), and it goes when one finishes.
+	Held *bool `json:"held,omitempty"`
+
 	// Sent One dispatch to a download client (ADR-57, section 12) -- denormalised from the candidate it came from, since a candidate can expire while this row must outlive it.
 	Sent *Acquisition `json:"sent,omitempty"`
 }
@@ -1445,6 +1451,16 @@ type HealthStatus struct {
 
 // HealthStatusStatus defines model for HealthStatus.Status.
 type HealthStatusStatus string
+
+// HeldRelease defines model for HeldRelease.
+type HeldRelease struct {
+	Album        *string   `json:"album,omitempty"`
+	Artist       *string   `json:"artist,omitempty"`
+	HeldAt       time.Time `json:"held_at"`
+	Indexer      *string   `json:"indexer,omitempty"`
+	ReleaseTitle string    `json:"release_title"`
+	WorkId       *int64    `json:"work_id,omitempty"`
+}
 
 // HistoryEntry One thing that happened to a download, as it was known then.
 type HistoryEntry struct {
@@ -2480,7 +2496,10 @@ type QualityTarget struct {
 // Queue defines model for Queue.
 type Queue struct {
 	Clients []QueueClient `json:"clients"`
-	Items   []QueueItem   `json:"items"`
+
+	// Held Releases decided but not sent because their client is full, next first.
+	Held  []HeldRelease `json:"held"`
+	Items []QueueItem   `json:"items"`
 }
 
 // QueueClient One download client's own queue, or why it could not be read.

@@ -16,12 +16,13 @@ import (
 type fakeQueue struct {
 	rows      []apiserver.QueueRow
 	clients   []apiserver.QueueClientRow
+	held      []apiserver.HeldRow
 	removeErr error
 	removed   []string
 }
 
-func (f *fakeQueue) List(context.Context) ([]apiserver.QueueRow, []apiserver.QueueClientRow, error) {
-	return f.rows, f.clients, nil
+func (f *fakeQueue) List(context.Context) (apiserver.QueueSnapshot, error) {
+	return apiserver.QueueSnapshot{Rows: f.rows, Clients: f.clients, Held: f.held}, nil
 }
 
 func (f *fakeQueue) Remove(_ context.Context, id int64, blocklist bool) error {
@@ -65,6 +66,10 @@ func newQueueFixture(t *testing.T) queueFixture {
 			AddedAt: time.Unix(2, 0).UTC()},
 	}
 	fixture.queue.clients = []apiserver.QueueClientRow{{ID: 1, Name: "Home SABnzbd", Paused: true, Items: 2}}
+	fixture.queue.held = []apiserver.HeldRow{
+		{WorkID: &workID, CategoryID: visible.ID, Album: "Zanuvode", ReleaseTitle: "Heka-Zanuvode-FLAC", HeldAt: time.Unix(3, 0).UTC()},
+		{CategoryID: hidden.ID, ReleaseTitle: "Hidden-Held", HeldAt: time.Unix(4, 0).UTC()},
+	}
 	return queueFixture{worksFixture: fixture, visible: visible, hidden: hidden}
 }
 
@@ -80,9 +85,16 @@ func TestQueue_ScopedToTheCallersLibraries(t *testing.T) {
 	var body struct {
 		Clients []map[string]any `json:"clients"`
 		Items   []map[string]any `json:"items"`
+		Held    []map[string]any `json:"held"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
+	}
+	wantHeld := []map[string]any{{
+		"work_id": 7.0, "album": "Zanuvode", "release_title": "Heka-Zanuvode-FLAC", "held_at": "1970-01-01T00:00:03Z",
+	}}
+	if !reflect.DeepEqual(body.Held, wantHeld) {
+		t.Errorf("held = %v\nwant %v", body.Held, wantHeld)
 	}
 	wantItems := []map[string]any{{
 		"id": 1.0, "work_id": 7.0, "album": "Zanuvode", "artist": "Heka", "release_title": "Heka-Zanuvode",

@@ -71,8 +71,10 @@ type Config struct {
 	Search func(ctx context.Context, desiredItemID int64) error
 	// History records an imported or failed download for History and the album's page.
 	History func(ctx context.Context, kind download.HistoryKind, acquisition library.Acquisition, detail string)
-	Clock   clock.Clock
-	Logger  *slog.Logger
+	// SendHeld is optional: after each poll, held releases go to clients that now have room (ADR-57).
+	SendHeld func(ctx context.Context) error
+	Clock    clock.Clock
+	Logger   *slog.Logger
 }
 
 // Job is one poll.
@@ -88,6 +90,14 @@ func NewJob(config Config) *Job {
 
 // Run polls every client with a download in flight and moves each download on.
 func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
+	polled := j.poll(ctx)
+	if j.config.SendHeld == nil {
+		return polled
+	}
+	return errors.Join(polled, j.config.SendHeld(ctx))
+}
+
+func (j *Job) poll(ctx context.Context) error {
 	active, err := j.config.Acquisitions.ListActive(ctx)
 	if err != nil || len(active) == 0 {
 		return err

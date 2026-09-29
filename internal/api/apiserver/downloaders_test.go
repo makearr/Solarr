@@ -74,6 +74,22 @@ func TestAddDownloader_RefusesAnUnknownProtocol(t *testing.T) {
 	}
 }
 
+// ADR-57's queue depth holds everything at 0 and nothing useful past 1000: refused on write.
+func TestAddDownloader_RefusesAQueueDepthOutOfRange(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	for _, depth := range []string{"0", "1001"} {
+		recorder := fixture.do(authedPost(t, cookies, "/api/v1/downloaders",
+			`{"name":"SABnzbd","impl":"sabnzbd","base_url":"http://sabnzbd.local:8080","protocol":"usenet",`+
+				`"options":{"max_queued":`+depth+`}}`))
+		if recorder.Code != http.StatusBadRequest {
+			t.Errorf("max_queued %s: status = %d, want 400", depth, recorder.Code)
+		}
+	}
+}
+
 func TestUpdateDownloader_NeverTouchesTheCredentials(t *testing.T) {
 	fixture := newWorksFixture(t)
 	cipher, err := secrets.New(testArrCipherKey())

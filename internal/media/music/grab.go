@@ -23,6 +23,8 @@ type GrabResult struct {
 	Sent   *library.Acquisition
 	// AlreadyInFlight means a download for the album was on its way, so nothing was searched.
 	AlreadyInFlight bool
+	// Held means the best release waits for room in its client's queue (ADR-57's HELD).
+	Held bool
 }
 
 // SearchAndSend searches itemID unless a download for it is already on its way, and sends the
@@ -41,6 +43,11 @@ func (g Grab) SearchAndSend(ctx context.Context, itemID int64, indexers []Indexe
 	for _, detail := range found.Decisions {
 		if detail.Decision.Outcome != string(model.OutcomeAccept) {
 			continue
+		}
+		if held, err := g.Dispatch.holdIfFull(ctx, itemID, detail, at); err != nil {
+			return GrabResult{Search: found}, fmt.Errorf("music: grab item %d: %w", itemID, err)
+		} else if held {
+			return GrabResult{Search: found, Held: true}, nil
 		}
 		sent, err := g.Dispatch.Send(ctx, itemID, detail.Decision.ID, at)
 		if errors.Is(err, library.ErrAcquisitionAlreadyInFlight) {

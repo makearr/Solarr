@@ -3783,6 +3783,8 @@ export interface components {
             sent?: components["schemas"]["Acquisition"];
             /** @description A download for the album was on its way, so nothing was searched. */
             already_downloading: boolean;
+            /** @description The best release waits for room: its client already holds as many of Solarr's downloads as it may (ADR-57), and it goes when one finishes. */
+            held?: boolean;
         };
         ProwlarrIndexer: {
             /** Format: int64 */
@@ -3809,8 +3811,20 @@ export interface components {
             next_cursor?: number;
         };
         Queue: {
+            /** @description Releases decided but not sent because their client is full, next first. */
+            held: components["schemas"]["HeldRelease"][];
             clients: components["schemas"]["QueueClient"][];
             items: components["schemas"]["QueueItem"][];
+        };
+        HeldRelease: {
+            /** Format: int64 */
+            work_id?: number;
+            album?: string;
+            artist?: string;
+            release_title: string;
+            indexer?: string;
+            /** Format: date-time */
+            held_at: string;
         };
         /** @description One download client's own queue, or why it could not be read. */
         QueueClient: {
@@ -4136,6 +4150,8 @@ export interface components {
             remote_path?: string;
             /** @description Where Solarr sees that same folder. */
             local_path?: string;
+            /** @description How many of Solarr's downloads this client may hold at once before further automatic sends are held (ADR-57). Absent means 10. */
+            max_queued?: number;
         };
         TestDownloaderRequest: {
             impl: string;
