@@ -4750,6 +4750,8 @@ export interface components {
             chmod_folder: string;
             /** @description A group name or number; empty leaves the group alone. */
             chown_group: string;
+            /** @description Fill identified files' tags with their MusicBrainz ids (revision D3): never overwriting a value, never on a read-only root. Absent means yes. */
+            write_ids_to_tags?: boolean;
         };
         /** @description ADR-48's commit-line knob (import.auto_commit_confidence) and the transfer ladder import walks when it places a file. */
         ImportSettings: {

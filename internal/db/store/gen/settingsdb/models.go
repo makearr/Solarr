@@ -75,6 +75,7 @@ type CategoryFileManagement struct {
 	SetPermissions           int64
 	ChmodFolder              string
 	ChownGroup               string
+	WriteIdsToTags           int64
 }
 
 type CategoryQualityProfile struct {

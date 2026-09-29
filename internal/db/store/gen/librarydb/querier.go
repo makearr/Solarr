@@ -499,6 +499,9 @@ type Querier interface {
 	ListStatRollup(ctx context.Context, arg ListStatRollupParams) ([]StatRollup, error)
 	// "This tag or any descendant" is one join because the closure is materialised.
 	ListSubjectsForTagTree(ctx context.Context, arg ListSubjectsForTagTreeParams) ([]ListSubjectsForTagTreeRow, error)
+	// Files whose work and edition carry the given providers' ids and that were never written,
+	// with each id the tags could take. Providers are arguments: the query knows no media type.
+	ListTagWritebackCandidates(ctx context.Context, arg ListTagWritebackCandidatesParams) ([]ListTagWritebackCandidatesRow, error)
 	ListTagsForSubject(ctx context.Context, arg ListTagsForSubjectParams) ([]TagAssignment, error)
 	// The work detail page's own need, same reasoning as ListCreditsForWorkWithPerson.
 	ListTagsForSubjectWithName(ctx context.Context, arg ListTagsForSubjectWithNameParams) ([]ListTagsForSubjectWithNameRow, error)
@@ -620,6 +623,7 @@ type Querier interface {
 	RecordItemSearched(ctx context.Context, arg RecordItemSearchedParams) error
 	RecordManualIdentification(ctx context.Context, arg RecordManualIdentificationParams) error
 	RecordPersonRefresh(ctx context.Context, arg RecordPersonRefreshParams) error
+	RecordTagWriteback(ctx context.Context, arg RecordTagWritebackParams) error
 	RecycleBin(ctx context.Context, arg RecycleBinParams) (RecycleBin, error)
 	// Recycled bytes count against the free-space gate, so they are summed per
 	// root rather than assumed to be free (ADR-12).

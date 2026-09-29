@@ -34,3 +34,20 @@ Rules worth knowing:
 - **A group name** is looked up in the container's own group database; use the gid on network
   filesystems or when the name exists only on the host.
 - A permission or date that cannot be set is logged, never a failed import.
+
+## Write MusicBrainz IDs into files
+
+On by default, per library (revision D3). The `tag_writeback` task (hourly, and after every
+enrichment run that refined albums) fills a file's tags with the release group, release,
+recording and album artist ids Solarr identified it by: `musicbrainz_releasegroupid`,
+`musicbrainz_albumid`, `musicbrainz_trackid` and `musicbrainz_albumartistid`, Picard's names,
+which Navidrome and Lidarr read.
+
+- **Fill-only.** A key the file already has is never replaced, even with a different value.
+- **Only once the album has a release**: a file whose album is identified to a release group
+  but no edition yet waits for enrichment to choose one.
+- **Never on a root that is read-only, offline or not writable**, whatever the library says.
+- **Once per file**, recorded in `tag_writeback` (`library.db`): an MP3's recording id is a UFID
+  frame ffprobe cannot show, so re-reading would rewrite it for ever. A failure is recorded too.
+- A run writes at most 2,000 files; a large library is written over successive hours.
+- The written file keeps its identity: a known path keeps its `media_object`.

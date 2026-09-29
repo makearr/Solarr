@@ -85,6 +85,16 @@ export function LibraryFileManagement() {
           checked={draft.unmonitor_deleted}
           onChange={(checked) => set({ unmonitor_deleted: checked })}
         />
+        <Toggle
+          label="Write MusicBrainz IDs into files"
+          help={
+            "Once a file is identified, its release group, release, recording and album artist IDs are added to its tags, " +
+            "so other tools and a rebuilt library recognise it. Only missing values are added; nothing is overwritten. " +
+            "Never on a read-only root folder."
+          }
+          checked={draft.write_ids_to_tags ?? true}
+          onChange={(checked) => set({ write_ids_to_tags: checked })}
+        />
         {advanced && (
         <>
         <Choice

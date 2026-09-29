@@ -7221,6 +7221,11 @@ components:
         chown_group:
           type: string
           description: A group name or number; empty leaves the group alone.
+        write_ids_to_tags:
+          type: boolean
+          description: >-
+            Fill identified files' tags with their MusicBrainz ids (revision D3):
+            never overwriting a value, never on a read-only root. Absent means yes.
 
     ImportSettings:
       type: object

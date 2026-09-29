@@ -381,6 +381,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerEnrichJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerTagWritebackJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerArtworkJob(registry, executor); err != nil {
 		return err
 	}
