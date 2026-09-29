@@ -10,6 +10,7 @@ import { discCountOf, formatTrackNumber } from "@/lib/trackNumber";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import { usePreference } from "@/lib/usePreference";
 
+import { IndexerProblems } from "./IndexerProblems";
 import { CandidateList } from "./CandidateList";
 import { CoverArt } from "./CoverArt";
 import { statusLabel, useQueue } from "./Queue";
@@ -59,8 +60,9 @@ export function WorkDetail() {
   const search = useMutation({
     mutationFn: async (terms?: { artist: string; album: string }) => {
       if (id === undefined) return;
-      const { error } = await api.POST("/works/{id}/search", { params: { path: { id } }, body: terms });
+      const { data, error } = await api.POST("/works/{id}/search", { params: { path: { id } }, body: terms });
       if (error) throw error;
+      return data;
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["work", id, "candidates"] }),
   });
@@ -318,6 +320,7 @@ export function WorkDetail() {
                   That search could not run -- check that an indexer is connected and enabled.
                 </p>
               )}
+              <IndexerProblems problems={search.data?.indexer_errors} />
               <CandidateList
                 decisions={candidates.data ?? []}
                 loading={candidates.isLoading}

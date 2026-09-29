@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
@@ -82,7 +83,9 @@ type IndexerSearcher interface {
 // (cmd/solarr/app/providers.go), the same split ArrSync's own
 // LidarrClientFactory already keeps.
 type IndexerConn struct {
-	ID     int64
+	ID int64
+	// Name is what a person calls the indexer, for naming it when it fails or is slow.
+	Name   string
 	Impl   string // "newznab" | "torznab" (ADR-43) -- decides the stored protocol and which RawItem fields apply
 	Client IndexerSearcher
 	// MusicParams is what the indexer's caps say its music search accepts; nil when unknown.
@@ -99,9 +102,16 @@ func (c IndexerConn) takesStructuredMusic() bool {
 // across every configured indexer (ADR-37's own "partial results are
 // normal, not an error"), never stopping the rest.
 type IndexerSearchError struct {
-	IndexerID int64
-	Error     string
+	IndexerID   int64
+	IndexerName string
+	Error       string
+	// TooSlow means the indexer had not answered when the group deadline passed (ADR-37).
+	TooSlow bool
 }
+
+// indexerGroupDeadline bounds one tier's fan-out to every indexer (ADR-37's default), whatever
+// each indexer's own timeout.
+const indexerGroupDeadline = 20 * time.Second
 
 // ItemSearchResult is one desired item's own run: which tier (if any)
 // produced an acceptable match, every decision persisted, and any indexer
@@ -124,6 +134,8 @@ type Search struct {
 	Clock      clock.Clock
 	// Blocklist, when set, keeps a blocklisted release out before it is evaluated (section 10.11).
 	Blocklist *library.BlocklistStore
+	// IndexerDeadline bounds each tier's fan-out; zero is indexerGroupDeadline.
+	IndexerDeadline time.Duration
 }
 
 // SearchTerms are a person's own artist and album for "search with different terms".
@@ -230,27 +242,23 @@ func (s Search) SearchItemWithTerms(
 	result := ItemSearchResult{}
 	for tierIndex, terms := range tiers {
 		var accepted []acceptedFind
-		for _, conn := range indexers {
-			seen := map[string]bool{}
-			for _, term := range terms {
-				if term.Extra != nil && !conn.takesStructuredMusic() {
-					continue
-				}
-				raws, searchErr := conn.Client.Search(ctx, indexer.SearchRequest{
-					Function: "music", Query: term.Query, Extra: term.Extra, Limit: candidateSearchResultLimit,
+		answers, err := askEveryIndexer(ctx, indexers, terms, cmp.Or(s.IndexerDeadline, indexerGroupDeadline))
+		if err != nil {
+			return result, fmt.Errorf("music: search item %d: %w", itemID, err)
+		}
+		// Merged in indexer order, so a duplicate keeps the best-priority indexer's copy.
+		for index, answer := range answers {
+			conn := indexers[index]
+			if answer.err != nil {
+				result.IndexerErrors = append(result.IndexerErrors, IndexerSearchError{
+					IndexerID: conn.ID, IndexerName: conn.Name, Error: answer.err.Error(), TooSlow: answer.tooSlow,
 				})
-				if searchErr != nil {
-					result.IndexerErrors = append(result.IndexerErrors,
-						IndexerSearchError{IndexerID: conn.ID, Error: searchErr.Error()})
-					break // a failing indexer is not asked again within the tier
-				}
-				raws = unseen(raws, seen)
-				raws, err = s.withoutBlocklisted(ctx, conn.ID, raws, at)
-				if err != nil {
-					return result, fmt.Errorf("music: search item %d: %w", itemID, err)
-				}
-				accepted = append(accepted, evaluateRawItems(raws, conn, target, albumTarget, wantedArtist, rules, languagePolicy, preferPropers)...)
 			}
+			raws, err := s.withoutBlocklisted(ctx, conn.ID, answer.raws, at)
+			if err != nil {
+				return result, fmt.Errorf("music: search item %d: %w", itemID, err)
+			}
+			accepted = append(accepted, evaluateRawItems(raws, conn, target, albumTarget, wantedArtist, rules, languagePolicy, preferPropers)...)
 		}
 		accepted = withoutCrossIndexerDuplicates(accepted)
 		if len(accepted) == 0 {
@@ -269,6 +277,59 @@ func (s Search) SearchItemWithTerms(
 		return result, nil
 	}
 	return result, nil
+}
+
+// indexerAnswer is what one indexer gave for one tier's queries, up to its first failure.
+type indexerAnswer struct {
+	raws    []indexer.RawItem
+	err     error
+	tooSlow bool
+}
+
+// askEveryIndexer runs a tier's queries against every indexer at once and waits for all of them,
+// or the group deadline (ADR-37): one slow indexer no longer delays the others' results.
+func askEveryIndexer(
+	ctx context.Context, indexers []IndexerConn, terms []searchTerms, deadline time.Duration,
+) ([]indexerAnswer, error) {
+	group, cancel := context.WithTimeout(ctx, deadline)
+	defer cancel()
+	answers := make([]indexerAnswer, len(indexers))
+	var wait sync.WaitGroup
+	for index, conn := range indexers {
+		wait.Go(func() { answers[index] = askIndexer(group, conn, terms) })
+	}
+	wait.Wait()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	for index := range answers {
+		if answers[index].err != nil && errors.Is(group.Err(), context.DeadlineExceeded) &&
+			errors.Is(answers[index].err, context.DeadlineExceeded) {
+			answers[index].tooSlow = true
+			answers[index].err = fmt.Errorf("no answer within %s; its releases are missing from this search", deadline)
+		}
+	}
+	return answers, nil
+}
+
+// askIndexer sends one indexer a tier's queries in turn; a failing indexer is not asked again.
+func askIndexer(ctx context.Context, conn IndexerConn, terms []searchTerms) indexerAnswer {
+	var answer indexerAnswer
+	seen := map[string]bool{}
+	for _, term := range terms {
+		if term.Extra != nil && !conn.takesStructuredMusic() {
+			continue
+		}
+		raws, err := conn.Client.Search(ctx, indexer.SearchRequest{
+			Function: "music", Query: term.Query, Extra: term.Extra, Limit: candidateSearchResultLimit,
+		})
+		if err != nil {
+			answer.err = err
+			return answer
+		}
+		answer.raws = append(answer.raws, unseen(raws, seen)...)
+	}
+	return answer
 }
 
 // sortBestFirst ranks releases as a grab chooses them: accepted first, then the quality tiers

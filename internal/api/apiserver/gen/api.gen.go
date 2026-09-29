@@ -1809,8 +1809,12 @@ type Indexer struct {
 
 // IndexerSearchError defines model for IndexerSearchError.
 type IndexerSearchError struct {
-	Error     string `json:"error"`
-	IndexerId int64  `json:"indexer_id"`
+	Error       string `json:"error"`
+	IndexerId   int64  `json:"indexer_id"`
+	IndexerName string `json:"indexer_name"`
+
+	// TooSlow The indexer had not answered when the search's 20-second deadline passed (ADR-37).
+	TooSlow bool `json:"too_slow"`
 }
 
 // Job The job's payload is deliberately absent. It can carry paths and provider identifiers, and a listing is not the place to hand that out.

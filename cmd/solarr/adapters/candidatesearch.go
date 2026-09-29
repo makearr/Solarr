@@ -264,7 +264,10 @@ func (c CandidateSearch) searchItemResultView(ctx context.Context, result music.
 	decisions := c.decisionViews(ctx, result.Decisions)
 	indexerErrors := make([]apiserver.IndexerSearchError, len(result.IndexerErrors))
 	for index, indexerError := range result.IndexerErrors {
-		indexerErrors[index] = apiserver.IndexerSearchError{IndexerID: indexerError.IndexerID, Error: indexerError.Error}
+		indexerErrors[index] = apiserver.IndexerSearchError{
+			IndexerID: indexerError.IndexerID, IndexerName: indexerError.IndexerName,
+			Error: indexerError.Error, TooSlow: indexerError.TooSlow,
+		}
 	}
 	return apiserver.SearchItemResult{TierUsed: result.TierUsed, Decisions: decisions, IndexerErrors: indexerErrors}
 }

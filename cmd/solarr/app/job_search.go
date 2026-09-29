@@ -33,7 +33,7 @@ func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error)
 			return nil, err
 		}
 		client := factory(indexer.ID, indexer.BaseURL, apiKey.Reveal(), indexer.Egress())
-		conn := music.IndexerConn{ID: indexer.ID, Impl: indexer.Impl, Client: client}
+		conn := music.IndexerConn{ID: indexer.ID, Name: indexer.Name, Impl: indexer.Impl, Client: client}
 		if p.indexerCaps != nil {
 			conn.MusicParams = p.indexerCaps.musicParams(ctx, indexer.ID, indexer.BaseURL, client)
 		}

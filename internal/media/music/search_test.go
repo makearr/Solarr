@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -799,5 +801,79 @@ func TestSearchItem_TheSameReleaseFromTwoIndexersIsOneRow(t *testing.T) {
 	slices.Sort(guids)
 	if want := []string{"a-1", "b-2", "b-3"}; !reflect.DeepEqual(guids, want) {
 		t.Errorf("rows = %v, want %v", guids, want)
+	}
+}
+
+// searchFunc is an indexer answering through a function that sees the search's context.
+type searchFunc func(ctx context.Context, request indexer.SearchRequest) ([]indexer.RawItem, error)
+
+func (f searchFunc) Search(ctx context.Context, request indexer.SearchRequest) ([]indexer.RawItem, error) {
+	return f(ctx, request)
+}
+
+// ADR-37: every indexer is asked at once. The first answers only after the second has been asked,
+// which a one-after-another search never reaches before the deadline.
+func TestSearchItem_AsksEveryIndexerAtOnce(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	secondAsked := make(chan struct{})
+	var once sync.Once
+	first := searchFunc(func(ctx context.Context, _ indexer.SearchRequest) ([]indexer.RawItem, error) {
+		select {
+		case <-secondAsked:
+			return []indexer.RawItem{rawItem("guid-first", "Nosi Zada-Discovery-2001-FLAC-GROUP")}, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	})
+	second := searchFunc(func(context.Context, indexer.SearchRequest) ([]indexer.RawItem, error) {
+		once.Do(func() { close(secondAsked) })
+		item := rawItem("guid-second", "Nosi Zada-Discovery-2001-MP3-320-GROUP")
+		item.SizeBytes = 120_000_000
+		return []indexer.RawItem{item}, nil
+	})
+	search := env.search()
+	search.IndexerDeadline = 5 * time.Second
+
+	result, err := search.SearchItem(t.Context(), item.ID, []music.IndexerConn{
+		{ID: 1, Name: "First", Impl: "newznab", Client: first}, {ID: 2, Name: "Second", Impl: "newznab", Client: second},
+	}, env.clock.Now())
+	if err != nil {
+		t.Fatalf("SearchItem: %v", err)
+	}
+	if len(result.IndexerErrors) != 0 || len(result.Decisions) != 2 {
+		t.Fatalf("errors %+v, %d decisions; want both indexers answering", result.IndexerErrors, len(result.Decisions))
+	}
+}
+
+// A slow indexer costs the search its deadline, not the other indexers' releases, and is named.
+func TestSearchItem_NamesAnIndexerTooSlowToAnswer(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	slow := searchFunc(func(ctx context.Context, _ indexer.SearchRequest) ([]indexer.RawItem, error) {
+		<-ctx.Done()
+		return nil, fmt.Errorf("newznab: %w", ctx.Err())
+	})
+	quick := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+		return []indexer.RawItem{rawItem("guid-quick", "Nosi Zada-Discovery-2001-FLAC-GROUP")}, nil
+	}}
+	search := env.search()
+	search.IndexerDeadline = 100 * time.Millisecond
+
+	result, err := search.SearchItem(t.Context(), item.ID, []music.IndexerConn{
+		{ID: 1, Name: "Slow", Impl: "newznab", Client: slow}, {ID: 2, Name: "Quick", Impl: "newznab", Client: quick},
+	}, env.clock.Now())
+	if err != nil {
+		t.Fatalf("SearchItem: %v", err)
+	}
+	want := []music.IndexerSearchError{{
+		IndexerID: 1, IndexerName: "Slow", TooSlow: true,
+		Error: "no answer within 100ms; its releases are missing from this search",
+	}}
+	if !reflect.DeepEqual(result.IndexerErrors, want) {
+		t.Errorf("IndexerErrors = %+v, want %+v", result.IndexerErrors, want)
+	}
+	if len(result.Decisions) != 1 || result.Decisions[0].ReleaseCandidate.GUID != "guid-quick" {
+		t.Errorf("decisions = %+v, want the quick indexer's release", result.Decisions)
 	}
 }

@@ -15,6 +15,10 @@ Two scheduled tasks (Settings -> Scheduler) do what Lidarr leaves to a person pr
   download already on its way costs nothing and is looked at again in an hour. Every search counts
   toward the backoff, whoever started it.
 
+Every search asks all enabled indexers at once and waits at most **20 seconds** for them (ADR-37):
+a dead or slow indexer bounds a search instead of adding to it. The album page and Interactive
+search name each indexer that failed or did not answer in time.
+
 Adding from **Discover** with **Start search for missing albums** ticked (on by default, remembered
 per person) searches an album at once, as Lidarr does. For an artist it adds their albums now rather
 than at the 12-hourly subscription expansion, then searches the missing ones. Monitoring an album
