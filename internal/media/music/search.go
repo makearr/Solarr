@@ -245,6 +245,7 @@ func (s Search) SearchItemWithTerms(
 				accepted = append(accepted, evaluateRawItems(raws, conn, target, wantedArtist, rules, languagePolicy, preferPropers)...)
 			}
 		}
+		accepted = withoutCrossIndexerDuplicates(accepted)
 		if len(accepted) == 0 {
 			continue
 		}
@@ -281,6 +282,37 @@ func sortBestFirst(finds []acceptedFind) {
 		}
 		return cmp.Compare(a.distance.Total, b.distance.Total)
 	})
+}
+
+// duplicateSizeTolerance is how far two indexers' sizes for one release may differ (answered
+// 2026-09-24: within 1%).
+const duplicateSizeTolerance = 0.01
+
+// withoutCrossIndexerDuplicates keeps one row for a release two indexers both list: same title
+// once case and punctuation are ignored, size within 1%. Indexers are searched in priority order,
+// so the first find, the best-priority indexer's, is kept.
+func withoutCrossIndexerDuplicates(finds []acceptedFind) []acceptedFind {
+	kept := finds[:0:0]
+	for _, find := range finds {
+		duplicate := slices.ContainsFunc(kept, func(earlier acceptedFind) bool {
+			return earlier.conn.ID != find.conn.ID &&
+				cleanSearchText(strings.ToLower(earlier.raw.Title)) == cleanSearchText(strings.ToLower(find.raw.Title)) &&
+				sameSize(earlier.raw.SizeBytes, find.raw.SizeBytes)
+		})
+		if !duplicate {
+			kept = append(kept, find)
+		}
+	}
+	return kept
+}
+
+// sameSize is within duplicateSizeTolerance; an unknown size matches only another unknown one.
+func sameSize(a, b int64) bool {
+	if a <= 0 || b <= 0 {
+		return a <= 0 && b <= 0
+	}
+	larger := float64(max(a, b))
+	return (larger-float64(min(a, b)))/larger <= duplicateSizeTolerance
 }
 
 // unseen drops a release an earlier query of the same tier already returned from this indexer.
