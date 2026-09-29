@@ -240,20 +240,20 @@ func TestObserve_ChangesFileDatesWhereTheLibraryAsks(t *testing.T) {
 		consumer, _, fsys := newConsumerForCategory(t, settings.Category{
 			ID: discoveryCategoryID, MonitorDiscovered: settings.MonitorDiscoveredNone, FileManagement: fileManagement,
 		})
-		content := []byte("heka - watermark - 03")
-		writeMusicFile(t, fsys, "Heka/Watermark/03.flac", content)
+		content := []byte("heka - zanuvode - 03")
+		writeMusicFile(t, fsys, "Heka/Zanuvode/03.flac", content)
 		root := settings.RootFolder{ID: 1, Path: testRoot, Online: true, Writable: true, ReadOnly: readOnly}
-		batch := []scan.Observed{observedFile("Heka/Watermark/03.flac", int64(len(content)), mediatool.Tags{
-			"album": "Watermark", "date": "1988-09-19", "tracknumber": "3",
+		batch := []scan.Observed{observedFile("Heka/Zanuvode/03.flac", int64(len(content)), mediatool.Tags{
+			"album": "Zanuvode", "date": "1988-03-02", "tracknumber": "3",
 		})}
 		if err := consumer.Observe(t.Context(), root, discoveryCategoryID, batch); err != nil {
 			t.Fatalf("Observe: %v", err)
 		}
-		info, err := fsys.Stat(path.Join(testRoot, "Heka/Watermark/03.flac"))
+		info, err := fsys.Stat(path.Join(testRoot, "Heka/Zanuvode/03.flac"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		released := time.Date(1988, time.September, 19, 0, 0, 0, 0, time.UTC)
+		released := time.Date(1988, time.March, 2, 0, 0, 0, 0, time.UTC)
 		if changed := info.ModTime.Equal(released); changed == readOnly {
 			t.Errorf("read-only %v: modified %v", readOnly, info.ModTime)
 		}
@@ -263,13 +263,13 @@ func TestObserve_ChangesFileDatesWhereTheLibraryAsks(t *testing.T) {
 // A person's identification always wins: a rescan whose tags name another album leaves it alone.
 func TestObserve_NeverReidentifiesAManuallyIdentifiedFile(t *testing.T) {
 	consumer, opened, fsys := newConsumerWithDiscovery(t, settings.MonitorDiscoveredNone)
-	content := []byte("heka - watermark - 03")
-	writeMusicFile(t, fsys, "Heka/Watermark/03.flac", content)
+	content := []byte("heka - zanuvode - 03")
+	writeMusicFile(t, fsys, "Heka/Zanuvode/03.flac", content)
 	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
 	observe := func(releaseGroup string) {
 		t.Helper()
-		batch := []scan.Observed{observedFile("Heka/Watermark/03.flac", int64(len(content)), mediatool.Tags{
-			"album": "Watermark", "musicbrainz_releasegroupid": releaseGroup, "tracknumber": "3",
+		batch := []scan.Observed{observedFile("Heka/Zanuvode/03.flac", int64(len(content)), mediatool.Tags{
+			"album": "Zanuvode", "musicbrainz_releasegroupid": releaseGroup, "tracknumber": "3",
 		})}
 		if err := consumer.Observe(t.Context(), root, discoveryCategoryID, batch); err != nil {
 			t.Fatalf("Observe: %v", err)

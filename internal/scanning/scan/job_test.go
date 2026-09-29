@@ -562,14 +562,14 @@ func TestJob_RescansOnlyTheNamedDirectoriesAndRecordsNoProgress(t *testing.T) {
 		"Heka/Detisisu Binip (1991)/01.m4a",
 		"Heka/Detisisu Binip (1991)/02.m4a",
 		"Heka/Detisisu Binip (1991)/scans/cover.m4a",
-		"Heka/Watermark (1988)/01.m4a",
-		"P!po/Trustfall (2023)/01.m4a",
+		"Heka/Zanuvode (1988)/01.m4a",
+		"P!po/Kovalune (2023)/01.m4a",
 	)
 	handler := fixture.job(t, scan.IsAudio)
 
 	if err := fixture.run(t, handler, scan.Payload{
 		RootFolderID: 1, CategoryID: 3,
-		Directories: []string{"Heka/Detisisu Binip (1991)", "P!po/Trustfall (2023)", "Gone/Deleted (2000)"},
+		Directories: []string{"Heka/Detisisu Binip (1991)", "P!po/Kovalune (2023)", "Gone/Deleted (2000)"},
 	}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -579,7 +579,7 @@ func TestJob_RescansOnlyTheNamedDirectoriesAndRecordsNoProgress(t *testing.T) {
 	want := []string{
 		"Heka/Detisisu Binip (1991)/01.m4a",
 		"Heka/Detisisu Binip (1991)/02.m4a",
-		"P!po/Trustfall (2023)/01.m4a",
+		"P!po/Kovalune (2023)/01.m4a",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("observed %v, want only the named directories' own files %v", got, want)

@@ -509,7 +509,7 @@ func TestCommitUnit_NamesAKnownAlbumCanonicallyNotByItsTags(t *testing.T) {
 	at := time.Unix(1_700_000_000, 0)
 	workIDs, err := library.NewIdentity(opened).ResolveWorks(t.Context(), at, []library.WorkLink{{
 		Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 1,
-		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Watermark", SortTitle: "Watermark"},
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Zanuvode", SortTitle: "Zanuvode"},
 	}})
 	if err != nil {
 		t.Fatalf("ResolveWorks: %v", err)
@@ -547,7 +547,7 @@ func TestCommitUnit_NamesAKnownAlbumCanonicallyNotByItsTags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PathsForObject: %v", err)
 	}
-	if want := "Heka/Watermark (1988)/Heka - 03 - Pihudoc Zaze.flac"; len(paths) != 1 || paths[0].RelPath != want {
+	if want := "Heka/Zanuvode (1988)/Heka - 03 - Pihudoc Zaze.flac"; len(paths) != 1 || paths[0].RelPath != want {
 		t.Errorf("placed at %+v, want %q", paths, want)
 	}
 }

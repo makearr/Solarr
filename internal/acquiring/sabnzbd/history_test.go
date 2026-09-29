@@ -9,8 +9,8 @@ import (
 )
 
 const historyFixtureJSON = `{"history": {"slots": [
-  {"nzo_id": "SABnzbd_nzo_abc123", "name": "Heka-Watermark-1988-FLAC", "category": "music",
-   "status": "Completed", "storage": "/downloads/complete/Heka-Watermark-1988-FLAC",
+  {"nzo_id": "SABnzbd_nzo_abc123", "name": "Heka-Zanuvode-1988-FLAC", "category": "music",
+   "status": "Completed", "storage": "/downloads/complete/Heka-Zanuvode-1988-FLAC",
    "fail_message": "", "bytes": 300000000, "completed": 1790000000},
   {"nzo_id": "SABnzbd_nzo_def456", "name": "Broken", "category": "music", "status": "Failed",
    "storage": "", "fail_message": "Repair failed, not enough repair blocks", "bytes": 0, "completed": 1790000100}
@@ -29,8 +29,8 @@ func TestHistory_ReadsCompletedAndFailedDownloads(t *testing.T) {
 		t.Errorf("query = %v, want mode=history category=music limit=50", query)
 	}
 	want := []sabnzbd.HistorySlot{
-		{ClientRef: "SABnzbd_nzo_abc123", Name: "Heka-Watermark-1988-FLAC", Category: "music", Status: "Completed",
-			StoragePath: "/downloads/complete/Heka-Watermark-1988-FLAC", SizeBytes: 300000000, CompletedAt: time.Unix(1790000000, 0)},
+		{ClientRef: "SABnzbd_nzo_abc123", Name: "Heka-Zanuvode-1988-FLAC", Category: "music", Status: "Completed",
+			StoragePath: "/downloads/complete/Heka-Zanuvode-1988-FLAC", SizeBytes: 300000000, CompletedAt: time.Unix(1790000000, 0)},
 		{ClientRef: "SABnzbd_nzo_def456", Name: "Broken", Category: "music", Status: "Failed",
 			FailMessage: "Repair failed, not enough repair blocks", CompletedAt: time.Unix(1790000100, 0)},
 	}

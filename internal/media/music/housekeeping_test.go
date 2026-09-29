@@ -49,18 +49,18 @@ func TestHousekeeping_DeletesEmptyFolders(t *testing.T) {
 		fileManagement.DeleteEmptyFolders = true
 		fileManagement.CreateEmptyArtistFolders = createArtistFolders
 		housekeeping, fsys, _ := newHousekeeping(t, fileManagement)
-		for _, folder := range []string{"Heka/Watermark (1988)", "Solo"} {
+		for _, folder := range []string{"Heka/Zanuvode (1988)", "Solo"} {
 			if err := fsys.MkdirAll(path.Join(commitDestRoot, folder), 0o755); err != nil {
 				t.Fatal(err)
 			}
 		}
 		err := housekeeping.AfterSweep(t.Context(), settings.RootFolder{ID: commitDestRootID, Path: commitDestRoot},
-			commitCategoryID, scan.SweepOutcome{EmptyDirectories: []string{"Heka/Watermark (1988)", "Solo"}})
+			commitCategoryID, scan.SweepOutcome{EmptyDirectories: []string{"Heka/Zanuvode (1988)", "Solo"}})
 		if err != nil {
 			t.Fatalf("AfterSweep: %v", err)
 		}
 		for folder, wantKept := range map[string]bool{
-			"Heka/Watermark (1988)": false, "Heka": createArtistFolders, "Solo": createArtistFolders, "": true,
+			"Heka/Zanuvode (1988)": false, "Heka": createArtistFolders, "Solo": createArtistFolders, "": true,
 		} {
 			_, err := fsys.Stat(path.Join(commitDestRoot, folder))
 			if kept := err == nil; kept != wantKept {

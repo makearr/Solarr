@@ -374,12 +374,12 @@ func TestSearchTrack_ReachesTheSearcherWithBothIDs(t *testing.T) {
 func TestSearchWork_ForwardsDifferentTerms(t *testing.T) {
 	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
 
-	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/search", `{"artist":" Heka ","album":"Watermark"}`))
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/search", `{"artist":" Heka ","album":"Zanuvode"}`))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
 	}
-	if got := fixture.candidateSearcher.lastSearchTerms; got == nil || *got != (apiserver.SearchTerms{Artist: "Heka", Album: "Watermark"}) {
-		t.Errorf("terms = %+v, want Heka / Watermark", got)
+	if got := fixture.candidateSearcher.lastSearchTerms; got == nil || *got != (apiserver.SearchTerms{Artist: "Heka", Album: "Zanuvode"}) {
+		t.Errorf("terms = %+v, want Heka / Zanuvode", got)
 	}
 	recorder = fixture.do(authedPost(t, cookies, "/api/v1/works/42/search", `{"artist":"Heka","album":""}`))
 	if recorder.Code != http.StatusBadRequest {

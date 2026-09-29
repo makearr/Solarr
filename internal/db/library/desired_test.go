@@ -497,7 +497,7 @@ func TestDesired_IncompleteItemsForOnePerson(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
 	heka := resolvePersonNamed(t, people, "artist-1", "Heka", "Heka")
-	hers := createWork(t, opened, "music", "Watermark")
+	hers := createWork(t, opened, "music", "Zanuvode")
 	addTrack(t, opened, hers.ID)
 	other := createWork(t, opened, "music", "Zor A")
 	if err := people.AddCredit(t.Context(), hers.ID, heka, "artist", 0); err != nil {
@@ -512,6 +512,6 @@ func TestDesired_IncompleteItemsForOnePerson(t *testing.T) {
 
 	items, err := library.NewDesired(opened).IncompleteItems(t.Context(), 0, heka, 0, 10)
 	if err != nil || len(items) != 1 || items[0].WorkID != hers.ID {
-		t.Errorf("IncompleteItems(Heka) = %+v, %v; want only Watermark", items, err)
+		t.Errorf("IncompleteItems(Heka) = %+v, %v; want only Zanuvode", items, err)
 	}
 }

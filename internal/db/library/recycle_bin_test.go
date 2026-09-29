@@ -316,11 +316,11 @@ func TestRecycleBinPut_RemovesTheFoldersItEmptied(t *testing.T) {
 	fake := clock.NewFakeAtEpoch()
 	fsys := fsx.NewMem(fake)
 	q := library.NewRecycleBin(opened, fsys, fake)
-	putTestFile(t, fsys, "/media/root/Heka/Watermark/03.flac", []byte("audio"))
+	putTestFile(t, fsys, "/media/root/Heka/Zanuvode/03.flac", []byte("audio"))
 	putTestFile(t, fsys, "/media/root/Heka/Detisisu Binip/01.flac", []byte("audio"))
 	putTestFile(t, fsys, "/media/root/Solo/Only/01.flac", []byte("audio"))
 
-	for _, original := range []string{"/media/root/Heka/Watermark/03.flac", "/media/root/Solo/Only/01.flac"} {
+	for _, original := range []string{"/media/root/Heka/Zanuvode/03.flac", "/media/root/Solo/Only/01.flac"} {
 		if _, err := q.Put(t.Context(), library.PutRequest{
 			RootPath: "/media/root", OriginalPath: original, Reason: library.ReasonUserDelete,
 			Retain: time.Hour, RemoveEmptyFolders: true,
@@ -329,7 +329,7 @@ func TestRecycleBinPut_RemovesTheFoldersItEmptied(t *testing.T) {
 		}
 	}
 	for folder, wantExists := range map[string]bool{
-		"/media/root/Heka/Watermark": false, "/media/root/Heka": true, "/media/root/Solo": false, "/media/root": true,
+		"/media/root/Heka/Zanuvode": false, "/media/root/Heka": true, "/media/root/Solo": false, "/media/root": true,
 	} {
 		_, err := fsys.Stat(folder)
 		if exists := err == nil; exists != wantExists {

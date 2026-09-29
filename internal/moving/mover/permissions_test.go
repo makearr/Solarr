@@ -12,26 +12,26 @@ import (
 // Everything from the file up to the root changes; the root itself is the host's and does not.
 func TestApplyPermissions_StopsAtTheRoot(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
-	if err := fsys.MkdirAll("/library/Heka/Watermark (1988)", 0o700); err != nil {
+	if err := fsys.MkdirAll("/library/Heka/Zanuvode (1988)", 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := fsys.Chmod("/library", 0o700); err != nil {
 		t.Fatal(err)
 	}
-	file, err := fsys.Create("/library/Heka/Watermark (1988)/03.flac")
+	file, err := fsys.Create("/library/Heka/Zanuvode (1988)/03.flac")
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = file.Close()
 
-	err = mover.ApplyPermissions(fsys, "/library/", "/library/Heka/Watermark (1988)/03.flac",
+	err = mover.ApplyPermissions(fsys, "/library/", "/library/Heka/Zanuvode (1988)/03.flac",
 		mover.Permissions{FolderMode: 0o775, FileMode: 0o664, GID: 1000})
 	if err != nil {
 		t.Fatalf("ApplyPermissions: %v", err)
 	}
 	want := map[string]fs.FileMode{
-		"/library": 0o700, "/library/Heka": 0o775, "/library/Heka/Watermark (1988)": 0o775,
-		"/library/Heka/Watermark (1988)/03.flac": 0o664,
+		"/library": 0o700, "/library/Heka": 0o775, "/library/Heka/Zanuvode (1988)": 0o775,
+		"/library/Heka/Zanuvode (1988)/03.flac": 0o664,
 	}
 	for target, mode := range want {
 		info, err := fsys.Stat(target)
