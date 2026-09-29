@@ -5,11 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/makearr/Solarr/internal/acquiring/download"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
+
+	"github.com/makearr/Solarr/internal/acquiring/download"
 )
 
 // AddFileRequest is one NZB uploaded to SABnzbd (ADR-57's acquire.send).

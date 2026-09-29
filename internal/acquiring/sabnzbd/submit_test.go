@@ -3,10 +3,10 @@ package sabnzbd_test
 import (
 	"context"
 	"errors"
-	"github.com/makearr/Solarr/internal/acquiring/download"
 	"io"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
 )
 
