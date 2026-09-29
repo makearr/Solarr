@@ -465,7 +465,6 @@ func (d Desired) IdentityForFile(ctx context.Context, mediaObjectID int64) (File
 	return FileIdentity{}, false, nil
 }
 
-// Get answers one desired_item's own row, including its WorkID -- needed by
 // HuntPriority is an item's composite priority (ADR-36); an item not in the hunt queue has 0.
 func (d Desired) HuntPriority(ctx context.Context, itemID int64) (int64, error) {
 	priority, err := librarydb.New(d.store.Read()).GetHuntPriority(ctx, itemID)
@@ -475,6 +474,14 @@ func (d Desired) HuntPriority(ctx context.Context, itemID int64) (int64, error) 
 	return priority, err
 }
 
+// ReleaseDate is an item's street date as work_date holds it ("2024-03-01", "2024"), empty when unknown.
+func (d Desired) ReleaseDate(ctx context.Context, itemID int64) (string, error) {
+	return librarydb.New(d.store.Read()).GetItemReleaseDate(ctx, librarydb.GetItemReleaseDateParams{
+		Kind: WorkDateStreet, ItemID: itemID,
+	})
+}
+
+// Get answers one desired_item's own row, including its WorkID -- needed by
 // a caller that only has an item id and must recompute or detach against it.
 func (d Desired) Get(ctx context.Context, itemID int64) (librarydb.DesiredItem, error) {
 	row, err := librarydb.New(d.store.Read()).GetDesiredItem(ctx, itemID)

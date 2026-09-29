@@ -217,7 +217,8 @@ func (c CandidateSearch) GrabWork(ctx context.Context, workID int64) (apiserver.
 	if len(indexers) == 0 {
 		return apiserver.GrabResult{}, apiserver.ErrNoIndexersConfigured
 	}
-	result, err := music.Grab{Search: c.Search, Dispatch: c.Dispatch}.SearchAndSend(ctx, detail.Wanted.ID, indexers, c.Clock.Now())
+	result, err := music.Grab{Search: c.Search, Dispatch: c.Dispatch}.SearchAndSend(
+		ctx, detail.Wanted.ID, indexers, music.GrabUser, c.Clock.Now())
 	if err != nil {
 		return apiserver.GrabResult{}, translateDispatchError(err)
 	}

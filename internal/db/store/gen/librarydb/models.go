@@ -563,6 +563,7 @@ type ReadyQueue struct {
 	QueuedAt      int64
 	ExpiresAt     int64
 	SizeBytes     sql.NullInt64
+	Origin        string
 }
 
 type RecycleBin struct {

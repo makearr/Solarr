@@ -32,7 +32,7 @@ export function Queue() {
             ) : (
               <QueueTable items={queue.data.items} />
             )}
-            {queue.data.held.length > 0 && <HeldList held={queue.data.held} />}
+            <HeldList held={queue.data.held} />
           </>
         )}
       </div>
@@ -188,6 +188,8 @@ function QueueRow({ item }: { item: QueueItem }) {
   );
 }
 
+const ORIGIN_LABELS: Record<HeldRelease["origin"], string> = { user: "You", rss: "RSS", automatic: "Automatic" };
+
 /** ADR-57's HELD: found and chosen, waiting because the client already has as many as it may. */
 function HeldList({ held }: { held: readonly HeldRelease[] }) {
   return (
@@ -196,25 +198,53 @@ function HeldList({ held }: { held: readonly HeldRelease[] }) {
         Waiting for room in the download client ({held.length})
       </h3>
       <p className="text-xs text-ink-muted">
-        Sent in this order as downloads finish. The limit is each client&apos;s &ldquo;Downloads at once&rdquo;.
+        Releases found while the client already had as many as its &ldquo;Downloads at once&rdquo;. They are sent
+        in this order as downloads finish: your own grabs first, then RSS, then new albums, then older ones.
       </p>
-      <ol className="flex flex-col divide-y divide-border-subtle text-xs">
-        {held.map((release, index) => (
-          <li key={`${release.work_id ?? 0}-${release.release_title}`} className="flex gap-3 py-1.5">
-            <span className="w-6 text-right text-ink-muted">{index + 1}.</span>
-            {release.work_id != null ? (
-              <Link to="/works/$id" params={{ id: String(release.work_id) }} className="text-ink hover:underline">
-                {[release.artist, release.album].filter(Boolean).join(" — ") || "Album"}
-              </Link>
-            ) : (
-              <span>{release.album}</span>
-            )}
-            <span className="truncate text-ink-muted" title={release.release_title}>
-              {release.release_title}
-            </span>
-          </li>
-        ))}
-      </ol>
+      {held.length === 0 ? (
+        <Message>Nothing is waiting.</Message>
+      ) : (
+        <table className="w-full text-left text-xs">
+          <thead className="text-ink-muted">
+            <tr className="border-b border-border-subtle">
+              <th className="w-8 px-2 py-1.5 text-right font-medium">#</th>
+              <th className="px-2 py-1.5 font-medium">Album</th>
+              <th className="px-2 py-1.5 font-medium">Release</th>
+              <th className="px-2 py-1.5 font-medium">Size</th>
+              <th className="px-2 py-1.5 font-medium">Asked by</th>
+              <th className="px-2 py-1.5 font-medium">Indexer</th>
+              <th className="px-2 py-1.5 font-medium">Waiting since</th>
+            </tr>
+          </thead>
+          <tbody>
+            {held.map((release, index) => (
+              <tr key={`${release.work_id ?? 0}-${release.release_title}`} className="border-b border-border-subtle">
+                <td className="px-2 py-1.5 text-right text-ink-muted">{index + 1}</td>
+                <td className="px-2 py-1.5">
+                  {release.work_id != null ? (
+                    <Link to="/works/$id" params={{ id: String(release.work_id) }} className="text-ink hover:underline">
+                      {[release.artist, release.album].filter(Boolean).join(" — ") || "Album"}
+                    </Link>
+                  ) : (
+                    (release.album ?? "")
+                  )}
+                </td>
+                <td className="max-w-80 px-2 py-1.5">
+                  <span className="block truncate text-ink-muted" title={release.release_title}>
+                    {release.release_title}
+                  </span>
+                </td>
+                <td className="px-2 py-1.5 text-ink-muted">
+                  {release.size_bytes != null ? formatBytes(release.size_bytes) : ""}
+                </td>
+                <td className="px-2 py-1.5">{ORIGIN_LABELS[release.origin]}</td>
+                <td className="px-2 py-1.5 text-ink-muted">{release.indexer ?? ""}</td>
+                <td className="px-2 py-1.5 text-ink-muted">{new Date(release.held_at).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </section>
   );
 }

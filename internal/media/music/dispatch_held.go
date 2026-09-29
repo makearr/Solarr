@@ -9,14 +9,18 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/identify/priority"
 )
 
 // heldBatch bounds how many held releases one pass looks at; the rest wait for the next poll.
 const heldBatch = 50
 
 // holdIfFull holds detail instead of sending it when its client already has MaxQueued of Solarr's
-// downloads (ADR-57): once sent, the client decides the order, not Solarr's priority.
-func (d Dispatch) holdIfFull(ctx context.Context, itemID int64, detail library.DecisionDetail, at time.Time) (bool, error) {
+// downloads (ADR-57): once sent, the client decides the order, not Solarr's priority. A user's or an
+// RSS grab goes regardless when the client says so.
+func (d Dispatch) holdIfFull(
+	ctx context.Context, itemID int64, detail library.DecisionDetail, origin GrabOrigin, at time.Time,
+) (bool, error) {
 	if d.Ready == nil {
 		return false, nil
 	}
@@ -25,20 +29,42 @@ func (d Dispatch) holdIfFull(ctx context.Context, itemID int64, detail library.D
 		return false, err
 	}
 	downloader, found := firstMatchingProtocol(downloaders, detail.ReleaseCandidate.Protocol)
-	if !found {
+	if !found || downloader.alwaysSent(origin) {
 		return false, nil
 	}
 	if room, err := d.hasRoom(ctx, downloader); err != nil || room {
 		return false, err
 	}
-	priority, err := d.Desired.HuntPriority(ctx, itemID)
+	rank, err := d.heldPriority(ctx, itemID, origin, at)
 	if err != nil {
 		return false, err
 	}
 	return true, d.Ready.Hold(ctx, library.ReadyEntry{
-		CandidateID: detail.ReleaseCandidate.ID, DesiredItemID: itemID, Priority: priority,
-		QueuedAt: at.Unix(), ExpiresAt: detail.ReleaseCandidate.ExpiresAt,
+		CandidateID: detail.ReleaseCandidate.ID, DesiredItemID: itemID, Priority: rank,
+		QueuedAt: at.Unix(), ExpiresAt: detail.ReleaseCandidate.ExpiresAt, Origin: string(origin),
 	})
+}
+
+// heldPriority orders held releases user, RSS, new, backfill (ADR-36's ladder); within one, the
+// longest waiting goes first.
+func (d Dispatch) heldPriority(ctx context.Context, itemID int64, origin GrabOrigin, at time.Time) (int64, error) {
+	trigger := priority.TriggerUserRequest
+	switch origin {
+	case GrabUser:
+	case GrabRSS:
+		trigger = priority.TriggerRSS
+	default:
+		released, err := d.Desired.ReleaseDate(ctx, itemID)
+		if err != nil {
+			return 0, err
+		}
+		var releasedAt *time.Time
+		if parsed, ok := priority.ParseReleaseDate(released); ok {
+			releasedAt = &parsed
+		}
+		trigger = priority.ClassifyTrigger(releasedAt, at, priority.DefaultNewReleaseDays)
+	}
+	return priority.Compute(priority.DefaultWeights(), priority.Input{Trigger: trigger, QueuedSince: at}, at), nil
 }
 
 func (d Dispatch) hasRoom(ctx context.Context, downloader DownloaderConn) (bool, error) {

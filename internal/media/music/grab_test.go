@@ -28,7 +28,7 @@ func TestGrab_SendsTheBestReleaseAndNeverSearchesAnAlbumAlreadyDownloading(t *te
 	})}
 	indexers := []music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}
 
-	first, err := grab.SearchAndSend(t.Context(), item.ID, indexers, env.clock.Now())
+	first, err := grab.SearchAndSend(t.Context(), item.ID, indexers, music.GrabAutomatic, env.clock.Now())
 	if err != nil {
 		t.Fatalf("SearchAndSend: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestGrab_SendsTheBestReleaseAndNeverSearchesAnAlbumAlreadyDownloading(t *te
 	}
 
 	calls := len(searcher.requests)
-	second, err := grab.SearchAndSend(context.Background(), item.ID, indexers, env.clock.Now())
+	second, err := grab.SearchAndSend(context.Background(), item.ID, indexers, music.GrabAutomatic, env.clock.Now())
 	if err != nil {
 		t.Fatalf("second SearchAndSend: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestGrab_PassesOverAReleaseNoClientCanTake(t *testing.T) {
 
 	result, err := grab.SearchAndSend(t.Context(), item.ID, []music.IndexerConn{
 		{ID: 1, Impl: "torznab", Client: torrents}, {ID: 2, Impl: "newznab", Client: usenet},
-	}, env.clock.Now())
+	}, music.GrabAutomatic, env.clock.Now())
 	if err != nil {
 		t.Fatalf("SearchAndSend: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestGrab_ARefusedReleaseGivesWayToTheNextBest(t *testing.T) {
 	sender := &fakeSabnzbdSender{clientRef: "nzo-1", refuse: map[string]bool{"Nosi Zada-Discovery-2001-FLAC-GROUP": true}}
 	grab := music.Grab{Search: env.search(), Dispatch: env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: sender}})}
 
-	result, err := grab.SearchAndSend(t.Context(), item.ID, []music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, env.clock.Now())
+	result, err := grab.SearchAndSend(t.Context(), item.ID, []music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, music.GrabAutomatic, env.clock.Now())
 	if err != nil {
 		t.Fatalf("SearchAndSend: %v", err)
 	}

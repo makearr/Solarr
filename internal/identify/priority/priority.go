@@ -14,36 +14,41 @@ import "time"
 // user request first.
 type Trigger string
 
-// The four triggers, in the order the shipped defaults rank them.
+// The triggers, in the order the shipped defaults rank them.
 const (
 	TriggerUserRequest Trigger = "user_request"
-	TriggerNewRelease  Trigger = "new_release"
-	TriggerGap         Trigger = "gap"
-	TriggerUpgrade     Trigger = "upgrade"
+	// TriggerRSS is a release an RSS sync found for a wanted album (2026-09-29: user > RSS > new).
+	TriggerRSS        Trigger = "rss"
+	TriggerNewRelease Trigger = "new_release"
+	TriggerGap        Trigger = "gap"
+	TriggerUpgrade    Trigger = "upgrade"
 )
 
-// Weights are the four trigger weights -- ADR-36's 2026-09-05 amendment made
+// Weights are the trigger weights -- ADR-36's 2026-09-05 amendment made
 // these advanced-tier settings rather than constants, so a user who wants
 // gaps filled before new releases changes two numbers rather than losing the
 // feature. Bigger means more urgent.
 type Weights struct {
 	UserRequest int64
+	RSS         int64
 	NewRelease  int64
 	Gap         int64
 	Upgrade     int64
 }
 
-// DefaultWeights is the shipped ladder: user request > new release > gap >
+// DefaultWeights is the shipped ladder: user request > RSS > new release > gap >
 // upgrade. Spaced apart deliberately, not just 4/3/2/1 -- see the package's
 // own tests for why the gap matters once modifiers are added in.
 func DefaultWeights() Weights {
-	return Weights{UserRequest: 40, NewRelease: 30, Gap: 20, Upgrade: 10}
+	return Weights{UserRequest: 40, RSS: 35, NewRelease: 30, Gap: 20, Upgrade: 10}
 }
 
 func (w Weights) forTrigger(t Trigger) int64 {
 	switch t {
 	case TriggerUserRequest:
 		return w.UserRequest
+	case TriggerRSS:
+		return w.RSS
 	case TriggerNewRelease:
 		return w.NewRelease
 	case TriggerGap:

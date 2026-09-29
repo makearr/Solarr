@@ -180,7 +180,7 @@ func (j *SearchCategoryJob) grabIncomplete(
 func (j *SearchCategoryJob) grabOne(
 	ctx context.Context, categoryID, itemID int64, indexers []IndexerConn, now time.Time, tally *searchTally,
 ) {
-	result, err := j.grab.SearchAndSend(ctx, itemID, indexers, now)
+	result, err := j.grab.SearchAndSend(ctx, itemID, indexers, GrabAutomatic, now)
 	switch {
 	case errors.Is(err, ErrTrackSearchNotSupported), result.AlreadyInFlight:
 		tally.skipped++

@@ -3838,6 +3838,7 @@ export interface components {
             clients: components["schemas"]["QueueClient"][];
             items: components["schemas"]["QueueItem"][];
         };
+        /** @description A release found and held for room in its client's queue (ADR-57), in the order held releases are sent: a user's own grabs, then RSS, then new albums, then backfill. */
         HeldRelease: {
             /** Format: int64 */
             work_id?: number;
@@ -3845,6 +3846,13 @@ export interface components {
             artist?: string;
             release_title: string;
             indexer?: string;
+            /** Format: int64 */
+            size_bytes?: number;
+            /**
+             * @description Who asked for it.
+             * @enum {string}
+             */
+            origin: "user" | "rss" | "automatic";
             /** Format: date-time */
             held_at: string;
         };
@@ -4174,6 +4182,10 @@ export interface components {
             local_path?: string;
             /** @description How many of Solarr's downloads this client may hold at once before further automatic sends are held (ADR-57). Absent means 10. */
             max_queued?: number;
+            /** @description A user's own grab goes to this client even when it is full. Absent means yes. */
+            always_send_user_grabs?: boolean;
+            /** @description An RSS grab goes to this client even when it is full. Absent means yes. */
+            always_send_rss_grabs?: boolean;
         };
         TestDownloaderRequest: {
             impl: string;

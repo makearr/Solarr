@@ -67,7 +67,8 @@ func newQueueFixture(t *testing.T) queueFixture {
 	}
 	fixture.queue.clients = []apiserver.QueueClientRow{{ID: 1, Name: "Home SABnzbd", Paused: true, Items: 2}}
 	fixture.queue.held = []apiserver.HeldRow{
-		{WorkID: &workID, CategoryID: visible.ID, Album: "Zanuvode", ReleaseTitle: "Heka-Zanuvode-FLAC", HeldAt: time.Unix(3, 0).UTC()},
+		{WorkID: &workID, CategoryID: visible.ID, Album: "Zanuvode", ReleaseTitle: "Heka-Zanuvode-FLAC", Origin: "rss",
+			HeldAt: time.Unix(3, 0).UTC()},
 		{CategoryID: hidden.ID, ReleaseTitle: "Hidden-Held", HeldAt: time.Unix(4, 0).UTC()},
 	}
 	return queueFixture{worksFixture: fixture, visible: visible, hidden: hidden}
@@ -91,7 +92,7 @@ func TestQueue_ScopedToTheCallersLibraries(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantHeld := []map[string]any{{
-		"work_id": 7.0, "album": "Zanuvode", "release_title": "Heka-Zanuvode-FLAC", "held_at": "1970-01-01T00:00:03Z",
+		"work_id": 7.0, "album": "Zanuvode", "release_title": "Heka-Zanuvode-FLAC", "held_at": "1970-01-01T00:00:03Z", "origin": "rss",
 	}}
 	if !reflect.DeepEqual(body.Held, wantHeld) {
 		t.Errorf("held = %v\nwant %v", body.Held, wantHeld)

@@ -252,6 +252,8 @@ type Querier interface {
 	GetHuntPriority(ctx context.Context, desiredItemID int64) (int64, error)
 	GetImportSession(ctx context.Context, id int64) (ImportSession, error)
 	GetImportUnit(ctx context.Context, id int64) (ImportUnit, error)
+	// An item's release date of the given kind, empty when unknown: held releases rank new before backfill.
+	GetItemReleaseDate(ctx context.Context, arg GetItemReleaseDateParams) (string, error)
 	// The newest import a download's poll started, to follow it to IMPORTED.
 	GetLatestImportSessionForAcquisition(ctx context.Context, acquisitionID sql.NullInt64) (ImportSession, error)
 	GetMediaObject(ctx context.Context, id int64) (MediaObject, error)

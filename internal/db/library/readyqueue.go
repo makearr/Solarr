@@ -15,6 +15,8 @@ type ReadyEntry struct {
 	Priority      int64
 	QueuedAt      int64
 	ExpiresAt     int64
+	// Origin is who asked: "user", "rss" or "automatic".
+	Origin string
 }
 
 // ReadyQueue is section 10.5's ready queue: held releases, sent the moment a client has room.
@@ -32,7 +34,7 @@ func (r ReadyQueue) Hold(ctx context.Context, entry ReadyEntry) error {
 		}
 		return queries.EnqueueReady(ctx, librarydb.EnqueueReadyParams{
 			CandidateID: entry.CandidateID, DesiredItemID: entry.DesiredItemID, Priority: entry.Priority,
-			QueuedAt: entry.QueuedAt, ExpiresAt: entry.ExpiresAt,
+			QueuedAt: entry.QueuedAt, ExpiresAt: entry.ExpiresAt, Origin: entry.Origin,
 		})
 	})
 }
@@ -47,7 +49,7 @@ func (r ReadyQueue) Next(ctx context.Context, now int64, limit int) ([]ReadyEntr
 	for i, row := range rows {
 		entries[i] = ReadyEntry{
 			CandidateID: row.CandidateID, DesiredItemID: row.DesiredItemID, Priority: row.Priority,
-			QueuedAt: row.QueuedAt, ExpiresAt: row.ExpiresAt,
+			QueuedAt: row.QueuedAt, ExpiresAt: row.ExpiresAt, Origin: row.Origin,
 		}
 	}
 	return entries, nil
