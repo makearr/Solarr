@@ -630,6 +630,12 @@ const (
 	GetPersonArtworkParamsSizeThumb GetPersonArtworkParamsSize = "thumb"
 )
 
+// Defines values for SetQueueClientPausedParamsAction.
+const (
+	SetQueueClientPausedParamsActionPause  SetQueueClientPausedParamsAction = "pause"
+	SetQueueClientPausedParamsActionResume SetQueueClientPausedParamsAction = "resume"
+)
+
 // Defines values for ListLogsParamsLevel.
 const (
 	ListLogsParamsLevelDebug ListLogsParamsLevel = "debug"
@@ -3423,6 +3429,9 @@ type ListQueueParams struct {
 	WorkId *int64 `form:"work_id,omitempty" json:"work_id,omitempty"`
 }
 
+// SetQueueClientPausedParamsAction defines parameters for SetQueueClientPaused.
+type SetQueueClientPausedParamsAction string
+
 // RemoveQueueItemParams defines parameters for RemoveQueueItem.
 type RemoveQueueItemParams struct {
 	Blocklist *bool `form:"blocklist,omitempty" json:"blocklist,omitempty"`
@@ -4258,6 +4267,9 @@ type ServerInterface interface {
 	// Downloads in flight and every enabled download client's own queue, read live.
 	// (GET /queue)
 	ListQueue(w http.ResponseWriter, r *http.Request, params ListQueueParams)
+	// Pause or resume Solarr's own downloads in one client. Administrator only.
+	// (POST /queue/clients/{id}/{action})
+	SetQueueClientPaused(w http.ResponseWriter, r *http.Request, id int64, action SetQueueClientPausedParamsAction)
 	// Remove a download from its client with its files; manage on its library.
 	// (DELETE /queue/{id})
 	RemoveQueueItem(w http.ResponseWriter, r *http.Request, id int64, params RemoveQueueItemParams)
@@ -5242,6 +5254,12 @@ func (_ Unimplemented) UpdateQualityProfile(w http.ResponseWriter, r *http.Reque
 // Downloads in flight and every enabled download client's own queue, read live.
 // (GET /queue)
 func (_ Unimplemented) ListQueue(w http.ResponseWriter, r *http.Request, params ListQueueParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Pause or resume Solarr's own downloads in one client. Administrator only.
+// (POST /queue/clients/{id}/{action})
+func (_ Unimplemented) SetQueueClientPaused(w http.ResponseWriter, r *http.Request, id int64, action SetQueueClientPausedParamsAction) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9872,6 +9890,48 @@ func (siw *ServerInterfaceWrapper) ListQueue(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// SetQueueClientPaused operation middleware
+func (siw *ServerInterfaceWrapper) SetQueueClientPaused(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "action" -------------
+	var action SetQueueClientPausedParamsAction
+
+	err = runtime.BindStyledParameterWithOptions("simple", "action", chi.URLParam(r, "action"), &action, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetQueueClientPaused(w, r, id, action)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RemoveQueueItem operation middleware
 func (siw *ServerInterfaceWrapper) RemoveQueueItem(w http.ResponseWriter, r *http.Request) {
 
@@ -12038,6 +12098,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/queue", wrapper.ListQueue)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/queue/clients/{id}/{action}", wrapper.SetQueueClientPaused)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/queue/{id}", wrapper.RemoveQueueItem)

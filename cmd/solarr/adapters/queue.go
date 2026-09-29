@@ -107,6 +107,10 @@ func (a Queue) held(ctx context.Context) ([]apiserver.HeldRow, error) {
 	return rows, nil
 }
 
+func (a Queue) SetClientPaused(ctx context.Context, downloaderID int64, paused bool) error {
+	return a.Poll.SetPaused(ctx, downloaderID, paused)
+}
+
 func (a Queue) Remove(ctx context.Context, id int64, blocklist bool) error {
 	err := a.Poll.Remove(ctx, id, blocklist)
 	if errors.Is(err, poll.ErrNotRemovable) {

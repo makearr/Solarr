@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
+import { useIsAdministrator } from "@/lib/useAdministrator";
 import type { components } from "@/api/schema";
 
 type QueueItem = components["schemas"]["QueueItem"];
@@ -26,7 +27,7 @@ export function Queue() {
         {queue.error !== null && <Message>The queue could not be read.</Message>}
         {queue.data && (
           <>
-            <ClientList clients={queue.data.clients} />
+            <ClientList clients={queue.data.clients} items={queue.data.items} />
             {queue.data.items.length === 0 ? (
               <Message>Nothing is downloading. Albums sent to a download client appear here until imported.</Message>
             ) : (
@@ -53,7 +54,7 @@ export function useQueue(workId?: number) {
   });
 }
 
-function ClientList({ clients }: { clients: readonly QueueClient[] }) {
+function ClientList({ clients, items }: { clients: readonly QueueClient[]; items: readonly QueueItem[] }) {
   if (clients.length === 0) {
     return <Message>No download client is enabled, so nothing can be downloaded.</Message>;
   }
@@ -74,9 +75,39 @@ function ClientList({ clients }: { clients: readonly QueueClient[] }) {
               {client.items} in its queue · {formatBytes(client.size_left_bytes)} left
             </span>
           )}
+          <PauseMine client={client} items={items.filter((item) => item.client === client.name)} />
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Pauses or resumes Solarr's own downloads in one client, never the client: other apps share it. */
+function PauseMine({ client, items }: { client: QueueClient; items: readonly QueueItem[] }) {
+  const administrator = useIsAdministrator();
+  const queryClient = useQueryClient();
+  const waiting = items.filter((item) => item.state === "QUEUED" || item.state === "DOWNLOADING");
+  const allPaused = waiting.length > 0 && waiting.every((item) => item.client_state === "paused");
+  const toggle = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST("/queue/clients/{id}/{action}", {
+        params: { path: { id: client.id, action: allPaused ? "resume" : "pause" } },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["queue"] }),
+  });
+  if (!administrator || waiting.length === 0) return null;
+  return (
+    <button
+      type="button"
+      disabled={toggle.isPending}
+      onClick={() => toggle.mutate()}
+      title="Only Solarr's downloads; anything else in the client carries on"
+      className="rounded-md border border-border-subtle px-2 py-0.5 text-ink-muted hover:text-ink disabled:opacity-50"
+    >
+      {allPaused ? "Resume Solarr's downloads" : "Pause Solarr's downloads"}
+    </button>
   );
 }
 

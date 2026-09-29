@@ -3,6 +3,7 @@ package apiserver_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"reflect"
 	"testing"
@@ -19,10 +20,16 @@ type fakeQueue struct {
 	held      []apiserver.HeldRow
 	removeErr error
 	removed   []string
+	paused    []string
 }
 
 func (f *fakeQueue) List(context.Context) (apiserver.QueueSnapshot, error) {
 	return apiserver.QueueSnapshot{Rows: f.rows, Clients: f.clients, Held: f.held}, nil
+}
+
+func (f *fakeQueue) SetClientPaused(_ context.Context, downloaderID int64, paused bool) error {
+	f.paused = append(f.paused, fmt.Sprintf("%d %v", downloaderID, paused))
+	return nil
 }
 
 func (f *fakeQueue) Remove(_ context.Context, id int64, blocklist bool) error {
@@ -163,5 +170,26 @@ func TestRemoveQueueItem_RemovesAndReportsAConflict(t *testing.T) {
 	fixture.queue.removeErr = apiserver.ErrQueueItemNotRemovable
 	if recorder := fixture.do(authedDelete(t, cookies, "/api/v1/queue/1")); recorder.Code != http.StatusConflict {
 		t.Errorf("importing remove: status = %d, want 409", recorder.Code)
+	}
+}
+
+// Pausing Solarr's downloads in a client is an administrator's action; an unknown action is 404.
+func TestSetQueueClientPaused_AdministratorOnly(t *testing.T) {
+	fixture := newQueueFixture(t)
+	if recorder := fixture.do(authedPost(t, fixture.signIn(t, "listener"), "/api/v1/queue/clients/1/pause", "")); recorder.Code != http.StatusForbidden {
+		t.Errorf("read-only pause: status = %d, want 403", recorder.Code)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	for _, action := range []string{"pause", "resume"} {
+		if recorder := fixture.do(authedPost(t, cookies, "/api/v1/queue/clients/1/"+action, "")); recorder.Code != http.StatusNoContent {
+			t.Fatalf("%s: status = %d, %s", action, recorder.Code, recorder.Body)
+		}
+	}
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/queue/clients/1/stop", "")); recorder.Code != http.StatusNotFound {
+		t.Errorf("unknown action: status = %d, want 404", recorder.Code)
+	}
+	if want := []string{"1 true", "1 false"}; !reflect.DeepEqual(fixture.queue.paused, want) {
+		t.Errorf("paused calls = %v, want %v", fixture.queue.paused, want)
 	}
 }

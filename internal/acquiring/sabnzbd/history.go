@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -84,6 +85,28 @@ func (c Client) Remove(ctx context.Context, clientRef string, deleteFiles bool) 
 		if !parsed.Status && parsed.Error != "" {
 			return fmt.Errorf("sabnzbd: remove from %s: %s", mode, parsed.Error)
 		}
+	}
+	return nil
+}
+
+// SetPaused pauses or resumes queued downloads by reference (mode=queue, name=pause|resume).
+func (c Client) SetPaused(ctx context.Context, clientRefs []string, paused bool) error {
+	if len(clientRefs) == 0 {
+		return nil
+	}
+	action := "resume"
+	if paused {
+		action = "pause"
+	}
+	params := url.Values{}
+	params.Set("name", action)
+	params.Set("value", strings.Join(clientRefs, ","))
+	var parsed statusResponse
+	if err := c.getJSON(ctx, c.apiURL("queue", params), &parsed); err != nil {
+		return fmt.Errorf("sabnzbd: %s: %w", action, err)
+	}
+	if !parsed.Status && parsed.Error != "" {
+		return fmt.Errorf("sabnzbd: %s: %s", action, parsed.Error)
 	}
 	return nil
 }

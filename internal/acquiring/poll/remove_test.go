@@ -96,3 +96,26 @@ func TestRemove_ALaterPollLeavesItCancelled(t *testing.T) {
 		t.Errorf("history %v, searched %v: want only the removal", e.history, e.searched)
 	}
 }
+
+// Pausing a client pauses only Solarr's downloads still in its queue there.
+func TestSetPaused_PausesOnlySolarrsDownloadsStillQueued(t *testing.T) {
+	e := newEnv(t)
+	queued := e.send(t, "nzo-1")
+	finished := e.send(t, "nzo-2")
+	if err := e.acquisitions.SetState(t.Context(), finished.ID, poll.StateCompleted, "", 2); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := e.job().SetPaused(t.Context(), 1, true); err != nil {
+		t.Fatalf("SetPaused: %v", err)
+	}
+	if err := e.job().SetPaused(t.Context(), 1, false); err != nil {
+		t.Fatalf("SetPaused: %v", err)
+	}
+	if !slices.Equal(e.client.paused, []string{queued.DownloadClientRef}) || !slices.Equal(e.client.resumed, []string{"nzo-1"}) {
+		t.Errorf("paused %v, resumed %v; want only the queued download", e.client.paused, e.client.resumed)
+	}
+	if err := e.job().SetPaused(t.Context(), 9, true); err == nil {
+		t.Error("an unknown client was accepted")
+	}
+}

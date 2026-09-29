@@ -91,4 +91,7 @@ type Client interface {
 	QueueStatus(ctx context.Context) (QueueStatus, error)
 	// Remove takes a download out of the client; deleteFiles also deletes what it downloaded.
 	Remove(ctx context.Context, clientRef string, deleteFiles bool) error
+	// Pause and Resume act on the named downloads only, never the whole client: other apps share it.
+	Pause(ctx context.Context, clientRefs []string) error
+	Resume(ctx context.Context, clientRefs []string) error
 }
