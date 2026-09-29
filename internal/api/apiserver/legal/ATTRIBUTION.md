@@ -148,6 +148,7 @@ a user offered the Corresponding Source should be able to see what the binary li
 | `github.com/go-chi/chi/v5` | MIT | HTTP routing. Everything stays an `http.Handler`, so the router owns no part of the code's shape (ADR-31) |
 | `golang.org/x/crypto` | BSD-3-Clause | argon2id password hashing (ADR-14). Not in the standard library, and hand-rolling a password hash is never the right call |
 | `golang.org/x/image` | BSD-3-Clause | High-quality resampling (`draw.CatmullRom`) for section 21.6's artwork pipeline |
+| `golang.org/x/text` | BSD-3-Clause | Unicode normalisation, to search an indexer without accents ("Björk" as "Bjork"), as Lidarr cleans its queries |
 | `github.com/mayahiro/go-webp` | MIT | Pure-Go lossy (VP8) WebP encoder for section 21.6. ADR-30 rules out cgo's libwebp; chosen as the first of three candidates tried, verified by a real encode-then-decode round trip rather than trusting its README |
 | `github.com/nwaples/rardecode/v2` | BSD-2-Clause | Pure-Go RAR decoder (ADR-49), including multi-volume sets. `zip`/`tar`/`gzip`/`bzip2` are stdlib and need no entry here |
 | `github.com/bodgit/sevenzip` | BSD-3-Clause | Pure-Go 7z decoder (ADR-49) |

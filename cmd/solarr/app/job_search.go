@@ -32,10 +32,12 @@ func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error)
 		if err != nil {
 			return nil, err
 		}
-		conns = append(conns, music.IndexerConn{
-			ID: indexer.ID, Impl: indexer.Impl,
-			Client: factory(indexer.ID, indexer.BaseURL, apiKey.Reveal(), indexer.Egress()),
-		})
+		client := factory(indexer.ID, indexer.BaseURL, apiKey.Reveal(), indexer.Egress())
+		conn := music.IndexerConn{ID: indexer.ID, Impl: indexer.Impl, Client: client}
+		if p.indexerCaps != nil {
+			conn.MusicParams = p.indexerCaps.musicParams(ctx, indexer.ID, indexer.BaseURL, client)
+		}
+		conns = append(conns, conn)
 	}
 	return conns, nil
 }
