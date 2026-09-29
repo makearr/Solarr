@@ -71,6 +71,7 @@ type ArtworkJob struct {
 	logger          *slog.Logger
 	coverSources    func() []string
 	theAudioDBCover artworkSource
+	onDone          func(context.Context)
 }
 
 // EmbeddedPictureReader copies a file's own cover art out, or answers
@@ -104,6 +105,8 @@ type ArtworkJobConfig struct {
 	// TheAudioDBCover is optional: a release group's cover URL from TheAudioDB, or
 	// musicbrainz.ErrNoCoverArt when it has none.
 	TheAudioDBCover func(ctx context.Context, releaseGroupMBID string) (string, error)
+	// OnDone is optional: told when a sweep finished, so new covers reach the tag writer at once.
+	OnDone func(context.Context)
 }
 
 // NewArtworkJob builds the handler.
@@ -115,7 +118,7 @@ func NewArtworkJob(config ArtworkJobConfig) *ArtworkJob {
 	return &ArtworkJob{
 		artworks: config.Artworks, coverArt: config.CoverArt, pictures: config.Pictures, roots: config.Roots,
 		http: config.HTTP, coverSources: config.CoverSources, theAudioDBCover: config.TheAudioDBCover,
-		fs: config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
+		fs: config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger, onDone: config.OnDone,
 	}
 }
 
@@ -157,6 +160,9 @@ func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
 				return err
 			}
 		}
+	}
+	if j.onDone != nil {
+		j.onDone(ctx)
 	}
 	return nil
 }

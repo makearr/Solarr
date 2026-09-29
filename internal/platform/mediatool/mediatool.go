@@ -102,11 +102,20 @@ type Fingerprint struct {
 	Err     error
 }
 
-// TagEdit is one file's pending tag changes. Write-back fills gaps only and never
-// overwrites (section 19.5), which is the caller's rule to apply, not this one's.
+// TagEdit is one file's tag changes: Fill only where the file has no value, Set wherever the
+// file's value differs, Cover (a JPEG path) embedded only when the file carries no picture.
 type TagEdit struct {
-	Path string
-	Set  Tags
+	Path  string
+	Fill  Tags
+	Set   Tags
+	Cover string
+}
+
+// TagResult is one edit's outcome: the keys the file actually changed ("cover" for the
+// picture), or why it could not be written.
+type TagResult struct {
+	Changed []string
+	Err     error
 }
 
 // Tool is ADR-30's interface. Every method takes a slice: a subprocess per file on
@@ -116,9 +125,9 @@ type Tool interface {
 	// import time. It is what readiness checks.
 	Available(ctx context.Context) error
 	ReadTags(ctx context.Context, paths []string) ([]Probe, error)
-	// WriteTags answers one error per edit, in order, nil where it was written; the second
-	// return is the batch failing as a whole (the tool missing, the context cancelled).
-	WriteTags(ctx context.Context, edits []TagEdit) ([]error, error)
+	// WriteTags answers one result per edit, in order; the error is the batch failing as a
+	// whole (the tool missing, the context cancelled).
+	WriteTags(ctx context.Context, edits []TagEdit) ([]TagResult, error)
 	Fingerprint(ctx context.Context, paths []string) ([]Fingerprint, error)
 }
 

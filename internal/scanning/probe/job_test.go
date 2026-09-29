@@ -66,7 +66,7 @@ func (f *fakeTool) ReadTags(_ context.Context, paths []string) ([]mediatool.Prob
 	return probes, nil
 }
 
-func (f *fakeTool) WriteTags(context.Context, []mediatool.TagEdit) ([]error, error) {
+func (f *fakeTool) WriteTags(context.Context, []mediatool.TagEdit) ([]mediatool.TagResult, error) {
 	return nil, nil
 }
 

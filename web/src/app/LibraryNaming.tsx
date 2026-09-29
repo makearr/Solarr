@@ -9,6 +9,7 @@ import type { components } from "@/api/schema";
 import { useDebouncedValue } from "./useDebouncedValue";
 
 type NamingSettings = components["schemas"]["NamingSettings"];
+type Tagging = components["schemas"]["Tagging"];
 type NamingToken = components["schemas"]["NamingToken"];
 type LibraryRenamePlan = components["schemas"]["LibraryRenamePlan"];
 type ColonReplacement = NamingSettings["colon_replacement"];
@@ -58,16 +59,39 @@ export function LibraryNaming() {
     },
   });
 
-  const save = useMutation({
-    mutationFn: async (settings: NamingSettings) => {
-      const { data, error } = await api.PUT("/categories/{id}/naming", {
-        params: { path: { id: id! } },
-        body: settings,
-      });
+  const tagging = useQuery({
+    queryKey: ["libraryTagging", id],
+    enabled: id !== undefined,
+    queryFn: async () => {
+      const { data, error } = await api.GET("/categories/{id}/tagging", { params: { path: { id: id! } } });
       if (error) throw error;
       return data;
     },
-    onSuccess: (data) => queryClient.setQueryData(["libraryNaming", id], data),
+  });
+  const [taggingDraft, setTaggingDraft] = useState<Tagging | undefined>();
+  useEffect(() => {
+    if (tagging.data) setTaggingDraft(tagging.data);
+  }, [tagging.data]);
+
+  const save = useMutation({
+    mutationFn: async ({ settings, tags }: { settings?: NamingSettings; tags?: Tagging }) => {
+      if (settings) {
+        const { data, error } = await api.PUT("/categories/{id}/naming", {
+          params: { path: { id: id! } },
+          body: settings,
+        });
+        if (error) throw error;
+        queryClient.setQueryData(["libraryNaming", id], data);
+      }
+      if (tags) {
+        const { data, error } = await api.PUT("/categories/{id}/tagging", {
+          params: { path: { id: id! } },
+          body: tags,
+        });
+        if (error) throw error;
+        queryClient.setQueryData(["libraryTagging", id], data);
+      }
+    },
   });
 
   const [builderSlot, setBuilderSlot] = useState<string | undefined>();
@@ -78,7 +102,10 @@ export function LibraryNaming() {
   if (naming.error !== null || !naming.data) return <Message>This library's naming could not be read.</Message>;
 
   const scheme = naming.data.scheme;
-  const dirty = JSON.stringify(draft) !== JSON.stringify(naming.data.naming);
+  const namingDirty = JSON.stringify(draft) !== JSON.stringify(naming.data.naming);
+  const taggingDirty =
+    taggingDraft !== undefined && JSON.stringify(taggingDraft) !== JSON.stringify(tagging.data);
+  const dirty = namingDirty || taggingDirty;
   const setFormat = (slot: string, template: string) =>
     setDraft({ ...draft, formats: { ...draft.formats, [slot]: template } });
   const preset = scheme.presets.find((candidate) =>
@@ -200,11 +227,53 @@ export function LibraryNaming() {
         />
       </section>
 
+      {taggingDraft && (
+        <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
+          <h2 className="text-sm font-medium">Tags</h2>
+          <p className="text-xs text-ink-muted">
+            Written into this library's files once enrichment has identified them, never into a download folder
+            and never on a read-only root folder.
+          </p>
+          <Toggle
+            label="Write MusicBrainz IDs"
+            help="Adds the release group, release, recording and album artist IDs a file lacks, so other tools recognise it."
+            checked={taggingDraft.write_ids}
+            onChange={(checked) =>
+              setTaggingDraft({ ...taggingDraft, write_ids: checked, replace_ids: checked && taggingDraft.replace_ids })
+            }
+          />
+          <Toggle
+            label="Replace existing MusicBrainz IDs"
+            help="Also overwrites IDs a file already carries when they differ from the current ones."
+            checked={taggingDraft.replace_ids}
+            disabled={!taggingDraft.write_ids}
+            onChange={(checked) => setTaggingDraft({ ...taggingDraft, replace_ids: checked })}
+          />
+          <Toggle
+            label="Write other tags"
+            help="Album, album artist, track title, track and disc number, date and genre from the metadata providers, overwriting what the file says."
+            checked={taggingDraft.write_metadata}
+            onChange={(checked) => setTaggingDraft({ ...taggingDraft, write_metadata: checked })}
+          />
+          <Toggle
+            label="Embed cover art"
+            help="Embeds the fetched album cover into files that carry no picture of their own."
+            checked={taggingDraft.embed_cover}
+            onChange={(checked) => setTaggingDraft({ ...taggingDraft, embed_cover: checked })}
+          />
+        </section>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           disabled={!dirty || save.isPending || (examples.data?.problems.length ?? 0) > 0}
-          onClick={() => save.mutate(draft)}
+          onClick={() =>
+            save.mutate({
+              settings: namingDirty ? draft : undefined,
+              tags: taggingDirty ? taggingDraft : undefined,
+            })
+          }
           className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50"
         >
           {save.isPending ? "Saving…" : "Save"}
@@ -212,7 +281,10 @@ export function LibraryNaming() {
         {dirty && (
           <button
             type="button"
-            onClick={() => setDraft(naming.data.naming)}
+            onClick={() => {
+              setDraft(naming.data.naming);
+              setTaggingDraft(tagging.data);
+            }}
             className="rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted hover:text-ink"
           >
             Discard changes
@@ -225,7 +297,7 @@ export function LibraryNaming() {
         )}
       </div>
 
-      <ApplyToLibrary categoryId={id} unsaved={dirty} />
+      <ApplyToLibrary categoryId={id} unsaved={namingDirty} />
 
       {builderSlot !== undefined && (
         <TokenBuilder
@@ -243,17 +315,24 @@ export function Toggle({
   label,
   help,
   checked,
+  disabled,
   onChange,
 }: {
   label: string;
   help: string;
   checked: boolean;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+    <label className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-sm ${disabled ? "opacity-50" : ""}`}>
       <span className="w-48 shrink-0">{label}</span>
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
       <span className="text-xs text-ink-muted">{help}</span>
     </label>
   );

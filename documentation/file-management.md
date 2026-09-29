@@ -35,19 +35,27 @@ Rules worth knowing:
   filesystems or when the name exists only on the host.
 - A permission or date that cannot be set is logged, never a failed import.
 
-## Write MusicBrainz IDs into files
+## Tags written into files
 
-On by default, per library (revision D3). The `tag_writeback` task (hourly, and after every
-enrichment run that refined albums) fills a file's tags with the release group, release,
-recording and album artist ids Solarr identified it by: `musicbrainz_releasegroupid`,
-`musicbrainz_albumid`, `musicbrainz_trackid` and `musicbrainz_albumartistid`, Picard's names,
-which Navidrome and Lidarr read.
+Per library, on the **Naming** page beside the file name formats (revision D3, widened
+2026-09-29). The `tag_writeback` task writes them once enrichment has identified a file: it runs
+after every enrichment run that refined albums, after every cover sweep, when the options are
+saved, and hourly.
 
-- **Fill-only.** A key the file already has is never replaced, even with a different value.
-- **Only once the album has a release**: a file whose album is identified to a release group
-  but no edition yet waits for enrichment to choose one.
-- **Never on a root that is read-only, offline or not writable**, whatever the library says.
-- **Once per file**, recorded in `tag_writeback` (`library.db`): an MP3's recording id is a UFID
-  frame ffprobe cannot show, so re-reading would rewrite it for ever. A failure is recorded too.
-- A run writes at most 2,000 files; a large library is written over successive hours.
+| Option | Default | Writes |
+|---|---|---|
+| Write MusicBrainz IDs | on | `musicbrainz_releasegroupid`, `musicbrainz_albumid`, `musicbrainz_trackid`, `musicbrainz_albumartistid` (Picard's names, which Navidrome and Lidarr read), **fill-only**: a key the file has is kept |
+| Replace existing MusicBrainz IDs | off | the same ids, overwriting a value that differs from the current one (only with the first) |
+| Write other tags | off | `album`, `albumartist`, `title`, `tracknumber`, `discnumber`, `date` (the release's year), `genre` (MusicBrainz genres joined by `; `), overwriting what the file says. No track artist: Solarr keeps no per-track credits yet |
+| Embed cover art | off | the fetched album cover as a JPEG front cover, only into a file that carries no picture |
+
+- **Only the library's own root folders**, never a download folder, and never a root that is
+  read-only, offline or not writable, whatever the library says (Invariant 69).
+- **Only once the album has a release**: a file identified to a release group but no edition
+  waits for enrichment to choose one.
+- **Written again only when something changes.** `tag_writeback` (`library.db`) keeps a digest
+  of what was last asked of each file; new ids, metadata, a new cover or changed options make it
+  differ. The helper compares with what the file holds and saves only when a value changes.
+- An album showing its artist's photo has no cover of its own; nothing is embedded for it.
+- A run writes at most 2,000 files; a large library is written over successive runs.
 - The written file keeps its identity: a known path keeps its `media_object`.

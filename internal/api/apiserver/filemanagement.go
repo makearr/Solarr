@@ -40,7 +40,8 @@ func (s *Server) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request
 	if !s.requireAdministrator(w, r) {
 		return
 	}
-	if _, err := s.libraryFor(r, id); err != nil {
+	category, err := s.libraryFor(r, id)
+	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
@@ -54,7 +55,7 @@ func (s *Server) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request
 		ChangeFileDate: settings.ChangeFileDate(body.ChangeFileDate), RecycleRetentionDays: body.RecycleRetentionDays,
 		DeleteEmptyFolders: body.DeleteEmptyFolders, CreateEmptyArtistFolders: body.CreateEmptyArtistFolders,
 		UnmonitorDeleted: body.UnmonitorDeleted, SetPermissions: body.SetPermissions,
-		ChmodFolder: body.ChmodFolder, ChownGroup: body.ChownGroup, WriteIDsToTags: derefOr(body.WriteIdsToTags, true),
+		ChmodFolder: body.ChmodFolder, ChownGroup: body.ChownGroup, Tagging: category.FileManagement.Tagging,
 	}
 	if err := s.auth.Settings.SetCategoryFileManagement(r.Context(), id, wanted); err != nil {
 		var problems config.Problems
@@ -76,6 +77,69 @@ func fileManagementView(f settings.FileManagement) gen.FileManagement {
 		ChangeFileDate:     gen.FileManagementChangeFileDate(f.ChangeFileDate), RecycleRetentionDays: f.RecycleRetentionDays,
 		DeleteEmptyFolders: f.DeleteEmptyFolders, CreateEmptyArtistFolders: f.CreateEmptyArtistFolders,
 		UnmonitorDeleted: f.UnmonitorDeleted, SetPermissions: f.SetPermissions,
-		ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup, WriteIdsToTags: &f.WriteIDsToTags,
+		ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup,
 	}
+}
+
+func (s *Server) routeGetLibraryTagging(w http.ResponseWriter, r *http.Request) {
+	if id, ok := s.categoryIDParam(w, r); ok {
+		s.GetLibraryTagging(w, r, id)
+	}
+}
+
+func (s *Server) routeSetLibraryTagging(w http.ResponseWriter, r *http.Request) {
+	if id, ok := s.categoryIDParam(w, r); ok {
+		s.SetLibraryTagging(w, r, id)
+	}
+}
+
+// GetLibraryTagging answers what the tag writer puts into a library's files.
+func (s *Server) GetLibraryTagging(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	category, err := s.libraryFor(r, id)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, taggingView(category.FileManagement.Tagging))
+}
+
+// tagWritebackTaskKey is the tag writer's key in the scheduler (cmd/solarr/app/scheduler.go).
+const tagWritebackTaskKey = "tag_writeback"
+
+// SetLibraryTagging saves it, keeping the rest of File management, and starts the tag writer.
+func (s *Server) SetLibraryTagging(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	category, err := s.libraryFor(r, id)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	var body gen.Tagging
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected the tagging settings")
+		return
+	}
+	wanted := category.FileManagement
+	wanted.Tagging = settings.Tagging{
+		WriteIDs: body.WriteIds, ReplaceIDs: body.ReplaceIds, WriteMetadata: body.WriteMetadata, EmbedCover: body.EmbedCover,
+	}
+	if err := s.auth.Settings.SetCategoryFileManagement(r.Context(), id, wanted); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.scheduler != nil {
+		if err := s.scheduler.RunNow(r.Context(), tagWritebackTaskKey, false); err != nil {
+			s.logger.InfoContext(r.Context(), "tag writer after a tagging change not started", "error", err)
+		}
+	}
+	writeJSON(w, s.logger, http.StatusOK, taggingView(wanted.Tagging))
+}
+
+func taggingView(t settings.Tagging) gen.Tagging {
+	return gen.Tagging{WriteIds: t.WriteIDs, ReplaceIds: t.ReplaceIDs, WriteMetadata: t.WriteMetadata, EmbedCover: t.EmbedCover}
 }

@@ -12,7 +12,8 @@ import (
 const listCategoryFileManagement = `-- name: ListCategoryFileManagement :many
 SELECT category_id, propers_repacks, rescan_after_refresh, change_file_date, recycle_retention_days,
        delete_empty_folders, create_empty_artist_folders, unmonitor_deleted, set_permissions,
-       chmod_folder, chown_group, write_ids_to_tags
+       chmod_folder, chown_group, write_ids_to_tags, replace_ids_in_tags, write_metadata_to_tags,
+       embed_cover_in_tags
 FROM category_file_management
 ORDER BY category_id
 `
@@ -39,6 +40,9 @@ func (q *Queries) ListCategoryFileManagement(ctx context.Context) ([]CategoryFil
 			&i.ChmodFolder,
 			&i.ChownGroup,
 			&i.WriteIdsToTags,
+			&i.ReplaceIdsInTags,
+			&i.WriteMetadataToTags,
+			&i.EmbedCoverInTags,
 		); err != nil {
 			return nil, err
 		}
@@ -57,8 +61,9 @@ const upsertCategoryFileManagement = `-- name: UpsertCategoryFileManagement :exe
 INSERT INTO category_file_management (
   category_id, propers_repacks, rescan_after_refresh, change_file_date, recycle_retention_days,
   delete_empty_folders, create_empty_artist_folders, unmonitor_deleted, set_permissions,
-  chmod_folder, chown_group, write_ids_to_tags
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  chmod_folder, chown_group, write_ids_to_tags, replace_ids_in_tags, write_metadata_to_tags,
+  embed_cover_in_tags
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (category_id) DO UPDATE SET
   propers_repacks = excluded.propers_repacks,
   rescan_after_refresh = excluded.rescan_after_refresh,
@@ -70,7 +75,10 @@ ON CONFLICT (category_id) DO UPDATE SET
   set_permissions = excluded.set_permissions,
   chmod_folder = excluded.chmod_folder,
   chown_group = excluded.chown_group,
-  write_ids_to_tags = excluded.write_ids_to_tags
+  write_ids_to_tags = excluded.write_ids_to_tags,
+  replace_ids_in_tags = excluded.replace_ids_in_tags,
+  write_metadata_to_tags = excluded.write_metadata_to_tags,
+  embed_cover_in_tags = excluded.embed_cover_in_tags
 `
 
 type UpsertCategoryFileManagementParams struct {
@@ -86,6 +94,9 @@ type UpsertCategoryFileManagementParams struct {
 	ChmodFolder              string
 	ChownGroup               string
 	WriteIdsToTags           int64
+	ReplaceIdsInTags         int64
+	WriteMetadataToTags      int64
+	EmbedCoverInTags         int64
 }
 
 func (q *Queries) UpsertCategoryFileManagement(ctx context.Context, arg UpsertCategoryFileManagementParams) error {
@@ -102,6 +113,9 @@ func (q *Queries) UpsertCategoryFileManagement(ctx context.Context, arg UpsertCa
 		arg.ChmodFolder,
 		arg.ChownGroup,
 		arg.WriteIdsToTags,
+		arg.ReplaceIdsInTags,
+		arg.WriteMetadataToTags,
+		arg.EmbedCoverInTags,
 	)
 	return err
 }

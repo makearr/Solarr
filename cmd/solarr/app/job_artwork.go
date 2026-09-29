@@ -46,6 +46,7 @@ func (p *process) registerArtworkJob(registry *jobs.Registry, executor *jobs.Exe
 		Logger:          p.logger,
 		CoverSources:    func() []string { return p.cache.Snapshot().MetadataSettings().CoverSources },
 		TheAudioDBCover: theAudioDBCover(p.theAudioDB()),
+		OnDone:          func(ctx context.Context) { _, _ = p.enqueueTagWriteback(ctx) },
 	})
 	executor.Handle(music.ArtworkJobType, job)
 	return nil
