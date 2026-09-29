@@ -7,11 +7,7 @@ import type { components } from "@/api/schema";
 
 type PrioritySettings = components["schemas"]["PrioritySettings"];
 
-/** todo 4.7, ADR-36/ADR-55: the four trigger weights and the release-date
- *  freshness window. Settings only -- internal/identify/priority.Compute has
- *  no caller until stage 5/6's planner exists, so there is no waiting item
- *  yet to show a live priority breakdown for. Advanced tier (the registry's
- *  own priority.* keys, todo 4.14), same reasoning as Network's own. */
+/** ADR-36/ADR-55's trigger weights and freshness window, and the automatic search budget (section 9.4). */
 export function Priority() {
   const tier = useTier();
   const queryClient = useQueryClient();
@@ -65,13 +61,15 @@ function PriorityForm({
   const [gapWeight, setGapWeight] = useState(priority.gap_weight);
   const [upgradeWeight, setUpgradeWeight] = useState(priority.upgrade_weight);
   const [newReleaseDays, setNewReleaseDays] = useState(priority.new_release_days);
+  const [searchesPerHour, setSearchesPerHour] = useState(priority.searches_per_hour ?? 12);
 
   const dirty =
     userRequestWeight !== priority.user_request_weight ||
     newReleaseWeight !== priority.new_release_weight ||
     gapWeight !== priority.gap_weight ||
     upgradeWeight !== priority.upgrade_weight ||
-    newReleaseDays !== priority.new_release_days;
+    newReleaseDays !== priority.new_release_days ||
+    searchesPerHour !== priority.searches_per_hour;
 
   return (
     <form
@@ -84,6 +82,7 @@ function PriorityForm({
           gap_weight: gapWeight,
           upgrade_weight: upgradeWeight,
           new_release_days: newReleaseDays,
+          searches_per_hour: searchesPerHour,
         });
       }}
     >
@@ -106,6 +105,23 @@ function PriorityForm({
         />
         <span className="text-[0.6875rem]">
           Days after release an item still counts as newly released rather than a gap.
+        </span>
+      </label>
+
+      <label className="flex flex-col gap-1">
+        Automatic searches per hour
+        <input
+          type="number"
+          min={0}
+          max={1000}
+          value={searchesPerHour}
+          disabled={busy}
+          onChange={(event) => setSearchesPerHour(Number(event.target.value))}
+          className={`${inputStyle} w-24`}
+        />
+        <span className="text-[0.6875rem]">
+          Missing albums searched on their own each hour, most urgent first. 0 turns automatic
+          searching off. Keep it low if an indexer limits API calls per day.
         </span>
       </label>
 

@@ -2445,6 +2445,9 @@ type PrioritySettings struct {
 	// NewReleaseWeight Bigger is more urgent. Default 30.
 	NewReleaseWeight int64 `json:"new_release_weight"`
 
+	// SearchesPerHour Missing albums searched automatically each hour, most urgent first; 0 turns automatic searching off. Default 12. Always answered; omitted on a PATCH leaves it alone.
+	SearchesPerHour *int64 `json:"searches_per_hour,omitempty"`
+
 	// UpgradeWeight Bigger is more urgent. Default 10.
 	UpgradeWeight int64 `json:"upgrade_weight"`
 

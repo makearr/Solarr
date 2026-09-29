@@ -35,6 +35,9 @@ import (
 // search terms; nothing has asked for that yet.
 var ErrTrackSearchNotSupported = errors.New("music: search: only album-level (SET) desired items are supported")
 
+// SearchedOnItsOwn is music's answer to which desired items the planner hunts: albums, not tracks.
+func SearchedOnItsOwn(satisfactionKind string) bool { return satisfactionKind == "SET" }
+
 // ErrNoQualityProfile reports a desired item whose own profile_id no longer
 // resolves -- a deleted profile a category still points items at.
 var ErrNoQualityProfile = errors.New("music: search: quality profile not found")
@@ -177,7 +180,7 @@ func (s Search) SearchItemWithTerms(
 	if err != nil {
 		return ItemSearchResult{}, fmt.Errorf("music: search item %d: %w", itemID, err)
 	}
-	if item.SatisfactionKind != "SET" {
+	if !SearchedOnItsOwn(item.SatisfactionKind) {
 		return ItemSearchResult{}, ErrTrackSearchNotSupported
 	}
 	if err := s.Desired.RecordSearched(ctx, itemID, at.Unix()); err != nil {
@@ -206,10 +209,13 @@ func (s Search) SearchItemWithTerms(
 
 	artistName := primaryArtistName(detail)
 	target := targetIdentity(detail, item, artistName, aliases)
+	albumTarget := target
+	albumTarget.Title = detail.Work.CanonicalTitle
 	tiers := buildSearchTiers(artistName, detail.Work, aliases)
 	if custom != nil {
 		tiers = [][]searchTerms{musicTerms(custom.Artist, custom.Album, "")}
 		// The typed terms are the identity now; the work's year and ids would judge them against the old name.
+		albumTarget.Identity = match.Identity{Title: custom.Album, AlternateTitles: []string{detail.Work.CanonicalTitle}}
 		target.Identity = match.Identity{
 			Title: combinedTitle(custom.Artist, custom.Album), AlternateTitles: []string{target.Title},
 		}
@@ -242,7 +248,7 @@ func (s Search) SearchItemWithTerms(
 				if err != nil {
 					return result, fmt.Errorf("music: search item %d: %w", itemID, err)
 				}
-				accepted = append(accepted, evaluateRawItems(raws, conn, target, wantedArtist, rules, languagePolicy, preferPropers)...)
+				accepted = append(accepted, evaluateRawItems(raws, conn, target, albumTarget, wantedArtist, rules, languagePolicy, preferPropers)...)
 			}
 		}
 		accepted = withoutCrossIndexerDuplicates(accepted)
@@ -387,7 +393,7 @@ type acceptedFind struct {
 // never persisted (section 10.1: module.Evaluate produces Matches, not raw
 // items).
 func evaluateRawItems(
-	raws []indexer.RawItem, conn IndexerConn, target match.Candidate, wantedArtist string,
+	raws []indexer.RawItem, conn IndexerConn, target, albumTarget match.Candidate, wantedArtist string,
 	rules []rankedProfile, languagePolicy *score.LanguagePolicy, preferPropers bool,
 ) []acceptedFind {
 	var accepted []acceptedFind
@@ -396,11 +402,14 @@ func evaluateRawItems(
 		if !sameArtist(parsed.Identity.Artist, wantedArtist) {
 			continue
 		}
-		claimed := match.Claimed{Identity: match.Identity{
-			Title: combinedTitle(parsed.Identity.Artist, parsed.Identity.Album),
-			Year:  parsed.Identity.Year,
-		}}
-		distance := match.Compute(claimed, target, nil)
+		// The artist is gated above; comparing "artist - album" whole let the shared artist carry
+		// another album of theirs through (Third for Portishead, 2026-09-29).
+		claimed := match.Claimed{Identity: match.Identity{Title: parsed.Identity.Album, Year: parsed.Identity.Year}}
+		against := albumTarget
+		if parsed.Identity.Artist == "" || parsed.Identity.Album == "" {
+			claimed.Title, against = combinedTitle(parsed.Identity.Artist, parsed.Identity.Album), target
+		}
+		distance := match.Compute(claimed, against, nil)
 		if distance.Total > maxCandidateMatchDistance {
 			continue
 		}

@@ -16,6 +16,14 @@ const (
 	KeyPriorityGapWeight         = "priority.weight.gap"
 	KeyPriorityUpgradeWeight     = "priority.weight.upgrade"
 	KeyPriorityNewReleaseDays    = "priority.new_release_days"
+	// KeySearchesPerHour is the automatic search budget (section 9.4); zero turns it off.
+	KeySearchesPerHour = "search.automatic_per_hour"
+)
+
+// DefaultSearchesPerHour spares an indexer's daily API limit; maxSearchesPerHour bounds a typo.
+const (
+	DefaultSearchesPerHour = 12
+	maxSearchesPerHour     = 1000
 )
 
 // ADR-36/ADR-55's own shipped defaults -- duplicated from
@@ -40,12 +48,16 @@ const (
 type PrioritySettings struct {
 	UserRequestWeight, NewReleaseWeight, GapWeight, UpgradeWeight int64
 	NewReleaseDays                                                int64
+	// SearchesPerHour is how many albums are searched automatically per hour; nil on a write leaves it alone.
+	SearchesPerHour *int64
 }
 
 // PrioritySettings reads the configured policy, or the shipped defaults for
 // whatever nothing has stored yet.
 func (s *Snapshot) PrioritySettings() PrioritySettings {
+	perHour := s.policyInt(KeySearchesPerHour, DefaultSearchesPerHour)
 	return PrioritySettings{
+		SearchesPerHour:   &perHour,
 		UserRequestWeight: s.policyInt(KeyPriorityUserRequestWeight, DefaultPriorityUserRequestWeight),
 		NewReleaseWeight:  s.policyInt(KeyPriorityNewReleaseWeight, DefaultPriorityNewReleaseWeight),
 		GapWeight:         s.policyInt(KeyPriorityGapWeight, DefaultPriorityGapWeight),
@@ -69,6 +81,9 @@ func (c *Cache) SetPrioritySettings(ctx context.Context, cl clock.Clock, ps Prio
 			return err
 		}
 	}
+	if ps.SearchesPerHour != nil {
+		return c.setPolicy(ctx, cl, KeySearchesPerHour, strconv.FormatInt(*ps.SearchesPerHour, 10))
+	}
 	return nil
 }
 
@@ -88,6 +103,12 @@ func validatePrioritySettings(ps PrioritySettings) config.Problems {
 		problems = append(problems, config.Problem{
 			Path: "new_release_days", Value: strconv.FormatInt(ps.NewReleaseDays, 10),
 			Expectation: "a positive number of days",
+		})
+	}
+	if perHour := ps.SearchesPerHour; perHour != nil && (*perHour < 0 || *perHour > maxSearchesPerHour) {
+		problems = append(problems, config.Problem{
+			Path: "searches_per_hour", Value: strconv.FormatInt(*perHour, 10),
+			Expectation: "0 (off) to " + strconv.Itoa(maxSearchesPerHour),
 		})
 	}
 	return problems

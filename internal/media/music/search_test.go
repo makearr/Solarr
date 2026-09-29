@@ -262,6 +262,38 @@ func TestSearchItem_AReleaseByAnotherArtistIsNoMatch(t *testing.T) {
 	}
 }
 
+// The artist's other albums are no match for a self-titled one: the automatic search sent their
+// third album for the first (found live 2026-09-29).
+func TestSearchItem_AnotherAlbumByTheSameArtistIsNoMatch(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Kavelori", "Kavelori", 1997, alwaysAcceptRules)
+	searcher := &fakeIndexerSearcher{
+		responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+			return []indexer.RawItem{
+				rawItem("guid-third", "Kavelori-2008-Third.[CDrip-FLAC-LOG-CUE]"),
+				rawItem("guid-sos", "Kavelori-SOS [FRWC7002]"),
+				rawItem("guid-live", "Kavelori-Roseland NYC Live 25-REMASTERED-24BIT-48KHZ-WEB-FLAC-2023-GROUP"),
+				rawItem("guid-own", "Kavelori-Kavelori-1997-GROUP"),
+				rawItem("guid-dotted", "Kavelori-Kavelori.1997"),
+			}, nil
+		},
+	}
+
+	result, err := env.search().SearchItem(t.Context(), item.ID,
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, env.clock.Now())
+	if err != nil {
+		t.Fatalf("SearchItem: %v", err)
+	}
+	var guids []string
+	for _, decision := range result.Decisions {
+		guids = append(guids, decision.ReleaseCandidate.GUID)
+	}
+	slices.Sort(guids)
+	if want := []string{"guid-dotted", "guid-own"}; !slices.Equal(guids, want) {
+		t.Errorf("decided on %v, want %v: another album of the artist is no candidate", guids, want)
+	}
+}
+
 func TestSearchItem_WidensToTheYearTierWhenExactFindsNothing(t *testing.T) {
 	env := newSearchTestEnv(t)
 	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)

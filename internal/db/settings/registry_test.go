@@ -108,7 +108,7 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 		settings.KeyNetworkProxyBypass, settings.KeyNetworkAllowCIDRsEnabled, settings.KeyNetworkAllowCIDRs,
 		settings.KeyCacheMaxBytes, settings.KeyCacheMaxAgeDays, settings.KeyCacheImagesShare, settings.KeyCacheMetadataShare,
 		settings.KeyPriorityUserRequestWeight, settings.KeyPriorityNewReleaseWeight,
-		settings.KeyPriorityGapWeight, settings.KeyPriorityUpgradeWeight, settings.KeyPriorityNewReleaseDays,
+		settings.KeyPriorityGapWeight, settings.KeyPriorityUpgradeWeight, settings.KeySearchesPerHour, settings.KeyPriorityNewReleaseDays,
 		settings.KeyBrainzMashUserAgent, settings.KeyMetadataSourceOrder,
 		settings.KeyMetadataCoverSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID,
 		settings.KeyAcoustIDAPIKey, settings.KeyMetadataTheAudioDB, settings.KeyTheAudioDBAPIKey,
