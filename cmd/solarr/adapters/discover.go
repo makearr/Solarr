@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -60,6 +61,28 @@ func (a Discover) Search(
 		}
 	}
 	return results, nil
+}
+
+// creditArtists records an added album's artists at once, so a search before enrichment has an
+// artist to ask for; enrichment fills in their details. Best-effort: enrichment credits them anyway.
+func (a Discover) creditArtists(ctx context.Context, now time.Time, workID int64, credits []musicbrainz.ArtistCredit) {
+	for index, credit := range credits {
+		if credit.MBID == "" {
+			continue
+		}
+		name := credit.ArtistName
+		if name == "" {
+			name = credit.Name
+		}
+		personID, err := a.People.ResolvePerson(ctx, now, library.PersonLink{
+			Provider: music.ProviderArtist, ExternalID: credit.MBID,
+			Person: library.PersonIdentity{Name: name, SortName: name},
+		})
+		if err != nil {
+			continue
+		}
+		_ = a.People.AddCredit(ctx, workID, personID, music.CreditRoleArtist, index)
+	}
 }
 
 // searchArtists is Search's artist half (revision 7.1). The disambiguation
@@ -120,6 +143,8 @@ func (a Discover) Add(
 	if err != nil {
 		return apiserver.DiscoverAddResult{}, fmt.Errorf("resolve work: %w", err)
 	}
+
+	a.creditArtists(ctx, now, workIDs[0], releaseGroup.ArtistCredit)
 
 	profileID := a.DefaultProfileID
 	if category.QualityProfileID != nil {
