@@ -12,7 +12,7 @@
       (() => {
         /* Kept in step with THEMES in src/lib/theme.ts. Duplicated deliberately:
            this runs before any module loads, which is the whole point. */
-        const DARK = ["dark", "jellyfin", "arr", "nord"];
+        const DARK = ["dark", "jellyfin", "arr", "nord", "lidarr-dark", "sonarr-dark", "radarr-dark"];
         try {
           const stored = localStorage.getItem("solarr.theme");
           const theme = stored

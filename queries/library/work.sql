@@ -153,6 +153,10 @@ DELETE FROM edition WHERE id = ?;
 -- edition's UNIQUE(work_id, kind, label). Once refined, kind changes away from
 -- 'unknown' and the row stops being returned here -- no separate cursor needed,
 -- the query's own result set shrinks as enrichment succeeds.
+-- How many editions still wait on real metadata: an enrichment run's total, for the status bar.
+-- name: CountPlaceholderEditions :one
+SELECT CAST(COUNT(*) AS INTEGER) AS total FROM edition WHERE kind = 'unknown';
+
 -- name: ListPlaceholderEditions :many
 SELECT id, work_id, kind, label, year, format, catalogue_number,
        barcode, runtime_ms, is_default

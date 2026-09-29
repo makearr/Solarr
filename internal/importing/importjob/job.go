@@ -38,6 +38,7 @@ const JobType = jobs.Type("import.inspect")
 // resumable, in the import pool, whose one slot is ADR-3's fixed import concurrency. In
 // maintenance a finished download waited behind every rescan (found 2026-09-28).
 var Definition = jobs.Definition{
+	Name: "Importing",
 	Type: JobType, Pool: jobs.PoolImport, Mutating: true, MaxAttempts: 3,
 }
 
@@ -187,6 +188,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	}
 	j.estimateOnce(ctx, sessionID, payload.SourcePath)
 	j.publishProgress(ctx, sessionID, importPhaseWalking, "")
+	j.reportProgress(ctx, sessionID, job.Progress)
 
 	identifyCfg := model.ChainConfig{
 		AcceptThreshold: music.DefaultAcceptThreshold, AmbiguityThreshold: threshold,
@@ -194,8 +196,10 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	result, err := inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{Cursor: cursor},
 		inspect.WalkOptions{},
 		func(ctx context.Context, batch []inspect.Unit) error {
-			return j.commitCluster(ctx, sessionID, payload.SourcePath, identifyCfg, payload.Preview,
+			err := j.commitCluster(ctx, sessionID, payload.SourcePath, identifyCfg, payload.Preview,
 				payload.TransferLadder, batch)
+			j.reportProgress(ctx, sessionID, job.Progress)
+			return err
 		})
 	if errors.Is(err, errCancelled) {
 		j.logger.Info("import inspection cancelled",
@@ -733,6 +737,16 @@ func (j *Job) publishProgress(ctx context.Context, sessionID int64, phase, curre
 			UnitsFailed: session.UnitsFailed, BytesImported: session.BytesImported,
 		},
 	})
+}
+
+// reportProgress gives the status bar the units handled of the estimated total; best-effort.
+func (j *Job) reportProgress(ctx context.Context, sessionID int64, progress *jobs.Progress) {
+	session, err := j.sessions.Get(ctx, sessionID)
+	if err != nil {
+		return
+	}
+	handled := session.UnitsCommitted + session.UnitsQueued + session.UnitsSkipped + session.UnitsFailed
+	progress.Set(handled, session.UnitsTotal)
 }
 
 // Enqueue submits an import inspection of one source path, deduplicated by

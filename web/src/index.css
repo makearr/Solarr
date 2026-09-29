@@ -20,6 +20,8 @@
   --color-ok: oklch(62% 0.15 150);
   --color-warn: oklch(72% 0.15 75);
   --color-busy: oklch(58% 0.19 305);
+  /* The header bar: the page's own ground unless a scheme colours it, as the *arr apps do. */
+  --color-header: var(--color-canvas);
 }
 
 @layer base {
@@ -99,6 +101,95 @@
     --color-ok: oklch(56% 0.13 150);
     --color-warn: oklch(66% 0.13 70);
     --color-busy: oklch(52% 0.13 310);
+  }
+
+  /* The *arr schemes (2026-09-29): each app's light look -- pale page, slate sidebar, header in
+     its colour -- and its dark one, charcoal with its colour as the accent. Approximations of a
+     familiar look, not a claim to be those products. The sidebar and header are data-region
+     scopes: a scheme redefines the same tokens inside them, so no component knows about schemes. */
+  [data-theme="lidarr"],
+  [data-theme="sonarr"],
+  [data-theme="radarr"] {
+    --color-canvas: #f5f7fa;
+    --color-surface: #ffffff;
+    --color-border-subtle: #e5e5e5;
+    --color-ink: #515253;
+    --color-ink-muted: #909293;
+    --color-danger: #f05050;
+    --color-ok: #27c24c;
+    --color-warn: #ffa500;
+    --color-busy: #7a43b6;
+  }
+  [data-theme="lidarr"] {
+    --color-accent: #00a65b;
+    --color-accent-ink: #ffffff;
+    --color-header: #00a65b;
+  }
+  [data-theme="sonarr"] {
+    --color-accent: #2193b5;
+    --color-accent-ink: #ffffff;
+    --color-header: #2193b5;
+  }
+  [data-theme="radarr"] {
+    --color-accent: #e5a91f;
+    --color-accent-ink: #1f1f1f;
+    --color-header: #464b51;
+  }
+  :is([data-theme="lidarr"], [data-theme="sonarr"], [data-theme="radarr"]) [data-region="sidebar"] {
+    --color-surface: #3a3f51;
+    --color-canvas: #2f3343;
+    --color-border-subtle: #2f3343;
+    --color-ink: #e1e2e3;
+    --color-ink-muted: #a8acb8;
+  }
+  [data-theme="sonarr"] [data-region="sidebar"] {
+    --color-accent: #35c5f4;
+    --color-accent-ink: #1f1f1f;
+  }
+  [data-theme="radarr"] [data-region="sidebar"] {
+    --color-accent: #ffc230;
+  }
+  /* White on the coloured bar; its fields translucent and its dropdowns slate, as in the *arrs. */
+  :is([data-theme="lidarr"], [data-theme="sonarr"], [data-theme="radarr"]) [data-region="header"] {
+    --color-canvas: rgb(0 0 0 / 0.18);
+    --color-surface: #3a3f51;
+    --color-ink: #ffffff;
+    --color-ink-muted: rgb(255 255 255 / 0.8);
+    --color-border-subtle: rgb(255 255 255 / 0.25);
+  }
+  /* Inherited text follows the region's ink, not the page's, or typed text vanishes on the bar. */
+  [data-region] {
+    color: var(--color-ink);
+  }
+  :is([data-theme="lidarr"], [data-theme="sonarr"], [data-theme="radarr"]) [data-region="header"] option {
+    color: #515253;
+    background-color: #ffffff;
+  }
+
+  [data-theme="lidarr-dark"],
+  [data-theme="sonarr-dark"],
+  [data-theme="radarr-dark"] {
+    --color-canvas: #202020;
+    --color-surface: #2a2a2a;
+    --color-border-subtle: #3a3a3a;
+    --color-ink: #cccccc;
+    --color-ink-muted: #8c8c8c;
+    --color-accent-ink: #1f1f1f;
+    --color-danger: #f05050;
+    --color-ok: #27c24c;
+    --color-warn: #ffa500;
+    --color-busy: #9a6ad6;
+    --color-header: #2a2a2a;
+  }
+  [data-theme="lidarr-dark"] {
+    --color-accent: #00a65b;
+    --color-accent-ink: #ffffff;
+  }
+  [data-theme="sonarr-dark"] {
+    --color-accent: #35c5f4;
+  }
+  [data-theme="radarr-dark"] {
+    --color-accent: #ffc230;
   }
 
   body {

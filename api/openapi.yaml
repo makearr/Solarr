@@ -131,6 +131,23 @@ paths:
               schema: { $ref: "#/components/schemas/Egress" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /system/activity:
+    get:
+      operationId: getActivity
+      tags: [system]
+      summary: The jobs running now, with progress and an estimate of the time left.
+      description: >-
+        For the status bar (2026-09-29). The rate is measured over the last one to five
+        minutes; a job that does not know how much there is has no total and no estimate.
+        Jobs of a library the caller cannot see are left out.
+      responses:
+        "200":
+          description: Running jobs, longest running first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Activity" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /dashboard:
     get:
       operationId: getDashboard
@@ -6036,6 +6053,37 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/QueueItem" }
+
+    Activity:
+      type: object
+      required: [running]
+      properties:
+        running:
+          type: array
+          items: { $ref: "#/components/schemas/RunningJob" }
+
+    RunningJob:
+      type: object
+      required: [job_id, type, name, started_at, done]
+      properties:
+        job_id: { type: integer, format: int64 }
+        type: { type: string }
+        name:
+          type: string
+          description: What the job is doing, as the status bar says it.
+        started_at: { type: string, format: date-time }
+        done: { type: integer, format: int64 }
+        total:
+          type: integer
+          format: int64
+          description: How much there is; absent when the job does not know.
+        per_minute:
+          type: number
+          description: Items a minute over the last one to five minutes; absent until measured.
+        eta_seconds:
+          type: integer
+          format: int64
+          description: Time left at that rate; absent when unknown.
 
     HeldRelease:
       type: object

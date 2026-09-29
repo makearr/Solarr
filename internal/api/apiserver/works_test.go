@@ -54,6 +54,8 @@ func (f *fakeWorksReader) ListWorks(
 // through the real repository layer while the library answer stays a fake.
 type worksFixture struct {
 	server               *apiserver.Server
+	running              *jobs.Running
+	jobRegistry          *jobs.Registry
 	cache                *settings.Cache
 	works                *fakeWorksReader
 	workDetail           *fakeWorkDetailReader
@@ -253,8 +255,10 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	downloaderTester := &fakeConnectionTester{}
 	candidateSearcher := &fakeCandidateSearcher{}
 	fsys := fsx.NewMem(fake)
+	running, jobRegistry := jobs.NewRunning(fake), jobs.NewRegistry()
 	server, err := apiserver.New(apiserver.Config{
 		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
+		Running: running, JobRegistry: jobRegistry,
 		Checker:               fakeChecker{},
 		Works:                 works,
 		WorkDetail:            workDetail,
@@ -309,7 +313,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		t.Fatalf("New: %v", err)
 	}
 	return worksFixture{
-		server: server, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor,
+		server: server, running: running, jobRegistry: jobRegistry, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor,
 		search: search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,
 		artwork: artwork, people: people, subscriber: subscriber, artistActions: artistActions,
 		subscriptionPreview: subscriptionPreview,

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Globe } from "lucide-react";
+import { Globe, LoaderCircle } from "lucide-react";
 
 import { api } from "@/api/client";
+import type { components } from "@/api/schema";
 import { SKEW_TOLERANCE_MS, useServerClock } from "@/lib/useServerClock";
 import { describe, historyNotification, useNotifications, type Connection } from "@/lib/useNotifications";
 
@@ -50,6 +51,20 @@ export function StatusBar() {
     staleTime: 60_000,
   });
 
+  // What is being worked on now (2026-09-29); in memory on the server, so polling is cheap.
+  const activity = useQuery({
+    queryKey: ["activity"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/system/activity");
+      if (error) throw error;
+      return data.running;
+    },
+    refetchInterval: 3_000,
+    retry: false,
+  });
+  const [jobsOpen, setJobsOpen] = useState(false);
+  const running = activity.data ?? [];
+
   const latest = recent[0];
   const idle = lastDownload.data ? describe(historyNotification(lastDownload.data)) : "No downloads yet";
 
@@ -67,6 +82,17 @@ export function StatusBar() {
               <time className="ml-auto shrink-0 font-mono text-ink-muted" dateTime={event.at}>
                 {new Date(event.at).toLocaleTimeString(undefined, { hour12: false })}
               </time>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {jobsOpen && running.length > 0 && (
+        <ul className="absolute bottom-full left-1/3 w-[28rem] border border-b-0 border-border-subtle bg-surface
+                       text-xs shadow-lg">
+          {running.map((job) => (
+            <li key={job.job_id} className="border-b border-border-subtle px-3 py-1.5 last:border-b-0">
+              <RunningLine job={job} />
             </li>
           ))}
         </ul>
@@ -96,6 +122,23 @@ export function StatusBar() {
             </span>
           )}
         </button>
+
+        {running[0] && (
+          <button
+            type="button"
+            onClick={() => setJobsOpen(!jobsOpen)}
+            aria-expanded={jobsOpen}
+            title="Work running now"
+            className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-ink-muted hover:text-ink
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <LoaderCircle aria-hidden className="size-3 shrink-0 animate-spin" />
+            <span className="truncate">
+              <RunningLine job={running[0]} />
+            </span>
+            {running.length > 1 && <span className="shrink-0">+{running.length - 1}</span>}
+          </button>
+        )}
 
         <div className="ml-auto flex shrink-0 items-center gap-3 text-ink-muted">
           {egress.data?.public_ip && (
@@ -154,4 +197,27 @@ function Light({ connection }: { connection: Connection }) {
       className={`size-1.5 shrink-0 rounded-full ${tone}`}
     />
   );
+}
+
+type RunningJob = components["schemas"]["RunningJob"];
+
+/** "Enriching metadata · 120 of 184 · about 2 min left": the count and the estimate where known. */
+function RunningLine({ job }: { job: RunningJob }) {
+  const parts = [job.name];
+  if (job.total != null && job.total >= job.done) {
+    parts.push(`${job.done.toLocaleString()} of ${job.total.toLocaleString()}`);
+  } else if (job.done > 0) {
+    parts.push(`${job.done.toLocaleString()} done`);
+  }
+  if (job.eta_seconds != null) parts.push(timeLeft(job.eta_seconds));
+  return <>{parts.join(" · ")}</>;
+}
+
+function timeLeft(seconds: number): string {
+  if (seconds < 60) return "under a minute left";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `about ${minutes} min left`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `about ${hours} h left` : `about ${hours} h ${rest} min left`;
 }

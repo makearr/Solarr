@@ -88,11 +88,15 @@ type Job struct {
 	LastError  string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+	// Progress is where a running handler reports work done; never stored, nil outside a run.
+	Progress *Progress
 }
 
 // Definition declares how a job type behaves.
 type Definition struct {
 	Type Type
+	// Name is what the status bar calls a running job ("Enriching metadata"); empty shows the type.
+	Name string
 	Pool Pool
 	// Mutating must be true for anything that changes the library, the filesystem or a download
 	// client.

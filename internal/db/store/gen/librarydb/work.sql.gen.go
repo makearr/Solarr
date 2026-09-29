@@ -218,6 +218,25 @@ func (q *Queries) CountMonitoredParts(ctx context.Context, workID int64) (int64,
 	return monitored_parts, err
 }
 
+const countPlaceholderEditions = `-- name: CountPlaceholderEditions :one
+SELECT CAST(COUNT(*) AS INTEGER) AS total FROM edition WHERE kind = 'unknown'
+`
+
+// kind='unknown' is the cross-media-type placeholder marker an Identifier chain
+// leaves behind when it resolves an edition's external id but has no real
+// metadata yet (internal/db/library.EditionLink, internal/media/music's newEditionLink):
+// label is that external id itself, chosen so it can never collide with a real
+// edition's UNIQUE(work_id, kind, label). Once refined, kind changes away from
+// 'unknown' and the row stops being returned here -- no separate cursor needed,
+// the query's own result set shrinks as enrichment succeeds.
+// How many editions still wait on real metadata: an enrichment run's total, for the status bar.
+func (q *Queries) CountPlaceholderEditions(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPlaceholderEditions)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const countWorkFiles = `-- name: CountWorkFiles :one
 SELECT CAST(COUNT(*) AS INTEGER) AS total FROM work_file WHERE work_id = ?
 `
@@ -1125,13 +1144,6 @@ type ListPlaceholderEditionsParams struct {
 	PageSize int64
 }
 
-// kind='unknown' is the cross-media-type placeholder marker an Identifier chain
-// leaves behind when it resolves an edition's external id but has no real
-// metadata yet (internal/db/library.EditionLink, internal/media/music's newEditionLink):
-// label is that external id itself, chosen so it can never collide with a real
-// edition's UNIQUE(work_id, kind, label). Once refined, kind changes away from
-// 'unknown' and the row stops being returned here -- no separate cursor needed,
-// the query's own result set shrinks as enrichment succeeds.
 func (q *Queries) ListPlaceholderEditions(ctx context.Context, arg ListPlaceholderEditionsParams) ([]Edition, error) {
 	rows, err := q.db.QueryContext(ctx, listPlaceholderEditions, arg.AfterID, arg.PageSize)
 	if err != nil {
