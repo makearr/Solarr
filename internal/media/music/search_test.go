@@ -678,3 +678,25 @@ func TestSearchItem_CleanedTextFindsANameWithPunctuation(t *testing.T) {
 		t.Errorf("queries = %q, want %q", queries, want)
 	}
 }
+
+// 2026-09-29: an indexer files "Vörnü" as "Voernue", and the only copy of the 2003 album is a 2010
+// reissue; found by the German spelling, it matches, the later year weighing little.
+func TestSearchItem_AReissueFoundByTheGermanSpellingMatches(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Vörnü", "Best of Vörnü", 2003, alwaysAcceptRules)
+	searcher := &fakeIndexerSearcher{responses: func(request indexer.SearchRequest) ([]indexer.RawItem, error) {
+		if request.Query == "Voernue Best of Voernue" {
+			return []indexer.RawItem{rawItem("guid-best", "Voernue-Best Of Voernue-DE-CD-FLAC-2010-NBFLAC-T1T")}, nil
+		}
+		return nil, nil
+	}}
+
+	result, err := env.search().SearchItem(t.Context(), item.ID,
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher, MusicParams: []string{"q"}}}, env.clock.Now())
+	if err != nil {
+		t.Fatalf("SearchItem: %v", err)
+	}
+	if len(result.Decisions) != 1 || result.Decisions[0].Decision.Outcome != "ACCEPT" {
+		t.Errorf("decisions = %+v, want the reissue accepted", result.Decisions)
+	}
+}
