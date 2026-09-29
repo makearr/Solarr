@@ -700,3 +700,40 @@ func TestSearchItem_AReissueFoundByTheGermanSpellingMatches(t *testing.T) {
 		t.Errorf("decisions = %+v, want the reissue accepted", result.Decisions)
 	}
 }
+
+// Answered 2026-09-24: the same release from two indexers is one row -- same title ignoring case
+// and punctuation, size within 1% -- and the best-priority indexer's (searched first) is kept.
+func TestSearchItem_TheSameReleaseFromTwoIndexersIsOneRow(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Pasulo", 2003, alwaysAcceptRules)
+	sized := func(guid, title string, size int64) indexer.RawItem {
+		raw := rawItem(guid, title)
+		raw.SizeBytes = size
+		return raw
+	}
+	first := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+		return []indexer.RawItem{sized("a-1", "Nosi Zada-Pasulo-2003-FLAC-GROUP", 500_000_000)}, nil
+	}}
+	second := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+		return []indexer.RawItem{
+			sized("b-1", "Nosi.Zada-Pasulo-2003-FLAC-GROUP", 503_000_000), // the same, 0.6% apart
+			sized("b-2", "Nosi.Zada-Pasulo-2003-FLAC-GROUP", 600_000_000), // same name, another upload
+			sized("b-3", "Nosi Zada-Pasulo-2003-MP3-GROUP", 100_000_000),
+		}, nil
+	}}
+
+	result, err := env.search().SearchItem(t.Context(), item.ID, []music.IndexerConn{
+		{ID: 1, Impl: "newznab", Client: first}, {ID: 2, Impl: "newznab", Client: second},
+	}, env.clock.Now())
+	if err != nil {
+		t.Fatalf("SearchItem: %v", err)
+	}
+	var guids []string
+	for _, detail := range result.Decisions {
+		guids = append(guids, detail.ReleaseCandidate.GUID)
+	}
+	slices.Sort(guids)
+	if want := []string{"a-1", "b-2", "b-3"}; !reflect.DeepEqual(guids, want) {
+		t.Errorf("rows = %v, want %v", guids, want)
+	}
+}
