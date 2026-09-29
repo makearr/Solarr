@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -399,7 +400,7 @@ func evaluateRawItems(
 	var accepted []acceptedFind
 	for _, raw := range raws {
 		parsed := parse.Parse(raw.Title)
-		if !sameArtist(parsed.Identity.Artist, wantedArtist) {
+		if !sameArtist(parsed.Identity.Artist, wantedArtist) || videoRelease(raw.Title) {
 			continue
 		}
 		// The artist is gated above; comparing "artist - album" whole let the shared artist carry
@@ -408,6 +409,9 @@ func evaluateRawItems(
 		against := albumTarget
 		if parsed.Identity.Artist == "" || parsed.Identity.Album == "" {
 			claimed.Title, against = combinedTitle(parsed.Identity.Artist, parsed.Identity.Album), target
+			if rest, found := withoutLeadingArtist(parsed.Identity.Album, wantedArtist); found {
+				claimed.Title, against = rest, albumTarget
+			}
 		}
 		distance := match.Compute(claimed, against, nil)
 		if distance.Total > maxCandidateMatchDistance {
@@ -420,6 +424,22 @@ func evaluateRawItems(
 	}
 	return accepted
 }
+
+// withoutLeadingArtist cuts the wanted artist off a name the parser could not split
+// ("Kavelori2005Remixes"), so the rest is judged as the album alone.
+func withoutLeadingArtist(name, artist string) (string, bool) {
+	if artist == "" || len(name) <= len(artist) || !strings.EqualFold(name[:len(artist)], artist) {
+		return "", false
+	}
+	return strings.TrimLeft(name[len(artist):], " .-_"), true
+}
+
+// videoMarkerRe matches scene tokens only a video release carries; a concert DVD rip was accepted
+// for an album by the first automatic search (2026-09-29).
+var videoMarkerRe = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(?:dvd-?rip|dvd[r59]|bd-?rip|br-?rip|blu-?ray|web-?dl|web-?rip|hdtv|hdrip|x26[45]|h\.?26[45]|xvid|divx|hevc|(?:480|576|720|1080|2160)[pi])(?:$|[^a-z0-9])`)
+
+// videoRelease reports a release name that is a video, not an album.
+func videoRelease(title string) bool { return videoMarkerRe.MatchString(title) }
 
 // minArtistSimilarity is how alike a release's artist must be to the album's; the combined
 // "artist album" distance alone let another artist's same-named single through (2026-09-29).
