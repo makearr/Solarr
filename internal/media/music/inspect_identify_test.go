@@ -130,7 +130,7 @@ func traumaUnit() (inspect.Unit, map[string]mediatool.Probe, *fakeAlbumLookup) {
 func TestRefineUnitByAlbum_TheOneThresholdDecides(t *testing.T) {
 	unit, probes, lookup := traumaUnit()
 
-	refined, placement, err := music.RefineUnitByAlbum(t.Context(), lookup, unit, probes, model.ChainResult{}, 0.9)
+	refined, placement, err := music.RefineUnitByAlbum(t.Context(), lookup, unit, probes, model.ChainResult{}, 0.9, nil)
 	if err != nil {
 		t.Fatalf("RefineUnitByAlbum: %v", err)
 	}
@@ -141,11 +141,37 @@ func TestRefineUnitByAlbum_TheOneThresholdDecides(t *testing.T) {
 		t.Errorf("Best = %.2f at precedence %d, want >= 0.90 and matched", refined.Best.Confidence, refined.Best.Precedence)
 	}
 
-	strict, placement, err := music.RefineUnitByAlbum(t.Context(), lookup, unit, probes, model.ChainResult{}, 0.999)
+	strict, placement, err := music.RefineUnitByAlbum(t.Context(), lookup, unit, probes, model.ChainResult{}, 0.999, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if strict.Best != nil || placement != nil || len(strict.Candidates) == 0 {
 		t.Errorf("under 0.999: Best = %+v, want the match held for review as a candidate", strict.Best)
+	}
+}
+
+// Section 12: a download is identified against the album it was grabbed for, even when nothing
+// its files say recalls that album -- the tracklist still has to fit.
+func TestRefineUnitByAlbum_ADownloadIsMatchedAgainstTheAlbumItWasGrabbedFor(t *testing.T) {
+	unit, probes, lookup := traumaUnit()
+	lookup.searches = nil // the names recall nothing
+	lookup.groups = map[string]musicbrainz.ReleaseGroup{
+		"rg-studio": {MBID: "rg-studio", Title: "Kebilegev Bibihi", PrimaryType: "Album"},
+	}
+
+	unseeded, _, err := music.RefineUnitByAlbum(t.Context(), lookup, unit, probes, model.ChainResult{}, 0.9, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unseeded.Best != nil {
+		t.Fatalf("without provenance Best = %+v, want nothing recalled", unseeded.Best)
+	}
+
+	seeded, placement, err := music.RefineUnitByAlbum(t.Context(), lookup, unit, probes, model.ChainResult{}, 0.9, []string{"rg-studio"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seeded.Best == nil || seeded.Best.ExternalID.ExternalID != "rg-studio" || placement == nil {
+		t.Errorf("with provenance Best = %+v, placement %v; want rg-studio placed", seeded.Best, placement)
 	}
 }

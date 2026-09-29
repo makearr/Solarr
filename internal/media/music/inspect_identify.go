@@ -55,10 +55,11 @@ func UnitTagSourceFor(root string, probes []mediatool.Probe) Resolved {
 }
 
 // RefineUnitByAlbum matches a unit its embedded MBIDs did not identify against whole
-// tracklists, replacing a weaker text-search answer. probes are keyed by the unit's RelPath.
+// tracklists, replacing a weaker text-search answer. probes are keyed by the unit's RelPath;
+// seeds are release groups scored whatever else is recalled (a download's own album).
 func RefineUnitByAlbum(
 	ctx context.Context, lookup AlbumLookup, unit inspect.Unit, probes map[string]mediatool.Probe, result model.ChainResult,
-	threshold float64,
+	threshold float64, seeds []string,
 ) (model.ChainResult, *AlbumPlacement, error) {
 	if lookup == nil || (result.Best != nil && result.Best.Strategy == StrategyEmbeddedTag) {
 		return result, nil, nil
@@ -71,7 +72,7 @@ func RefineUnitByAlbum(
 			relPaths = append(relPaths, media.RelPath)
 		}
 	}
-	decision, err := IdentifyAlbum(ctx, lookup, musicbrainz.PriorityIdentify, locals, nil)
+	decision, err := IdentifyAlbum(ctx, lookup, musicbrainz.PriorityIdentify, locals, seeds)
 	if err != nil {
 		return result, nil, fmt.Errorf("music: identify unit %q as an album: %w", unit.Directory, err)
 	}

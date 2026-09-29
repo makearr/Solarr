@@ -436,12 +436,17 @@ func (c Committer) CommitMatchedUnit(
 		}
 	}
 
-	link := library.WorkLink{
-		Provider: best.ExternalID.Provider, ExternalID: best.ExternalID.ExternalID,
-		Confidence: best.ExternalID.Confidence, Work: work, Edition: edition,
-		RootFolderID: destRoot.ID, MediaObjectID: mediaObjectIDs[0],
+	// One link per placed file, as a scan links them: a later rescan then knows every file is this
+	// work's, even before its tracklist exists (found live 2026-09-29: 13 of 14 were left unlinked).
+	links := make([]library.WorkLink, len(mediaObjectIDs))
+	for index, mediaObjectID := range mediaObjectIDs {
+		links[index] = library.WorkLink{
+			Provider: best.ExternalID.Provider, ExternalID: best.ExternalID.ExternalID,
+			Confidence: best.ExternalID.Confidence, Work: work, Edition: edition,
+			RootFolderID: destRoot.ID, MediaObjectID: mediaObjectID,
+		}
 	}
-	resolutions, err := c.identity.ResolveWorksDetailed(ctx, now, []library.WorkLink{link})
+	resolutions, err := c.identity.ResolveWorksDetailed(ctx, now, links)
 	if err != nil {
 		return Placed{}, fmt.Errorf("music: resolve identity for unit %q: %w", unit.Directory, err)
 	}
