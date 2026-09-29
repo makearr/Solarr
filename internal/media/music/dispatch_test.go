@@ -18,11 +18,15 @@ type fakeSabnzbdSender struct {
 	download.Client
 	clientRef string
 	err       error
+	refuse    map[string]bool
 	requests  []download.AddRequest
 }
 
 func (f *fakeSabnzbdSender) Add(_ context.Context, request download.AddRequest) (string, error) {
 	f.requests = append(f.requests, request)
+	if f.refuse[request.Name] {
+		return "", fmt.Errorf("fake: %w", download.ErrRefused)
+	}
 	return f.clientRef, f.err
 }
 

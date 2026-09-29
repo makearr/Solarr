@@ -32,6 +32,9 @@ var ErrNoIndexersConfigured = errors.New("apiserver: no indexer is configured an
 // decision -- ADR-57's acquire.send only ever fires on an ACCEPT.
 var ErrDecisionNotAccepted = errors.New("apiserver: decision is not ACCEPT")
 
+// ErrDownloadClientRefused is the client declining the release it was sent; the wrapped text says why.
+var ErrDownloadClientRefused = errors.New("apiserver: the download client refused the release")
+
 // ErrNoDownloaderForProtocol reports no enabled downloader matching a
 // candidate's own protocol.
 var ErrNoDownloaderForProtocol = errors.New("apiserver: no downloader configured for this candidate's protocol")
@@ -331,6 +334,7 @@ type GrabResult struct {
 	Sent               *Acquisition
 	AlreadyDownloading bool
 	Held               bool
+	Refused            int
 }
 
 func (s *Server) routeGrabWork(w http.ResponseWriter, r *http.Request) {
@@ -356,7 +360,9 @@ func (s *Server) GrabWork(w http.ResponseWriter, r *http.Request, id int64) {
 		writeCandidateSearchError(w, s, err)
 		return
 	}
-	view := gen.GrabResult{Found: result.Found, AlreadyDownloading: result.AlreadyDownloading, Held: &result.Held}
+	view := gen.GrabResult{
+		Found: result.Found, AlreadyDownloading: result.AlreadyDownloading, Held: &result.Held, Refused: &result.Refused,
+	}
 	if result.Sent != nil {
 		sent := acquisitionView(*result.Sent)
 		view.Sent = &sent
@@ -392,6 +398,9 @@ func writeCandidateSearchError(w http.ResponseWriter, s *Server, err error) {
 	case errors.Is(err, ErrAcquisitionAlreadyInFlight):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
 			"Already in flight", "this item already has an acquisition in flight")
+	case errors.Is(err, ErrDownloadClientRefused):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Refused by the download client",
+			strings.TrimPrefix(err.Error(), ErrDownloadClientRefused.Error()+": "))
 	case errors.Is(err, ErrCandidateDecisionNotFound):
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such decision")
 	case errors.Is(err, sql.ErrNoRows):

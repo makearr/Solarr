@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -161,6 +162,8 @@ func translateDispatchError(err error) error {
 		return apiserver.ErrNoDownloaderForProtocol
 	case errors.Is(err, library.ErrAcquisitionAlreadyInFlight):
 		return apiserver.ErrAcquisitionAlreadyInFlight
+	case errors.Is(err, download.ErrRefused):
+		return fmt.Errorf("%w: %s", apiserver.ErrDownloadClientRefused, err.Error())
 	default:
 		return err
 	}
@@ -220,6 +223,7 @@ func (c CandidateSearch) GrabWork(ctx context.Context, workID int64) (apiserver.
 	}
 	view := apiserver.GrabResult{
 		Found: len(result.Search.Decisions), AlreadyDownloading: result.AlreadyInFlight, Held: result.Held,
+		Refused: result.Refused,
 	}
 	if result.Sent != nil {
 		sent := acquisitionView(*result.Sent)

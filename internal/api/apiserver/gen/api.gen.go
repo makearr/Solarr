@@ -1422,6 +1422,9 @@ type GrabResult struct {
 	// Held The best release waits for room: its client already holds as many of Solarr's downloads as it may (ADR-57), and it goes when one finishes.
 	Held *bool `json:"held,omitempty"`
 
+	// Refused Releases the download client declined before one was taken (or none was), each passed over for the next best.
+	Refused *int `json:"refused,omitempty"`
+
 	// Sent One dispatch to a download client (ADR-57, section 12) -- denormalised from the candidate it came from, since a candidate can expire while this row must outlive it.
 	Sent *Acquisition `json:"sent,omitempty"`
 }

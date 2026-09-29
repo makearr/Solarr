@@ -5944,6 +5944,11 @@ components:
           description: >-
             The best release waits for room: its client already holds as many of
             Solarr's downloads as it may (ADR-57), and it goes when one finishes.
+        refused:
+          type: integer
+          description: >-
+            Releases the download client declined before one was taken (or none
+            was), each passed over for the next best.
 
     ProwlarrIndexer:
       type: object

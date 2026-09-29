@@ -3,7 +3,10 @@
 // sends, watches and cleans up, by client reference and never by path (section 10.9).
 package download
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 // State is where a download stands, in Solarr's words rather than any one client's.
 type State string
@@ -45,6 +48,10 @@ type HistoryData struct {
 	Client        string `json:"client,omitempty"`
 	Detail        string `json:"detail,omitempty"`
 }
+
+// ErrRefused is a client declining a release it was sent: SABnzbd answers status false, often
+// without a reason, for one it has downloaded before (found live 2026-09-29).
+var ErrRefused = errors.New("the download client refused the release")
 
 // Download is one download as the client reports it.
 type Download struct {

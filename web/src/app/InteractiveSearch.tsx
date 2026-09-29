@@ -66,6 +66,7 @@ export function InteractiveSearch({
                 onSend={(decisionId) => send.mutate(decisionId)}
                 sendPendingId={send.isPending ? send.variables : undefined}
                 sendError={send.isError ? send.variables : undefined}
+                sendErrorDetail={send.isError ? (send.error as { detail?: string }).detail : undefined}
               />
             )}
             {send.isSuccess && <p className="mt-2 text-xs text-ok">Sent to the download client.</p>}

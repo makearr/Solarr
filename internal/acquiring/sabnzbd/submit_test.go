@@ -2,6 +2,8 @@ package sabnzbd_test
 
 import (
 	"context"
+	"errors"
+	"github.com/makearr/Solarr/internal/acquiring/download"
 	"io"
 	"testing"
 
@@ -48,7 +50,20 @@ func TestAddFile_RefusalSurfacesSABnzbdsOwnError(t *testing.T) {
 	client := sabnzbd.NewClient(newTestClient(t, transport), "http://sabnzbd.local:8080", "")
 
 	_, err := client.AddFile(context.Background(), sabnzbd.AddFileRequest{Name: "x", NZB: []byte("junk")})
-	if err == nil || err.Error() != "sabnzbd: add file: NZB file not valid" {
-		t.Fatalf("err = %v, want the refusal surfaced", err)
+	want := "sabnzbd: add file: the download client refused the release: NZB file not valid"
+	if !errors.Is(err, download.ErrRefused) || err.Error() != want {
+		t.Fatalf("err = %v, want %q as a refusal", err, want)
+	}
+}
+
+// SABnzbd's duplicate detection answers status false with no reason at all (found live 2026-09-29).
+func TestAddFile_ARefusalWithoutAReasonStillSaysWhatHappened(t *testing.T) {
+	transport := &recordingTransport{body: `{"status": false}`}
+	client := sabnzbd.NewClient(newTestClient(t, transport), "http://sabnzbd.local:8080", "")
+
+	_, err := client.AddFile(context.Background(), sabnzbd.AddFileRequest{Name: "x", NZB: []byte("<nzb/>")})
+	want := "sabnzbd: add file: the download client refused the release (SABnzbd gave no reason; often it has downloaded it before)"
+	if !errors.Is(err, download.ErrRefused) || err.Error() != want {
+		t.Fatalf("err = %v, want %q", err, want)
 	}
 }

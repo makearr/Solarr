@@ -3785,6 +3785,8 @@ export interface components {
             already_downloading: boolean;
             /** @description The best release waits for room: its client already holds as many of Solarr's downloads as it may (ADR-57), and it goes when one finishes. */
             held?: boolean;
+            /** @description Releases the download client declined before one was taken (or none was), each passed over for the next best. */
+            refused?: number;
         };
         ProwlarrIndexer: {
             /** Format: int64 */

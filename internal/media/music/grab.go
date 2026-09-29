@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
 )
@@ -25,6 +26,8 @@ type GrabResult struct {
 	AlreadyInFlight bool
 	// Held means the best release waits for room in its client's queue (ADR-57's HELD).
 	Held bool
+	// Refused counts releases the client declined before one was taken, or none was.
+	Refused int
 }
 
 // SearchAndSend searches itemID unless a download for it is already on its way, and sends the
@@ -40,6 +43,7 @@ func (g Grab) SearchAndSend(ctx context.Context, itemID int64, indexers []Indexe
 		return GrabResult{Search: found}, err
 	}
 	// SearchItem persists best first.
+	refused := 0
 	for _, detail := range found.Decisions {
 		if detail.Decision.Outcome != string(model.OutcomeAccept) {
 			continue
@@ -57,10 +61,15 @@ func (g Grab) SearchAndSend(ctx context.Context, itemID int64, indexers []Indexe
 		if errors.Is(err, ErrNoDownloaderForProtocol) {
 			continue
 		}
-		if err != nil {
-			return GrabResult{Search: found}, fmt.Errorf("music: grab item %d: %w", itemID, err)
+		// The client declined this one (a duplicate, a broken NZB): Lidarr moves on to the next.
+		if errors.Is(err, download.ErrRefused) {
+			refused++
+			continue
 		}
-		return GrabResult{Search: found, Sent: &sent}, nil
+		if err != nil {
+			return GrabResult{Search: found, Refused: refused}, fmt.Errorf("music: grab item %d: %w", itemID, err)
+		}
+		return GrabResult{Search: found, Sent: &sent, Refused: refused}, nil
 	}
-	return GrabResult{Search: found}, nil
+	return GrabResult{Search: found, Refused: refused}, nil
 }
