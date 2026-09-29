@@ -488,6 +488,9 @@ type Querier interface {
 	// provider id their discography is browsed by.
 	ListPersonExternalIDs(ctx context.Context, personID int64) ([]PersonExternalID, error)
 	ListPlaceholderEditions(ctx context.Context, arg ListPlaceholderEditionsParams) ([]Edition, error)
+	// The planner's facts for one page of items (section 9.1): the dirty set, or with dirty_only 0
+	// the paced sweep. Absent hunt columns read as zero.
+	ListPlanInputs(ctx context.Context, arg ListPlanInputsParams) ([]ListPlanInputsRow, error)
 	// One page of queued files with what their newest attempt concluded. The caller
 	// filters on the pass and outcome it cares about (D12's "re-run what a missing
 	// AcoustID key skipped"): sqlc's SQLite parser cannot model json_each's columns
@@ -568,6 +571,8 @@ type Querier interface {
 	ListWorksNeedingReleaseGroupArtwork(ctx context.Context, arg ListWorksNeedingReleaseGroupArtworkParams) ([]ListWorksNeedingReleaseGroupArtworkRow, error)
 	MarkDesiredItemDirty(ctx context.Context, id int64) error
 	MarkDesiredItemPlanned(ctx context.Context, arg MarkDesiredItemPlannedParams) error
+	// Clears dirty only when nothing the plan read has changed since; zero rows means plan it again.
+	MarkDesiredItemPlannedIfUnchanged(ctx context.Context, arg MarkDesiredItemPlannedIfUnchangedParams) (int64, error)
 	// After a restore the planner has to re-evaluate everything (ADR-15). Batched so no
 	// single transaction exceeds the write budget (Invariant 2), and self-terminating:
 	// it stops reporting rows once nothing is left clean.
@@ -582,6 +587,7 @@ type Querier interface {
 	// so tightening it here does not touch a working caller.
 	MarkRecycleBinRestored(ctx context.Context, arg MarkRecycleBinRestoredParams) (int64, error)
 	MarkRequestFulfilled(ctx context.Context, id int64) (int64, error)
+	MaxDesiredItemID(ctx context.Context) (int64, error)
 	NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error)
 	// oldest_searched, the default hunt mode (section 9.3).
 	NextHuntByOldestSearched(ctx context.Context, arg NextHuntByOldestSearchedParams) ([]HuntQueue, error)
@@ -692,6 +698,7 @@ type Querier interface {
 	SetDownloadProgress(ctx context.Context, arg SetDownloadProgressParams) error
 	SetFingerprints(ctx context.Context, arg SetFingerprintsParams) error
 	SetGroupReputation(ctx context.Context, arg SetGroupReputationParams) error
+	SetHuntEligibleAfter(ctx context.Context, arg SetHuntEligibleAfterParams) error
 	// From no category, or a no-op onto the same one -- the second form is what
 	// makes re-running the placement catch-up idempotent (a caller retrying
 	// after a transient placement failure, e.g. capacity not probed yet, sends
@@ -764,6 +771,8 @@ type Querier interface {
 	UpsertCandidate(ctx context.Context, arg UpsertCandidateParams) (Candidate, error)
 	UpsertFileTrackClaim(ctx context.Context, arg UpsertFileTrackClaimParams) error
 	UpsertHuntQueueEntry(ctx context.Context, arg UpsertHuntQueueEntryParams) error
+	// The planner owns every column but the search record, which each search keeps itself.
+	UpsertPlannedHunt(ctx context.Context, arg UpsertPlannedHuntParams) error
 	// F29: the manual identification queue (migration 0014). Column lists follow table
 	// order, or sqlc stops reusing models.
 	// A file marked "not media" is never queued again, nor one that already belongs to a work: a

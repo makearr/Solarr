@@ -183,11 +183,16 @@ func (d Desired) SetItemMonitored(ctx context.Context, itemID int64, monitored b
 	return nil
 }
 
-// RecordSearched notes that itemID was searched at, found anything or not.
+// RecordSearched notes that itemID was searched at, found anything or not, and has the planner
+// work out when to search it next.
 func (d Desired) RecordSearched(ctx context.Context, itemID, at int64) error {
 	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		return librarydb.New(tx).RecordItemSearched(ctx,
-			librarydb.RecordItemSearchedParams{DesiredItemID: itemID, LastSearchedAt: at})
+		queries := librarydb.New(tx)
+		if err := queries.RecordItemSearched(ctx,
+			librarydb.RecordItemSearchedParams{DesiredItemID: itemID, LastSearchedAt: at}); err != nil {
+			return err
+		}
+		return queries.MarkDesiredItemDirty(ctx, itemID)
 	})
 	if err != nil {
 		return fmt.Errorf("library: record item searched: %w", err)

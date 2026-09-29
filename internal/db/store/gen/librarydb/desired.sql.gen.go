@@ -896,6 +896,83 @@ func (q *Queries) ListPartFilesForWork(ctx context.Context, workID int64) ([]Lis
 	return items, nil
 }
 
+const listPlanInputs = `-- name: ListPlanInputs :many
+SELECT di.id, di.category_id, di.media_ref, di.monitored, di.satisfaction_kind, di.state, di.generation,
+       CAST(COALESCE((SELECT MIN(wd.date) FROM work_date wd
+                      WHERE wd.work_id = di.work_id AND wd.kind = ?1), '') AS TEXT) AS release_date,
+       CAST(COALESCE(h.last_searched_at, 0) AS INTEGER) AS last_searched_at,
+       CAST(COALESCE(h.search_count, 0) AS INTEGER) AS search_count,
+       CAST(COALESCE(h.queued_since, 0) AS INTEGER) AS queued_since
+FROM desired_item di
+LEFT JOIN hunt_queue h ON h.desired_item_id = di.id
+WHERE (CAST(?2 AS INTEGER) = 0 OR di.dirty = 1) AND di.id > ?3
+ORDER BY di.id
+LIMIT ?4
+`
+
+type ListPlanInputsParams struct {
+	Kind      string
+	DirtyOnly int64
+	AfterID   int64
+	PageSize  int64
+}
+
+type ListPlanInputsRow struct {
+	ID               int64
+	CategoryID       int64
+	MediaRef         string
+	Monitored        int64
+	SatisfactionKind string
+	State            string
+	Generation       int64
+	ReleaseDate      string
+	LastSearchedAt   int64
+	SearchCount      int64
+	QueuedSince      int64
+}
+
+// The planner's facts for one page of items (section 9.1): the dirty set, or with dirty_only 0
+// the paced sweep. Absent hunt columns read as zero.
+func (q *Queries) ListPlanInputs(ctx context.Context, arg ListPlanInputsParams) ([]ListPlanInputsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPlanInputs,
+		arg.Kind,
+		arg.DirtyOnly,
+		arg.AfterID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPlanInputsRow{}
+	for rows.Next() {
+		var i ListPlanInputsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CategoryID,
+			&i.MediaRef,
+			&i.Monitored,
+			&i.SatisfactionKind,
+			&i.State,
+			&i.Generation,
+			&i.ReleaseDate,
+			&i.LastSearchedAt,
+			&i.SearchCount,
+			&i.QueuedSince,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markDesiredItemDirty = `-- name: MarkDesiredItemDirty :exec
 UPDATE desired_item SET dirty = 1 WHERE id = ?
 `
@@ -919,6 +996,34 @@ type MarkDesiredItemPlannedParams struct {
 func (q *Queries) MarkDesiredItemPlanned(ctx context.Context, arg MarkDesiredItemPlannedParams) error {
 	_, err := q.db.ExecContext(ctx, markDesiredItemPlanned, arg.LastPlannedAt, arg.ID, arg.Generation)
 	return err
+}
+
+const markDesiredItemPlannedIfUnchanged = `-- name: MarkDesiredItemPlannedIfUnchanged :execrows
+UPDATE desired_item SET dirty = 0, generation = generation + 1, last_planned_at = ?
+WHERE id = ? AND generation = ? AND state = ? AND monitored = ?
+`
+
+type MarkDesiredItemPlannedIfUnchangedParams struct {
+	LastPlannedAt sql.NullInt64
+	ID            int64
+	Generation    int64
+	State         string
+	Monitored     int64
+}
+
+// Clears dirty only when nothing the plan read has changed since; zero rows means plan it again.
+func (q *Queries) MarkDesiredItemPlannedIfUnchanged(ctx context.Context, arg MarkDesiredItemPlannedIfUnchangedParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markDesiredItemPlannedIfUnchanged,
+		arg.LastPlannedAt,
+		arg.ID,
+		arg.Generation,
+		arg.State,
+		arg.Monitored,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const markDesiredItemsDirtyBatch = `-- name: MarkDesiredItemsDirtyBatch :execrows
@@ -954,9 +1059,20 @@ func (q *Queries) MarkHunted(ctx context.Context, arg MarkHuntedParams) error {
 	return err
 }
 
+const maxDesiredItemID = `-- name: MaxDesiredItemID :one
+SELECT CAST(COALESCE(MAX(id), 0) AS INTEGER) AS max_id FROM desired_item
+`
+
+func (q *Queries) MaxDesiredItemID(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, maxDesiredItemID)
+	var max_id int64
+	err := row.Scan(&max_id)
+	return max_id, err
+}
+
 const nextHuntByNewestRelease = `-- name: NextHuntByNewestRelease :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count
+       eligible_after, search_count, queued_since
 FROM hunt_queue
 WHERE class = ?1 AND eligible_after <= ?2
 ORDER BY priority DESC, release_date DESC
@@ -986,6 +1102,7 @@ func (q *Queries) NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNew
 			&i.ReleaseDate,
 			&i.EligibleAfter,
 			&i.SearchCount,
+			&i.QueuedSince,
 		); err != nil {
 			return nil, err
 		}
@@ -1002,7 +1119,7 @@ func (q *Queries) NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNew
 
 const nextHuntByOldestSearched = `-- name: NextHuntByOldestSearched :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count
+       eligible_after, search_count, queued_since
 FROM hunt_queue
 WHERE class = ?1 AND eligible_after <= ?2
 ORDER BY priority DESC, last_searched_at ASC
@@ -1033,6 +1150,7 @@ func (q *Queries) NextHuntByOldestSearched(ctx context.Context, arg NextHuntByOl
 			&i.ReleaseDate,
 			&i.EligibleAfter,
 			&i.SearchCount,
+			&i.QueuedSince,
 		); err != nil {
 			return nil, err
 		}
@@ -1217,6 +1335,20 @@ func (q *Queries) SetDesiredItemState(ctx context.Context, arg SetDesiredItemSta
 	return err
 }
 
+const setHuntEligibleAfter = `-- name: SetHuntEligibleAfter :exec
+UPDATE hunt_queue SET eligible_after = ? WHERE desired_item_id = ?
+`
+
+type SetHuntEligibleAfterParams struct {
+	EligibleAfter int64
+	DesiredItemID int64
+}
+
+func (q *Queries) SetHuntEligibleAfter(ctx context.Context, arg SetHuntEligibleAfterParams) error {
+	_, err := q.db.ExecContext(ctx, setHuntEligibleAfter, arg.EligibleAfter, arg.DesiredItemID)
+	return err
+}
+
 const unmonitorDesiredItemsWithMissingFiles = `-- name: UnmonitorDesiredItemsWithMissingFiles :execrows
 UPDATE desired_item SET monitored = 0, dirty = 1
 WHERE id IN (
@@ -1307,6 +1439,40 @@ func (q *Queries) UpsertHuntQueueEntry(ctx context.Context, arg UpsertHuntQueueE
 		arg.ReleaseDate,
 		arg.EligibleAfter,
 		arg.SearchCount,
+	)
+	return err
+}
+
+const upsertPlannedHunt = `-- name: UpsertPlannedHunt :exec
+INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at, release_date,
+                        eligible_after, search_count, queued_since)
+VALUES (?, ?, ?, 0, ?, ?, 0, ?)
+ON CONFLICT (desired_item_id) DO UPDATE SET
+  class = excluded.class,
+  priority = excluded.priority,
+  release_date = excluded.release_date,
+  eligible_after = excluded.eligible_after,
+  queued_since = excluded.queued_since
+`
+
+type UpsertPlannedHuntParams struct {
+	DesiredItemID int64
+	Class         string
+	Priority      int64
+	ReleaseDate   sql.NullInt64
+	EligibleAfter int64
+	QueuedSince   int64
+}
+
+// The planner owns every column but the search record, which each search keeps itself.
+func (q *Queries) UpsertPlannedHunt(ctx context.Context, arg UpsertPlannedHuntParams) error {
+	_, err := q.db.ExecContext(ctx, upsertPlannedHunt,
+		arg.DesiredItemID,
+		arg.Class,
+		arg.Priority,
+		arg.ReleaseDate,
+		arg.EligibleAfter,
+		arg.QueuedSince,
 	)
 	return err
 }

@@ -7247,6 +7247,12 @@ components:
           type: integer
           format: int64
           description: Days after release an item still counts as new rather than a gap. Default 7.
+        searches_per_hour:
+          type: integer
+          format: int64
+          description: >-
+            Missing albums searched automatically each hour, most urgent first; 0 turns automatic
+            searching off. Default 12. Always answered; omitted on a PATCH leaves it alone.
 
     MetadataSource:
       type: string

@@ -293,6 +293,7 @@ type HuntQueue struct {
 	ReleaseDate    sql.NullInt64
 	EligibleAfter  int64
 	SearchCount    int64
+	QueuedSince    int64
 }
 
 type IdentificationAttempt struct {

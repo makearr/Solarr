@@ -16,8 +16,33 @@ func TestPrioritySettings_DefaultsWhenNothingIsStored(t *testing.T) {
 		UpgradeWeight:     settings.DefaultPriorityUpgradeWeight,
 		NewReleaseDays:    settings.DefaultPriorityNewReleaseDays,
 	}
-	if got != want {
+	if got.SearchesPerHour == nil || *got.SearchesPerHour != settings.DefaultSearchesPerHour {
+		t.Errorf("SearchesPerHour = %v, want %d", got.SearchesPerHour, settings.DefaultSearchesPerHour)
+	}
+	if got.SearchesPerHour = nil; got != want {
 		t.Errorf("PrioritySettings = %+v, want the shipped defaults %+v", got, want)
+	}
+}
+
+func TestSetPrioritySettings_KeepsTheSearchBudgetWhenLeftOut(t *testing.T) {
+	cache, cl := newCache(t)
+	three := int64(3)
+	base := settings.PrioritySettings{UserRequestWeight: 40, NewReleaseWeight: 30, GapWeight: 20, UpgradeWeight: 10, NewReleaseDays: 7}
+	withBudget := base
+	withBudget.SearchesPerHour = &three
+	if err := cache.SetPrioritySettings(t.Context(), cl, withBudget); err != nil {
+		t.Fatalf("SetPrioritySettings: %v", err)
+	}
+	if err := cache.SetPrioritySettings(t.Context(), cl, base); err != nil {
+		t.Fatalf("SetPrioritySettings: %v", err)
+	}
+	if got := cache.Snapshot().PrioritySettings().SearchesPerHour; got == nil || *got != 3 {
+		t.Errorf("SearchesPerHour = %v, want 3 kept", got)
+	}
+	tooMany := int64(5000)
+	withBudget.SearchesPerHour = &tooMany
+	if err := cache.SetPrioritySettings(t.Context(), cl, withBudget); err == nil {
+		t.Error("SetPrioritySettings accepted 5000 searches an hour")
 	}
 }
 
@@ -29,7 +54,8 @@ func TestSetPrioritySettings_RoundTrips(t *testing.T) {
 	if err := cache.SetPrioritySettings(t.Context(), cl, want); err != nil {
 		t.Fatalf("SetPrioritySettings: %v", err)
 	}
-	if got := cache.Snapshot().PrioritySettings(); got != want {
+	got := cache.Snapshot().PrioritySettings()
+	if got.SearchesPerHour = nil; got != want {
 		t.Errorf("PrioritySettings = %+v, want %+v", got, want)
 	}
 }

@@ -176,7 +176,7 @@ DELETE FROM hunt_queue WHERE desired_item_id = ?;
 -- oldest_searched, the default hunt mode (section 9.3).
 -- name: NextHuntByOldestSearched :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count
+       eligible_after, search_count, queued_since
 FROM hunt_queue
 WHERE class = sqlc.arg(class) AND eligible_after <= sqlc.arg(now)
 ORDER BY priority DESC, last_searched_at ASC
@@ -184,7 +184,7 @@ LIMIT sqlc.arg(page_size);
 
 -- name: NextHuntByNewestRelease :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count
+       eligible_after, search_count, queued_since
 FROM hunt_queue
 WHERE class = sqlc.arg(class) AND eligible_after <= sqlc.arg(now)
 ORDER BY priority DESC, release_date DESC
@@ -309,3 +309,42 @@ ORDER BY c.media_object_id;
 SELECT CAST(COALESCE((SELECT MIN(wd.date) FROM work_date wd
   WHERE wd.work_id = di.work_id AND wd.kind = sqlc.arg(kind)), '') AS TEXT) AS release_date
 FROM desired_item di WHERE di.id = sqlc.arg(item_id);
+
+-- The planner's facts for one page of items (section 9.1): the dirty set, or with dirty_only 0
+-- the paced sweep. Absent hunt columns read as zero.
+-- name: ListPlanInputs :many
+SELECT di.id, di.category_id, di.media_ref, di.monitored, di.satisfaction_kind, di.state, di.generation,
+       CAST(COALESCE((SELECT MIN(wd.date) FROM work_date wd
+                      WHERE wd.work_id = di.work_id AND wd.kind = sqlc.arg(kind)), '') AS TEXT) AS release_date,
+       CAST(COALESCE(h.last_searched_at, 0) AS INTEGER) AS last_searched_at,
+       CAST(COALESCE(h.search_count, 0) AS INTEGER) AS search_count,
+       CAST(COALESCE(h.queued_since, 0) AS INTEGER) AS queued_since
+FROM desired_item di
+LEFT JOIN hunt_queue h ON h.desired_item_id = di.id
+WHERE (CAST(sqlc.arg(dirty_only) AS INTEGER) = 0 OR di.dirty = 1) AND di.id > sqlc.arg(after_id)
+ORDER BY di.id
+LIMIT sqlc.arg(page_size);
+
+-- name: MaxDesiredItemID :one
+SELECT CAST(COALESCE(MAX(id), 0) AS INTEGER) AS max_id FROM desired_item;
+
+-- Clears dirty only when nothing the plan read has changed since; zero rows means plan it again.
+-- name: MarkDesiredItemPlannedIfUnchanged :execrows
+UPDATE desired_item SET dirty = 0, generation = generation + 1, last_planned_at = ?
+WHERE id = ? AND generation = ? AND state = ? AND monitored = ?;
+
+-- The planner owns every column but the search record, which each search keeps itself.
+-- name: UpsertPlannedHunt :exec
+INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at, release_date,
+                        eligible_after, search_count, queued_since)
+VALUES (?, ?, ?, 0, ?, ?, 0, ?)
+ON CONFLICT (desired_item_id) DO UPDATE SET
+  class = excluded.class,
+  priority = excluded.priority,
+  release_date = excluded.release_date,
+  eligible_after = excluded.eligible_after,
+  queued_since = excluded.queued_since;
+
+-- name: SetHuntEligibleAfter :exec
+UPDATE hunt_queue SET eligible_after = ? WHERE desired_item_id = ?;
+

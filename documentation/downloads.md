@@ -1,5 +1,20 @@
 # Downloads: what is sent, and what waits
 
+## Missing albums are searched on their own
+
+Two scheduled tasks (Settings -> Scheduler) do what Lidarr leaves to a person pressing *Search all*:
+
+- **Plan wanted albums** (every 5 minutes, advanced) reads every album whose state or search record
+  changed, plus a slice of the rest so a whole pass takes a day, and writes the hunt queue: which
+  monitored MISSING or PARTIAL albums may be searched, how urgently (the priority ladder below), and
+  from when. An album with a known street date waits until 12 hours after it; one just searched
+  waits 6 hours, then 12, 24, doubling to a week. Tracks are never searched on their own.
+- **Search for missing albums** (every 15 minutes) searches the most urgent eligible albums, least
+  recently searched first, and sends the best release as an automatic grab. It spends at most
+  **Automatic searches per hour** (Settings -> Priority, default 12, 0 = off); an album with a
+  download already on its way costs nothing and is looked at again in an hour. Every search counts
+  toward the backoff, whoever started it.
+
 Once a release is in a download client, the client decides the order. So Solarr sends each client
 only as many releases as its **Downloads at once** (per client, default 10; ADR-57) and keeps the
 rest **held**, in its own order, until a download finishes or is removed.

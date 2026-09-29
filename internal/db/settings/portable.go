@@ -60,8 +60,10 @@ type ScalarSettingsEntry struct {
 	PriorityGapWeight         int64    `yaml:"priority_gap_weight,omitempty"`
 	PriorityUpgradeWeight     int64    `yaml:"priority_upgrade_weight,omitempty"`
 	PriorityNewReleaseDays    int64    `yaml:"priority_new_release_days,omitempty"`
-	BrainzMashUserAgent       string   `yaml:"brainzmash_user_agent,omitempty"`
-	MetadataSourceOrder       []string `yaml:"metadata_source_order,omitempty"`
+	// AutomaticSearchesPerHour is the search budget; absent keeps the stored value.
+	AutomaticSearchesPerHour *int64   `yaml:"automatic_searches_per_hour,omitempty"`
+	BrainzMashUserAgent      string   `yaml:"brainzmash_user_agent,omitempty"`
+	MetadataSourceOrder      []string `yaml:"metadata_source_order,omitempty"`
 	// Pointers, so "all cover sources off" and "switched off" survive a round trip; absent keeps
 	// the stored value.
 	MetadataCoverSources *[]string `yaml:"metadata_cover_sources,omitempty"`
@@ -335,6 +337,7 @@ func (c *Cache) Export() Document {
 		PriorityGapWeight:            priority.GapWeight,
 		PriorityUpgradeWeight:        priority.UpgradeWeight,
 		PriorityNewReleaseDays:       priority.NewReleaseDays,
+		AutomaticSearchesPerHour:     priority.SearchesPerHour,
 		BrainzMashUserAgent:          snapshot.MetadataSettings().BrainzMashUserAgent,
 		MetadataSourceOrder:          snapshot.MetadataSettings().SourceOrder,
 		MetadataCoverSources:         &metadata.CoverSources,
@@ -530,6 +533,12 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 		}
 		if d.Settings.hasAll(settingsGroups[2]) {
 			for _, problem := range validatePrioritySettings(priority) {
+				problems = append(problems, prefixed("settings", problem))
+			}
+		}
+		if perHour := d.Settings.AutomaticSearchesPerHour; perHour != nil {
+			for _, problem := range validatePrioritySettings(PrioritySettings{
+				UserRequestWeight: 0, NewReleaseDays: 1, SearchesPerHour: perHour}) {
 				problems = append(problems, prefixed("settings", problem))
 			}
 		}
@@ -1072,6 +1081,9 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 	}
 	if entry.MetadataTheAudioDB != nil {
 		values[KeyMetadataTheAudioDB] = strconv.FormatBool(*entry.MetadataTheAudioDB)
+	}
+	if entry.AutomaticSearchesPerHour != nil {
+		values[KeySearchesPerHour] = strconv.FormatInt(*entry.AutomaticSearchesPerHour, 10)
 	}
 	if entry.MetadataPeopleBackfillPerRun != nil {
 		values[KeyMetadataPeopleBackfillPerRun] = strconv.FormatInt(*entry.MetadataPeopleBackfillPerRun, 10)
