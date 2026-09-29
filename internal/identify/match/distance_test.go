@@ -120,6 +120,9 @@ func TestDistance_YearProximity(t *testing.T) {
 		{"same year", 1977, 1977, 0},
 		{"one year off", 1977, 1978, 0.2},
 		{"far off saturates at one", 1977, 2020, 1},
+		// 2026-09-29: a reissue's later year weighs a fifth, however late; an earlier one fully.
+		{"a reissue five years later", 1982, 1977, 0.2},
+		{"a reissue decades later", 2020, 1977, 0.2},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

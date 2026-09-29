@@ -154,15 +154,21 @@ func TitleSimilarity(a, b string) float64 {
 // at maximum distance.
 const yearDistanceScale = 5.0
 
+// laterYearFactor is how much a claimed year after the candidate's counts: a reissue carries its
+// own later year, as Lidarr accepts (2026-09-29). An earlier year counts fully -- nothing predates
+// its own work.
+const laterYearFactor = 0.2
+
 func yearDistance(claimed, candidate int) (DistancePart, bool) {
 	if claimed == 0 || candidate == 0 {
 		return DistancePart{}, false
 	}
 	diff := claimed - candidate
+	factor := laterYearFactor
 	if diff < 0 {
-		diff = -diff
+		diff, factor = -diff, 1
 	}
-	distance := min(float64(diff)/yearDistanceScale, 1)
+	distance := min(float64(diff)/yearDistanceScale, 1) * factor
 	return DistancePart{Dimension: DimensionYear, Distance: distance,
 		Detail: fmt.Sprintf("year %d vs %d", claimed, candidate)}, true
 }
