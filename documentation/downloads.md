@@ -15,6 +15,13 @@ Two scheduled tasks (Settings -> Scheduler) do what Lidarr leaves to a person pr
   download already on its way costs nothing and is looked at again in an hour. Every search counts
   toward the backoff, whoever started it.
 
+**RSS sync** (every 15 minutes, as Lidarr's) reads each indexer's newest 100 audio releases
+(Newznab category 3000 -- without it a feed is mostly television), groups them by the artist they
+name, and judges each group against that artist's wanted albums exactly as a search would. The best
+accepted release is sent as an RSS grab. Nothing is searched, and an album's search backoff is left
+alone. Artists are matched by name ignoring case; an alias or a differently spelled name is not yet
+matched.
+
 Every search asks all enabled indexers at once and waits at most **20 seconds** for them (ADR-37):
 a dead or slow indexer bounds a search instead of adding to it. The album page and Interactive
 search name each indexer that failed or did not answer in time.

@@ -973,6 +973,46 @@ func (q *Queries) ListPlanInputs(ctx context.Context, arg ListPlanInputsParams) 
 	return items, nil
 }
 
+const listWantedAlbumsByArtistName = `-- name: ListWantedAlbumsByArtistName :many
+SELECT DISTINCT di.id
+FROM person p
+JOIN credit c ON c.person_id = p.id AND c.role = 'artist' AND c.edition_id = 0 AND c.part_id = 0
+JOIN desired_item di ON di.work_id = c.work_id
+WHERE p.name = ?1 COLLATE NOCASE
+  AND di.monitored = 1 AND di.state IN ('MISSING', 'PARTIAL') AND di.satisfaction_kind = 'SET'
+ORDER BY di.id
+LIMIT ?2
+`
+
+type ListWantedAlbumsByArtistNameParams struct {
+	Name     string
+	PageSize int64
+}
+
+// RSS sync: the monitored, incomplete albums credited to an artist of this name, ignoring case.
+func (q *Queries) ListWantedAlbumsByArtistName(ctx context.Context, arg ListWantedAlbumsByArtistNameParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listWantedAlbumsByArtistName, arg.Name, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markDesiredItemDirty = `-- name: MarkDesiredItemDirty :exec
 UPDATE desired_item SET dirty = 1 WHERE id = ?
 `

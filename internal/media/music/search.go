@@ -200,43 +200,19 @@ func (s Search) SearchItemWithTerms(
 		return ItemSearchResult{}, fmt.Errorf("music: search item %d: %w", itemID, err)
 	}
 
-	detail, err := s.Works.Detail(ctx, item.WorkID)
-	if err != nil {
-		return ItemSearchResult{}, fmt.Errorf("music: search item %d: work detail: %w", itemID, err)
-	}
-	aliases, err := s.Works.AlternateTitles(ctx, item.WorkID)
-	if err != nil {
-		return ItemSearchResult{}, fmt.Errorf("music: search item %d: alternate titles: %w", itemID, err)
-	}
-
-	snapshot := s.Settings.Snapshot()
-	rules, err := libraryProfiles(snapshot, item.CategoryID, item.ProfileID)
+	judge, err := s.judgeFor(ctx, item)
 	if err != nil {
 		return ItemSearchResult{}, fmt.Errorf("music: search item %d: %w", itemID, err)
 	}
-	languagePolicy := languagePolicyFor(snapshot, item.CategoryID)
-	preferPropers := true
-	if category, found := snapshot.Category(item.CategoryID); found {
-		preferPropers = category.FileManagement.PropersRepacks != settings.PropersDoNotPrefer
-	}
-
-	artistName := primaryArtistName(detail)
-	target := targetIdentity(detail, item, artistName, aliases)
-	albumTarget := target
-	albumTarget.Title = detail.Work.CanonicalTitle
-	tiers := buildSearchTiers(artistName, detail.Work, aliases)
+	tiers := buildSearchTiers(judge.artistName, judge.work, judge.aliases)
 	if custom != nil {
 		tiers = [][]searchTerms{musicTerms(custom.Artist, custom.Album, "")}
 		// The typed terms are the identity now; the work's year and ids would judge them against the old name.
-		albumTarget.Identity = match.Identity{Title: custom.Album, AlternateTitles: []string{detail.Work.CanonicalTitle}}
-		target.Identity = match.Identity{
-			Title: combinedTitle(custom.Artist, custom.Album), AlternateTitles: []string{target.Title},
+		judge.albumTarget.Identity = match.Identity{Title: custom.Album, AlternateTitles: []string{judge.work.CanonicalTitle}}
+		judge.target.Identity = match.Identity{
+			Title: combinedTitle(custom.Artist, custom.Album), AlternateTitles: []string{judge.target.Title},
 		}
-	}
-
-	wantedArtist := artistName
-	if custom != nil {
-		wantedArtist = custom.Artist
+		judge.wantedArtist = custom.Artist
 	}
 
 	result := ItemSearchResult{}
@@ -258,25 +234,108 @@ func (s Search) SearchItemWithTerms(
 			if err != nil {
 				return result, fmt.Errorf("music: search item %d: %w", itemID, err)
 			}
-			accepted = append(accepted, evaluateRawItems(raws, conn, target, albumTarget, wantedArtist, rules, languagePolicy, preferPropers)...)
+			accepted = append(accepted, judge.evaluate(raws, conn)...)
 		}
-		accepted = withoutCrossIndexerDuplicates(accepted)
 		if len(accepted) == 0 {
 			continue
 		}
 		tier := tierIndex
 		result.TierUsed = &tier
-		sortBestFirst(accepted)
-		for _, found := range accepted {
-			decisionDetail, persistErr := s.persist(ctx, itemID, found, at)
-			if persistErr != nil {
-				return result, fmt.Errorf("music: search item %d: persist: %w", itemID, persistErr)
-			}
-			result.Decisions = append(result.Decisions, decisionDetail)
-		}
-		return result, nil
+		result.Decisions, err = s.decide(ctx, itemID, accepted, "search", at)
+		return result, err
 	}
 	return result, nil
+}
+
+// judge is one album's yardstick for releases: who and what it is, and the library's quality rules.
+type judge struct {
+	work                librarydb.Work
+	aliases             []string
+	artistName          string
+	wantedArtist        string
+	target, albumTarget match.Candidate
+	rules               []rankedProfile
+	languagePolicy      *score.LanguagePolicy
+	preferPropers       bool
+}
+
+// judgeFor builds item's yardstick from its work and its library's settings.
+func (s Search) judgeFor(ctx context.Context, item librarydb.DesiredItem) (judge, error) {
+	detail, err := s.Works.Detail(ctx, item.WorkID)
+	if err != nil {
+		return judge{}, fmt.Errorf("work detail: %w", err)
+	}
+	aliases, err := s.Works.AlternateTitles(ctx, item.WorkID)
+	if err != nil {
+		return judge{}, fmt.Errorf("alternate titles: %w", err)
+	}
+	snapshot := s.Settings.Snapshot()
+	rules, err := libraryProfiles(snapshot, item.CategoryID, item.ProfileID)
+	if err != nil {
+		return judge{}, err
+	}
+	preferPropers := true
+	if category, found := snapshot.Category(item.CategoryID); found {
+		preferPropers = category.FileManagement.PropersRepacks != settings.PropersDoNotPrefer
+	}
+	artistName := primaryArtistName(detail)
+	target := targetIdentity(detail, item, artistName, aliases)
+	albumTarget := target
+	albumTarget.Title = detail.Work.CanonicalTitle
+	return judge{
+		work: detail.Work, aliases: aliases, artistName: artistName, wantedArtist: artistName,
+		target: target, albumTarget: albumTarget, rules: rules,
+		languagePolicy: languagePolicyFor(snapshot, item.CategoryID), preferPropers: preferPropers,
+	}, nil
+}
+
+func (j judge) evaluate(raws []indexer.RawItem, conn IndexerConn) []acceptedFind {
+	return evaluateRawItems(raws, conn, j.target, j.albumTarget, j.wantedArtist, j.rules, j.languagePolicy, j.preferPropers)
+}
+
+// decide keeps one row per release, ranks them best first and records each decision against itemID.
+func (s Search) decide(ctx context.Context, itemID int64, accepted []acceptedFind, source string, at time.Time) (
+	[]library.DecisionDetail, error,
+) {
+	accepted = withoutCrossIndexerDuplicates(accepted)
+	sortBestFirst(accepted)
+	decisions := make([]library.DecisionDetail, 0, len(accepted))
+	for _, found := range accepted {
+		detail, err := s.persist(ctx, itemID, found, source, at)
+		if err != nil {
+			return decisions, fmt.Errorf("music: search item %d: persist: %w", itemID, err)
+		}
+		decisions = append(decisions, detail)
+	}
+	return decisions, nil
+}
+
+// JudgeFeed judges releases an RSS sync found against one wanted album, exactly as a search's
+// would be; nothing is searched, and the album's search record is left alone.
+func (s Search) JudgeFeed(
+	ctx context.Context, itemID int64, conn IndexerConn, raws []indexer.RawItem, at time.Time,
+) (ItemSearchResult, error) {
+	item, err := s.Desired.Get(ctx, itemID)
+	if err != nil {
+		return ItemSearchResult{}, fmt.Errorf("music: judge feed for item %d: %w", itemID, err)
+	}
+	if !SearchedOnItsOwn(item.SatisfactionKind) {
+		return ItemSearchResult{}, ErrTrackSearchNotSupported
+	}
+	judge, err := s.judgeFor(ctx, item)
+	if err != nil {
+		return ItemSearchResult{}, fmt.Errorf("music: judge feed for item %d: %w", itemID, err)
+	}
+	raws, err = s.withoutBlocklisted(ctx, conn.ID, raws, at)
+	if err != nil {
+		return ItemSearchResult{}, fmt.Errorf("music: judge feed for item %d: %w", itemID, err)
+	}
+	accepted := judge.evaluate(raws, conn)
+	if len(accepted) == 0 {
+		return ItemSearchResult{}, nil
+	}
+	decisions, err := s.decide(ctx, itemID, accepted, "rss", at)
+	return ItemSearchResult{Decisions: decisions}, err
 }
 
 // indexerAnswer is what one indexer gave for one tier's queries, up to its first failure.
@@ -521,7 +580,7 @@ func sameArtist(released, wanted string) bool {
 
 // persist upserts the release and records the decision against itemID,
 // exactly once per accepted find.
-func (s Search) persist(ctx context.Context, itemID int64, found acceptedFind, at time.Time) (library.DecisionDetail, error) {
+func (s Search) persist(ctx context.Context, itemID int64, found acceptedFind, source string, at time.Time) (library.DecisionDetail, error) {
 	var sizeBytes *int64
 	if found.raw.SizeBytes > 0 {
 		size := found.raw.SizeBytes
@@ -543,7 +602,7 @@ func (s Search) persist(ctx context.Context, itemID int64, found acceptedFind, a
 		IndexerID: found.conn.ID, GUID: found.raw.GUID, Title: found.raw.Title,
 		SizeBytes: sizeBytes, Seeders: seeders, Leechers: leechers, PublishedAt: publishedAt,
 		Protocol: protocolForImpl(found.conn.Impl), DownloadURL: found.raw.Link,
-		ParseConfidence: &confidence, Source: "search",
+		ParseConfidence: &confidence, Source: source,
 		FirstSeenAt: at.Unix(), ExpiresAt: at.Add(defaultCandidateRetention).Unix(),
 	})
 	if err != nil {

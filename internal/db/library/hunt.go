@@ -131,3 +131,15 @@ func (h Hunt) Postpone(ctx context.Context, itemID, at int64) error {
 	}
 	return nil
 }
+
+// WantedAlbumsByArtist answers the monitored, incomplete albums credited to an artist named
+// artistName, ignoring case -- what an RSS release by that artist could satisfy.
+func (h Hunt) WantedAlbumsByArtist(ctx context.Context, artistName string, limit int64) ([]int64, error) {
+	ids, err := librarydb.New(h.store.Read()).ListWantedAlbumsByArtistName(ctx, librarydb.ListWantedAlbumsByArtistNameParams{
+		Name: artistName, PageSize: limit,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: wanted albums by artist: %w", err)
+	}
+	return ids, nil
+}

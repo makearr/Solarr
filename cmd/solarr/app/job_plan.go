@@ -13,7 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// registerPlanJobs wires M1c's planner and hunt: what is missing is searched without being asked.
+// registerPlanJobs wires M1c's planner, hunt and RSS sync: what is missing is found without being asked.
 func (p *process) registerPlanJobs(registry *jobs.Registry, executor *jobs.Executor) error {
 	if err := registry.Register(plan.Definition); err != nil {
 		return err
@@ -29,7 +29,20 @@ func (p *process) registerPlanJobs(registry *jobs.Registry, executor *jobs.Execu
 	executor.Handle(plan.HuntJobType, plan.NewHuntJob(plan.HuntConfig{
 		Hunt: hunt, PerHour: p.searchesPerHour, Search: p.huntSearch, Clock: clock.NewSystem(), Logger: p.logger,
 	}))
+	if err := registry.Register(music.RSSDefinition); err != nil {
+		return err
+	}
+	executor.Handle(music.RSSJobType, music.NewRSSJob(music.RSSConfig{
+		Grab: p.musicGrab(), Indexers: p.indexerConns, WantedByArtist: hunt.WantedAlbumsByArtist,
+		Clock: clock.NewSystem(), Logger: p.logger,
+	}))
 	return nil
+}
+
+func (p *process) enqueueRSS(ctx context.Context) (jobs.EnqueueResult, error) {
+	return p.queue.Enqueue(ctx, jobs.Request{
+		Type: music.RSSJobType, ActionKey: string(music.RSSJobType), Priority: jobs.PriorityNormal, Payload: []byte("{}"),
+	})
 }
 
 // planFacts reads the priority policy and every library's rank fresh for one planner pass.
