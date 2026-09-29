@@ -13,8 +13,8 @@ func TestUnidentified_NotMediaStaysOutOfTheQueue(t *testing.T) {
 	opened, _ := newLibrary(t)
 	physical := library.NewPhysical(opened)
 	queue := library.NewUnidentified(opened)
-	cover := registerOne(t, physical, "Heka/Watermark/scan.flac")
-	entry := library.QueueEntry{MediaObjectID: cover, RootFolderID: 1, RelPath: "Heka/Watermark/scan.flac", At: 10}
+	cover := registerOne(t, physical, "Heka/Zanuvode/scan.flac")
+	entry := library.QueueEntry{MediaObjectID: cover, RootFolderID: 1, RelPath: "Heka/Zanuvode/scan.flac", At: 10}
 	if err := queue.Record(t.Context(), []library.QueueEntry{entry}); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
@@ -39,8 +39,8 @@ func TestUnidentified_InFolderIsOneFolderDeep(t *testing.T) {
 	var entries []library.QueueEntry
 	ids := map[string]int64{}
 	for _, relPath := range []string{
-		"Heka/Watermark/01.flac", "Heka/Watermark/02.flac", "Heka/Watermark/CD2/01.flac",
-		"Heka/Watermark (Deluxe)/01.flac", "loose.flac",
+		"Heka/Zanuvode/01.flac", "Heka/Zanuvode/02.flac", "Heka/Zanuvode/CD2/01.flac",
+		"Heka/Zanuvode (Deluxe)/01.flac", "loose.flac",
 	} {
 		ids[relPath] = registerOne(t, physical, relPath)
 		entries = append(entries, library.QueueEntry{MediaObjectID: ids[relPath], RootFolderID: 1, RelPath: relPath, At: 10})
@@ -49,8 +49,8 @@ func TestUnidentified_InFolderIsOneFolderDeep(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 
-	got, err := queue.InFolder(t.Context(), 1, "Heka/Watermark/02.flac")
-	if want := []int64{ids["Heka/Watermark/01.flac"], ids["Heka/Watermark/02.flac"]}; err != nil || !slices.Equal(got, want) {
+	got, err := queue.InFolder(t.Context(), 1, "Heka/Zanuvode/02.flac")
+	if want := []int64{ids["Heka/Zanuvode/01.flac"], ids["Heka/Zanuvode/02.flac"]}; err != nil || !slices.Equal(got, want) {
 		t.Errorf("InFolder = %v, %v; want %v", got, err, want)
 	}
 	got, err = queue.InFolder(t.Context(), 1, "loose.flac")
@@ -64,8 +64,8 @@ func TestUnidentified_AFileBelongingToAWorkIsNeverQueued(t *testing.T) {
 	opened, _ := newLibrary(t)
 	physical := library.NewPhysical(opened)
 	queue := library.NewUnidentified(opened)
-	resolved := registerOne(t, physical, "Heka/Watermark/01.flac")
-	work := createWork(t, opened, "music", "Watermark")
+	resolved := registerOne(t, physical, "Heka/Zanuvode/01.flac")
+	work := createWork(t, opened, "music", "Zanuvode")
 	if _, err := library.NewIdentity(opened).ResolveWorks(t.Context(), time.Unix(10, 0), []library.WorkLink{{
 		Provider: "musicbrainz:release-group", ExternalID: "rg-1", Confidence: 1,
 		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: work.CanonicalTitle}, RootFolderID: 1,
@@ -74,7 +74,7 @@ func TestUnidentified_AFileBelongingToAWorkIsNeverQueued(t *testing.T) {
 		t.Fatalf("ResolveWorks: %v", err)
 	}
 	if err := queue.Record(t.Context(), []library.QueueEntry{
-		{MediaObjectID: resolved, RootFolderID: 1, RelPath: "Heka/Watermark/01.flac", At: 20},
+		{MediaObjectID: resolved, RootFolderID: 1, RelPath: "Heka/Zanuvode/01.flac", At: 20},
 	}); err != nil {
 		t.Fatalf("Record: %v", err)
 	}

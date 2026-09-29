@@ -37,7 +37,7 @@ func TestDownloader_MapsQueueAndHistory(t *testing.T) {
 	want := []string{
 		"SABnzbd_nzo_abc123 downloading ",
 		"SABnzbd_nzo_def456 queued ",
-		"SABnzbd_nzo_abc123 completed /downloads/complete/Heka-Watermark-1988-FLAC",
+		"SABnzbd_nzo_abc123 completed /downloads/complete/Heka-Zanuvode-1988-FLAC",
 		"SABnzbd_nzo_def456 failed ",
 	}
 	if !reflect.DeepEqual(got, want) {

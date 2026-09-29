@@ -14,7 +14,7 @@ func TestAddFile_UploadsTheNZBUnderTheReleaseName(t *testing.T) {
 	client := sabnzbd.NewClient(newTestClient(t, transport), "http://sabnzbd.local:8080", "test-api-key")
 
 	clientRef, err := client.AddFile(context.Background(), sabnzbd.AddFileRequest{
-		Name: "Heka-Watermark-1988-FLAC", NZB: []byte("<nzb/>"), Category: "music", Priority: 1,
+		Name: "Heka-Zanuvode-1988-FLAC", NZB: []byte("<nzb/>"), Category: "music", Priority: 1,
 	})
 	if err != nil {
 		t.Fatalf("AddFile: %v", err)
@@ -26,7 +26,7 @@ func TestAddFile_UploadsTheNZBUnderTheReleaseName(t *testing.T) {
 	request := transport.requested[0]
 	query := request.URL.Query()
 	got := [5]string{request.Method, query.Get("mode"), query.Get("nzbname"), query.Get("cat"), query.Get("priority")}
-	want := [5]string{"POST", "addfile", "Heka-Watermark-1988-FLAC", "music", "1"}
+	want := [5]string{"POST", "addfile", "Heka-Zanuvode-1988-FLAC", "music", "1"}
 	if got != want {
 		t.Errorf("request = %q, want %q", got, want)
 	}
@@ -38,8 +38,8 @@ func TestAddFile_UploadsTheNZBUnderTheReleaseName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(content) != "<nzb/>" || header.Filename != "Heka-Watermark-1988-FLAC.nzb" {
-		t.Errorf("uploaded %q as %q, want the NZB as Heka-Watermark-1988-FLAC.nzb", content, header.Filename)
+	if string(content) != "<nzb/>" || header.Filename != "Heka-Zanuvode-1988-FLAC.nzb" {
+		t.Errorf("uploaded %q as %q, want the NZB as Heka-Zanuvode-1988-FLAC.nzb", content, header.Filename)
 	}
 }
 

@@ -37,12 +37,12 @@ func TestNamingFor_DefaultTrackShapes(t *testing.T) {
 func TestNamingFor_RenameFilesOffKeepsTheName(t *testing.T) {
 	names := NamingFor(nil)
 	names.RenameFiles = false
-	track := TrackNaming{ArtistName: "Heka", AlbumTitle: "Watermark", ReleaseYear: 1988, Track: 3, TrackTitle: "Milaru Tidasola"}
+	track := TrackNaming{ArtistName: "Heka", AlbumTitle: "Zanuvode", ReleaseYear: 1988, Track: 3, TrackTitle: "Milaru Tidasola"}
 	got, _, err := names.RenderTrack(track, 1, "downloads/03-heka-milaru_tidasola.flac")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "Heka/Watermark (1988)/03-heka-milaru_tidasola.flac"; got != want {
+	if want := "Heka/Zanuvode (1988)/03-heka-milaru_tidasola.flac"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }

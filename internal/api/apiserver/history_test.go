@@ -40,7 +40,7 @@ func TestHistory_ScopedToTheCallersLibrariesAndPagedOnWhatWasRead(t *testing.T) 
 	}
 	workID := int64(7)
 	fixture.history.rows = []apiserver.HistoryRow{
-		{ID: 9, Kind: "imported", WorkID: &workID, CategoryID: visible.ID, ReleaseTitle: "Heka-Watermark", Album: "Watermark"},
+		{ID: 9, Kind: "imported", WorkID: &workID, CategoryID: visible.ID, ReleaseTitle: "Heka-Zanuvode", Album: "Zanuvode"},
 		{ID: 8, Kind: "grabbed", CategoryID: hidden.ID, ReleaseTitle: "Hidden-Album"},
 		{ID: 5, Kind: "failed", ReleaseTitle: "No-Library", Detail: "Repair failed"},
 	}
@@ -62,7 +62,7 @@ func TestHistory_ScopedToTheCallersLibrariesAndPagedOnWhatWasRead(t *testing.T) 
 	if err := json.Unmarshal(recorder.Body.Bytes(), &page); err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Items) != 1 || page.Items[0].ID != 9 || page.Items[0].Kind != "imported" || page.Items[0].Album != "Watermark" {
+	if len(page.Items) != 1 || page.Items[0].ID != 9 || page.Items[0].Kind != "imported" || page.Items[0].Album != "Zanuvode" {
 		t.Errorf("items = %+v, want only entry 9 from the visible library", page.Items)
 	}
 	if page.NextCursor == nil || *page.NextCursor != 5 {

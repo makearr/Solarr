@@ -402,7 +402,7 @@ func TestWorkFileLocations_AnswersTheRecordedFilesPathsForTheNamedWorks(t *testi
 		return workIDs[0]
 	}
 	heka := resolve("rg-heka", "Heka/Detisisu Binip (1991)/01.m4a", "q-heka")
-	resolve("rg-pink", "P!po/Trustfall (2023)/01.m4a", "q-pink")
+	resolve("rg-pipo", "P!po/Kovalune (2023)/01.m4a", "q-pipo")
 
 	got, err := identity.WorkFileLocations(t.Context(), []int64{heka, 9999})
 	if err != nil {

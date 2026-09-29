@@ -435,7 +435,7 @@ func TestArtworkJob_PrefersTheArchiveOverTheEmbeddedPicture(t *testing.T) {
 	pictures := &fakePictures{byPath: map[string][]byte{}}
 	coverArt := &fakeCoverArt{urlByReleaseGroup: map[string]string{"rg-archived": server.URL + "/cover.png"}}
 	job, opened, _ := newArtworkJobReadingPictures(t, coverArt, server.URL, pictures)
-	resolveWorkFromFile(t, opened, "rg-archived", "P!po/Trustfall/01.m4a")
+	resolveWorkFromFile(t, opened, "rg-archived", "P!po/Kovalune/01.m4a")
 
 	if err := job.Run(t.Context(), jobs.Job{Type: music.ArtworkJobType}); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -449,10 +449,10 @@ func TestArtworkJob_PrefersTheArchiveOverTheEmbeddedPicture(t *testing.T) {
 // work's embedded picture is used and the archive is never asked.
 func TestArtworkJob_FollowsTheConfiguredCoverSources(t *testing.T) {
 	server := testImageServer(t)
-	pictures := &fakePictures{byPath: map[string][]byte{"/music/P!po/Trustfall/01.m4a": testPNG(t)}}
+	pictures := &fakePictures{byPath: map[string][]byte{"/music/P!po/Kovalune/01.m4a": testPNG(t)}}
 	coverArt := &fakeCoverArt{urlByReleaseGroup: map[string]string{"rg-archived": server.URL + "/cover.png"}}
 	job, opened, _ := newArtworkJobReadingPictures(t, coverArt, server.URL, pictures, settings.CoverSourceEmbedded)
-	resolveWorkFromFile(t, opened, "rg-archived", "P!po/Trustfall/01.m4a")
+	resolveWorkFromFile(t, opened, "rg-archived", "P!po/Kovalune/01.m4a")
 
 	if err := job.Run(t.Context(), jobs.Job{Type: music.ArtworkJobType}); err != nil {
 		t.Fatalf("Run: %v", err)

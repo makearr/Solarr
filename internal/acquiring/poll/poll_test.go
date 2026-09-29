@@ -81,7 +81,7 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	fsys := fsx.NewMem(fake)
-	if err := fsys.MkdirAll("/downloads/complete/Heka-Watermark", 0o755); err != nil {
+	if err := fsys.MkdirAll("/downloads/complete/Heka-Zanuvode", 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return &env{
@@ -126,7 +126,7 @@ func (e *env) send(t *testing.T, ref string) library.Acquisition {
 	identity := library.NewIdentity(e.store)
 	workIDs, err := identity.ResolveWorks(t.Context(), e.clock.Now(), []library.WorkLink{{
 		Provider: "musicbrainz:release-group", ExternalID: "rg-" + ref, Confidence: 1,
-		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Watermark " + ref},
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Zanuvode " + ref},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -139,7 +139,7 @@ func (e *env) send(t *testing.T, ref string) library.Acquisition {
 	}
 	indexerID := int64(3)
 	acquisition, err := e.acquisitions.Create(t.Context(), library.NewAcquisition{
-		DesiredItemID: &item.ID, IndexerID: &indexerID, CandidateGUID: "guid-" + ref, CandidateTitle: "Heka - Watermark",
+		DesiredItemID: &item.ID, IndexerID: &indexerID, CandidateGUID: "guid-" + ref, CandidateTitle: "Heka - Zanuvode",
 		DownloaderID: 1, DownloadClientRef: ref, Protocol: "usenet", State: poll.StateQueued,
 		CreatedAt: 1, UpdatedAt: 1,
 	})
@@ -162,19 +162,19 @@ func TestPoll_FollowsADownloadToImporting(t *testing.T) {
 	e := newEnv(t)
 	sent := e.send(t, "nzo-1")
 
-	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Watermark", State: download.StateDownloading}}
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: download.StateDownloading}}
 	e.run(t)
-	if got := e.state(t, sent.ID); got.State != poll.StateDownloading || got.ClientFingerprint != "client:Heka-Watermark" {
+	if got := e.state(t, sent.ID); got.State != poll.StateDownloading || got.ClientFingerprint != "client:Heka-Zanuvode" {
 		t.Fatalf("after downloading: %s %q, want DOWNLOADING with the client's name recorded", got.State, got.ClientFingerprint)
 	}
 
-	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Watermark", State: download.StateCompleted,
-		Path: "/downloads/complete/Heka-Watermark"}}
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: download.StateCompleted,
+		Path: "/downloads/complete/Heka-Zanuvode"}}
 	e.run(t)
-	if got := e.state(t, sent.ID); got.State != poll.StateImporting || got.DownloadDir != "/downloads/complete/Heka-Watermark" {
+	if got := e.state(t, sent.ID); got.State != poll.StateImporting || got.DownloadDir != "/downloads/complete/Heka-Zanuvode" {
 		t.Errorf("after completion: %s %q, want IMPORTING from its folder", got.State, got.DownloadDir)
 	}
-	if !slices.Equal(e.imported, []string{"/downloads/complete/Heka-Watermark"}) {
+	if !slices.Equal(e.imported, []string{"/downloads/complete/Heka-Zanuvode"}) {
 		t.Errorf("imported %v, want exactly the reported folder", e.imported)
 	}
 }
@@ -183,11 +183,11 @@ func TestPoll_FollowsADownloadToImporting(t *testing.T) {
 func TestPoll_RefusesAPathOutsideTheDownloadFolders(t *testing.T) {
 	e := newEnv(t)
 	sent := e.send(t, "nzo-1")
-	if err := e.fsys.MkdirAll("/elsewhere/Heka-Watermark", 0o755); err != nil {
+	if err := e.fsys.MkdirAll("/elsewhere/Heka-Zanuvode", 0o755); err != nil {
 		t.Fatal(err)
 	}
 	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "x", State: download.StateCompleted,
-		Path: "/elsewhere/Heka-Watermark"}}
+		Path: "/elsewhere/Heka-Zanuvode"}}
 	e.run(t)
 	if got := e.state(t, sent.ID); got.State != poll.StateCompleted || got.LastError == "" || len(e.imported) != 0 {
 		t.Errorf("= %s %q, imported %v; want COMPLETED with the reason and nothing imported", got.State, got.LastError, e.imported)
@@ -252,10 +252,10 @@ func TestPoll_VanishedAndMassVanished(t *testing.T) {
 func TestPoll_AReusedReferenceIsNotAdopted(t *testing.T) {
 	e := newEnv(t)
 	sent := e.send(t, "nzo-1")
-	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Watermark", State: download.StateDownloading}}
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: download.StateDownloading}}
 	e.run(t)
 	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Something Else", State: download.StateCompleted,
-		Path: "/downloads/complete/Heka-Watermark"}}
+		Path: "/downloads/complete/Heka-Zanuvode"}}
 	e.run(t)
 	if got := e.state(t, sent.ID); got.State != poll.StateFailed || len(e.imported) != 0 {
 		t.Errorf("= %s, imported %v; want FAILED and nothing imported", got.State, e.imported)
@@ -268,9 +268,9 @@ func TestPoll_TheFingerprintWaitsForTheClientsName(t *testing.T) {
 	sent := e.send(t, "nzo-1")
 	e.client.downloads = []download.Download{{ClientRef: "nzo-1", State: download.StateQueued}}
 	e.run(t)
-	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Watermark", State: download.StateDownloading}}
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: download.StateDownloading}}
 	e.run(t)
-	if got := e.state(t, sent.ID); got.State != poll.StateDownloading || got.ClientFingerprint != "client:Heka-Watermark" {
+	if got := e.state(t, sent.ID); got.State != poll.StateDownloading || got.ClientFingerprint != "client:Heka-Zanuvode" {
 		t.Errorf("= %s %q, want DOWNLOADING fingerprinted by the real name", got.State, got.ClientFingerprint)
 	}
 }
@@ -279,7 +279,7 @@ func TestPoll_TheFingerprintWaitsForTheClientsName(t *testing.T) {
 func (e *env) finishImport(t *testing.T, acquisition library.Acquisition, placed bool, decision string) {
 	t.Helper()
 	sessionID, err := e.sessions.Create(t.Context(), library.NewSession{
-		SourcePath: "/downloads/complete/Heka-Watermark", Origin: library.ImportOriginAcquisition,
+		SourcePath: "/downloads/complete/Heka-Zanuvode", Origin: library.ImportOriginAcquisition,
 		AcquisitionID: &acquisition.ID, Threshold: 0.9, StartedAt: 2,
 	})
 	if err != nil {
