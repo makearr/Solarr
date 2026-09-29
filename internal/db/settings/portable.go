@@ -186,10 +186,28 @@ type FileManagementEntry struct {
 	SetPermissions           bool               `yaml:"set_permissions"`
 	ChmodFolder              string             `yaml:"chmod_folder"`
 	ChownGroup               string             `yaml:"chown_group,omitempty"`
+	// WriteIDsToTags is optional so an export from before it existed keeps the default, on.
+	WriteIDsToTags *bool `yaml:"write_ids_to_tags,omitempty"`
 }
 
 func (e FileManagementEntry) fileManagement() FileManagement {
-	return FileManagement(e)
+	return FileManagement{
+		PropersRepacks: e.PropersRepacks, RescanAfterRefresh: e.RescanAfterRefresh, ChangeFileDate: e.ChangeFileDate,
+		RecycleRetentionDays: e.RecycleRetentionDays, DeleteEmptyFolders: e.DeleteEmptyFolders,
+		CreateEmptyArtistFolders: e.CreateEmptyArtistFolders, UnmonitorDeleted: e.UnmonitorDeleted,
+		SetPermissions: e.SetPermissions, ChmodFolder: e.ChmodFolder, ChownGroup: e.ChownGroup,
+		WriteIDsToTags: e.WriteIDsToTags == nil || *e.WriteIDsToTags,
+	}
+}
+
+func fileManagementEntry(f FileManagement) FileManagementEntry {
+	writeIDs := f.WriteIDsToTags
+	return FileManagementEntry{
+		PropersRepacks: f.PropersRepacks, RescanAfterRefresh: f.RescanAfterRefresh, ChangeFileDate: f.ChangeFileDate,
+		RecycleRetentionDays: f.RecycleRetentionDays, DeleteEmptyFolders: f.DeleteEmptyFolders,
+		CreateEmptyArtistFolders: f.CreateEmptyArtistFolders, UnmonitorDeleted: f.UnmonitorDeleted,
+		SetPermissions: f.SetPermissions, ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup, WriteIDsToTags: &writeIDs,
+	}
 }
 
 // QualityTargetEntry is a library's aimed-for quality.
@@ -391,7 +409,7 @@ func (c *Cache) Export() Document {
 		}
 		if category.FileManagement != DefaultFileManagement {
 			entry.FileManagement = &FileManagementEntry{}
-			*entry.FileManagement = FileManagementEntry(category.FileManagement)
+			*entry.FileManagement = fileManagementEntry(category.FileManagement)
 		}
 		for _, attachment := range attachments {
 			if attachment.CategoryID != category.ID {

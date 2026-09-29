@@ -49,7 +49,11 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 		Realigner: realigner{p: p},
 		Desired:   &desired,
 		// Covers follow at once rather than at the six-hourly sweep (found 2026-09-28).
-		OnRefined: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx); _, _ = p.enqueueArtwork(ctx) },
+		OnRefined: func(ctx context.Context) {
+			_, _ = p.enqueueCategoryCounts(ctx)
+			_, _ = p.enqueueArtwork(ctx)
+			_, _ = p.enqueueTagWriteback(ctx)
+		},
 		Tags:      mediatool.New(nil, 0),
 		Roots:     adapters.Roots{Cache: p.cache},
 		HTTP:      imageClient,

@@ -56,12 +56,15 @@ type FileManagement struct {
 	ChmodFolder string
 	// ChownGroup is a group name or number; empty leaves the group alone.
 	ChownGroup string
+	// WriteIDsToTags fills identified files' tags with their provider ids (revision D3), never
+	// overwriting and never on a read-only root.
+	WriteIDsToTags bool
 }
 
 // DefaultFileManagement is Sonarr's defaults, with Solarr's 7-day recycle bin as the bin.
 var DefaultFileManagement = FileManagement{
 	PropersRepacks: PropersPreferAndUpgrade, RescanAfterRefresh: RescanAlways, ChangeFileDate: FileDateNone,
-	RecycleRetentionDays: 7, ChmodFolder: "755",
+	RecycleRetentionDays: 7, ChmodFolder: "755", WriteIDsToTags: true,
 }
 
 var (
@@ -139,6 +142,7 @@ func writeCategoryFileManagement(ctx context.Context, queries *settingsdb.Querie
 		RecycleRetentionDays: f.RecycleRetentionDays, DeleteEmptyFolders: boolToInt(f.DeleteEmptyFolders),
 		CreateEmptyArtistFolders: boolToInt(f.CreateEmptyArtistFolders), UnmonitorDeleted: boolToInt(f.UnmonitorDeleted),
 		SetPermissions: boolToInt(f.SetPermissions), ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup,
+		WriteIdsToTags: boolToInt(f.WriteIDsToTags),
 	})
 }
 
@@ -159,7 +163,7 @@ func withFileManagement(categories []Category, rows []settingsdb.CategoryFileMan
 			ChangeFileDate: ChangeFileDate(row.ChangeFileDate), RecycleRetentionDays: row.RecycleRetentionDays,
 			DeleteEmptyFolders: row.DeleteEmptyFolders != 0, CreateEmptyArtistFolders: row.CreateEmptyArtistFolders != 0,
 			UnmonitorDeleted: row.UnmonitorDeleted != 0, SetPermissions: row.SetPermissions != 0,
-			ChmodFolder: row.ChmodFolder, ChownGroup: row.ChownGroup,
+			ChmodFolder: row.ChmodFolder, ChownGroup: row.ChownGroup, WriteIDsToTags: row.WriteIdsToTags != 0,
 		}
 	}
 	return categories

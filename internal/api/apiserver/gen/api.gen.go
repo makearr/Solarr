@@ -1392,6 +1392,9 @@ type FileManagement struct {
 
 	// UnmonitorDeleted Lidarr's "Ignore Deleted Tracks" -- an album losing a file is unmonitored.
 	UnmonitorDeleted bool `json:"unmonitor_deleted"`
+
+	// WriteIdsToTags Fill identified files' tags with their MusicBrainz ids (revision D3): never overwriting a value, never on a read-only root. Absent means yes.
+	WriteIdsToTags *bool `json:"write_ids_to_tags,omitempty"`
 }
 
 // FileManagementChangeFileDate defines model for FileManagement.ChangeFileDate.

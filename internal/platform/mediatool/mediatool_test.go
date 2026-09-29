@@ -277,7 +277,7 @@ func TestReadTags_RefusesTheBatchWhenTheToolIsMissing(t *testing.T) {
 // ADR-44's rule, applied to tools: report every problem at once, not the first.
 func TestAvailable_NamesEveryMissingTool(t *testing.T) {
 	runner := &fakeRunner{
-		missing: map[string]bool{"ffprobe": true, "fpcalc": true, "ffmpeg": true},
+		missing: map[string]bool{"ffprobe": true, "fpcalc": true, "ffmpeg": true, "solarr-tag": true},
 		respond: probeReplying(flacProbe),
 	}
 	err := mediatool.New(runner, 1).Available(t.Context())
@@ -333,15 +333,53 @@ func TestFingerprint_TreatsAnEmptyResultAsAFailure(t *testing.T) {
 	}
 }
 
-func TestWriteTags_SaysItIsNotImplementedRatherThanSilentlyDoingNothing(t *testing.T) {
-	tool := mediatool.New(&fakeRunner{respond: probeReplying(flacProbe)}, 1)
-	err := tool.WriteTags(t.Context(), []mediatool.TagEdit{{Path: "/m/a.flac", Set: mediatool.Tags{"artist": "x"}}})
-	if !errors.Is(err, mediatool.ErrWriteUnsupported) {
-		t.Errorf("WriteTags = %v, want ErrWriteUnsupported", err)
+// The helper gets every edit as one JSON argument and answers per file: one file it cannot
+// tag fails alone, not the batch (revision D3).
+func TestWriteTags_ReportsEachFileOnItsOwn(t *testing.T) {
+	var sent []string
+	runner := &fakeRunner{
+		record: func(args []string) { sent = args },
+		respond: func(name, _ string) ([]byte, error) {
+			if name != "solarr-tag" {
+				return nil, fmt.Errorf("unexpected tool %s", name)
+			}
+			return []byte(`[{"path":"/m/a.m4a"},{"path":"/m/b.txt","error":"ValueError: not audio"}]`), nil
+		},
 	}
-	// Nothing to write is not an unsupported operation.
-	if err := tool.WriteTags(t.Context(), nil); err != nil {
-		t.Errorf("WriteTags(nil) = %v, want nil", err)
+	failures, err := mediatool.New(runner, 1).WriteTags(t.Context(), []mediatool.TagEdit{
+		{Path: "/m/a.m4a", Set: mediatool.Tags{"musicbrainz_releasegroupid": "rg-1"}},
+		{Path: "/m/b.txt", Set: mediatool.Tags{"musicbrainz_albumid": "rel-1"}},
+	})
+	if err != nil {
+		t.Fatalf("WriteTags: %v", err)
+	}
+	want := `[{"path":"/m/a.m4a","set":{"musicbrainz_releasegroupid":"rg-1"}},{"path":"/m/b.txt","set":{"musicbrainz_albumid":"rel-1"}}]`
+	if len(sent) != 1 || sent[0] != want {
+		t.Errorf("sent %q, want %q", sent, want)
+	}
+	if len(failures) != 2 || failures[0] != nil ||
+		failures[1] == nil || failures[1].Error() != "mediatool: write tags to /m/b.txt: ValueError: not audio" {
+		t.Errorf("failures = %v, want only the second file", failures)
+	}
+}
+
+// Without the helper nothing is written and the reason is the missing tool, not a silent no-op.
+func TestWriteTags_MissingHelperFailsTheBatch(t *testing.T) {
+	tool := mediatool.New(&fakeRunner{missing: map[string]bool{"solarr-tag": true}}, 1)
+	_, err := tool.WriteTags(t.Context(), []mediatool.TagEdit{{Path: "/m/a.flac", Set: mediatool.Tags{"artist": "x"}}})
+	if !errors.Is(err, mediatool.ErrToolMissing) {
+		t.Errorf("WriteTags = %v, want ErrToolMissing", err)
+	}
+	if failures, err := tool.WriteTags(t.Context(), nil); err != nil || failures != nil {
+		t.Errorf("WriteTags(nil) = %v, %v; want nothing", failures, err)
+	}
+}
+
+// A helper answering for fewer files than it was given is a broken run, not a partial success.
+func TestWriteTags_AShortAnswerFailsTheBatch(t *testing.T) {
+	runner := &fakeRunner{respond: func(string, string) ([]byte, error) { return []byte(`[]`), nil }}
+	if _, err := mediatool.New(runner, 1).WriteTags(t.Context(), []mediatool.TagEdit{{Path: "/m/a.flac"}}); err == nil {
+		t.Error("an answer for 0 of 1 files was accepted")
 	}
 }
 

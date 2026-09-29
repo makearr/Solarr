@@ -54,7 +54,7 @@ func (s *Server) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request
 		ChangeFileDate: settings.ChangeFileDate(body.ChangeFileDate), RecycleRetentionDays: body.RecycleRetentionDays,
 		DeleteEmptyFolders: body.DeleteEmptyFolders, CreateEmptyArtistFolders: body.CreateEmptyArtistFolders,
 		UnmonitorDeleted: body.UnmonitorDeleted, SetPermissions: body.SetPermissions,
-		ChmodFolder: body.ChmodFolder, ChownGroup: body.ChownGroup,
+		ChmodFolder: body.ChmodFolder, ChownGroup: body.ChownGroup, WriteIDsToTags: derefOr(body.WriteIdsToTags, true),
 	}
 	if err := s.auth.Settings.SetCategoryFileManagement(r.Context(), id, wanted); err != nil {
 		var problems config.Problems
@@ -76,6 +76,6 @@ func fileManagementView(f settings.FileManagement) gen.FileManagement {
 		ChangeFileDate:     gen.FileManagementChangeFileDate(f.ChangeFileDate), RecycleRetentionDays: f.RecycleRetentionDays,
 		DeleteEmptyFolders: f.DeleteEmptyFolders, CreateEmptyArtistFolders: f.CreateEmptyArtistFolders,
 		UnmonitorDeleted: f.UnmonitorDeleted, SetPermissions: f.SetPermissions,
-		ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup,
+		ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup, WriteIdsToTags: &f.WriteIDsToTags,
 	}
 }

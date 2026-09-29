@@ -26,7 +26,9 @@ func (f fakeTagTool) ReadTags(_ context.Context, paths []string) ([]mediatool.Pr
 	return probes, nil
 }
 
-func (f fakeTagTool) WriteTags(context.Context, []mediatool.TagEdit) error { return nil }
+func (f fakeTagTool) WriteTags(context.Context, []mediatool.TagEdit) ([]error, error) {
+	return nil, nil
+}
 
 func (f fakeTagTool) Fingerprint(context.Context, []string) ([]mediatool.Fingerprint, error) {
 	return nil, nil

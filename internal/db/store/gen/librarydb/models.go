@@ -664,6 +664,13 @@ type TagClosure struct {
 	Depth        int64
 }
 
+type TagWriteback struct {
+	MediaObjectID int64
+	AttemptedAt   int64
+	Written       string
+	Error         sql.NullString
+}
+
 type TitleSearch struct {
 	Title     string
 	WorkID    string

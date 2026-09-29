@@ -5,8 +5,8 @@ implementation into the **image** instead: acoustic fingerprinting and tag writi
 are invoked as batched subprocesses through one `MediaTool` interface
 (`internal/platform/mediatool`).
 
-`ffmpeg` and `chromaprint` are in the Dockerfile's runtime stage (`fpcalc`/`ffprobe`); the
-tagging helper is still not, per the still-undecided write path below. This page records
+`ffmpeg`, `chromaprint` and `py3-mutagen` are in the Dockerfile's runtime stage, with the
+tag writer `solarr-tag` beside them (decided 2026-09-17, revision D3). This page records
 what was verified, so the choice started from measurements rather than from hoping the base
 image could supply them — finding out later would have meant changing the base after it had
 been published.
@@ -91,10 +91,16 @@ identity from embedded MBIDs, which is a read, **stage 3 needs no tagging helper
 `MediaTool` read path is ffprobe, already in the image at no extra cost, and the write path
 waits for section 19.5's write-back at stage 5.
 
-**The write-back tool is therefore still undecided**, deliberately, and the interface is
-implemented without it. The options are mutagen and its Python, a pure-Go tagger per format
-(ADR-30 explicitly allows satisfying the interface in-process where a solid library exists),
-kid3 and its Qt, or linking taglib — which means CGO and is what ADR-30 exists to avoid.
+**The write-back tool is mutagen** (revision D3): `solarr-tag`
+(`internal/platform/mediatool/solarr-tag`, ~40 lines of Python) takes a JSON list of
+`{path, set}` as its one argument, sets exactly those keys through mutagen's "easy" interface
+and answers one result per file; `WriteTags` batches 200 files a run and returns one error per
+file. Keys are Picard's (`musicbrainz_releasegroupid`, `musicbrainz_albumid`, ...); MP4's easy
+interface lacks the release group and release track ids, which the helper registers under
+Picard's freeform names. Fill-only is enforced by the Go caller, never by the helper. Verified
+on M4A, FLAC and MP3 and read back through ffprobe -- except an MP3's recording id, which
+mutagen writes as a UFID frame ffprobe does not show. A pure-Go writer per format can replace
+the helper later behind the same interface.
 
 ## How the tools are called
 
@@ -126,7 +132,7 @@ requests **positionally**, never by the filename a tool echoes back.
 
 ## Running outside Docker
 
-`ffprobe`, `fpcalc`, `ffmpeg` and (from stage 5) the tagging helper must be on `PATH`.
+`ffprobe`, `fpcalc`, `ffmpeg` and `solarr-tag` (with Python 3 and mutagen) must be on `PATH`.
 `ffmpeg` copies a file's embedded cover art out unchanged (`EmbeddedPicture`), the fallback
 album picture when the Cover Art Archive has none (2026-09-17); `metadata.cover_sources`
 orders or drops either. Startup logs

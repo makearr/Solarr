@@ -19,11 +19,6 @@ var ErrToolMissing = errors.New("mediatool: not on PATH")
 // ErrNoEmbeddedPicture reports a file that carries no cover art of its own.
 var ErrNoEmbeddedPicture = errors.New("mediatool: no embedded picture")
 
-// ErrWriteUnsupported reports the tag write-back path, which is deliberately not
-// implemented: nothing needs it before section 19.5's write-back at stage 5, and the
-// tool to do it with is still undecided (documentation/media-tools.md).
-var ErrWriteUnsupported = errors.New("mediatool: writing tags is not implemented yet")
-
 // Tags are the fields a file carries. **Keys are lowercased**: the same tag is
 // ARTIST in Vorbis comments and artist in ID3, and a caller must not have to know
 // which container it came from.
@@ -121,7 +116,9 @@ type Tool interface {
 	// import time. It is what readiness checks.
 	Available(ctx context.Context) error
 	ReadTags(ctx context.Context, paths []string) ([]Probe, error)
-	WriteTags(ctx context.Context, edits []TagEdit) error
+	// WriteTags answers one error per edit, in order, nil where it was written; the second
+	// return is the batch failing as a whole (the tool missing, the context cancelled).
+	WriteTags(ctx context.Context, edits []TagEdit) ([]error, error)
 	Fingerprint(ctx context.Context, paths []string) ([]Fingerprint, error)
 }
 

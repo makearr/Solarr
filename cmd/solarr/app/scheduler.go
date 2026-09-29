@@ -17,6 +17,7 @@ const (
 	enrichmentScheduleCron         = "20 * * * *"    // every hour
 	subscriptionExpandScheduleCron = "10 */12 * * *" // every 12 hours
 	artworkScheduleCron            = "30 */6 * * *"  // every 6 hours
+	tagWritebackScheduleCron       = "45 * * * *"    // every hour, paced to 2000 files a run
 	categoryCountsScheduleCron     = "30 5 * * *"    // daily, after database maintenance; only corrects drift
 	freshCountsScheduleCron        = "40 * * * *"    // every hour
 	probeScheduleCron              = "0 2 * * *"     // daily at 02:00
@@ -59,6 +60,11 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Key: "artwork", Name: "Cover art sweep", DefaultCadence: artworkScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueArtwork,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "tag_writeback", Name: "Write MusicBrainz ids into files", DefaultCadence: tagWritebackScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueTagWriteback,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "category_counts", Name: "Category counters", DefaultCadence: categoryCountsScheduleCron,
