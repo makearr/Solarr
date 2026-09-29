@@ -28,8 +28,17 @@ func (p *process) pollJob() *poll.Job {
 		Blocklist: library.NewBlocklistStore(p.library), FS: p.fsys,
 		Clients: p.pollClients, DownloadFolders: p.pollDownloadFolders,
 		Import: p.importAcquisition, Search: p.searchAgain, History: p.recordDownloadHistory,
-		Clock: clock.NewSystem(), Logger: p.logger,
+		SendHeld: p.sendHeld, Clock: clock.NewSystem(), Logger: p.logger,
 	})
+}
+
+// sendHeld sends held releases to clients with room again (ADR-57's HELD, section 10.5).
+func (p *process) sendHeld(ctx context.Context) error {
+	sent, err := p.musicDispatch().SendHeld(ctx, clock.NewSystem().Now())
+	if sent > 0 {
+		p.logger.Info("held releases sent", slog.Int("sent", sent))
+	}
+	return err
 }
 
 func (p *process) enqueuePoll(ctx context.Context) (jobs.EnqueueResult, error) {

@@ -73,7 +73,8 @@ func (p *process) downloaderConns(ctx context.Context) ([]music.DownloaderConn, 
 		}
 		conns = append(conns, music.DownloaderConn{
 			ID: downloader.ID, Protocol: downloader.Protocol, Category: downloader.Options().CategoryFor("music"),
-			Client: sabnzbd.Downloader{Client: factory(downloader.ID, downloader.BaseURL, credentials.Reveal())},
+			MaxQueued: downloader.Options().MaxQueuedDownloads(),
+			Client:    sabnzbd.Downloader{Client: factory(downloader.ID, downloader.BaseURL, credentials.Reveal())},
 		})
 	}
 	return conns, nil
@@ -87,10 +88,12 @@ func (p *process) musicGrab() music.Grab {
 // musicDispatch builds internal/media/music.Dispatch (ADR-57's own
 // acquire.send) over the real stores.
 func (p *process) musicDispatch() music.Dispatch {
+	ready := library.NewReadyQueue(p.library)
+	blocklist := library.NewBlocklistStore(p.library)
 	return music.Dispatch{
 		Candidates: library.NewCandidates(p.library), Acquisitions: library.NewAcquisitions(p.library),
 		Desired: library.NewDesired(p.library), Downloaders: p.downloaderConns,
-		Fetch: p.fetchRelease, History: p.recordDownloadHistory,
+		Fetch: p.fetchRelease, History: p.recordDownloadHistory, Ready: &ready, Blocklist: &blocklist,
 	}
 }
 

@@ -33,6 +33,8 @@ type DownloaderConn struct {
 	Client   download.Client
 	// Category is the client category music is sent under, "music" unless the client says otherwise.
 	Category string
+	// MaxQueued is ADR-57's queue depth: an automatic send beyond it is held. 0 means no limit.
+	MaxQueued int
 }
 
 // ReleaseFetcher downloads a release's file (an NZB) from the indexer that listed it.
@@ -56,6 +58,10 @@ type Dispatch struct {
 	Fetch        ReleaseFetcher
 	// History is optional: told of every grab, for History and the album's page.
 	History func(ctx context.Context, kind download.HistoryKind, acquisition library.Acquisition, detail string)
+	// Ready is optional: where an automatic send is held while its client's queue is full.
+	Ready *library.ReadyQueue
+	// Blocklist is optional: a held release blocklisted meanwhile is dropped, not sent.
+	Blocklist *library.BlocklistStore
 }
 
 // Send dispatches one decision, previously recorded against itemID by

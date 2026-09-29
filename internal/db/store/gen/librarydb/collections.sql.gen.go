@@ -155,6 +155,16 @@ func (q *Queries) DequeueReady(ctx context.Context, candidateID int64) error {
 	return err
 }
 
+const dequeueReadyForItem = `-- name: DequeueReadyForItem :exec
+DELETE FROM ready_queue WHERE desired_item_id = ?
+`
+
+// One held release per album: a later decision replaces the earlier one.
+func (q *Queries) DequeueReadyForItem(ctx context.Context, desiredItemID int64) error {
+	_, err := q.db.ExecContext(ctx, dequeueReadyForItem, desiredItemID)
+	return err
+}
+
 const enqueueReady = `-- name: EnqueueReady :exec
 INSERT INTO ready_queue (candidate_id, desired_item_id, priority, queued_at,
                          expires_at, size_bytes)

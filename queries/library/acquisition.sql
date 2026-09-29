@@ -105,6 +105,11 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        created_at, updated_at
 FROM acquisition WHERE downloader_id = ? AND download_client_ref = ?;
 
+-- A client's queue as Solarr fills it: sent and not finished downloading (ADR-57).
+-- name: CountQueuedOnDownloader :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM acquisition
+WHERE downloader_id = ? AND state IN ('QUEUED', 'DOWNLOADING');
+
 -- name: SetAcquisitionState :exec
 UPDATE acquisition SET state = ?, last_error = ?, updated_at = ? WHERE id = ?;
 

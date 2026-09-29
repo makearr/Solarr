@@ -466,6 +466,15 @@ func (d Desired) IdentityForFile(ctx context.Context, mediaObjectID int64) (File
 }
 
 // Get answers one desired_item's own row, including its WorkID -- needed by
+// HuntPriority is an item's composite priority (ADR-36); an item not in the hunt queue has 0.
+func (d Desired) HuntPriority(ctx context.Context, itemID int64) (int64, error) {
+	priority, err := librarydb.New(d.store.Read()).GetHuntPriority(ctx, itemID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return priority, err
+}
+
 // a caller that only has an item id and must recompute or detach against it.
 func (d Desired) Get(ctx context.Context, itemID int64) (librarydb.DesiredItem, error) {
 	row, err := librarydb.New(d.store.Read()).GetDesiredItem(ctx, itemID)

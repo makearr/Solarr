@@ -91,7 +91,9 @@ export function Wanted() {
     onSuccess: (data, workId) => {
       const message = data.already_downloading
         ? "Already downloading"
-        : data.sent
+        : data.held
+          ? "Waiting for room in the download client"
+          : data.sent
           ? "Sent to the download client"
           : data.found > 0
             ? `${data.found} found, none acceptable`

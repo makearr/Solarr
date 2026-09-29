@@ -9,19 +9,26 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/poll"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // Queue satisfies apiserver.Queue over the download poll's live view of every client.
 type Queue struct {
-	Poll *poll.Job
+	Poll       *poll.Job
+	Ready      library.ReadyQueue
+	Candidates library.Candidates
+	Clock      clock.Clock
 	// Describe names a download's album, artist, library, indexer and client.
 	Describe func(ctx context.Context, acquisition library.Acquisition) (download.HistoryData, int64)
 }
 
-func (a Queue) List(ctx context.Context) ([]apiserver.QueueRow, []apiserver.QueueClientRow, error) {
+// heldShown bounds the held releases one queue read lists.
+const heldShown = 200
+
+func (a Queue) List(ctx context.Context) (apiserver.QueueSnapshot, error) {
 	entries, statuses, err := a.Poll.Queue(ctx)
 	if err != nil {
-		return nil, nil, err
+		return apiserver.QueueSnapshot{}, err
 	}
 	speeds := make(map[int64]int64, len(statuses))
 	clients := make([]apiserver.QueueClientRow, len(statuses))
@@ -65,7 +72,38 @@ func (a Queue) List(ctx context.Context) ([]apiserver.QueueRow, []apiserver.Queu
 		}
 		rows[i] = row
 	}
-	return rows, clients, nil
+	held, err := a.held(ctx)
+	if err != nil {
+		return apiserver.QueueSnapshot{}, err
+	}
+	return apiserver.QueueSnapshot{Rows: rows, Clients: clients, Held: held}, nil
+}
+
+func (a Queue) held(ctx context.Context) ([]apiserver.HeldRow, error) {
+	entries, err := a.Ready.Next(ctx, a.Clock.Now().Unix(), heldShown)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]apiserver.HeldRow, 0, len(entries))
+	for _, entry := range entries {
+		candidate, err := a.Candidates.Get(ctx, entry.CandidateID)
+		if err != nil {
+			continue // expired and purged meanwhile
+		}
+		itemID, indexerID := entry.DesiredItemID, candidate.IndexerID
+		data, workID := a.Describe(ctx, library.Acquisition{
+			DesiredItemID: &itemID, IndexerID: &indexerID, CandidateTitle: candidate.Title,
+		})
+		row := apiserver.HeldRow{
+			CategoryID: data.CategoryID, Album: data.Album, Artist: data.Artist, ReleaseTitle: candidate.Title,
+			Indexer: data.Indexer, HeldAt: time.Unix(entry.QueuedAt, 0).UTC(),
+		}
+		if workID != 0 {
+			row.WorkID = &workID
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
 }
 
 func (a Queue) Remove(ctx context.Context, id int64, blocklist bool) error {

@@ -124,6 +124,12 @@ func (a Acquisitions) InFlightForItem(ctx context.Context, desiredItemID int64) 
 	return acquisitionFromRow(row), true, nil
 }
 
+// QueuedOn counts what Solarr has in one client's queue: sent and not finished downloading.
+func (a Acquisitions) QueuedOn(ctx context.Context, downloaderID int64) (int, error) {
+	count, err := librarydb.New(a.store.Read()).CountQueuedOnDownloader(ctx, downloaderID)
+	return int(count), err
+}
+
 // ListActive answers every non-terminal acquisition -- startup
 // reconciliation's own future job (section 10.9), not built yet.
 func (a Acquisitions) ListActive(ctx context.Context) ([]Acquisition, error) {

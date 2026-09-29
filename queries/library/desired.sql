@@ -190,6 +190,10 @@ WHERE class = sqlc.arg(class) AND eligible_after <= sqlc.arg(now)
 ORDER BY priority DESC, release_date DESC
 LIMIT sqlc.arg(page_size);
 
+-- The composite priority a held release goes out in (ADR-36).
+-- name: GetHuntPriority :one
+SELECT priority FROM hunt_queue WHERE desired_item_id = ?;
+
 -- name: MarkHunted :exec
 UPDATE hunt_queue
 SET last_searched_at = ?, search_count = search_count + 1, eligible_after = ?

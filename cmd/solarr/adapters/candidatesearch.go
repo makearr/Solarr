@@ -218,7 +218,9 @@ func (c CandidateSearch) GrabWork(ctx context.Context, workID int64) (apiserver.
 	if err != nil {
 		return apiserver.GrabResult{}, translateDispatchError(err)
 	}
-	view := apiserver.GrabResult{Found: len(result.Search.Decisions), AlreadyDownloading: result.AlreadyInFlight}
+	view := apiserver.GrabResult{
+		Found: len(result.Search.Decisions), AlreadyDownloading: result.AlreadyInFlight, Held: result.Held,
+	}
 	if result.Sent != nil {
 		sent := acquisitionView(*result.Sent)
 		view.Sent = &sent

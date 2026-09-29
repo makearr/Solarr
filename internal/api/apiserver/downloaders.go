@@ -51,6 +51,9 @@ func (s *Server) AddDownloader(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.validOptions(w, body.Options) {
+		return
+	}
 	created, err := s.auth.Settings.CreateDownloader(r.Context(), settings.DownloaderRequest{
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
 		Enabled: derefOr(body.Enabled, true), Protocol: string(body.Protocol), SettingsJSON: optionsJSON(body.Options),
@@ -86,6 +89,9 @@ func (s *Server) UpdateDownloader(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 
+	if !s.validOptions(w, body.Options) {
+		return
+	}
 	// No options in the request keeps the stored ones: switching a client off must not wipe them.
 	settingsJSON := optionsJSON(body.Options)
 	if body.Options == nil {
@@ -230,6 +236,7 @@ func optionsJSON(options *gen.DownloaderOptions) string {
 	stored := settings.DownloaderOptions{
 		RemoveCompleted: options.RemoveCompleted, Category: derefOr(options.Category, ""),
 		RemotePath: derefOr(options.RemotePath, ""), LocalPath: derefOr(options.LocalPath, ""),
+		MaxQueued: options.MaxQueued,
 	}
 	encoded, err := json.Marshal(stored)
 	if err != nil || string(encoded) == "{}" {
@@ -270,5 +277,16 @@ func downloaderOptionsView(options settings.DownloaderOptions) *gen.DownloaderOp
 	return &gen.DownloaderOptions{
 		Category: strPtr(options.Category), RemoveCompleted: options.RemoveCompleted,
 		RemotePath: strPtr(options.RemotePath), LocalPath: strPtr(options.LocalPath),
+		MaxQueued: options.MaxQueued,
 	}
+}
+
+// validOptions refuses a queue depth that would hold everything or nothing (ADR-44: on write).
+func (s *Server) validOptions(w http.ResponseWriter, options *gen.DownloaderOptions) bool {
+	if options != nil && options.MaxQueued != nil && (*options.MaxQueued < 1 || *options.MaxQueued > 1000) {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "max_queued must be between 1 and 1000")
+		return false
+	}
+	return true
 }

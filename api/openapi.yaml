@@ -5939,6 +5939,11 @@ components:
         already_downloading:
           type: boolean
           description: A download for the album was on its way, so nothing was searched.
+        held:
+          type: boolean
+          description: >-
+            The best release waits for room: its client already holds as many of
+            Solarr's downloads as it may (ADR-57), and it goes when one finishes.
 
     ProwlarrIndexer:
       type: object
@@ -5975,14 +5980,29 @@ components:
 
     Queue:
       type: object
-      required: [clients, items]
+      required: [clients, items, held]
       properties:
+        held:
+          type: array
+          description: Releases decided but not sent because their client is full, next first.
+          items: { $ref: "#/components/schemas/HeldRelease" }
         clients:
           type: array
           items: { $ref: "#/components/schemas/QueueClient" }
         items:
           type: array
           items: { $ref: "#/components/schemas/QueueItem" }
+
+    HeldRelease:
+      type: object
+      required: [release_title, held_at]
+      properties:
+        work_id: { type: integer, format: int64 }
+        album: { type: string }
+        artist: { type: string }
+        release_title: { type: string }
+        indexer: { type: string }
+        held_at: { type: string, format: date-time }
 
     QueueClient:
       type: object
@@ -6371,6 +6391,13 @@ components:
         local_path:
           type: string
           description: Where Solarr sees that same folder.
+        max_queued:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: >-
+            How many of Solarr's downloads this client may hold at once before
+            further automatic sends are held (ADR-57). Absent means 10.
 
     TestDownloaderRequest:
       type: object

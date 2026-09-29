@@ -113,6 +113,15 @@ func (c Candidates) Upsert(ctx context.Context, req NewReleaseCandidate) (Releas
 	return releaseCandidateFromRow(row), nil
 }
 
+// Get answers one release by id.
+func (c Candidates) Get(ctx context.Context, id int64) (ReleaseCandidate, error) {
+	row, err := librarydb.New(c.store.Read()).GetCandidate(ctx, id)
+	if err != nil {
+		return ReleaseCandidate{}, fmt.Errorf("library: get candidate %d: %w", id, err)
+	}
+	return releaseCandidateFromRow(row), nil
+}
+
 // RecordDecision persists one candidate_decision row.
 func (c Candidates) RecordDecision(ctx context.Context, req NewDecision) (Decision, error) {
 	var row librarydb.CandidateDecision

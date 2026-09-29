@@ -62,6 +62,19 @@ func (q *Queries) BlocklistRelease(ctx context.Context, arg BlocklistReleasePara
 	return i, err
 }
 
+const countQueuedOnDownloader = `-- name: CountQueuedOnDownloader :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM acquisition
+WHERE downloader_id = ? AND state IN ('QUEUED', 'DOWNLOADING')
+`
+
+// A client's queue as Solarr fills it: sent and not finished downloading (ADR-57).
+func (q *Queries) CountQueuedOnDownloader(ctx context.Context, downloaderID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countQueuedOnDownloader, downloaderID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createAcquisition = `-- name: CreateAcquisition :one
 INSERT INTO acquisition (desired_item_id, candidate_id, indexer_id, candidate_guid,
                          candidate_title, search_terms, downloader_id,

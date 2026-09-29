@@ -330,6 +330,7 @@ type GrabResult struct {
 	Found              int
 	Sent               *Acquisition
 	AlreadyDownloading bool
+	Held               bool
 }
 
 func (s *Server) routeGrabWork(w http.ResponseWriter, r *http.Request) {
@@ -355,7 +356,7 @@ func (s *Server) GrabWork(w http.ResponseWriter, r *http.Request, id int64) {
 		writeCandidateSearchError(w, s, err)
 		return
 	}
-	view := gen.GrabResult{Found: result.Found, AlreadyDownloading: result.AlreadyDownloading}
+	view := gen.GrabResult{Found: result.Found, AlreadyDownloading: result.AlreadyDownloading, Held: &result.Held}
 	if result.Sent != nil {
 		sent := acquisitionView(*result.Sent)
 		view.Sent = &sent

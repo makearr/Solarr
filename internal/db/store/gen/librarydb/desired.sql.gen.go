@@ -405,6 +405,18 @@ func (q *Queries) GetDesiredItem(ctx context.Context, id int64) (DesiredItem, er
 	return i, err
 }
 
+const getHuntPriority = `-- name: GetHuntPriority :one
+SELECT priority FROM hunt_queue WHERE desired_item_id = ?
+`
+
+// The composite priority a held release goes out in (ADR-36).
+func (q *Queries) GetHuntPriority(ctx context.Context, desiredItemID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getHuntPriority, desiredItemID)
+	var priority int64
+	err := row.Scan(&priority)
+	return priority, err
+}
+
 const listCountersForScope = `-- name: ListCountersForScope :many
 SELECT scope, metric, value, updated_at FROM counter WHERE scope = ? ORDER BY metric
 `
