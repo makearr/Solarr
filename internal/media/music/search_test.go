@@ -646,3 +646,35 @@ func TestSearchItemWithTerms_SearchesThePersonsOwnTerms(t *testing.T) {
 		t.Errorf("%d decisions, want the release matching the typed terms once", len(result.Decisions))
 	}
 }
+
+// 2026-09-29: punctuation in a name finds nothing until it is a space ("K!ra" is filed as "Kira"),
+// and an indexer whose caps take only "q" is never sent the structured query.
+func TestSearchItem_CleanedTextFindsANameWithPunctuation(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "K!ra", "Zelu", 2003, alwaysAcceptRules)
+	searcher := &fakeIndexerSearcher{responses: func(request indexer.SearchRequest) ([]indexer.RawItem, error) {
+		if request.Query == "K ra Zelu" {
+			return []indexer.RawItem{rawItem("guid-zelu", "Kira-Zelu-2003-FLAC-GROUP")}, nil
+		}
+		return nil, nil
+	}}
+
+	result, err := env.search().SearchItem(t.Context(), item.ID,
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher, MusicParams: []string{"q"}}}, env.clock.Now())
+	if err != nil {
+		t.Fatalf("SearchItem: %v", err)
+	}
+	if len(result.Decisions) != 1 || result.Decisions[0].Decision.Outcome != "ACCEPT" {
+		t.Fatalf("decisions = %+v, want the release found by the cleaned text accepted", result.Decisions)
+	}
+	var queries []string
+	for _, request := range searcher.requests {
+		if request.Extra != nil {
+			t.Errorf("sent a structured query %v to an indexer that takes only q", request.Extra)
+		}
+		queries = append(queries, request.Query)
+	}
+	if want := []string{"K!ra Zelu", "K ra Zelu"}; !reflect.DeepEqual(queries, want) {
+		t.Errorf("queries = %q, want %q", queries, want)
+	}
+}

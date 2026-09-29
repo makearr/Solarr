@@ -65,6 +65,8 @@ type process struct {
 	// running is every job the executor works on now, for the status bar.
 	running     *jobs.Running
 	jobRegistry *jobs.Registry
+	// indexerCaps is what each indexer's music search accepts, fetched once a day.
+	indexerCaps *indexerCapsCache
 	cache       *settings.Cache
 	bus         *events.Bus
 	dispatcher  *jobs.Dispatcher
@@ -374,6 +376,7 @@ func (p *process) startJobs(ctx context.Context) error {
 	owner := fmt.Sprintf("%s-%d-%d", hostname(), os.Getpid(), time.Now().UnixNano())
 
 	p.running, p.jobRegistry = jobs.NewRunning(wall), registry
+	p.indexerCaps = newIndexerCapsCache(wall)
 	executor := jobs.NewExecutor(queue, wall, jobs.ExecutorConfig{
 		Owner:   owner,
 		Mode:    jobs.Mode(p.config.Mode),

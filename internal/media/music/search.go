@@ -81,6 +81,14 @@ type IndexerConn struct {
 	ID     int64
 	Impl   string // "newznab" | "torznab" (ADR-43) -- decides the stored protocol and which RawItem fields apply
 	Client IndexerSearcher
+	// MusicParams is what the indexer's caps say its music search accepts; nil when unknown.
+	MusicParams []string
+}
+
+// takesStructuredMusic reports whether an artist/album query can find anything here: an indexer
+// whose caps list only "q" answers it with nothing (NZBgeek via Prowlarr, 2026-09-29).
+func (c IndexerConn) takesStructuredMusic() bool {
+	return c.MusicParams == nil || slices.Contains(c.MusicParams, "artist")
 }
 
 // IndexerSearchError records one indexer's own search failure -- best-effort
@@ -127,7 +135,8 @@ type searchTerms struct {
 	Extra map[string]string
 }
 
-// musicTerms is one album's structured and text query; an unknown artist drops the structured one.
+// musicTerms is one album's structured query and its text query in every spelling
+// searchTextVariants gives; an unknown artist drops the structured one.
 func musicTerms(artist, album, year string) []searchTerms {
 	var terms []searchTerms
 	if artist != "" {
@@ -143,7 +152,10 @@ func musicTerms(artist, album, year string) []searchTerms {
 			words = append(words, word)
 		}
 	}
-	return append(terms, searchTerms{Query: strings.Join(words, " ")})
+	for _, text := range searchTextVariants(strings.Join(words, " ")) {
+		terms = append(terms, searchTerms{Query: text})
+	}
+	return terms
 }
 
 // SearchItem runs the pipeline for one album-level desired item: build its
@@ -214,6 +226,9 @@ func (s Search) SearchItemWithTerms(
 		for _, conn := range indexers {
 			seen := map[string]bool{}
 			for _, term := range terms {
+				if term.Extra != nil && !conn.takesStructuredMusic() {
+					continue
+				}
 				raws, searchErr := conn.Client.Search(ctx, indexer.SearchRequest{
 					Function: "music", Query: term.Query, Extra: term.Extra, Limit: candidateSearchResultLimit,
 				})
