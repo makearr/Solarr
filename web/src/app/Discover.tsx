@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useParams } from "@tanstack/react-router";
+import { useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Search } from "lucide-react";
 
@@ -19,13 +19,14 @@ const DEBOUNCE_MS = 250;
 
 /** ADR-56's per-library half: search this category's own metadata provider for
  *  something not in the library yet, and add it as intent (a resolved work
- *  plus a monitored desired_item -- never a download). The global half
- *  (search across every media type, with a suggested destination) is not
- *  built; this screen is always scoped to the library it was opened from. */
+ *  plus a monitored desired_item -- never a download). The global half is the header search's
+ *  "Not in your library" rows, which open this screen with their search filled in. */
 export function Discover() {
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
-  const [query, setQuery] = useState("");
-  const [kind, setKind] = useState<DiscoverKind>("album");
+  // The header search's "Not in your library" rows open here with their search filled in.
+  const opened = useSearch({ strict: false }) as { q?: string; kind?: DiscoverKind };
+  const [query, setQuery] = useState(opened.q ?? "");
+  const [kind, setKind] = useState<DiscoverKind>(opened.kind === "artist" ? "artist" : "album");
   const [added, setAdded] = useState<Set<string>>(new Set());
   const debounced = useDebouncedValue(query.trim(), DEBOUNCE_MS);
   const searchable = debounced.length >= MINIMUM_QUERY_LENGTH && categoryId !== undefined;

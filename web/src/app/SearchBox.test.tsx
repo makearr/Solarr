@@ -36,6 +36,9 @@ vi.mock("@tanstack/react-router", () => ({
   },
 }));
 
+// The library search calls only: the box also reads /libraries for where new things can be added.
+const searches = () => get.mock.calls.filter(([path]) => path === "/search");
+
 function mount() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -59,7 +62,7 @@ test("a query below the 2-character floor never fires a request", async () => {
 
   // Long enough to cross the 250ms debounce, so this is a real absence, not a timing gap.
   await new Promise((resolve) => setTimeout(resolve, 400));
-  expect(get).not.toHaveBeenCalled();
+  expect(searches()).toHaveLength(0);
 });
 
 test("a 2-character query debounces before firing, and shows results", async () => {
@@ -82,9 +85,9 @@ test("a 2-character query debounces before firing, and shows results", async () 
   fireEvent.change(input, { target: { value: "ok" } });
 
   // Not immediate: the debounce must have actually delayed the call.
-  expect(get).not.toHaveBeenCalled();
+  expect(searches()).toHaveLength(0);
 
-  await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(searches()).toHaveLength(1));
   expect(get).toHaveBeenCalledWith("/search", {
     params: { query: { q: "ok", limit: 20 } },
   });
@@ -177,4 +180,29 @@ describe("no matches", () => {
 
     await screen.findByText("No matches.");
   });
+});
+
+test("artists and albums not in the library are offered, to add in a library the person may add to", async () => {
+  get.mockImplementation((path: string, options?: { params: { query: { kind?: string } } }) => {
+    if (path === "/libraries") {
+      return Promise.resolve({ data: [{ id: 3, media_type: "music", name: "Music", permission: "manage" }], error: undefined });
+    }
+    if (path === "/discover/search") {
+      const kind = options?.params.query.kind;
+      return Promise.resolve({
+        data: [{ provider: "p", external_id: kind!, title: kind === "artist" ? "Katupoken" : "KI Pecezinu", artist: "Katupoken" }],
+        error: undefined,
+      });
+    }
+    return Promise.resolve({ data: [], error: undefined });
+  });
+  mount();
+  const input = screen.getByPlaceholderText("Search the library…");
+  fireEvent.focus(input);
+  fireEvent.change(input, { target: { value: "kat" } });
+
+  await screen.findByText("Not in your library yet");
+  const album = await screen.findByText("KI Pecezinu");
+  expect(album.closest("a")?.getAttribute("href")).toBe("/library/3/discover");
+  expect(await screen.findByText("Artist · Add")).toBeTruthy();
 });
