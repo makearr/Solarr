@@ -170,7 +170,7 @@ web:        ## Production build, embedded via embed.FS. Lints and tests first.
 
 e2e:        ## One-shot smoke run: builds the image, drives a throwaway instance, removes it
 	@$(MAKE) --no-print-directory image-local
-	@scripts/e2e.sh
+	@E2E_IMPORT_FOLDER="$(E2E_IMPORT_FOLDER)" scripts/e2e.sh
 
 web-test:   ## Frontend unit tests only
 	$(RUN_NODE) npm ci && $(RUN_NODE) npm run test
