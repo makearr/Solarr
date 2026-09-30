@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -142,4 +143,35 @@ func (h Hunt) WantedAlbumsByArtist(ctx context.Context, artistName string, limit
 		return nil, fmt.Errorf("library: wanted albums by artist: %w", err)
 	}
 	return ids, nil
+}
+
+// HuntEntry is one item's hunt_queue row, as its album page explains it (F2).
+type HuntEntry struct {
+	LastSearchedAt, EligibleAfter, SearchCount int64
+	// ReleaseDate is the street date in Unix seconds, 0 when unknown.
+	ReleaseDate int64
+}
+
+// Entry answers itemID's hunt_queue row; found is false until the planner has seen the item.
+func (h Hunt) Entry(ctx context.Context, itemID int64) (entry HuntEntry, found bool, err error) {
+	row, err := librarydb.New(h.store.Read()).GetHuntEntry(ctx, itemID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return HuntEntry{}, false, nil
+	}
+	if err != nil {
+		return HuntEntry{}, false, fmt.Errorf("library: hunt entry %d: %w", itemID, err)
+	}
+	return HuntEntry{
+		LastSearchedAt: row.LastSearchedAt, EligibleAfter: row.EligibleAfter, SearchCount: row.SearchCount,
+		ReleaseDate: row.ReleaseDate.Int64,
+	}, true, nil
+}
+
+// Held reports whether a release for itemID waits for room in a download client (ADR-57).
+func (h Hunt) Held(ctx context.Context, itemID int64) (bool, error) {
+	count, err := librarydb.New(h.store.Read()).CountHeldForItem(ctx, itemID)
+	if err != nil {
+		return false, fmt.Errorf("library: held for item %d: %w", itemID, err)
+	}
+	return count > 0, nil
 }

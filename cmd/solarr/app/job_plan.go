@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/makearr/Solarr/internal/acquiring/plan"
+	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/priority"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -105,6 +106,45 @@ func (p *process) huntSearch(ctx context.Context, itemID int64) (plan.Outcome, e
 		p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
 	}
 	return plan.OutcomeSearched, nil
+}
+
+// searchStatus is an album page's F2 line: when it was and will be searched, and if not, why.
+func (p *process) searchStatus(ctx context.Context, itemID int64) (apiserver.WantedRow, error) {
+	item, err := library.NewDesired(p.library).Get(ctx, itemID)
+	if err != nil {
+		return apiserver.WantedRow{}, err
+	}
+	hunt := library.NewHunt(p.library)
+	entry, planned, err := hunt.Entry(ctx, itemID)
+	if err != nil {
+		return apiserver.WantedRow{}, err
+	}
+	held, err := hunt.Held(ctx, itemID)
+	if err != nil {
+		return apiserver.WantedRow{}, err
+	}
+	_, inFlight, err := library.NewAcquisitions(p.library).InFlightForItem(ctx, itemID)
+	if err != nil {
+		return apiserver.WantedRow{}, err
+	}
+	indexers, err := p.indexerConns(ctx)
+	if err != nil {
+		return apiserver.WantedRow{}, err
+	}
+	snapshot := p.cache.Snapshot()
+	room, measured := snapshot.AcquisitionHeadroom(item.CategoryID)
+	now := clock.NewSystem().Now()
+	why := plan.Explain(plan.Circumstances{
+		Monitored: item.Monitored == 1, State: item.State, Searchable: music.SearchedOnItsOwn(item.SatisfactionKind),
+		InFlight: inFlight, Held: held, Indexers: len(indexers), PerHour: int(*snapshot.PrioritySettings().SearchesPerHour),
+		NoRoom: measured && room <= 0, Planned: planned && entry.EligibleAfter != plan.Never, ReleaseDate: entry.ReleaseDate,
+	}, now)
+	status := apiserver.WantedRow{LastSearchedAt: entry.LastSearchedAt, AutomaticSearch: string(why)}
+	if why == plan.WhyScheduled || why == plan.WhyWaitingForRelease {
+		// A search the planner has not replanned since still counts toward the backoff.
+		status.NextSearchAt = max(entry.EligibleAfter, plan.RetryAfter(entry.LastSearchedAt, entry.SearchCount), now.Unix())
+	}
+	return status, nil
 }
 
 func (p *process) enqueuePlan(ctx context.Context) (jobs.EnqueueResult, error) {

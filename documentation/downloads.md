@@ -32,6 +32,10 @@ Every search asks all enabled indexers at once and waits at most **20 seconds** 
 a dead or slow indexer bounds a search instead of adding to it. The album page and Interactive
 search name each indexer that failed or did not answer in time.
 
+An album's page says, under Search, when it was last searched and when the automatic search will
+look again -- or why it will not: a download on its way, a release held for room, no indexer,
+searching switched off, no free space, not yet planned, or waiting for its release date.
+
 Adding from **Discover** with **Start search for missing albums** ticked (on by default, remembered
 per person) searches an album at once, as Lidarr does. For an artist it adds their albums now rather
 than at the 12-hourly subscription expansion, then searches the missing ones. Monitoring an album

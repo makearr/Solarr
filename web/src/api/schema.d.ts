@@ -4511,6 +4511,16 @@ export interface components {
              * @description Unix seconds of the last search for this item; absent means never.
              */
             last_searched_at?: number;
+            /**
+             * Format: int64
+             * @description Unix seconds from when the automatic search may search this album again; absent when it will not (see automatic_search). Searched at the first hunt run after it, budget allowing.
+             */
+            next_search_at?: number;
+            /**
+             * @description Why the album is or is not searched on its own (F2), for an album only: the first of downloading, held (found, waiting for room in the client), no_indexer, off (no searches per hour), no_room (library below its free-space reserve), not_planned (just added; planned within 5 minutes), waiting_for_release, scheduled; not_wanted when it is unmonitored or complete.
+             * @enum {string}
+             */
+            automatic_search?: "not_wanted" | "downloading" | "held" | "no_indexer" | "off" | "no_room" | "not_planned" | "waiting_for_release" | "scheduled";
             monitored: boolean;
             /**
              * Format: int64

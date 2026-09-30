@@ -89,6 +89,9 @@ type WantedRow struct {
 	PresentCount   int64
 	State          string
 	LastSearchedAt int64
+	// NextSearchAt and AutomaticSearch are set for an album only (F2); zero and empty otherwise.
+	NextSearchAt    int64
+	AutomaticSearch string
 }
 
 // WorkDetailRow is a work's full detail. RootFolderIDs and CategoryIDs are not
@@ -506,6 +509,13 @@ func buildWantedView(row WantedRow) gen.Wanted {
 	}
 	if row.LastSearchedAt > 0 {
 		view.LastSearchedAt = &row.LastSearchedAt
+	}
+	if row.NextSearchAt > 0 {
+		view.NextSearchAt = &row.NextSearchAt
+	}
+	if row.AutomaticSearch != "" {
+		why := gen.WantedAutomaticSearch(row.AutomaticSearch)
+		view.AutomaticSearch = &why
 	}
 	return view
 }

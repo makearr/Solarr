@@ -270,6 +270,7 @@ export function WorkDetail() {
         {work.wanted && work.can_request && (
           <Section title="Search">
             <div className="flex flex-col gap-2">
+              <AutomaticSearchLine wanted={work.wanted} />
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -740,6 +741,44 @@ function QualityMark({ label, met, what }: { label: string; met: boolean; what: 
       {label}
     </span>
   );
+}
+
+/** F2: when this album was and will be searched on its own, or why it will not be. */
+function AutomaticSearchLine({ wanted }: { wanted: components["schemas"]["Wanted"] }) {
+  const last = wanted.last_searched_at ? `Last searched ${relativeTime(wanted.last_searched_at)}. ` : "Not searched yet. ";
+  const next = wanted.next_search_at;
+  const why: Record<string, string> = {
+    not_wanted: "",
+    downloading: "A download for it is on its way; it is not searched meanwhile.",
+    held: "A release was found and waits for room in the download client.",
+    no_indexer: "Nothing is searched automatically: no indexer is enabled.",
+    off: "Automatic searching is off (Settings → Priority, searches per hour).",
+    no_room: "Automatic downloads for this library are paused: no free space above the reserve.",
+    not_planned: "It will be scheduled for an automatic search within 5 minutes.",
+    waiting_for_release:
+      next != null ? `Searched automatically from ${new Date(next * 1000).toLocaleString()}, after its release.` : "",
+    scheduled:
+      next != null && next * 1000 > Date.now()
+        ? `Next automatic search ${relativeTime(next)}.`
+        : "Next automatic search within 15 minutes, as the hourly budget allows.",
+  };
+  const reason = why[wanted.automatic_search ?? "not_wanted"];
+  if (!reason && wanted.automatic_search === "not_wanted") return null;
+  return (
+    <p className="text-xs text-ink-muted">
+      {last}
+      {reason}
+    </p>
+  );
+}
+
+/** "3 hours ago" or "in 5 hours", from Unix seconds. */
+function relativeTime(at: number): string {
+  const minutes = Math.round((at * 1000 - Date.now()) / 60_000);
+  const format = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  if (Math.abs(minutes) < 60) return format.format(minutes, "minute");
+  if (Math.abs(minutes) < 48 * 60) return format.format(Math.round(minutes / 60), "hour");
+  return format.format(Math.round(minutes / 1440), "day");
 }
 
 function formatLastSearched(at: number | undefined): string {
