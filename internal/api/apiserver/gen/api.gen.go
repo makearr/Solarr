@@ -1757,7 +1757,7 @@ type ImportSettings struct {
 	// RenameOnImport Whether a committed file is named by the library's own template (on, the default) or keeps the name it arrived with. The folder structure comes from the template either way. Omitted on a PATCH leaves the stored value alone.
 	RenameOnImport *bool `json:"rename_on_import,omitempty"`
 
-	// TransferLadder Transfer methods tried in order until one succeeds. Each may appear at most once and the list may not be empty. Omitted on a PATCH leaves the stored order alone. Default reflink, hardlink, move, copy, symlink.
+	// TransferLadder Transfer methods tried in order until one succeeds. Each may appear at most once and the list may not be empty. Omitted on a PATCH leaves the stored order alone. Default reflink, hardlink, move, copy; symlink only when added.
 	TransferLadder *[]TransferMethod `json:"transfer_ladder,omitempty"`
 }
 

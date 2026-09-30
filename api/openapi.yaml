@@ -7444,7 +7444,7 @@ components:
             Transfer methods tried in order until one succeeds. Each may appear
             at most once and the list may not be empty. Omitted on a PATCH
             leaves the stored order alone. Default
-            reflink, hardlink, move, copy, symlink.
+            reflink, hardlink, move, copy; symlink only when added.
           items: { $ref: "#/components/schemas/TransferMethod" }
         rename_on_import:
           type: boolean

@@ -4895,7 +4895,7 @@ export interface components {
              * @description 0.75-0.95, the section 11.4 table's five named levels. Default 0.90.
              */
             auto_commit_confidence: number;
-            /** @description Transfer methods tried in order until one succeeds. Each may appear at most once and the list may not be empty. Omitted on a PATCH leaves the stored order alone. Default reflink, hardlink, move, copy, symlink. */
+            /** @description Transfer methods tried in order until one succeeds. Each may appear at most once and the list may not be empty. Omitted on a PATCH leaves the stored order alone. Default reflink, hardlink, move, copy; symlink only when added. */
             transfer_ladder?: components["schemas"]["TransferMethod"][];
             /** @description Whether a committed file is named by the library's own template (on, the default) or keeps the name it arrived with. The folder structure comes from the template either way. Omitted on a PATCH leaves the stored value alone. */
             rename_on_import?: boolean;
