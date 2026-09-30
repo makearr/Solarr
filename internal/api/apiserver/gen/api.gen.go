@@ -749,7 +749,10 @@ type AddIndexerRequest struct {
 	EgressProxyUrl *string `json:"egress_proxy_url,omitempty"`
 	Enabled        *bool   `json:"enabled,omitempty"`
 	Impl           string  `json:"impl"`
-	Name           string  `json:"name"`
+
+	// MusicCategories Newznab categories for music; omitted or empty means [3000] (Audio).
+	MusicCategories *[]int `json:"music_categories,omitempty"`
+	Name            string `json:"name"`
 
 	// Priority Lower is preferred when several indexers list the same release.
 	Priority *int64 `json:"priority,omitempty"`
@@ -1817,10 +1820,13 @@ type Indexer struct {
 	Id             int64   `json:"id"`
 
 	// Impl "newznab" or "torznab" (ADR-43).
-	Impl      string    `json:"impl"`
-	Name      string    `json:"name"`
-	Priority  int64     `json:"priority"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Impl string `json:"impl"`
+
+	// MusicCategories Newznab categories music is searched and RSS-read in (D17). Always answered; [3000] (Audio) unless set.
+	MusicCategories *[]int    `json:"music_categories,omitempty"`
+	Name            string    `json:"name"`
+	Priority        int64     `json:"priority"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // IndexerSearchError defines model for IndexerSearchError.
@@ -3012,8 +3018,11 @@ type UpdateIndexerRequest struct {
 	EgressProxyUrl *string `json:"egress_proxy_url,omitempty"`
 	Enabled        *bool   `json:"enabled,omitempty"`
 	Impl           string  `json:"impl"`
-	Name           string  `json:"name"`
-	Priority       *int64  `json:"priority,omitempty"`
+
+	// MusicCategories Newznab categories for music; omitted or empty means [3000] (Audio).
+	MusicCategories *[]int `json:"music_categories,omitempty"`
+	Name            string `json:"name"`
+	Priority        *int64 `json:"priority,omitempty"`
 }
 
 // UserAccount defines model for UserAccount.

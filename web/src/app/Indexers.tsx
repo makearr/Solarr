@@ -40,6 +40,7 @@ export function Indexers() {
           name: args.indexer.name, impl: args.indexer.impl, base_url: args.indexer.base_url,
           priority: args.indexer.priority, enabled: args.enabled,
           egress_proxy_url: args.indexer.egress_proxy_url,
+          music_categories: args.indexer.music_categories,
         },
       });
       if (error) throw error;
@@ -149,6 +150,7 @@ export function Indexers() {
                 {indexer.caps_fetched_at ? ` · capabilities last read ${new Date(indexer.caps_fetched_at).toLocaleString()}` : " · capabilities never read"}
                 {expert && indexer.egress_proxy_url ? ` · FlareSolverr proxy ${indexer.egress_proxy_url}` : ""}
               </span>
+              <MusicCategories indexer={indexer} onSaved={invalidate} />
               {(() => {
                 const result = testResults[indexer.id];
                 return result && (
@@ -187,6 +189,7 @@ function AddIndexer({ onAdded, expert }: { onAdded: () => void; expert: boolean 
   const [apiKey, setApiKey] = useState("");
   const [priority, setPriority] = useState(25);
   const [egressProxyUrl, setEgressProxyUrl] = useState("");
+  const [categories, setCategories] = useState("3000");
 
   const create = useMutation({
     mutationFn: async () => {
@@ -194,6 +197,7 @@ function AddIndexer({ onAdded, expert }: { onAdded: () => void; expert: boolean 
         body: {
           name, impl, base_url: baseUrl, api_key: apiKey || undefined, priority, enabled: true,
           egress_proxy_url: egressProxyUrl || undefined,
+          music_categories: parseCategories(categories),
         },
       });
       if (error) throw error;
@@ -251,6 +255,15 @@ function AddIndexer({ onAdded, expert }: { onAdded: () => void; expert: boolean 
           value={apiKey}
           autoComplete="off"
           onChange={(event) => setApiKey(event.target.value)}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-ink-muted">
+        Music categories
+        <input
+          className={`${inputStyle} w-28`}
+          value={categories}
+          title="Newznab category numbers, comma separated: 3000 is Audio, 3040 Audio/Lossless"
+          onChange={(event) => setCategories(event.target.value)}
         />
       </label>
       <label className="flex flex-col gap-1 text-xs text-ink-muted">
@@ -414,3 +427,56 @@ function Badge({ tone, children }: { tone: "ok" | "warn"; children: React.ReactN
 const inputStyle =
   "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+
+/** "3000, 3040" as numbers; anything that is not a number is dropped. */
+function parseCategories(text: string): number[] {
+  return text
+    .split(/[\s,]+/)
+    .map((part) => Number(part))
+    .filter((category) => Number.isInteger(category) && category > 0);
+}
+
+/** D17: the Newznab categories music is searched and RSS-read in, editable in place. */
+function MusicCategories({ indexer, onSaved }: { indexer: Indexer; onSaved: () => void }) {
+  const current = (indexer.music_categories ?? [3000]).join(", ");
+  const [text, setText] = useState(current);
+  const save = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.PATCH("/indexers/{id}", {
+        params: { path: { id: indexer.id } },
+        body: {
+          name: indexer.name, impl: indexer.impl, base_url: indexer.base_url, priority: indexer.priority,
+          enabled: indexer.enabled, egress_proxy_url: indexer.egress_proxy_url,
+          music_categories: parseCategories(text),
+        },
+      });
+      if (error) throw error;
+    },
+    onSuccess: onSaved,
+  });
+  return (
+    <form
+      className="flex items-center gap-2 text-xs text-ink-muted"
+      onSubmit={(event) => {
+        event.preventDefault();
+        save.mutate();
+      }}
+    >
+      <label className="flex items-center gap-1.5">
+        Music categories
+        <input
+          className={`${inputStyle} w-28`}
+          value={text}
+          title="Newznab category numbers, comma separated: 3000 is Audio, 3040 Audio/Lossless"
+          onChange={(event) => setText(event.target.value)}
+        />
+      </label>
+      {text !== current && (
+        <button type="submit" disabled={save.isPending} className="rounded-md border border-border-subtle px-2 py-0.5 hover:text-ink">
+          Save
+        </button>
+      )}
+      {save.isError && <span className="text-danger">Refused.</span>}
+    </form>
+  );
+}

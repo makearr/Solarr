@@ -877,3 +877,22 @@ func TestSearchItem_NamesAnIndexerTooSlowToAnswer(t *testing.T) {
 		t.Errorf("decisions = %+v, want the quick indexer's release", result.Decisions)
 	}
 }
+
+// D17: every search asks in the indexer's own music categories, so video and books stay out.
+func TestSearchItem_AsksInTheIndexersMusicCategories(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	searcher := &fakeIndexerSearcher{}
+	if _, err := env.search().SearchItem(t.Context(), item.ID,
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher, Categories: []int{3010, 3040}}}, env.clock.Now()); err != nil {
+		t.Fatalf("SearchItem: %v", err)
+	}
+	if len(searcher.requests) == 0 {
+		t.Fatal("no request was sent")
+	}
+	for _, request := range searcher.requests {
+		if !slices.Equal(request.Categories, []int{3010, 3040}) {
+			t.Errorf("request %+v, want categories [3010 3040]", request)
+		}
+	}
+}

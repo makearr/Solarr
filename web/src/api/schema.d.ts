@@ -4181,6 +4181,8 @@ export interface components {
             api_key: components["schemas"]["SecretMask"];
             /** @description ADR-47, expert tier: an HTTP/SOCKS5 proxy for this indexer's own requests only. Empty means "use the global egress proxy, if any" -- not "no proxy". FlareSolverr is not yet built. */
             egress_proxy_url?: string;
+            /** @description Newznab categories music is searched and RSS-read in (D17). Always answered; [3000] (Audio) unless set. */
+            music_categories?: number[];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -4201,6 +4203,8 @@ export interface components {
              */
             priority: number;
             egress_proxy_url?: string;
+            /** @description Newznab categories for music; omitted or empty means [3000] (Audio). */
+            music_categories?: number[];
         };
         UpdateIndexerRequest: {
             name: string;
@@ -4214,6 +4218,8 @@ export interface components {
              */
             priority: number;
             egress_proxy_url?: string;
+            /** @description Newznab categories for music; omitted or empty means [3000] (Audio). */
+            music_categories?: number[];
         };
         ConnectionTestResult: {
             ok: boolean;

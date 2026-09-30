@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -53,6 +54,26 @@ type IndexerEgress struct {
 // same column without colliding with "egress".
 type indexerSettingsJSON struct {
 	Egress IndexerEgress `json:"egress,omitempty"`
+	// MusicCategories are the Newznab categories music is asked for in (D17); absent is the default.
+	MusicCategories []int `json:"music_categories,omitempty"`
+}
+
+// DefaultMusicCategories is Newznab's Audio: without a category an indexer's feed is mostly
+// television (2026-09-30).
+var DefaultMusicCategories = []int{3000}
+
+// maxMusicCategories bounds the list; a real indexer's music tree has a dozen at most.
+const maxMusicCategories = 32
+
+// MusicCategories are the categories music is searched and read in, DefaultMusicCategories unless set.
+func (i Indexer) MusicCategories() []int {
+	if i.SettingsJSON != "" {
+		var parsed indexerSettingsJSON
+		if err := json.Unmarshal([]byte(i.SettingsJSON), &parsed); err == nil && len(parsed.MusicCategories) > 0 {
+			return parsed.MusicCategories
+		}
+	}
+	return slices.Clone(DefaultMusicCategories)
 }
 
 // Egress parses SettingsJSON's own egress block. An empty or unparseable
@@ -69,15 +90,15 @@ func (i Indexer) Egress() IndexerEgress {
 	return parsed.Egress
 }
 
-// buildIndexerSettingsJSON encodes egressProxyURL into SettingsJSON's own
-// shape, or "" for no egress configured -- kept out of the stored value
-// entirely rather than an empty egress object, so an indexer nobody has
-// ever configured egress for still reads back with SettingsJSON == "".
-func buildIndexerSettingsJSON(egressProxyURL string) string {
-	if egressProxyURL == "" {
+// buildIndexerSettingsJSON encodes the request's egress and categories into SettingsJSON, or "" when
+// both are unset, so an indexer nobody configured still reads back with SettingsJSON == "".
+func buildIndexerSettingsJSON(request IndexerRequest) string {
+	if request.EgressProxyURL == "" && len(request.MusicCategories) == 0 {
 		return ""
 	}
-	encoded, err := json.Marshal(indexerSettingsJSON{Egress: IndexerEgress{ProxyURL: egressProxyURL}})
+	encoded, err := json.Marshal(indexerSettingsJSON{
+		Egress: IndexerEgress{ProxyURL: request.EgressProxyURL}, MusicCategories: request.MusicCategories,
+	})
 	if err != nil {
 		return ""
 	}
@@ -95,6 +116,8 @@ type IndexerRequest struct {
 	Enabled        bool
 	Priority       int64
 	EgressProxyURL string
+	// MusicCategories empty means DefaultMusicCategories.
+	MusicCategories []int
 }
 
 // defaultIndexerPriority is Lidarr's default, what a request without one gets.
@@ -123,6 +146,16 @@ func validateIndexer(request IndexerRequest) config.Problems {
 	if request.Priority < 1 || request.Priority > 50 {
 		problems = append(problems, config.Problem{Path: "priority", Value: fmt.Sprint(request.Priority),
 			Expectation: "1 to 50, lower preferred"})
+	}
+	if len(request.MusicCategories) > maxMusicCategories {
+		problems = append(problems, config.Problem{Path: "music_categories", Value: fmt.Sprint(len(request.MusicCategories)),
+			Expectation: fmt.Sprintf("at most %d categories", maxMusicCategories)})
+	}
+	for _, category := range request.MusicCategories {
+		if category < 1 || category > 999_999 {
+			problems = append(problems, config.Problem{Path: "music_categories", Value: fmt.Sprint(category),
+				Expectation: "Newznab category numbers, such as 3000 (Audio) or 3040 (Audio/Lossless)"})
+		}
 	}
 	return problems
 }
@@ -165,7 +198,7 @@ func (c *Cache) CreateIndexer(ctx context.Context, request IndexerRequest, apiKe
 		return Indexer{}, fmt.Errorf("settings: seal indexer api key: %w", err)
 	}
 
-	settingsJSON := buildIndexerSettingsJSON(request.EgressProxyURL)
+	settingsJSON := buildIndexerSettingsJSON(request)
 	var created settingsdb.Indexer
 	err = c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		var err error
@@ -193,7 +226,7 @@ func (c *Cache) UpdateIndexer(ctx context.Context, id int64, request IndexerRequ
 		return Indexer{}, problems
 	}
 
-	settingsJSON := buildIndexerSettingsJSON(request.EgressProxyURL)
+	settingsJSON := buildIndexerSettingsJSON(request)
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		return c.queries.WithTx(tx).UpdateIndexer(ctx, settingsdb.UpdateIndexerParams{
 			Name: request.Name, Impl: request.Impl, BaseUrl: request.BaseURL,

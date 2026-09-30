@@ -54,7 +54,7 @@ func (s *Server) AddIndexer(w http.ResponseWriter, r *http.Request) {
 	created, err := s.auth.Settings.CreateIndexer(r.Context(), settings.IndexerRequest{
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
 		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 25),
-		EgressProxyURL: derefOr(body.EgressProxyUrl, ""),
+		EgressProxyURL: derefOr(body.EgressProxyUrl, ""), MusicCategories: derefOr(body.MusicCategories, nil),
 	}, secrets.Secret(derefOr(body.ApiKey, "")), s.wall.Now().Unix())
 	if err != nil {
 		writeIndexerError(w, s, err, "The connection has problems", "Nothing was created.")
@@ -90,7 +90,7 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 	updated, err := s.auth.Settings.UpdateIndexer(r.Context(), id, settings.IndexerRequest{
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
 		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 25),
-		EgressProxyURL: derefOr(body.EgressProxyUrl, ""),
+		EgressProxyURL: derefOr(body.EgressProxyUrl, ""), MusicCategories: derefOr(body.MusicCategories, nil),
 	}, s.wall.Now().Unix())
 	if err != nil {
 		writeIndexerError(w, s, err, "The connection has problems", "Nothing was changed.")
@@ -234,6 +234,8 @@ func indexerView(indexer settings.Indexer) gen.Indexer {
 		at := unixTime(*indexer.CapsFetchedAt)
 		view.CapsFetchedAt = &at
 	}
+	categories := indexer.MusicCategories()
+	view.MusicCategories = &categories
 	if egress := indexer.Egress(); egress.ProxyURL != "" {
 		proxyURL := egress.ProxyURL
 		view.EgressProxyUrl = &proxyURL
