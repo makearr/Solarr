@@ -6450,6 +6450,12 @@ components:
             ADR-47, expert tier: an HTTP/SOCKS5 proxy for this indexer's own
             requests only. Empty means "use the global egress proxy, if any"
             -- not "no proxy". FlareSolverr is not yet built.
+        music_categories:
+          type: array
+          items: { type: integer }
+          description: >-
+            Newznab categories music is searched and RSS-read in (D17). Always answered; [3000]
+            (Audio) unless set.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -6466,6 +6472,10 @@ components:
         enabled: { type: boolean, default: true }
         priority: { type: integer, format: int64, minimum: 1, maximum: 50, default: 25, description: "Lower is preferred when several indexers list the same release." }
         egress_proxy_url: { type: string }
+        music_categories:
+          type: array
+          items: { type: integer }
+          description: Newznab categories for music; omitted or empty means [3000] (Audio).
 
     UpdateIndexerRequest:
       type: object
@@ -6477,6 +6487,10 @@ components:
         enabled: { type: boolean, default: true }
         priority: { type: integer, format: int64, minimum: 1, maximum: 50, default: 25 }
         egress_proxy_url: { type: string }
+        music_categories:
+          type: array
+          items: { type: integer }
+          description: Newznab categories for music; omitted or empty means [3000] (Audio).
 
     ConnectionTestResult:
       type: object

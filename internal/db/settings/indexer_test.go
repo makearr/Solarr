@@ -2,6 +2,7 @@ package settings_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -288,5 +289,35 @@ func TestIndexers_ListsInPriorityThenNameOrder(t *testing.T) {
 	}
 	if len(indexers) != 2 || indexers[0].Name != "First" || indexers[1].Name != "Second" {
 		t.Errorf("Indexers() = %+v, want First (priority 10) before Second (priority 50)", indexers)
+	}
+}
+
+// D17: music categories default to Newznab's Audio, round-trip beside the egress proxy, and a
+// category that is no Newznab number is refused.
+func TestIndexerMusicCategories_DefaultRoundTripAndValidation(t *testing.T) {
+	cache, _ := newCache(t)
+	created, err := cache.CreateIndexer(t.Context(), settings.IndexerRequest{
+		Name: "Geek", Impl: "newznab", BaseURL: "https://indexer.example", Enabled: true,
+	}, "", 1)
+	if err != nil {
+		t.Fatalf("CreateIndexer: %v", err)
+	}
+	if got := created.MusicCategories(); !slices.Equal(got, []int{3000}) {
+		t.Errorf("default MusicCategories = %v, want [3000]", got)
+	}
+	updated, err := cache.UpdateIndexer(t.Context(), created.ID, settings.IndexerRequest{
+		Name: "Geek", Impl: "newznab", BaseURL: "https://indexer.example", Enabled: true,
+		EgressProxyURL: "socks5://proxy.example:1080", MusicCategories: []int{3010, 3040},
+	}, 2)
+	if err != nil {
+		t.Fatalf("UpdateIndexer: %v", err)
+	}
+	if got := updated.MusicCategories(); !slices.Equal(got, []int{3010, 3040}) || updated.Egress().ProxyURL != "socks5://proxy.example:1080" {
+		t.Errorf("after update: categories %v, proxy %q; want both kept", got, updated.Egress().ProxyURL)
+	}
+	if _, err := cache.UpdateIndexer(t.Context(), created.ID, settings.IndexerRequest{
+		Name: "Geek", Impl: "newznab", BaseURL: "https://indexer.example", Enabled: true, MusicCategories: []int{-3},
+	}, 3); err == nil {
+		t.Error("UpdateIndexer accepted category -3")
 	}
 }

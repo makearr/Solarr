@@ -23,7 +23,8 @@ var RSSDefinition = jobs.Definition{
 	Name: "RSS sync", Type: RSSJobType, Pool: jobs.PoolSearch, Mutating: true, MaxAttempts: 1,
 }
 
-// rssAudioCategory is Newznab's Audio: without it an indexer's feed is mostly television (2026-09-30).
+// rssAudioCategory is Newznab's Audio, for an indexer with no categories set: without one a feed is
+// mostly television (2026-09-30).
 const rssAudioCategory = 3000
 
 // rssFeedLimit is how many of an indexer's newest releases one sync reads, as Lidarr's RSS does.
@@ -76,9 +77,11 @@ func (j *RSSJob) Run(ctx context.Context, _ jobs.Job) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		raws, err := conn.Client.Search(ctx, indexer.SearchRequest{
-			Function: "music", Categories: []int{rssAudioCategory}, Limit: rssFeedLimit,
-		})
+		categories := conn.Categories
+		if len(categories) == 0 {
+			categories = []int{rssAudioCategory}
+		}
+		raws, err := conn.Client.Search(ctx, indexer.SearchRequest{Function: "music", Categories: categories, Limit: rssFeedLimit})
 		if err != nil {
 			j.config.Logger.Warn("rss sync: feed failed", "indexer", conn.Name, "error", err)
 			continue

@@ -16,7 +16,8 @@ Two scheduled tasks (Settings -> Scheduler) do what Lidarr leaves to a person pr
   toward the backoff, whoever started it.
 
 **RSS sync** (every 15 minutes, as Lidarr's) reads each indexer's newest 100 audio releases
-(Newznab category 3000 -- without it a feed is mostly television), groups them by the artist they
+(each indexer's **Music categories**, Connections -> Indexers, default 3000 Audio -- without a
+category a feed is mostly television; searches use the same categories), groups them by the artist they
 name, and judges each group against that artist's wanted albums exactly as a search would. The best
 accepted release is sent as an RSS grab. Nothing is searched, and an album's search backoff is left
 alone. Artists are matched by name ignoring case; an alias or a differently spelled name is not yet

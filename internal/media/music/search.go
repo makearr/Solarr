@@ -90,6 +90,8 @@ type IndexerConn struct {
 	Client IndexerSearcher
 	// MusicParams is what the indexer's caps say its music search accepts; nil when unknown.
 	MusicParams []string
+	// Categories scope every search and feed read to music (D17); nil asks without a category.
+	Categories []int
 }
 
 // takesStructuredMusic reports whether an artist/album query can find anything here: an indexer
@@ -380,7 +382,8 @@ func askIndexer(ctx context.Context, conn IndexerConn, terms []searchTerms) inde
 			continue
 		}
 		raws, err := conn.Client.Search(ctx, indexer.SearchRequest{
-			Function: "music", Query: term.Query, Extra: term.Extra, Limit: candidateSearchResultLimit,
+			Function: "music", Query: term.Query, Extra: term.Extra, Categories: conn.Categories,
+			Limit: candidateSearchResultLimit,
 		})
 		if err != nil {
 			answer.err = err
