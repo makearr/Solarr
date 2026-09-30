@@ -70,6 +70,9 @@ INSERT INTO category_quality_profile (category_id, quality_profile_id, ord) VALU
 -- name: SetCategoryQualityCutoff :exec
 UPDATE category SET quality_cutoff_profile_id = ? WHERE id = ?;
 
+-- name: SetCategoryQualityUpgrades :exec
+UPDATE category SET quality_upgrades = ? WHERE id = ?;
+
 -- name: ListCategoryQualityTargets :many
 SELECT category_id, audio_codec, container, bitrate_kbps, tolerance_pct FROM category_quality_target;
 

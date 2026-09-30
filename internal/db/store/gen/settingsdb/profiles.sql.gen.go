@@ -387,6 +387,20 @@ func (q *Queries) SetCategoryQualityProfile(ctx context.Context, arg SetCategory
 	return err
 }
 
+const setCategoryQualityUpgrades = `-- name: SetCategoryQualityUpgrades :exec
+UPDATE category SET quality_upgrades = ? WHERE id = ?
+`
+
+type SetCategoryQualityUpgradesParams struct {
+	QualityUpgrades int64
+	ID              int64
+}
+
+func (q *Queries) SetCategoryQualityUpgrades(ctx context.Context, arg SetCategoryQualityUpgradesParams) error {
+	_, err := q.db.ExecContext(ctx, setCategoryQualityUpgrades, arg.QualityUpgrades, arg.ID)
+	return err
+}
+
 const updateLanguageProfile = `-- name: UpdateLanguageProfile :exec
 UPDATE language_profile
 SET name = ?, audio_preferred_json = ?, audio_required_json = ?, subtitle_preferred_json = ?,

@@ -76,6 +76,14 @@ func TestCutoffJob_MarksAnAlbumBelowTheCutoffUpgradable(t *testing.T) {
 	if state := stateAfterRun(); state != "COMPLETE" {
 		t.Fatalf("measured as flac: state %s, want COMPLETE again", state)
 	}
+	// Upgrades off (Lidarr's "Upgrades Allowed"): the mp3 is enough.
+	measure("mp3")
+	if err := env.settings.SetCategoryQualityUpgrades(t.Context(), item.CategoryID, false); err != nil {
+		t.Fatalf("SetCategoryQualityUpgrades: %v", err)
+	}
+	if state := stateAfterRun(); state != "COMPLETE" {
+		t.Fatalf("upgrades off: state %s, want COMPLETE", state)
+	}
 }
 
 // M1d: searching an album below its cutoff offers only releases strictly better than the files it has;

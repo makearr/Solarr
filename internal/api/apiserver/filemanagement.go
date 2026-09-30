@@ -109,6 +109,9 @@ func (s *Server) GetLibraryTagging(w http.ResponseWriter, r *http.Request, id in
 // tagWritebackTaskKey is the tag writer's key in the scheduler (cmd/solarr/app/scheduler.go).
 const tagWritebackTaskKey = "tag_writeback"
 
+// cutoffTaskKey is the scheduler's quality cutoff check (cmd/solarr/app/scheduler.go).
+const cutoffTaskKey = "cutoff"
+
 // SetLibraryTagging saves it, keeping the rest of File management, and starts the tag writer.
 func (s *Server) SetLibraryTagging(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {

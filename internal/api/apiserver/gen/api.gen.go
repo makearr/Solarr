@@ -2060,6 +2060,9 @@ type LibraryQuality struct {
 	Profiles []QualityProfileRef `json:"profiles"`
 	Target   *QualityTarget      `json:"target,omitempty"`
 
+	// UpgradesAllowed Lidarr's "Upgrades Allowed". Off, an album with every track is complete whatever its quality: nothing is upgradable and nothing is searched for an upgrade.
+	UpgradesAllowed bool `json:"upgrades_allowed"`
+
 	// Warnings Plain-language notices, e.g. a target the first profile would refuse.
 	Warnings []string `json:"warnings"`
 }
@@ -2071,6 +2074,9 @@ type LibraryQualityWrite struct {
 	// ProfileIds The profiles the library accepts, earlier preferred.
 	ProfileIds []int64        `json:"profile_ids"`
 	Target     *QualityTarget `json:"target,omitempty"`
+
+	// UpgradesAllowed Lidarr's "Upgrades Allowed". Omitted leaves it as it is.
+	UpgradesAllowed *bool `json:"upgrades_allowed,omitempty"`
 }
 
 // LibraryRenamePlan defines model for LibraryRenamePlan.

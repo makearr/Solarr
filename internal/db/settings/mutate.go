@@ -423,6 +423,20 @@ func (c *Cache) SetCategoryQualityProfile(ctx context.Context, categoryID int64,
 	})
 }
 
+// SetCategoryQualityUpgrades turns a library's upgrades on or off.
+func (c *Cache) SetCategoryQualityUpgrades(ctx context.Context, categoryID int64, allowed bool) error {
+	if _, found := c.Snapshot().Category(categoryID); !found {
+		return fmt.Errorf("%w: category %d", ErrNotFound, categoryID)
+	}
+	value := int64(0)
+	if allowed {
+		value = 1
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetCategoryQualityUpgrades(ctx, settingsdb.SetCategoryQualityUpgradesParams{QualityUpgrades: value, ID: categoryID})
+	})
+}
+
 // SetCategoryQuality saves a library's quality: the profiles it accepts in priority order, the
 // cutoff (one of them), and the target, nil for none. Every problem is reported at once.
 func (c *Cache) SetCategoryQuality(

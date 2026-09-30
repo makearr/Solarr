@@ -5430,6 +5430,9 @@ components:
           items: { type: integer, format: int64 }
         cutoff_profile_id: { type: integer, format: int64 }
         target: { $ref: "#/components/schemas/QualityTarget" }
+        upgrades_allowed:
+          type: boolean
+          description: Lidarr's "Upgrades Allowed". Omitted leaves it as it is.
 
     QualityProfileRef:
       type: object
@@ -5440,8 +5443,13 @@ components:
 
     LibraryQuality:
       type: object
-      required: [profiles, available, warnings]
+      required: [profiles, available, warnings, upgrades_allowed]
       properties:
+        upgrades_allowed:
+          type: boolean
+          description: >-
+            Lidarr's "Upgrades Allowed". Off, an album with every track is complete whatever its
+            quality: nothing is upgradable and nothing is searched for an upgrade.
         profiles:
           type: array
           description: The library's own list, earlier preferred. Empty means the instance default.

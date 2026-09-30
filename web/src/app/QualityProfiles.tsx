@@ -82,19 +82,21 @@ function LibraryQualityEditor() {
 
   const [order, setOrder] = useState<number[] | undefined>();
   const [cutoff, setCutoff] = useState<number | undefined>();
+  const [upgrades, setUpgrades] = useState(true);
   const [target, setTarget] = useState<QualityTarget | undefined>();
   useEffect(() => {
     if (!quality.data) return;
     setOrder(quality.data.profiles.map((profile) => profile.id));
     setCutoff(quality.data.cutoff_profile_id ?? undefined);
     setTarget(quality.data.target ?? undefined);
+    setUpgrades(quality.data.upgrades_allowed);
   }, [quality.data]);
 
   const save = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.PUT("/categories/{id}/quality", {
         params: { path: { id: id! } },
-        body: { profile_ids: order ?? [], cutoff_profile_id: cutoff, target },
+        body: { profile_ids: order ?? [], cutoff_profile_id: cutoff, target, upgrades_allowed: upgrades },
       });
       if (error) throw error;
       return data;
@@ -109,11 +111,12 @@ function LibraryQualityEditor() {
   const names = new Map(quality.data.available.map((profile) => [profile.id, profile.name]));
   const unused = quality.data.available.filter((profile) => !order.includes(profile.id));
   const dirty =
-    JSON.stringify([order, cutoff ?? null, target ?? null]) !==
+    JSON.stringify([order, cutoff ?? null, target ?? null, upgrades]) !==
     JSON.stringify([
       quality.data.profiles.map((profile) => profile.id),
       quality.data.cutoff_profile_id ?? null,
       quality.data.target ?? null,
+      quality.data.upgrades_allowed,
     ]);
 
   const move = (index: number, by: number) => {
@@ -203,11 +206,21 @@ function LibraryQualityEditor() {
       </section>
 
       <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
-        <h2 className="text-sm font-medium">Cutoff</h2>
+        <h2 className="text-sm font-medium">Upgrades</h2>
+        <label className="flex items-start gap-2 text-xs">
+          <input type="checkbox" className="mt-0.5" checked={upgrades} onChange={(event) => setUpgrades(event.target.checked)} />
+          <span className="flex flex-col">
+            <span className="text-ink">Upgrades allowed</span>
+            <span className="text-ink-muted">
+              Off, an album with every track is complete whatever its quality: nothing is searched for an upgrade.
+            </span>
+          </span>
+        </label>
         <p className="text-xs text-ink-muted">
           Once a file is at least this good, or meets the target, it is not upgraded any further.
         </p>
         <select
+          disabled={!upgrades}
           value={cutoff ?? ""}
           onChange={(event) => setCutoff(event.target.value === "" ? undefined : Number(event.target.value))}
           className={`${inputStyle} self-start`}
@@ -336,6 +349,7 @@ function LibraryQualityEditor() {
               setOrder(quality.data.profiles.map((profile) => profile.id));
               setCutoff(quality.data.cutoff_profile_id ?? undefined);
               setTarget(quality.data.target ?? undefined);
+              setUpgrades(quality.data.upgrades_allowed);
             }}
             className="rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted hover:text-ink"
           >

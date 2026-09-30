@@ -135,6 +135,7 @@ type Querier interface {
 	SetCategoryNamingProfile(ctx context.Context, arg SetCategoryNamingProfileParams) error
 	SetCategoryQualityCutoff(ctx context.Context, arg SetCategoryQualityCutoffParams) error
 	SetCategoryQualityProfile(ctx context.Context, arg SetCategoryQualityProfileParams) error
+	SetCategoryQualityUpgrades(ctx context.Context, arg SetCategoryQualityUpgradesParams) error
 	// The enable transition on its own: this is the "preview before enabling" gate, a
 	// deliberate act distinct from editing a job's policy.
 	SetDiscoveryJobEnabled(ctx context.Context, arg SetDiscoveryJobEnabledParams) error

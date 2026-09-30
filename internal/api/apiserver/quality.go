@@ -74,6 +74,19 @@ func (s *Server) SetLibraryQuality(w http.ResponseWriter, r *http.Request, id in
 		writeError(w, s.logger, err)
 		return
 	}
+	if body.UpgradesAllowed != nil && *body.UpgradesAllowed != category.QualityUpgrades {
+		if err := s.auth.Settings.SetCategoryQualityUpgrades(r.Context(), id, *body.UpgradesAllowed); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+		category.QualityUpgrades = *body.UpgradesAllowed
+		// The cutoff check re-reads every album at once, so Cutoff Unmet follows the switch.
+		if s.scheduler != nil {
+			if err := s.scheduler.RunNow(r.Context(), cutoffTaskKey, false); err != nil {
+				s.logger.InfoContext(r.Context(), "cutoff check after an upgrades change not started", "error", err)
+			}
+		}
+	}
 	// The request's Access is frozen at its start (ADR-27), so the answer is what was saved.
 	category.QualityProfileIDs = body.ProfileIds
 	category.QualityCutoffID = body.CutoffProfileId
@@ -85,7 +98,7 @@ func (s *Server) libraryQualityView(category settings.Category) gen.LibraryQuali
 	snapshot := s.auth.Settings.Snapshot()
 	view := gen.LibraryQuality{
 		Profiles: []gen.QualityProfileRef{}, Available: []gen.QualityProfileRef{}, Warnings: []string{},
-		CutoffProfileId: category.QualityCutoffID,
+		CutoffProfileId: category.QualityCutoffID, UpgradesAllowed: category.QualityUpgrades,
 	}
 	for _, id := range category.QualityProfileIDs {
 		if profile, found := snapshot.QualityProfile(id); found {
