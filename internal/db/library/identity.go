@@ -11,6 +11,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 // WorkIdentity is what a work should look like if one has to be created. Naming only
@@ -365,6 +366,82 @@ func resolveEdition(
 		return 0, false, fmt.Errorf("link external id: %w", err)
 	}
 	return edition.ID, true, nil
+}
+
+// ReturnedToReview is what ReturnToReview did with an album.
+type ReturnedToReview struct {
+	Files       int
+	WorkDeleted bool
+}
+
+// ReturnToReview hands an album's files back to the identification queue with candidate as a weak
+// suggestion -- its release group no longer exists anywhere (M1f) -- and detaches them. The work is
+// deleted unless a person added it; then it stays, wanted and MISSING.
+func (i Identity) ReturnToReview(ctx context.Context, workID int64, candidate model.Identification, at int64) (ReturnedToReview, error) {
+	var result ReturnedToReview
+	candidatesJSON, err := encodeCandidates([]model.Identification{candidate})
+	if err != nil {
+		return result, err
+	}
+	err = i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		paths, err := queries.ListWorkFilePaths(ctx, workID)
+		if err != nil {
+			return fmt.Errorf("list files: %w", err)
+		}
+		for _, step := range []func(context.Context, int64) error{queries.DetachDesiredFilesForWork, queries.UnlinkWorkFiles} {
+			if err := step(ctx, workID); err != nil {
+				return err
+			}
+		}
+		queued := map[int64]bool{}
+		for _, file := range paths {
+			if queued[file.MediaObjectID] {
+				continue
+			}
+			queued[file.MediaObjectID] = true
+			if err := queries.UpsertUnidentified(ctx, librarydb.UpsertUnidentifiedParams{
+				MediaObjectID: file.MediaObjectID, RootFolderID: file.RootFolderID, RelPath: file.RelPath,
+				CandidatesJson: candidatesJSON, FirstSeenAt: at, LastSeenAt: at,
+			}); err != nil {
+				return fmt.Errorf("queue file %d: %w", file.MediaObjectID, err)
+			}
+		}
+		result.Files = len(queued)
+		wanted, err := queries.CountPersonAddedItems(ctx, workID)
+		if err != nil {
+			return err
+		}
+		if wanted > 0 {
+			return queries.ResetDesiredItemsForWork(ctx, workID)
+		}
+		result.WorkDeleted = true
+		return deleteFilelessWork(ctx, queries, workID)
+	})
+	if err != nil {
+		return ReturnedToReview{}, fmt.Errorf("library: return work %d to review: %w", workID, err)
+	}
+	return result, nil
+}
+
+// deleteFilelessWork removes a work and everything pointing at it; the caller has checked it has no files.
+func deleteFilelessWork(ctx context.Context, queries *librarydb.Queries, workID int64) error {
+	if err := queries.DetachAcquisitionsForWork(ctx, workID); err != nil {
+		return fmt.Errorf("detach acquisitions: %w", err)
+	}
+	if err := queries.DeleteDesiredItemsForWork(ctx, workID); err != nil {
+		return fmt.Errorf("delete desired items: %w", err)
+	}
+	if err := queries.DetachImportUnitsFromWork(ctx, sql.NullInt64{Int64: workID, Valid: true}); err != nil {
+		return fmt.Errorf("detach import units: %w", err)
+	}
+	if err := queries.DetachPackItemsFromWork(ctx, sql.NullInt64{Int64: workID, Valid: true}); err != nil {
+		return fmt.Errorf("detach pack items: %w", err)
+	}
+	if err := queries.DeleteWork(ctx, workID); err != nil {
+		return fmt.Errorf("delete work: %w", err)
+	}
+	return nil
 }
 
 // RemoveWorkResult is what removing an album actually did.

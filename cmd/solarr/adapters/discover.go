@@ -154,7 +154,7 @@ func (a Discover) Add(
 		profileID = *category.QualityProfileID
 	}
 	item, err := a.Desired.EnsureAlbumItem(ctx, library.AlbumRequest{
-		WorkID: workIDs[0], CategoryID: category.ID, ProfileID: profileID, Monitored: monitored,
+		WorkID: workIDs[0], CategoryID: category.ID, ProfileID: profileID, Monitored: monitored, AddedBy: &userID,
 	})
 	if err != nil {
 		return apiserver.DiscoverAddResult{}, fmt.Errorf("ensure album item: %w", err)

@@ -396,3 +396,24 @@ WHERE edition_external_id.provider = sqlc.arg(provider) AND edition_external_id.
   AND edition_external_id.edition_id = sqlc.arg(edition_id)
   AND NOT EXISTS (SELECT 1 FROM edition_external_id held
                   WHERE held.provider = sqlc.arg(provider) AND held.external_id = sqlc.arg(new_id));
+
+-- Every path of every file of one work, for returning the files to the identification queue.
+-- name: ListWorkFilePaths :many
+SELECT f.media_object_id, lp.root_folder_id, lp.rel_path
+FROM work_file f
+JOIN library_path lp ON lp.media_object_id = f.media_object_id
+WHERE f.work_id = ?
+ORDER BY f.media_object_id, lp.is_primary DESC, lp.id;
+
+-- name: UnlinkWorkFiles :exec
+DELETE FROM work_file WHERE work_id = ?;
+
+-- name: DetachDesiredFilesForWork :exec
+DELETE FROM desired_item_file WHERE desired_item_id IN (SELECT id FROM desired_item WHERE work_id = ?);
+
+-- A person added this album (Discover, the add dialog), rather than a scan or an artist's expansion.
+-- name: CountPersonAddedItems :one
+SELECT CAST(COUNT(*) AS INTEGER) AS total FROM desired_item WHERE work_id = ? AND added_by IS NOT NULL;
+
+-- name: ResetDesiredItemsForWork :exec
+UPDATE desired_item SET present_count = 0, state = 'MISSING', dirty = 1 WHERE work_id = ?;
