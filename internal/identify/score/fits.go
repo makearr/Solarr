@@ -7,10 +7,8 @@ import (
 	"github.com/makearr/Solarr/internal/identify/model"
 )
 
-// Fits reports whether facts are among the best a profile asks for: every gate passes, every
-// tiered dimension is in its first tier, and every measured target value is within its min and
-// max. A library's target is checked against its first profile this way, and a file meets a
-// cutoff when it fits a profile at or before it. The reason names the first thing that misses.
+// Fits reports whether facts are among the best a profile asks for: Accepts, and every tiered dimension
+// in its first tier. A file meets a cutoff when it fits a profile at or before it.
 func Fits(profile Profile, facts Facts) (bool, string) {
 	decision := Evaluate(profile, facts, nil)
 	if decision.Outcome != model.OutcomeAccept {
@@ -21,6 +19,19 @@ func Fits(profile Profile, facts Facts) (bool, string) {
 			return false, fmt.Sprintf("it prefers another %s to %s", strings.ReplaceAll(tier.Dimension, "_", " "), tier.Label)
 		}
 	}
+	return withinTargets(profile, facts)
+}
+
+// Accepts reports whether a profile takes facts at all: its rules accept them, in any tier, and every
+// measured value lies within its target's min and max. A library's target need only be accepted.
+func Accepts(profile Profile, facts Facts) (bool, string) {
+	if Evaluate(profile, facts, nil).Outcome != model.OutcomeAccept {
+		return false, "its rules refuse it"
+	}
+	return withinTargets(profile, facts)
+}
+
+func withinTargets(profile Profile, facts Facts) (bool, string) {
 	for dimension, resolved := range resolveTargets(profile.Targets, facts) {
 		if !resolved.hasTarget {
 			continue
