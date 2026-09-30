@@ -266,6 +266,15 @@ func (d Desired) SetPartMonitored(ctx context.Context, workID, partID int64, mon
 	return nil
 }
 
+// AllParts answers every part of a work, covered or not: what a replacement file is aligned against.
+func (d Desired) AllParts(ctx context.Context, workID int64) ([]librarydb.WorkPart, error) {
+	parts, err := librarydb.New(d.store.Read()).ListWorkParts(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: parts of work %d: %w", workID, err)
+	}
+	return parts, nil
+}
+
 // UnfilledParts returns every one of a work's parts not yet covered by
 // itemID's desired_item_file rows, in part order -- what a media type's own
 // alignment (internal/media/music's Align is the first) should try to match new

@@ -408,6 +408,9 @@ type Querier interface {
 	ListDesiredItemsForWork(ctx context.Context, workID int64) ([]DesiredItem, error)
 	// The planner reads the dirty set, not the whole library (ADR-6).
 	ListDirtyDesiredItems(ctx context.Context, arg ListDirtyDesiredItemsParams) ([]DesiredItem, error)
+	// Which of an album's files a Solarr download brought in: placed by an import session a download
+	// started. Only those can replace an owned file (M1d).
+	ListDownloadedFilesForWork(ctx context.Context, workID int64) ([]int64, error)
 	ListEditionExternalIDs(ctx context.Context, editionID int64) ([]EditionExternalID, error)
 	// Works identified at release-group level only (the text search never picks an
 	// edition): no edition, and either not enriched yet (no credit) or with files on

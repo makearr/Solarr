@@ -262,6 +262,8 @@ type judge struct {
 	// incumbent is the worst owned file's decision when the album is below its cutoff: a release must
 	// strictly beat it to be an upgrade (Invariant 72). Nil otherwise.
 	incumbent *model.Decision
+	// cutoffMet rejects every release, as Lidarr's "existing files meet cutoff": the album wants nothing.
+	cutoffMet bool
 }
 
 // judgeFor builds item's yardstick from its work and its library's settings.
@@ -292,6 +294,7 @@ func (s Search) judgeFor(ctx context.Context, item librarydb.DesiredItem) (judge
 		target: target, albumTarget: albumTarget, rules: rules,
 		languagePolicy: languagePolicyFor(snapshot, item.CategoryID), preferPropers: preferPropers,
 	}
+	built.cutoffMet = item.State == ItemStateComplete
 	if item.State == ItemStateUpgradable {
 		if built.incumbent, err = s.incumbentFor(ctx, item.WorkID, built); err != nil {
 			return judge{}, err
@@ -328,6 +331,18 @@ func strictlyBetter(candidate, incumbent model.Decision) bool {
 
 func (j judge) evaluate(raws []indexer.RawItem, conn IndexerConn) []acceptedFind {
 	finds := evaluateRawItems(raws, conn, j.target, j.albumTarget, j.wantedArtist, j.rules, j.languagePolicy, j.preferPropers)
+	if j.cutoffMet {
+		for index := range finds {
+			decision := &finds[index].decision
+			if decision.Outcome == model.OutcomeAccept {
+				decision.Outcome = model.OutcomeReject
+				decision.Rejections = append(decision.Rejections, model.Rejection{
+					Rule: "upgrade", Field: "quality", Wanted: "files below the cutoff", Got: "the files you have meet it",
+				})
+			}
+		}
+		return finds
+	}
 	if j.incumbent == nil {
 		return finds
 	}

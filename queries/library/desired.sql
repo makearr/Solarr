@@ -372,8 +372,19 @@ SELECT COUNT(*) AS held FROM ready_queue WHERE desired_item_id = ?;
 
 -- M1d's cutoff check walks every monitored album that has all its tracks, by id.
 -- name: ListAlbumItemsForCutoff :many
-SELECT id, work_id, category_id, state, present_count
+SELECT id, work_id, category_id, profile_id, state, present_count
 FROM desired_item
 WHERE monitored = 1 AND satisfaction_kind = 'SET' AND state IN ('COMPLETE', 'UPGRADABLE') AND id > sqlc.arg(after_id)
 ORDER BY id
 LIMIT sqlc.arg(page_size);
+
+-- Which of an album's files a Solarr download brought in: placed by an import session a download
+-- started. Only those can replace an owned file (M1d).
+-- name: ListDownloadedFilesForWork :many
+SELECT DISTINCT wf.media_object_id
+FROM work_file wf
+JOIN import_unit_file iuf ON iuf.media_object_id = wf.media_object_id
+JOIN import_unit u ON u.id = iuf.unit_id
+JOIN import_session s ON s.id = u.session_id
+WHERE wf.work_id = ? AND s.acquisition_id IS NOT NULL
+ORDER BY wf.media_object_id;

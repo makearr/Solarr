@@ -73,6 +73,8 @@ type Config struct {
 	History func(ctx context.Context, kind download.HistoryKind, acquisition library.Acquisition, detail string)
 	// SendHeld is optional: after each poll, held releases go to clients that now have room (ADR-57).
 	SendHeld func(ctx context.Context) error
+	// Imported is optional: told once a download's files are in the library, e.g. to settle an upgrade.
+	Imported func(ctx context.Context, acquisition library.Acquisition)
 	Clock    clock.Clock
 	Logger   *slog.Logger
 }
@@ -299,6 +301,9 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 		}
 		acquisition.State = StateImported
 		j.config.History(ctx, download.HistoryImported, acquisition, "")
+		if j.config.Imported != nil {
+			j.config.Imported(ctx, acquisition)
+		}
 		return j.cleanUp(ctx, client, acquisition)
 	case waiting > 0:
 		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting,

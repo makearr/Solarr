@@ -108,9 +108,16 @@ func (a RemoveAndBlock) RemoveAndBlockFile(
 // desired_item that file satisfied is reopened so the album reports what it
 // really has.
 func (a RemoveAndBlock) RecycleFile(ctx context.Context, mediaObjectID int64, recycling library.Recycling) error {
+	return a.RecycleFor(ctx, mediaObjectID, recycling, library.ReasonUserDelete)
+}
+
+// RecycleFor is RecycleFile with the reason recorded in the recycle bin, e.g. an upgrade replacing a file.
+func (a RemoveAndBlock) RecycleFor(
+	ctx context.Context, mediaObjectID int64, recycling library.Recycling, reason library.Reason,
+) error {
 	_, err := a.Action.Do(ctx, library.RemoveAndBlockRequest{
 		MediaObjectID: mediaObjectID, RecycleBin: true,
-		RecycleReason: library.ReasonUserDelete, Reopen: true,
+		RecycleReason: reason, Reopen: true,
 		RecycleRetain: recycling.Retain, RemoveEmptyFolders: recycling.RemoveEmptyFolders,
 		At: a.Clock.Now().Unix(),
 	})
