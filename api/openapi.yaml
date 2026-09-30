@@ -2042,6 +2042,11 @@ paths:
       operationId: syncArrInstance
       tags: [settings]
       summary: Start one import (todo 4.13). Administrator only.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ArrSyncOptions" }
       description: >-
         Starts the run and answers immediately with it in state RUNNING --
         a real library (hundreds of artists, each needing its own Albums
@@ -6597,6 +6602,32 @@ components:
         masked:
           type: string
           description: A short hint ("abc…xyz"), present only when has_value is true.
+
+    ArrSyncOptions:
+      type: object
+      description: What one import brings in. Absent is monitored items and every album, as before options.
+      properties:
+        monitored: { type: boolean, default: true, description: Monitored artists and albums. }
+        unmonitored:
+          type: boolean
+          default: false
+          description: Unmonitored ones too; they arrive unmonitored, an artist without following them.
+        albums:
+          type: string
+          enum: [all, missing, complete]
+          default: all
+          description: Which albums, by what the *Arr holds of them.
+        path_rewrites:
+          type: array
+          description: >-
+            How the *Arr's paths read here, e.g. /media/music as /mnt/media/music; the first matching
+            prefix applies. Used to find each artist's library by its root folder.
+          items:
+            type: object
+            required: [from, to]
+            properties:
+              from: { type: string }
+              to: { type: string }
 
     ArrDownloadClient:
       type: object

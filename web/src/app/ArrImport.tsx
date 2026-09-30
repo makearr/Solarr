@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
 import { ArrConnectionTools } from "./ArrConnectionTools";
+import { ArrSyncOptions } from "./ArrSyncOptions";
 
 type ArrInstance = components["schemas"]["ArrInstance"];
 type ArrApp = components["schemas"]["ArrApp"];
@@ -113,20 +114,9 @@ function InstanceCard({
   busy: boolean;
 }) {
   const queryClient = useQueryClient();
-
-  const sync = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/arr/instances/{id}/sync", {
-        params: { path: { id: instance.id } },
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      onChanged();
-      void queryClient.invalidateQueries({ queryKey: ["arr-imports", instance.id] });
-    },
-  });
+  // An import starts from its options (2026-09-30); the run it started is shown until the next.
+  const [choosing, setChoosing] = useState(false);
+  const [started, setStarted] = useState<ArrImportRun | null>(null);
 
   return (
     <li className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
@@ -168,14 +158,13 @@ function InstanceCard({
         {instance.app !== "prowlarr" && (
         <button
           type="button"
-          onClick={() => sync.mutate()}
-          disabled={sync.isPending}
+          onClick={() => setChoosing(!choosing)}
           className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-border-subtle
                      px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50
                      focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
-          <RefreshCw aria-hidden className={`size-3.5 ${sync.isPending ? "animate-spin" : ""}`} />
-          {sync.isPending ? "Syncing…" : "Sync now"}
+          <RefreshCw aria-hidden className="size-3.5" />
+          Import…
         </button>
         )}
         <button
@@ -191,10 +180,19 @@ function InstanceCard({
         </button>
       </div>
 
-      {sync.isError && <p className="text-xs text-danger">The sync could not run -- check the connection.</p>}
-      {sync.data && (
-        <RunSummary run={sync.data} />
+      {choosing && (
+        <ArrSyncOptions
+          instance={instance}
+          onCancel={() => setChoosing(false)}
+          onStarted={(run) => {
+            setChoosing(false);
+            setStarted(run);
+            onChanged();
+            void queryClient.invalidateQueries({ queryKey: ["arr-imports", instance.id] });
+          }}
+        />
       )}
+      {started && <RunSummary run={started} />}
 
       <ArrConnectionTools instanceId={instance.id} app={instance.app} />
 

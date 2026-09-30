@@ -58,6 +58,13 @@ const (
 	ArrImportRunStateRUNNING  ArrImportRunState = "RUNNING"
 )
 
+// Defines values for ArrSyncOptionsAlbums.
+const (
+	ArrSyncOptionsAlbumsAll      ArrSyncOptionsAlbums = "all"
+	ArrSyncOptionsAlbumsComplete ArrSyncOptionsAlbums = "complete"
+	ArrSyncOptionsAlbumsMissing  ArrSyncOptionsAlbums = "missing"
+)
+
 // Defines values for AuthPolicyConfiguredMode.
 const (
 	AuthPolicyConfiguredModeApikeyOnly AuthPolicyConfiguredMode = "apikey_only"
@@ -873,6 +880,27 @@ type ArrRootFolder struct {
 	// Path As the *Arr instance's own container sees it.
 	Path string `json:"path"`
 }
+
+// ArrSyncOptions What one import brings in. Absent is monitored items and every album, as before options.
+type ArrSyncOptions struct {
+	// Albums Which albums, by what the *Arr holds of them.
+	Albums *ArrSyncOptionsAlbums `json:"albums,omitempty"`
+
+	// Monitored Monitored artists and albums.
+	Monitored *bool `json:"monitored,omitempty"`
+
+	// PathRewrites How the *Arr's paths read here, e.g. /media/music as /mnt/media/music; the first matching prefix applies. Used to find each artist's library by its root folder.
+	PathRewrites *[]struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	} `json:"path_rewrites,omitempty"`
+
+	// Unmonitored Unmonitored ones too; they arrive unmonitored, an artist without following them.
+	Unmonitored *bool `json:"unmonitored,omitempty"`
+}
+
+// ArrSyncOptionsAlbums Which albums, by what the *Arr holds of them.
+type ArrSyncOptionsAlbums string
 
 // AuthPolicy defines model for AuthPolicy.
 type AuthPolicy struct {
@@ -3783,6 +3811,9 @@ type SetArrInstanceKeyJSONRequestBody SetArrInstanceKeyJSONBody
 
 // UseArrInstanceIndexersJSONRequestBody defines body for UseArrInstanceIndexers for application/json ContentType.
 type UseArrInstanceIndexersJSONRequestBody UseArrInstanceIndexersJSONBody
+
+// SyncArrInstanceJSONRequestBody defines body for SyncArrInstance for application/json ContentType.
+type SyncArrInstanceJSONRequestBody = ArrSyncOptions
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody LoginJSONBody
