@@ -576,6 +576,8 @@ function InspectForm() {
     routeCategoryId ? Number(routeCategoryId) : "",
   );
   const [preview, setPreview] = useState(false);
+  // D6: what nothing identified still becomes an album, marked unverified.
+  const [addUnverified, setAddUnverified] = useState(true);
   const categories = useCategories();
 
   const inspect = useMutation({
@@ -586,6 +588,7 @@ function InspectForm() {
           origin,
           category_id: categoryId === "" ? undefined : categoryId,
           preview,
+          add_unverified: addUnverified && !preview,
         },
       });
       if (error) throw error;
@@ -648,6 +651,17 @@ function InspectForm() {
         />
         <span title="Nothing is placed until you say so: every unit waits below with its candidates.">
           Preview first
+        </span>
+      </label>
+      <label className="flex items-center gap-2 self-center pt-4 text-xs text-ink">
+        <input
+          type="checkbox"
+          checked={addUnverified && !preview}
+          disabled={preview}
+          onChange={(event) => setAddUnverified(event.target.checked)}
+        />
+        <span title="A folder no metadata source recognises still becomes an album, named by its own tags or folder and marked unverified. It is not searched for; identify it later from the review below.">
+          Add unrecognised albums
         </span>
       </label>
       <button

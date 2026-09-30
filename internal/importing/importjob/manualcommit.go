@@ -107,6 +107,30 @@ func (m ManualCommitter) CommitHeld(ctx context.Context, unitID int64) (music.Pl
 	return m.place(ctx, session, unit, best)
 }
 
+// identifyUnverified commits a queued unit already placed as an unverified album (D6): its files are
+// in the library, so they are moved onto the chosen album instead of being placed a second time.
+func (m ManualCommitter) identifyUnverified(
+	ctx context.Context, session library.Session, unit library.Unit, best model.Identification, committer UnverifiedCommitter,
+) (music.Placed, error) {
+	placed, err := committer.IdentifyUnverified(ctx, *unit.WorkID, best, *session.CategoryID)
+	if err != nil {
+		return music.Placed{}, fmt.Errorf("importjob: identify unit %d: %w", unit.ID, err)
+	}
+	if err := m.sessions.SetUnitDecisions(ctx, session.ID, []library.UnitDecision{{
+		UnitID: unit.ID, Decision: library.UnitCommit, Confidence: best.Confidence,
+		CandidatesJSON: unit.CandidatesJSON, Reason: "manual override",
+	}}); err != nil {
+		return music.Placed{}, fmt.Errorf("importjob: record decision override for unit %d: %w", unit.ID, err)
+	}
+	// The unit's files were recorded when it was placed; only the album it belongs to changes.
+	if err := m.sessions.RecordPlacement(ctx, unit.ID, library.Placement{
+		WorkID: placed.WorkID, WorkCreated: placed.WorkCreated, EditionID: placed.EditionID, EditionCreated: placed.EditionCreated,
+	}); err != nil {
+		return music.Placed{}, fmt.Errorf("importjob: record placement for unit %d: %w", unit.ID, err)
+	}
+	return placed, nil
+}
+
 // PlaceUnplaced places every unit this session already decided COMMIT but
 // never placed -- todo 4.9's other UI action: assigning a category to a
 // session after WALK already decided some units. Best-effort per unit, the
@@ -289,6 +313,9 @@ func (m ManualCommitter) reconstructUnit(ctx context.Context, root string, unit 
 func (m ManualCommitter) place(
 	ctx context.Context, session library.Session, unit library.Unit, best model.Identification,
 ) (music.Placed, error) {
+	if unverified, ok := m.committer.(UnverifiedCommitter); ok && unit.WorkID != nil && unit.Decision == library.UnitQueue {
+		return m.identifyUnverified(ctx, session, unit, best, unverified)
+	}
 	root := path.Join(session.SourcePath, unit.RelPath)
 	reconstructed, err := m.reconstructUnit(ctx, root, unit)
 	if err != nil {

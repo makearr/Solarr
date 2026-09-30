@@ -60,6 +60,19 @@ type Payload struct {
 	Preview bool `json:"preview,omitempty"`
 	// TransferLadder is a download folder's own order; empty keeps the Import screen's.
 	TransferLadder []string `json:"transfer_ladder,omitempty"`
+	// NoUnverified keeps a folder nothing identified out of the library; by default an Import-screen
+	// run adds it as an unverified album (D6). Negative, so a resumed session keeps the default.
+	NoUnverified bool `json:"no_unverified,omitempty"`
+}
+
+// UnverifiedCommitter is a Committer that can also place a unit nothing identified as an
+// unverified album (D6); optional, so a committer without it only ever places identified units.
+type UnverifiedCommitter interface {
+	CommitUnverifiedUnit(
+		ctx context.Context, sourceRoot string, unit inspect.Unit, tags music.Resolved, categoryID int64, ladder []string,
+	) (music.Placed, error)
+	// IdentifyUnverified moves an unverified album's placed files onto the album chosen for them.
+	IdentifyUnverified(ctx context.Context, fromWorkID int64, best model.Identification, categoryID int64) (music.Placed, error)
 }
 
 // ReasonPreview is why a unit a preview run would otherwise have committed is
@@ -204,7 +217,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		inspect.WalkOptions{},
 		func(ctx context.Context, batch []inspect.Unit) error {
 			err := j.commitCluster(ctx, sessionID, payload.SourcePath, identifyCfg, payload.Preview,
-				payload.TransferLadder, seeds, batch)
+				unverifiedWanted(payload), payload.TransferLadder, seeds, batch)
 			j.reportProgress(ctx, sessionID, job.Progress)
 			return err
 		})
@@ -524,8 +537,8 @@ func (j *Job) poisonedByExclusion(batch []inspect.Unit, categoryID *int64) []str
 // PATCH must place into it -- the same "ask, don't cache" rule Policy's own
 // per-run read already follows.
 func (j *Job) commitCluster(
-	ctx context.Context, sessionID int64, sourcePath string, cfg model.ChainConfig, preview bool, ladder []string,
-	seeds []string, batch []inspect.Unit,
+	ctx context.Context, sessionID int64, sourcePath string, cfg model.ChainConfig, preview, unverified bool,
+	ladder []string, seeds []string, batch []inspect.Unit,
 ) error {
 	session, err := j.sessions.Get(ctx, sessionID)
 	if err != nil {
@@ -605,6 +618,9 @@ func (j *Job) commitCluster(
 	if categoryID != nil && j.committer != nil {
 		j.placeCommitted(ctx, sessionID, *categoryID, sourcePath, tagSource, ids, batch, decisions, results,
 			placements, ladder)
+		if unverified {
+			j.placeUnverified(ctx, *categoryID, sourcePath, tagSource, ids, batch, decisions, ladder)
+		}
 	}
 	j.publishProgress(ctx, sessionID, importPhaseWalking, batch[len(batch)-1].Directory)
 	return nil
@@ -682,6 +698,43 @@ func (j *Job) placeCommitted(
 		logPathWarnings(j.logger, ids[i], placed.PathWarnings)
 		for _, skipped := range placed.ExtrasSkipped {
 			j.logger.Warn("import commit: extra file not placed", slog.Int64("unit_id", ids[i]), slog.String("reason", skipped))
+		}
+	}
+}
+
+// unverifiedWanted is D6's rule: only a run started from the Import screen, not a preview, and not
+// switched off, adds what nothing identified. A finished download was grabbed for a known album.
+func unverifiedWanted(payload Payload) bool {
+	return payload.Origin == library.ImportOriginManual && !payload.Preview && !payload.NoUnverified
+}
+
+// placeUnverified adds every queued unit as an unverified album (D6). The unit stays queued for
+// Review, now holding its placement, so a revert undoes it and a later identification repoints it.
+func (j *Job) placeUnverified(
+	ctx context.Context, categoryID int64, sourcePath string, tagSource music.Resolved,
+	ids []int64, batch []inspect.Unit, decisions []library.UnitDecision, ladder []string,
+) {
+	committer, ok := j.committer.(UnverifiedCommitter)
+	if !ok {
+		return
+	}
+	for i, decision := range decisions {
+		if decision.Decision != library.UnitQueue || len(batch[i].Media) == 0 {
+			continue
+		}
+		placed, err := committer.CommitUnverifiedUnit(ctx, sourcePath, batch[i], tagSource, categoryID, ladder)
+		if err != nil {
+			j.logger.Warn("import: could not add an unverified album",
+				slog.Int64("unit_id", ids[i]), slog.String("path", batch[i].Directory), slog.Any("error", err))
+			continue
+		}
+		if err := j.sessions.RecordPlacement(ctx, ids[i], library.Placement{
+			WorkID: placed.WorkID, WorkCreated: placed.WorkCreated,
+			EditionID: placed.EditionID, EditionCreated: placed.EditionCreated,
+			MediaObjectIDs: placed.MediaObjectIDs, LibraryPathIDs: placed.LibraryPathIDs,
+			TransferMethods: placed.TransferMethodNames(), Extras: placedExtras(placed),
+		}); err != nil {
+			j.logger.Warn("import: could not record an unverified placement", slog.Int64("unit_id", ids[i]), slog.Any("error", err))
 		}
 	}
 }

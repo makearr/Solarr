@@ -67,6 +67,7 @@ type Committer struct {
 	renameOnImport   RenameOnImport
 	extraFiles       ExtraFiles
 	groupID          GroupID
+	people           *library.People
 }
 
 // TransferLadder answers the ordered transfer methods import should try, read
@@ -113,6 +114,8 @@ type CommitterConfig struct {
 	RenameOnImport   RenameOnImport
 	ExtraFiles       ExtraFiles
 	GroupID          GroupID
+	// People credits an unverified album's artist (D6); optional.
+	People *library.People
 }
 
 // NewCommitter builds one.
@@ -122,7 +125,7 @@ func NewCommitter(config CommitterConfig) Committer {
 		identity: config.Identity, desired: config.Desired, categories: config.Categories,
 		blockedContent: config.BlockedContent, clock: config.Clock,
 		defaultProfileID: config.DefaultProfileID, transferLadder: config.TransferLadder,
-		renameOnImport: config.RenameOnImport, extraFiles: config.ExtraFiles, groupID: config.GroupID,
+		renameOnImport: config.RenameOnImport, extraFiles: config.ExtraFiles, groupID: config.GroupID, people: config.People,
 	}
 }
 

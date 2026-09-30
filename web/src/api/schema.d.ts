@@ -4922,6 +4922,11 @@ export interface components {
             category_id?: number;
             /** @description Hold every unit for review instead of placing the confident ones. The run demands a confidence no candidate can reach, so each unit lands QUEUE with its candidates intact and `POST /import/sessions/{id}/commit` places the ones you pick. Defaults to false. */
             preview?: boolean;
+            /**
+             * @description A folder nothing identified still becomes an album, named by its own tags or folder and marked unverified (D6); not searched for, identified later from the review. Only for a manual, non-preview run.
+             * @default true
+             */
+            add_unverified: boolean;
         };
         ImportInspectResult: {
             enqueued: boolean;

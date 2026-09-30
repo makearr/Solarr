@@ -115,7 +115,8 @@ type ImportPlacementResult struct {
 // separate from ImportSessionLister, since a real caller might reasonably
 // want reads without the write (or the reverse).
 type ImportInspector interface {
-	InspectImport(ctx context.Context, sourcePath, origin string, categoryID *int64, preview bool) error
+	// addUnverified is D6: a folder nothing identified still becomes an unverified album.
+	InspectImport(ctx context.Context, sourcePath, origin string, categoryID *int64, preview, addUnverified bool) error
 }
 
 // ImportSessionRow is one import_session row.
@@ -206,7 +207,8 @@ func (s *Server) InspectImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	preview := body.Preview != nil && *body.Preview
-	if err := s.importInspector.InspectImport(r.Context(), body.SourcePath, origin, body.CategoryId, preview); err != nil {
+	if err := s.importInspector.InspectImport(r.Context(), body.SourcePath, origin, body.CategoryId, preview,
+		derefOr(body.AddUnverified, true)); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}

@@ -295,10 +295,10 @@ type ImportInspector struct {
 }
 
 func (a ImportInspector) InspectImport(
-	ctx context.Context, sourcePath, origin string, categoryID *int64, preview bool,
+	ctx context.Context, sourcePath, origin string, categoryID *int64, preview, addUnverified bool,
 ) error {
 	_, err := importjob.Enqueue(ctx, a.Queue, importjob.Payload{
-		SourcePath: sourcePath, Origin: origin, CategoryID: categoryID, Preview: preview,
+		SourcePath: sourcePath, Origin: origin, CategoryID: categoryID, Preview: preview, NoUnverified: !addUnverified,
 	})
 	return err
 }

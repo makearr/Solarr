@@ -7488,6 +7488,13 @@ components:
             lands QUEUE with its candidates intact and
             `POST /import/sessions/{id}/commit` places the ones you pick.
             Defaults to false.
+        add_unverified:
+          type: boolean
+          default: true
+          description: >-
+            A folder nothing identified still becomes an album, named by its own tags or folder and
+            marked unverified (D6); not searched for, identified later from the review. Only for a
+            manual, non-preview run.
 
     ImportInspectResult:
       type: object

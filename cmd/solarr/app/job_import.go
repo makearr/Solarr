@@ -95,6 +95,7 @@ func (p *process) acquisitionReleaseGroups(ctx context.Context, acquisitionID in
 // so the two never drift apart on how a unit gets placed.
 func (p *process) importCommitter() music.Committer {
 	desired := library.NewDesired(p.library)
+	people := library.NewPeople(p.library)
 	return music.NewCommitter(music.CommitterConfig{
 		FS:               p.fsys,
 		Roots:            adapters.DrainRoots{Cache: p.cache},
@@ -110,6 +111,7 @@ func (p *process) importCommitter() music.Committer {
 		RenameOnImport:   p.renameOnImport,
 		ExtraFiles:       p.extraFileExtensions,
 		GroupID:          lookupGroupID,
+		People:           &people,
 	})
 }
 

@@ -1631,6 +1631,9 @@ type ImportEvidenceSignal struct {
 
 // ImportInspectRequest Where to look, and what kind of import this is (ADR-48).
 type ImportInspectRequest struct {
+	// AddUnverified A folder nothing identified still becomes an album, named by its own tags or folder and marked unverified (D6); not searched for, identified later from the review. Only for a manual, non-preview run.
+	AddUnverified *bool `json:"add_unverified,omitempty"`
+
 	// CategoryId The target category, when known up front. Omitted means "decide per unit".
 	CategoryId *int64 `json:"category_id,omitempty"`
 

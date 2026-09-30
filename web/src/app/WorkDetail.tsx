@@ -202,7 +202,16 @@ export function WorkDetail() {
               <p className="text-sm text-ink-muted">
                 {work.year ? `Released ${work.year}` : "Release date unknown"}
               </p>
-              <WantedBadge wanted={work.wanted} onDisk={work.on_disk} hasTracklist={work.parts.length > 0} />
+              {isUnverified(work.external_ids) ? (
+                <span
+                  className="w-fit rounded-full border border-warn px-2 py-0.5 text-xs text-warn"
+                  title="Named from its own tags or folder: no metadata source knew it. It is not searched for; identify it from the import's review to make it a real album."
+                >
+                  Unverified
+                </span>
+              ) : (
+                <WantedBadge wanted={work.wanted} onDisk={work.on_disk} hasTracklist={work.parts.length > 0} />
+              )}
               <DownloadingBadge workId={work.id} />
             </div>
             <button
@@ -743,6 +752,11 @@ function QualityMark({ label, met, what }: { label: string; met: boolean; what: 
       {label}
     </span>
   );
+}
+
+/** D6: an album known only by its own tags or folder carries nothing but local ids. */
+function isUnverified(ids: readonly ExternalID[]): boolean {
+  return ids.length > 0 && ids.every((id) => id.provider.startsWith("local:"));
 }
 
 /** F2: when this album was and will be searched on its own, or why it will not be. */

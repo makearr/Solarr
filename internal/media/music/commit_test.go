@@ -135,6 +135,7 @@ func newCommitterWith(
 	opened, fsys, fake := newCommitterEnv(t)
 
 	desired := library.NewDesired(opened)
+	people := library.NewPeople(opened)
 	plentyFree := int64(1 << 30)
 	roots := &fakePlacementRoots{
 		roots: map[int64]settings.RootFolder{
@@ -155,7 +156,7 @@ func newCommitterWith(
 		Categories: fakeCategories{
 			commitCategoryID: {ID: commitCategoryID, MonitorDiscovered: settings.MonitorDiscoveredMonitored},
 		},
-		Clock: fake, DefaultProfileID: 42,
+		Clock: fake, DefaultProfileID: 42, People: &people,
 	}
 	configure(&config)
 	return music.NewCommitter(config), opened, fsys

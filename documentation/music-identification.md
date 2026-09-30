@@ -236,3 +236,19 @@ The chosen edition equalled Lidarr's in 102 of 120; the rest were pressings with
 track count and distance, differing only in country or date. Of the 47 folders without an
 embedded release group, 46 were identified — all plausible on inspection — and one, a
 74-track box set fitting two catalogued box sets within 0.007, was ambiguous.
+
+## Unverified albums (D6)
+
+An Import-screen run with **Add unrecognised albums** ticked (the default; not in a preview, and never
+for a finished download) still adds a folder nothing identified. It is placed like any album and named
+by its own tags, else by its folder read as a release name. Its identity is `local:album`, keyed by the
+source folder and the album name, so the same folder imported again is the same album and two
+folders with the same sloppy tags stay two. The artist is credited as `local:artist`. The album is
+**not monitored** and carries an "Unverified" badge in place of a track count.
+
+The unit stays queued in the import's review. Committing it there with a candidate moves the placed
+files onto that album (they are not placed a second time), deletes the unverified album unless a
+person added it, and leaves the paths to a rename preview.
+
+Not built yet: the scan path (a library folder nothing identified still goes to Unidentified), the
+badge on posters and the artist page, and "Identify as..." for a unit with no candidate at all.
