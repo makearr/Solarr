@@ -4136,6 +4136,11 @@ export interface components {
             artist?: string;
             /** Format: int64 */
             year?: number;
+            /**
+             * Format: int64
+             * @description Already in the library: the work (an album) or the person (an artist) it is. Absent when it is new.
+             */
+            library_id?: number;
         };
         DiscoverAddRequest: {
             /** Format: int64 */

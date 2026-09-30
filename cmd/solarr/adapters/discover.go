@@ -62,6 +62,13 @@ func (a Discover) Search(
 			Kind: apiserver.DiscoverAlbum, Provider: music.ProviderReleaseGroup, ExternalID: match.MBID,
 			Title: match.Title, Artist: match.ArtistCredit, Year: releaseYear(match.FirstReleaseDate),
 		}
+		workID, found, err := a.Identity.WorkByExternalID(ctx, music.ProviderReleaseGroup, match.MBID)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			results[i].LibraryID = &workID
+		}
 	}
 	return results, nil
 }
@@ -102,6 +109,13 @@ func (a Discover) searchArtists(ctx context.Context, query string, limit int) ([
 			Kind: apiserver.DiscoverArtist, Provider: music.ProviderArtist, ExternalID: match.MBID,
 			Title: match.Name, Disambiguation: match.Disambiguation,
 			Year: releaseYear(match.Born),
+		}
+		personID, found, err := a.People.FindByExternalID(ctx, music.ProviderArtist, match.MBID)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			results[i].LibraryID = &personID
 		}
 	}
 	return results, nil

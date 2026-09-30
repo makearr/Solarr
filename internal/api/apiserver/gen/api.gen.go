@@ -1241,10 +1241,13 @@ type DiscoverResult struct {
 	ExternalId     string  `json:"external_id"`
 
 	// Kind Absent means album, which is what search returned before artists were searchable.
-	Kind     *DiscoverKind `json:"kind,omitempty"`
-	Provider string        `json:"provider"`
-	Title    string        `json:"title"`
-	Year     *int64        `json:"year,omitempty"`
+	Kind *DiscoverKind `json:"kind,omitempty"`
+
+	// LibraryId Already in the library: the work (an album) or the person (an artist) it is. Absent when it is new.
+	LibraryId *int64 `json:"library_id,omitempty"`
+	Provider  string `json:"provider"`
+	Title     string `json:"title"`
+	Year      *int64 `json:"year,omitempty"`
 }
 
 // DownloadFolder One upstream-download destination (todo 4.18). Watched: each entry is imported once it has settled, once only.
