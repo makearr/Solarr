@@ -48,9 +48,18 @@ function mount() {
   );
 }
 
+// Every endpoint but /people answers with what the test set; /people answers an empty page.
+let answer: unknown = { data: [], error: undefined };
+const respond = (value: unknown) => {
+  answer = value;
+};
+
 beforeEach(() => {
   get.mockReset();
-  get.mockResolvedValue({ data: [], error: undefined });
+  answer = { data: [], error: undefined };
+  get.mockImplementation((path: string) =>
+    Promise.resolve(path === "/people" ? { data: { items: [] }, error: undefined } : answer),
+  );
 });
 
 test("a query below the 2-character floor never fires a request", async () => {
@@ -66,7 +75,7 @@ test("a query below the 2-character floor never fires a request", async () => {
 });
 
 test("a 2-character query debounces before firing, and shows results", async () => {
-  get.mockResolvedValue({
+  respond({
     data: [
       {
         work: {
@@ -96,7 +105,7 @@ test("a 2-character query debounces before firing, and shows results", async () 
 });
 
 test("escape clears the query and closes the dropdown", async () => {
-  get.mockResolvedValue({
+  respond({
     data: [
       {
         work: {
@@ -121,7 +130,7 @@ test("escape clears the query and closes the dropdown", async () => {
 });
 
 test("blur closes the dropdown", async () => {
-  get.mockResolvedValue({
+  respond({
     data: [
       {
         work: {
@@ -148,7 +157,7 @@ test("blur closes the dropdown", async () => {
 });
 
 test("a result links to its own work", async () => {
-  get.mockResolvedValue({
+  respond({
     data: [
       {
         work: {
@@ -178,12 +187,13 @@ describe("no matches", () => {
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: "nothing" } });
 
-    await screen.findByText("No matches.");
+    await screen.findByText("No matches in your library.");
   });
 });
 
 test("artists and albums not in the library are offered, to add in a library the person may add to", async () => {
   get.mockImplementation((path: string, options?: { params: { query: { kind?: string } } }) => {
+    if (path === "/people") return Promise.resolve({ data: { items: [] }, error: undefined });
     if (path === "/libraries") {
       return Promise.resolve({ data: [{ id: 3, media_type: "music", name: "Music", permission: "manage" }], error: undefined });
     }
