@@ -34,6 +34,7 @@ import { People } from "./People";
 import { PersonDetail } from "./PersonDetail";
 import { QualityProfilesPage } from "./QualityProfileEditor";
 import { QualityProfiles } from "./QualityProfiles";
+import { RecycleBin } from "./RecycleBin";
 import { RootFolders } from "./RootFolders";
 import { BlocklistsSettings, LibrariesSettings, MetadataSettingsPage, NetworkSettings } from "./Settings";
 import { Backups } from "./Backups";
@@ -167,6 +168,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/moves", component: Moves }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/downloads", component: DownloadFolders }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/import", component: Import }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/storage/recycle-bin", component: RecycleBin }),
   // Packs moved to each library 2026-09-11; redirected rather than 404ing,
   // same as /import and /moves below.
   createRoute({

@@ -16,7 +16,7 @@ export function LibraryFileManagement() {
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
   const id = categoryId ? Number(categoryId) : undefined;
   const queryClient = useQueryClient();
-  // Sonarr's basic view: folders, deleted tracks and the recycling bin; the rest is advanced.
+  // Sonarr's basic view: folders and deleted tracks; the recycle bin and the rest are advanced (2026-09-30).
   const advanced = isTierVisible(useTier(), "advanced");
 
   const saved = useQuery({
@@ -125,6 +125,7 @@ export function LibraryFileManagement() {
         />
         </>
         )}
+        {advanced && (
         <label className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
           <span className="w-48 shrink-0">Recycling Bin Cleanup</span>
           <input
@@ -136,10 +137,12 @@ export function LibraryFileManagement() {
             className={`${inputStyle} w-20`}
           />
           <span className="text-xs text-ink-muted">
-            days. Deleted files go to each root folder&apos;s recycle bin, never straight to deletion, and are
-            removed after this.
+            days, for this library. Deleted files go to each root folder&apos;s recycle bin, never straight to
+            deletion, and are removed after this -- or sooner once the bin passes its size limit under
+            Storage.
           </span>
         </label>
+        )}
       </section>
 
       {advanced && (

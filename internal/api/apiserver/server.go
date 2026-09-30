@@ -546,6 +546,8 @@ func New(config Config) (*Server, error) {
 			secured.Patch("/network", server.UpdateNetworkSettings)
 			secured.Get("/cache", server.GetCache)
 			secured.Patch("/cache", server.UpdateCacheBudget)
+			secured.Get("/recyclebin", server.GetRecycleBinLimits)
+			secured.Patch("/recyclebin", server.UpdateRecycleBinLimits)
 			secured.Get("/priority", server.GetPrioritySettings)
 			secured.Patch("/priority", server.UpdatePrioritySettings)
 			secured.Get("/metadata/settings", server.GetMetadataSettings)
