@@ -109,16 +109,16 @@ func (s *Server) libraryQualityView(category settings.Category) gen.LibraryQuali
 	return view
 }
 
-// targetOutsideProfiles warns only when no profile of the library takes the target: any of them will do,
-// the second as well as the first (asked 2026-09-30). Empty when one fits or none can be read.
+// targetOutsideProfiles warns only when no profile of the library takes the target, in any tier of any
+// profile (asked 2026-09-30: AAC is Space conscious' second codec). Empty when one does or none reads.
 func targetOutsideProfiles(snapshot *settings.Snapshot, profiles []gen.QualityProfileRef, facts score.Facts) string {
 	var reasons []string
 	for _, profile := range profiles {
-		fits, known, reason := profileFits(snapshot, profile.Id, facts)
+		accepts, known, reason := quality.ProfileAccepts(snapshot, profile.Id, facts)
 		if !known {
 			continue
 		}
-		if fits {
+		if accepts {
 			return ""
 		}
 		reasons = append(reasons, profile.Name+": "+reason)
@@ -139,9 +139,4 @@ func targetFacts(target settings.QualityTarget) score.Facts {
 		facts.File.OverallBitrate = facts.File.AudioBitrate
 	}
 	return facts
-}
-
-// profileFits is quality.ProfileFits, kept under its old name for this package's callers.
-func profileFits(snapshot *settings.Snapshot, profileID int64, facts score.Facts) (fits, known bool, reason string) {
-	return quality.ProfileFits(snapshot, profileID, facts)
 }

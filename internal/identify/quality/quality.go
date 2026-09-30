@@ -44,6 +44,17 @@ func Judge(snapshot *settings.Snapshot, category settings.Category, facts score.
 // ProfileFits is score.Fits for a stored profile; known is false when it is missing or its rules do
 // not parse.
 func ProfileFits(snapshot *settings.Snapshot, profileID int64, facts score.Facts) (fits, known bool, reason string) {
+	return judgeProfile(snapshot, profileID, facts, score.Fits)
+}
+
+// ProfileAccepts is score.Accepts for a stored profile, with ProfileFits' known.
+func ProfileAccepts(snapshot *settings.Snapshot, profileID int64, facts score.Facts) (accepts, known bool, reason string) {
+	return judgeProfile(snapshot, profileID, facts, score.Accepts)
+}
+
+func judgeProfile(
+	snapshot *settings.Snapshot, profileID int64, facts score.Facts, check func(score.Profile, score.Facts) (bool, string),
+) (bool, bool, string) {
 	profile, found := snapshot.QualityProfile(profileID)
 	if !found {
 		return false, false, ""
@@ -52,8 +63,8 @@ func ProfileFits(snapshot *settings.Snapshot, profileID int64, facts score.Facts
 	if err != nil {
 		return false, false, ""
 	}
-	fits, reason = score.Fits(rules, facts)
-	return fits, true, reason
+	ok, reason := check(rules, facts)
+	return ok, true, reason
 }
 
 // MeetsTarget is codec and container equal, and the bitrate within the tolerance unless lossless.

@@ -51,13 +51,13 @@ func TestLibraryQuality_SaveAndWarnWhenTheTargetFitsNoProfile(t *testing.T) {
 	path := "/api/v1/categories/" + strconv.FormatInt(id, 10) + "/quality"
 	aac := `"target":{"audio_codec":"aac","container":"m4a","bitrate_kbps":256,"tolerance_pct":10}`
 
-	put := func(first, second string) qualityBody {
+	put := func(first, second, target string) qualityBody {
 		t.Helper()
 		profiles := fmt.Sprintf("%d", ids[first])
 		if second != "" {
 			profiles += fmt.Sprintf(",%d", ids[second])
 		}
-		body := fmt.Sprintf(`{"profile_ids":[%s],"cutoff_profile_id":%d,%s}`, profiles, ids[first], aac)
+		body := fmt.Sprintf(`{"profile_ids":[%s],"cutoff_profile_id":%d,%s}`, profiles, ids[first], target)
 		recorder := fixture.do(authedPut(t, cookies, path, body))
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("status = %d, %s", recorder.Code, recorder.Body)
@@ -69,7 +69,7 @@ func TestLibraryQuality_SaveAndWarnWhenTheTargetFitsNoProfile(t *testing.T) {
 		return saved
 	}
 
-	fits := put("Lossy 320", "Lossless preferred")
+	fits := put("Lossy 320", "Lossless preferred", aac)
 	if len(fits.Warnings) != 0 {
 		t.Errorf("aac 256 under Lossy 320 warned: %v", fits.Warnings)
 	}
@@ -80,21 +80,28 @@ func TestLibraryQuality_SaveAndWarnWhenTheTargetFitsNoProfile(t *testing.T) {
 		t.Errorf("available = %v, want the suggested order first", got)
 	}
 
-	second := put("Lossless preferred", "Lossy 320")
+	second := put("Lossless preferred", "Lossy 320", aac)
 	if len(second.Warnings) != 0 {
 		t.Errorf("aac 256 in the second profile warned: %v", second.Warnings)
 	}
 
-	misses := put("Lossless preferred", "")
-	if len(misses.Warnings) != 1 || !strings.Contains(misses.Warnings[0], "Lossless preferred") {
-		t.Errorf("aac 256 under Lossless preferred alone: warnings = %v, want one naming the profile", misses.Warnings)
+	// The reported case: AAC is Space conscious' second codec, and 160 kbps its AAC ideal.
+	aac160 := `"target":{"audio_codec":"aac","container":"m4a","bitrate_kbps":160,"tolerance_pct":10}`
+	if secondTier := put("Space conscious", "", aac160); len(secondTier.Warnings) != 0 {
+		t.Errorf("aac 160 under Space conscious warned: %v", secondTier.Warnings)
+	}
+
+	aac128 := `"target":{"audio_codec":"aac","container":"m4a","bitrate_kbps":128,"tolerance_pct":10}`
+	misses := put("Lossy 320", "", aac128)
+	if len(misses.Warnings) != 1 || !strings.Contains(misses.Warnings[0], "Lossy 320: its bitrate range is 224kbps to 320kbps") {
+		t.Errorf("aac 128 under Lossy 320 alone: warnings = %v, want one naming the profile and why", misses.Warnings)
 	}
 
 	var reread qualityBody
 	if err := json.Unmarshal(fixture.do(authedGet(t, cookies, path)).Body.Bytes(), &reread); err != nil {
 		t.Fatal(err)
 	}
-	if reread.CutoffProfileID == nil || *reread.CutoffProfileID != ids["Lossless preferred"] || len(reread.Warnings) != 1 {
+	if reread.CutoffProfileID == nil || *reread.CutoffProfileID != ids["Lossy 320"] || len(reread.Warnings) != 1 {
 		t.Errorf("read back: cutoff = %v warnings = %v", reread.CutoffProfileID, reread.Warnings)
 	}
 }

@@ -38,3 +38,29 @@ func TestFits(t *testing.T) {
 		}
 	}
 }
+
+// A library's target need only be taken by a profile, in any tier (2026-09-30).
+func TestAccepts(t *testing.T) {
+	profile, err := score.Parse([]byte(lossy320))
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := func(codec string, kbps int64) score.Facts {
+		return score.Facts{File: score.FileFacts{AudioCodec: codec, AudioBitrate: kbps * 1000, OverallBitrate: kbps * 1000}}
+	}
+	for _, tc := range []struct {
+		name    string
+		facts   score.Facts
+		accepts bool
+		reason  string
+	}{
+		{"flac in the second tier is taken", file("flac", 900), true, ""},
+		{"aac inside its range", file("aac", 256), true, ""},
+		{"aac below its minimum", file("aac", 128), false, "its bitrate range is 224kbps to 320kbps"},
+	} {
+		accepts, reason := score.Accepts(profile, tc.facts)
+		if accepts != tc.accepts || reason != tc.reason {
+			t.Errorf("%s: Accepts = %v %q, want %v %q", tc.name, accepts, reason, tc.accepts, tc.reason)
+		}
+	}
+}
