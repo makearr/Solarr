@@ -51,15 +51,18 @@ type ScalarSettingsEntry struct {
 	NetworkProxyBypass        []string `yaml:"network_proxy_bypass,omitempty"`
 	NetworkAllowCIDRsEnabled  bool     `yaml:"network_allow_cidrs_enabled"`
 	NetworkAllowCIDRs         []string `yaml:"network_allow_cidrs,omitempty"`
-	CacheMaxBytes             int64    `yaml:"cache_max_bytes,omitempty"`
-	CacheMaxAgeDays           int64    `yaml:"cache_max_age_days,omitempty"`
-	CacheImagesSharePercent   int64    `yaml:"cache_images_share_percent,omitempty"`
-	CacheMetadataSharePercent int64    `yaml:"cache_metadata_share_percent,omitempty"`
-	PriorityUserRequestWeight int64    `yaml:"priority_user_request_weight,omitempty"`
-	PriorityNewReleaseWeight  int64    `yaml:"priority_new_release_weight,omitempty"`
-	PriorityGapWeight         int64    `yaml:"priority_gap_weight,omitempty"`
-	PriorityUpgradeWeight     int64    `yaml:"priority_upgrade_weight,omitempty"`
-	PriorityNewReleaseDays    int64    `yaml:"priority_new_release_days,omitempty"`
+	// RecycleBinMaxBytes and its share of a root; absent keeps what is stored.
+	RecycleBinMaxBytes         *int64 `yaml:"recycle_bin_max_bytes,omitempty"`
+	RecycleBinMaxPercentOfRoot *int64 `yaml:"recycle_bin_max_percent_of_root,omitempty"`
+	CacheMaxBytes              int64  `yaml:"cache_max_bytes,omitempty"`
+	CacheMaxAgeDays            int64  `yaml:"cache_max_age_days,omitempty"`
+	CacheImagesSharePercent    int64  `yaml:"cache_images_share_percent,omitempty"`
+	CacheMetadataSharePercent  int64  `yaml:"cache_metadata_share_percent,omitempty"`
+	PriorityUserRequestWeight  int64  `yaml:"priority_user_request_weight,omitempty"`
+	PriorityNewReleaseWeight   int64  `yaml:"priority_new_release_weight,omitempty"`
+	PriorityGapWeight          int64  `yaml:"priority_gap_weight,omitempty"`
+	PriorityUpgradeWeight      int64  `yaml:"priority_upgrade_weight,omitempty"`
+	PriorityNewReleaseDays     int64  `yaml:"priority_new_release_days,omitempty"`
 	// AutomaticSearchesPerHour is the search budget; absent keeps the stored value.
 	AutomaticSearchesPerHour *int64   `yaml:"automatic_searches_per_hour,omitempty"`
 	BrainzMashUserAgent      string   `yaml:"brainzmash_user_agent,omitempty"`
@@ -110,6 +113,21 @@ func (d *Document) NameSettings(keys []string) {
 }
 
 func (e ScalarSettingsEntry) has(key string) bool { return e.present == nil || e.present[key] }
+
+// recycleBinLimits is the document's recycle bin limits, a missing one at its default; nil when neither is named.
+func (e ScalarSettingsEntry) recycleBinLimits() *RecycleBinLimits {
+	if e.RecycleBinMaxBytes == nil && e.RecycleBinMaxPercentOfRoot == nil {
+		return nil
+	}
+	limits := RecycleBinLimits{MaxPercentOfRoot: DefaultRecycleBinMaxPercentOfRoot}
+	if e.RecycleBinMaxBytes != nil {
+		limits.MaxBytes = *e.RecycleBinMaxBytes
+	}
+	if e.RecycleBinMaxPercentOfRoot != nil {
+		limits.MaxPercentOfRoot = *e.RecycleBinMaxPercentOfRoot
+	}
+	return &limits
+}
 
 // hasAll is whether a group is complete; its values are judged only then, the missing keys first.
 func (e ScalarSettingsEntry) hasAll(keys []string) bool {
@@ -317,6 +335,7 @@ func (c *Cache) Export() Document {
 	priority := snapshot.PrioritySettings()
 	metadata := snapshot.MetadataSettings()
 	extras := snapshot.ImportExtraFiles()
+	recycleBin := snapshot.RecycleBinLimits()
 	settingsEntry := ScalarSettingsEntry{
 		AuthRequired:                 snapshot.AuthRequired(),
 		ImportAutoCommitConfidence:   snapshot.ImportAutoCommitConfidence(),
@@ -330,6 +349,8 @@ func (c *Cache) Export() Document {
 		NetworkProxyBypass:           network.ProxyBypass,
 		NetworkAllowCIDRsEnabled:     network.AllowCIDRsEnabled,
 		NetworkAllowCIDRs:            network.AllowCIDRs,
+		RecycleBinMaxBytes:           &recycleBin.MaxBytes,
+		RecycleBinMaxPercentOfRoot:   &recycleBin.MaxPercentOfRoot,
 		CacheMaxBytes:                cacheBudget.MaxBytes,
 		CacheMaxAgeDays:              cacheBudget.MaxAgeDays,
 		CacheImagesSharePercent:      cacheBudget.ImagesSharePercent,
@@ -526,6 +547,11 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 		cacheBudget := CacheBudget{
 			MaxBytes: d.Settings.CacheMaxBytes, MaxAgeDays: d.Settings.CacheMaxAgeDays,
 			ImagesSharePercent: d.Settings.CacheImagesSharePercent, MetadataSharePercent: d.Settings.CacheMetadataSharePercent,
+		}
+		if limits := d.Settings.recycleBinLimits(); limits != nil {
+			for _, problem := range validateRecycleBinLimits(*limits) {
+				problems = append(problems, prefixed("settings", problem))
+			}
 		}
 		if d.Settings.hasAll(settingsGroups[1]) {
 			for _, problem := range validateCacheBudget(cacheBudget) {
@@ -1098,6 +1124,12 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 	}
 	if entry.MetadataPeopleBackfillPerRun != nil {
 		values[KeyMetadataPeopleBackfillPerRun] = strconv.FormatInt(*entry.MetadataPeopleBackfillPerRun, 10)
+	}
+	if entry.RecycleBinMaxBytes != nil {
+		values[KeyRecycleBinMaxBytes] = strconv.FormatInt(*entry.RecycleBinMaxBytes, 10)
+	}
+	if entry.RecycleBinMaxPercentOfRoot != nil {
+		values[KeyRecycleBinMaxPercentOfRoot] = strconv.FormatInt(*entry.RecycleBinMaxPercentOfRoot, 10)
 	}
 	if entry.ImportExtraFiles != nil {
 		values[KeyImportExtraFiles] = strconv.FormatBool(*entry.ImportExtraFiles)

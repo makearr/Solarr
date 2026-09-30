@@ -275,6 +275,18 @@ func NewDefaultRegistry() *Registry {
 		Default:  fmt.Sprintf("%d", DefaultCacheMetadataSharePercent),
 	})
 
+	// Recycle bin (section 10.8): the space bound, global; each library keeps its own days.
+	registry.MustRegister(SettingDef{
+		Key: KeyRecycleBinMaxBytes, Kind: KindInt, Tier: TierAdvanced,
+		Name: "Recycle bin size limit", HelpText: "All recycle bins together, in bytes; the oldest go first. 0 is no limit.",
+		Default: "0",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyRecycleBinMaxPercentOfRoot, Kind: KindInt, Tier: TierAdvanced,
+		Name: "Recycle bin share of a root folder", HelpText: "A root's recycle bin as a percentage of the root; the oldest go first. 0 is no limit.",
+		Default: fmt.Sprintf("%d", DefaultRecycleBinMaxPercentOfRoot),
+	})
+
 	// Priority (ADR-36/ADR-55): scoring rules, advanced per ADR-26's own table.
 	registry.MustRegister(SettingDef{
 		Key: KeyPriorityUserRequestWeight, Kind: KindInt, Tier: TierAdvanced,

@@ -796,6 +796,27 @@ export interface paths {
         patch: operations["updateCacheBudget"];
         trace?: never;
     };
+    "/recyclebin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The recycle bin's space bound (section 10.8); each library keeps its own retention days. */
+        get: operations["getRecycleBinLimits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the recycle bin's space bound. Administrator only.
+         * @description Takes effect at the next recycle bin cleanup.
+         */
+        patch: operations["updateRecycleBinLimits"];
+        trace?: never;
+    };
     "/cache/clear": {
         parameters: {
             query?: never;
@@ -3422,6 +3443,18 @@ export interface components {
             bitrate_kbps?: number;
             /** Format: int64 */
             tolerance_pct: number;
+        };
+        RecycleBinLimits: {
+            /**
+             * Format: int64
+             * @description All recycle bins together, in bytes; the oldest entries go first. 0 is no limit.
+             */
+            max_bytes: number;
+            /**
+             * Format: int64
+             * @description A root's recycle bin as a percentage of the root; the oldest go first. 0 is no limit.
+             */
+            max_percent_of_root: number;
         };
         LibraryQualityWrite: {
             /** @description The profiles the library accepts, earlier preferred. */
@@ -6788,6 +6821,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CacheReport"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getRecycleBinLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The limits. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecycleBinLimits"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    updateRecycleBinLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecycleBinLimits"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecycleBinLimits"];
                 };
             };
             400: components["responses"]["Problem"];

@@ -15,6 +15,7 @@ import {
   Library as LibraryIcon,
   Radar,
   ScanSearch,
+  Trash2,
   Settings,
   Share2,
   type LucideIcon,
@@ -59,6 +60,7 @@ const STORAGE_SECTIONS: readonly { to: string; label: string; icon: LucideIcon; 
   { to: "/storage/moves", label: "Move & drain", icon: ArrowLeftRight, tier: "expert" },
   { to: "/storage/downloads", label: "Download folders", icon: Download },
   { to: "/storage/import", label: "Import", icon: ScanSearch },
+  { to: "/storage/recycle-bin", label: "Recycle bin", icon: Trash2 },
 ];
 
 const CONNECTIONS_SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier: Tier }[] = [

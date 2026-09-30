@@ -2629,6 +2629,15 @@ type ReadyStatus struct {
 // ReadyStatusStatus defines model for ReadyStatus.Status.
 type ReadyStatusStatus string
 
+// RecycleBinLimits defines model for RecycleBinLimits.
+type RecycleBinLimits struct {
+	// MaxBytes All recycle bins together, in bytes; the oldest entries go first. 0 is no limit.
+	MaxBytes int64 `json:"max_bytes"`
+
+	// MaxPercentOfRoot A root's recycle bin as a percentage of the root; the oldest go first. 0 is no limit.
+	MaxPercentOfRoot int64 `json:"max_percent_of_root"`
+}
+
 // Rejection One failed gate, as data rather than a formatted string (ADR-10).
 type Rejection struct {
 	Field  string `json:"field"`
@@ -3855,6 +3864,9 @@ type CreateQualityProfileJSONRequestBody = QualityProfileWrite
 // UpdateQualityProfileJSONRequestBody defines body for UpdateQualityProfile for application/json ContentType.
 type UpdateQualityProfileJSONRequestBody = QualityProfileWrite
 
+// UpdateRecycleBinLimitsJSONRequestBody defines body for UpdateRecycleBinLimits for application/json ContentType.
+type UpdateRecycleBinLimitsJSONRequestBody = RecycleBinLimits
+
 // AddRootFolderJSONRequestBody defines body for AddRootFolder for application/json ContentType.
 type AddRootFolderJSONRequestBody AddRootFolderJSONBody
 
@@ -4340,6 +4352,12 @@ type ServerInterface interface {
 	// Readiness.
 	// (GET /ready)
 	GetReady(w http.ResponseWriter, r *http.Request)
+	// The recycle bin's space bound (section 10.8); each library keeps its own retention days.
+	// (GET /recyclebin)
+	GetRecycleBinLimits(w http.ResponseWriter, r *http.Request)
+	// Change the recycle bin's space bound. Administrator only.
+	// (PATCH /recyclebin)
+	UpdateRecycleBinLimits(w http.ResponseWriter, r *http.Request)
 	// The configured library roots.
 	// (GET /rootfolders)
 	ListRootFolders(w http.ResponseWriter, r *http.Request)
@@ -5336,6 +5354,18 @@ func (_ Unimplemented) RemoveQueueItem(w http.ResponseWriter, r *http.Request, i
 // Readiness.
 // (GET /ready)
 func (_ Unimplemented) GetReady(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The recycle bin's space bound (section 10.8); each library keeps its own retention days.
+// (GET /recyclebin)
+func (_ Unimplemented) GetRecycleBinLimits(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change the recycle bin's space bound. Administrator only.
+// (PATCH /recyclebin)
+func (_ Unimplemented) UpdateRecycleBinLimits(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10054,6 +10084,50 @@ func (siw *ServerInterfaceWrapper) GetReady(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// GetRecycleBinLimits operation middleware
+func (siw *ServerInterfaceWrapper) GetRecycleBinLimits(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRecycleBinLimits(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateRecycleBinLimits operation middleware
+func (siw *ServerInterfaceWrapper) UpdateRecycleBinLimits(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateRecycleBinLimits(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRootFolders operation middleware
 func (siw *ServerInterfaceWrapper) ListRootFolders(w http.ResponseWriter, r *http.Request) {
 
@@ -12179,6 +12253,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/ready", wrapper.GetReady)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/recyclebin", wrapper.GetRecycleBinLimits)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/recyclebin", wrapper.UpdateRecycleBinLimits)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/rootfolders", wrapper.ListRootFolders)

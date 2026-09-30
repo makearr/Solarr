@@ -1222,6 +1222,38 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /recyclebin:
+    get:
+      operationId: getRecycleBinLimits
+      tags: [settings]
+      summary: The recycle bin's space bound (section 10.8); each library keeps its own retention days.
+      responses:
+        "200":
+          description: The limits.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecycleBinLimits" }
+        "401": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateRecycleBinLimits
+      tags: [settings]
+      summary: Change the recycle bin's space bound. Administrator only.
+      description: Takes effect at the next recycle bin cleanup.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecycleBinLimits" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecycleBinLimits" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /cache/clear:
     post:
       operationId: clearCache
@@ -5419,6 +5451,19 @@ components:
           format: int64
           description: Absent for a lossless codec.
         tolerance_pct: { type: integer, format: int64, minimum: 0, maximum: 50 }
+
+    RecycleBinLimits:
+      type: object
+      required: [max_bytes, max_percent_of_root]
+      properties:
+        max_bytes:
+          type: integer
+          format: int64
+          description: All recycle bins together, in bytes; the oldest entries go first. 0 is no limit.
+        max_percent_of_root:
+          type: integer
+          format: int64
+          description: A root's recycle bin as a percentage of the root; the oldest go first. 0 is no limit.
 
     LibraryQualityWrite:
       type: object
