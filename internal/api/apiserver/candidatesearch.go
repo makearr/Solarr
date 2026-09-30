@@ -77,6 +77,8 @@ type CandidateDecision struct {
 	// IndexerName is empty when the indexer has since been removed.
 	IndexerName string
 	Blocklisted bool
+	// NoClient means no enabled download client takes the release's protocol.
+	NoClient bool
 }
 
 // SearchTerms are a person's own artist and album, searched instead of the work's own.
@@ -472,7 +474,7 @@ func candidateDecisionView(decision CandidateDecision) gen.CandidateDecision {
 		IndexerId: decision.IndexerID, Guid: decision.GUID, Title: decision.Title,
 		Protocol: gen.CandidateDecisionProtocol(decision.Protocol),
 		Source:   gen.CandidateDecisionSource(decision.Source), DecidedAt: decision.DecidedAt,
-		IndexerName: &decision.IndexerName, Blocklisted: &decision.Blocklisted,
+		IndexerName: &decision.IndexerName, Blocklisted: &decision.Blocklisted, NoClient: &decision.NoClient,
 	}
 	if decision.MatchConfidence != nil {
 		confidence := float32(*decision.MatchConfidence)

@@ -55,7 +55,15 @@ export function CandidateList({
                 Blocklist
               </button>
             )}
-            {decision.outcome === "ACCEPT" && !decision.blocklisted && (
+            {decision.no_client && (
+              <span
+                className="rounded-full border border-border-subtle px-1.5 py-px text-[0.6875rem] text-ink-muted"
+                title={`No enabled download client takes ${decision.protocol} releases`}
+              >
+                no {decision.protocol} client
+              </span>
+            )}
+            {decision.outcome === "ACCEPT" && !decision.blocklisted && !decision.no_client && (
               <button
                 type="button"
                 onClick={() => onSend(decision.id)}

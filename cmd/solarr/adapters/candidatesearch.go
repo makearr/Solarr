@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
@@ -257,6 +258,36 @@ func (c CandidateSearch) decisionViews(ctx context.Context, details []library.De
 			views[index].Blocklisted = err == nil && blocked
 		}
 	}
+	return c.sendableFirst(ctx, views)
+}
+
+// sendableFirst marks releases no enabled client can take and lists them after the rest, keeping
+// the best-first order within each: a torrent ranked first with no torrent client misleads.
+func (c CandidateSearch) sendableFirst(ctx context.Context, views []apiserver.CandidateDecision) []apiserver.CandidateDecision {
+	if c.Dispatch.Downloaders == nil {
+		return views
+	}
+	clients, err := c.Dispatch.Downloaders(ctx)
+	if err != nil {
+		return views
+	}
+	protocols := map[string]bool{}
+	for _, client := range clients {
+		protocols[client.Protocol] = true
+	}
+	for index := range views {
+		views[index].NoClient = !protocols[views[index].Protocol]
+	}
+	slices.SortStableFunc(views, func(a, b apiserver.CandidateDecision) int {
+		switch {
+		case a.NoClient == b.NoClient:
+			return 0
+		case a.NoClient:
+			return 1
+		default:
+			return -1
+		}
+	})
 	return views
 }
 
