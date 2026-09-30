@@ -4264,6 +4264,30 @@ export interface components {
             /** @description A short hint ("abc…xyz"), present only when has_value is true. */
             masked?: string;
         };
+        /** @description What one import brings in. Absent is monitored items and every album, as before options. */
+        ArrSyncOptions: {
+            /**
+             * @description Monitored artists and albums.
+             * @default true
+             */
+            monitored: boolean;
+            /**
+             * @description Unmonitored ones too; they arrive unmonitored, an artist without following them.
+             * @default false
+             */
+            unmonitored: boolean;
+            /**
+             * @description Which albums, by what the *Arr holds of them.
+             * @default all
+             * @enum {string}
+             */
+            albums: "all" | "missing" | "complete";
+            /** @description How the *Arr's paths read here, e.g. /media/music as /mnt/media/music; the first matching prefix applies. Used to find each artist's library by its root folder. */
+            path_rewrites?: {
+                from: string;
+                to: string;
+            }[];
+        };
         ArrDownloadClient: {
             name: string;
             /** @description The *Arr implementation, lower case: "sabnzbd", "qbittorrent", ... */
@@ -7810,7 +7834,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ArrSyncOptions"];
+            };
+        };
         responses: {
             /** @description The run, just started (state RUNNING). */
             200: {

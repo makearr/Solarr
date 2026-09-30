@@ -68,6 +68,15 @@ type LidarrAlbum struct {
 	ArtistID       int64  `json:"artistId"`
 	ForeignAlbumID string `json:"foreignAlbumId"`
 	Monitored      bool   `json:"monitored"`
+	Statistics     struct {
+		TrackFileCount  int64 `json:"trackFileCount"`
+		TotalTrackCount int64 `json:"totalTrackCount"`
+	} `json:"statistics"`
+}
+
+// Complete is an album Lidarr holds every track of.
+func (a LidarrAlbum) Complete() bool {
+	return a.Statistics.TotalTrackCount > 0 && a.Statistics.TrackFileCount >= a.Statistics.TotalTrackCount
 }
 
 // LidarrQualityProfile is GET /api/v1/qualityprofile's own shape -- report

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -20,6 +21,7 @@ type fakeArrSync struct {
 	err    error
 
 	lastSyncInstanceID int64
+	lastSyncOptions    apiserver.ArrSyncOptions
 	syncCalls          int
 	lastListInstanceID int64
 	lastGetImportID    int64
@@ -30,9 +32,10 @@ type fakeArrSync struct {
 	lastRootFoldersInstanceID int64
 }
 
-func (f *fakeArrSync) Sync(_ context.Context, instanceID int64) (apiserver.ArrImportRun, error) {
+func (f *fakeArrSync) Sync(_ context.Context, instanceID int64, options apiserver.ArrSyncOptions) (apiserver.ArrImportRun, error) {
 	f.syncCalls++
 	f.lastSyncInstanceID = instanceID
+	f.lastSyncOptions = options
 	if f.err != nil {
 		return apiserver.ArrImportRun{}, f.err
 	}
@@ -97,6 +100,36 @@ func TestSyncArrInstance_ReachesTheSyncerAndRendersTheRun(t *testing.T) {
 	}
 	if body.ArtistsCreated != 2 {
 		t.Errorf("artists_created = %d, want 2", body.ArtistsCreated)
+	}
+}
+
+// The import options (2026-09-30): absent is the old behaviour, a body names what to bring in.
+func TestSyncArrInstance_ReadsTheImportOptions(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/arr/instances/3/sync", "")); recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if !reflect.DeepEqual(fixture.arrSync.lastSyncOptions, apiserver.DefaultArrSyncOptions) {
+		t.Errorf("no body: options = %+v, want the defaults", fixture.arrSync.lastSyncOptions)
+	}
+
+	body := `{"monitored":false,"unmonitored":true,"albums":"missing","path_rewrites":[{"from":"/media/music","to":"/mnt/media/music"}]}`
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/arr/instances/3/sync", body)); recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	want := apiserver.ArrSyncOptions{
+		Unmonitored: true, Albums: "missing",
+		PathRewrites: []apiserver.PathRewrite{{From: "/media/music", To: "/mnt/media/music"}},
+	}
+	if !reflect.DeepEqual(fixture.arrSync.lastSyncOptions, want) {
+		t.Errorf("options = %+v, want %+v", fixture.arrSync.lastSyncOptions, want)
+	}
+
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/arr/instances/3/sync", `{"monitored":false}`)); recorder.Code != http.StatusBadRequest {
+		t.Errorf("neither monitored nor unmonitored: status = %d, want 400", recorder.Code)
 	}
 }
 

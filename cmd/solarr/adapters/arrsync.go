@@ -57,7 +57,7 @@ type ArrSync struct {
 // actual walk (runAndFinish) runs detached from ctx: an HTTP request's own
 // context is cancelled the instant this method returns, but the sync it
 // started must keep running.
-func (a ArrSync) Sync(ctx context.Context, instanceID int64) (apiserver.ArrImportRun, error) {
+func (a ArrSync) Sync(ctx context.Context, instanceID int64, options apiserver.ArrSyncOptions) (apiserver.ArrImportRun, error) {
 	instance, err := a.Cache.GetArrInstance(ctx, instanceID)
 	if err != nil {
 		return apiserver.ArrImportRun{}, err
@@ -87,7 +87,7 @@ func (a ArrSync) Sync(ctx context.Context, instanceID int64) (apiserver.ArrImpor
 	}
 
 	client := a.Lidarr(instance.BaseURL, apiKey.Reveal())
-	go a.runAndFinish(context.WithoutCancel(ctx), importID, instanceID, instance, client)
+	go a.runAndFinish(context.WithoutCancel(ctx), importID, instanceID, instance, client, options)
 
 	run, err := a.Imports.Get(ctx, importID)
 	if err != nil {
@@ -102,8 +102,9 @@ func (a ArrSync) Sync(ctx context.Context, instanceID int64) (apiserver.ArrImpor
 // started it.
 func (a ArrSync) runAndFinish(
 	ctx context.Context, importID, instanceID int64, instance settings.ArrInstance, client arrimport.LidarrClient,
+	options apiserver.ArrSyncOptions,
 ) {
-	counts, syncErr := a.syncLidarr(ctx, importID, instance, client)
+	counts, syncErr := a.syncLidarr(ctx, importID, instance, client, options)
 
 	finishedAt := a.Clock.Now().Unix()
 	errMsg := ""
@@ -241,6 +242,7 @@ func arrImportItemView(item library.ArrImportItem) apiserver.ArrImportItem {
 // the one thing that fails the whole run.
 func (a ArrSync) syncLidarr(
 	ctx context.Context, importID int64, instance settings.ArrInstance, client arrimport.LidarrClient,
+	options apiserver.ArrSyncOptions,
 ) (library.ArrImportCounts, error) {
 	if _, err := client.SystemStatus(ctx); err != nil {
 		return library.ArrImportCounts{}, fmt.Errorf("connect: %w", err)
@@ -256,16 +258,19 @@ func (a ArrSync) syncLidarr(
 	var failures []string
 	fail := func(format string, args ...any) { failures = append(failures, fmt.Sprintf(format, args...)) }
 
+	wanted := func(monitored bool) bool {
+		return (monitored && options.Monitored) || (!monitored && options.Unmonitored)
+	}
 	for _, artist := range artists {
-		if !artist.Monitored {
+		if !wanted(artist.Monitored) {
 			continue
 		}
-		categoryID, ok := a.categoryFor(instance, artist.RootFolderPath, roots)
+		categoryID, ok := a.categoryFor(instance, rewritePath(artist.RootFolderPath, options.PathRewrites), roots)
 		if !ok {
 			fail("%s: no category matches root folder %q", artist.ArtistName, artist.RootFolderPath)
 			continue
 		}
-		personID, created, err := a.syncArtist(ctx, importID, artist)
+		personID, created, err := a.syncArtist(ctx, importID, artist, artist.Monitored)
 		if err != nil {
 			fail("%s: %v", artist.ArtistName, err)
 			continue
@@ -282,7 +287,7 @@ func (a ArrSync) syncLidarr(
 			continue
 		}
 		for _, album := range albums {
-			if !album.Monitored {
+			if !wanted(album.Monitored) || !albumWanted(album, options.Albums) {
 				continue
 			}
 			workCreated, err := a.syncAlbum(ctx, importID, categoryID, personID, album)
@@ -309,7 +314,9 @@ func (a ArrSync) syncLidarr(
 // way. created reports whether this call is the one that created the
 // person -- a brand-new person cannot have had a prior subscription either,
 // so the subscription is created exactly when the person is.
-func (a ArrSync) syncArtist(ctx context.Context, importID int64, artist arrimport.LidarrArtist) (personID int64, created bool, err error) {
+func (a ArrSync) syncArtist(
+	ctx context.Context, importID int64, artist arrimport.LidarrArtist, follow bool,
+) (personID int64, created bool, err error) {
 	if artist.ForeignArtistID == "" {
 		return 0, false, errors.New("no MusicBrainz artist id")
 	}
@@ -328,16 +335,21 @@ func (a ArrSync) syncArtist(ctx context.Context, importID int64, artist arrimpor
 	}
 	created = !found
 
-	subscriptionID, err := a.People.Subscribe(ctx, now, personID, 0, library.SubscriptionRequest{
-		MediaTypes: []string{"music"}, Roles: []string{"artist"},
-	})
-	if err != nil {
-		return 0, false, err
+	// An unmonitored artist arrives as an artist in the library, not one followed for new albums.
+	var subscription *int64
+	if follow {
+		subscriptionID, err := a.People.Subscribe(ctx, now, personID, 0, library.SubscriptionRequest{
+			MediaTypes: []string{"music"}, Roles: []string{"artist"},
+		})
+		if err != nil {
+			return 0, false, err
+		}
+		subscription = &subscriptionID
 	}
 
 	if _, err := a.Imports.AddItem(ctx, importID, library.NewArrImportItem{
 		Kind: library.ArrImportItemArtist, SourceID: strconv.FormatInt(artist.ID, 10), Title: artist.ArtistName,
-		PersonID: &personID, PersonCreated: created, SubscriptionID: &subscriptionID,
+		PersonID: &personID, PersonCreated: created, SubscriptionID: subscription,
 	}, now.Unix()); err != nil {
 		return 0, false, err
 	}
@@ -378,7 +390,7 @@ func (a ArrSync) syncAlbum(ctx context.Context, importID, categoryID, personID i
 		profileID = *category.QualityProfileID
 	}
 	item, err := a.Desired.EnsureAlbumItem(ctx, library.AlbumRequest{
-		WorkID: resolution.WorkID, CategoryID: categoryID, ProfileID: profileID, Monitored: true,
+		WorkID: resolution.WorkID, CategoryID: categoryID, ProfileID: profileID, Monitored: album.Monitored,
 	})
 	if err != nil {
 		return false, err
@@ -425,4 +437,30 @@ func (a ArrSync) categoryFor(instance settings.ArrInstance, rootFolderPath strin
 		return 0, false
 	}
 	return categories[0], true
+}
+
+// rewritePath reads an *Arr path as it is here: the first rewrite whose prefix it is under applies.
+func rewritePath(path string, rewrites []apiserver.PathRewrite) string {
+	for _, rewrite := range rewrites {
+		from := strings.TrimRight(rewrite.From, "/")
+		if from == "" {
+			continue
+		}
+		if path == from || strings.HasPrefix(path, from+"/") {
+			return strings.TrimRight(rewrite.To, "/") + strings.TrimPrefix(path, from)
+		}
+	}
+	return path
+}
+
+// albumWanted is the albums option: every album, those the *Arr lacks a track of, or those it holds whole.
+func albumWanted(album arrimport.LidarrAlbum, which string) bool {
+	switch which {
+	case "missing":
+		return !album.Complete()
+	case "complete":
+		return album.Complete()
+	default:
+		return true
+	}
 }

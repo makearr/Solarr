@@ -14,6 +14,21 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 )
 
+// ArrSyncOptions is what one import brings in (asked 2026-09-30): monitored and unmonitored items,
+// which albums by what the *Arr holds of them, and how its paths read here.
+type ArrSyncOptions struct {
+	Monitored, Unmonitored bool
+	// Albums is "all", "missing" (the *Arr lacks a track) or "complete".
+	Albums       string
+	PathRewrites []PathRewrite
+}
+
+// PathRewrite reads an *Arr's path prefix as another here, e.g. /media/music as /mnt/media/music.
+type PathRewrite struct{ From, To string }
+
+// DefaultArrSyncOptions is what a sync did before it had options: monitored items, every album.
+var DefaultArrSyncOptions = ArrSyncOptions{Monitored: true, Albums: "all"}
+
 // ErrArrAppNotYetSupported means Sync was asked to run a connection for an
 // app that only connects and parks today (ADR-52) -- Lidarr is the only one
 // with a real mapping this pass.
@@ -74,7 +89,7 @@ type ArrImportRevertResult struct {
 // Discover's own interface keeps -- this package never imports
 // internal/db/library directly.
 type ArrSync interface {
-	Sync(ctx context.Context, instanceID int64) (ArrImportRun, error)
+	Sync(ctx context.Context, instanceID int64, options ArrSyncOptions) (ArrImportRun, error)
 	ListImports(ctx context.Context, instanceID int64) ([]ArrImportRun, error)
 	GetImport(ctx context.Context, id int64) (ArrImportDetail, error)
 	Revert(ctx context.Context, id int64) (ArrImportRevertResult, error)
@@ -104,7 +119,26 @@ func (s *Server) SyncArrInstance(w http.ResponseWriter, r *http.Request, id int6
 		return
 	}
 
-	run, err := s.arrSync.Sync(r.Context(), id)
+	options := DefaultArrSyncOptions
+	if r.ContentLength != 0 {
+		var body gen.ArrSyncOptions
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the sync options could not be read")
+			return
+		}
+		options = ArrSyncOptions{Monitored: derefOr(body.Monitored, true), Unmonitored: derefOr(body.Unmonitored, false), Albums: "all"}
+		if body.Albums != nil {
+			options.Albums = string(*body.Albums)
+		}
+		for _, rewrite := range derefOr(body.PathRewrites, nil) {
+			options.PathRewrites = append(options.PathRewrites, PathRewrite{From: rewrite.From, To: rewrite.To})
+		}
+		if !options.Monitored && !options.Unmonitored {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Nothing to import", "choose monitored items, unmonitored items or both")
+			return
+		}
+	}
+	run, err := s.arrSync.Sync(r.Context(), id, options)
 	switch {
 	case errors.Is(err, ErrArrAppNotYetSupported):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
@@ -147,7 +181,8 @@ func (s *Server) ListArrInstanceRootFolders(w http.ResponseWriter, r *http.Reque
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
 			"Not yet supported", "this app only connects and parks its own intent so far")
 	case err != nil:
-		writeError(w, s.logger, err)
+		// An *Arr that does not answer is a 502 saying so, not an internal error (found 2026-09-30).
+		s.writeArrConnectionError(w, err)
 	default:
 		views := make([]gen.ArrRootFolder, len(paths))
 		for index, path := range paths {
