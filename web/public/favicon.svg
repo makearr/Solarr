@@ -8,12 +8,12 @@
     <mask id="reel">
       <rect width="64" height="64" fill="#fff"/>
       <g fill="#000">
-        <circle cx="32.00" cy="16.60" r="3.1"/>
-        <circle cx="45.34" cy="24.30" r="3.1"/>
-        <circle cx="45.34" cy="39.70" r="3.1"/>
-        <circle cx="32.00" cy="47.40" r="3.1"/>
-        <circle cx="18.66" cy="39.70" r="3.1"/>
-        <circle cx="18.66" cy="24.30" r="3.1"/>
+        <circle cx="32.00" cy="19.40" r="6.1"/>
+        <circle cx="43.98" cy="28.11" r="6.1"/>
+        <circle cx="39.41" cy="42.19" r="6.1"/>
+        <circle cx="24.59" cy="42.19" r="6.1"/>
+        <circle cx="20.02" cy="28.11" r="6.1"/>
+        <circle cx="32" cy="32" r="2.4"/>
       </g>
     </mask>
   </defs>
@@ -28,8 +28,6 @@
     <line x1="11.1" y1="52.9" x2="14.7" y2="49.3"/>
   </g>
   <circle cx="32" cy="32" r="21" fill="url(#sun)" mask="url(#reel)"/>
-  <g fill="#fff">
-    <ellipse cx="28.3" cy="38.4" rx="4.7" ry="3.6" transform="rotate(-22 28.3 38.4)"/>
-    <path d="M31.1 38.2V21.4c0-1 1.1-1.5 1.9-.9c2.4 1.9 6 3.3 6 7.6c0 1.1-1.1 1.4-1.7.5c-1-1.6-2.3-2.5-3.9-2.9v12.5z"/>
-  </g>
+  <circle cx="32" cy="32" r="21" fill="none" stroke="#c2410c" stroke-opacity="0.35" stroke-width="1.2"/>
+  <circle cx="32" cy="32" r="4.6" fill="none" stroke="#c2410c" stroke-opacity="0.45" stroke-width="1.2"/>
 </svg>
