@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 
 import { api } from "@/api/client";
+import { parseAudioRules } from "@/lib/qualityRules";
 import type { components } from "@/api/schema";
 
 /** A library's own quality: which shared profiles it accepts, in order, where upgrades stop, and
@@ -30,6 +31,29 @@ const CODECS = ["aac", "mp3", "opus", "vorbis", "flac", "alac"] as const;
 const LOSSLESS = new Set(["flac", "alac"]);
 const CONTAINERS = ["m4a", "mp3", "opus", "ogg", "flac"] as const;
 
+// Codec to its usual file type, for a target prefilled from a profile.
+const CONTAINER_OF: Record<string, string> = { aac: "m4a", alac: "m4a", mp3: "mp3", opus: "opus", vorbis: "ogg", flac: "flac" };
+
+/** "One exact quality" starts at the first profile's own bitrate target (answered 2026-09-30):
+ *  AAC around 160 kbps becomes aac, .m4a, 160 kbps. FLAC when the profile names no bitrate. */
+export function targetFromProfile(rulesJSON: string | undefined): QualityTarget {
+  const lossless: QualityTarget = { audio_codec: "flac", container: "flac", bitrate_kbps: undefined, tolerance_pct: 10 };
+  if (!rulesJSON) return lossless;
+  let first: { codec: string; ideal: string } | undefined;
+  try {
+    first = parseAudioRules(rulesJSON).bitrates.find((target) => target.codec && Number(target.ideal) > 0);
+  } catch {
+    return lossless;
+  }
+  if (!first) return lossless;
+  return {
+    audio_codec: first.codec,
+    container: CONTAINER_OF[first.codec] ?? first.codec,
+    bitrate_kbps: Number(first.ideal),
+    tolerance_pct: 10,
+  };
+}
+
 /** A library's quality (2026-09-19, answered 2026-09-24): the profiles it accepts in order of
  *  preference, the cutoff where upgrades stop, and the one target it aims for. */
 function LibraryQualityEditor() {
@@ -42,6 +66,15 @@ function LibraryQualityEditor() {
     enabled: id !== undefined,
     queryFn: async () => {
       const { data, error } = await api.GET("/categories/{id}/quality", { params: { path: { id: id! } } });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const profiles = useQuery({
+    queryKey: ["qualityProfiles"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/qualityprofiles");
       if (error) throw error;
       return data;
     },
@@ -201,7 +234,7 @@ function LibraryQualityEditor() {
             onChange={(event) =>
               setTarget(
                 event.target.value === "exact"
-                  ? { audio_codec: "flac", container: "flac", bitrate_kbps: undefined, tolerance_pct: 10 }
+                  ? targetFromProfile(profiles.data?.find((profile) => profile.id === order?.[0])?.rules)
                   : undefined,
               )
             }
@@ -280,7 +313,10 @@ function LibraryQualityEditor() {
 
       {quality.data.warnings.map((warning) => (
         <p key={warning} className="rounded-md border border-warn/50 bg-warn/10 px-3 py-2 text-xs">
-          {warning}
+          {warning}{" "}
+          <Link to="/quality-profiles" className="underline hover:text-ink">
+            Edit quality profiles
+          </Link>
         </p>
       ))}
 

@@ -43,9 +43,9 @@ func names(refs []struct {
 	return out
 }
 
-// A target outside the first profile's best tier is flagged (2026-09-19: "print a small warning
-// if the target quality does not fall into the highest priority quality profile").
-func TestLibraryQuality_SaveAndWarnWhenTheTargetMissesTheFirstProfile(t *testing.T) {
+// A target is flagged only when no profile of the library takes it: in the second is as good as in the
+// first (2026-09-30, replacing 2026-09-19's first-profile-only warning).
+func TestLibraryQuality_SaveAndWarnWhenTheTargetFitsNoProfile(t *testing.T) {
 	fixture, cookies, id := adminWithLibrary(t)
 	ids := profileIDs(t, fixture.cache)
 	path := "/api/v1/categories/" + strconv.FormatInt(id, 10) + "/quality"
@@ -53,7 +53,11 @@ func TestLibraryQuality_SaveAndWarnWhenTheTargetMissesTheFirstProfile(t *testing
 
 	put := func(first, second string) qualityBody {
 		t.Helper()
-		body := fmt.Sprintf(`{"profile_ids":[%d,%d],"cutoff_profile_id":%d,%s}`, ids[first], ids[second], ids[second], aac)
+		profiles := fmt.Sprintf("%d", ids[first])
+		if second != "" {
+			profiles += fmt.Sprintf(",%d", ids[second])
+		}
+		body := fmt.Sprintf(`{"profile_ids":[%s],"cutoff_profile_id":%d,%s}`, profiles, ids[first], aac)
 		recorder := fixture.do(authedPut(t, cookies, path, body))
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("status = %d, %s", recorder.Code, recorder.Body)
@@ -76,16 +80,21 @@ func TestLibraryQuality_SaveAndWarnWhenTheTargetMissesTheFirstProfile(t *testing
 		t.Errorf("available = %v, want the suggested order first", got)
 	}
 
-	misses := put("Lossless preferred", "Lossy 320")
+	second := put("Lossless preferred", "Lossy 320")
+	if len(second.Warnings) != 0 {
+		t.Errorf("aac 256 in the second profile warned: %v", second.Warnings)
+	}
+
+	misses := put("Lossless preferred", "")
 	if len(misses.Warnings) != 1 || !strings.Contains(misses.Warnings[0], "Lossless preferred") {
-		t.Errorf("aac 256 under Lossless preferred: warnings = %v, want one naming the profile", misses.Warnings)
+		t.Errorf("aac 256 under Lossless preferred alone: warnings = %v, want one naming the profile", misses.Warnings)
 	}
 
 	var reread qualityBody
 	if err := json.Unmarshal(fixture.do(authedGet(t, cookies, path)).Body.Bytes(), &reread); err != nil {
 		t.Fatal(err)
 	}
-	if reread.CutoffProfileID == nil || *reread.CutoffProfileID != ids["Lossy 320"] || len(reread.Warnings) != 1 {
+	if reread.CutoffProfileID == nil || *reread.CutoffProfileID != ids["Lossless preferred"] || len(reread.Warnings) != 1 {
 		t.Errorf("read back: cutoff = %v warnings = %v", reread.CutoffProfileID, reread.Warnings)
 	}
 }

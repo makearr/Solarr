@@ -102,15 +102,31 @@ func (s *Server) libraryQualityView(category settings.Category) gen.LibraryQuali
 			AudioCodec: target.AudioCodec, Container: target.Container,
 			BitrateKbps: target.BitrateKbps, TolerancePct: target.TolerancePct,
 		}
-		if len(view.Profiles) > 0 {
-			first := view.Profiles[0]
-			if fits, known, reason := profileFits(snapshot, first.Id, targetFacts(*target)); known && !fits {
-				view.Warnings = append(view.Warnings, fmt.Sprintf(
-					"The target does not fall in %s, the first profile: %s.", first.Name, reason))
-			}
+		if warning := targetOutsideProfiles(snapshot, view.Profiles, targetFacts(*target)); warning != "" {
+			view.Warnings = append(view.Warnings, warning)
 		}
 	}
 	return view
+}
+
+// targetOutsideProfiles warns only when no profile of the library takes the target: any of them will do,
+// the second as well as the first (asked 2026-09-30). Empty when one fits or none can be read.
+func targetOutsideProfiles(snapshot *settings.Snapshot, profiles []gen.QualityProfileRef, facts score.Facts) string {
+	var reasons []string
+	for _, profile := range profiles {
+		fits, known, reason := profileFits(snapshot, profile.Id, facts)
+		if !known {
+			continue
+		}
+		if fits {
+			return ""
+		}
+		reasons = append(reasons, profile.Name+": "+reason)
+	}
+	if len(reasons) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("The target falls in none of this library's quality profiles (%s).", strings.Join(reasons, "; "))
 }
 
 // targetFacts is the target as the file facts a profile judges.
