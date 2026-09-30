@@ -259,6 +259,9 @@ type judge struct {
 	rules               []rankedProfile
 	languagePolicy      *score.LanguagePolicy
 	preferPropers       bool
+	// incumbent is the worst owned file's decision when the album is below its cutoff: a release must
+	// strictly beat it to be an upgrade (Invariant 72). Nil otherwise.
+	incumbent *model.Decision
 }
 
 // judgeFor builds item's yardstick from its work and its library's settings.
@@ -284,15 +287,60 @@ func (s Search) judgeFor(ctx context.Context, item librarydb.DesiredItem) (judge
 	target := targetIdentity(detail, item, artistName, aliases)
 	albumTarget := target
 	albumTarget.Title = detail.Work.CanonicalTitle
-	return judge{
+	built := judge{
 		work: detail.Work, aliases: aliases, artistName: artistName, wantedArtist: artistName,
 		target: target, albumTarget: albumTarget, rules: rules,
 		languagePolicy: languagePolicyFor(snapshot, item.CategoryID), preferPropers: preferPropers,
-	}, nil
+	}
+	if item.State == ItemStateUpgradable {
+		if built.incumbent, err = s.incumbentFor(ctx, item.WorkID, built); err != nil {
+			return judge{}, err
+		}
+	}
+	return built, nil
+}
+
+// incumbentFor is the worst of the album's measured files, judged by the library's own profiles.
+func (s Search) incumbentFor(ctx context.Context, workID int64, j judge) (*model.Decision, error) {
+	files, err := s.Desired.MeasuredFiles(ctx, workID)
+	if err != nil {
+		return nil, err
+	}
+	var worst *model.Decision
+	for _, file := range files {
+		if !file.Measured {
+			continue
+		}
+		decision := evaluateInOrder(j.rules, measuredFacts(file), j.languagePolicy)
+		if worst == nil || strictlyBetter(*worst, decision) {
+			worst = &decision
+		}
+	}
+	return worst, nil
+}
+
+// strictlyBetter is Invariant 72: higher by the quality tiers, or equal there and higher in score. A
+// tie keeps what is owned.
+func strictlyBetter(candidate, incumbent model.Decision) bool {
+	winner, _ := model.Compare(candidate.Quality, incumbent.Quality)
+	return winner < 0 || (winner == 0 && candidate.Score() > incumbent.Score())
 }
 
 func (j judge) evaluate(raws []indexer.RawItem, conn IndexerConn) []acceptedFind {
-	return evaluateRawItems(raws, conn, j.target, j.albumTarget, j.wantedArtist, j.rules, j.languagePolicy, j.preferPropers)
+	finds := evaluateRawItems(raws, conn, j.target, j.albumTarget, j.wantedArtist, j.rules, j.languagePolicy, j.preferPropers)
+	if j.incumbent == nil {
+		return finds
+	}
+	for index := range finds {
+		decision := &finds[index].decision
+		if decision.Outcome == model.OutcomeAccept && !strictlyBetter(*decision, *j.incumbent) {
+			decision.Outcome = model.OutcomeReject
+			decision.Rejections = append(decision.Rejections, model.Rejection{
+				Rule: "upgrade", Field: "quality", Wanted: "better than the files you have", Got: "not better",
+			})
+		}
+	}
+	return finds
 }
 
 // decide keeps one row per release, ranks them best first and records each decision against itemID.
