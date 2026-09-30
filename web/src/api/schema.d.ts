@@ -5319,6 +5319,8 @@ export interface components {
             indexer_name?: string;
             /** @description The release is blocklisted and will not be offered again. */
             blocklisted?: boolean;
+            /** @description No enabled download client takes this release's protocol (a torrent with no torrent client), so it cannot be sent; such releases are listed after every sendable one. */
+            no_client?: boolean;
             guid: string;
             /** @description The release's own raw title */
             title: string;

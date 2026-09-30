@@ -1028,15 +1028,18 @@ type CandidateDecision struct {
 	Leechers    *int64  `json:"leechers"`
 
 	// MatchConfidence 1 - the match distance against this item's own identity (section 10.2).
-	MatchConfidence *float32                  `json:"match_confidence"`
-	Outcome         CandidateDecisionOutcome  `json:"outcome"`
-	Protocol        CandidateDecisionProtocol `json:"protocol"`
-	PublishedAt     *time.Time                `json:"published_at"`
-	Rejections      []Rejection               `json:"rejections"`
-	Score           float32                   `json:"score"`
-	Seeders         *int64                    `json:"seeders"`
-	SizeBytes       *int64                    `json:"size_bytes"`
-	Source          CandidateDecisionSource   `json:"source"`
+	MatchConfidence *float32 `json:"match_confidence"`
+
+	// NoClient No enabled download client takes this release's protocol (a torrent with no torrent client), so it cannot be sent; such releases are listed after every sendable one.
+	NoClient    *bool                     `json:"no_client,omitempty"`
+	Outcome     CandidateDecisionOutcome  `json:"outcome"`
+	Protocol    CandidateDecisionProtocol `json:"protocol"`
+	PublishedAt *time.Time                `json:"published_at"`
+	Rejections  []Rejection               `json:"rejections"`
+	Score       float32                   `json:"score"`
+	Seeders     *int64                    `json:"seeders"`
+	SizeBytes   *int64                    `json:"size_bytes"`
+	Source      CandidateDecisionSource   `json:"source"`
 
 	// Title The release's own raw title
 	Title string `json:"title"`

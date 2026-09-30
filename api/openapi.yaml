@@ -8025,6 +8025,11 @@ components:
         blocklisted:
           type: boolean
           description: The release is blocklisted and will not be offered again.
+        no_client:
+          type: boolean
+          description: >-
+            No enabled download client takes this release's protocol (a torrent with no torrent
+            client), so it cannot be sent; such releases are listed after every sendable one.
         guid: { type: string }
         title: { type: string, description: The release's own raw title, unparsed. }
         size_bytes: { type: integer, format: int64, nullable: true }
