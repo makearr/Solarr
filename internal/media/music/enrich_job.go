@@ -246,6 +246,9 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 			total++
 			job.Progress.Add(1)
 			err := j.enrichOne(ctx, edition, answers[index], artists)
+			if err == nil {
+				j.followMergedIDs(ctx, edition, albums[index], answers[index])
+			}
 			if errors.Is(err, musicbrainz.ErrNotFound) && j.replaceRetiredRelease(ctx, edition, albums[index], artists) {
 				err = nil
 			}
@@ -651,6 +654,24 @@ func (j *EnrichJob) lookupAlbums(ctx context.Context, albums []albumKey) []album
 	wait.Wait()
 	j.describeAlbums(ctx, answers)
 	return answers
+}
+
+// followMergedIDs repoints a work or edition whose MusicBrainz id was merged into another: the old
+// id still answers (a redirect), but the new one is what MusicBrainz and everyone else now use.
+func (j *EnrichJob) followMergedIDs(ctx context.Context, edition library.PlaceholderEdition, asked albumKey, answered albumAnswer) {
+	workMoved, editionMoved, err := j.identity.FollowMergedIDs(ctx, library.MergedIDs{
+		WorkID: edition.WorkID, WorkProvider: ProviderReleaseGroup, OldWorkID: asked.releaseGroup, NewWorkID: answered.rg.MBID,
+		EditionID: edition.EditionID, EditionProvider: ProviderRelease, OldEditionID: asked.release,
+		NewEditionID: answered.release.MBID,
+	})
+	switch {
+	case err != nil:
+		j.logger.WarnContext(ctx, "merged id not followed", slog.Int64("work_id", edition.WorkID), slog.Any("error", err))
+	case workMoved || editionMoved:
+		j.logger.InfoContext(ctx, "merged MusicBrainz id followed", slog.Int64("work_id", edition.WorkID),
+			slog.String("release_group", asked.releaseGroup+" -> "+answered.rg.MBID),
+			slog.String("release", asked.release+" -> "+answered.release.MBID))
+	}
 }
 
 // describeAlbums fetches every answered album's Wikidata description in one batch: one album at a

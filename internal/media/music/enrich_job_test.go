@@ -1656,3 +1656,43 @@ func TestEnrichJob_ReplacesARetiredReleaseByOneTheFilesFit(t *testing.T) {
 		t.Errorf("placeholders left = %+v, %v; want none to ask about again", placeholders, err)
 	}
 }
+
+// M1f: MusicBrainz merged the release group this album was tagged with; the old id still answers,
+// under the new one. Enrichment moves the work to the new id so lookups and matching use it.
+func TestEnrichJob_FollowsAMergedReleaseGroup(t *testing.T) {
+	source := &releaseListingSource{
+		fakeArtistSource: fakeArtistSource{fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{MBID: "rg-merged-into", Title: "Detisisu Binip", PrimaryType: "Album"},
+		}},
+		releases: []musicbrainz.Release{{MBID: "rel-current", Title: "Detisisu Binip", Status: "official", Media: []musicbrainz.Medium{{
+			Position: 1, Tracks: []musicbrainz.Track{{Position: 1, Title: "Detisisu Binip"}},
+		}}}},
+	}
+	job, opened, queries := newEnrichJobRealigning(t, source, nil, &fakeRealigner{}, fakeTags{
+		"01.m4a": {"title": "Detisisu Binip", "track": "1", "disc": "1"},
+	})
+	registered, err := library.NewPhysical(opened).RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "Heka/Detisisu Binip (1991)/01.m4a", SizeBytes: 1, QuickHash: "h1", FirstSeenAt: firstSeen},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	if _, err := library.NewIdentity(opened).ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-merged-away", Confidence: 1, RootFolderID: 1,
+		Work:          library.WorkIdentity{MediaType: "music", CanonicalTitle: "Detisisu Binip", SortTitle: "detisisu binip"},
+		MediaObjectID: registered[0].MediaObjectID,
+		Edition: &library.EditionLink{Provider: music.ProviderRelease, ExternalID: "rel-current", Confidence: 1,
+			Edition: library.EditionIdentity{Kind: "unknown", Label: "rel-current"}},
+	}}); err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if _, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-merged-into",
+	}); err != nil {
+		t.Errorf("the work is not found under the release group it was merged into: %v", err)
+	}
+}

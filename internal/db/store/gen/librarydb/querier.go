@@ -653,6 +653,10 @@ type Querier interface {
 	RemoveBlockedContent(ctx context.Context, id int64) error
 	RemoveFromBlocklist(ctx context.Context, id int64) error
 	RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error
+	RepointEditionExternalID(ctx context.Context, arg RepointEditionExternalIDParams) (int64, error)
+	// A merged MusicBrainz id answers under its new id: the work follows it, unless another work
+	// already holds the new one (M1f, 2026-09-25).
+	RepointWorkExternalID(ctx context.Context, arg RepointWorkExternalIDParams) (int64, error)
 	// Only from INSPECTING: refuses a no-op cancel of an already-terminal session
 	// and never overwrites CANCELLING with itself. :execrows lets the caller
 	// distinguish "already stopped/never running" (0 rows) from "now stopping".
