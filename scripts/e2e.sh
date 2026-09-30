@@ -8,9 +8,15 @@ set -uo pipefail
 PORT="${E2E_PORT:-15455}"
 NAME="${E2E_CONTAINER:-solarr-e2e}"
 IMAGE="${E2E_IMAGE:-ghcr.io/makearr/solarr:dev}"
-PLAYWRIGHT_IMAGE="${E2E_PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.50.0-noble}"
+PLAYWRIGHT_IMAGE="${E2E_PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.55.1-noble}"
 MUSIC="${E2E_MUSIC:-/storage/media/music}"
 DOWNLOADS="${E2E_DOWNLOADS:-/storage/media/download}"
+# A folder under DOWNLOADS the import check commits; machine-local (Makefile.local), never in git.
+IMPORT_FOLDER="${E2E_IMPORT_FOLDER:-}"
+if [ -z "$IMPORT_FOLDER" ] || [ ! -d "$DOWNLOADS/$IMPORT_FOLDER" ]; then
+  echo "e2e: set E2E_IMPORT_FOLDER (in Makefile.local) to an identifiable album folder under $DOWNLOADS" >&2
+  exit 2
+fi
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/solarr-e2e.XXXXXX")"
 OUT="$REPO/web/e2e/out"
@@ -61,10 +67,11 @@ fi
 docker run --rm --network host --ipc=host \
   -u "$(id -u):$(id -g)" -e HOME=/tmp \
   -e SOLARR_URL="http://127.0.0.1:$PORT" \
+  -e E2E_IMPORT_FIXTURE="/media/download/$IMPORT_FOLDER" \
   -e npm_config_cache=/tmp/.npm \
   -v solarr-npm:/tmp/.npm \
   -v "$REPO/web/e2e":/e2e -v "$OUT":/e2e-out -w /e2e \
-  "$PLAYWRIGHT_IMAGE" sh -c 'npm install --no-audit --no-fund --silent && npx playwright test'
+  "$PLAYWRIGHT_IMAGE" sh -c 'npm ci --no-audit --no-fund && npx playwright test'
 status=$?
 
 if [ "$status" -ne 0 ]; then

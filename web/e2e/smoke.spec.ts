@@ -6,7 +6,8 @@ const PASSWORD = "TestPass123!TestPass";
 
 /** Mounted read-only into the instance by the harness. */
 const LIBRARY_ROOT = "/library";
-const DOWNLOAD_FIXTURE = "/media/download/Goual-Zubinugi 1986-WEB-2024-ENRiCH";
+// A real release folder, named in Makefile.local (E2E_IMPORT_FOLDER) so no library name is in git.
+const DOWNLOAD_FIXTURE = process.env.E2E_IMPORT_FIXTURE ?? "";
 
 /** The suite runs in order against one instance: step 2 needs step 1's account,
  *  and the import needs the library. Playwright's default is parallel files,
@@ -61,11 +62,11 @@ test("the default tier shows the whole library tree", async ({ page }) => {
   const nav = page.getByRole("navigation");
   await nav.getByText("Music", { exact: true }).first().click();
 
-  for (const entry of ["Artists", "Albums", "Tracks", "Wanted", "Import", "Unidentified"]) {
+  for (const entry of ["Artists", "Albums", "Tracks", "Wanted", "Unidentified"]) {
     await expect(nav.getByRole("link", { name: entry, exact: true })).toBeVisible();
   }
-  // Advanced by decision D4, so their absence here is the assertion.
-  for (const entry of ["Packs", "Activity"]) {
+  // Advanced: Packs by decision D4, Import by the 2026-09-25 review, so their absence is the assertion.
+  for (const entry of ["Packs", "Import"]) {
     await expect(nav.getByRole("link", { name: entry, exact: true })).toBeHidden();
   }
 });
