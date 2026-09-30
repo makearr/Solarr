@@ -296,3 +296,40 @@ func TestPlacementAffinity_UpdateOverwritesThePreviousRoot(t *testing.T) {
 		t.Errorf("PlacementAffinity = (%d, %v), want (%d, true)", rootID, found, second.ID)
 	}
 }
+
+// ADR-12's free-space gate reads this: the best root's free space above its reserve, over roots
+// that take new files; unmeasured roots gate nothing.
+func TestAcquisitionHeadroom_IsTheBestAcceptingRootAboveItsReserve(t *testing.T) {
+	cache, _ := newCache(t)
+	category, err := cache.CreateCategory(t.Context(), "music", "Music", 1)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	if _, measured := cache.Snapshot().AcquisitionHeadroom(category.ID); measured {
+		t.Fatal("a library with no root reported a measured headroom")
+	}
+	for _, root := range []struct {
+		path       string
+		free       int64
+		acceptsNew bool
+	}{{"/media/a", 10_000_000_000, true}, {"/media/b", 50_000_000_000, false}, {"/media/c", 9_000_000_000, true}} {
+		created, err := cache.CreateRootFolder(t.Context(), root.path, "")
+		if err != nil {
+			t.Fatalf("CreateRootFolder: %v", err)
+		}
+		if err := cache.AttachRootFolder(t.Context(), settings.CategoryRoot{
+			CategoryID: category.ID, RootFolderID: created.ID, Weight: 1, AcceptsNew: root.acceptsNew,
+		}); err != nil {
+			t.Fatalf("AttachRootFolder: %v", err)
+		}
+		if err := cache.SetRootFolderCapacity(t.Context(), created.ID, settings.RootFolderCapacity{
+			Writable: true, TotalBytes: 100_000_000_000, FreeBytes: root.free, CheckedAt: 1,
+		}); err != nil {
+			t.Fatalf("SetRootFolderCapacity: %v", err)
+		}
+	}
+	bytes, measured := cache.Snapshot().AcquisitionHeadroom(category.ID)
+	if want := 10_000_000_000 - settings.DefaultMinFreeBytes; !measured || bytes != want {
+		t.Errorf("AcquisitionHeadroom = %d, %v; want %d from /media/a (b takes nothing new, c has less)", bytes, measured, want)
+	}
+}

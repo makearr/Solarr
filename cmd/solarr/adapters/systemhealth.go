@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -33,6 +34,24 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 			Message: "No download client is enabled, so nothing found could be fetched.",
 			Link:    "/connections/downloaders",
 		})
+	}
+	return append(checks, pausedForRoom(a.Cache.Snapshot())...)
+}
+
+// pausedForRoom names each library whose automatic downloads stop for want of free space
+// (ADR-12; Invariant 29: every pause is visible, with its resume condition).
+func pausedForRoom(snapshot *settings.Snapshot) []apiserver.HealthCheck {
+	var checks []apiserver.HealthCheck
+	for _, category := range snapshot.Categories() {
+		if room, measured := snapshot.AcquisitionHeadroom(category.ID); measured && room <= 0 {
+			checks = append(checks, apiserver.HealthCheck{
+				ID: fmt.Sprintf("no_room_%d", category.ID), Severity: apiserver.HealthWarning,
+				// No link: the fix is free disk space, and the reserve's page is advanced (2026-09-29 tier rule).
+				Message: fmt.Sprintf("Automatic downloads for %s are paused: no root folder taking new files has "+
+					"free space above its reserve. Free up space, or lower the reserve under Storage → Root folders; "+
+					"your own grabs still go.", category.Name),
+			})
+		}
 	}
 	return checks
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media/music"
 )
 
@@ -137,5 +138,43 @@ func TestGrab_ContentThatFailedBeforeIsRefusedUnderANewListing(t *testing.T) {
 	}
 	if want := download.NZBContentHash([]byte(`<segment bytes="1" number="1">fine@x</segment>`)); result.Sent.ContentHash != want {
 		t.Errorf("sent content hash %q, want %q recorded for a later failure", result.Sent.ContentHash, want)
+	}
+}
+
+// ADR-12: an automatic grab never fills a library past its reserve; a person's own grab still goes.
+func TestGrab_AnAutomaticGrabLeavesTheReserveAlone(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	root, err := env.settings.CreateRootFolder(t.Context(), "/music", "")
+	if err != nil {
+		t.Fatalf("CreateRootFolder: %v", err)
+	}
+	if err := env.settings.AttachRootFolder(t.Context(), settings.CategoryRoot{
+		CategoryID: item.CategoryID, RootFolderID: root.ID, Weight: 1, AcceptsNew: true,
+	}); err != nil {
+		t.Fatalf("AttachRootFolder: %v", err)
+	}
+	// 100 MB above the reserve; every release below is 500 MB.
+	if err := env.settings.SetRootFolderCapacity(t.Context(), root.ID, settings.RootFolderCapacity{
+		Writable: true, TotalBytes: 1_000_000_000_000, FreeBytes: settings.DefaultMinFreeBytes + 100_000_000, CheckedAt: 1,
+	}); err != nil {
+		t.Fatalf("SetRootFolderCapacity: %v", err)
+	}
+	searcher := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+		return []indexer.RawItem{rawItem("guid-flac", "Nosi Zada-Discovery-2001-FLAC-GROUP")}, nil
+	}}
+	sender := &fakeSabnzbdSender{clientRef: "nzo-1"}
+	grab := music.Grab{Search: env.search(), Dispatch: env.dispatch([]music.DownloaderConn{
+		{ID: 5, Protocol: "usenet", Client: sender, AlwaysSendUser: true},
+	})}
+	indexers := []music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}
+
+	automatic, err := grab.SearchAndSend(t.Context(), item.ID, indexers, music.GrabAutomatic, env.clock.Now())
+	if err != nil || automatic.Sent != nil || automatic.NoRoom != 1 {
+		t.Fatalf("automatic = sent %v, no room %d, %v; want the release passed over for room", automatic.Sent, automatic.NoRoom, err)
+	}
+	own, err := grab.SearchAndSend(t.Context(), item.ID, indexers, music.GrabUser, env.clock.Now())
+	if err != nil || own.Sent == nil {
+		t.Fatalf("own grab = %+v, %v; want it sent: a person's grab is never gated", own, err)
 	}
 }

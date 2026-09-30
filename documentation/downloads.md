@@ -22,6 +22,12 @@ accepted release is sent as an RSS grab. Nothing is searched, and an album's sea
 alone. Artists are matched by name ignoring case; an alias or a differently spelled name is not yet
 matched.
 
+**Free space gates automatic downloads** (ADR-12). The hunt, RSS sync and Search all never send a
+release larger than the library's headroom: the most free space above its reserve on a root that
+takes new files (Storage -> Root folders; measured by the capacity task every 6 hours). A library
+with no headroom is skipped by the hunt without spending its budget, and the dashboard says
+automatic downloads are paused. Your own grabs are never gated.
+
 Every search asks all enabled indexers at once and waits at most **20 seconds** for them (ADR-37):
 a dead or slow indexer bounds a search instead of adding to it. The album page and Interactive
 search name each indexer that failed or did not answer in time.
