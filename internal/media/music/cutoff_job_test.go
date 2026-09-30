@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/store"
@@ -73,5 +74,53 @@ func TestCutoffJob_MarksAnAlbumBelowTheCutoffUpgradable(t *testing.T) {
 	measure("flac")
 	if state := stateAfterRun(); state != "COMPLETE" {
 		t.Fatalf("measured as flac: state %s, want COMPLETE again", state)
+	}
+}
+
+// M1d: searching an album below its cutoff offers only releases strictly better than the files it has;
+// an equal one is refused as no upgrade (Invariant 72: ties keep the incumbent).
+func TestSearchItem_AnUpgradableAlbumAcceptsOnlyABetterRelease(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, losslessFirstRules)
+	physical := library.NewPhysical(env.library)
+	registered, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "Nosi Zada/Discovery/01.mp3", SizeBytes: 1, QuickHash: "h1", FirstSeenAt: time.Unix(1, 0)},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	if err := env.library.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).AttachFile(ctx, librarydb.AttachFileParams{
+			DesiredItemID: item.ID, MediaObjectID: registered[0].MediaObjectID, Role: "primary", MediaRef: "1", AddedAt: 1,
+		})
+	}); err != nil {
+		t.Fatalf("AttachFile: %v", err)
+	}
+	if err := physical.RecordMeasured(t.Context(), registered[0].MediaObjectID,
+		library.AttributeClaim{AudioCodec: "mp3", Container: "mp3"},
+		library.MeasuredScalars{AudioBitrate: 320_000, OverallBitrate: 320_000}, "", 1); err != nil {
+		t.Fatalf("RecordMeasured: %v", err)
+	}
+	if err := library.NewDesired(env.library).SetAlbumState(t.Context(), item.ID, music.ItemStateUpgradable, 1); err != nil {
+		t.Fatalf("SetAlbumState: %v", err)
+	}
+	searcher := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+		return []indexer.RawItem{
+			rawItem("guid-mp3", "Nosi Zada-Discovery-2001-MP3-320-GROUP"),
+			rawItem("guid-flac", "Nosi Zada-Discovery-2001-FLAC-GROUP"),
+		}, nil
+	}}
+
+	result, err := env.search().SearchItem(t.Context(), item.ID,
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, env.clock.Now())
+	if err != nil {
+		t.Fatalf("SearchItem: %v", err)
+	}
+	outcomes := map[string]string{}
+	for _, decision := range result.Decisions {
+		outcomes[decision.ReleaseCandidate.GUID] = decision.Decision.Outcome
+	}
+	if outcomes["guid-flac"] != "ACCEPT" || outcomes["guid-mp3"] != "REJECT" {
+		t.Errorf("outcomes = %v, want the FLAC accepted and the MP3 320 refused as no upgrade", outcomes)
 	}
 }

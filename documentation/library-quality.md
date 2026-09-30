@@ -41,4 +41,10 @@ measured yet is left as it is. The judgment is the same one the album page shows
 (`internal/identify/quality`).
 
 **Library -> Wanted** has two lists: **Missing** (MISSING and PARTIAL) and **Cutoff Unmet**
-(UPGRADABLE). Searching for upgrades is the next step and is not built yet, so Cutoff Unmet only lists.
+(UPGRADABLE).
+
+Searching a cutoff-unmet album judges every release against the album's **worst owned file**, by the
+same profiles: a release must strictly beat it -- better by the quality tiers, or equal there and higher
+in score -- or it is rejected as "not better than the files you have" (Invariant 72: ties keep the
+incumbent). Cutoff Unmet offers Interactive search; upgrading on its own waits for in-place
+replacement, so an upgrade sent by hand is placed beside the old files for now.

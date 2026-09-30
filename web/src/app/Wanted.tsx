@@ -158,7 +158,7 @@ export function Wanted() {
         <span className="text-xs text-ink-muted">
           {view === "missing"
             ? "Monitored and not yet complete."
-            : "Complete, but a file is below the library's cutoff. Searching for upgrades is not built yet."}
+            : "Complete, but a file is below the library's cutoff. Interactive search shows which releases would be upgrades; upgrading on its own is not built yet."}
         </span>
         <span className="ml-auto flex items-center gap-2 text-xs text-ink-muted">
           {searchLibrary.isSuccess &&
@@ -226,8 +226,9 @@ export function Wanted() {
             <StateBadge state={work.wanted_state} />
             <span className="flex items-center justify-end gap-2 text-xs text-ink-muted">
               <span className="truncate">{rowResult[work.id]}</span>
-              {searchable && (
+              {canRequest && (
               <>
+              {searchable && (
               <button
                 type="button"
                 title="Search: send the best release"
@@ -238,6 +239,7 @@ export function Wanted() {
               >
                 <Search aria-hidden className="size-3.5" />
               </button>
+              )}
               <button
                 type="button"
                 title="Interactive search: choose the release"
