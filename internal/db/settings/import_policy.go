@@ -25,11 +25,9 @@ const (
 	TransferSymlink  = "symlink"
 )
 
-// DefaultImportTransferLadder is the order the user gave on 2026-09-18.
+// DefaultImportTransferLadder is the order the user gave on 2026-09-18, symlink dropped 2026-09-30 (ADR-11).
 // Mirrors mover.DefaultLadder, which this package may not import.
-var DefaultImportTransferLadder = []string{
-	TransferReflink, TransferHardlink, TransferMove, TransferCopy, TransferSymlink,
-}
+var DefaultImportTransferLadder = []string{TransferReflink, TransferHardlink, TransferMove, TransferCopy}
 
 // ValidTransferMethod reports whether name is one of the five known methods.
 func ValidTransferMethod(name string) bool {

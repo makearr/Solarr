@@ -311,6 +311,30 @@ func TestPlaceOne_MoveKeepsTheSourceWhenVerifyFails(t *testing.T) {
 	}
 }
 
+// A read-only download folder: the move's verified copy is the placement, reported as a copy, not a
+// failure that leaves the copy behind untracked (found 2026-09-30).
+func TestPlaceOne_MoveFromAReadOnlySourceIsACopy(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	fsys.SetHardlinkSupported(false)
+	fsys.SetReflinkSupported(false)
+	fsys.SetRenameSupported(false)
+	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
+	fsys.SetWriteDenied("/downloads/Old", true)
+
+	// A ladder ending at move, as the user's did: nothing after it to fall to.
+	ladder := []mover.PlaceMethod{mover.PlaceReflink, mover.PlaceHardlink, mover.PlaceMove}
+	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
+	if err != nil {
+		t.Fatalf("PlaceOne: %v", err)
+	}
+	if method != mover.PlaceCopy {
+		t.Errorf("method = %q, want copy", method)
+	}
+	if readFile(t, fsys, "/library/New/track.flac") != "the bytes" || !exists(fsys, "/downloads/Old/track.flac") {
+		t.Error("want the library copy in place and the read-only source untouched")
+	}
+}
+
 // Symlink is reachable only because the user's own ladder named it -- ADR-11
 // bans it as a default, not as a choice (2026-09-18).
 func TestPlaceOne_SymlinkOnlyWhenTheLadderNamesIt(t *testing.T) {

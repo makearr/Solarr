@@ -394,15 +394,20 @@ func (c Committer) CommitMatchedUnit(
 	trackFiles := make([]TrackFile, len(unit.Media))
 	pathWarnings := make([][]string, len(unit.Media))
 	transferMethods := make([]mover.PlaceMethod, len(unit.Media))
+	var placedSoFar []placedFile
+	// A unit that fails part-way takes back what it placed, rather than leaving files nothing tracks.
+	undo := func(err error) (Placed, error) {
+		return Placed{}, errors.Join(err, c.undoPlaced(placedSoFar))
+	}
 	for index, media := range unit.Media {
 		fileTags, err := tags.TagsFor(ctx, model.FileRef{RelPath: media.RelPath})
 		if err != nil {
-			return Placed{}, fmt.Errorf("music: commit unit %q: %w", unit.Directory, err)
+			return undo(fmt.Errorf("music: commit unit %q: %w", unit.Directory, err))
 		}
 		track, discCount := matched.trackOf(media.RelPath, fileTags)
 		destRelPath, warnings, err := importRelPath(names, work, artist, year, track, discCount, media.RelPath)
 		if err != nil {
-			return Placed{}, fmt.Errorf("music: commit unit %q: %w", unit.Directory, err)
+			return undo(fmt.Errorf("music: commit unit %q: %w", unit.Directory, err))
 		}
 		pathWarnings[index] = warnings
 
@@ -410,8 +415,9 @@ func (c Committer) CommitMatchedUnit(
 		destAbs := path.Join(destRoot.Path, destRelPath)
 		method, err := mover.PlaceOne(c.fsys, sourceAbs, destAbs, media.SizeBytes, methods)
 		if err != nil {
-			return Placed{}, fmt.Errorf("music: place %q: %w", media.RelPath, err)
+			return undo(fmt.Errorf("music: place %q: %w", media.RelPath, err))
 		}
+		placedSoFar = append(placedSoFar, placedFile{source: sourceAbs, dest: destAbs, sizeBytes: media.SizeBytes, method: method})
 		if method != mover.PlaceSymlink {
 			// A symlink's bytes are the source's; a hardlink's are shared, as in Sonarr.
 			pathWarnings[index] = append(pathWarnings[index], c.finishFile(destRoot.Path, destAbs, fileManagement, fileTags)...)
@@ -426,7 +432,7 @@ func (c Committer) CommitMatchedUnit(
 
 	registered, err := c.physical.RegisterBatch(ctx, destRoot.ID, files)
 	if err != nil {
-		return Placed{}, fmt.Errorf("music: register placed files for unit %q: %w", unit.Directory, err)
+		return undo(fmt.Errorf("music: register placed files for unit %q: %w", unit.Directory, err))
 	}
 	mediaObjectIDs := make([]int64, len(registered))
 	libraryPathIDs := make([]int64, len(registered))
@@ -531,6 +537,31 @@ func (c Committer) placeExtras(
 		placed = append(placed, destRelPath)
 	}
 	return placed, skipped
+}
+
+// placedFile is one file a unit placed, enough to take it back.
+type placedFile struct {
+	source, dest string
+	sizeBytes    int64
+	method       mover.PlaceMethod
+}
+
+// undoPlaced takes back a failed unit's files: a moved file goes back to its source, since it is the
+// only copy; anything else is removed from the library. Answers what could not be taken back.
+func (c Committer) undoPlaced(placed []placedFile) error {
+	var failures []error
+	for _, file := range placed {
+		var err error
+		if file.method == mover.PlaceMove {
+			_, err = mover.PlaceOne(c.fsys, file.dest, file.source, file.sizeBytes, []mover.PlaceMethod{mover.PlaceMove})
+		} else {
+			err = c.fsys.Remove(file.dest)
+		}
+		if err != nil {
+			failures = append(failures, fmt.Errorf("music: could not take back %q: %w", file.dest, err))
+		}
+	}
+	return errors.Join(failures...)
 }
 
 // finishFile applies the library's Change File Date and Set Permissions to one placed track.
