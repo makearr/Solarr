@@ -5,12 +5,13 @@ export type AlbumStatus = PersonWork["status"];
 
 // One colour vocabulary for every place an album is listed (2026-09-19):
 // red incomplete, purple downloading, yellow not released yet, green
-// complete. The server decides which one; nothing here re-derives it.
+// complete, grey unverified (D6). The server decides which one; nothing here re-derives it.
 const FILL: Record<AlbumStatus, string> = {
   complete: "bg-ok",
   incomplete: "bg-danger",
   downloading: "bg-busy",
   unreleased: "bg-warn",
+  unverified: "bg-ink-muted",
 };
 
 const TEXT: Record<AlbumStatus, string> = {
@@ -18,6 +19,7 @@ const TEXT: Record<AlbumStatus, string> = {
   incomplete: "text-danger",
   downloading: "text-busy",
   unreleased: "text-warn",
+  unverified: "text-ink-muted",
 };
 
 const LABEL: Record<AlbumStatus, string> = {
@@ -25,6 +27,7 @@ const LABEL: Record<AlbumStatus, string> = {
   incomplete: "Missing",
   downloading: "Downloading",
   unreleased: "Not released yet",
+  unverified: "Unverified",
 };
 
 export function albumStatusLabel(status: AlbumStatus): string {

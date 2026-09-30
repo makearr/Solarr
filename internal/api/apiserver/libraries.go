@@ -472,7 +472,7 @@ func (s *Server) listLibraryLevelWorks(
 	for index, row := range items {
 		status := gen.LibraryLevelItemStatus(albumStatus(PersonWorkRow{
 			WantedState: row.WantedState, OnDisk: row.OnDisk,
-			AvailableFrom: row.AvailableFrom, Downloading: row.Downloading,
+			AvailableFrom: row.AvailableFrom, Downloading: row.Downloading, Unverified: row.Unverified,
 		}, now))
 		views[index] = gen.LibraryLevelItem{
 			Id: row.ID, Title: row.Title, Subtitle: row.Artist, Year: yearOf(row.Year),

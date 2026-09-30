@@ -134,6 +134,7 @@ function buildColumns(visible: ReadonlySet<OptionalColumn>): Column<Work>[] {
           className="hover:underline"
         >
           {work.title}
+          {work.unverified && <span className="ml-2 text-xs text-ink-muted">unverified</span>}
         </Link>
       ),
     },
@@ -435,7 +436,9 @@ export function Library() {
                   subject="works"
                   imageId={work.id}
                   title={work.title}
-                  subtitle={[work.artist ?? work.media_type, work.year].filter(Boolean).join(" · ")}
+                  subtitle={[work.artist ?? work.media_type, work.year, work.unverified ? "unverified" : null]
+                    .filter(Boolean)
+                    .join(" · ")}
                   link={{ to: "/works/$id", params: { id: String(work.id) } }}
                 />
               )}

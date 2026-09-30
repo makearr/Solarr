@@ -71,6 +71,7 @@ func (a Works) ListWorks(
 		}
 		view.Downloading = row.Downloading
 		view.OnDisk = row.OnDisk
+		view.Unverified = row.Unverified
 		if row.LastSearchedAt != 0 {
 			at := time.Unix(row.LastSearchedAt, 0).UTC()
 			view.LastSearchedAt = &at

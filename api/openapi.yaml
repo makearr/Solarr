@@ -5957,6 +5957,11 @@ components:
           type: string
           format: date-time
           description: When the album was last searched. Absent means never.
+        unverified:
+          type: boolean
+          description: >-
+            Known only by its own tags or folder (D6): no metadata source recognised it. Absent
+            means false.
         wanted_state:
           type: string
           enum: [MISSING, PARTIAL, COMPLETE, UPGRADABLE]
@@ -6736,7 +6741,7 @@ components:
           description: How many it needs, absent when nothing has counted them yet.
         status:
           type: string
-          enum: [complete, incomplete, downloading, unreleased]
+          enum: [complete, incomplete, downloading, unreleased, unverified]
           description: >-
             The colour this album carries wherever it is listed -- green
             complete, red incomplete, purple downloading, yellow not released
@@ -7899,7 +7904,7 @@ components:
           description: How much it would take to be complete.
         status:
           type: string
-          enum: [complete, incomplete, downloading, unreleased]
+          enum: [complete, incomplete, downloading, unreleased, unverified]
           description: >-
             PersonWork.status' own vocabulary, so the poster wall and the
             artist page colour a row the same way. Absent on a level with

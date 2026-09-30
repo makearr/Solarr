@@ -21,6 +21,11 @@ func TestAlbumStatus_DecidesTheColourInPrecedenceOrder(t *testing.T) {
 		want string
 	}{
 		{
+			name: "an album known only by its own tags is unverified, whatever else holds (D6)",
+			row:  apiserver.PersonWorkRow{Unverified: true, OnDisk: true, WantedState: &complete},
+			want: "unverified",
+		},
+		{
 			name: "not out yet is never missing, even while downloading",
 			row:  apiserver.PersonWorkRow{AvailableFrom: &future, Downloading: true, WantedState: &missing},
 			want: "unreleased",

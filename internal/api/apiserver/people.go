@@ -65,6 +65,8 @@ type PersonWorkRow struct {
 	// reports an acquisition in flight. Both feed AlbumStatus.
 	AvailableFrom *time.Time
 	Downloading   bool
+	// Unverified is an album known only by its own tags or folder (D6).
+	Unverified bool
 }
 
 // AlbumStatus is the colour an album carries wherever it is listed: red
@@ -76,6 +78,7 @@ type AlbumStatus string
 // The four states, in the order albumStatus decides them.
 const (
 	AlbumUnreleased  AlbumStatus = "unreleased"
+	AlbumUnverified  AlbumStatus = "unverified"
 	AlbumDownloading AlbumStatus = "downloading"
 	AlbumComplete    AlbumStatus = "complete"
 	AlbumIncomplete  AlbumStatus = "incomplete"
@@ -87,6 +90,8 @@ const (
 // finishing upgrade is visible while it runs.
 func albumStatus(row PersonWorkRow, now time.Time) AlbumStatus {
 	switch {
+	case row.Unverified:
+		return AlbumUnverified
 	case row.AvailableFrom != nil && row.AvailableFrom.After(now):
 		return AlbumUnreleased
 	case row.Downloading:

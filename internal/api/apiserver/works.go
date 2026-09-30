@@ -101,6 +101,8 @@ type WorkRow struct {
 	OnDisk bool
 	// LastSearchedAt is nil for an album never searched.
 	LastSearchedAt *time.Time
+	// Unverified is an album known only by its own tags or folder (D6).
+	Unverified bool
 }
 
 // ListWorks returns a page of the library the caller may see (ADR-27). A work
@@ -235,6 +237,9 @@ func buildWorkPage(rows []WorkRow, limit int, sort WorkSort) gen.WorkPage {
 			Id: row.ID, MediaType: row.MediaType, Title: row.Title, SortTitle: row.SortTitle,
 			Year: yearOf(row.Year), Artist: row.Artist, AddedAt: row.AddedAt, UpdatedAt: row.UpdatedAt,
 			WantedState: wantedStateOf(row.WantedState), LastSearchedAt: row.LastSearchedAt,
+		}
+		if row.Unverified {
+			views[index].Unverified = &row.Unverified
 		}
 	}
 
