@@ -17,7 +17,7 @@ import type { components } from "@/api/schema";
 import { CoverArt } from "./CoverArt";
 import {
   DEFAULT_POSTER_OPTIONS, IndexPoster, IndexViewToggle, OVERVIEW_ROW_HEIGHT, OverviewList, POSTER_GAP, POSTER_PADDING,
-  POSTER_WIDTHS, PosterOptionsMenu, RowActions, posterRowHeight, type IndexEntry, type IndexView, type PosterOptions,
+  POSTER_WIDTHS, PosterOptionsMenu, RowActions, posterRowHeight, workEntry, type IndexView, type PosterOptions,
 } from "./IndexViews";
 import { formatBytes } from "./Queue";
 import { usePreference } from "@/lib/usePreference";
@@ -70,16 +70,7 @@ function loadView(): IndexView {
   }
 }
 
-/** An album as the index views show it. */
-function entryOf(work: Work): IndexEntry {
-  return {
-    id: work.id, kind: "albums", title: work.title,
-    subtitle: [work.artist ?? work.media_type, work.year, work.unverified ? "unverified" : null].filter(Boolean).join(" · "),
-    year: work.year, status: work.status, presentCount: work.present_count, requiredCount: work.required_count,
-    monitored: work.monitored, overview: work.overview, sizeBytes: work.size_bytes, artistCover: work.artist_cover,
-    image: { subject: "works", id: work.id }, link: { to: "/works/$id", params: { id: String(work.id) } },
-  };
-}
+const entryOf = workEntry;
 
 // Cover and title are always shown -- they are how a row is identified at
 // all. The rest is what section 21's "configurable columns" picks among.

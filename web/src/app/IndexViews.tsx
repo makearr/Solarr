@@ -4,6 +4,7 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Check, LayoutGrid, Rows3, Settings2, StretchHorizontal } from "lucide-react";
 
 import { albumStatusFill, albumStatusLabel, type AlbumStatus } from "@/lib/albumStatus";
+import type { components } from "@/api/schema";
 import type { useLibraryList } from "@/list/useLibraryList";
 
 import { CoverArt } from "./CoverArt";
@@ -30,6 +31,19 @@ export interface IndexEntry {
 }
 
 export type IndexView = "poster" | "overview" | "list";
+
+type Work = components["schemas"]["Work"];
+
+/** An album from the works list as the index views show it. */
+export function workEntry(work: Work): IndexEntry {
+  return {
+    id: work.id, kind: "albums", title: work.title,
+    subtitle: [work.artist ?? work.media_type, work.year, work.unverified ? "unverified" : null].filter(Boolean).join(" · "),
+    year: work.year, status: work.status, presentCount: work.present_count, requiredCount: work.required_count,
+    monitored: work.monitored, overview: work.overview, sizeBytes: work.size_bytes, artistCover: work.artist_cover,
+    image: { subject: "works", id: work.id }, link: { to: "/works/$id", params: { id: String(work.id) } },
+  };
+}
 
 export const POSTER_WIDTHS = { small: 128, medium: 168, large: 224 } as const;
 export type PosterSize = keyof typeof POSTER_WIDTHS;
@@ -266,4 +280,28 @@ function OverviewRow({ entry }: { entry: IndexEntry }) {
 export function RowActions({ column, entry }: { column: "monitored" | "actions"; entry: IndexEntry }) {
   const actions = useItemActions(entry.kind, entry.id, entry.monitored);
   return column === "monitored" ? <MonitorToggle actions={actions} /> : <ActionButtons actions={actions} showNote={false} />;
+}
+
+/** Posters for a paged list (Wanted), unvirtualised: one page is at most a hundred. */
+export function PosterWall({ entries, options }: { entries: readonly IndexEntry[]; options: PosterOptions }) {
+  return (
+    <div className="grid gap-4 p-4" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${POSTER_WIDTHS[options.size]}px, 1fr))` }}>
+      {entries.map((entry) => (
+        <IndexPoster key={entry.id} entry={entry} options={options} />
+      ))}
+    </div>
+  );
+}
+
+/** The Overview for a paged list (Wanted), unvirtualised. */
+export function OverviewRows({ entries }: { entries: readonly IndexEntry[] }) {
+  return (
+    <div className="px-4">
+      {entries.map((entry) => (
+        <div key={entry.id} style={{ height: OVERVIEW_ROW_HEIGHT }}>
+          <OverviewRow entry={entry} />
+        </div>
+      ))}
+    </div>
+  );
 }
