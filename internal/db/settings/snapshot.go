@@ -126,9 +126,8 @@ func (s *Snapshot) RootFoldersForCategory(categoryID int64) []RootFolder {
 	return folders
 }
 
-// AcquisitionHeadroom is the most a category can take in new downloads: the largest free space
-// above its reserve on a root that accepts new files (ADR-12, section 10.6). measured is false
-// while no such root has been measured, which gates nothing.
+// AcquisitionHeadroom is the most free space above its reserve on a category's roots taking new files
+// (ADR-12); measured is false while none has been measured, which gates nothing.
 func (s *Snapshot) AcquisitionHeadroom(categoryID int64) (bytes int64, measured bool) {
 	for _, attachment := range s.categoryRoot {
 		folder, found := s.rootFolderByID[attachment.RootFolderID]

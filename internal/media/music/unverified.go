@@ -43,9 +43,8 @@ func LocalNames(ctx context.Context, sourceRoot string, unit inspect.Unit, tags 
 	return strings.TrimSpace(artist), strings.TrimSpace(album), nil
 }
 
-// folderNames reads a unit's own folder as a release name ("Artist-Album-2001-WEB"): the folder, not
-// its parent (a nested Artist/Album was named after the artist), and not "." when the imported
-// folder is the album itself.
+// folderNames reads a unit's own folder as a release name: the folder itself, not its parent, and not
+// "." when the imported folder is the album.
 func folderNames(sourceRoot, directory string) (artist, album string) {
 	folder := path.Base(path.Join(sourceRoot, directory))
 	parsed := parse.Parse(folder).Identity
@@ -62,9 +61,8 @@ func localAlbumKey(sourceRoot, directory, album string) string {
 	return strings.ToLower(path.Join(sourceRoot, directory)) + "|" + strings.ToLower(album)
 }
 
-// CommitUnverifiedUnit places a unit nothing identified as an unverified album named by its own tags
-// or folder (D6): visible and manageable, never searched for (D17), identified properly later from
-// Review.
+// CommitUnverifiedUnit places a unit nothing identified as an unverified album named by its own tags or
+// folder (D6): visible, never searched for (D17), identified later from the review.
 func (c Committer) CommitUnverifiedUnit(
 	ctx context.Context, sourceRoot string, unit inspect.Unit, tags Resolved, categoryID int64, ladder []string,
 ) (Placed, error) {
@@ -107,9 +105,8 @@ func (c Committer) CommitUnverifiedUnit(
 	return placed, nil
 }
 
-// IdentifyUnverified moves an unverified album's placed files onto the album they turned out to be
-// (D6's merge): the files stay where they are, the unverified album goes, and a rename preview
-// brings the paths in line later.
+// IdentifyUnverified moves an unverified album's placed files onto the album chosen for them (D6's merge);
+// the files stay put and a rename preview brings their paths in line.
 func (c Committer) IdentifyUnverified(
 	ctx context.Context, fromWorkID int64, best model.Identification, categoryID int64,
 ) (Placed, error) {
