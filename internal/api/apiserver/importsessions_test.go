@@ -139,7 +139,7 @@ type fakeImportInspector struct {
 }
 
 func (f *fakeImportInspector) InspectImport(
-	_ context.Context, sourcePath, origin string, categoryID *int64, preview bool,
+	_ context.Context, sourcePath, origin string, categoryID *int64, preview, _ bool,
 ) error {
 	f.calls++
 	f.lastSourcePath, f.lastOrigin, f.lastCategoryID, f.lastPreview = sourcePath, origin, categoryID, preview

@@ -424,6 +424,59 @@ func (i Identity) ReturnToReview(ctx context.Context, workID int64, candidate mo
 	return result, nil
 }
 
+// WorkIdentityOf answers what a work is called, to carry its name onto the album it turns out to be.
+func (i Identity) WorkIdentityOf(ctx context.Context, workID int64) (WorkIdentity, error) {
+	work, err := librarydb.New(i.store.Read()).GetWork(ctx, workID)
+	if err != nil {
+		return WorkIdentity{}, fmt.Errorf("library: work %d: %w", workID, err)
+	}
+	return WorkIdentity{MediaType: work.MediaType, CanonicalTitle: work.CanonicalTitle, SortTitle: work.SortTitle}, nil
+}
+
+// FileRoot is one file of a work and the root folder it lives on.
+type FileRoot struct{ MediaObjectID, RootFolderID int64 }
+
+// WorkFileRoots answers each of a work's files once, with its root folder.
+func (i Identity) WorkFileRoots(ctx context.Context, workID int64) ([]FileRoot, error) {
+	rows, err := librarydb.New(i.store.Read()).ListWorkFilePaths(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: work file roots %d: %w", workID, err)
+	}
+	var locations []FileRoot
+	seen := map[int64]bool{}
+	for _, row := range rows {
+		if !seen[row.MediaObjectID] {
+			seen[row.MediaObjectID] = true
+			locations = append(locations, FileRoot{MediaObjectID: row.MediaObjectID, RootFolderID: row.RootFolderID})
+		}
+	}
+	return locations, nil
+}
+
+// ReleaseWork detaches every file from a work whose files now belong to another (an unverified album
+// identified, D6) and deletes it; answers whether it was deleted -- kept when a person added it.
+func (i Identity) ReleaseWork(ctx context.Context, workID int64) (deleted bool, err error) {
+	err = i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		if err := queries.DetachDesiredFilesForWork(ctx, workID); err != nil {
+			return err
+		}
+		if err := queries.UnlinkWorkFiles(ctx, workID); err != nil {
+			return err
+		}
+		asked, err := queries.CountPersonAddedItems(ctx, workID)
+		if err != nil || asked > 0 {
+			return err
+		}
+		deleted = true
+		return deleteFilelessWork(ctx, queries, workID)
+	})
+	if err != nil {
+		return false, fmt.Errorf("library: release work %d: %w", workID, err)
+	}
+	return deleted, nil
+}
+
 // deleteFilelessWork removes a work and everything pointing at it; the caller has checked it has no files.
 func deleteFilelessWork(ctx context.Context, queries *librarydb.Queries, workID int64) error {
 	if err := queries.DetachAcquisitionsForWork(ctx, workID); err != nil {
