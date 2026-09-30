@@ -362,6 +362,23 @@ func (q *Queries) GetRecycleBin(ctx context.Context, id int64) (RecycleBin, erro
 	return i, err
 }
 
+const inFlightBytesForCategory = `-- name: InFlightBytesForCategory :one
+SELECT CAST(COALESCE(SUM(c.size_bytes), 0) AS INTEGER) AS total
+FROM acquisition a
+JOIN desired_item di ON di.id = a.desired_item_id
+LEFT JOIN candidate c ON c.id = a.candidate_id
+WHERE di.category_id = ? AND a.state IN ('QUEUED', 'DOWNLOADING', 'COMPLETED', 'IMPORTING')
+`
+
+// What a library's downloads still on their way will take when they land, so the free-space gate
+// does not count the same room twice between capacity measurements (ADR-12).
+func (q *Queries) InFlightBytesForCategory(ctx context.Context, categoryID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, inFlightBytesForCategory, categoryID)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const isBlocklisted = `-- name: IsBlocklisted :one
 SELECT COUNT(*) AS blocked FROM blocklisted_release
 WHERE (expires_at IS NULL OR expires_at > ?1)

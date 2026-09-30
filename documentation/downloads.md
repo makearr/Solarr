@@ -25,7 +25,8 @@ matched.
 
 **Free space gates automatic downloads** (ADR-12). The hunt, RSS sync and Search all never send a
 release larger than the library's headroom: the most free space above its reserve on a root that
-takes new files (Storage -> Root folders; measured by the capacity task every 6 hours). A library
+takes new files (Storage -> Root folders; measured by the capacity task every 6 hours), less what the
+library's downloads already on their way will take. A library
 with no headroom is skipped by the hunt without spending its budget, and the dashboard says
 automatic downloads are paused. Your own grabs are never gated.
 

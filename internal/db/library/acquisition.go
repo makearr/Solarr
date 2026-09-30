@@ -115,6 +115,15 @@ func (a Acquisitions) Get(ctx context.Context, id int64) (Acquisition, error) {
 	return acquisitionFromRow(row), nil
 }
 
+// InFlightBytes is what a library's downloads on their way will take when they land (ADR-12's gate).
+func (a Acquisitions) InFlightBytes(ctx context.Context, categoryID int64) (int64, error) {
+	total, err := librarydb.New(a.store.Read()).InFlightBytesForCategory(ctx, categoryID)
+	if err != nil {
+		return 0, fmt.Errorf("library: in-flight bytes for category %d: %w", categoryID, err)
+	}
+	return total, nil
+}
+
 // InFlightForItem answers the desired item's download still on its way, if it has one (Invariant 15).
 func (a Acquisitions) InFlightForItem(ctx context.Context, desiredItemID int64) (Acquisition, bool, error) {
 	row, err := librarydb.New(a.store.Read()).GetActiveAcquisitionForItem(ctx, nullInt64(&desiredItemID))

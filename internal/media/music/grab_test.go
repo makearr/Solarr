@@ -182,3 +182,61 @@ func TestGrab_AnAutomaticGrabLeavesTheReserveAlone(t *testing.T) {
 		t.Fatalf("own grab = %+v, %v; want it sent: a person's grab is never gated", own, err)
 	}
 }
+
+// Free space is measured every 6 hours, so what is already downloading is subtracted first: two
+// automatic grabs of 500 MB never both go into 700 MB above the reserve (2026-09-30).
+func TestGrab_WhatIsAlreadyDownloadingCountsAgainstTheReserve(t *testing.T) {
+	env := newSearchTestEnv(t)
+	first := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	secondWork := env.createWork(t, "Homework", 1997)
+	people := library.NewPeople(env.library)
+	personID, err := people.ResolvePerson(t.Context(), env.clock.Now(), library.PersonLink{
+		Provider: "test", ExternalID: "Nosi Zada", Person: library.PersonIdentity{Name: "Nosi Zada", SortName: "Nosi Zada"},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePerson: %v", err)
+	}
+	if err := people.AddCredit(t.Context(), secondWork, personID, "artist", 0); err != nil {
+		t.Fatalf("AddCredit: %v", err)
+	}
+	second, err := env.desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{
+		WorkID: secondWork, CategoryID: first.CategoryID, ProfileID: first.ProfileID, Monitored: true,
+	})
+	if err != nil {
+		t.Fatalf("EnsureAlbumItem: %v", err)
+	}
+	root, err := env.settings.CreateRootFolder(t.Context(), "/music", "")
+	if err != nil {
+		t.Fatalf("CreateRootFolder: %v", err)
+	}
+	if err := env.settings.AttachRootFolder(t.Context(), settings.CategoryRoot{
+		CategoryID: first.CategoryID, RootFolderID: root.ID, Weight: 1, AcceptsNew: true,
+	}); err != nil {
+		t.Fatalf("AttachRootFolder: %v", err)
+	}
+	if err := env.settings.SetRootFolderCapacity(t.Context(), root.ID, settings.RootFolderCapacity{
+		Writable: true, TotalBytes: 1_000_000_000_000, FreeBytes: settings.DefaultMinFreeBytes + 700_000_000, CheckedAt: 1,
+	}); err != nil {
+		t.Fatalf("SetRootFolderCapacity: %v", err)
+	}
+	searcher := &fakeIndexerSearcher{responses: func(request indexer.SearchRequest) ([]indexer.RawItem, error) {
+		if strings.Contains(request.Query, "Homework") || request.Extra["album"] == "Homework" {
+			return []indexer.RawItem{rawItem("guid-homework", "Nosi Zada-Homework-1997-FLAC-GROUP")}, nil
+		}
+		return []indexer.RawItem{rawItem("guid-discovery", "Nosi Zada-Discovery-2001-FLAC-GROUP")}, nil
+	}}
+	grab := music.Grab{Search: env.search(), Dispatch: env.dispatch([]music.DownloaderConn{
+		{ID: 5, Protocol: "usenet", Client: &fakeSabnzbdSender{clientRef: "nzo-1"}},
+	})}
+	indexers := []music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}
+
+	sent, err := grab.SearchAndSend(t.Context(), first.ID, indexers, music.GrabAutomatic, env.clock.Now())
+	if err != nil || sent.Sent == nil {
+		t.Fatalf("first grab = %+v, %v; want it sent into 700 MB", sent, err)
+	}
+	held, err := grab.SearchAndSend(t.Context(), second.ID, indexers, music.GrabAutomatic, env.clock.Now())
+	if err != nil || held.Sent != nil || held.NoRoom != 1 {
+		t.Fatalf("second grab = sent %v, no room %d, %v; want it passed over: 500 MB is already on its way",
+			held.Sent, held.NoRoom, err)
+	}
+}

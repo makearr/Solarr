@@ -307,6 +307,9 @@ type Querier interface {
 	// An import names an album it already knows by the canonical title and artist, never the tags.
 	GetWorkNamingByExternalID(ctx context.Context, arg GetWorkNamingByExternalIDParams) (GetWorkNamingByExternalIDRow, error)
 	GetWorkPart(ctx context.Context, id int64) (WorkPart, error)
+	// What a library's downloads still on their way will take when they land, so the free-space gate
+	// does not count the same room twice between capacity measurements (ADR-12).
+	InFlightBytesForCategory(ctx context.Context, categoryID int64) (int64, error)
 	// Identification attempts (migration 0033). Column lists follow table order.
 	InsertIdentificationAttempt(ctx context.Context, arg InsertIdentificationAttemptParams) error
 	InsertImportUnit(ctx context.Context, arg InsertImportUnitParams) (ImportUnit, error)

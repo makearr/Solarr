@@ -243,3 +243,12 @@ WHERE f.media_object_id = ? ORDER BY a.created_at DESC;
 -- The client's own name and size, recorded when first seen (section 10.9's fingerprint).
 -- name: SetAcquisitionFingerprint :exec
 UPDATE acquisition SET client_fingerprint = ?, updated_at = ? WHERE id = ?;
+
+-- What a library's downloads still on their way will take when they land, so the free-space gate
+-- does not count the same room twice between capacity measurements (ADR-12).
+-- name: InFlightBytesForCategory :one
+SELECT CAST(COALESCE(SUM(c.size_bytes), 0) AS INTEGER) AS total
+FROM acquisition a
+JOIN desired_item di ON di.id = a.desired_item_id
+LEFT JOIN candidate c ON c.id = a.candidate_id
+WHERE di.category_id = ? AND a.state IN ('QUEUED', 'DOWNLOADING', 'COMPLETED', 'IMPORTING');

@@ -124,5 +124,13 @@ func (g Grab) headroom(ctx context.Context, itemID int64, origin GrabOrigin) (by
 		return 0, false, err
 	}
 	bytes, gated = g.Search.Settings.Snapshot().AcquisitionHeadroom(item.CategoryID)
-	return bytes, gated, nil
+	if !gated {
+		return 0, false, nil
+	}
+	// Free space is measured every 6 hours; what is already on its way has not been subtracted yet.
+	inFlight, err := g.Dispatch.Acquisitions.InFlightBytes(ctx, item.CategoryID)
+	if err != nil {
+		return 0, false, err
+	}
+	return bytes - inFlight, true, nil
 }
