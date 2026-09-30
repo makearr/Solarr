@@ -96,6 +96,10 @@ func TestGrab_ARefusedReleaseGivesWayToTheNextBest(t *testing.T) {
 	if result.Sent == nil || result.Sent.CandidateTitle != "Nosi Zada-Discovery-2001-MP3-320-GROUP" || result.Refused != 1 {
 		t.Errorf("sent %+v, refused %d; want the MP3 release after one refusal", result.Sent, result.Refused)
 	}
+	// Why it was refused is kept, so "found but nothing sent" is never unexplained (2026-09-30).
+	if len(result.Refusals) != 1 || !strings.HasPrefix(result.Refusals[0], "Nosi Zada-Discovery-2001-FLAC-GROUP: ") {
+		t.Errorf("Refusals = %q, want the FLAC release named with its reason", result.Refusals)
+	}
 }
 
 // Section 10.11: a release whose content failed before is refused under any listing, and the

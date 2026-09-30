@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -567,5 +568,31 @@ func TestListLibraries_CarriesTheCallersPermission(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil || len(body) != 1 ||
 		body[0].ID != category.ID || body[0].Permission != "read" {
 		t.Errorf("status %d, body %s; want the one library with permission read", recorder.Code, recorder.Body)
+	}
+}
+
+// D16: monitoring with search asks for a search of that album in its library at once; without the
+// flag, or when unmonitoring, nothing is searched.
+func TestSetWorkMonitored_SearchesAtOnceWhenAsked(t *testing.T) {
+	for _, test := range []struct {
+		body       string
+		wantSearch bool
+	}{
+		{`{"monitored":true,"search":true}`, true},
+		{`{"monitored":true}`, false},
+		{`{"monitored":false,"search":true}`, false},
+	} {
+		fixture, cookies := visibleWorksFixture(t)
+		fixture.workDetail.row.CategoryIDs = []int64{7}
+		recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/1/monitor", test.body))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d, body = %s", test.body, recorder.Code, recorder.Body)
+		}
+		searched := fixture.candidateSearcher.lastSearchCategoryID == 7 &&
+			slices.Equal(fixture.candidateSearcher.lastSearchWorkIDs, []int64{1})
+		if searched != test.wantSearch {
+			t.Errorf("%s: searched = %v (category %d, works %v), want %v", test.body, searched,
+				fixture.candidateSearcher.lastSearchCategoryID, fixture.candidateSearcher.lastSearchWorkIDs, test.wantSearch)
+		}
 	}
 }

@@ -313,7 +313,25 @@ func (s *Server) SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int
 		writeError(w, s.logger, err)
 		return
 	}
+	if body.Monitored && derefOr(body.Search, false) {
+		s.searchNowMonitored(r, id)
+	}
 	writeJSON(w, s.logger, http.StatusOK, buildWantedView(wanted))
+}
+
+// searchNowMonitored queues a search for an album just monitored (D16); failing to queue one does not
+// undo the monitoring, and the hunt still finds the album within 15 minutes.
+func (s *Server) searchNowMonitored(r *http.Request, id int64) {
+	if s.candidateSearcher == nil {
+		return
+	}
+	detail, err := s.workDetail.GetWorkDetail(r.Context(), id)
+	if err != nil || len(detail.CategoryIDs) == 0 {
+		return
+	}
+	if _, err := s.candidateSearcher.SearchCategory(r.Context(), detail.CategoryIDs[0], []int64{id}); err != nil {
+		s.logger.Warn("search after monitoring", "work_id", id, "error", err)
+	}
 }
 
 // routeSetPartMonitored parses id and partId, mirroring routeSetWorkMonitored.

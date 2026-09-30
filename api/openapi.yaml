@@ -2499,6 +2499,12 @@ paths:
               required: [monitored]
               properties:
                 monitored: { type: boolean }
+                search:
+                  type: boolean
+                  default: false
+                  description: >-
+                    Search the album at once when it becomes monitored (D16: the person's "Start search
+                    for missing albums" preference). Ignored when monitored is false.
       responses:
         "200":
           description: The album's wanted state after the change.

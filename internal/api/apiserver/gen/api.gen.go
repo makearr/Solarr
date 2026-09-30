@@ -3642,6 +3642,9 @@ type GetWorkArtworkParamsSize string
 // SetWorkMonitoredJSONBody defines parameters for SetWorkMonitored.
 type SetWorkMonitoredJSONBody struct {
 	Monitored bool `json:"monitored"`
+
+	// Search Search the album at once when it becomes monitored (D16: the person's "Start search for missing albums" preference). Ignored when monitored is false.
+	Search *bool `json:"search,omitempty"`
 }
 
 // SetPartMonitoredJSONBody defines parameters for SetPartMonitored.

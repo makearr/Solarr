@@ -156,4 +156,7 @@ func (j *RSSJob) offer(ctx context.Context, conn IndexerConn, itemID int64, raws
 	if result.Held {
 		tally.held++
 	}
+	if len(result.Refusals) > 0 {
+		j.config.Logger.Info("rss sync: releases refused", "item_id", itemID, "refused", result.Refusals)
+	}
 }
