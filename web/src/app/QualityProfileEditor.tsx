@@ -27,6 +27,8 @@ const DEFAULT_UPGRADE = '{"min_delta":15,"min_file_age":"24h","max_per_window":3
 
 /** Quality profiles, shared by every library of their media type (2026-09-25): a library only picks
  *  and orders them. Grouped by media type; audio profiles are built with a form. */
+const SAMPLE_RATE_FALLBACK = { min: "44100", ideal: "48000", max: "96000" };
+
 export function QualityProfilesPage() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<number | "new" | null>(null);
@@ -131,7 +133,10 @@ function ProfileForm({
   const tier = useTier();
   const [name, setName] = useState(initial?.name ?? "");
   const [mediaType, setMediaType] = useState(initial?.media_type ?? "music");
-  const [rules, setRules] = useState<AudioRules>(() => parseAudioRules(initial?.rules ?? ""));
+  // A new profile starts with the sample rate target on (asked 2026-09-30); an existing one keeps its own.
+  const [rules, setRules] = useState<AudioRules>(() =>
+    initial ? parseAudioRules(initial.rules) : { ...parseAudioRules(""), sampleRate: SAMPLE_RATE_FALLBACK },
+  );
   const [json, setJson] = useState(initial?.rules ?? "");
   const [asJSON, setAsJSON] = useState(false);
   const [upgrade, setUpgrade] = useState(initial?.upgrade ?? DEFAULT_UPGRADE);
@@ -300,7 +305,7 @@ function AudioRulesForm({ rules, onChange }: { rules: AudioRules; onChange: (rul
       <OptionalRange
         label="Sample rate target (Hz)"
         value={rules.sampleRate}
-        fallback={{ min: "44100", ideal: "48000", max: "96000" }}
+        fallback={SAMPLE_RATE_FALLBACK}
         onChange={(sampleRate) => set({ sampleRate })}
       />
       <OptionalRange
