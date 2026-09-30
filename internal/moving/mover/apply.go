@@ -103,11 +103,9 @@ var ErrNoRungSucceeded = errors.New("mover: no transfer method in the ladder cou
 // ErrUnknownMethod names a ladder entry that is not one of the five rungs.
 var ErrUnknownMethod = errors.New("mover: unknown transfer method")
 
-// DefaultLadder is the order the user gave on 2026-09-18: share the bytes
-// where the filesystem allows it, move them where it does not. Move always
-// succeeds (rename, else copy-and-unlink), so the two rungs behind it are
-// reachable only once a user reorders the ladder or drops move from it.
-var DefaultLadder = []PlaceMethod{PlaceReflink, PlaceHardlink, PlaceMove, PlaceCopy, PlaceSymlink}
+// DefaultLadder is the order the user gave on 2026-09-18: share the bytes where the filesystem allows
+// it, move them where it does not. Symlink only when a user adds it (ADR-11, 2026-09-30).
+var DefaultLadder = []PlaceMethod{PlaceReflink, PlaceHardlink, PlaceMove, PlaceCopy}
 
 // ValidMethod reports whether method names a rung PlaceOne can actually walk.
 func ValidMethod(method PlaceMethod) bool {
@@ -161,6 +159,10 @@ func PlaceOne(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64, ladder []
 		if err == nil {
 			return method, nil
 		}
+		if errors.Is(err, errSourceKept) {
+			// A read-only download folder: the verified copy is placed, and the source stays as a copy leaves it.
+			return PlaceCopy, nil
+		}
 		lastErr = fmt.Errorf("mover: %s %q to %q: %w", method, sourceAbs, destAbs, err)
 	}
 	return "", fmt.Errorf("%w: %w", ErrNoRungSucceeded, lastErr)
@@ -199,9 +201,11 @@ func copyVerified(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64) error
 	return nil
 }
 
-// moveFile renames where it can and copies-then-unlinks where it cannot. The
-// source is removed only after the copy verifies, so a failed move never
-// destroys the only copy of a file.
+// errSourceKept is a move whose verified copy is in place but whose source could not be removed.
+var errSourceKept = errors.New("mover: source kept after a verified copy")
+
+// moveFile renames where it can and copies-then-unlinks where it cannot. The source is removed only
+// after the copy verifies, so a failed move never destroys the only copy of a file.
 func moveFile(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64) error {
 	if err := fsys.Rename(sourceAbs, destAbs); err == nil {
 		return nil
@@ -210,7 +214,7 @@ func moveFile(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64) error {
 		return err
 	}
 	if err := fsys.Remove(sourceAbs); err != nil {
-		return fmt.Errorf("remove source after copy: %w", err)
+		return fmt.Errorf("%w: remove %q: %w", errSourceKept, sourceAbs, err)
 	}
 	return nil
 }

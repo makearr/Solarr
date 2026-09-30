@@ -956,3 +956,56 @@ func TestCommitUnit_NamesAnUntaggedUnitByItsFolder(t *testing.T) {
 		t.Errorf("placed at %q, want under Qozuvek Tarimo/Ilvaran Sepho and named with the artist", relPath)
 	}
 }
+
+// A unit whose second file cannot be placed takes back the first, rather than leaving a file nothing
+// tracks in the library (found 2026-09-30: a stray track 1 after a failed import).
+func TestCommitUnit_AFailedUnitTakesBackWhatItPlaced(t *testing.T) {
+	committer, _, fsys := newCommitter(t, true)
+	fsys.SetHardlinkSupported(false)
+	fsys.SetReflinkSupported(false)
+	fsys.SetRenameSupported(false)
+	first, second := []byte("first track bytes"), []byte("second track bytes")
+	writeCommitSourceFile(t, fsys, "Katupoken/KI Pecezinu/01 Sesoge.flac", first)
+	writeCommitSourceFile(t, fsys, "Katupoken/KI Pecezinu/02 Bafu.flac", second)
+	unit := testUnit("Katupoken/KI Pecezinu", []inspect.File{
+		{RelPath: "Katupoken/KI Pecezinu/01 Sesoge.flac", SizeBytes: int64(len(first))},
+		// A wrong size fails the copy's verification: the second file cannot be placed.
+		{RelPath: "Katupoken/KI Pecezinu/02 Bafu.flac", SizeBytes: int64(len(second)) + 1},
+	})
+	probes := []mediatool.Probe{
+		{Path: path.Join(commitSourceRoot, "Katupoken/KI Pecezinu/01 Sesoge.flac"), Tags: mediatool.Tags{"album": "KI Pecezinu", "tracknumber": "1"}},
+		{Path: path.Join(commitSourceRoot, "Katupoken/KI Pecezinu/02 Bafu.flac"), Tags: mediatool.Tags{"album": "KI Pecezinu", "tracknumber": "2"}},
+	}
+	best := model.Identification{
+		Confidence: 0.95,
+		ExternalID: &model.ExternalID{Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 0.95},
+	}
+
+	if _, err := committer.CommitUnit(t.Context(), commitSourceRoot, unit, best, music.UnitTagSourceFor(commitSourceRoot, probes), commitCategoryID); err == nil {
+		t.Fatal("CommitUnit = nil, want the second file's failure")
+	}
+	if left := filesUnder(t, fsys, commitDestRoot); len(left) != 0 {
+		t.Errorf("files left in the library = %v, want none", left)
+	}
+	if _, err := fsys.Stat(path.Join(commitSourceRoot, "Katupoken/KI Pecezinu/01 Sesoge.flac")); err != nil {
+		t.Errorf("the source of the taken-back file: %v", err)
+	}
+}
+
+func filesUnder(t *testing.T, fsys *fsx.Mem, directory string) []string {
+	t.Helper()
+	entries, err := fsys.ReadDir(directory)
+	if err != nil {
+		t.Fatalf("ReadDir %s: %v", directory, err)
+	}
+	var files []string
+	for _, entry := range entries {
+		name := path.Join(directory, entry.Name)
+		if entry.IsDir {
+			files = append(files, filesUnder(t, fsys, name)...)
+		} else {
+			files = append(files, name)
+		}
+	}
+	return files
+}

@@ -387,6 +387,9 @@ func (m *Mem) Remove(path string) error {
 	if !ok {
 		return pathError("remove", path, fs.ErrNotExist)
 	}
+	if m.writeDenied[filepath.Dir(target)] {
+		return pathError("remove", path, syscall.EACCES)
+	}
 	if node.isDir {
 		for candidate := range m.nodes {
 			if strings.HasPrefix(candidate, strings.TrimSuffix(target, "/")+"/") {
