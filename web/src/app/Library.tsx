@@ -15,7 +15,12 @@ import { useRecordLastLevel } from "@/list/useRecordLastLevel";
 import type { SelectionRequest } from "@/list/selection";
 import type { components } from "@/api/schema";
 import { CoverArt } from "./CoverArt";
-import { ArtistCoverMark, Poster } from "./Poster";
+import {
+  DEFAULT_POSTER_OPTIONS, IndexPoster, IndexViewToggle, OVERVIEW_ROW_HEIGHT, OverviewList, POSTER_GAP, POSTER_PADDING,
+  POSTER_WIDTHS, PosterOptionsMenu, RowActions, posterRowHeight, type IndexEntry, type IndexView, type PosterOptions,
+} from "./IndexViews";
+import { formatBytes } from "./Queue";
+import { usePreference } from "@/lib/usePreference";
 
 type Work = components["schemas"]["Work"];
 
@@ -52,30 +57,41 @@ const CARD_HEIGHT = 68;
 // A 32px thumbnail plus padding, for a table row.
 const TABLE_ROW_HEIGHT = 44;
 // The poster wall's own geometry, matching LibraryLevelList's.
-const POSTER_MIN_WIDTH = 168;
-const POSTER_GAP = 16;
-const POSTER_PADDING = 16;
-const POSTER_LABEL_HEIGHT = 46;
 const VIEW_STORAGE_KEY = "solarr.library.view";
 
-/** Albums open as a poster wall (Lidarr's own album view, 2026-09-13); the
- *  table is a click away and remembered once chosen. */
-function loadView(): "table" | "poster" {
+/** Albums open as a poster wall (Lidarr's own album view, 2026-09-13); Radarr's Overview and the
+ *  table are a click away and remembered once chosen. */
+function loadView(): IndexView {
   try {
-    return localStorage.getItem(VIEW_STORAGE_KEY) === "table" ? "table" : "poster";
+    const stored = localStorage.getItem(VIEW_STORAGE_KEY);
+    return stored === "table" || stored === "list" ? "list" : stored === "overview" ? "overview" : "poster";
   } catch {
     return "poster";
   }
 }
 
+/** An album as the index views show it. */
+function entryOf(work: Work): IndexEntry {
+  return {
+    id: work.id, kind: "albums", title: work.title,
+    subtitle: [work.artist ?? work.media_type, work.year, work.unverified ? "unverified" : null].filter(Boolean).join(" · "),
+    year: work.year, status: work.status, presentCount: work.present_count, requiredCount: work.required_count,
+    monitored: work.monitored, overview: work.overview, sizeBytes: work.size_bytes, artistCover: work.artist_cover,
+    image: { subject: "works", id: work.id }, link: { to: "/works/$id", params: { id: String(work.id) } },
+  };
+}
+
 // Cover and title are always shown -- they are how a row is identified at
 // all. The rest is what section 21's "configurable columns" picks among.
-const OPTIONAL_COLUMNS = ["artist", "year", "added_at"] as const;
+const OPTIONAL_COLUMNS = ["artist", "year", "added_at", "size", "monitored", "actions"] as const;
 type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number];
 const COLUMN_LABELS: Record<OptionalColumn, string> = {
   artist: "Artist",
   year: "Released",
   added_at: "Added",
+  size: "Size",
+  monitored: "Monitored",
+  actions: "Actions",
 };
 const COLUMNS_STORAGE_KEY = "solarr.library.columns";
 
@@ -154,6 +170,15 @@ function buildColumns(visible: ReadonlySet<OptionalColumn>): Column<Work>[] {
       render: (work) => new Date(work.added_at).toLocaleDateString(),
     });
   }
+  if (visible.has("size")) {
+    columns.push({ key: "size", header: "Size", width: "6rem", render: (work) => (work.size_bytes ? formatBytes(work.size_bytes) : "") });
+  }
+  if (visible.has("monitored")) {
+    columns.push({ key: "monitored", header: "", width: "3rem", render: (work) => <RowActions column="monitored" entry={entryOf(work)} /> });
+  }
+  if (visible.has("actions")) {
+    columns.push({ key: "actions", header: "", width: "5rem", render: (work) => <RowActions column="actions" entry={entryOf(work)} /> });
+  }
   return columns;
 }
 
@@ -179,7 +204,9 @@ export function Library() {
     }),
     [baseView, categoryId],
   );
-  const [view, setView] = useState<"table" | "poster">(loadView);
+  const [view, setView] = useState<IndexView>(loadView);
+  const [storedOptions, setOptions] = usePreference<PosterOptions>("posters.options", DEFAULT_POSTER_OPTIONS);
+  const options = { ...DEFAULT_POSTER_OPTIONS, ...storedOptions };
   const frameRef = useRef<HTMLDivElement>(null);
   const [visibleColumns, setVisibleColumns] = useState<OptionalColumn[]>(loadVisibleColumns);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -187,7 +214,7 @@ export function Library() {
   const queryClient = useQueryClient();
 
   const narrow = useNarrow();
-  const metrics = useGridMetrics(frameRef, POSTER_MIN_WIDTH, POSTER_GAP, POSTER_PADDING);
+  const metrics = useGridMetrics(frameRef, POSTER_WIDTHS[options.size], POSTER_GAP, POSTER_PADDING);
   const isPoster = view === "poster";
   // Albums as posters are grouped by artist (asked for 2026-09-17), which only
   // works if they arrive ordered by artist, whatever the table was sorted by.
@@ -201,10 +228,12 @@ export function Library() {
       groupOf: isPoster ? artistOf : undefined,
       groupHeaderHeight: POSTER_GROUP_HEADER_HEIGHT,
       rowHeight: isPoster
-        ? metrics.cellWidth + POSTER_LABEL_HEIGHT + POSTER_GAP
-        : narrow
-          ? CARD_HEIGHT
-          : TABLE_ROW_HEIGHT,
+        ? posterRowHeight(options, metrics.cellWidth)
+        : view === "overview"
+          ? OVERVIEW_ROW_HEIGHT
+          : narrow
+            ? CARD_HEIGHT
+            : TABLE_ROW_HEIGHT,
       itemsPerRow: isPoster ? metrics.columns : 1,
       idOf: (work) => work.id,
       fetchPage: async ({ cursor, query, signal }) => {
@@ -362,10 +391,10 @@ export function Library() {
               </div>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              const next = view === "table" ? "poster" : "table";
+          {isPoster && <PosterOptionsMenu options={options} onChange={setOptions} />}
+          <IndexViewToggle
+            view={view}
+            onChange={(next) => {
               setView(next);
               try {
                 localStorage.setItem(VIEW_STORAGE_KEY, next);
@@ -373,10 +402,7 @@ export function Library() {
                 // A per-browser convenience; losing it costs nothing worth failing over.
               }
             }}
-            className={quietButton}
-          >
-            {view === "table" ? "Posters" : "Table"}
-          </button>
+          />
           {categoryId && (
             <Link
               to="/library/$categoryId/discover"
@@ -425,24 +451,15 @@ export function Library() {
         )}
 
         {list.items.length > 0 &&
-          (view === "table" ? (
+          (view === "list" ? (
             <ListTable list={list} columns={columns} idOf={(work) => work.id} />
+          ) : view === "overview" ? (
+            <OverviewList list={list} entryOf={entryOf} />
           ) : (
             <PosterGrid
               list={list}
               idOf={(work) => work.id}
-              renderPoster={(work) => (
-                <Poster
-                  subject="works"
-                  imageId={work.id}
-                  title={work.title}
-                  subtitle={[work.artist ?? work.media_type, work.year, work.unverified ? "unverified" : null]
-                    .filter(Boolean)
-                    .join(" · ")}
-                  link={{ to: "/works/$id", params: { id: String(work.id) } }}
-                  badge={work.artist_cover ? <ArtistCoverMark /> : undefined}
-                />
-              )}
+              renderPoster={(work) => <IndexPoster entry={entryOf(work)} options={options} />}
             />
           ))}
       </div>

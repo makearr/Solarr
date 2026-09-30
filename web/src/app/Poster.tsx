@@ -17,6 +17,9 @@ export function Poster({
   title,
   subtitle,
   badge,
+  topLeft,
+  hoverActions,
+  showTitle = true,
   link,
   round = false,
   status,
@@ -28,6 +31,10 @@ export function Poster({
   title: string;
   subtitle?: string;
   badge?: React.ReactNode;
+  // Radarr's poster: the monitored bookmark top left, actions over the cover on hover (2026-09-30).
+  topLeft?: React.ReactNode;
+  hoverActions?: React.ReactNode;
+  showTitle?: boolean;
   link: LinkProps | null;
   round?: boolean;
   // status absent means this tile has nothing to report, and carries no bar
@@ -58,6 +65,12 @@ export function Poster({
           </span>
         )}
         {badge && <span className="absolute right-1.5 top-1.5">{badge}</span>}
+        {topLeft && <span className="absolute left-1.5 top-1.5">{topLeft}</span>}
+        {hoverActions && (
+          <span className="absolute inset-x-1.5 bottom-1.5 flex justify-end opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            {hoverActions}
+          </span>
+        )}
       </span>
       {status && (
         <AvailabilityBar
@@ -67,8 +80,8 @@ export function Poster({
           className="mt-1.5"
         />
       )}
-      <span className="mt-2 block truncate text-sm font-medium group-hover:text-accent">{title}</span>
-      {subtitle && <span className="block truncate text-xs text-ink-muted">{subtitle}</span>}
+      {showTitle && <span className="mt-2 block truncate text-sm font-medium group-hover:text-accent">{title}</span>}
+      {showTitle && subtitle && <span className="block truncate text-xs text-ink-muted">{subtitle}</span>}
     </>
   );
 

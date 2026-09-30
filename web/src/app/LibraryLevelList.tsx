@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import type { LinkProps } from "@tanstack/react-router";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ArrowDown, ArrowUp, Check, Columns3, LayoutGrid, Plus, Rows3 } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Columns3, Plus } from "lucide-react";
 
 import { api } from "@/api/client";
 import { albumStatusFill, albumStatusLabel } from "@/lib/albumStatus";
@@ -14,7 +14,11 @@ import { useRouteView } from "@/list/useRouteView";
 import { useRecordLastLevel } from "@/list/useRecordLastLevel";
 import type { components } from "@/api/schema";
 import { CoverArt } from "./CoverArt";
-import { ArtistCoverMark, Poster } from "./Poster";
+import {
+  DEFAULT_POSTER_OPTIONS, IndexPoster, IndexViewToggle, OVERVIEW_ROW_HEIGHT, OverviewList, POSTER_GAP, POSTER_PADDING,
+  POSTER_WIDTHS, PosterOptionsMenu, RowActions, posterRowHeight, type IndexEntry, type IndexView, type PosterOptions,
+} from "./IndexViews";
+import { formatBytes } from "./Queue";
 
 type LevelItem = components["schemas"]["LibraryLevelItem"];
 
@@ -24,10 +28,7 @@ const FILTER_KEYS: readonly string[] = [];
 // The poster wall's own geometry: a tile is at least this wide, gaps and page
 // padding are the grid's, and a row is one square cover plus its two lines of
 // label.
-const POSTER_MIN_WIDTH = 168;
-const POSTER_GAP = 16;
-const POSTER_PADDING = 16;
-const POSTER_LABEL_HEIGHT = 46;
+
 
 /** Which levels open as a poster wall rather than a list -- the browse views
  *  a person actually looks at (Lidarr's own Artists and Albums), not Tracks,
@@ -85,7 +86,7 @@ function SortPicker({
   );
 }
 
-type ViewMode = "poster" | "list";
+type ViewMode = IndexView;
 const VIEW_STORAGE_KEY = "solarr.level.view";
 
 /** The remembered poster/list choice per level, so switching to the list on
@@ -97,7 +98,7 @@ function useViewMode(level: string | undefined): [ViewMode, (mode: ViewMode) => 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(`${VIEW_STORAGE_KEY}.${level ?? ""}`);
-      setMode(raw === "poster" || raw === "list" ? raw : fallback);
+      setMode(raw === "poster" || raw === "overview" || raw === "list" ? raw : fallback);
     } catch {
       setMode(fallback);
     }
@@ -129,6 +130,17 @@ function imageSourceFor(level: string | undefined, item: LevelItem): { subject: 
 /** Where a row navigates: Artists to the person page, Tracks to their own
  *  album (there is no track-detail page -- a track is a work_part shown
  *  inside its work, WorkDetail's own Parts section). */
+/** A level row as the index views show it. */
+function entryOf(level: string | undefined, item: LevelItem): IndexEntry {
+  return {
+    id: item.id, kind: level === "artists" ? "artists" : level === "albums" ? "albums" : "tracks",
+    title: item.title, subtitle: item.subtitle, year: item.year, status: item.status,
+    presentCount: item.present_count, requiredCount: item.required_count, monitored: item.monitored,
+    overview: item.overview, sizeBytes: item.size_bytes, artistCover: item.artist_cover,
+    image: imageSourceFor(level, item), link: linkFor(level, item),
+  };
+}
+
 function linkFor(level: string | undefined, item: LevelItem): LinkProps | null {
   if (level === "artists") return { to: "/people/$id", params: { id: String(item.id) } };
   if (item.work_id != null) return { to: "/works/$id", params: { id: String(item.work_id) } };
@@ -157,15 +169,17 @@ export function LibraryLevelList() {
       setDir("");
     }
   };
-  const [showBars, setShowBars] = usePreference("posters.availabilityBar", true);
+  const [storedOptions, setOptions] = usePreference<PosterOptions>("posters.options", DEFAULT_POSTER_OPTIONS);
+  const options = { ...DEFAULT_POSTER_OPTIONS, ...storedOptions };
   const frameRef = useRef<HTMLDivElement>(null);
-  const metrics = useGridMetrics(frameRef, POSTER_MIN_WIDTH, POSTER_GAP, POSTER_PADDING);
+  const metrics = useGridMetrics(frameRef, POSTER_WIDTHS[options.size], POSTER_GAP, POSTER_PADDING);
   const isPoster = view === "poster";
+
 
   const list = useLibraryList<LevelItem>(
     {
       name: `library-level:${categoryId ?? ""}:${level ?? ""}:${sort}:${dir}`,
-      rowHeight: isPoster ? metrics.cellWidth + POSTER_LABEL_HEIGHT + POSTER_GAP : ROW_HEIGHT,
+      rowHeight: isPoster ? posterRowHeight(options, metrics.cellWidth) : view === "overview" ? OVERVIEW_ROW_HEIGHT : ROW_HEIGHT,
       itemsPerRow: isPoster ? metrics.columns : 1,
       idOf: (item) => item.id,
       fetchPage: async ({ cursor, signal }) => {
@@ -188,16 +202,15 @@ export function LibraryLevelList() {
       <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-4 py-2">
         <h1 className="text-sm font-semibold capitalize tracking-tight">{level ?? "Library"}</h1>
         <div className="ml-auto flex items-center gap-2">
-          <label className="flex items-center gap-1 text-xs text-ink-muted">
-            <input type="checkbox" checked={showBars} onChange={(e) => setShowBars(e.target.checked)} />
-            Availability
-          </label>
-          {isPoster ? (
-            <SortPicker level={level} sort={sort} onChange={sortBy} />
-          ) : (
+          {view === "list" ? (
             <ColumnChooser level={level} hidden={hidden} onChange={setHidden} />
+          ) : (
+            <>
+              <SortPicker level={level} sort={sort} onChange={sortBy} />
+              {isPoster && <PosterOptionsMenu options={options} onChange={setOptions} />}
+            </>
           )}
-          <ViewToggle view={view} onChange={setView} />
+          <IndexViewToggle view={view} onChange={setView} />
           {categoryId && (
             <Link
               to="/library/$categoryId/discover"
@@ -224,24 +237,10 @@ export function LibraryLevelList() {
             <PosterGrid
               list={list}
               idOf={(item) => item.id}
-              renderPoster={(item) => {
-                const image = imageSourceFor(level, item);
-                return (
-                  <Poster
-                    subject={image?.subject ?? "works"}
-                    imageId={image?.id ?? null}
-                    title={item.title}
-                    subtitle={item.subtitle ?? (item.year != null ? String(item.year) : undefined)}
-                    link={linkFor(level, item)}
-                    badge={item.artist_cover ? <ArtistCoverMark /> : undefined}
-                    round={level === "artists"}
-                    status={showBars ? item.status : undefined}
-                    presentCount={item.present_count}
-                    requiredCount={item.required_count}
-                  />
-                );
-              }}
+              renderPoster={(item) => <IndexPoster entry={entryOf(level, item)} options={options} />}
             />
+          ) : view === "overview" ? (
+            <OverviewList list={list} entryOf={(item) => entryOf(level, item)} />
           ) : (
             <LevelTable list={list} level={level} sort={sort} dir={dir} onSort={sortBy} hidden={hidden} />
           )}
@@ -251,35 +250,7 @@ export function LibraryLevelList() {
   );
 }
 
-function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (mode: ViewMode) => void }) {
-  return (
-    <div className="flex items-center rounded-md border border-border-subtle">
-      {(
-        [
-          { mode: "poster" as const, icon: LayoutGrid, label: "Poster view" },
-          { mode: "list" as const, icon: Rows3, label: "List view" },
-        ]
-      ).map(({ mode, icon: Icon, label }) => (
-        <button
-          key={mode}
-          type="button"
-          aria-pressed={view === mode}
-          aria-label={label}
-          title={label}
-          onClick={() => onChange(mode)}
-          className={`p-1.5 first:rounded-l-md last:rounded-r-md focus-visible:outline-2
-                      focus-visible:outline-offset-2 focus-visible:outline-accent ${
-                        view === mode ? "bg-accent text-accent-ink" : "text-ink-muted hover:bg-canvas hover:text-ink"
-                      }`}
-        >
-          <Icon aria-hidden className="size-4" />
-        </button>
-      ))}
-    </div>
-  );
-}
-
-type OptionalColumn = "subtitle" | "year" | "progress" | "status";
+type OptionalColumn = "subtitle" | "year" | "progress" | "status" | "size" | "monitored" | "actions";
 
 interface LevelColumns {
   title: { header: string; sort?: SortKey };
@@ -293,6 +264,7 @@ const LEVEL_COLUMNS: Record<string, LevelColumns> = {
     optional: [
       { key: "progress", header: "Albums", width: "7rem" },
       { key: "status", header: "Status", width: "6rem" },
+      { key: "actions", header: "Actions", width: "5rem" },
     ],
   },
   albums: {
@@ -302,6 +274,9 @@ const LEVEL_COLUMNS: Record<string, LevelColumns> = {
       { key: "year", header: "Released", sort: "year", width: "6rem" },
       { key: "progress", header: "Tracks", width: "6rem" },
       { key: "status", header: "Status", width: "6rem" },
+      { key: "size", header: "Size", width: "6rem" },
+      { key: "monitored", header: "Monitored", width: "6rem" },
+      { key: "actions", header: "Actions", width: "5rem" },
     ],
   },
   tracks: {
@@ -445,7 +420,7 @@ function LevelTable({
                 <span className="truncate font-medium">{item.title}</span>
                 {shown.map((column) => (
                   <span key={column.key} className="truncate text-ink-muted">
-                    {cellFor(column.key, item)}
+                    {cellFor(column.key, item, level)}
                   </span>
                 ))}
               </>
@@ -466,8 +441,13 @@ function LevelTable({
   );
 }
 
-function cellFor(column: OptionalColumn, item: LevelItem): React.ReactNode {
+function cellFor(column: OptionalColumn, item: LevelItem, level?: string): React.ReactNode {
   switch (column) {
+    case "size":
+      return item.size_bytes ? formatBytes(item.size_bytes) : "";
+    case "monitored":
+    case "actions":
+      return <RowActions column={column} entry={entryOf(level, item)} />;
     case "subtitle":
       return item.subtitle ?? "";
     case "year":

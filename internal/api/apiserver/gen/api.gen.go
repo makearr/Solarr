@@ -573,6 +573,15 @@ const (
 	WantedStateUPGRADABLE WantedState = "UPGRADABLE"
 )
 
+// Defines values for WorkStatus.
+const (
+	WorkStatusComplete    WorkStatus = "complete"
+	WorkStatusDownloading WorkStatus = "downloading"
+	WorkStatusIncomplete  WorkStatus = "incomplete"
+	WorkStatusUnreleased  WorkStatus = "unreleased"
+	WorkStatusUnverified  WorkStatus = "unverified"
+)
+
 // Defines values for WorkWantedState.
 const (
 	WorkWantedStateCOMPLETE   WorkWantedState = "COMPLETE"
@@ -2012,11 +2021,17 @@ type LibraryLevelItem struct {
 	Id          int64 `json:"id"`
 	Monitored   *bool `json:"monitored,omitempty"`
 
+	// Overview The album's description, cut to a paragraph, for the Overview view. Albums only.
+	Overview *string `json:"overview,omitempty"`
+
 	// PresentCount How much of this row is here: tracks for an album, complete albums for an artist. Absent on a level that counts neither.
 	PresentCount *int64 `json:"present_count,omitempty"`
 
 	// RequiredCount How much it would take to be complete.
 	RequiredCount *int64 `json:"required_count,omitempty"`
+
+	// SizeBytes Size on disk of the album's files. Albums only.
+	SizeBytes *int64 `json:"size_bytes,omitempty"`
 
 	// Status PersonWork.status' own vocabulary, so the poster wall and the artist page colour a row the same way. Absent on a level with nothing to colour.
 	Status *LibraryLevelItemStatus `json:"status,omitempty"`
@@ -3120,8 +3135,20 @@ type Work struct {
 	// LastSearchedAt When the album was last searched. Absent means never.
 	LastSearchedAt *time.Time `json:"last_searched_at,omitempty"`
 	MediaType      string     `json:"media_type"`
-	SortTitle      string     `json:"sort_title"`
-	Title          string     `json:"title"`
+	Monitored      *bool      `json:"monitored,omitempty"`
+
+	// Overview The album's description, cut to a paragraph, for the Overview view.
+	Overview      *string `json:"overview,omitempty"`
+	PresentCount  *int64  `json:"present_count,omitempty"`
+	RequiredCount *int64  `json:"required_count,omitempty"`
+
+	// SizeBytes Size on disk of the album's files.
+	SizeBytes *int64 `json:"size_bytes,omitempty"`
+	SortTitle string `json:"sort_title"`
+
+	// Status The poster wall's colour, PersonWork.status' own vocabulary.
+	Status *WorkStatus `json:"status,omitempty"`
+	Title  string      `json:"title"`
 
 	// Unverified Known only by its own tags or folder (D6): no metadata source recognised it. Absent means false.
 	Unverified *bool     `json:"unverified,omitempty"`
@@ -3131,6 +3158,9 @@ type Work struct {
 	WantedState *WorkWantedState `json:"wanted_state,omitempty"`
 	Year        *int             `json:"year,omitempty"`
 }
+
+// WorkStatus The poster wall's colour, PersonWork.status' own vocabulary.
+type WorkStatus string
 
 // WorkWantedState Set when this work has a monitored desired_item, regardless of whether the wanted filter was used.
 type WorkWantedState string

@@ -145,6 +145,10 @@ type WorkListRow struct {
 	ArrivedAt int64
 	// ArtistCover is an album with no cover of its own, shown by its primary artist's image instead.
 	ArtistCover bool
+	// Monitored, Description and SizeBytes are what Radarr's poster, overview and table show (2026-09-30).
+	Monitored   bool
+	Description string
+	SizeBytes   int64
 }
 
 // Works reads the library list surface.
@@ -229,6 +233,11 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		",\n       COALESCE((SELECT a.arrived_at FROM work_arrival a WHERE a.work_id = work.id), 0) AS arrived_at" +
 		",\n       (work.primary_artist_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM artwork aw" +
 		" WHERE aw.subject_type = 'work' AND aw.subject_id = work.id)) AS artist_cover" +
+		",\n       EXISTS (SELECT 1 FROM desired_item mon WHERE mon.work_id = work.id AND mon.monitored = 1" +
+		" AND mon.satisfaction_kind = 'SET') AS monitored" +
+		",\n       COALESCE(work.description, '') AS description" +
+		",\n       CAST(COALESCE((SELECT SUM(mo.size_bytes) FROM work_file wf JOIN media_object mo ON mo.id = wf.media_object_id" +
+		" WHERE wf.work_id = work.id), 0) AS INTEGER) AS size_bytes" +
 		"\nFROM work" + join +
 		predicates.Where() + "\nORDER BY " + orderBy + "\nLIMIT ?"
 	return query, predicates.Args(pageSize)
@@ -367,7 +376,8 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 			&work.OriginalLanguage, &work.Year, &work.RuntimeMs, &work.AddedAt,
 			&work.UpdatedAt, &work.AddedBy, &work.Artist, &work.WantedState,
 			&work.PresentCount, &work.RequiredCount, &work.AvailableFrom, &work.Downloading,
-			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt, &work.Unverified, &work.ArrivedAt, &work.ArtistCover); err != nil {
+			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt, &work.Unverified, &work.ArrivedAt, &work.ArtistCover,
+			&work.Monitored, &work.Description, &work.SizeBytes); err != nil {
 			return nil, fmt.Errorf("library: scan work: %w", err)
 		}
 		works = append(works, work)
