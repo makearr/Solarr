@@ -37,7 +37,7 @@ func (a Works) ListWorks(
 		},
 		library.WorkCursor{
 			SortTitle: cursor.SortTitle, SortYear: cursor.SortYear, SortAdded: cursor.SortAdded,
-			SortArtist: cursor.SortArtist, SortSearched: cursor.SortSearched, ID: cursor.ID,
+			SortArtist: cursor.SortArtist, SortSearched: cursor.SortSearched, SortImported: cursor.SortImported, ID: cursor.ID,
 		},
 		pageSize)
 	if err != nil {
@@ -73,6 +73,7 @@ func (a Works) ListWorks(
 		view.Downloading = row.Downloading
 		view.OnDisk = row.OnDisk
 		view.Unverified = row.Unverified
+		view.ArrivedAt = row.ArrivedAt
 		if row.LastSearchedAt != 0 {
 			at := time.Unix(row.LastSearchedAt, 0).UTC()
 			view.LastSearchedAt = &at

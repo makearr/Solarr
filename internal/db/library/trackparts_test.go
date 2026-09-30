@@ -59,7 +59,7 @@ func setUpAlbumWithParts(
 	if artistName != "" {
 		personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 			Provider: "test", ExternalID: artistExternalID,
-			Person: library.PersonIdentity{Name: artistName, SortName: artistName},
+			Person: library.PersonIdentity{Name: artistName},
 		})
 		if err != nil {
 			t.Fatalf("ResolvePerson: %v", err)

@@ -25,7 +25,7 @@ func TestArrImports_StartAddItemFinishRoundTrips(t *testing.T) {
 		t.Fatalf("run = %+v, want RUNNING for instance 7/lidarr", run)
 	}
 
-	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci", "Bush, Vutu")
+	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci")
 	itemID, err := imports.AddItem(t.Context(), importID, library.NewArrImportItem{
 		Kind: library.ArrImportItemArtist, SourceID: "lidarr-artist-1", Title: "Vutu Doci",
 		PersonID: &personID, PersonCreated: true,
@@ -80,7 +80,7 @@ func TestArrImportRevert_DeletesWhatTheRunCreated(t *testing.T) {
 	imports := library.NewArrImports(opened)
 	identity := library.NewIdentity(opened)
 
-	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci", "Bush, Vutu")
+	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci")
 	subscriptionID, err := people.Subscribe(t.Context(), firstSeen, personID, 0,
 		library.SubscriptionRequest{MediaTypes: []string{"music"}, Roles: []string{"artist"}})
 	if err != nil {
@@ -157,7 +157,7 @@ func TestArrImportRevert_NeverDeletesWhatTheRunOnlyMatched(t *testing.T) {
 	imports := library.NewArrImports(opened)
 	identity := library.NewIdentity(opened)
 
-	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci", "Bush, Vutu")
+	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci")
 	work := createWork(t, opened, "music", "The Sezo Siluko")
 
 	importID, err := imports.Start(t.Context(), 1, "lidarr", firstSeen.Unix())
@@ -211,7 +211,7 @@ func TestArrImportRevert_DeletesTheWorkBeforeItsOwnPrimaryArtist(t *testing.T) {
 	imports := library.NewArrImports(opened)
 	identity := library.NewIdentity(opened)
 
-	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci", "Bush, Vutu")
+	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci")
 	work := createWork(t, opened, "music", "The Sezo Siluko")
 	if err := people.AddCredit(t.Context(), work.ID, personID, "artist", 0); err != nil {
 		t.Fatalf("AddCredit: %v", err)

@@ -7389,8 +7389,8 @@ export interface operations {
                 limit?: number;
                 /** @description Narrows to one category. Naming a category the caller cannot read answers 404, matching a single-item lookup (Invariant 37) rather than a filter that silently returns nothing. */
                 category_id?: number;
-                /** @description Which column orders the list; title is the default. artist orders by the primary artist's sort name, then title -- the Albums view's grouping -- with a work that has no artist first. */
-                sort?: "title" | "year" | "added" | "artist" | "searched";
+                /** @description Which column orders the list; title is the default. artist orders by the primary artist's sort name, then title -- the Albums view's grouping -- with a work that has no artist first. imported orders by when the newest file arrived and lists only works with files (the dashboard's Recently added). */
+                sort?: "title" | "year" | "added" | "artist" | "searched" | "imported";
                 dir?: "asc" | "desc";
                 /** @description Only works released within priority.new_release_days (ADR-55's release-date window; the 48h indexer/RSS window is not built -- it needs candidate.first_seen_at, stage 5). A work with no known release date, or one known only to the year or month, never matches: day precision is required. */
                 fresh?: boolean;

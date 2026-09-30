@@ -549,7 +549,7 @@ func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArt
 		return backfillFailed
 	}
 	if err := j.people.BackfillDetails(ctx, candidate.PersonID, library.PersonIdentity{
-		Name: artist.Name, SortName: artist.SortName, Disambiguation: artist.Disambiguation,
+		Name: artist.Name, Disambiguation: artist.Disambiguation,
 		Kind: artist.Type, Gender: artist.Gender, Country: artist.Country,
 		Born: artist.Born, Died: artist.Died, Biography: biographyText(bio),
 	}); err != nil {
@@ -825,13 +825,9 @@ func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.Artist
 		artist = musicbrainz.Artist{MBID: credit.MBID, Name: credit.Name, SortName: credit.Name}
 	}
 
-	sortName := artist.SortName
-	if sortName == "" {
-		sortName = artist.Name
-	}
 	bio := j.wikidataBiographyFor(ctx, artist)
 	identity := library.PersonIdentity{
-		Name: artist.Name, SortName: sortName, Disambiguation: artist.Disambiguation,
+		Name: artist.Name, Disambiguation: artist.Disambiguation,
 		Kind: artist.Type, Gender: artist.Gender, Country: artist.Country,
 		Born: artist.Born, Died: artist.Died, Biography: biographyText(bio),
 	}

@@ -496,7 +496,7 @@ func TestDesiredItem_KeyAdmitsTwoProfilesForTheSameWork(t *testing.T) {
 func TestDesired_IncompleteItemsForOnePerson(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
-	heka := resolvePersonNamed(t, people, "artist-1", "Heka", "Heka")
+	heka := resolvePersonNamed(t, people, "artist-1", "Heka")
 	hers := createWork(t, opened, "music", "Zanuvode")
 	addTrack(t, opened, hers.ID)
 	other := createWork(t, opened, "music", "Zor A")

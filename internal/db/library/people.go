@@ -16,9 +16,9 @@ import (
 // PersonIdentity is what a person should look like if one has to be created --
 // naming and biographical facts only, the same "this package decides
 // persistence, the caller decides what to name" split as WorkIdentity.
+// The sort name is always the name, as Lidarr sorts: MusicBrainz's "Doci, Vutu" filed Vutu Doci under D.
 type PersonIdentity struct {
 	Name           string
-	SortName       string
 	Disambiguation string
 	// Kind is the provider's own vocabulary ("Person", "Group", ...), stored
 	// as-is, same reasoning as ReleaseGroup.PrimaryType.
@@ -75,15 +75,14 @@ func (p People) ResolvePerson(ctx context.Context, at time.Time, link PersonLink
 	return personID, nil
 }
 
-// BackfillDetails fills in only the biographical columns this person still
-// has empty, from a provider that has since learned them. Nothing already
-// set is touched, so it can run repeatedly and never undoes an edit. Needed
-// because findOrCreatePerson returns an existing person untouched, which
-// left everyone resolved before a field had a source without it forever.
+// BackfillDetails corrects the name and sort name to the provider's and fills only the empty
+// biographical columns: a person first made from a release's credit name ("VUTU") gets the artist's own.
 func (p People) BackfillDetails(ctx context.Context, personID int64, identity PersonIdentity) error {
 	return p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return librarydb.New(tx).BackfillPersonDetails(ctx, librarydb.BackfillPersonDetailsParams{
 			ID:             personID,
+			Name:           identity.Name,
+			SortName:       identity.Name,
 			Disambiguation: nullString(identity.Disambiguation),
 			Kind:           nullString(identity.Kind),
 			Gender:         nullString(identity.Gender),
@@ -92,6 +91,21 @@ func (p People) BackfillDetails(ctx context.Context, personID int64, identity Pe
 			Died:           nullString(identity.Died),
 			FieldsJson:     nullString(personFieldsJSON(identity)),
 		})
+	})
+}
+
+// ResolveFolderArtist is the artist of an album known only by its folder (D6): the one provider-identified
+// person of that name when there is exactly one, else a local person keyed by the name.
+func (p People) ResolveFolderArtist(ctx context.Context, at time.Time, provider, name string) (int64, error) {
+	matches, err := librarydb.New(p.store.Read()).FindIdentifiedPeopleByName(ctx, name)
+	if err != nil {
+		return 0, fmt.Errorf("library: find people named %q: %w", name, err)
+	}
+	if len(matches) == 1 {
+		return matches[0], nil
+	}
+	return p.ResolvePerson(ctx, at, PersonLink{
+		Provider: provider, ExternalID: strings.ToLower(name), Person: PersonIdentity{Name: name},
 	})
 }
 
@@ -128,7 +142,7 @@ func findOrCreatePerson(
 
 	identity := link.Person
 	person, err := queries.CreatePerson(ctx, librarydb.CreatePersonParams{
-		Name: identity.Name, SortName: identity.SortName,
+		Name: identity.Name, SortName: identity.Name,
 		Disambiguation: nullString(identity.Disambiguation), Kind: nullString(identity.Kind),
 		Gender: nullString(identity.Gender), Country: nullString(identity.Country),
 		Born: nullString(identity.Born), Died: nullString(identity.Died),

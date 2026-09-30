@@ -77,7 +77,7 @@ func TestHousekeeping_CreatesAMonitoredArtistsFolderOnTheChosenRoot(t *testing.T
 	housekeeping, fsys, people := newHousekeeping(t, fileManagement)
 	at := time.Unix(1_700_000_000, 0)
 	personID, err := people.ResolvePerson(t.Context(), at, library.PersonLink{
-		Provider: "musicbrainz:artist", ExternalID: "a1", Person: library.PersonIdentity{Name: "Heka", SortName: "Heka"},
+		Provider: "musicbrainz:artist", ExternalID: "a1", Person: library.PersonIdentity{Name: "Heka"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)

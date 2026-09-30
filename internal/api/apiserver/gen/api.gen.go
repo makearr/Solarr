@@ -663,6 +663,7 @@ const (
 const (
 	ListWorksParamsSortAdded    ListWorksParamsSort = "added"
 	ListWorksParamsSortArtist   ListWorksParamsSort = "artist"
+	ListWorksParamsSortImported ListWorksParamsSort = "imported"
 	ListWorksParamsSortSearched ListWorksParamsSort = "searched"
 	ListWorksParamsSortTitle    ListWorksParamsSort = "title"
 	ListWorksParamsSortYear     ListWorksParamsSort = "year"
@@ -3620,7 +3621,7 @@ type ListWorksParams struct {
 	// CategoryId Narrows to one category. Naming a category the caller cannot read answers 404, matching a single-item lookup (Invariant 37) rather than a filter that silently returns nothing.
 	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
 
-	// Sort Which column orders the list; title is the default. artist orders by the primary artist's sort name, then title -- the Albums view's grouping -- with a work that has no artist first.
+	// Sort Which column orders the list; title is the default. artist orders by the primary artist's sort name, then title -- the Albums view's grouping -- with a work that has no artist first. imported orders by when the newest file arrived and lists only works with files (the dashboard's Recently added).
 	Sort *ListWorksParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 	Dir  *ListWorksParamsDir  `form:"dir,omitempty" json:"dir,omitempty"`
 

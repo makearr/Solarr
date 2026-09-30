@@ -111,7 +111,7 @@ func TestWorkDetail_IncludesCreditsAndGenres(t *testing.T) {
 
 	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 		Provider: "musicbrainz:artist", ExternalID: "artist-1",
-		Person: library.PersonIdentity{Name: "Katupoken", SortName: "Katupoken"},
+		Person: library.PersonIdentity{Name: "Katupoken"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)

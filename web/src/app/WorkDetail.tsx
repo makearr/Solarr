@@ -423,13 +423,15 @@ function WantedBadge({
   hasTracklist: boolean;
 }) {
   if (!wanted) return <OnDiskBadge onDisk={onDisk} />;
+  // Every track here but below the cutoff is still a whole album (Lidarr): only Cutoff Unmet says otherwise.
+  const whole = wanted.state === "COMPLETE" || wanted.state === "UPGRADABLE";
 
   // No tracks known yet: the album may well be complete on disk, so it is not called missing.
-  const label = !hasTracklist && wanted.state !== "COMPLETE"
+  const label = !hasTracklist && !whole
     ? "Waiting for metadata"
     : wanted.required_count != null
       ? `${wanted.present_count} of ${wanted.required_count} tracks`
-      : wanted.state === "COMPLETE"
+      : whole
         ? "Complete"
         : wanted.present_count > 0
           ? `${wanted.present_count} tracks`
@@ -438,7 +440,7 @@ function WantedBadge({
   return (
     <span
       className={`w-fit rounded-full border px-2 py-0.5 text-xs ${
-        wanted.state === "COMPLETE"
+        whole
           ? "border-current text-accent"
           : "border-border-subtle text-ink-muted"
       }`}

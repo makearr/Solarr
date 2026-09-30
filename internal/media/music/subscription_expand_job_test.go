@@ -139,7 +139,7 @@ func subscribedArtist(t *testing.T, opened *store.Store, artistMBID string) int6
 	people := library.NewPeople(opened)
 	personID, err := people.ResolvePerson(t.Context(), clock.NewFakeAtEpoch().Now(), library.PersonLink{
 		Provider: music.ProviderArtist, ExternalID: artistMBID,
-		Person: library.PersonIdentity{Name: "Katupoken", SortName: "Katupoken"},
+		Person: library.PersonIdentity{Name: "Katupoken"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
@@ -238,7 +238,7 @@ func TestSubscriptionExpandJob_SkipsASubscriptionWithNoArtistExternalID(t *testi
 	people := library.NewPeople(opened)
 	personID, err := people.ResolvePerson(t.Context(), clock.NewFakeAtEpoch().Now(), library.PersonLink{
 		Provider: "manual", ExternalID: "no-mbid",
-		Person: library.PersonIdentity{Name: "Unknown Artist", SortName: "Unknown Artist"},
+		Person: library.PersonIdentity{Name: "Unknown Artist"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
@@ -290,7 +290,7 @@ func TestSubscriptionExpandJob_ExpandsIntoTheLibraryTheArtistWasAddedTo(t *testi
 	people := library.NewPeople(opened)
 	personID, err := people.ResolvePerson(t.Context(), clock.NewFakeAtEpoch().Now(), library.PersonLink{
 		Provider: music.ProviderArtist, ExternalID: "katupoken-mbid",
-		Person: library.PersonIdentity{Name: "Katupoken", SortName: "Katupoken"},
+		Person: library.PersonIdentity{Name: "Katupoken"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)

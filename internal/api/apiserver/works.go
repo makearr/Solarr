@@ -32,6 +32,8 @@ const (
 	WorkSortArtist WorkSort = "artist"
 	// WorkSortSearched orders by when the album was last searched.
 	WorkSortSearched WorkSort = "searched"
+	// WorkSortImported orders by when the newest file arrived; works with no file are left out.
+	WorkSortImported WorkSort = "imported"
 )
 
 // SortDirection is which way a WorkSort orders. The zero value is ascending.
@@ -72,6 +74,7 @@ type WorksCursor struct {
 	SortAdded    int64
 	SortArtist   string
 	SortSearched int64
+	SortImported int64
 	ID           int64
 }
 
@@ -105,6 +108,8 @@ type WorkRow struct {
 	LastSearchedAt *time.Time
 	// Unverified is an album known only by its own tags or folder (D6).
 	Unverified bool
+	// ArrivedAt is the Unix time the newest file arrived, 0 with none; the imported sort's cursor.
+	ArrivedAt int64
 }
 
 // ListWorks returns a page of the library the caller may see (ADR-27). A work
@@ -168,6 +173,9 @@ func worksCursorFor(sort WorkSort, cursor paginate.TextCursor) WorksCursor {
 	case WorkSortSearched:
 		value, _ := strconv.ParseInt(cursor.Sort, 10, 64)
 		return WorksCursor{SortSearched: value, ID: cursor.ID}
+	case WorkSortImported:
+		value, _ := strconv.ParseInt(cursor.Sort, 10, 64)
+		return WorksCursor{SortImported: value, ID: cursor.ID}
 	case WorkSortArtist:
 		artist, title, _ := strings.Cut(cursor.Sort, artistCursorSeparator)
 		return WorksCursor{SortArtist: artist, SortTitle: title, ID: cursor.ID}
@@ -265,6 +273,8 @@ func cursorValueFor(sort WorkSort, row WorkRow) string {
 			return "0"
 		}
 		return strconv.FormatInt(row.LastSearchedAt.Unix(), 10)
+	case WorkSortImported:
+		return strconv.FormatInt(row.ArrivedAt, 10)
 	case WorkSortArtist:
 		return row.ArtistSortName + artistCursorSeparator + row.SortTitle
 	default:

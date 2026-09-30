@@ -191,7 +191,7 @@ func TestGrab_WhatIsAlreadyDownloadingCountsAgainstTheReserve(t *testing.T) {
 	secondWork := env.createWork(t, "Homework", 1997)
 	people := library.NewPeople(env.library)
 	personID, err := people.ResolvePerson(t.Context(), env.clock.Now(), library.PersonLink{
-		Provider: "test", ExternalID: "Nosi Zada", Person: library.PersonIdentity{Name: "Nosi Zada", SortName: "Nosi Zada"},
+		Provider: "test", ExternalID: "Nosi Zada", Person: library.PersonIdentity{Name: "Nosi Zada"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)

@@ -19,7 +19,7 @@ FROM collection_member WHERE collection_id = ? ORDER BY ord, work_id;
 -- name: CollectionCoverage :one
 SELECT c.id, c.name, c.complete_at,
        CAST(COUNT(DISTINCT m.work_id) AS INTEGER) AS members,
-       CAST(COUNT(DISTINCT CASE WHEN d.state = 'COMPLETE' THEN m.work_id END) AS INTEGER) AS held
+       CAST(COUNT(DISTINCT CASE WHEN d.state IN ('COMPLETE', 'UPGRADABLE') THEN m.work_id END) AS INTEGER) AS held
 FROM collection c
 LEFT JOIN collection_member m ON m.collection_id = c.id
 LEFT JOIN desired_item d ON d.work_id = m.work_id
