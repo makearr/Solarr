@@ -29,6 +29,8 @@ type GrabResult struct {
 	Held bool
 	// Refused counts releases the client declined before one was taken, or none was.
 	Refused int
+	// NoRoom counts releases passed over because the library has no root with space for them.
+	NoRoom int
 }
 
 // SearchAndSend searches itemID unless a download for it is already on its way, and sends the
@@ -68,9 +70,17 @@ func (g Grab) JudgeFeedAndSend(
 // sendBest sends found's best accepted release, or holds it when origin may wait; SearchItem
 // persists best first. Finding nothing acceptable is not an error.
 func (g Grab) sendBest(ctx context.Context, itemID int64, found ItemSearchResult, origin GrabOrigin, at time.Time) (GrabResult, error) {
-	refused := 0
+	headroom, gated, err := g.headroom(ctx, itemID, origin)
+	if err != nil {
+		return GrabResult{Search: found}, fmt.Errorf("music: grab item %d: %w", itemID, err)
+	}
+	refused, noRoom := 0, 0
 	for _, detail := range found.Decisions {
 		if detail.Decision.Outcome != string(model.OutcomeAccept) {
+			continue
+		}
+		if size := detail.ReleaseCandidate.SizeBytes; gated && size != nil && *size > headroom {
+			noRoom++
 			continue
 		}
 		if held, err := g.Dispatch.holdIfFull(ctx, itemID, detail, origin, at); err != nil {
@@ -94,7 +104,21 @@ func (g Grab) sendBest(ctx context.Context, itemID int64, found ItemSearchResult
 		if err != nil {
 			return GrabResult{Search: found, Refused: refused}, fmt.Errorf("music: grab item %d: %w", itemID, err)
 		}
-		return GrabResult{Search: found, Sent: &sent, Refused: refused}, nil
+		return GrabResult{Search: found, Sent: &sent, Refused: refused, NoRoom: noRoom}, nil
 	}
-	return GrabResult{Search: found, Refused: refused}, nil
+	return GrabResult{Search: found, Refused: refused, NoRoom: noRoom}, nil
+}
+
+// headroom is how much an automatic grab for itemID may bring in (ADR-12: free space is a hard
+// precondition). A person's own grab is never gated, nor is a library with no measured root.
+func (g Grab) headroom(ctx context.Context, itemID int64, origin GrabOrigin) (bytes int64, gated bool, err error) {
+	if origin == GrabUser || g.Search.Settings == nil {
+		return 0, false, nil
+	}
+	item, err := g.Search.Desired.Get(ctx, itemID)
+	if err != nil {
+		return 0, false, err
+	}
+	bytes, gated = g.Search.Settings.Snapshot().AcquisitionHeadroom(item.CategoryID)
+	return bytes, gated, nil
 }

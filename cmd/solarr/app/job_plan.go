@@ -85,6 +85,9 @@ func (p *process) huntSearch(ctx context.Context, itemID int64) (plan.Outcome, e
 	if item.Monitored != 1 || (item.State != "MISSING" && item.State != "PARTIAL") {
 		return plan.OutcomeNotWanted, nil
 	}
+	if room, measured := p.cache.Snapshot().AcquisitionHeadroom(item.CategoryID); measured && room <= 0 {
+		return plan.OutcomeNoRoom, nil
+	}
 	indexers, err := p.indexerConns(ctx)
 	if err != nil {
 		return plan.OutcomeSearched, err

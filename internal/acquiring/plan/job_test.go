@@ -203,3 +203,23 @@ func TestHuntDropsAnAlbumNoLongerWanted(t *testing.T) {
 		t.Fatalf("looked at %v, want the unwanted album dropped until the planner says otherwise", e.searched)
 	}
 }
+
+func TestHuntDoesNotChargeTheBudgetWhileTheLibraryHasNoRoom(t *testing.T) {
+	e := newEnv(t)
+	e.perHour = 1
+	e.album(t, "A", true)
+	e.album(t, "B", true)
+	e.planPass(t)
+	e.outcome = plan.OutcomeNoRoom
+	hunt := e.huntJob()
+
+	run(t, hunt)
+	if len(e.searched) != 2 {
+		t.Fatalf("looked at %v, want both: a library with no room costs no budget", e.searched)
+	}
+	e.clock.Advance(30 * time.Minute)
+	run(t, hunt)
+	if len(e.searched) != 2 {
+		t.Fatalf("looked at %v within the hour, want them left alone until it passes", e.searched)
+	}
+}
