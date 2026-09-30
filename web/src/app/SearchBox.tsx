@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -12,6 +12,12 @@ import { CoverArt } from "./CoverArt";
 import { useDebouncedValue } from "./useDebouncedValue";
 
 type SearchResult = components["schemas"]["SearchResult"];
+type DiscoverResult = components["schemas"]["DiscoverResult"];
+type Library = components["schemas"]["Library"];
+
+// Media types Discover can search a provider for; music only until TV (stage 8).
+const DISCOVERABLE = new Set(["music"]);
+const NEW_PER_KIND = 5;
 
 // Mirrors library.ErrQueryTooShort's floor (section 21.5), so a one-character keystroke
 // never fires a request the server would just reject.
@@ -53,6 +59,39 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
     },
     enabled: searchable,
     staleTime: 30_000,
+  });
+
+  // Beyond the library (asked 2026-09-30, ADR-56's global half): artists and albums not in it yet,
+  // searched in a library the person may add to; with several, they choose which.
+  const libraries = useQuery({
+    queryKey: ["libraries"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/libraries");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const addable = (libraries.data ?? []).filter(
+    (library: Library) =>
+      DISCOVERABLE.has(library.media_type) && (library.permission === "request" || library.permission === "manage"),
+  );
+  const [chosenLibrary, setChosenLibrary] = useState<number | undefined>();
+  const destination = addable.find((library) => library.id === chosenLibrary) ?? addable[0];
+  const discovered = useQuery({
+    queryKey: ["search-new", destination?.id, debounced],
+    queryFn: async () => {
+      const found: DiscoverResult[] = [];
+      for (const kind of ["artist", "album"] as const) {
+        const { data, error } = await api.GET("/discover/search", {
+          params: { query: { category_id: destination!.id, q: debounced, kind, limit: NEW_PER_KIND } },
+        });
+        if (error) throw error;
+        found.push(...data.map((result) => ({ ...result, kind })));
+      }
+      return found;
+    },
+    enabled: searchable && destination !== undefined,
+    staleTime: 60_000,
   });
 
   const open = focused && searchable;
@@ -107,6 +146,35 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
           {results.error != null && <li className="px-3 py-2 text-danger">The search could not be completed.</li>}
           {results.data?.length === 0 && <li className="px-3 py-2 text-ink-muted">No matches.</li>}
           {results.data?.map((result) => <ResultRow key={result.work.id} result={result} />)}
+          {destination && (
+            <li className="flex items-center gap-2 border-t border-border-subtle bg-canvas px-3 py-1.5 text-xs text-ink-muted">
+              <span className="flex-1">Not in your library yet</span>
+              {addable.length > 1 && (
+                <select
+                  aria-label="Add to which library"
+                  value={destination.id}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onChange={(event) => setChosenLibrary(Number(event.target.value))}
+                  className="rounded border border-border-subtle bg-canvas px-1 py-0.5"
+                >
+                  {addable.map((library) => (
+                    <option key={library.id} value={library.id}>
+                      {library.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </li>
+          )}
+          {destination && discovered.isLoading && <li className="px-3 py-2 text-ink-muted">Searching the metadata sources…</li>}
+          {destination && discovered.error != null && (
+            <li className="px-3 py-2 text-danger">The metadata sources could not be searched.</li>
+          )}
+          {destination && discovered.data?.length === 0 && <li className="px-3 py-2 text-ink-muted">Nothing new found.</li>}
+          {destination &&
+            discovered.data?.map((result) => (
+              <NewResultRow key={`${result.kind}-${result.external_id}`} result={result} libraryId={destination.id} query={debounced} />
+            ))}
         </ul>
       )}
     </div>
@@ -129,6 +197,31 @@ function ResultRow({ result }: { result: SearchResult }) {
           {work.media_type}
           {work.year ? ` · ${work.year}` : ""}
         </span>
+      </Link>
+    </li>
+  );
+}
+
+/** Something to add: opens the library's Discover with the search filled in, where the add options live. */
+function NewResultRow({ result, libraryId, query }: { result: DiscoverResult; libraryId: number; query: string }) {
+  const artist = result.kind === "artist";
+  return (
+    <li className="border-b border-border-subtle last:border-b-0">
+      <Link
+        to="/library/$categoryId/discover"
+        params={{ categoryId: String(libraryId) }}
+        search={{ q: query, kind: result.kind ?? "album" }}
+        className="flex items-center gap-2 px-3 py-1.5 hover:bg-canvas
+                   focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+      >
+        <span className="flex size-7 shrink-0 items-center justify-center rounded border border-dashed border-border-subtle text-ink-muted">
+          <Plus aria-hidden className="size-3.5" />
+        </span>
+        <span className="truncate font-medium">{result.title}</span>
+        <span className="truncate text-ink-muted">
+          {artist ? (result.disambiguation ?? "") : [result.artist, result.year].filter(Boolean).join(" · ")}
+        </span>
+        <span className="ml-auto shrink-0 text-xs text-ink-muted">{artist ? "Artist" : "Album"} · Add</span>
       </Link>
     </li>
   );
