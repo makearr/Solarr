@@ -284,6 +284,8 @@ type DiscographyRow struct {
 	AvailableFrom sql.NullInt64
 	// Downloading reports an acquisition in flight for this album.
 	Downloading bool
+	// Unverified is an album known only by its own tags or folder (D6).
+	Unverified bool
 }
 
 // discographyStatusColumns are the four facts the artist page colours a row
@@ -312,7 +314,8 @@ func (p People) Discography(ctx context.Context, personID int64, role string) ([
 	query := `SELECT ` + workColumns + `, work.primary_type,
        ` + workStateColumn + `,
        CAST((SELECT COUNT(*) FROM work_root_folder wrf WHERE wrf.work_id = work.id) AS INTEGER) AS on_disk_count,
-       ` + discographyStatusColumns + `
+       ` + discographyStatusColumns + `,
+       ` + unverifiedColumn + ` AS unverified
 FROM work
 JOIN credit c ON c.work_id = work.id
 WHERE c.person_id = ? AND (? = '' OR c.role = ?)
@@ -330,7 +333,7 @@ ORDER BY work.year, work.sort_title, work.id`
 		if err := rows.Scan(&row.ID, &row.MediaType, &row.CanonicalTitle, &row.SortTitle,
 			&row.OriginalLanguage, &row.Year, &row.RuntimeMs, &row.AddedAt, &row.UpdatedAt, &row.AddedBy,
 			&row.PrimaryType, &row.WantedState, &row.OnDiskCount,
-			&row.PresentCount, &row.RequiredCount, &row.AvailableFrom, &row.Downloading); err != nil {
+			&row.PresentCount, &row.RequiredCount, &row.AvailableFrom, &row.Downloading, &row.Unverified); err != nil {
 			return nil, fmt.Errorf("library: scan discography row: %w", err)
 		}
 		discography = append(discography, row)

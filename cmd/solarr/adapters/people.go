@@ -115,6 +115,7 @@ func (a People) GetPersonDetail(ctx context.Context, id int64) (apiserver.Person
 			row.AvailableFrom = &at
 		}
 		row.Downloading = work.Downloading
+		row.Unverified = work.Unverified
 		discography[index] = row
 	}
 
