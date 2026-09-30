@@ -158,6 +158,78 @@ func (c LidarrClient) Tags(ctx context.Context) ([]LidarrTag, error) {
 	return tags, nil
 }
 
+// DownloadClient is one download client an *Arr instance uses, from /api/v1/downloadclient -- the
+// v1 shape Lidarr and Prowlarr share. Its secrets come back masked, so none is read.
+type DownloadClient struct {
+	Name           string
+	Implementation string
+	Protocol       string
+	Enabled        bool
+	Host           string
+	Port           int64
+	UseSSL         bool
+	URLBase        string
+	Category       string
+}
+
+type downloadClientWire struct {
+	Name           string `json:"name"`
+	Implementation string `json:"implementation"`
+	Protocol       string `json:"protocol"`
+	Enable         bool   `json:"enable"`
+	Fields         []struct {
+		Name  string          `json:"name"`
+		Value json.RawMessage `json:"value"`
+	} `json:"fields"`
+}
+
+// DownloadClients answers the instance's download clients, their address and category.
+func (c LidarrClient) DownloadClients(ctx context.Context) ([]DownloadClient, error) {
+	var wire []downloadClientWire
+	if err := c.get(ctx, "/api/v1/downloadclient", &wire); err != nil {
+		return nil, err
+	}
+	clients := make([]DownloadClient, len(wire))
+	for index, entry := range wire {
+		client := DownloadClient{
+			Name: entry.Name, Implementation: entry.Implementation, Protocol: entry.Protocol, Enabled: entry.Enable,
+		}
+		for _, field := range entry.Fields {
+			switch field.Name {
+			case "host":
+				_ = json.Unmarshal(field.Value, &client.Host)
+			case "port":
+				_ = json.Unmarshal(field.Value, &client.Port)
+			case "useSsl":
+				_ = json.Unmarshal(field.Value, &client.UseSSL)
+			case "urlBase":
+				_ = json.Unmarshal(field.Value, &client.URLBase)
+			case "category", "musicCategory":
+				var category string
+				if json.Unmarshal(field.Value, &category) == nil && category != "" && client.Category == "" {
+					client.Category = category
+				}
+			}
+		}
+		clients[index] = client
+	}
+	return clients, nil
+}
+
+// BaseURL is the client's address as a URL: scheme, host, port and its URL base.
+func (d DownloadClient) BaseURL() string {
+	scheme := "http"
+	if d.UseSSL {
+		scheme = "https"
+	}
+	base := strings.Trim(d.URLBase, "/")
+	address := scheme + "://" + d.Host + ":" + strconv.FormatInt(d.Port, 10)
+	if base != "" {
+		address += "/" + base
+	}
+	return address
+}
+
 // get is the common request shape every call above uses: GET with the API
 // key header, bounded read, decode. httpx.Client.Do already classifies a
 // non-2xx response into a *httpx.StatusError (wrong API key answers 401,

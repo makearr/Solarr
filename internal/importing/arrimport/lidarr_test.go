@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -153,5 +154,35 @@ func TestLidarrClient_SystemStatusReportsAnUnauthorizedResponse(t *testing.T) {
 	}
 	if statusErr.Status != 401 {
 		t.Errorf("StatusError.Status = %d, want 401", statusErr.Status)
+	}
+}
+
+// Prowlarr and Lidarr answer the same v1 shape; the secrets come back masked and are not read.
+func TestLidarrClient_DownloadClientsReadsAddressAndCategory(t *testing.T) {
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"http://prowlarr.local/api/v1/downloadclient": {status: 200, body: `[
+			{"name":"SABnzbd","implementation":"Sabnzbd","protocol":"usenet","enable":true,"fields":[
+				{"name":"host","value":"10.0.0.5"},{"name":"port","value":8080},{"name":"useSsl","value":false},
+				{"name":"urlBase","value":"/sab/"},{"name":"apiKey","value":"********"},{"name":"category","value":"arr"}]},
+			{"name":"Torrent","implementation":"QBittorrent","protocol":"torrent","enable":false,"fields":[
+				{"name":"host","value":"qbit"},{"name":"port","value":8086},{"name":"useSsl","value":true},
+				{"name":"urlBase","value":null},{"name":"musicCategory","value":"music"}]}
+		]`},
+	}}
+	client := arrimport.NewLidarrClient(newTestClient(t, transport), "http://prowlarr.local", "key")
+
+	clients, err := client.DownloadClients(t.Context())
+	if err != nil {
+		t.Fatalf("DownloadClients: %v", err)
+	}
+	want := []arrimport.DownloadClient{
+		{Name: "SABnzbd", Implementation: "Sabnzbd", Protocol: "usenet", Enabled: true, Host: "10.0.0.5", Port: 8080, URLBase: "/sab/", Category: "arr"},
+		{Name: "Torrent", Implementation: "QBittorrent", Protocol: "torrent", Host: "qbit", Port: 8086, UseSSL: true, Category: "music"},
+	}
+	if !reflect.DeepEqual(clients, want) {
+		t.Errorf("clients = %+v, want %+v", clients, want)
+	}
+	if got := []string{clients[0].BaseURL(), clients[1].BaseURL()}; !reflect.DeepEqual(got, []string{"http://10.0.0.5:8080/sab", "https://qbit:8086"}) {
+		t.Errorf("base URLs = %v", got)
 	}
 }

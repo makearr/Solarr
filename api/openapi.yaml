@@ -2070,6 +2070,88 @@ paths:
             (connect/preview/park only), or this instance already has a sync
             running.
 
+  /arr/instances/{id}/indexers:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listArrInstanceIndexers
+      tags: [settings]
+      summary: >-
+        A Prowlarr connection's indexers, each reachable through Prowlarr, marked when already
+        used here. Administrator only.
+      responses:
+        "200":
+          description: Prowlarr's indexers.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProwlarrIndexer" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: useArrInstanceIndexers
+      tags: [settings]
+      summary: >-
+        Use the named Prowlarr indexers here, through Prowlarr and with the connection's own key,
+        which never leaves the server. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prowlarr_ids]
+              properties:
+                prowlarr_ids:
+                  type: array
+                  items: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: How many were added; one already used is skipped.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [added]
+                properties:
+                  added: { type: integer, format: int64 }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+
+  /arr/instances/{id}/downloadclients:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listArrInstanceDownloadClients
+      tags: [settings]
+      summary: >-
+        The connection's own download clients, address and category, to add here. Their API keys
+        and passwords come back masked from the *Arr, so adding one asks for them once.
+        Administrator only.
+      responses:
+        "200":
+          description: The download clients.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ArrDownloadClient" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+
   /arr/instances/{id}/rootfolders:
     parameters:
       - name: id
@@ -6496,11 +6578,12 @@ components:
 
     ArrApp:
       type: string
-      enum: [lidarr, sonarr, radarr, readarr, whisparr]
+      enum: [lidarr, sonarr, radarr, readarr, whisparr, prowlarr]
       description: >-
         Which *Arr application a connection talks to (ADR-52). Only lidarr
         has a real sync this pass (music exists); the other four can be
-        connected for when their own stage ships.
+        connected for when their own stage ships. prowlarr has no library:
+        its active indexers and download clients are used from it.
 
     SecretMask:
       type: object
@@ -6514,6 +6597,19 @@ components:
         masked:
           type: string
           description: A short hint ("abc…xyz"), present only when has_value is true.
+
+    ArrDownloadClient:
+      type: object
+      required: [name, impl, protocol, enabled, base_url, supported, already_added]
+      properties:
+        name: { type: string }
+        impl: { type: string, description: 'The *Arr implementation, lower case: "sabnzbd", "qbittorrent", ...' }
+        protocol: { type: string }
+        enabled: { type: boolean }
+        base_url: { type: string }
+        category: { type: string }
+        supported: { type: boolean, description: Solarr can use a client of this kind. }
+        already_added: { type: boolean, description: A download client with this address is already here. }
 
     ArrInstance:
       type: object

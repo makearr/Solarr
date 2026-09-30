@@ -5,11 +5,13 @@ import { ChevronDown, ChevronRight, RefreshCw, RotateCcw, Trash2 } from "lucide-
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
+import { ArrConnectionTools } from "./ArrConnectionTools";
+
 type ArrInstance = components["schemas"]["ArrInstance"];
 type ArrApp = components["schemas"]["ArrApp"];
 type ArrImportRun = components["schemas"]["ArrImportRun"];
 
-const APPS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr", "readarr", "whisparr"];
+const APPS: readonly ArrApp[] = ["lidarr", "prowlarr", "sonarr", "radarr", "readarr", "whisparr"];
 
 /** Todo 4.13, ADR-52: import from the *Arr applications over their own REST
  *  API. Only Lidarr has a real sync so far -- a monitored artist becomes a
@@ -55,7 +57,8 @@ export function ArrImport() {
         <p className="text-sm leading-relaxed text-ink-muted">
           Connect an existing Sonarr/Radarr/Lidarr/Readarr/Whisparr and bring in what it already
           monitors as intent -- never a download, never a write back to the source. Only Lidarr
-          has a real sync today; the others connect and wait for their own stage.
+          has a real sync today; the others connect and wait for their own stage. Connect Prowlarr to use
+          its active indexers and download clients here.
         </p>
       </header>
 
@@ -162,6 +165,7 @@ function InstanceCard({
           </span>
         )}
 
+        {instance.app !== "prowlarr" && (
         <button
           type="button"
           onClick={() => sync.mutate()}
@@ -173,6 +177,7 @@ function InstanceCard({
           <RefreshCw aria-hidden className={`size-3.5 ${sync.isPending ? "animate-spin" : ""}`} />
           {sync.isPending ? "Syncing…" : "Sync now"}
         </button>
+        )}
         <button
           type="button"
           aria-label={`Remove ${instance.name}`}
@@ -190,6 +195,8 @@ function InstanceCard({
       {sync.data && (
         <RunSummary run={sync.data} />
       )}
+
+      <ArrConnectionTools instanceId={instance.id} app={instance.app} />
 
       {expanded && <InstanceHistory instanceId={instance.id} />}
     </li>

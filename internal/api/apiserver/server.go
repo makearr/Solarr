@@ -105,6 +105,8 @@ type Config struct {
 	ArtistActions ArtistActions
 	// AlbumRefresher is an album's Refresh. Optional: nil answers 503.
 	AlbumRefresher AlbumRefresher
+	// ArrConnections reads a connection's indexers and download clients. Optional: nil answers 503.
+	ArrConnections ArrConnections
 	// SubscriptionPreviewer answers an artist's discography, unfiltered, for
 	// the subscribe screen's filter preview (todo 4.4). Optional: without
 	// it, PreviewSubscription answers 503.
@@ -237,6 +239,7 @@ type Server struct {
 	peopleSubscriber      PeopleSubscriber
 	artistActions         ArtistActions
 	albumRefresher        AlbumRefresher
+	arrConnections        ArrConnections
 	subscriptionPreviewer SubscriptionPreviewer
 	blockedContent        BlockedContentLister
 	packs                 PackLister
@@ -327,6 +330,7 @@ func New(config Config) (*Server, error) {
 		peopleSubscriber:      config.PeopleSubscriber,
 		artistActions:         config.ArtistActions,
 		albumRefresher:        config.AlbumRefresher,
+		arrConnections:        config.ArrConnections,
 		subscriptionPreviewer: config.SubscriptionPreviewer,
 		blockedContent:        config.BlockedContent,
 		packs:                 config.Packs,
@@ -457,6 +461,9 @@ func New(config Config) (*Server, error) {
 			secured.Post("/arr/instances/{id}/apikey", server.routeSetArrInstanceKey)
 			secured.Post("/arr/instances/{id}/sync", server.routeSyncArrInstance)
 			secured.Get("/arr/instances/{id}/rootfolders", server.routeListArrInstanceRootFolders)
+			secured.Get("/arr/instances/{id}/indexers", server.routeListArrInstanceIndexers)
+			secured.Post("/arr/instances/{id}/indexers", server.routeUseArrInstanceIndexers)
+			secured.Get("/arr/instances/{id}/downloadclients", server.routeListArrInstanceDownloadClients)
 			secured.Get("/arr/imports", server.routeListArrImports)
 			secured.Get("/arr/imports/{id}", server.routeGetArrImport)
 			secured.Post("/arr/imports/{id}/revert", server.routeRevertArrImport)

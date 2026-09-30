@@ -575,6 +575,9 @@ func (p *process) startServer(ctx context.Context) error {
 			Logger: p.logger,
 		},
 		Prowlarr: adapters.Prowlarr{Cache: p.cache, List: p.listProwlarr},
+		ArrConnections: adapters.Prowlarr{
+			Cache: p.cache, List: p.listProwlarr, Lidarr: p.arrClientFactory(), Clock: clock.NewSystem(),
+		},
 		IndexerTester: adapters.ConnectionTester{
 			Cache: p.cache, Indexer: p.indexerClientFactory(), Downloader: p.downloaderClientFactory(),
 			Clock: clock.NewSystem(),
