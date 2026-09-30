@@ -49,6 +49,10 @@ in score -- or it is rejected as "not better than the files you have" (Invariant
 incumbent). Cutoff Unmet offers Interactive search. A complete album wants nothing: searching it rejects
 every release as "the files you have meet it", Lidarr's *existing files meet cutoff*.
 
+**Upgrades allowed** (Lidarr's switch, per library, on by default): off, an album with every track
+is complete whatever its quality -- the cutoff check marks nothing upgradable, so Cutoff Unmet is
+empty and no upgrade is searched. Switching it runs the cutoff check at once.
+
 **Replacing in place.** When a download's files are imported, Solarr measures them at once (the probe)
 and then checks that album: for each track that now has an owned file and a downloaded one, the
 strictly better file by the library's profiles stays, a tie keeping the owned one. The other goes to

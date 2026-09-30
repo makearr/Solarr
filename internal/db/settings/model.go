@@ -103,6 +103,8 @@ type Category struct {
 	QualityCutoffID *int64
 	// QualityTarget is the one exact quality the library aims for; nil when none is set.
 	QualityTarget *QualityTarget
+	// QualityUpgrades is Lidarr's "Upgrades Allowed": off, an album with every track is complete.
+	QualityUpgrades bool
 	// FileManagement is Sonarr's File Management and Permissions; the defaults when never saved.
 	FileManagement FileManagement
 }

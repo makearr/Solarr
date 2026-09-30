@@ -273,6 +273,7 @@ func convertCategories(rows []settingsdb.Category, naming map[int64]*NamingProfi
 			MonitorReleaseTypes: decodeReleaseTypes(row.MonitorReleaseTypes),
 			Naming:              profile,
 			QualityCutoffID:     nullInt64Ptr(row.QualityCutoffProfileID),
+			QualityUpgrades:     row.QualityUpgrades != 0,
 		})
 	}
 	return categories

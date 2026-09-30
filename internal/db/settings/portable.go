@@ -165,7 +165,9 @@ type CategoryEntry struct {
 	QualityProfiles []string            `yaml:"quality_profiles,omitempty"`
 	QualityCutoff   string              `yaml:"quality_cutoff,omitempty"`
 	QualityTarget   *QualityTargetEntry `yaml:"quality_target,omitempty"`
-	LanguageProfile string              `yaml:"language_profile,omitempty"`
+	// QualityUpgrades is written only when off, so documents from before it read as on.
+	QualityUpgrades *bool  `yaml:"quality_upgrades,omitempty"`
+	LanguageProfile string `yaml:"language_profile,omitempty"`
 	// MonitorDiscovered is section 19.6's policy: what a scan does with an
 	// album it finds that nobody asked for. Empty on import means the
 	// column's own default (monitored) applies.
@@ -408,6 +410,10 @@ func (c *Cache) Export() Document {
 				AudioCodec: target.AudioCodec, Container: target.Container,
 				BitrateKbps: target.BitrateKbps, TolerancePct: target.TolerancePct,
 			}
+		}
+		if !category.QualityUpgrades {
+			off := false
+			entry.QualityUpgrades = &off
 		}
 		if category.LanguageProfileID != nil {
 			entry.LanguageProfile = languageNameByID[*category.LanguageProfileID]
@@ -936,6 +942,11 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 					BitrateKbps: int64PtrToNull(target.BitrateKbps), TolerancePct: target.TolerancePct,
 				}); err != nil {
 					return fmt.Errorf("category %q quality target: %w", key, err)
+				}
+			}
+			if category.QualityUpgrades != nil && !*category.QualityUpgrades {
+				if err := queries.SetCategoryQualityUpgrades(ctx, settingsdb.SetCategoryQualityUpgradesParams{ID: id}); err != nil {
+					return fmt.Errorf("category %q quality upgrades: %w", key, err)
 				}
 			}
 			if category.MonitorDiscovered != "" {

@@ -61,6 +61,7 @@ type Category struct {
 	NamingProfileID        sql.NullInt64
 	MonitorReleaseTypes    string
 	QualityCutoffProfileID sql.NullInt64
+	QualityUpgrades        int64
 }
 
 type CategoryFileManagement struct {

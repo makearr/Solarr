@@ -76,7 +76,7 @@ const createCategory = `-- name: CreateCategory :one
 INSERT INTO category (media_type, name, priority_rank)
 VALUES (?, ?, ?)
 RETURNING id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
-          monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id
+          monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades
 `
 
 type CreateCategoryParams struct {
@@ -99,6 +99,7 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 		&i.NamingProfileID,
 		&i.MonitorReleaseTypes,
 		&i.QualityCutoffProfileID,
+		&i.QualityUpgrades,
 	)
 	return i, err
 }
@@ -181,7 +182,7 @@ func (q *Queries) DetachRootFolderFromCategory(ctx context.Context, arg DetachRo
 
 const getCategory = `-- name: GetCategory :one
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
-       monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id
+       monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades
 FROM category WHERE id = ?
 `
 
@@ -199,6 +200,7 @@ func (q *Queries) GetCategory(ctx context.Context, id int64) (Category, error) {
 		&i.NamingProfileID,
 		&i.MonitorReleaseTypes,
 		&i.QualityCutoffProfileID,
+		&i.QualityUpgrades,
 	)
 	return i, err
 }
@@ -252,7 +254,7 @@ func (q *Queries) GetRootFolder(ctx context.Context, id int64) (RootFolder, erro
 
 const listCategories = `-- name: ListCategories :many
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
-       monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id
+       monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades
 FROM category ORDER BY priority_rank, name
 `
 
@@ -276,6 +278,7 @@ func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 			&i.NamingProfileID,
 			&i.MonitorReleaseTypes,
 			&i.QualityCutoffProfileID,
+			&i.QualityUpgrades,
 		); err != nil {
 			return nil, err
 		}

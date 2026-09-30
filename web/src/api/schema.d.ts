@@ -3429,6 +3429,8 @@ export interface components {
             /** Format: int64 */
             cutoff_profile_id?: number;
             target?: components["schemas"]["QualityTarget"];
+            /** @description Lidarr's "Upgrades Allowed". Omitted leaves it as it is. */
+            upgrades_allowed?: boolean;
         };
         QualityProfileRef: {
             /** Format: int64 */
@@ -3436,6 +3438,8 @@ export interface components {
             name: string;
         };
         LibraryQuality: {
+            /** @description Lidarr's "Upgrades Allowed". Off, an album with every track is complete whatever its quality: nothing is upgradable and nothing is searched for an upgrade. */
+            upgrades_allowed: boolean;
             /** @description The library's own list, earlier preferred. Empty means the instance default. */
             profiles: components["schemas"]["QualityProfileRef"][];
             /** @description Every profile, in the suggested order. */

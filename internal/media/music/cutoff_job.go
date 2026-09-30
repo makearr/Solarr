@@ -263,6 +263,9 @@ func (j CutoffJob) stateFor(ctx context.Context, snapshot *settings.Snapshot, it
 	if !found {
 		return "", false, nil
 	}
+	if !category.QualityUpgrades {
+		return ItemStateComplete, true, nil // Lidarr's "Upgrades Allowed" off: every track here is enough
+	}
 	files, err := j.Desired.MeasuredFiles(ctx, item.WorkID)
 	if err != nil {
 		return "", false, fmt.Errorf("music: cutoff check item %d: %w", item.ID, err)
