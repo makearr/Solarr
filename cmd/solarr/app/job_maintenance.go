@@ -33,11 +33,27 @@ var maintenanceDefinitions = []jobs.Definition{
 // (section 10.8; Sonarr's recycling bin cleanup).
 type recycleBinCleanupJob struct {
 	recycleBin library.RecycleBin
+	cache      *settings.Cache
 	logger     *slog.Logger
 }
 
 func (j recycleBinCleanupJob) Run(ctx context.Context, _ jobs.Job) error {
-	result, err := j.recycleBin.Sweep(ctx, library.RecycleBinConfig{}, nil, nil)
+	snapshot := j.cache.Snapshot()
+	limits := snapshot.RecycleBinLimits()
+	var rootFolderIDs []int64
+	for _, root := range snapshot.RootFolders() {
+		rootFolderIDs = append(rootFolderIDs, root.ID)
+	}
+	capacity := func(rootFolderID int64) (int64, bool) {
+		root, found := snapshot.RootFolder(rootFolderID)
+		if !found || root.TotalBytes == nil {
+			return 0, false
+		}
+		return *root.TotalBytes, true
+	}
+	result, err := j.recycleBin.Sweep(ctx, library.RecycleBinConfig{
+		MaxBytes: limits.MaxBytes, MaxPercentOfRoot: float64(limits.MaxPercentOfRoot),
+	}, capacity, rootFolderIDs)
 	if err != nil {
 		return err
 	}
@@ -134,7 +150,7 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 		stores: []*store.Store{p.settings, p.jobs, p.library, p.metadata}, logger: p.logger,
 	})
 	executor.Handle(recycleBinCleanupJobType, recycleBinCleanupJob{
-		recycleBin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()), logger: p.logger,
+		recycleBin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()), cache: p.cache, logger: p.logger,
 	})
 	executor.Handle(backupJobType, backupJob{stores: backedUp, directory: p.config.Paths.BackupDir, logger: p.logger})
 	executor.Handle(backupCleanupJobType, backupCleanupJob{
