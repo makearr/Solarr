@@ -98,7 +98,8 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
           params: { query: { category_id: destination!.id, q: debounced, kind, limit: NEW_PER_KIND } },
         });
         if (error) throw error;
-        found.push(...data.map((result) => ({ ...result, kind })));
+        // What the library already has is listed above it, not offered again (found 2026-09-30).
+        found.push(...data.filter((result) => result.library_id == null).map((result) => ({ ...result, kind })));
       }
       return found;
     },

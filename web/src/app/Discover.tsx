@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useParams, useSearch } from "@tanstack/react-router";
+import { Link, useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Search } from "lucide-react";
 
@@ -150,6 +150,18 @@ export function Discover() {
                     {subtitle(result)}
                   </div>
                 </div>
+                {result.library_id != null ? (
+                  // Already here: open it, where monitoring lives, rather than add it twice.
+                  <Link
+                    {...(result.kind === "artist"
+                      ? { to: "/people/$id" as const, params: { id: String(result.library_id) } }
+                      : { to: "/works/$id" as const, params: { id: String(result.library_id) } })}
+                    className="flex shrink-0 items-center gap-1 rounded-md border border-border-subtle px-2 py-1 text-xs
+                               text-ink-muted hover:text-ink"
+                  >
+                    <Check aria-hidden className="size-3.5" /> In library
+                  </Link>
+                ) : (
                 <button
                   type="button"
                   disabled={isAdded || (add.isPending && add.variables === result)}
@@ -166,6 +178,7 @@ export function Discover() {
                     "Add"
                   )}
                 </button>
+                )}
               </li>
             );
           })}

@@ -68,6 +68,20 @@ func (i Identity) WorkExternalID(ctx context.Context, workID int64, provider str
 	return row.ExternalID, true, nil
 }
 
+// WorkByExternalID answers the work behind an external id, found=false when there is none.
+func (i Identity) WorkByExternalID(ctx context.Context, provider, externalID string) (workID int64, found bool, err error) {
+	work, err := librarydb.New(i.store.Read()).GetWorkByExternalID(ctx, librarydb.GetWorkByExternalIDParams{
+		Provider: provider, ExternalID: externalID,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("library: work by external id: %w", err)
+	}
+	return work.ID, true, nil
+}
+
 // FollowMergedIDs moves a work's and an edition's ids to what the provider now answers with (a
 // merged MusicBrainz id), unless another holds the new id. Answers what moved.
 func (i Identity) FollowMergedIDs(ctx context.Context, merged MergedIDs) (workMoved, editionMoved bool, err error) {

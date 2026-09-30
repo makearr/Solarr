@@ -43,6 +43,8 @@ type DiscoverResult struct {
 	// all (ADR-56 does not ask for day precision here, todo 4.20's own
 	// FreshSince is a different, later concern).
 	Year *int64
+	// LibraryID is the work or person already in the library for this result; nil when it is new.
+	LibraryID *int64
 }
 
 // DiscoverAddResult is what adding a result created or reused (ADR-56: "the
@@ -155,7 +157,7 @@ func (s *Server) DiscoverSearch(w http.ResponseWriter, r *http.Request, params g
 		views[i] = gen.DiscoverResult{
 			Kind: &viewKind, Provider: result.Provider, ExternalId: result.ExternalID,
 			Title: result.Title, Artist: artist, Year: result.Year,
-			Disambiguation: disambiguation,
+			Disambiguation: disambiguation, LibraryId: result.LibraryID,
 		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)

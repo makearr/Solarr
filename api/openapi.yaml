@@ -6413,6 +6413,12 @@ components:
         title: { type: string }
         artist: { type: string }
         year: { type: integer, format: int64 }
+        library_id:
+          type: integer
+          format: int64
+          description: >-
+            Already in the library: the work (an album) or the person (an artist) it is. Absent
+            when it is new.
 
     DiscoverAddRequest:
       type: object
