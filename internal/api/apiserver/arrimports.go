@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // ErrArrAppNotYetSupported means Sync was asked to run a connection for an
@@ -283,4 +285,125 @@ func arrImportItemView(item ArrImportItem) gen.ArrImportItem {
 		DesiredItemId: item.DesiredItemID, DesiredItemCreated: item.DesiredItemCreated,
 		CreatedAt: unixTime(item.CreatedAt),
 	}
+}
+
+// ArrDownloadClientRow is one download client an *Arr connection uses, and whether Solarr can and does.
+type ArrDownloadClientRow struct {
+	Name, Impl, Protocol, BaseURL, Category string
+	Enabled, Supported, AlreadyAdded        bool
+}
+
+// ArrConnections reads a connection's indexers and download clients, and uses its indexers here.
+type ArrConnections interface {
+	InstanceIndexers(ctx context.Context, instanceID int64) ([]ProwlarrIndexerRow, error)
+	UseInstanceIndexers(ctx context.Context, instanceID int64, prowlarrIDs []int64) (int64, error)
+	InstanceDownloadClients(ctx context.Context, instanceID int64) ([]ArrDownloadClientRow, error)
+}
+
+func (s *Server) routeListArrInstanceIndexers(w http.ResponseWriter, r *http.Request) {
+	if id, err := parsePathID(w, s, r, "id", "an instance id must be a number"); err == nil {
+		s.ListArrInstanceIndexers(w, r, id)
+	}
+}
+
+func (s *Server) routeUseArrInstanceIndexers(w http.ResponseWriter, r *http.Request) {
+	if id, err := parsePathID(w, s, r, "id", "an instance id must be a number"); err == nil {
+		s.UseArrInstanceIndexers(w, r, id)
+	}
+}
+
+func (s *Server) routeListArrInstanceDownloadClients(w http.ResponseWriter, r *http.Request) {
+	if id, err := parsePathID(w, s, r, "id", "an instance id must be a number"); err == nil {
+		s.ListArrInstanceDownloadClients(w, r, id)
+	}
+}
+
+// arrConnectionsReady answers whether the connections reader is wired, having answered if not.
+func (s *Server) arrConnectionsReady(w http.ResponseWriter, r *http.Request) bool {
+	if !s.requireAdministrator(w, r) {
+		return false
+	}
+	if s.arrConnections == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "*Arr connections are not available")
+		return false
+	}
+	return true
+}
+
+// writeArrConnectionError tells an app that cannot answer apart from an *Arr that did not.
+func (s *Server) writeArrConnectionError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, ErrArrAppNotYetSupported):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Not for this app", err.Error())
+	case errors.Is(err, settings.ErrNotFound):
+		writeError(w, s.logger, err)
+	default:
+		writeProblem(w, s.logger, http.StatusBadGateway, TypeUnavailable, "The *Arr could not be read", err.Error())
+	}
+}
+
+// ListArrInstanceIndexers answers a Prowlarr connection's indexers.
+func (s *Server) ListArrInstanceIndexers(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.arrConnectionsReady(w, r) {
+		return
+	}
+	rows, err := s.arrConnections.InstanceIndexers(r.Context(), id)
+	if err != nil {
+		s.writeArrConnectionError(w, err)
+		return
+	}
+	views := make([]gen.ProwlarrIndexer, len(rows))
+	for i, row := range rows {
+		views[i] = gen.ProwlarrIndexer{
+			ProwlarrId: row.ProwlarrID, Name: row.Name, Impl: gen.ProwlarrIndexerImpl(row.Impl), BaseUrl: row.BaseURL,
+			Enabled: row.Enabled, Music: row.Music, AlreadyAdded: row.AlreadyAdded,
+		}
+	}
+	writeJSON(w, s.logger, http.StatusOK, views)
+}
+
+// UseArrInstanceIndexers adds the named Prowlarr indexers, with the connection's own key.
+func (s *Server) UseArrInstanceIndexers(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.arrConnectionsReady(w, r) {
+		return
+	}
+	var body gen.UseArrInstanceIndexersJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected prowlarr_ids")
+		return
+	}
+	if err := s.auth.Registry.LookupAll(settings.EntityIndexer); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	added, err := s.arrConnections.UseInstanceIndexers(r.Context(), id, body.ProwlarrIds)
+	if err != nil {
+		s.writeArrConnectionError(w, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, map[string]int64{"added": added})
+}
+
+// ListArrInstanceDownloadClients answers a connection's download clients.
+func (s *Server) ListArrInstanceDownloadClients(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.arrConnectionsReady(w, r) {
+		return
+	}
+	rows, err := s.arrConnections.InstanceDownloadClients(r.Context(), id)
+	if err != nil {
+		s.writeArrConnectionError(w, err)
+		return
+	}
+	views := make([]gen.ArrDownloadClient, len(rows))
+	for i, row := range rows {
+		views[i] = gen.ArrDownloadClient{
+			Name: row.Name, Impl: row.Impl, Protocol: row.Protocol, Enabled: row.Enabled, BaseUrl: row.BaseURL,
+			Supported: row.Supported, AlreadyAdded: row.AlreadyAdded,
+		}
+		if row.Category != "" {
+			category := row.Category
+			views[i].Category = &category
+		}
+	}
+	writeJSON(w, s.logger, http.StatusOK, views)
 }

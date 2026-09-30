@@ -25,6 +25,8 @@ const (
 	ArrAppRadarr   ArrApp = "radarr"
 	ArrAppReadarr  ArrApp = "readarr"
 	ArrAppWhisparr ArrApp = "whisparr"
+	// ArrAppProwlarr has no library: its active indexers and download clients are used from here.
+	ArrAppProwlarr ArrApp = "prowlarr"
 )
 
 // ErrSecretsUnavailable means Cache.EnableSecrets was never called -- an
@@ -63,7 +65,7 @@ type ArrInstanceRequest struct {
 func validateArrInstance(request ArrInstanceRequest) config.Problems {
 	var problems config.Problems
 	switch request.App {
-	case ArrAppLidarr, ArrAppSonarr, ArrAppRadarr, ArrAppReadarr, ArrAppWhisparr:
+	case ArrAppLidarr, ArrAppSonarr, ArrAppRadarr, ArrAppReadarr, ArrAppWhisparr, ArrAppProwlarr:
 	default:
 		problems = append(problems, config.Problem{
 			Path: "app", Value: string(request.App),

@@ -2,16 +2,22 @@ package adapters
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// Prowlarr satisfies apiserver.ProwlarrLister: Prowlarr's indexers, marked when already added here.
+// Prowlarr satisfies apiserver.ProwlarrLister and apiserver.ArrConnections: a Prowlarr's indexers, and a
+// connection's download clients, each marked when already added here.
 type Prowlarr struct {
-	Cache *settings.Cache
-	List  func(ctx context.Context, baseURL, apiKey string) ([]indexer.ProwlarrIndexer, error)
+	Cache  *settings.Cache
+	List   func(ctx context.Context, baseURL, apiKey string) ([]indexer.ProwlarrIndexer, error)
+	Lidarr LidarrClientFactory
+	Clock  clock.Clock
 }
 
 func (a Prowlarr) ListProwlarr(ctx context.Context, baseURL, apiKey string) ([]apiserver.ProwlarrIndexerRow, error) {
@@ -32,6 +38,98 @@ func (a Prowlarr) ListProwlarr(ctx context.Context, baseURL, apiKey string) ([]a
 		rows[i] = apiserver.ProwlarrIndexerRow{
 			ProwlarrID: entry.ProwlarrID, Name: entry.Name, Impl: entry.Impl, BaseURL: entry.BaseURL,
 			Enabled: entry.Enabled, Music: entry.Music, AlreadyAdded: added[entry.BaseURL],
+		}
+	}
+	return rows, nil
+}
+
+// connection is an instance and its revealed key, refused for an app it cannot serve.
+func (a Prowlarr) connection(ctx context.Context, instanceID int64, apps ...settings.ArrApp) (settings.ArrInstance, string, error) {
+	instance, err := a.Cache.GetArrInstance(ctx, instanceID)
+	if err != nil {
+		return settings.ArrInstance{}, "", err
+	}
+	allowed := false
+	for _, app := range apps {
+		allowed = allowed || instance.App == app
+	}
+	if !allowed {
+		return settings.ArrInstance{}, "", fmt.Errorf("%w: %s", apiserver.ErrArrAppNotYetSupported, instance.App)
+	}
+	key, err := a.Cache.DecryptedAPIKey(ctx, instanceID)
+	if err != nil {
+		return settings.ArrInstance{}, "", err
+	}
+	return instance, key.Reveal(), nil
+}
+
+// InstanceIndexers is ListProwlarr over a stored Prowlarr connection.
+func (a Prowlarr) InstanceIndexers(ctx context.Context, instanceID int64) ([]apiserver.ProwlarrIndexerRow, error) {
+	instance, key, err := a.connection(ctx, instanceID, settings.ArrAppProwlarr)
+	if err != nil {
+		return nil, err
+	}
+	return a.ListProwlarr(ctx, instance.BaseURL, key)
+}
+
+// UseInstanceIndexers adds the named Prowlarr indexers with the connection's key; one already here is skipped.
+func (a Prowlarr) UseInstanceIndexers(ctx context.Context, instanceID int64, prowlarrIDs []int64) (int64, error) {
+	instance, key, err := a.connection(ctx, instanceID, settings.ArrAppProwlarr)
+	if err != nil {
+		return 0, err
+	}
+	rows, err := a.ListProwlarr(ctx, instance.BaseURL, key)
+	if err != nil {
+		return 0, err
+	}
+	secret, err := a.Cache.DecryptedAPIKey(ctx, instanceID)
+	if err != nil {
+		return 0, err
+	}
+	wanted := make(map[int64]bool, len(prowlarrIDs))
+	for _, id := range prowlarrIDs {
+		wanted[id] = true
+	}
+	var added int64
+	for _, row := range rows {
+		if !wanted[row.ProwlarrID] || row.AlreadyAdded {
+			continue
+		}
+		if _, err := a.Cache.CreateIndexer(ctx, settings.IndexerRequest{
+			Name: row.Name, Impl: row.Impl, BaseURL: row.BaseURL, Enabled: true,
+		}, secret, a.Clock.Now().Unix()); err != nil {
+			return added, fmt.Errorf("add %s: %w", row.Name, err)
+		}
+		added++
+	}
+	return added, nil
+}
+
+// InstanceDownloadClients reads a Lidarr's or Prowlarr's download clients (their shared v1 API).
+func (a Prowlarr) InstanceDownloadClients(ctx context.Context, instanceID int64) ([]apiserver.ArrDownloadClientRow, error) {
+	instance, key, err := a.connection(ctx, instanceID, settings.ArrAppProwlarr, settings.ArrAppLidarr)
+	if err != nil {
+		return nil, err
+	}
+	clients, err := a.Lidarr(instance.BaseURL, key).DownloadClients(ctx)
+	if err != nil {
+		return nil, err
+	}
+	configured, err := a.Cache.Downloaders(ctx)
+	if err != nil {
+		return nil, err
+	}
+	here := make(map[string]bool, len(configured))
+	for _, existing := range configured {
+		here[strings.TrimRight(existing.BaseURL, "/")] = true
+	}
+	rows := make([]apiserver.ArrDownloadClientRow, len(clients))
+	for i, client := range clients {
+		impl := strings.ToLower(client.Implementation)
+		rows[i] = apiserver.ArrDownloadClientRow{
+			Name: client.Name, Impl: impl, Protocol: client.Protocol, BaseURL: client.BaseURL(), Category: client.Category,
+			// SABnzbd is the one kind Solarr talks to until the torrent stage.
+			Enabled: client.Enabled, Supported: impl == "sabnzbd", AlreadyAdded: here[client.BaseURL()],
 		}
 	}
 	return rows, nil

@@ -1311,6 +1311,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/arr/instances/{id}/indexers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** A Prowlarr connection's indexers, each reachable through Prowlarr, marked when already used here. Administrator only. */
+        get: operations["listArrInstanceIndexers"];
+        put?: never;
+        /** Use the named Prowlarr indexers here, through Prowlarr and with the connection's own key, which never leaves the server. Administrator only. */
+        post: operations["useArrInstanceIndexers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/arr/instances/{id}/downloadclients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** The connection's own download clients, address and category, to add here. Their API keys and passwords come back masked from the *Arr, so adding one asks for them once. Administrator only. */
+        get: operations["listArrInstanceDownloadClients"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/arr/instances/{id}/rootfolders": {
         parameters: {
             query?: never;
@@ -4215,15 +4254,28 @@ export interface components {
             priority: number;
         };
         /**
-         * @description Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships.
+         * @description Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships. prowlarr has no library: its active indexers and download clients are used from it.
          * @enum {string}
          */
-        ArrApp: "lidarr" | "sonarr" | "radarr" | "readarr" | "whisparr";
+        ArrApp: "lidarr" | "sonarr" | "radarr" | "readarr" | "whisparr" | "prowlarr";
         /** @description A credential, shown without ever exposing it (section 13.1). The raw value exists only between the database and the one outbound request that needs it. */
         SecretMask: {
             has_value: boolean;
             /** @description A short hint ("abc…xyz"), present only when has_value is true. */
             masked?: string;
+        };
+        ArrDownloadClient: {
+            name: string;
+            /** @description The *Arr implementation, lower case: "sabnzbd", "qbittorrent", ... */
+            impl: string;
+            protocol: string;
+            enabled: boolean;
+            base_url: string;
+            category?: string;
+            /** @description Solarr can use a client of this kind. */
+            supported: boolean;
+            /** @description A download client with this address is already here. */
+            already_added: boolean;
         };
         ArrInstance: {
             /** Format: int64 */
@@ -7774,6 +7826,93 @@ export interface operations {
             404: components["responses"]["Problem"];
             /** @description Either this app is not yet wired for a real sync (connect/preview/park only), or this instance already has a sync running. */
             409: components["responses"]["Problem"];
+        };
+    };
+    listArrInstanceIndexers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Prowlarr's indexers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProwlarrIndexer"][];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
+    useArrInstanceIndexers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    prowlarr_ids: number[];
+                };
+            };
+        };
+        responses: {
+            /** @description How many were added; one already used is skipped. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        added: number;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
+    listArrInstanceDownloadClients: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The download clients. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrDownloadClient"][];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
         };
     };
     listArrInstanceRootFolders: {

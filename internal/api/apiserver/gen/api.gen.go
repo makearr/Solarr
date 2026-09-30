@@ -36,6 +36,7 @@ const (
 // Defines values for ArrApp.
 const (
 	ArrAppLidarr   ArrApp = "lidarr"
+	ArrAppProwlarr ArrApp = "prowlarr"
 	ArrAppRadarr   ArrApp = "radarr"
 	ArrAppReadarr  ArrApp = "readarr"
 	ArrAppSonarr   ArrApp = "sonarr"
@@ -729,7 +730,7 @@ type Activity struct {
 type AddArrInstanceRequest struct {
 	ApiKey string `json:"api_key"`
 
-	// App Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships.
+	// App Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships. prowlarr has no library: its active indexers and download clients are used from it.
 	App        ArrApp `json:"app"`
 	BaseUrl    string `json:"base_url"`
 	CategoryId *int64 `json:"category_id,omitempty"`
@@ -770,8 +771,25 @@ type AddIndexerRequest struct {
 	Priority *int64 `json:"priority,omitempty"`
 }
 
-// ArrApp Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships.
+// ArrApp Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships. prowlarr has no library: its active indexers and download clients are used from it.
 type ArrApp string
+
+// ArrDownloadClient defines model for ArrDownloadClient.
+type ArrDownloadClient struct {
+	// AlreadyAdded A download client with this address is already here.
+	AlreadyAdded bool    `json:"already_added"`
+	BaseUrl      string  `json:"base_url"`
+	Category     *string `json:"category,omitempty"`
+	Enabled      bool    `json:"enabled"`
+
+	// Impl The *Arr implementation, lower case: "sabnzbd", "qbittorrent", ...
+	Impl     string `json:"impl"`
+	Name     string `json:"name"`
+	Protocol string `json:"protocol"`
+
+	// Supported Solarr can use a client of this kind.
+	Supported bool `json:"supported"`
+}
 
 // ArrImportDetail defines model for ArrImportDetail.
 type ArrImportDetail struct {
@@ -814,7 +832,7 @@ type ArrImportRun struct {
 	AlbumsCreated int64 `json:"albums_created"`
 	AlbumsMatched int64 `json:"albums_matched"`
 
-	// App Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships.
+	// App Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships. prowlarr has no library: its active indexers and download clients are used from it.
 	App            ArrApp            `json:"app"`
 	ArtistsCreated int64             `json:"artists_created"`
 	ArtistsMatched int64             `json:"artists_matched"`
@@ -835,7 +853,7 @@ type ArrInstance struct {
 	// ApiKey A credential, shown without ever exposing it (section 13.1). The raw value exists only between the database and the one outbound request that needs it.
 	ApiKey SecretMask `json:"api_key"`
 
-	// App Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships.
+	// App Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships. prowlarr has no library: its active indexers and download clients are used from it.
 	App     ArrApp `json:"app"`
 	BaseUrl string `json:"base_url"`
 
@@ -3231,6 +3249,11 @@ type SetArrInstanceKeyJSONBody struct {
 	ApiKey string `json:"api_key"`
 }
 
+// UseArrInstanceIndexersJSONBody defines parameters for UseArrInstanceIndexers.
+type UseArrInstanceIndexersJSONBody struct {
+	ProwlarrIds []int64 `json:"prowlarr_ids"`
+}
+
 // LoginJSONBody defines parameters for Login.
 type LoginJSONBody struct {
 	Password string `json:"password"`
@@ -3758,6 +3781,9 @@ type UpdateArrInstanceJSONRequestBody = UpdateArrInstanceRequest
 // SetArrInstanceKeyJSONRequestBody defines body for SetArrInstanceKey for application/json ContentType.
 type SetArrInstanceKeyJSONRequestBody SetArrInstanceKeyJSONBody
 
+// UseArrInstanceIndexersJSONRequestBody defines body for UseArrInstanceIndexers for application/json ContentType.
+type UseArrInstanceIndexersJSONRequestBody UseArrInstanceIndexersJSONBody
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody LoginJSONBody
 
@@ -4003,6 +4029,15 @@ type ServerInterface interface {
 	// Replace a connection's own API key. Administrator only. A separate endpoint from PATCH: resealing on every unrelated edit would be silent, pointless churn.
 	// (POST /arr/instances/{id}/apikey)
 	SetArrInstanceKey(w http.ResponseWriter, r *http.Request, id int64)
+	// The connection's own download clients, address and category, to add here. Their API keys and passwords come back masked from the *Arr, so adding one asks for them once. Administrator only.
+	// (GET /arr/instances/{id}/downloadclients)
+	ListArrInstanceDownloadClients(w http.ResponseWriter, r *http.Request, id int64)
+	// A Prowlarr connection's indexers, each reachable through Prowlarr, marked when already used here. Administrator only.
+	// (GET /arr/instances/{id}/indexers)
+	ListArrInstanceIndexers(w http.ResponseWriter, r *http.Request, id int64)
+	// Use the named Prowlarr indexers here, through Prowlarr and with the connection's own key, which never leaves the server. Administrator only.
+	// (POST /arr/instances/{id}/indexers)
+	UseArrInstanceIndexers(w http.ResponseWriter, r *http.Request, id int64)
 	// The instance's own configured root folders, read live. Administrator only.
 	// (GET /arr/instances/{id}/rootfolders)
 	ListArrInstanceRootFolders(w http.ResponseWriter, r *http.Request, id int64)
@@ -4621,6 +4656,24 @@ func (_ Unimplemented) UpdateArrInstance(w http.ResponseWriter, r *http.Request,
 // Replace a connection's own API key. Administrator only. A separate endpoint from PATCH: resealing on every unrelated edit would be silent, pointless churn.
 // (POST /arr/instances/{id}/apikey)
 func (_ Unimplemented) SetArrInstanceKey(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The connection's own download clients, address and category, to add here. Their API keys and passwords come back masked from the *Arr, so adding one asks for them once. Administrator only.
+// (GET /arr/instances/{id}/downloadclients)
+func (_ Unimplemented) ListArrInstanceDownloadClients(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A Prowlarr connection's indexers, each reachable through Prowlarr, marked when already used here. Administrator only.
+// (GET /arr/instances/{id}/indexers)
+func (_ Unimplemented) ListArrInstanceIndexers(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Use the named Prowlarr indexers here, through Prowlarr and with the connection's own key, which never leaves the server. Administrator only.
+// (POST /arr/instances/{id}/indexers)
+func (_ Unimplemented) UseArrInstanceIndexers(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6015,6 +6068,105 @@ func (siw *ServerInterfaceWrapper) SetArrInstanceKey(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetArrInstanceKey(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListArrInstanceDownloadClients operation middleware
+func (siw *ServerInterfaceWrapper) ListArrInstanceDownloadClients(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListArrInstanceDownloadClients(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListArrInstanceIndexers operation middleware
+func (siw *ServerInterfaceWrapper) ListArrInstanceIndexers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListArrInstanceIndexers(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UseArrInstanceIndexers operation middleware
+func (siw *ServerInterfaceWrapper) UseArrInstanceIndexers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UseArrInstanceIndexers(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11946,6 +12098,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/arr/instances/{id}/apikey", wrapper.SetArrInstanceKey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/arr/instances/{id}/downloadclients", wrapper.ListArrInstanceDownloadClients)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/arr/instances/{id}/indexers", wrapper.ListArrInstanceIndexers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/arr/instances/{id}/indexers", wrapper.UseArrInstanceIndexers)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/arr/instances/{id}/rootfolders", wrapper.ListArrInstanceRootFolders)

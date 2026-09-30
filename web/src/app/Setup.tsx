@@ -6,7 +6,8 @@ import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import type { components } from "@/api/schema";
 import { MEDIA_TYPES } from "./Categories";
 
-type ArrApp = components["schemas"]["ArrApp"];
+// The wizard connects an app to make a library from it; Prowlarr has none, so it is added under Connections.
+type ArrApp = Exclude<components["schemas"]["ArrApp"], "prowlarr">;
 type MediaType = components["schemas"]["MediaType"];
 
 const ARR_APPS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr", "readarr", "whisparr"];
