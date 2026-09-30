@@ -9,6 +9,11 @@ import type { components } from "@/api/schema";
 import { useCanRequest } from "@/lib/useLibraryPermission";
 
 import { InteractiveSearch } from "./InteractiveSearch";
+import {
+  DEFAULT_POSTER_OPTIONS, IndexViewToggle, OverviewRows, PosterOptionsMenu, PosterWall, workEntry, type IndexView,
+  type PosterOptions,
+} from "./IndexViews";
+import { usePreference } from "@/lib/usePreference";
 
 type Work = components["schemas"]["Work"];
 type Sort = "title" | "artist" | "year" | "searched";
@@ -40,6 +45,7 @@ export function Wanted() {
     dir?: "asc" | "desc";
     size?: number;
     view?: "missing" | "cutoff";
+    layout?: IndexView;
   };
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -48,6 +54,10 @@ export function Wanted() {
   const size = PAGE_SIZES.find((candidate) => candidate === Number(search.size)) ?? 50;
   // Lidarr's two Wanted lists: albums missing tracks, and albums below the library's cutoff (M1d).
   const view = search.view === "cutoff" ? "cutoff" : "missing";
+  // Radarr's three views here too (asked 2026-09-30); the table stays the default, as Lidarr's Wanted.
+  const layout: IndexView = search.layout === "poster" || search.layout === "overview" ? search.layout : "list";
+  const [storedOptions, setOptions] = usePreference<PosterOptions>("posters.options", DEFAULT_POSTER_OPTIONS);
+  const posterOptions = { ...DEFAULT_POSTER_OPTIONS, ...storedOptions };
 
   // Cursor paging (never OFFSET): the cursor that opened each page seen so far.
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
@@ -88,8 +98,9 @@ export function Wanted() {
   // Upgrades are not searched for yet (M1d's next step), so the cutoff list offers no search.
   const searchable = canRequest && view === "missing";
 
-  const setView = (next: { sort?: Sort; dir?: "asc" | "desc"; size?: number; view?: "missing" | "cutoff" }) =>
-    void navigate({ to: ".", search: { sort, dir, size, view, ...next }, replace: true });
+  const setView = (next: {
+    sort?: Sort; dir?: "asc" | "desc"; size?: number; view?: "missing" | "cutoff"; layout?: IndexView;
+  }) => void navigate({ to: ".", search: { sort, dir, size, view, layout, ...next }, replace: true });
 
   const [rowResult, setRowResult] = useState<Record<number, string>>({});
   const grab = useMutation({
@@ -161,6 +172,8 @@ export function Wanted() {
             : "Complete, but a file is below the library's cutoff. Interactive search shows which releases would be upgrades; upgrading on its own is not built yet."}
         </span>
         <span className="ml-auto flex items-center gap-2 text-xs text-ink-muted">
+          {layout === "poster" && <PosterOptionsMenu options={posterOptions} onChange={setOptions} />}
+          <IndexViewToggle view={layout} onChange={(next) => setView({ layout: next })} />
           {searchLibrary.isSuccess &&
             (searchLibrary.data?.duplicate ? "That search is already running." : "Searching in the background.")}
           {searchLibrary.isError && <span className="text-danger">The search could not start.</span>}
@@ -190,6 +203,21 @@ export function Wanted() {
         </span>
       </div>
 
+      {layout !== "list" && (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {works.isLoading && <Message>Loading…</Message>}
+          {works.isSuccess && items.length === 0 && page === 0 && (
+            <Message>Nothing wanted -- every monitored album in this library is complete.</Message>
+          )}
+          {layout === "poster" ? (
+            <PosterWall entries={items.map(workEntry)} options={posterOptions} />
+          ) : (
+            <OverviewRows entries={items.map(workEntry)} />
+          )}
+        </div>
+      )}
+
+      {layout === "list" && (
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div role="row" className={`${GRID} sticky top-0 border-b border-border-subtle bg-surface py-2 text-xs font-medium text-ink-muted`}>
           {COLUMNS.map((column) => (
@@ -255,6 +283,7 @@ export function Wanted() {
           </div>
         ))}
       </div>
+      )}
 
       <div className="flex shrink-0 items-center gap-3 border-t border-border-subtle px-4 py-2 text-xs text-ink-muted">
         <button
