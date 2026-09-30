@@ -3024,6 +3024,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fetch the album's metadata again, past the cache -- credits, genres, description -- then rescan its folder as its library's "Rescan after refresh" says. Background; a second request while one runs is folded in. */
+        post: operations["refreshWork"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/people/{id}/monitor-all": {
         parameters: {
             query?: never;
@@ -10531,6 +10550,29 @@ export interface operations {
         };
     };
     refreshPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Enqueued (or already running -- duplicate says which). */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategorySearchEnqueued"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    refreshWork: {
         parameters: {
             query?: never;
             header?: never;

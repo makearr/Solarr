@@ -103,6 +103,8 @@ type Config struct {
 	PeopleSubscriber PeopleSubscriber
 	// ArtistActions are the artist page's bulk verbs. Optional: nil answers 503.
 	ArtistActions ArtistActions
+	// AlbumRefresher is an album's Refresh. Optional: nil answers 503.
+	AlbumRefresher AlbumRefresher
 	// SubscriptionPreviewer answers an artist's discography, unfiltered, for
 	// the subscribe screen's filter preview (todo 4.4). Optional: without
 	// it, PreviewSubscription answers 503.
@@ -234,6 +236,7 @@ type Server struct {
 	people                PeopleReader
 	peopleSubscriber      PeopleSubscriber
 	artistActions         ArtistActions
+	albumRefresher        AlbumRefresher
 	subscriptionPreviewer SubscriptionPreviewer
 	blockedContent        BlockedContentLister
 	packs                 PackLister
@@ -323,6 +326,7 @@ func New(config Config) (*Server, error) {
 		people:                config.People,
 		peopleSubscriber:      config.PeopleSubscriber,
 		artistActions:         config.ArtistActions,
+		albumRefresher:        config.AlbumRefresher,
 		subscriptionPreviewer: config.SubscriptionPreviewer,
 		blockedContent:        config.BlockedContent,
 		packs:                 config.Packs,
@@ -442,6 +446,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/candidates/{decisionId}/blocklist", server.routeBlocklistCandidate)
 			secured.Post("/works/{id}/search", server.routeSearchWork)
 			secured.Post("/works/{id}/grab", server.routeGrabWork)
+			secured.Post("/works/{id}/refresh", server.routeRefreshWork)
 			secured.Post("/works/{id}/parts/{partId}/search", server.routeSearchTrack)
 			secured.Get("/discover/search", server.routeDiscoverSearch)
 			secured.Post("/discover/add", server.DiscoverAdd)

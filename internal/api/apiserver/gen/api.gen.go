@@ -4513,6 +4513,9 @@ type ServerInterface interface {
 	// Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
 	// (POST /works/{id}/parts/{partId}/wanted)
 	SetTrackWanted(w http.ResponseWriter, r *http.Request, id int64, partId int64)
+	// Fetch the album's metadata again, past the cache -- credits, genres, description -- then rescan its folder as its library's "Rescan after refresh" says. Background; a second request while one runs is folded in.
+	// (POST /works/{id}/refresh)
+	RefreshWork(w http.ResponseWriter, r *http.Request, id int64)
 	// Stop wanting an album, and optionally delete its files. Administrator only.
 	// (POST /works/{id}/remove)
 	RemoveWork(w http.ResponseWriter, r *http.Request, id int64)
@@ -5668,6 +5671,12 @@ func (_ Unimplemented) SearchTrack(w http.ResponseWriter, r *http.Request, id in
 // Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
 // (POST /works/{id}/parts/{partId}/wanted)
 func (_ Unimplemented) SetTrackWanted(w http.ResponseWriter, r *http.Request, id int64, partId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Fetch the album's metadata again, past the cache -- credits, genres, description -- then rescan its folder as its library's "Rescan after refresh" says. Background; a second request while one runs is folded in.
+// (POST /works/{id}/refresh)
+func (_ Unimplemented) RefreshWork(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11663,6 +11672,39 @@ func (siw *ServerInterfaceWrapper) SetTrackWanted(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// RefreshWork operation middleware
+func (siw *ServerInterfaceWrapper) RefreshWork(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefreshWork(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RemoveWork operation middleware
 func (siw *ServerInterfaceWrapper) RemoveWork(w http.ResponseWriter, r *http.Request) {
 
@@ -12414,6 +12456,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/wanted", wrapper.SetTrackWanted)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/refresh", wrapper.RefreshWork)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/remove", wrapper.RemoveWork)

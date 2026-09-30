@@ -4808,6 +4808,27 @@ paths:
               schema: { $ref: "#/components/schemas/CategorySearchEnqueued" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/{id}/refresh:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: refreshWork
+      tags: [library]
+      summary: >-
+        Fetch the album's metadata again, past the cache -- credits, genres,
+        description -- then rescan its folder as its library's "Rescan after
+        refresh" says. Background; a second request while one runs is folded in.
+      responses:
+        "202":
+          description: Enqueued (or already running -- duplicate says which).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategorySearchEnqueued" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /people/{id}/monitor-all:
     parameters:
       - name: id
