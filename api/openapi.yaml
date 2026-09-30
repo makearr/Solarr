@@ -6049,6 +6049,17 @@ components:
           description: >-
             No cover of its own: its artwork is the primary artist's image, and a poster marks it.
             Absent means false.
+        status:
+          type: string
+          enum: [complete, incomplete, downloading, unreleased, unverified]
+          description: The poster wall's colour, PersonWork.status' own vocabulary.
+        monitored: { type: boolean }
+        size_bytes: { type: integer, format: int64, description: Size on disk of the album's files. }
+        present_count: { type: integer, format: int64 }
+        required_count: { type: integer, format: int64 }
+        overview:
+          type: string
+          description: The album's description, cut to a paragraph, for the Overview view.
         wanted_state:
           type: string
           enum: [MISSING, PARTIAL, COMPLETE, UPGRADABLE]
@@ -8007,6 +8018,13 @@ components:
           description: >-
             An album with no cover of its own, whose artwork falls back to its
             primary artist's image; the poster marks it. Albums only.
+        size_bytes:
+          type: integer
+          format: int64
+          description: Size on disk of the album's files. Albums only.
+        overview:
+          type: string
+          description: The album's description, cut to a paragraph, for the Overview view. Albums only.
 
     LibraryLevelPage:
       type: object

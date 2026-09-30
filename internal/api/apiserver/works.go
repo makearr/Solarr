@@ -112,6 +112,9 @@ type WorkRow struct {
 	ArrivedAt int64
 	// ArtistCover is an album shown by its artist's image, having no cover of its own.
 	ArtistCover bool
+	Monitored   bool
+	Description string
+	SizeBytes   int64
 }
 
 // ListWorks returns a page of the library the caller may see (ADR-27). A work
@@ -158,7 +161,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, buildWorkPage(rows, limit, sort))
+	writeJSON(w, s.logger, http.StatusOK, buildWorkPage(rows, limit, sort, s.wall.Now()))
 }
 
 // worksCursorFor decodes the cursor's opaque sort value against whichever
@@ -234,7 +237,7 @@ func (s *Server) rootsOf(categoryIDs []int64) (rootFolderIDs []int64) {
 // buildWorkPage trims the probe row (one more than pageSize) and, if present,
 // encodes the cursor from it -- paginate.Build's shape, reimplemented here since
 // Build is fixed to the integer-sorted Cursor and works sort on text.
-func buildWorkPage(rows []WorkRow, limit int, sort WorkSort) gen.WorkPage {
+func buildWorkPage(rows []WorkRow, limit int, sort WorkSort, now time.Time) gen.WorkPage {
 	items := rows
 	var nextCursor string
 	if len(rows) > limit {
@@ -255,6 +258,18 @@ func buildWorkPage(rows []WorkRow, limit int, sort WorkSort) gen.WorkPage {
 		}
 		if row.ArtistCover {
 			views[index].ArtistCover = &row.ArtistCover
+		}
+		// What Radarr's poster, overview and table show (2026-09-30); status is the poster wall's own colour.
+		status := gen.WorkStatus(albumStatus(PersonWorkRow{
+			WantedState: row.WantedState, OnDisk: row.OnDisk, AvailableFrom: row.AvailableFrom,
+			Downloading: row.Downloading, Unverified: row.Unverified,
+		}, now))
+		monitored, size := row.Monitored, row.SizeBytes
+		views[index].Status, views[index].Monitored, views[index].SizeBytes = &status, &monitored, &size
+		views[index].PresentCount, views[index].RequiredCount = row.PresentCount, row.RequiredCount
+		if row.Description != "" {
+			overview := overviewOf(row.Description)
+			views[index].Overview = &overview
 		}
 	}
 

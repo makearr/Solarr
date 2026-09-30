@@ -3856,6 +3856,23 @@ export interface components {
             /** @description No cover of its own: its artwork is the primary artist's image, and a poster marks it. Absent means false. */
             artist_cover?: boolean;
             /**
+             * @description The poster wall's colour, PersonWork.status' own vocabulary.
+             * @enum {string}
+             */
+            status?: "complete" | "incomplete" | "downloading" | "unreleased" | "unverified";
+            monitored?: boolean;
+            /**
+             * Format: int64
+             * @description Size on disk of the album's files.
+             */
+            size_bytes?: number;
+            /** Format: int64 */
+            present_count?: number;
+            /** Format: int64 */
+            required_count?: number;
+            /** @description The album's description, cut to a paragraph, for the Overview view. */
+            overview?: string;
+            /**
              * @description Set when this work has a monitored desired_item, regardless of whether the wanted filter was used.
              * @enum {string}
              */
@@ -5300,6 +5317,13 @@ export interface components {
             status?: "complete" | "incomplete" | "downloading" | "unreleased" | "unverified";
             /** @description An album with no cover of its own, whose artwork falls back to its primary artist's image; the poster marks it. Albums only. */
             artist_cover?: boolean;
+            /**
+             * Format: int64
+             * @description Size on disk of the album's files. Albums only.
+             */
+            size_bytes?: number;
+            /** @description The album's description, cut to a paragraph, for the Overview view. Albums only. */
+            overview?: string;
         };
         LibraryLevelPage: {
             items: components["schemas"]["LibraryLevelItem"][];

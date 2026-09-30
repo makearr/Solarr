@@ -477,7 +477,11 @@ func (s *Server) listLibraryLevelWorks(
 		views[index] = gen.LibraryLevelItem{
 			Id: row.ID, Title: row.Title, Subtitle: row.Artist, Year: yearOf(row.Year),
 			PresentCount: row.PresentCount, RequiredCount: row.RequiredCount, Status: &status,
-			ArtistCover: &row.ArtistCover,
+			ArtistCover: &row.ArtistCover, Monitored: &row.Monitored, SizeBytes: &row.SizeBytes,
+		}
+		if row.Description != "" {
+			overview := overviewOf(row.Description)
+			views[index].Overview = &overview
 		}
 	}
 	writeLibraryLevelPage(w, s.logger, views, next)
@@ -632,4 +636,20 @@ func encodeLevelWorksCursor(sort WorkSort, last WorkRow) string {
 	default:
 		return (levelCursor{fields: []string{last.SortTitle}, id: last.ID}).encode()
 	}
+}
+
+// overviewMaxRunes keeps an overview row to a paragraph, as Radarr's Overview view does.
+const overviewMaxRunes = 400
+
+// overviewOf is a description cut to a paragraph at a word boundary.
+func overviewOf(description string) string {
+	runes := []rune(description)
+	if len(runes) <= overviewMaxRunes {
+		return description
+	}
+	cut := string(runes[:overviewMaxRunes])
+	if space := strings.LastIndex(cut, " "); space > 0 {
+		cut = cut[:space]
+	}
+	return cut + "…"
 }
