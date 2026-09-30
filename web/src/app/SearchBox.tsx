@@ -61,6 +61,18 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
     staleTime: 30_000,
   });
 
+  // Artists in the library too, not only album titles (found 2026-09-30: "Pendulum" matched nothing).
+  const artists = useQuery({
+    queryKey: ["search-artists", debounced],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/people", { params: { query: { q: debounced, limit: 5 } } });
+      if (error) throw error;
+      return data.items;
+    },
+    enabled: searchable,
+    staleTime: 30_000,
+  });
+
   // Beyond the library (asked 2026-09-30, ADR-56's global half): artists and albums not in it yet,
   // searched in a library the person may add to; with several, they choose which.
   const libraries = useQuery({
@@ -144,7 +156,23 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
         >
           {results.isLoading && <li className="px-3 py-2 text-ink-muted">Searching…</li>}
           {results.error != null && <li className="px-3 py-2 text-danger">The search could not be completed.</li>}
-          {results.data?.length === 0 && <li className="px-3 py-2 text-ink-muted">No matches.</li>}
+          {results.data?.length === 0 && artists.data?.length === 0 && (
+            <li className="px-3 py-2 text-ink-muted">No matches in your library.</li>
+          )}
+          {artists.data?.map((person) => (
+            <li key={`person-${person.id}`} className="border-b border-border-subtle last:border-b-0">
+              <Link
+                to="/people/$id"
+                params={{ id: String(person.id) }}
+                className="flex items-center gap-2 px-3 py-1.5 hover:bg-canvas
+                           focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+              >
+                <CoverArt subject="people" workId={person.id} title={person.name} size="thumb" className="size-7 shrink-0 rounded-full object-cover" />
+                <span className="truncate font-medium">{person.name}</span>
+                <span className="ml-auto shrink-0 text-ink-muted">Artist</span>
+              </Link>
+            </li>
+          ))}
           {results.data?.map((result) => <ResultRow key={result.work.id} result={result} />)}
           {destination && (
             <li className="flex items-center gap-2 border-t border-border-subtle bg-canvas px-3 py-1.5 text-xs text-ink-muted">
