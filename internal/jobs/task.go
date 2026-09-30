@@ -102,6 +102,10 @@ func (r *TaskRegistry) Register(task Task) error {
 	if _, err := cronParser.Parse(task.DefaultCadence); err != nil {
 		return fmt.Errorf("jobs: task %s default cadence %q: %w", task.Key, task.DefaultCadence, err)
 	}
+	if !SimpleCadence(task.DefaultCadence) {
+		// The user's standing rule, asked four times: no default may open as "Advanced (cron)".
+		return fmt.Errorf("jobs: task %s default cadence %q is not a plain trigger", task.Key, task.DefaultCadence)
+	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()

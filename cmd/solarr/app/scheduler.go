@@ -13,27 +13,27 @@ import (
 // Default cadences for every registered task (ADR-59), gentler since 2026-09-24 and offset so
 // no two land on the same minute; a stored settings.db override replaces them.
 const (
-	scanScheduleCron               = "0 */6 * * *"        // every 6 hours
-	enrichmentScheduleCron         = "20 * * * *"         // every hour
-	subscriptionExpandScheduleCron = "10 */12 * * *"      // every 12 hours
-	artworkScheduleCron            = "30 */6 * * *"       // every 6 hours
-	tagWritebackScheduleCron       = "45 * * * *"         // every hour, paced to 2000 files a run
-	categoryCountsScheduleCron     = "30 5 * * *"         // daily, after database maintenance; only corrects drift
-	freshCountsScheduleCron        = "40 * * * *"         // every hour
-	probeScheduleCron              = "0 2 * * *"          // daily at 02:00
-	capacityScheduleCron           = "50 */6 * * *"       // every 6 hours
-	cacheMaintenanceScheduleCron   = "0 3 * * *"          // daily at 03:00
-	downloadWatchScheduleCron      = "*/5 * * * *"        // every 5 minutes
-	downloadPollScheduleCron       = "* * * * *"          // every minute, as Lidarr checks its clients
-	databaseMaintenanceCron        = "0 4 * * 0"          // Sundays at 04:00, clear of the other nightly tasks
-	backupScheduleCron             = "0 1 * * 0"          // Sundays at 01:00 (weekly, asked 2026-09-25)
-	backupCleanupScheduleCron      = "30 1 * * 0"         // Sundays at 01:30, after the backup
-	recycleBinCleanupScheduleCron  = "30 2 * * *"         // daily at 02:30
-	refreshArtistsScheduleCron     = "0 5 * * 0"          // Sundays at 05:00, after database maintenance
-	planScheduleCron               = "*/5 * * * *"        // every 5 minutes; reads the database only
-	cutoffScheduleCron             = "40 2 * * *"         // daily at 02:40, after the probe measured the night's files
-	rssScheduleCron                = "*/15 * * * *"       // every 15 minutes, as Lidarr's RSS Sync
-	huntScheduleCron               = "7,22,37,52 * * * *" // every 15 minutes, within the hourly budget
+	scanScheduleCron               = "0 */6 * * *"   // every 6 hours
+	enrichmentScheduleCron         = "20 * * * *"    // every hour
+	subscriptionExpandScheduleCron = "10 */12 * * *" // every 12 hours
+	artworkScheduleCron            = "30 */6 * * *"  // every 6 hours
+	tagWritebackScheduleCron       = "45 * * * *"    // every hour, paced to 2000 files a run
+	categoryCountsScheduleCron     = "30 5 * * *"    // daily, after database maintenance; only corrects drift
+	freshCountsScheduleCron        = "40 * * * *"    // every hour
+	probeScheduleCron              = "0 2 * * *"     // daily at 02:00
+	capacityScheduleCron           = "50 */6 * * *"  // every 6 hours
+	cacheMaintenanceScheduleCron   = "0 3 * * *"     // daily at 03:00
+	downloadWatchScheduleCron      = "*/5 * * * *"   // every 5 minutes
+	downloadPollScheduleCron       = "* * * * *"     // every minute, as Lidarr checks its clients
+	databaseMaintenanceCron        = "0 4 * * 0"     // Sundays at 04:00, clear of the other nightly tasks
+	backupScheduleCron             = "0 1 * * 0"     // Sundays at 01:00 (weekly, asked 2026-09-25)
+	backupCleanupScheduleCron      = "30 1 * * 0"    // Sundays at 01:30, after the backup
+	recycleBinCleanupScheduleCron  = "30 2 * * *"    // daily at 02:30
+	refreshArtistsScheduleCron     = "0 5 * * 0"     // Sundays at 05:00, after database maintenance
+	planScheduleCron               = "*/5 * * * *"   // every 5 minutes; reads the database only
+	cutoffScheduleCron             = "40 2 * * *"    // daily at 02:40, after the probe measured the night's files
+	rssScheduleCron                = "*/15 * * * *"  // every 15 minutes, as Lidarr's RSS Sync
+	huntScheduleCron               = "*/15 * * * *"  // every 15 minutes, within the hourly budget
 )
 
 // buildTaskRegistry declares every periodic action this process has (ADR-59), in the order a
