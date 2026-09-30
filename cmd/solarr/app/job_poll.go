@@ -29,7 +29,7 @@ func (p *process) pollJob() *poll.Job {
 		Blocklist: library.NewBlocklistStore(p.library), FS: p.fsys,
 		Clients: p.pollClients, DownloadFolders: p.pollDownloadFolders,
 		Import: p.importAcquisition, Search: p.searchAgain, History: p.recordDownloadHistory,
-		SendHeld: p.sendHeld, Clock: clock.NewSystem(), Logger: p.logger,
+		SendHeld: p.sendHeld, Imported: p.afterDownloadImported, Clock: clock.NewSystem(), Logger: p.logger,
 	})
 }
 

@@ -87,7 +87,7 @@ func (a ImportSessions) RevertImportSession(ctx context.Context, id int64, retai
 	if session.CategoryID != nil {
 		categoryIDs = []int64{*session.CategoryID}
 	}
-	recycling := recyclingFor(a.Libraries, categoryIDs)
+	recycling := RecyclingFor(a.Libraries, categoryIDs)
 	if retainHours > 0 {
 		recycling.Retain = time.Duration(retainHours) * time.Hour
 	}

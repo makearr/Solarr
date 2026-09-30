@@ -256,7 +256,7 @@ func (a WorksMonitor) RemoveWork(
 		// Recycle bin, never delete: section 10.8 -- the bytes stay
 		// recoverable for the retention window, and a mistaken delete of a
 		// whole album is exactly what that window is for.
-		recycling := recyclingFor(a.Libraries, detail.CategoryIDs)
+		recycling := RecyclingFor(a.Libraries, detail.CategoryIDs)
 		for _, mediaObjectID := range files {
 			if err := a.Remover.RecycleFile(ctx, mediaObjectID, recycling); err != nil {
 				return apiserver.RemoveWorkResult{}, err
@@ -297,7 +297,7 @@ func (a WorksMonitor) RemovePart(
 
 	var result apiserver.RemovePartResult
 	if deleteFiles && part.File != nil {
-		recycling := recyclingFor(a.Libraries, detail.CategoryIDs)
+		recycling := RecyclingFor(a.Libraries, detail.CategoryIDs)
 		if err := a.Remover.RecycleFile(ctx, part.File.MediaObjectID, recycling); err != nil {
 			return apiserver.RemovePartResult{}, err
 		}

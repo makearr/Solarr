@@ -46,5 +46,13 @@ measured yet is left as it is. The judgment is the same one the album page shows
 Searching a cutoff-unmet album judges every release against the album's **worst owned file**, by the
 same profiles: a release must strictly beat it -- better by the quality tiers, or equal there and higher
 in score -- or it is rejected as "not better than the files you have" (Invariant 72: ties keep the
-incumbent). Cutoff Unmet offers Interactive search; upgrading on its own waits for in-place
-replacement, so an upgrade sent by hand is placed beside the old files for now.
+incumbent). Cutoff Unmet offers Interactive search. A complete album wants nothing: searching it rejects
+every release as "the files you have meet it", Lidarr's *existing files meet cutoff*.
+
+**Replacing in place.** When a download's files are imported, Solarr measures them at once (the probe)
+and then checks that album: for each track that now has an owned file and a downloaded one, the
+strictly better file by the library's profiles stays, a tie keeping the owned one. The other goes to
+the recycle bin -- reason `replaced` for an owned file an upgrade beat, `rejected_worse` for a download
+that measured no better (facts win over the release name). Every path of a recycled file goes with it
+(Invariant 92), and only tracks a Solarr download touched are ever settled this way: duplicates you
+placed yourself are left alone. The nightly cutoff check does the same for anything missed.

@@ -32,7 +32,7 @@ func TestRecyclingFor_CombinesLibrariesCautiously(t *testing.T) {
 		{"no library", nil, library.Recycling{Retain: 7 * 24 * time.Hour, RemoveEmptyFolders: false}},
 	}
 	for _, testCase := range cases {
-		if got := recyclingFor(libraries, testCase.categoryIDs); got != testCase.want {
+		if got := RecyclingFor(libraries, testCase.categoryIDs); got != testCase.want {
 			t.Errorf("%s: %+v, want %+v", testCase.name, got, testCase.want)
 		}
 	}

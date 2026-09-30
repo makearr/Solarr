@@ -472,7 +472,7 @@ func (q *Queries) GetItemReleaseDate(ctx context.Context, arg GetItemReleaseDate
 }
 
 const listAlbumItemsForCutoff = `-- name: ListAlbumItemsForCutoff :many
-SELECT id, work_id, category_id, state, present_count
+SELECT id, work_id, category_id, profile_id, state, present_count
 FROM desired_item
 WHERE monitored = 1 AND satisfaction_kind = 'SET' AND state IN ('COMPLETE', 'UPGRADABLE') AND id > ?1
 ORDER BY id
@@ -488,6 +488,7 @@ type ListAlbumItemsForCutoffRow struct {
 	ID           int64
 	WorkID       int64
 	CategoryID   int64
+	ProfileID    int64
 	State        string
 	PresentCount int64
 }
@@ -506,6 +507,7 @@ func (q *Queries) ListAlbumItemsForCutoff(ctx context.Context, arg ListAlbumItem
 			&i.ID,
 			&i.WorkID,
 			&i.CategoryID,
+			&i.ProfileID,
 			&i.State,
 			&i.PresentCount,
 		); err != nil {
@@ -727,6 +729,41 @@ func (q *Queries) ListDirtyDesiredItems(ctx context.Context, arg ListDirtyDesire
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDownloadedFilesForWork = `-- name: ListDownloadedFilesForWork :many
+SELECT DISTINCT wf.media_object_id
+FROM work_file wf
+JOIN import_unit_file iuf ON iuf.media_object_id = wf.media_object_id
+JOIN import_unit u ON u.id = iuf.unit_id
+JOIN import_session s ON s.id = u.session_id
+WHERE wf.work_id = ? AND s.acquisition_id IS NOT NULL
+ORDER BY wf.media_object_id
+`
+
+// Which of an album's files a Solarr download brought in: placed by an import session a download
+// started. Only those can replace an owned file (M1d).
+func (q *Queries) ListDownloadedFilesForWork(ctx context.Context, workID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listDownloadedFilesForWork, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var media_object_id int64
+		if err := rows.Scan(&media_object_id); err != nil {
+			return nil, err
+		}
+		items = append(items, media_object_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

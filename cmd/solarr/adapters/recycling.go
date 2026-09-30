@@ -12,9 +12,9 @@ type LibraryLookup interface {
 	Category(id int64) (settings.Category, bool)
 }
 
-// recyclingFor is the recycling bin of the libraries a file belongs to: the longest retention,
+// RecyclingFor is the recycling bin of the libraries a file belongs to: the longest retention,
 // and empty folders removed only when every one of them says so. None means the defaults.
-func recyclingFor(libraries LibraryLookup, categoryIDs []int64) library.Recycling {
+func RecyclingFor(libraries LibraryLookup, categoryIDs []int64) library.Recycling {
 	var found []settings.FileManagement
 	for _, id := range categoryIDs {
 		if libraries == nil {

@@ -13,9 +13,9 @@ import (
 
 // CutoffItem is one monitored album with all its tracks, as M1d's cutoff check reads it.
 type CutoffItem struct {
-	ID, WorkID, CategoryID int64
-	State                  string
-	PresentCount           int64
+	ID, WorkID, CategoryID, ProfileID int64
+	State                             string
+	PresentCount                      int64
 }
 
 // CutoffPage pages through monitored COMPLETE and UPGRADABLE albums by id.
@@ -29,7 +29,8 @@ func (d Desired) CutoffPage(ctx context.Context, afterID, limit int64) ([]Cutoff
 	items := make([]CutoffItem, len(rows))
 	for index, row := range rows {
 		items[index] = CutoffItem{
-			ID: row.ID, WorkID: row.WorkID, CategoryID: row.CategoryID, State: row.State, PresentCount: row.PresentCount,
+			ID: row.ID, WorkID: row.WorkID, CategoryID: row.CategoryID, ProfileID: row.ProfileID,
+			State: row.State, PresentCount: row.PresentCount,
 		}
 	}
 	return items, nil
@@ -37,6 +38,9 @@ func (d Desired) CutoffPage(ctx context.Context, afterID, limit int64) ([]Cutoff
 
 // MeasuredFile is what probing measured of one of an album's files; Measured is false until it has.
 type MeasuredFile struct {
+	MediaObjectID int64
+	// MediaRef is the track the file covers.
+	MediaRef    string
 	Measured    bool
 	AudioCodec  string
 	Extension   string
@@ -53,7 +57,7 @@ func (d Desired) MeasuredFiles(ctx context.Context, workID int64) ([]MeasuredFil
 	files := make([]MeasuredFile, len(rows))
 	for index, row := range rows {
 		files[index] = MeasuredFile{
-			Measured: row.AudioCodec.Valid, AudioCodec: row.AudioCodec.String,
+			MediaObjectID: row.MediaObjectID, MediaRef: row.MediaRef, Measured: row.AudioCodec.Valid, AudioCodec: row.AudioCodec.String,
 			Extension:   strings.ToLower(strings.TrimPrefix(path.Ext(row.RelPath), ".")),
 			BitrateKbps: bitrateKbps(row.OverallBitrate, row.AudioBitrate),
 			Lossless:    row.Lossless.Valid && row.Lossless.Int64 == 1,
@@ -73,4 +77,17 @@ func (d Desired) SetAlbumState(ctx context.Context, itemID int64, state string, 
 		return fmt.Errorf("library: set item %d state: %w", itemID, err)
 	}
 	return nil
+}
+
+// DownloadedFiles answers which of a work's files a Solarr download brought in.
+func (d Desired) DownloadedFiles(ctx context.Context, workID int64) (map[int64]bool, error) {
+	ids, err := librarydb.New(d.store.Read()).ListDownloadedFilesForWork(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: downloaded files of work %d: %w", workID, err)
+	}
+	downloaded := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		downloaded[id] = true
+	}
+	return downloaded, nil
 }
