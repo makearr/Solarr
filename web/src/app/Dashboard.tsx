@@ -7,7 +7,7 @@ import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
-import { Poster } from "./Poster";
+import { ArtistCoverMark, Poster } from "./Poster";
 import { SearchBox } from "./SearchBox";
 import { defaultLevelKey, pageTier } from "./Sidebar";
 
@@ -136,6 +136,7 @@ export function Dashboard() {
                     title={work.title}
                     subtitle={[work.artist ?? work.media_type, work.year].filter(Boolean).join(" · ")}
                     link={{ to: "/works/$id", params: { id: String(work.id) } }}
+                    badge={work.artist_cover ? <ArtistCoverMark /> : undefined}
                   />
                 </li>
               ))}

@@ -14,7 +14,7 @@ import { useRouteView } from "@/list/useRouteView";
 import { useRecordLastLevel } from "@/list/useRecordLastLevel";
 import type { components } from "@/api/schema";
 import { CoverArt } from "./CoverArt";
-import { Poster } from "./Poster";
+import { ArtistCoverMark, Poster } from "./Poster";
 
 type LevelItem = components["schemas"]["LibraryLevelItem"];
 
@@ -233,6 +233,7 @@ export function LibraryLevelList() {
                     title={item.title}
                     subtitle={item.subtitle ?? (item.year != null ? String(item.year) : undefined)}
                     link={linkFor(level, item)}
+                    badge={item.artist_cover ? <ArtistCoverMark /> : undefined}
                     round={level === "artists"}
                     status={showBars ? item.status : undefined}
                     presentCount={item.present_count}

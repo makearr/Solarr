@@ -3834,6 +3834,8 @@ export interface components {
             last_searched_at?: string;
             /** @description Known only by its own tags or folder (D6): no metadata source recognised it. Absent means false. */
             unverified?: boolean;
+            /** @description No cover of its own: its artwork is the primary artist's image, and a poster marks it. Absent means false. */
+            artist_cover?: boolean;
             /**
              * @description Set when this work has a monitored desired_item, regardless of whether the wanted filter was used.
              * @enum {string}
@@ -5272,6 +5274,8 @@ export interface components {
              * @enum {string}
              */
             status?: "complete" | "incomplete" | "downloading" | "unreleased" | "unverified";
+            /** @description An album with no cover of its own, whose artwork falls back to its primary artist's image; the poster marks it. Albums only. */
+            artist_cover?: boolean;
         };
         LibraryLevelPage: {
             items: components["schemas"]["LibraryLevelItem"][];
