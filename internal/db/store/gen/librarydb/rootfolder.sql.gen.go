@@ -53,7 +53,7 @@ SELECT CAST(COUNT(DISTINCT visible.work_id) AS INTEGER) AS total FROM (
   SELECT own.work_id FROM desired_item own WHERE own.category_id = ?2
 ) AS visible
 WHERE EXISTS (SELECT 1 FROM desired_item di
-              WHERE di.work_id = visible.work_id AND di.monitored = 1 AND di.state != 'COMPLETE')
+              WHERE di.work_id = visible.work_id AND di.monitored = 1 AND di.state IN ('MISSING', 'PARTIAL'))
   AND EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = visible.work_id)
 `
 

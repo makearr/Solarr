@@ -146,7 +146,7 @@ func TestPeopleNeedingArtwork_ListsACreditedArtistWithNoImageYet(t *testing.T) {
 	people := library.NewPeople(opened)
 	artworks := library.NewArtworks(opened)
 
-	personID := resolvePersonNamed(t, people, "artist-mbid-1", "Heka", "Heka")
+	personID := resolvePersonNamed(t, people, "artist-mbid-1", "Heka")
 
 	found, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10)
 	if err != nil {
@@ -162,7 +162,7 @@ func TestPeopleNeedingArtwork_ExcludesAPersonWhoseImageWasFetched(t *testing.T) 
 	people := library.NewPeople(opened)
 	artworks := library.NewArtworks(opened)
 
-	personID := resolvePersonNamed(t, people, "artist-mbid-2", "Heka", "Heka")
+	personID := resolvePersonNamed(t, people, "artist-mbid-2", "Heka")
 	if err := artworks.RecordForPerson(
 		t.Context(), personID, "https://example.invalid/heka.jpg", "person-1-cover", 500, 500, 1,
 	); err != nil {
@@ -186,7 +186,7 @@ func TestPeopleNeedingArtwork_ExcludesAPersonRecordedAsHavingNoImage(t *testing.
 	people := library.NewPeople(opened)
 	artworks := library.NewArtworks(opened)
 
-	personID := resolvePersonNamed(t, people, "artist-mbid-3", "Obscure Act", "Obscure Act")
+	personID := resolvePersonNamed(t, people, "artist-mbid-3", "Obscure Act")
 	if err := artworks.RecordPersonArtworkAbsent(t.Context(), personID, 1); err != nil {
 		t.Fatalf("RecordPersonArtworkAbsent: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestGetForPerson_TreatsARecordedAbsenceAsNoImage(t *testing.T) {
 	people := library.NewPeople(opened)
 	artworks := library.NewArtworks(opened)
 
-	personID := resolvePersonNamed(t, people, "artist-mbid-4", "Obscure Act", "Obscure Act")
+	personID := resolvePersonNamed(t, people, "artist-mbid-4", "Obscure Act")
 	if err := artworks.RecordPersonArtworkAbsent(t.Context(), personID, 1); err != nil {
 		t.Fatalf("RecordPersonArtworkAbsent: %v", err)
 	}
@@ -226,7 +226,7 @@ func TestGetForPerson_AnswersTheRecordedCacheKey(t *testing.T) {
 	people := library.NewPeople(opened)
 	artworks := library.NewArtworks(opened)
 
-	personID := resolvePersonNamed(t, people, "artist-mbid-5", "Heka", "Heka")
+	personID := resolvePersonNamed(t, people, "artist-mbid-5", "Heka")
 	if err := artworks.RecordForPerson(
 		t.Context(), personID, "https://example.invalid/heka.jpg", "person-9-cover", 500, 500, 1,
 	); err != nil {
@@ -249,8 +249,8 @@ func TestPeopleNeedingArtwork_StartsAfterTheGivenPerson(t *testing.T) {
 	people := library.NewPeople(opened)
 	artworks := library.NewArtworks(opened)
 
-	first := resolvePersonNamed(t, people, "artist-mbid-a", "First", "First")
-	second := resolvePersonNamed(t, people, "artist-mbid-b", "Second", "Second")
+	first := resolvePersonNamed(t, people, "artist-mbid-a", "First")
+	second := resolvePersonNamed(t, people, "artist-mbid-b", "Second")
 
 	found, err := artworks.PeopleNeedingArtwork(t.Context(), first, 10)
 	if err != nil {

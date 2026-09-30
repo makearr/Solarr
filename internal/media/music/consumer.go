@@ -262,10 +262,7 @@ func (c Consumer) settleUnverified(
 			return err
 		}
 		if artist != "" && c.people != nil {
-			personID, err := c.people.ResolvePerson(ctx, c.clock.Now(), library.PersonLink{
-				Provider: ProviderLocalArtist, ExternalID: strings.ToLower(artist),
-				Person: library.PersonIdentity{Name: artist, SortName: artist},
-			})
+			personID, err := c.people.ResolveFolderArtist(ctx, c.clock.Now(), ProviderLocalArtist, artist)
 			if err != nil {
 				return err
 			}

@@ -96,7 +96,8 @@ func albumStatus(row PersonWorkRow, now time.Time) AlbumStatus {
 		return AlbumUnreleased
 	case row.Downloading:
 		return AlbumDownloading
-	case row.WantedState != nil && *row.WantedState == "COMPLETE":
+	case row.WantedState != nil && (*row.WantedState == "COMPLETE" || *row.WantedState == "UPGRADABLE"):
+		// Every track is here; below the cutoff is Cutoff Unmet's business, not missing (as Lidarr).
 		return AlbumComplete
 	case row.WantedState == nil && row.OnDisk:
 		// Nothing wants it, but the files are here: on disk is complete.

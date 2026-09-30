@@ -49,6 +49,8 @@ const (
 	WorkSortArtist WorkSort = "artist"
 	// WorkSortSearched orders by when the album was last searched, never-searched first.
 	WorkSortSearched WorkSort = "searched"
+	// WorkSortImported orders by when the newest file arrived, and lists only works with files.
+	WorkSortImported WorkSort = "imported"
 )
 
 // SortDirection is which way WorkSort orders. The zero value is ascending.
@@ -113,6 +115,7 @@ type WorkCursor struct {
 	// SortArtist is read, with SortTitle, only by WorkSortArtist.
 	SortArtist   string
 	SortSearched int64
+	SortImported int64
 	ID           int64
 }
 
@@ -138,6 +141,8 @@ type WorkListRow struct {
 	LastSearchedAt int64
 	// Unverified is an album known only by its own tags or folder: every id it has is local (D6).
 	Unverified bool
+	// ArrivedAt is when the work's newest file arrived; 0 with none.
+	ArrivedAt int64
 }
 
 // Works reads the library list surface.
@@ -190,7 +195,15 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	// Every cursor compares as a row value, which SQLite answers with an index
 	// seek. The OR form this replaced could not be seeked at all.
 	var orderBy string
-	if filter.Sort == WorkSortArtist {
+	join := workArtistJoin
+	switch filter.Sort {
+	case WorkSortImported:
+		// Joined, not a subquery, so the order walks work_arrival_at instead of sorting every work.
+		join += "\nJOIN work_arrival arrival ON arrival.work_id = work.id"
+		predicates.AddIf(after.ID != 0,
+			"(arrival.arrived_at, arrival.work_id) "+operator+" (?, ?)", after.SortImported, after.ID)
+		orderBy = "arrival.arrived_at" + orderDirection + ", arrival.work_id" + orderDirection
+	case WorkSortArtist:
 		// Exactly the expression migration 0046 indexes, so the order stays indexed.
 		artist := "COALESCE(primary_artist_sort_name, '') COLLATE NOCASE"
 		predicates.AddIf(after.ID != 0,
@@ -198,7 +211,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 			after.SortArtist, after.SortTitle, after.ID)
 		orderBy = artist + orderDirection + ", work.sort_title" + orderDirection +
 			", work.id" + orderDirection
-	} else {
+	default:
 		column, cursorValue := sortColumn(filter.Sort, after)
 		predicates.AddIf(after.ID != 0,
 			"("+column+", work.id) "+operator+" (?, ?)", cursorValue, after.ID)
@@ -211,7 +224,8 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		",\n       COALESCE(work.primary_artist_sort_name, '') AS artist_sort" +
 		",\n       " + lastSearchedColumn + " AS last_searched" +
 		",\n       " + unverifiedColumn + " AS unverified" +
-		"\nFROM work" + workArtistJoin +
+		",\n       COALESCE((SELECT a.arrived_at FROM work_arrival a WHERE a.work_id = work.id), 0) AS arrived_at" +
+		"\nFROM work" + join +
 		predicates.Where() + "\nORDER BY " + orderBy + "\nLIMIT ?"
 	return query, predicates.Args(pageSize)
 }
@@ -349,7 +363,7 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 			&work.OriginalLanguage, &work.Year, &work.RuntimeMs, &work.AddedAt,
 			&work.UpdatedAt, &work.AddedBy, &work.Artist, &work.WantedState,
 			&work.PresentCount, &work.RequiredCount, &work.AvailableFrom, &work.Downloading,
-			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt, &work.Unverified); err != nil {
+			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt, &work.Unverified, &work.ArrivedAt); err != nil {
 			return nil, fmt.Errorf("library: scan work: %w", err)
 		}
 		works = append(works, work)

@@ -50,7 +50,7 @@ func TestCalendar_IncludesAMonitoredArtistsRelease(t *testing.T) {
 	people := library.NewPeople(opened)
 	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 		Provider: "musicbrainz:artist", ExternalID: "artist-1",
-		Person: library.PersonIdentity{Name: "Someone", SortName: "Someone"},
+		Person: library.PersonIdentity{Name: "Someone"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
@@ -120,7 +120,7 @@ func TestCalendar_OnlyShowsTheCallersLibraries(t *testing.T) {
 	people := library.NewPeople(opened)
 	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 		Provider: "musicbrainz:artist", ExternalID: "artist-2",
-		Person: library.PersonIdentity{Name: "Someone Else", SortName: "Someone Else"},
+		Person: library.PersonIdentity{Name: "Someone Else"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)

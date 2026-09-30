@@ -34,7 +34,7 @@ func TestResolvePerson_CreatesOnceAndReusesOnASecondCall(t *testing.T) {
 	link := library.PersonLink{
 		Provider: "musicbrainz:artist", ExternalID: "artist-1",
 		Person: library.PersonIdentity{
-			Name: "Vutu Doci", SortName: "Bush, Vutu", Kind: "Person",
+			Name: "Vutu Doci", Kind: "Person",
 			Gender: "Female", Country: "GB", Born: "1958-07-30",
 		},
 	}
@@ -63,7 +63,7 @@ func TestResolvePerson_StoresBiographyInFieldsJSON(t *testing.T) {
 	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 		Provider: "musicbrainz:artist", ExternalID: "artist-2",
 		Person: library.PersonIdentity{
-			Name: "Vutu Doci", SortName: "Bush, Vutu", Biography: "English singer-songwriter.",
+			Name: "Vutu Doci", Biography: "English singer-songwriter.",
 		},
 	})
 	if err != nil {
@@ -87,7 +87,7 @@ func TestAddCredit_RecordsAWorkLevelCredit(t *testing.T) {
 
 	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 		Provider: "musicbrainz:artist", ExternalID: "artist-3",
-		Person: library.PersonIdentity{Name: "Katupoken", SortName: "Katupoken", Kind: "Group"},
+		Person: library.PersonIdentity{Name: "Katupoken", Kind: "Group"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
@@ -117,7 +117,7 @@ func TestAddCredit_OrdZeroArtistSetsWorkPrimaryArtist(t *testing.T) {
 
 	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 		Provider: "musicbrainz:artist", ExternalID: "artist-primary",
-		Person: library.PersonIdentity{Name: "Katupoken", SortName: "Katupoken"},
+		Person: library.PersonIdentity{Name: "Katupoken"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
@@ -149,14 +149,14 @@ func TestAddCredit_NonPrimaryCreditDoesNotSetWorkPrimaryArtist(t *testing.T) {
 
 	primary, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 		Provider: "musicbrainz:artist", ExternalID: "artist-primary-2",
-		Person: library.PersonIdentity{Name: "Katupoken", SortName: "Katupoken"},
+		Person: library.PersonIdentity{Name: "Katupoken"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
 	}
 	featured, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 		Provider: "musicbrainz:artist", ExternalID: "artist-featured",
-		Person: library.PersonIdentity{Name: "Someone Else", SortName: "Else, Someone"},
+		Person: library.PersonIdentity{Name: "Someone Else"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
@@ -250,5 +250,46 @@ func TestAssignGenres_NeverRemovesAUserTag(t *testing.T) {
 	}
 	if len(assignments) != 2 {
 		t.Fatalf("assignments = %+v, want the new musicbrainz genre plus the surviving user tag", sources)
+	}
+}
+
+// A person first made from a release's credit name takes the artist's own name once looked up (found 2026-09-30).
+func TestBackfillDetails_CorrectsACreditNameToTheArtistName(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	personID := resolvePersonNamed(t, people, "artist-1", "VUTU")
+
+	if err := people.BackfillDetails(t.Context(), personID, library.PersonIdentity{Name: "Vutu Doci", Kind: "Person"}); err != nil {
+		t.Fatalf("BackfillDetails: %v", err)
+	}
+	person, err := librarydb.New(opened.Read()).GetPerson(t.Context(), personID)
+	if err != nil {
+		t.Fatalf("GetPerson: %v", err)
+	}
+	if person.Name != "Vutu Doci" || person.SortName != "Vutu Doci" || person.Kind.String != "Person" {
+		t.Errorf("person = %q/%q/%q, want Vutu Doci/Vutu Doci/Person", person.Name, person.SortName, person.Kind.String)
+	}
+}
+
+// An unverified album's folder artist is the identified artist of that name, not a second person (D6).
+func TestResolveFolderArtist_JoinsTheOneIdentifiedPersonOfThatName(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	identified := resolvePersonNamed(t, people, "artist-1", "Vutu Doci")
+
+	joined, err := people.ResolveFolderArtist(t.Context(), firstSeen, "local:artist", "vutu doci")
+	if err != nil {
+		t.Fatalf("ResolveFolderArtist: %v", err)
+	}
+	unknown, err := people.ResolveFolderArtist(t.Context(), firstSeen, "local:artist", "Katupoken")
+	if err != nil {
+		t.Fatalf("ResolveFolderArtist: %v", err)
+	}
+	again, err := people.ResolveFolderArtist(t.Context(), firstSeen, "local:artist", "Katupoken")
+	if err != nil {
+		t.Fatalf("ResolveFolderArtist: %v", err)
+	}
+	if joined != identified || unknown == identified || again != unknown {
+		t.Errorf("ids = joined %d, unknown %d, again %d; want joined %d, one new local person reused", joined, unknown, again, identified)
 	}
 }

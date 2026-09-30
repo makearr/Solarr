@@ -321,7 +321,7 @@ func (a ArrSync) syncArtist(ctx context.Context, importID int64, artist arrimpor
 	}
 	personID, err = a.People.ResolvePerson(ctx, now, library.PersonLink{
 		Provider: music.ProviderArtist, ExternalID: artist.ForeignArtistID,
-		Person: library.PersonIdentity{Name: artist.ArtistName, SortName: artist.SortName},
+		Person: library.PersonIdentity{Name: artist.ArtistName},
 	})
 	if err != nil {
 		return 0, false, err

@@ -20,6 +20,8 @@ UPDATE person SET monitored = ? WHERE id = ?;
 -- had a source, not a refresh (a manual override must always win, ADR-8).
 -- name: BackfillPersonDetails :exec
 UPDATE person SET
+  name           = COALESCE(NULLIF(CAST(sqlc.arg(name) AS TEXT), ''), name),
+  sort_name      = COALESCE(NULLIF(CAST(sqlc.arg(sort_name) AS TEXT), ''), sort_name),
   disambiguation = CASE WHEN COALESCE(disambiguation, '') = '' THEN sqlc.arg(disambiguation) ELSE disambiguation END,
   kind           = CASE WHEN COALESCE(kind, '') = ''           THEN sqlc.arg(kind)           ELSE kind END,
   gender         = CASE WHEN COALESCE(gender, '') = ''         THEN sqlc.arg(gender)         ELSE gender END,
@@ -47,6 +49,13 @@ SELECT p.id, p.name, p.sort_name, p.disambiguation, p.kind, p.gender, p.country,
 FROM person p
 JOIN person_alias a ON a.person_id = p.id
 WHERE a.normalized = ? ORDER BY p.sort_name COLLATE NOCASE, p.id;
+
+-- A provider-identified person by this name, ignoring case: an unverified album's folder artist joins them.
+-- name: FindIdentifiedPeopleByName :many
+SELECT p.id FROM person p
+WHERE p.name = sqlc.arg(name) COLLATE NOCASE
+  AND EXISTS (SELECT 1 FROM person_external_id x WHERE x.person_id = p.id AND x.provider NOT LIKE 'local:%')
+ORDER BY p.id LIMIT 2;
 
 -- name: LinkPersonExternalID :exec
 INSERT INTO person_external_id (provider, external_id, person_id)

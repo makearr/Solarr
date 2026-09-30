@@ -42,7 +42,7 @@ export function Dashboard() {
     queryKey: ["works", "recent"],
     queryFn: async () => {
       const { data, error } = await api.GET("/works", {
-        params: { query: { sort: "added", dir: "desc", limit: RECENT_LIMIT } },
+        params: { query: { sort: "imported", dir: "desc", limit: RECENT_LIMIT } },
       });
       if (error) throw error;
       return data;

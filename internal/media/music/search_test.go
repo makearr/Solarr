@@ -139,7 +139,7 @@ func (env *searchTestEnv) createSearchableWork(t *testing.T, artist, title strin
 
 	personID, err := people.ResolvePerson(t.Context(), env.clock.Now(), library.PersonLink{
 		Provider: "test", ExternalID: artist,
-		Person: library.PersonIdentity{Name: artist, SortName: artist},
+		Person: library.PersonIdentity{Name: artist},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
@@ -497,7 +497,7 @@ func TestSearchCategoryJob_SearchesEveryIncompleteItemInTheCategory(t *testing.T
 
 	people := library.NewPeople(env.library)
 	personID, err := people.ResolvePerson(t.Context(), env.clock.Now(), library.PersonLink{
-		Provider: "test", ExternalID: "Nosi Zada", Person: library.PersonIdentity{Name: "Nosi Zada", SortName: "Nosi Zada"},
+		Provider: "test", ExternalID: "Nosi Zada", Person: library.PersonIdentity{Name: "Nosi Zada"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
@@ -604,7 +604,7 @@ func TestSearchCategoryJob_OneItemFailingDoesNotStopTheRest(t *testing.T) {
 	people := library.NewPeople(env.library)
 	workingWorkID := env.createWork(t, "Discovery", 2001)
 	personID, err := people.ResolvePerson(t.Context(), env.clock.Now(), library.PersonLink{
-		Provider: "test", ExternalID: "Nosi Zada", Person: library.PersonIdentity{Name: "Nosi Zada", SortName: "Nosi Zada"},
+		Provider: "test", ExternalID: "Nosi Zada", Person: library.PersonIdentity{Name: "Nosi Zada"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)

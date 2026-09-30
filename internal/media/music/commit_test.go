@@ -523,7 +523,7 @@ func TestCommitUnit_NamesAKnownAlbumCanonicallyNotByItsTags(t *testing.T) {
 	}
 	people := library.NewPeople(opened)
 	personID, err := people.ResolvePerson(t.Context(), at, library.PersonLink{
-		Provider: "musicbrainz:artist", ExternalID: "heka", Person: library.PersonIdentity{Name: "Heka", SortName: "Heka"},
+		Provider: "musicbrainz:artist", ExternalID: "heka", Person: library.PersonIdentity{Name: "Heka"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)

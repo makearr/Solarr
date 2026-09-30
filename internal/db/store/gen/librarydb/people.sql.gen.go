@@ -152,17 +152,21 @@ func (q *Queries) AssignTag(ctx context.Context, arg AssignTagParams) error {
 
 const backfillPersonDetails = `-- name: BackfillPersonDetails :exec
 UPDATE person SET
-  disambiguation = CASE WHEN COALESCE(disambiguation, '') = '' THEN ?1 ELSE disambiguation END,
-  kind           = CASE WHEN COALESCE(kind, '') = ''           THEN ?2           ELSE kind END,
-  gender         = CASE WHEN COALESCE(gender, '') = ''         THEN ?3         ELSE gender END,
-  country        = CASE WHEN COALESCE(country, '') = ''        THEN ?4        ELSE country END,
-  born           = CASE WHEN COALESCE(born, '') = ''           THEN ?5           ELSE born END,
-  died           = CASE WHEN COALESCE(died, '') = ''           THEN ?6           ELSE died END,
-  fields_json    = CASE WHEN COALESCE(fields_json, '') = ''    THEN ?7    ELSE fields_json END
-WHERE id = ?8
+  name           = COALESCE(NULLIF(CAST(?1 AS TEXT), ''), name),
+  sort_name      = COALESCE(NULLIF(CAST(?2 AS TEXT), ''), sort_name),
+  disambiguation = CASE WHEN COALESCE(disambiguation, '') = '' THEN ?3 ELSE disambiguation END,
+  kind           = CASE WHEN COALESCE(kind, '') = ''           THEN ?4           ELSE kind END,
+  gender         = CASE WHEN COALESCE(gender, '') = ''         THEN ?5         ELSE gender END,
+  country        = CASE WHEN COALESCE(country, '') = ''        THEN ?6        ELSE country END,
+  born           = CASE WHEN COALESCE(born, '') = ''           THEN ?7           ELSE born END,
+  died           = CASE WHEN COALESCE(died, '') = ''           THEN ?8           ELSE died END,
+  fields_json    = CASE WHEN COALESCE(fields_json, '') = ''    THEN ?9    ELSE fields_json END
+WHERE id = ?10
 `
 
 type BackfillPersonDetailsParams struct {
+	Name           string
+	SortName       string
 	Disambiguation sql.NullString
 	Kind           sql.NullString
 	Gender         sql.NullString
@@ -178,6 +182,8 @@ type BackfillPersonDetailsParams struct {
 // had a source, not a refresh (a manual override must always win, ADR-8).
 func (q *Queries) BackfillPersonDetails(ctx context.Context, arg BackfillPersonDetailsParams) error {
 	_, err := q.db.ExecContext(ctx, backfillPersonDetails,
+		arg.Name,
+		arg.SortName,
 		arg.Disambiguation,
 		arg.Kind,
 		arg.Gender,
@@ -437,6 +443,37 @@ DELETE FROM subscription WHERE id = ?
 func (q *Queries) DeleteSubscription(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteSubscription, id)
 	return err
+}
+
+const findIdentifiedPeopleByName = `-- name: FindIdentifiedPeopleByName :many
+SELECT p.id FROM person p
+WHERE p.name = ?1 COLLATE NOCASE
+  AND EXISTS (SELECT 1 FROM person_external_id x WHERE x.person_id = p.id AND x.provider NOT LIKE 'local:%')
+ORDER BY p.id LIMIT 2
+`
+
+// A provider-identified person by this name, ignoring case: an unverified album's folder artist joins them.
+func (q *Queries) FindIdentifiedPeopleByName(ctx context.Context, name string) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, findIdentifiedPeopleByName, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const findPeopleByAlias = `-- name: FindPeopleByAlias :many

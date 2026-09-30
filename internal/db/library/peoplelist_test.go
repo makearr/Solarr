@@ -12,11 +12,11 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
-func resolvePersonNamed(t *testing.T, people library.People, externalID, name, sortName string) int64 {
+func resolvePersonNamed(t *testing.T, people library.People, externalID, name string) int64 {
 	t.Helper()
 	id, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 		Provider: "musicbrainz:artist", ExternalID: externalID,
-		Person: library.PersonIdentity{Name: name, SortName: sortName},
+		Person: library.PersonIdentity{Name: name},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson(%q): %v", name, err)
@@ -27,9 +27,9 @@ func resolvePersonNamed(t *testing.T, people library.People, externalID, name, s
 func TestListPeople_OrdersBySortNameThenID(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
-	resolvePersonNamed(t, people, "artist-1", "Katupoken", "Katupoken")
-	resolvePersonNamed(t, people, "artist-2", "Vutu Doci", "Bush, Vutu")
-	resolvePersonNamed(t, people, "artist-3", "AVEX", "AVEX")
+	resolvePersonNamed(t, people, "artist-1", "Katupoken")
+	resolvePersonNamed(t, people, "artist-2", "Vutu Doci")
+	resolvePersonNamed(t, people, "artist-3", "AVEX")
 
 	got, err := people.ListPeople(t.Context(), library.PersonFilter{}, library.PersonCursor{}, 50)
 	if err != nil {
@@ -38,20 +38,21 @@ func TestListPeople_OrdersBySortNameThenID(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("ListPeople = %+v, want 3 people", got)
 	}
-	if got[0].SortName != "AVEX" || got[1].SortName != "Bush, Vutu" || got[2].SortName != "Katupoken" {
-		t.Errorf("order = %q, %q, %q, want AVEX, Bush Vutu, Katupoken by sort_name", got[0].SortName, got[1].SortName, got[2].SortName)
+	// By the name as shown, as Lidarr: a provider's "Doci, Vutu" once filed Vutu Doci under D (2026-09-30).
+	if got[0].SortName != "AVEX" || got[1].SortName != "Katupoken" || got[2].SortName != "Vutu Doci" {
+		t.Errorf("order = %q, %q, %q, want AVEX, Katupoken, Vutu Doci by name", got[0].SortName, got[1].SortName, got[2].SortName)
 	}
 }
 
-// Lidarr ignores case: "bokaru" sorts after "Bush" and before "Ubra", on every page and either way.
+// Lidarr ignores case: "bokaru" sorts after "avex" and before "Ubra", on every page and either way.
 func TestListPeople_OrderIgnoresCase(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
-	resolvePersonNamed(t, people, "artist-1", "Ubra", "Ubra")
-	resolvePersonNamed(t, people, "artist-2", "bokaru", "bokaru")
-	resolvePersonNamed(t, people, "artist-3", "Vutu Doci", "Bush, Vutu")
-	resolvePersonNamed(t, people, "artist-4", "BOKARU", "BOKARU")
-	resolvePersonNamed(t, people, "artist-5", "avex", "avex")
+	resolvePersonNamed(t, people, "artist-1", "Ubra")
+	resolvePersonNamed(t, people, "artist-2", "bokaru")
+	resolvePersonNamed(t, people, "artist-3", "Vutu Doci")
+	resolvePersonNamed(t, people, "artist-4", "BOKARU")
+	resolvePersonNamed(t, people, "artist-5", "avex")
 
 	for _, descending := range []bool{false, true} {
 		var got []string
@@ -70,7 +71,7 @@ func TestListPeople_OrderIgnoresCase(t *testing.T) {
 			last := page[len(page)-1]
 			after = library.PersonCursor{SortName: last.SortName, ID: last.ID}
 		}
-		want := []string{"avex", "bokaru", "BOKARU", "Bush, Vutu", "Ubra"}
+		want := []string{"avex", "bokaru", "BOKARU", "Ubra", "Vutu Doci"}
 		if descending {
 			slices.Reverse(want)
 		}
@@ -103,9 +104,9 @@ func TestListPeople_RoleAndVisibilityFilterNarrowsToArtistsInTheCategory(t *test
 		t.Fatalf("ResolveWorks (other root): %v", err)
 	}
 
-	artistInCategory := resolvePersonNamed(t, people, "artist-in", "In Category", "In Category")
-	artistElsewhere := resolvePersonNamed(t, people, "artist-out", "Out Of Category", "Out Of Category")
-	producerOnly := resolvePersonNamed(t, people, "producer-only", "Producer Only", "Producer Only")
+	artistInCategory := resolvePersonNamed(t, people, "artist-in", "In Category")
+	artistElsewhere := resolvePersonNamed(t, people, "artist-out", "Out Of Category")
+	producerOnly := resolvePersonNamed(t, people, "producer-only", "Producer Only")
 
 	if err := people.AddCredit(t.Context(), visibleWork[0], artistInCategory, "artist", 0); err != nil {
 		t.Fatalf("AddCredit (in category): %v", err)
@@ -152,8 +153,8 @@ func TestListPeople_ArtistFilterPlanReachesTheIndexAndNeverSorts(t *testing.T) {
 func TestListPeople_MonitoredFilterNarrows(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
-	unmonitoredID := resolvePersonNamed(t, people, "artist-1", "Katupoken", "Katupoken")
-	monitoredID := resolvePersonNamed(t, people, "artist-2", "Vutu Doci", "Bush, Vutu")
+	unmonitoredID := resolvePersonNamed(t, people, "artist-1", "Katupoken")
+	monitoredID := resolvePersonNamed(t, people, "artist-2", "Vutu Doci")
 	if _, err := people.Subscribe(t.Context(), firstSeen, monitoredID, 1,
 		library.SubscriptionRequest{MediaTypes: []string{"music"}}); err != nil {
 		t.Fatalf("Subscribe: %v", err)
@@ -173,8 +174,8 @@ func TestListPeople_MonitoredFilterNarrows(t *testing.T) {
 func TestListPeople_NamePrefixNarrows(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
-	resolvePersonNamed(t, people, "artist-1", "Katupoken", "Katupoken")
-	resolvePersonNamed(t, people, "artist-2", "Vutu Doci", "Bush, Vutu")
+	resolvePersonNamed(t, people, "artist-1", "Katupoken")
+	resolvePersonNamed(t, people, "artist-2", "Vutu Doci")
 
 	got, err := people.ListPeople(t.Context(), library.PersonFilter{NamePrefix: "Kat"}, library.PersonCursor{}, 50)
 	if err != nil {
@@ -192,7 +193,7 @@ func TestPeopleDetail_IncludesAliasesBiographyAndDiscography(t *testing.T) {
 
 	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 		Provider: "musicbrainz:artist", ExternalID: "artist-1",
-		Person: library.PersonIdentity{Name: "Nick Cave", SortName: "Cave, Nick", Biography: "Australian musician."},
+		Person: library.PersonIdentity{Name: "Nick Cave", Biography: "Australian musician."},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
@@ -239,7 +240,7 @@ func TestSubscribe_MissingPersonReportsNoRows(t *testing.T) {
 func TestSubscribe_MarksThePersonMonitored(t *testing.T) {
 	opened, queries := newLibrary(t)
 	people := library.NewPeople(opened)
-	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci", "Bush, Vutu")
+	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci")
 
 	before, err := queries.GetPerson(t.Context(), personID)
 	if err != nil {
@@ -269,7 +270,7 @@ func TestSubscribe_FiltersJSONRoundTripsThroughListEnabled(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
 	subscriptions := library.NewSubscriptions(opened)
-	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci", "Bush, Vutu")
+	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci")
 
 	if _, err := people.Subscribe(t.Context(), firstSeen, personID, 1, library.SubscriptionRequest{
 		MediaTypes: []string{"music"}, FiltersJSON: `{"exclude_secondary_types":["live"]}`,
@@ -305,7 +306,7 @@ func TestSubscribe_FiltersJSONRoundTripsThroughListEnabled(t *testing.T) {
 func TestSubscribe_SecondCallForTheSamePersonIsIdempotent(t *testing.T) {
 	opened, queries := newLibrary(t)
 	people := library.NewPeople(opened)
-	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci", "Bush, Vutu")
+	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci")
 
 	first, err := people.Subscribe(t.Context(), firstSeen, personID, 1,
 		library.SubscriptionRequest{MediaTypes: []string{"music"}, Roles: []string{"artist"}})
@@ -342,10 +343,10 @@ func TestSubscribe_SecondCallForTheSamePersonIsIdempotent(t *testing.T) {
 func TestArtistsDueRefresh_StalestMonitoredFirst(t *testing.T) {
 	opened, queries := newLibrary(t)
 	people := library.NewPeople(opened)
-	never := resolvePersonNamed(t, people, "a1", "Never", "Never")
-	stale := resolvePersonNamed(t, people, "a2", "Stale", "Stale")
-	recent := resolvePersonNamed(t, people, "a3", "Recent", "Recent")
-	resolvePersonNamed(t, people, "a4", "Unmonitored", "Unmonitored")
+	never := resolvePersonNamed(t, people, "a1", "Never")
+	stale := resolvePersonNamed(t, people, "a2", "Stale")
+	recent := resolvePersonNamed(t, people, "a3", "Recent")
+	resolvePersonNamed(t, people, "a4", "Unmonitored")
 	for _, id := range []int64{never, stale, recent} {
 		if err := queries.SetPersonMonitored(t.Context(), librarydb.SetPersonMonitoredParams{Monitored: 1, ID: id}); err != nil {
 			t.Fatal(err)
@@ -368,9 +369,9 @@ func TestArtistsDueRefresh_StalestMonitoredFirst(t *testing.T) {
 func TestListPeople_DescendingPagesZToA(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
-	resolvePersonNamed(t, people, "artist-1", "Katupoken", "Katupoken")
-	resolvePersonNamed(t, people, "artist-2", "Vutu Doci", "Bush, Vutu")
-	resolvePersonNamed(t, people, "artist-3", "AVEX", "AVEX")
+	resolvePersonNamed(t, people, "artist-1", "Katupoken")
+	resolvePersonNamed(t, people, "artist-2", "Vutu Doci")
+	resolvePersonNamed(t, people, "artist-3", "AVEX")
 
 	var got []string
 	var after library.PersonCursor
@@ -385,7 +386,7 @@ func TestListPeople_DescendingPagesZToA(t *testing.T) {
 		got = append(got, page[0].SortName)
 		after = library.PersonCursor{SortName: page[0].SortName, ID: page[0].ID}
 	}
-	if want := []string{"Katupoken", "Bush, Vutu", "AVEX"}; !slices.Equal(got, want) {
+	if want := []string{"Vutu Doci", "Katupoken", "AVEX"}; !slices.Equal(got, want) {
 		t.Errorf("order = %q, want %q", got, want)
 	}
 }

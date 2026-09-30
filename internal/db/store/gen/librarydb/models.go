@@ -698,6 +698,11 @@ type Work struct {
 	PrimaryType           sql.NullString
 }
 
+type WorkArrival struct {
+	WorkID    int64
+	ArrivedAt int64
+}
+
 type WorkCertification struct {
 	WorkID int64
 	System string

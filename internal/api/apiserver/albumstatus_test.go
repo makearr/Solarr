@@ -13,7 +13,7 @@ func TestAlbumStatus_DecidesTheColourInPrecedenceOrder(t *testing.T) {
 	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
 	future := now.Add(24 * time.Hour)
 	past := now.Add(-24 * time.Hour)
-	complete, missing := "COMPLETE", "MISSING"
+	complete, missing, upgradable := "COMPLETE", "MISSING", "UPGRADABLE"
 
 	cases := []struct {
 		name string
@@ -34,6 +34,11 @@ func TestAlbumStatus_DecidesTheColourInPrecedenceOrder(t *testing.T) {
 			name: "a download in flight shows even over a complete album being upgraded",
 			row:  apiserver.PersonWorkRow{AvailableFrom: &past, Downloading: true, WantedState: &complete},
 			want: "downloading",
+		},
+		{
+			name: "every track here but below the cutoff is still green, as Lidarr (found 2026-09-30)",
+			row:  apiserver.PersonWorkRow{WantedState: &upgradable},
+			want: "complete",
 		},
 		{
 			name: "a complete wanted album is green",

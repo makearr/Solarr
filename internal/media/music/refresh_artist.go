@@ -161,7 +161,7 @@ func (j *EnrichJob) refreshDetails(ctx context.Context, personID int64, artistMB
 		return
 	}
 	if err := j.people.BackfillDetails(ctx, personID, library.PersonIdentity{
-		Name: artist.Name, SortName: artist.SortName, Disambiguation: artist.Disambiguation,
+		Name: artist.Name, Disambiguation: artist.Disambiguation,
 		Kind: artist.Type, Gender: artist.Gender, Country: artist.Country, Born: artist.Born, Died: artist.Died,
 	}); err != nil {
 		j.logger.WarnContext(ctx, "artist refresh: details not saved", slog.Int64("person_id", personID), slog.Any("error", err))

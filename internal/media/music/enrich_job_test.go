@@ -675,7 +675,7 @@ func resolveBareArtist(t *testing.T, opened *store.Store, mbid, name string) int
 	t.Helper()
 	personID, err := library.NewPeople(opened).ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 		Provider: music.ProviderArtist, ExternalID: mbid,
-		Person: library.PersonIdentity{Name: name, SortName: name},
+		Person: library.PersonIdentity{Name: name},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)

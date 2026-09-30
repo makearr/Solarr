@@ -24,7 +24,7 @@ const personCoverageColumns = `CAST((SELECT COUNT(*) FROM credit c
       WHERE c.person_id = person.id) AS INTEGER) AS albums_wanted,
    CAST((SELECT COUNT(*) FROM credit c
       JOIN desired_item di ON di.work_id = c.work_id AND di.monitored = 1 AND di.satisfaction_kind = 'SET'
-      WHERE c.person_id = person.id AND di.state = 'COMPLETE') AS INTEGER) AS albums_complete,
+      WHERE c.person_id = person.id AND di.state IN ('COMPLETE', 'UPGRADABLE')) AS INTEGER) AS albums_complete,
    EXISTS (SELECT 1 FROM credit c
       JOIN desired_item di ON di.work_id = c.work_id
       JOIN acquisition a ON a.desired_item_id = di.id

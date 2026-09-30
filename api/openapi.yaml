@@ -1784,8 +1784,10 @@ paths:
           description: >-
             Which column orders the list; title is the default. artist orders by
             the primary artist's sort name, then title -- the Albums view's
-            grouping -- with a work that has no artist first.
-          schema: { type: string, enum: [title, year, added, artist, searched] }
+            grouping -- with a work that has no artist first. imported orders by when
+            the newest file arrived and lists only works with files (the dashboard's
+            Recently added).
+          schema: { type: string, enum: [title, year, added, artist, searched, imported] }
         - name: dir
           in: query
           schema: { type: string, enum: [asc, desc], default: asc }

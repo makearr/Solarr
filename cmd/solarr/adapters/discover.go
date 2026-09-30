@@ -79,7 +79,7 @@ func (a Discover) creditArtists(ctx context.Context, now time.Time, workID int64
 		}
 		personID, err := a.People.ResolvePerson(ctx, now, library.PersonLink{
 			Provider: music.ProviderArtist, ExternalID: credit.MBID,
-			Person: library.PersonIdentity{Name: name, SortName: name},
+			Person: library.PersonIdentity{Name: name},
 		})
 		if err != nil {
 			continue
@@ -194,7 +194,7 @@ func (a Discover) addArtist(
 	personID, err := a.People.ResolvePerson(ctx, now, library.PersonLink{
 		Provider: music.ProviderArtist, ExternalID: externalID,
 		Person: library.PersonIdentity{
-			Name: artist.Name, SortName: artist.SortName, Disambiguation: artist.Disambiguation,
+			Name: artist.Name, Disambiguation: artist.Disambiguation,
 			Kind: artist.Type, Gender: artist.Gender, Country: artist.Country,
 			Born: artist.Born, Died: artist.Died,
 		},

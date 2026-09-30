@@ -229,7 +229,7 @@ func TestCategoryCounters_CountsPartsAndArtistCredits(t *testing.T) {
 
 	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 		Provider: "test", ExternalID: "artist-a",
-		Person: library.PersonIdentity{Name: "Artist A", SortName: "Artist A"},
+		Person: library.PersonIdentity{Name: "Artist A"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
@@ -276,7 +276,7 @@ func TestArtists_AMonitoredArtistBelongsToTheirLibraryAtOnce(t *testing.T) {
 	people := library.NewPeople(opened)
 	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 		Provider: "musicbrainz:artist", ExternalID: "heka",
-		Person: library.PersonIdentity{Name: "Heka", SortName: "Heka"},
+		Person: library.PersonIdentity{Name: "Heka"},
 	})
 	if err != nil {
 		t.Fatal(err)

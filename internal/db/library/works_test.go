@@ -226,7 +226,7 @@ func TestListWorks_ArtistIsThePersonCreditedInTheArtistRole(t *testing.T) {
 
 	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 		Provider: "musicbrainz:artist", ExternalID: "artist-1",
-		Person: library.PersonIdentity{Name: "Katupoken", SortName: "Katupoken"},
+		Person: library.PersonIdentity{Name: "Katupoken"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
@@ -306,7 +306,7 @@ func TestListWorks_SortByArtistGroupsThenOrdersByTitleAcrossPages(t *testing.T) 
 	people := library.NewPeople(opened)
 	setArtist := func(workID int64, sortName string) {
 		t.Helper()
-		personID := resolvePersonNamed(t, people, "artist-"+sortName, sortName, sortName)
+		personID := resolvePersonNamed(t, people, "artist-"+sortName, sortName)
 		if err := queries.SetWorkPrimaryArtist(t.Context(), librarydb.SetWorkPrimaryArtistParams{
 			PrimaryArtistID:       sql.NullInt64{Int64: personID, Valid: true},
 			PrimaryArtistSortName: sql.NullString{String: sortName, Valid: true},
@@ -708,5 +708,42 @@ func TestWanted_AnAlbumWithoutATracklistIsWaitingNotMissing(t *testing.T) {
 	}
 	if len(items) != 1 || items[0].WorkID != missing.ID {
 		t.Errorf("searched items = %+v, want only the album with a tracklist", items)
+	}
+}
+
+// The dashboard's Recently added: newest file first, pages by the arrival cursor, works without files left out.
+func TestListWorks_SortByImportedOrdersByTheNewestFile(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	physical := library.NewPhysical(opened)
+	arrivals := map[string][]int64{"Two Files": {100, 300}, "One File": {200}, "Only Wanted": nil}
+	for title, times := range arrivals {
+		work := createWork(t, opened, "music", title)
+		for index, at := range times {
+			object := registerFileForArtwork(t, physical, 1, fmt.Sprintf("%s/%d.flac", title, index), fmt.Sprintf("%s%d", title, index))
+			if err := opened.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+				return librarydb.New(tx).LinkWorkFile(ctx, librarydb.LinkWorkFileParams{WorkID: work.ID, MediaObjectID: object, FirstSeenAt: at})
+			}); err != nil {
+				t.Fatalf("LinkWorkFile: %v", err)
+			}
+		}
+	}
+
+	var got []string
+	var after library.WorkCursor
+	for {
+		page, err := works.List(t.Context(), library.WorkFilter{Sort: library.WorkSortImported, Direction: library.SortDescending}, after, 1)
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(page) == 0 {
+			break
+		}
+		got = append(got, fmt.Sprintf("%s@%d", page[0].CanonicalTitle, page[0].ArrivedAt))
+		after = library.WorkCursor{SortImported: page[0].ArrivedAt, ID: page[0].ID}
+	}
+	want := []string{"Two Files@300", "One File@200"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("order = %v, want %v", got, want)
 	}
 }
