@@ -27,6 +27,8 @@ type Querier interface {
 	AddWorkTitle(ctx context.Context, arg AddWorkTitleParams) (WorkTitle, error)
 	// excluded.value is the delta: sqlc cannot substitute a named argument inside DO UPDATE.
 	AdjustCounter(ctx context.Context, arg AdjustCounterParams) error
+	// Whether any unverified album exists, so a scan skips the per-file check on a library with none.
+	AnyUnverifiedWork(ctx context.Context) (int64, error)
 	AssignTag(ctx context.Context, arg AssignTagParams) error
 	AttachFile(ctx context.Context, arg AttachFileParams) error
 	// Fills in only the person columns still empty, never overwriting one that
@@ -201,6 +203,7 @@ type Querier interface {
 	// widened the key). Removing an album is removing the intent to have it.
 	// A download's record outlives the want it served: history keeps its own copy of the names.
 	DetachAcquisitionsForWork(ctx context.Context, workID int64) error
+	DetachDesiredFileForWork(ctx context.Context, arg DetachDesiredFileForWorkParams) error
 	DetachDesiredFilesForWork(ctx context.Context, workID int64) error
 	// Removes the file from the item entirely, every part it covered with it.
 	DetachFile(ctx context.Context, arg DetachFileParams) error
@@ -541,6 +544,8 @@ type Querier interface {
 	// what distinguishes the two, since nothing sets it before the IMPORTING
 	// phase runs.
 	ListUnplacedCommitUnits(ctx context.Context, sessionID int64) ([]ImportUnit, error)
+	// The unverified albums (only local ids, D6) a file is linked to, for when it is identified.
+	ListUnverifiedWorksForFile(ctx context.Context, mediaObjectID int64) ([]int64, error)
 	// RSS sync: the monitored, incomplete albums credited to an artist of this name, ignoring case.
 	ListWantedAlbumsByArtistName(ctx context.Context, arg ListWantedAlbumsByArtistNameParams) ([]int64, error)
 	ListWorkClassifications(ctx context.Context, workID int64) ([]WorkClassification, error)
@@ -768,6 +773,7 @@ type Querier interface {
 	// missing mark (section 10.4): a file coming back is exactly the case this exists
 	// for.
 	TouchLibraryPath(ctx context.Context, arg TouchLibraryPathParams) error
+	UnlinkWorkFile(ctx context.Context, arg UnlinkWorkFileParams) error
 	UnlinkWorkFiles(ctx context.Context, workID int64) error
 	// A library's "Unmonitor Deleted Tracks": items holding a file a full scan just found gone.
 	UnmonitorDesiredItemsWithMissingFiles(ctx context.Context, arg UnmonitorDesiredItemsWithMissingFilesParams) (int64, error)
@@ -793,7 +799,8 @@ type Querier interface {
 	// F29: the manual identification queue (migration 0014). Column lists follow table
 	// order, or sqlc stops reusing models.
 	// A file marked "not media" is never queued again, nor one that already belongs to a work: a
-	// person's resolve survives a full rescan the chain still cannot decide (found 2026-09-24).
+	// person's resolve survives a full rescan the chain still cannot decide (found 2026-09-24). An
+	// unverified album (only local ids, D6) does not count: its files still await identification.
 	UpsertUnidentified(ctx context.Context, arg UpsertUnidentifiedParams) error
 	// A placeholder whose release no source knows any more, replaced by one chosen from the files:
 	// no longer a placeholder, so enrichment stops asking about it.

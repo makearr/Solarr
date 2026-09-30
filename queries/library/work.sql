@@ -417,3 +417,23 @@ SELECT CAST(COUNT(*) AS INTEGER) AS total FROM desired_item WHERE work_id = ? AN
 
 -- name: ResetDesiredItemsForWork :exec
 UPDATE desired_item SET present_count = 0, state = 'MISSING', dirty = 1 WHERE work_id = ?;
+
+-- The unverified albums (only local ids, D6) a file is linked to, for when it is identified.
+-- name: ListUnverifiedWorksForFile :many
+SELECT wf.work_id FROM work_file wf
+WHERE wf.media_object_id = ?
+  AND EXISTS (SELECT 1 FROM work_external_id ux WHERE ux.work_id = wf.work_id)
+  AND NOT EXISTS (SELECT 1 FROM work_external_id vx WHERE vx.work_id = wf.work_id AND vx.provider NOT LIKE 'local:%')
+ORDER BY wf.work_id;
+
+-- name: UnlinkWorkFile :exec
+DELETE FROM work_file WHERE work_id = ? AND media_object_id = ?;
+
+-- name: DetachDesiredFileForWork :exec
+DELETE FROM desired_item_file
+WHERE media_object_id = sqlc.arg(media_object_id)
+  AND desired_item_id IN (SELECT id FROM desired_item WHERE work_id = sqlc.arg(work_id));
+
+-- Whether any unverified album exists, so a scan skips the per-file check on a library with none.
+-- name: AnyUnverifiedWork :one
+SELECT CAST(EXISTS (SELECT 1 FROM work_external_id WHERE provider = 'local:album') AS INTEGER) AS present;

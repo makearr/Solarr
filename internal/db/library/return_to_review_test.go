@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/identify/model"
 )
@@ -16,7 +17,7 @@ var retiredHint = model.Identification{
 }
 
 // albumWithFiles is a work holding two files on disk and its album item with both attached.
-func albumWithFiles(t *testing.T, addedBy *int64) (int64, []int64, *librarydb.Queries, library.Identity) {
+func albumWithFiles(t *testing.T, addedBy *int64) (int64, []int64, *librarydb.Queries, library.Identity, *store.Store) {
 	t.Helper()
 	opened, queries := newLibrary(t)
 	work := createWork(t, opened, "music", "Detisisu Binip")
@@ -41,13 +42,13 @@ func albumWithFiles(t *testing.T, addedBy *int64) (int64, []int64, *librarydb.Qu
 		})
 		attach(t, opened, item.ID, file.MediaObjectID, "primary", string(rune('1'+index)))
 	}
-	return work.ID, ids, queries, library.NewIdentity(opened)
+	return work.ID, ids, queries, library.NewIdentity(opened), opened
 }
 
 // M1f: an album whose release group no longer exists anywhere goes back to Review file by file,
 // with the retired id as a hint, and the work nobody asked for is gone.
 func TestReturnToReview_QueuesTheFilesAndDeletesAnUnaskedWork(t *testing.T) {
-	workID, files, queries, identity := albumWithFiles(t, nil)
+	workID, files, queries, identity, _ := albumWithFiles(t, nil)
 
 	returned, err := identity.ReturnToReview(t.Context(), workID, retiredHint, 5)
 	if err != nil || returned != (library.ReturnedToReview{Files: 2, WorkDeleted: true}) {
@@ -67,7 +68,7 @@ func TestReturnToReview_QueuesTheFilesAndDeletesAnUnaskedWork(t *testing.T) {
 // A work a person added stays wanted, now MISSING, so it can be searched for once identified again.
 func TestReturnToReview_KeepsAWorkAPersonAdded(t *testing.T) {
 	person := int64(1)
-	workID, _, queries, identity := albumWithFiles(t, &person)
+	workID, _, queries, identity, _ := albumWithFiles(t, &person)
 
 	returned, err := identity.ReturnToReview(t.Context(), workID, retiredHint, 5)
 	if err != nil || returned != (library.ReturnedToReview{Files: 2}) {
@@ -79,5 +80,29 @@ func TestReturnToReview_KeepsAWorkAPersonAdded(t *testing.T) {
 	}
 	if files, err := queries.CountWorkFiles(t.Context(), workID); err != nil || files != 0 {
 		t.Errorf("work still holds %d files, %v", files, err)
+	}
+}
+
+// D6: files of an unverified album are identified one at a time from Unidentified; the album keeps the
+// rest until its last file leaves, then goes.
+func TestLeaveUnverified_TheAlbumGoesWithItsLastFile(t *testing.T) {
+	workID, files, queries, identity, opened := albumWithFiles(t, nil)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.LinkWorkExternalID(ctx, librarydb.LinkWorkExternalIDParams{
+			Provider: "local:album", ExternalID: "/music/unsorted|unsorted", WorkID: workID, Confidence: 0.1, FirstSeenAt: 1,
+		})
+	})
+	if present, err := identity.AnyUnverified(t.Context()); err != nil || !present {
+		t.Fatalf("AnyUnverified = %v, %v; want true", present, err)
+	}
+
+	if deleted, err := identity.LeaveUnverified(t.Context(), files[:1]); err != nil || deleted != 0 {
+		t.Fatalf("first file: deleted %d, %v; want the album kept", deleted, err)
+	}
+	if left, err := queries.CountWorkFiles(t.Context(), workID); err != nil || left != 1 {
+		t.Fatalf("files left = %d, %v; want 1", left, err)
+	}
+	if deleted, err := identity.LeaveUnverified(t.Context(), files[1:]); err != nil || deleted != 1 {
+		t.Fatalf("last file: deleted %d, %v; want the album gone", deleted, err)
 	}
 }

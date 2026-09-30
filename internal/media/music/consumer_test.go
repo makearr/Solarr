@@ -346,7 +346,7 @@ func TestObserve_TwoTracksOfOneAlbumShareOneWork(t *testing.T) {
 	}
 }
 
-func TestObserve_NoMBIDStillRegistersThePhysicalFileButNoWork(t *testing.T) {
+func TestObserve_NoMBIDStillRegistersThePhysicalFileAsAnUnverifiedAlbum(t *testing.T) {
 	consumer, opened, fsys := newConsumer(t)
 	content := []byte("an unidentified file, tagged with nothing useful")
 	writeMusicFile(t, fsys, "Unsorted/track.mp3", content)
@@ -359,18 +359,24 @@ func TestObserve_NoMBIDStillRegistersThePhysicalFileButNoWork(t *testing.T) {
 	}
 
 	queries := librarydb.New(opened.Read())
-	if _, err := queries.GetPathByLocation(t.Context(), librarydb.GetPathByLocationParams{
+	path, err := queries.GetPathByLocation(t.Context(), librarydb.GetPathByLocationParams{
 		RootFolderID: 1, RelPath: "Unsorted/track.mp3",
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("GetPathByLocation: %v", err)
 	}
 
+	// D6: nothing here carries an identity, so the folder is an unverified album named after itself,
+	// and the file still waits in Unidentified for a person to identify it.
 	works, err := library.NewWorks(opened).List(t.Context(), library.WorkFilter{}, library.WorkCursor{}, 50)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(works) != 0 {
-		t.Errorf("work count = %d, want 0 -- nothing here carries an identity", len(works))
+	if len(works) != 1 || !works[0].Unverified || works[0].CanonicalTitle != "Unsorted" {
+		t.Fatalf("works = %+v, want one unverified album called Unsorted", works)
+	}
+	if _, err := queries.GetUnidentified(t.Context(), path.MediaObjectID); err != nil {
+		t.Errorf("the file left the Unidentified queue: %v", err)
 	}
 }
 

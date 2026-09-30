@@ -77,6 +77,7 @@ type Consumer struct {
 	// discovery, never a panic -- discoverWanted checks desired/categories
 	// before touching either.
 	desired          *library.Desired
+	people           *library.People
 	categories       Categories
 	defaultProfileID int64
 	threshold        func() float64
@@ -118,8 +119,10 @@ type ConsumerConfig struct {
 	// Desired, Categories and DefaultProfileID together turn on section 19.6's
 	// scan-time discovery. DefaultProfileID is used when a category has no
 	// quality profile of its own configured yet (todo 4.3's own gap).
-	Desired          *library.Desired
-	Categories       Categories
+	Desired    *library.Desired
+	Categories Categories
+	// People credits an unverified album's artist (D6); optional.
+	People           *library.People
 	DefaultProfileID int64
 }
 
@@ -141,6 +144,7 @@ func NewConsumer(config ConsumerConfig) Consumer {
 		fingerprints: config.Fingerprints, acoustID: config.AcoustID, tracks: config.Tracks,
 		clock: config.Clock, chain: chain, threshold: config.Threshold, logger: logger,
 		desired: config.Desired, categories: config.Categories, defaultProfileID: config.DefaultProfileID,
+		people: config.People,
 	}
 }
 
@@ -232,10 +236,67 @@ func (c Consumer) Observe(
 	if err := c.discoverWanted(ctx, categoryID, workIDs, trackFiles); err != nil {
 		return fmt.Errorf("music: %w", err)
 	}
+	if err := c.settleUnverified(ctx, links, workIDs, out.unverifiedArtist, resolved); err != nil {
+		return fmt.Errorf("music: %w", err)
+	}
 
 	c.logger.Info("scan batch recorded",
 		slog.Int64("root_folder_id", root.ID), slog.Int("files", len(readable)),
-		slog.Int("identified", len(links)), slog.Int("queued", len(queued)))
+		slog.Int("identified", len(resolved)), slog.Int("queued", len(queued)), slog.Int("unverified", len(links)-len(resolved)))
+	return nil
+}
+
+// settleUnverified keeps a new unverified album unmonitored with its artist credited (D6), and takes
+// files identified this sweep off any unverified album they were on.
+func (c Consumer) settleUnverified(
+	ctx context.Context, links []library.WorkLink, workIDs []int64, artist string, resolved []int64,
+) error {
+	settled := map[int64]bool{}
+	for index, link := range links {
+		workID := workIDs[index]
+		if link.Provider != ProviderLocalAlbum || settled[workID] {
+			continue
+		}
+		settled[workID] = true
+		if err := c.unmonitorWork(ctx, workID); err != nil {
+			return err
+		}
+		if artist != "" && c.people != nil {
+			personID, err := c.people.ResolvePerson(ctx, c.clock.Now(), library.PersonLink{
+				Provider: ProviderLocalArtist, ExternalID: strings.ToLower(artist),
+				Person: library.PersonIdentity{Name: artist, SortName: artist},
+			})
+			if err != nil {
+				return err
+			}
+			if err := c.people.AddCredit(ctx, workID, personID, CreditRoleArtist, 0); err != nil {
+				return err
+			}
+		}
+	}
+	if len(resolved) == 0 {
+		return nil
+	}
+	if present, err := c.identity.AnyUnverified(ctx); err != nil || !present {
+		return err
+	}
+	_, err := c.identity.LeaveUnverified(ctx, resolved)
+	return err
+}
+
+func (c Consumer) unmonitorWork(ctx context.Context, workID int64) error {
+	if c.desired == nil {
+		return nil
+	}
+	items, err := c.desired.AlbumItemsForWork(ctx, workID)
+	if err != nil {
+		return err
+	}
+	for _, item := range items {
+		if err := c.desired.SetItemMonitored(ctx, item.ID, false); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -298,6 +359,9 @@ func (c Consumer) identifyBatch(
 			Work: newWorkIdentity(one), RootFolderID: rootFolderID, MediaObjectID: mediaObjectIDs[file.index],
 		}, ReadTrackFile(mediaObjectIDs[file.index], one.Probe.Tags))
 	}
+	if len(out.links) == 0 && len(pending) > 0 {
+		out.addUnverified(pending)
+	}
 	return out
 }
 
@@ -316,6 +380,8 @@ type batchResult struct {
 	trackFiles []TrackFile
 	queued     []library.QueueEntry
 	resolved   []int64
+	// unverifiedArtist names the artist of a folder added as an unverified album (D6); empty otherwise.
+	unverifiedArtist string
 
 	// passes and outcomes are the attempt record, per batch index, for files past their embedded tags.
 	passes   map[int][]library.AttemptPass
@@ -332,6 +398,32 @@ func (r *batchResult) identify(index int, link library.WorkLink, file TrackFile)
 	r.links = append(r.links, link)
 	r.trackFiles = append(r.trackFiles, file)
 	r.outcomes[index] = AttemptIdentified
+}
+
+// addUnverified makes a folder nothing identified one unverified album named by its tags or folder (D6):
+// browsable, its files still in Unidentified until someone identifies them.
+func (r *batchResult) addUnverified(pending []pendingFile) {
+	first := r.observed[pending[0].index]
+	work := newWorkIdentity(first)
+	folder := path.Dir(first.File.RelPath)
+	key := strings.ToLower(path.Join(r.rootPath, folder)) + "|" + strings.ToLower(work.CanonicalTitle)
+	r.unverifiedArtist = first.Probe.Tags.First("albumartist", "album_artist", "artist")
+	if r.unverifiedArtist == "" {
+		r.unverifiedArtist, _ = folderNames(r.rootPath, folder)
+	}
+	for _, file := range pending {
+		one := r.observed[file.index]
+		r.linkUnverified(library.WorkLink{
+			Provider: ProviderLocalAlbum, ExternalID: key, Confidence: unverifiedConfidence,
+			Work: work, RootFolderID: r.rootFolderID, MediaObjectID: r.mediaObjectIDs[file.index],
+		}, ReadTrackFile(r.mediaObjectIDs[file.index], one.Probe.Tags))
+	}
+}
+
+// linkUnverified links a file to its folder's unverified album without resolving it: it stays queued (D6).
+func (r *batchResult) linkUnverified(link library.WorkLink, file TrackFile) {
+	r.links = append(r.links, link)
+	r.trackFiles = append(r.trackFiles, file)
 }
 
 func (r *batchResult) queue(index int, candidates []model.Identification) {
