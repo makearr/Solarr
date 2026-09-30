@@ -24,7 +24,7 @@ const unverifiedConfidence = 0.1
 
 // LocalNames are the artist and album an unidentified unit calls itself: tags first, then its folder
 // read as a release name.
-func LocalNames(ctx context.Context, unit inspect.Unit, tags Resolved) (artist, album string, err error) {
+func LocalNames(ctx context.Context, sourceRoot string, unit inspect.Unit, tags Resolved) (artist, album string, err error) {
 	if len(unit.Media) > 0 {
 		representative, err := tags.TagsFor(ctx, model.FileRef{RelPath: unit.Media[0].RelPath})
 		if err != nil {
@@ -33,23 +33,27 @@ func LocalNames(ctx context.Context, unit inspect.Unit, tags Resolved) (artist, 
 		artist = representative.First("albumartist", "album_artist", "artist")
 		album = representative.First("album")
 	}
-	folder := parse.Parse(path.Base(unit.Directory)).Identity
+	folderArtist, folderAlbum := folderNames(sourceRoot, unit.Directory)
 	if artist == "" {
-		artist = folder.Artist
+		artist = folderArtist
 	}
 	if album == "" {
-		album = cmpOr(folder.Album, path.Base(unit.Directory))
+		album = folderAlbum
 	}
 	return strings.TrimSpace(artist), strings.TrimSpace(album), nil
 }
 
-func cmpOr(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
+// folderNames reads a unit's own folder as a release name ("Artist-Album-2001-WEB"): the folder, not
+// its parent (a nested Artist/Album was named after the artist), and not "." when the imported
+// folder is the album itself.
+func folderNames(sourceRoot, directory string) (artist, album string) {
+	folder := path.Base(path.Join(sourceRoot, directory))
+	parsed := parse.Parse(folder).Identity
+	album = parsed.Album
+	if strings.TrimSpace(album) == "" {
+		album = folder
 	}
-	return ""
+	return parsed.Artist, album
 }
 
 // localAlbumKey is one unverified album per source folder (D17): two folders with the same sloppy
@@ -64,7 +68,7 @@ func localAlbumKey(sourceRoot, directory, album string) string {
 func (c Committer) CommitUnverifiedUnit(
 	ctx context.Context, sourceRoot string, unit inspect.Unit, tags Resolved, categoryID int64, ladder []string,
 ) (Placed, error) {
-	artist, album, err := LocalNames(ctx, unit, tags)
+	artist, album, err := LocalNames(ctx, sourceRoot, unit, tags)
 	if err != nil {
 		return Placed{}, fmt.Errorf("music: unverified unit %q: %w", unit.Directory, err)
 	}
