@@ -133,6 +133,8 @@ type WorkListRow struct {
 	OnDisk bool
 	// LastSearchedAt is when any of the work's desired items was last searched; 0 is never.
 	LastSearchedAt int64
+	// Unverified is an album known only by its own tags or folder: every id it has is local (D6).
+	Unverified bool
 }
 
 // Works reads the library list surface.
@@ -203,6 +205,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		",\n       EXISTS (SELECT 1 FROM work_root_folder wrf WHERE wrf.work_id = work.id) AS on_disk" +
 		",\n       COALESCE(work.primary_artist_sort_name, '') AS artist_sort" +
 		",\n       " + lastSearchedColumn + " AS last_searched" +
+		",\n       " + unverifiedColumn + " AS unverified" +
 		"\nFROM work" + workArtistJoin +
 		predicates.Where() + "\nORDER BY " + orderBy + "\nLIMIT ?"
 	return query, predicates.Args(pageSize)
@@ -223,6 +226,10 @@ func sortColumn(sort WorkSort, after WorkCursor) (column string, cursorValue any
 		return "work.sort_title", after.SortTitle
 	}
 }
+
+// unverifiedColumn is D6's "only local ids", over the per-work external-id index.
+const unverifiedColumn = "(EXISTS (SELECT 1 FROM work_external_id ux WHERE ux.work_id = work.id) AND " +
+	"NOT EXISTS (SELECT 1 FROM work_external_id vx WHERE vx.work_id = work.id AND vx.provider NOT LIKE 'local:%'))"
 
 // lastSearchedColumn is when the work was last searched, 0 for never. Not indexed: the only list
 // sorting on it is Wanted, which holds the incomplete albums alone.
@@ -337,7 +344,7 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 			&work.OriginalLanguage, &work.Year, &work.RuntimeMs, &work.AddedAt,
 			&work.UpdatedAt, &work.AddedBy, &work.Artist, &work.WantedState,
 			&work.PresentCount, &work.RequiredCount, &work.AvailableFrom, &work.Downloading,
-			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt); err != nil {
+			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt, &work.Unverified); err != nil {
 			return nil, fmt.Errorf("library: scan work: %w", err)
 		}
 		works = append(works, work)

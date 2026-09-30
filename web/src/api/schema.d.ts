@@ -3795,6 +3795,8 @@ export interface components {
              * @description When the album was last searched. Absent means never.
              */
             last_searched_at?: string;
+            /** @description Known only by its own tags or folder (D6): no metadata source recognised it. Absent means false. */
+            unverified?: boolean;
             /**
              * @description Set when this work has a monitored desired_item, regardless of whether the wanted filter was used.
              * @enum {string}
@@ -4427,7 +4429,7 @@ export interface components {
              * @description The colour this album carries wherever it is listed -- green complete, red incomplete, purple downloading, yellow not released yet. Unreleased outranks everything: an album that is not out is not missing.
              * @enum {string}
              */
-            status: "complete" | "incomplete" | "downloading" | "unreleased";
+            status: "complete" | "incomplete" | "downloading" | "unreleased" | "unverified";
         };
         PersonDetail: components["schemas"]["Person"] & {
             /** @description A Wikidata-sourced extract, when available (ADR-8). */
@@ -5232,7 +5234,7 @@ export interface components {
              * @description PersonWork.status' own vocabulary, so the poster wall and the artist page colour a row the same way. Absent on a level with nothing to colour.
              * @enum {string}
              */
-            status?: "complete" | "incomplete" | "downloading" | "unreleased";
+            status?: "complete" | "incomplete" | "downloading" | "unreleased" | "unverified";
         };
         LibraryLevelPage: {
             items: components["schemas"]["LibraryLevelItem"][];

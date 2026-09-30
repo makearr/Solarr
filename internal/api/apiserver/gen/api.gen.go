@@ -298,6 +298,7 @@ const (
 	LibraryLevelItemStatusDownloading LibraryLevelItemStatus = "downloading"
 	LibraryLevelItemStatusIncomplete  LibraryLevelItemStatus = "incomplete"
 	LibraryLevelItemStatusUnreleased  LibraryLevelItemStatus = "unreleased"
+	LibraryLevelItemStatusUnverified  LibraryLevelItemStatus = "unverified"
 )
 
 // Defines values for LogoutStatusStatus.
@@ -403,6 +404,7 @@ const (
 	PersonWorkStatusDownloading PersonWorkStatus = "downloading"
 	PersonWorkStatusIncomplete  PersonWorkStatus = "incomplete"
 	PersonWorkStatusUnreleased  PersonWorkStatus = "unreleased"
+	PersonWorkStatusUnverified  PersonWorkStatus = "unverified"
 )
 
 // Defines values for PersonWorkWantedState.
@@ -3096,7 +3098,10 @@ type Work struct {
 	MediaType      string     `json:"media_type"`
 	SortTitle      string     `json:"sort_title"`
 	Title          string     `json:"title"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+
+	// Unverified Known only by its own tags or folder (D6): no metadata source recognised it. Absent means false.
+	Unverified *bool     `json:"unverified,omitempty"`
+	UpdatedAt  time.Time `json:"updated_at"`
 
 	// WantedState Set when this work has a monitored desired_item, regardless of whether the wanted filter was used.
 	WantedState *WorkWantedState `json:"wanted_state,omitempty"`
