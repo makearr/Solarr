@@ -550,6 +550,19 @@ const (
 	UpdateDownloaderRequestProtocolUsenet  UpdateDownloaderRequestProtocol = "usenet"
 )
 
+// Defines values for WantedAutomaticSearch.
+const (
+	WantedAutomaticSearchDownloading       WantedAutomaticSearch = "downloading"
+	WantedAutomaticSearchHeld              WantedAutomaticSearch = "held"
+	WantedAutomaticSearchNoIndexer         WantedAutomaticSearch = "no_indexer"
+	WantedAutomaticSearchNoRoom            WantedAutomaticSearch = "no_room"
+	WantedAutomaticSearchNotPlanned        WantedAutomaticSearch = "not_planned"
+	WantedAutomaticSearchNotWanted         WantedAutomaticSearch = "not_wanted"
+	WantedAutomaticSearchOff               WantedAutomaticSearch = "off"
+	WantedAutomaticSearchScheduled         WantedAutomaticSearch = "scheduled"
+	WantedAutomaticSearchWaitingForRelease WantedAutomaticSearch = "waiting_for_release"
+)
+
 // Defines values for WantedState.
 const (
 	WantedStateCOMPLETE   WantedState = "COMPLETE"
@@ -3035,17 +3048,25 @@ type UserLimits struct {
 
 // Wanted The work's own album-level SET desired_item (section 19.6) -- what makes "9 of 12 tracks" a fact rather than on_disk's coarse badge.
 type Wanted struct {
-	Id int64 `json:"id"`
+	// AutomaticSearch Why the album is or is not searched on its own (F2), for an album only: the first of downloading, held (found, waiting for room in the client), no_indexer, off (no searches per hour), no_room (library below its free-space reserve), not_planned (just added; planned within 5 minutes), waiting_for_release, scheduled; not_wanted when it is unmonitored or complete.
+	AutomaticSearch *WantedAutomaticSearch `json:"automatic_search,omitempty"`
+	Id              int64                  `json:"id"`
 
 	// LastSearchedAt Unix seconds of the last search for this item; absent means never.
 	LastSearchedAt *int64 `json:"last_searched_at,omitempty"`
 	Monitored      bool   `json:"monitored"`
-	PresentCount   int64  `json:"present_count"`
+
+	// NextSearchAt Unix seconds from when the automatic search may search this album again; absent when it will not (see automatic_search). Searched at the first hunt run after it, budget allowing.
+	NextSearchAt *int64 `json:"next_search_at,omitempty"`
+	PresentCount int64  `json:"present_count"`
 
 	// RequiredCount Null until a tracklist has been enriched -- never a guessed zero.
 	RequiredCount *int64      `json:"required_count"`
 	State         WantedState `json:"state"`
 }
+
+// WantedAutomaticSearch Why the album is or is not searched on its own (F2), for an album only: the first of downloading, held (found, waiting for room in the client), no_indexer, off (no searches per hour), no_room (library below its free-space reserve), not_planned (just added; planned within 5 minutes), waiting_for_release, scheduled; not_wanted when it is unmonitored or complete.
+type WantedAutomaticSearch string
 
 // WantedState defines model for Wanted.State.
 type WantedState string

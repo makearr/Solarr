@@ -133,6 +133,18 @@ func (q *Queries) CountDesiredItemsByState(ctx context.Context, categoryID int64
 	return items, nil
 }
 
+const countHeldForItem = `-- name: CountHeldForItem :one
+SELECT COUNT(*) AS held FROM ready_queue WHERE desired_item_id = ?
+`
+
+// ready_queue is bounded (section 10.5), so no index is needed to ask this.
+func (q *Queries) CountHeldForItem(ctx context.Context, desiredItemID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countHeldForItem, desiredItemID)
+	var held int64
+	err := row.Scan(&held)
+	return held, err
+}
+
 const countPrimaryFiles = `-- name: CountPrimaryFiles :one
 SELECT COUNT(DISTINCT media_ref) AS covered
 FROM desired_item_file WHERE desired_item_id = ? AND role = 'primary'
@@ -401,6 +413,29 @@ func (q *Queries) GetDesiredItem(ctx context.Context, id int64) (DesiredItem, er
 		&i.Generation,
 		&i.LastPlannedAt,
 		&i.AddedBy,
+	)
+	return i, err
+}
+
+const getHuntEntry = `-- name: GetHuntEntry :one
+SELECT desired_item_id, class, priority, last_searched_at, release_date,
+       eligible_after, search_count, queued_since
+FROM hunt_queue WHERE desired_item_id = ?
+`
+
+// An album's page says when it is next searched, and why not (F2).
+func (q *Queries) GetHuntEntry(ctx context.Context, desiredItemID int64) (HuntQueue, error) {
+	row := q.db.QueryRowContext(ctx, getHuntEntry, desiredItemID)
+	var i HuntQueue
+	err := row.Scan(
+		&i.DesiredItemID,
+		&i.Class,
+		&i.Priority,
+		&i.LastSearchedAt,
+		&i.ReleaseDate,
+		&i.EligibleAfter,
+		&i.SearchCount,
+		&i.QueuedSince,
 	)
 	return i, err
 }

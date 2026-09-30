@@ -359,3 +359,13 @@ WHERE p.name = sqlc.arg(name) COLLATE NOCASE
   AND di.monitored = 1 AND di.state IN ('MISSING', 'PARTIAL') AND di.satisfaction_kind = 'SET'
 ORDER BY di.id
 LIMIT sqlc.arg(page_size);
+
+-- An album's page says when it is next searched, and why not (F2).
+-- name: GetHuntEntry :one
+SELECT desired_item_id, class, priority, last_searched_at, release_date,
+       eligible_after, search_count, queued_since
+FROM hunt_queue WHERE desired_item_id = ?;
+
+-- ready_queue is bounded (section 10.5), so no index is needed to ask this.
+-- name: CountHeldForItem :one
+SELECT COUNT(*) AS held FROM ready_queue WHERE desired_item_id = ?;

@@ -9,7 +9,11 @@ import (
 )
 
 // WorkDetail satisfies apiserver.WorkDetailReader over library.Works.
-type WorkDetail struct{ Works library.Works }
+type WorkDetail struct {
+	Works library.Works
+	// SearchStatus answers an album's last and next automatic search and why (F2); optional.
+	SearchStatus func(ctx context.Context, itemID int64) (apiserver.WantedRow, error)
+}
 
 func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.WorkDetailRow, error) {
 	detail, err := a.Works.Detail(ctx, id)
@@ -53,6 +57,14 @@ func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.Work
 			ID: detail.Wanted.ID, Monitored: detail.Wanted.Monitored,
 			RequiredCount: detail.Wanted.RequiredCount, PresentCount: detail.Wanted.PresentCount,
 			State: detail.Wanted.State,
+		}
+		if a.SearchStatus != nil {
+			status, err := a.SearchStatus(ctx, detail.Wanted.ID)
+			if err != nil {
+				return apiserver.WorkDetailRow{}, err
+			}
+			row.Wanted.LastSearchedAt, row.Wanted.NextSearchAt = status.LastSearchedAt, status.NextSearchAt
+			row.Wanted.AutomaticSearch = status.AutomaticSearch
 		}
 	}
 	return row, nil

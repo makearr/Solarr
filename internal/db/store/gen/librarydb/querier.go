@@ -72,6 +72,8 @@ type Querier interface {
 	CountFreshWorks(ctx context.Context, arg CountFreshWorksParams) (int64, error)
 	// Recomputable from the observations, which is why they are kept individually.
 	CountGroupOutcomes(ctx context.Context, arg CountGroupOutcomesParams) ([]CountGroupOutcomesRow, error)
+	// ready_queue is bounded (section 10.5), so no index is needed to ask this.
+	CountHeldForItem(ctx context.Context, desiredItemID int64) (int64, error)
 	// A download folder imports each entry once: any session, finished or dismissed, counts.
 	CountImportSessionsForSource(ctx context.Context, sourcePath string) (int64, error)
 	// One row per (unit, method) for a whole session, so the import screen can
@@ -257,6 +259,8 @@ type Querier interface {
 	GetEditionByExternalID(ctx context.Context, arg GetEditionByExternalIDParams) (Edition, error)
 	// Scoring reads the bounded value, never the raw rate (ADR-45).
 	GetGroupReputation(ctx context.Context, releaseGroup string) (GroupReputation, error)
+	// An album's page says when it is next searched, and why not (F2).
+	GetHuntEntry(ctx context.Context, desiredItemID int64) (HuntQueue, error)
 	// The composite priority a held release goes out in (ADR-36).
 	GetHuntPriority(ctx context.Context, desiredItemID int64) (int64, error)
 	GetImportSession(ctx context.Context, id int64) (ImportSession, error)
