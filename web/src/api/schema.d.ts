@@ -7396,6 +7396,8 @@ export interface operations {
                 fresh?: boolean;
                 /** @description Only works with a monitored desired_item that is not yet COMPLETE (the per-library Wanted screen). Its own state, when the work has one, comes back as wanted_state. */
                 wanted?: boolean;
+                /** @description Only works whose monitored album has every track but a file below the library's cutoff (UPGRADABLE; Lidarr's Wanted -> Cutoff Unmet). Wanted, by contrast, is MISSING or PARTIAL. */
+                cutoff_unmet?: boolean;
             };
             header?: never;
             path?: never;

@@ -31,6 +31,7 @@ const (
 	recycleBinCleanupScheduleCron  = "30 2 * * *"         // daily at 02:30
 	refreshArtistsScheduleCron     = "0 5 * * 0"          // Sundays at 05:00, after database maintenance
 	planScheduleCron               = "*/5 * * * *"        // every 5 minutes; reads the database only
+	cutoffScheduleCron             = "40 2 * * *"         // daily at 02:40, after the probe measured the night's files
 	rssScheduleCron                = "*/15 * * * *"       // every 15 minutes, as Lidarr's RSS Sync
 	huntScheduleCron               = "7,22,37,52 * * * *" // every 15 minutes, within the hourly budget
 )
@@ -108,6 +109,11 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Key: "plan", Name: "Plan wanted albums", DefaultCadence: planScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryDownloads, Startup: jobs.StartupOn,
 		Enqueue: p.enqueuePlan,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "cutoff", Name: "Check quality cutoff", DefaultCadence: cutoffScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueCutoff,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "rss", Name: "RSS sync", DefaultCadence: rssScheduleCron,

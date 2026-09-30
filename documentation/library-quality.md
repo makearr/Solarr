@@ -30,3 +30,15 @@ enough: the shipped profiles have no gates, so every release "passes" every one 
 - **The warning** on the Quality screen fires when the target does not fit the first profile.
 
 Files the probe has not measured yet are not judged either way.
+
+## Cutoff unmet (M1d)
+
+Lidarr's Wanted -> Cutoff Unmet. The **Check quality cutoff** task (daily at 02:40, after the probe;
+Settings -> Scheduler, advanced) judges every monitored album that has all its tracks: when any of its
+files, as the probe measured it, misses the library's target and fits no profile at or above the
+cutoff, the album is **UPGRADABLE**; otherwise it is COMPLETE. An album with a file the probe has not
+measured yet is left as it is. The judgment is the same one the album page shows per file
+(`internal/identify/quality`).
+
+**Library -> Wanted** has two lists: **Missing** (MISSING and PARTIAL) and **Cutoff Unmet**
+(UPGRADABLE). Searching for upgrades is the next step and is not built yet, so Cutoff Unmet only lists.

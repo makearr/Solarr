@@ -423,12 +423,29 @@ func TestListWorks_WantedFiltersToMonitoredIncompleteDesiredItems(t *testing.T) 
 
 	createWork(t, opened, "music", "No Desired Item At All")
 
+	// M1d: an album below its cutoff is Wanted -> Cutoff Unmet, never Missing.
+	belowCutoff := createWork(t, opened, "music", "Below Cutoff Album")
+	addTrack(t, opened, belowCutoff.ID)
+	belowItem := createDesired(t, opened, belowCutoff.ID, "SET", 10)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{
+			ID: belowItem.ID, State: "UPGRADABLE", PresentCount: 10,
+		})
+	})
+
 	page, err := works.List(t.Context(), library.WorkFilter{WantedOnly: true}, library.WorkCursor{}, 100)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	if len(page) != 1 || page[0].ID != missing.ID {
 		t.Fatalf("wanted page = %+v, want only %q (%d)", page, "Missing Album", missing.ID)
+	}
+	cutoff, err := works.List(t.Context(), library.WorkFilter{CutoffUnmetOnly: true}, library.WorkCursor{}, 100)
+	if err != nil {
+		t.Fatalf("List cutoff unmet: %v", err)
+	}
+	if len(cutoff) != 1 || cutoff[0].ID != belowCutoff.ID {
+		t.Fatalf("cutoff unmet page = %+v, want only %q", cutoff, "Below Cutoff Album")
 	}
 	if !page[0].WantedState.Valid || page[0].WantedState.String != "MISSING" {
 		t.Errorf("WantedState = %+v, want MISSING", page[0].WantedState)

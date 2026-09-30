@@ -1805,6 +1805,12 @@ paths:
             COMPLETE (the per-library Wanted screen). Its own state, when the
             work has one, comes back as wanted_state.
           schema: { type: boolean, default: false }
+        - name: cutoff_unmet
+          in: query
+          description: >-
+            Only works whose monitored album has every track but a file below the library's cutoff
+            (UPGRADABLE; Lidarr's Wanted -> Cutoff Unmet). Wanted, by contrast, is MISSING or PARTIAL.
+          schema: { type: boolean, default: false }
       responses:
         "200":
           description: One page.

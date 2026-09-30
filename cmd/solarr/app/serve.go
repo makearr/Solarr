@@ -431,6 +431,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerPlanJobs(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerCutoffJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerCacheJob(registry, executor); err != nil {
 		return err
 	}

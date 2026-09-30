@@ -650,6 +650,23 @@ func TestListWorks_WantedReachesTheFilter(t *testing.T) {
 	}
 }
 
+// Wanted -> Cutoff Unmet listed every album: the hand-written route never read cutoff_unmet (2026-09-30),
+// the same miss wanted once had.
+func TestListWorks_CutoffUnmetReachesTheFilter(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works?cutoff_unmet=true"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	if !fixture.works.lastFilter.CutoffUnmet || fixture.works.lastFilter.Wanted {
+		t.Errorf("filter = %+v, want CutoffUnmet alone", fixture.works.lastFilter)
+	}
+}
+
 func TestListWorks_FreshDefaultsToFalse(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.createCategoryWithRoot(t, "Music", "/media/music")

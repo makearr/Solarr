@@ -77,6 +77,8 @@ full, and stop when the library's root folders have no space above their reserve
 
 - **Activity → Queue**: what is downloading, and what is held waiting for room.
 - **Activity → History**: what was grabbed, imported or failed, and why.
+- **Library → Wanted** lists what is **Missing**, and under **Cutoff Unmet** the complete albums whose
+  files are below the library's quality (not searched for upgrades yet).
 - An **album's page**, under Search, says when it was last searched and when it will be searched
   again -- or why it will not: a download on its way, no indexer, searching switched off, no space,
   or waiting for its release date. **Interactive search** lists every release found, best first,

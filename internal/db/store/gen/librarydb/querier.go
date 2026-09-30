@@ -347,6 +347,8 @@ type Querier interface {
 	// Oldest-first eviction order for the max_bytes guard -- distinct from
 	// ListExpiredRecycleBin, which is age-of-expiry, not age-of-entry.
 	ListActiveRecycleBinOldestFirst(ctx context.Context, limit int64) ([]RecycleBin, error)
+	// M1d's cutoff check walks every monitored album that has all its tracks, by id.
+	ListAlbumItemsForCutoff(ctx context.Context, arg ListAlbumItemsForCutoffParams) ([]ListAlbumItemsForCutoffRow, error)
 	// The person detail page's own need: every alias this person is known by.
 	ListAliasesForPerson(ctx context.Context, personID int64) ([]string, error)
 	// Every credit anywhere under a work, at any scope. Coverage counts use this;

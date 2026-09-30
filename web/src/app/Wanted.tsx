@@ -35,25 +35,33 @@ const GRID = "grid grid-cols-[1fr_1.4fr_6rem_10rem_6rem_14rem] items-center gap-
  *  library at a time. Search sends the best release; the list icon lets a person choose it. */
 export function Wanted() {
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
-  const search = useSearch({ strict: false }) as { sort?: Sort; dir?: "asc" | "desc"; size?: number };
+  const search = useSearch({ strict: false }) as {
+    sort?: Sort;
+    dir?: "asc" | "desc";
+    size?: number;
+    view?: "missing" | "cutoff";
+  };
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const sort: Sort = search.sort ?? "artist";
   const dir = search.dir ?? "asc";
   const size = PAGE_SIZES.find((candidate) => candidate === Number(search.size)) ?? 50;
+  // Lidarr's two Wanted lists: albums missing tracks, and albums below the library's cutoff (M1d).
+  const view = search.view === "cutoff" ? "cutoff" : "missing";
 
   // Cursor paging (never OFFSET): the cursor that opened each page seen so far.
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const page = cursors.length - 1;
-  useEffect(() => setCursors([undefined]), [categoryId, sort, dir, size]);
+  useEffect(() => setCursors([undefined]), [categoryId, sort, dir, size, view]);
 
   const works = useQuery({
-    queryKey: ["wanted", categoryId, sort, dir, size, cursors[page]],
+    queryKey: ["wanted", categoryId, view, sort, dir, size, cursors[page]],
     queryFn: async () => {
       const { data, error } = await api.GET("/works", {
         params: {
           query: {
-            cursor: cursors[page], limit: size, sort, dir, wanted: true,
+            cursor: cursors[page], limit: size, sort, dir,
+            wanted: view === "missing", cutoff_unmet: view === "cutoff",
             category_id: categoryId ? Number(categoryId) : undefined,
           },
         },
@@ -72,13 +80,16 @@ export function Wanted() {
       return data;
     },
   });
-  const total = libraries.data?.find((library) => String(library.id) === categoryId)?.wanted;
+  const total =
+    view === "missing" ? libraries.data?.find((library) => String(library.id) === categoryId)?.wanted : undefined;
   const pages = total === undefined ? undefined : Math.max(1, Math.ceil(total / size));
 
   const canRequest = useCanRequest((library) => String(library.id) === categoryId);
+  // Upgrades are not searched for yet (M1d's next step), so the cutoff list offers no search.
+  const searchable = canRequest && view === "missing";
 
-  const setView = (next: { sort?: Sort; dir?: "asc" | "desc"; size?: number }) =>
-    void navigate({ to: ".", search: { sort, dir, size, ...next }, replace: true });
+  const setView = (next: { sort?: Sort; dir?: "asc" | "desc"; size?: number; view?: "missing" | "cutoff" }) =>
+    void navigate({ to: ".", search: { sort, dir, size, view, ...next }, replace: true });
 
   const [rowResult, setRowResult] = useState<Record<number, string>>({});
   const grab = useMutation({
@@ -127,13 +138,34 @@ export function Wanted() {
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border-subtle px-4 py-2">
         <h2 className="text-sm font-medium">Wanted</h2>
-        <span className="text-xs text-ink-muted">Monitored and not yet complete.</span>
+        <div className="flex gap-1" role="group" aria-label="Which wanted albums">
+          {(["missing", "cutoff"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={view === option}
+              onClick={() => setView({ view: option })}
+              className={`rounded-md border px-2 py-1 text-xs ${
+                view === option
+                  ? "border-accent bg-accent text-accent-ink"
+                  : "border-border-subtle text-ink-muted hover:text-ink"
+              }`}
+            >
+              {option === "missing" ? "Missing" : "Cutoff Unmet"}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-ink-muted">
+          {view === "missing"
+            ? "Monitored and not yet complete."
+            : "Complete, but a file is below the library's cutoff. Searching for upgrades is not built yet."}
+        </span>
         <span className="ml-auto flex items-center gap-2 text-xs text-ink-muted">
           {searchLibrary.isSuccess &&
             (searchLibrary.data?.duplicate ? "That search is already running." : "Searching in the background.")}
           {searchLibrary.isError && <span className="text-danger">The search could not start.</span>}
           {!canRequest && <span>Searching needs request access to this library.</span>}
-          {canRequest && (
+          {searchable && (
           <>
           <button
             type="button"
@@ -194,7 +226,7 @@ export function Wanted() {
             <StateBadge state={work.wanted_state} />
             <span className="flex items-center justify-end gap-2 text-xs text-ink-muted">
               <span className="truncate">{rowResult[work.id]}</span>
-              {canRequest && (
+              {searchable && (
               <>
               <button
                 type="button"
