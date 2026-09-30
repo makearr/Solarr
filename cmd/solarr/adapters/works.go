@@ -74,6 +74,7 @@ func (a Works) ListWorks(
 		view.OnDisk = row.OnDisk
 		view.Unverified = row.Unverified
 		view.ArrivedAt = row.ArrivedAt
+		view.ArtistCover = row.ArtistCover
 		if row.LastSearchedAt != 0 {
 			at := time.Unix(row.LastSearchedAt, 0).UTC()
 			view.LastSearchedAt = &at

@@ -747,3 +747,41 @@ func TestListWorks_SortByImportedOrdersByTheNewestFile(t *testing.T) {
 		t.Errorf("order = %v, want %v", got, want)
 	}
 }
+
+// A poster marks an album shown by its artist's image: it has a primary artist and no cover of its own.
+func TestListWorks_ArtistCoverMarksAnAlbumWithoutItsOwnCover(t *testing.T) {
+	opened, queries := newLibrary(t)
+	works := library.NewWorks(opened)
+	personID := resolvePersonNamed(t, library.NewPeople(opened), "artist-1", "Katupoken")
+	credited := func(title string) librarydb.Work {
+		work := createWork(t, opened, "music", title)
+		if err := queries.SetWorkPrimaryArtist(t.Context(), librarydb.SetWorkPrimaryArtistParams{
+			PrimaryArtistID: sql.NullInt64{Int64: personID, Valid: true}, PrimaryArtistSortName: sql.NullString{String: "Katupoken", Valid: true},
+			ID: work.ID,
+		}); err != nil {
+			t.Fatalf("SetWorkPrimaryArtist: %v", err)
+		}
+		return work
+	}
+	covered := credited("Aretimok")
+	credited("Bafu")
+	createWork(t, opened, "music", "Cesoge")
+	if err := queries.UpsertArtwork(t.Context(), librarydb.UpsertArtworkParams{
+		SubjectType: "work", SubjectID: covered.ID, Kind: "cover", CacheKey: "k",
+	}); err != nil {
+		t.Fatalf("UpsertArtwork: %v", err)
+	}
+
+	page, err := works.List(t.Context(), library.WorkFilter{}, library.WorkCursor{}, 10)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	got := map[string]bool{}
+	for _, row := range page {
+		got[row.CanonicalTitle] = row.ArtistCover
+	}
+	want := map[string]bool{"Aretimok": false, "Bafu": true, "Cesoge": false}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("artist cover = %v, want %v", got, want)
+	}
+}

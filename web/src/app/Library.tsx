@@ -15,7 +15,7 @@ import { useRecordLastLevel } from "@/list/useRecordLastLevel";
 import type { SelectionRequest } from "@/list/selection";
 import type { components } from "@/api/schema";
 import { CoverArt } from "./CoverArt";
-import { Poster } from "./Poster";
+import { ArtistCoverMark, Poster } from "./Poster";
 
 type Work = components["schemas"]["Work"];
 
@@ -440,6 +440,7 @@ export function Library() {
                     .filter(Boolean)
                     .join(" · ")}
                   link={{ to: "/works/$id", params: { id: String(work.id) } }}
+                  badge={work.artist_cover ? <ArtistCoverMark /> : undefined}
                 />
               )}
             />

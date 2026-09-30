@@ -477,6 +477,7 @@ func (s *Server) listLibraryLevelWorks(
 		views[index] = gen.LibraryLevelItem{
 			Id: row.ID, Title: row.Title, Subtitle: row.Artist, Year: yearOf(row.Year),
 			PresentCount: row.PresentCount, RequiredCount: row.RequiredCount, Status: &status,
+			ArtistCover: &row.ArtistCover,
 		}
 	}
 	writeLibraryLevelPage(w, s.logger, views, next)

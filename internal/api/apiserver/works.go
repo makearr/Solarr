@@ -110,6 +110,8 @@ type WorkRow struct {
 	Unverified bool
 	// ArrivedAt is the Unix time the newest file arrived, 0 with none; the imported sort's cursor.
 	ArrivedAt int64
+	// ArtistCover is an album shown by its artist's image, having no cover of its own.
+	ArtistCover bool
 }
 
 // ListWorks returns a page of the library the caller may see (ADR-27). A work
@@ -250,6 +252,9 @@ func buildWorkPage(rows []WorkRow, limit int, sort WorkSort) gen.WorkPage {
 		}
 		if row.Unverified {
 			views[index].Unverified = &row.Unverified
+		}
+		if row.ArtistCover {
+			views[index].ArtistCover = &row.ArtistCover
 		}
 	}
 

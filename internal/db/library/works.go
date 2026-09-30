@@ -143,6 +143,8 @@ type WorkListRow struct {
 	Unverified bool
 	// ArrivedAt is when the work's newest file arrived; 0 with none.
 	ArrivedAt int64
+	// ArtistCover is an album with no cover of its own, shown by its primary artist's image instead.
+	ArtistCover bool
 }
 
 // Works reads the library list surface.
@@ -225,6 +227,8 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		",\n       " + lastSearchedColumn + " AS last_searched" +
 		",\n       " + unverifiedColumn + " AS unverified" +
 		",\n       COALESCE((SELECT a.arrived_at FROM work_arrival a WHERE a.work_id = work.id), 0) AS arrived_at" +
+		",\n       (work.primary_artist_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM artwork aw" +
+		" WHERE aw.subject_type = 'work' AND aw.subject_id = work.id)) AS artist_cover" +
 		"\nFROM work" + join +
 		predicates.Where() + "\nORDER BY " + orderBy + "\nLIMIT ?"
 	return query, predicates.Args(pageSize)
@@ -363,7 +367,7 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 			&work.OriginalLanguage, &work.Year, &work.RuntimeMs, &work.AddedAt,
 			&work.UpdatedAt, &work.AddedBy, &work.Artist, &work.WantedState,
 			&work.PresentCount, &work.RequiredCount, &work.AvailableFrom, &work.Downloading,
-			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt, &work.Unverified, &work.ArrivedAt); err != nil {
+			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt, &work.Unverified, &work.ArrivedAt, &work.ArtistCover); err != nil {
 			return nil, fmt.Errorf("library: scan work: %w", err)
 		}
 		works = append(works, work)

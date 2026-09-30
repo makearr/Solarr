@@ -2004,8 +2004,10 @@ type LibraryLevelEntity string
 
 // LibraryLevelItem One row of one navigation level, whatever entity it wraps (a work, a work_part, a person). Deliberately generic (see listLibraryLevel).
 type LibraryLevelItem struct {
-	Id        int64 `json:"id"`
-	Monitored *bool `json:"monitored,omitempty"`
+	// ArtistCover An album with no cover of its own, whose artwork falls back to its primary artist's image; the poster marks it. Albums only.
+	ArtistCover *bool `json:"artist_cover,omitempty"`
+	Id          int64 `json:"id"`
+	Monitored   *bool `json:"monitored,omitempty"`
 
 	// PresentCount How much of this row is here: tracks for an album, complete albums for an artist. Absent on a level that counts neither.
 	PresentCount *int64 `json:"present_count,omitempty"`
@@ -3107,7 +3109,10 @@ type Work struct {
 
 	// Artist The work's own primary artist credit, when it has one. Ordered on by sort=artist.
 	Artist *string `json:"artist,omitempty"`
-	Id     int64   `json:"id"`
+
+	// ArtistCover No cover of its own: its artwork is the primary artist's image, and a poster marks it. Absent means false.
+	ArtistCover *bool `json:"artist_cover,omitempty"`
+	Id          int64 `json:"id"`
 
 	// LastSearchedAt When the album was last searched. Absent means never.
 	LastSearchedAt *time.Time `json:"last_searched_at,omitempty"`

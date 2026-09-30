@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { LinkProps } from "@tanstack/react-router";
+import { UserRound } from "lucide-react";
 
 import { AvailabilityBar, type AlbumStatus } from "@/lib/albumStatus";
 
@@ -79,5 +80,18 @@ export function Poster({
     >
       {body}
     </Link>
+  );
+}
+
+/** Marks an album shown by its artist's image, having no cover of its own (asked 2026-09-30). */
+export function ArtistCoverMark() {
+  return (
+    <span
+      title="No album cover yet: this is the artist's image"
+      aria-label="Artist image, no album cover"
+      className="flex size-6 items-center justify-center rounded-full border border-border-subtle bg-canvas/85 text-ink-muted shadow-sm"
+    >
+      <UserRound aria-hidden className="size-3.5" />
+    </span>
   );
 }
