@@ -33,6 +33,29 @@ func TestTaskRegistry_RegisterRejectsAnInvalidCadence(t *testing.T) {
 	}
 }
 
+// The user's standing rule: a default the Scheduler screen can only show as raw cron fails the build.
+func TestTaskRegistry_RegisterRejectsACronOnlyDefault(t *testing.T) {
+	registry := jobs.NewTaskRegistry()
+	err := registry.Register(jobs.Task{Category: jobs.CategoryLibrary, Key: "hunt", DefaultCadence: "7,22,37,52 * * * *", Enqueue: noopEnqueue})
+	if err == nil {
+		t.Fatal("a default cadence the Scheduler shows as Advanced (cron) was accepted")
+	}
+}
+
+// The same shapes web/src/app/Scheduler.tsx's parseCadence reads as plain triggers, and some it does not.
+func TestSimpleCadence(t *testing.T) {
+	for cadence, want := range map[string]bool{
+		"* * * * *": true, "*/15 * * * *": true, "20 * * * *": true, "0 */6 * * *": true,
+		"30 2 * * *": true, "0 4 * * 0": true, "0 3 1 * *": true,
+		"7,22,37,52 * * * *": false, "5-10 * * * *": false, "0 0 1 1 *": false, "*/5 2 * * *": false,
+		"0 */2 * * 1": false, "0 4 * * 7": false, "0 4 1 * 1": false, "@daily": false,
+	} {
+		if got := jobs.SimpleCadence(cadence); got != want {
+			t.Errorf("SimpleCadence(%q) = %v, want %v", cadence, got, want)
+		}
+	}
+}
+
 func TestTaskRegistry_RegisterRejectsADuplicateKey(t *testing.T) {
 	registry := jobs.NewTaskRegistry()
 	task := jobs.Task{Category: jobs.CategoryLibrary, Key: "scan", DefaultCadence: "* * * * *", Enqueue: noopEnqueue}
