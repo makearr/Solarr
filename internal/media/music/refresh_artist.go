@@ -86,6 +86,88 @@ func (j RefreshArtistsJob) Run(ctx context.Context, _ jobs.Job) error {
 	return nil
 }
 
+// refreshAlbums fetches each album again past the cache -- credits, genres, description -- and has
+// their folders rescanned as the library's "Rescan after refresh" says. Answers the albums refreshed.
+func (j *EnrichJob) refreshAlbums(ctx, fresh context.Context, workIDs []int64, manual bool) ([]int64, error) {
+	var refreshed []int64
+	var answers []albumAnswer
+	artists := artistMemo{}
+	for _, workID := range workIDs {
+		if ctx.Err() != nil {
+			return refreshed, ctx.Err()
+		}
+		releaseGroupMBID, ok, err := j.identity.WorkExternalID(ctx, workID, ProviderReleaseGroup)
+		if err != nil || !ok {
+			continue
+		}
+		rg, _, err := j.provider.Album(fresh, musicbrainz.PriorityRefresh, releaseGroupMBID, "")
+		if err != nil {
+			j.logger.WarnContext(ctx, "refresh: album not refreshed", slog.Int64("work_id", workID), slog.Any("error", err))
+			continue
+		}
+		j.enrichCreditsAndGenres(ctx, workID, rg, artists)
+		refreshed = append(refreshed, workID)
+		answers = append(answers, albumAnswer{rg: rg})
+	}
+	j.describeAlbums(ctx, answers)
+	for index, workID := range refreshed {
+		j.enrichDescription(ctx, workID, answers[index].description)
+	}
+	if j.realigner != nil && len(refreshed) > 0 {
+		if err := j.realigner.RealignWorks(ctx, refreshed, manual); err != nil {
+			j.logger.WarnContext(ctx, "refresh: rescan failed", slog.Any("error", err))
+		}
+	}
+	return refreshed, nil
+}
+
+// RefreshAlbum is RefreshArtist for one album: Radarr's per-item "Refresh" (asked 2026-09-30).
+func (j *EnrichJob) RefreshAlbum(ctx context.Context, workID int64) error {
+	refreshed, err := j.refreshAlbums(ctx, musicbrainz.WithFresh(ctx), []int64{workID}, true)
+	if err != nil {
+		return err
+	}
+	j.logger.Info("album refreshed", slog.Int64("work_id", workID), slog.Bool("found", len(refreshed) == 1))
+	return nil
+}
+
+// RefreshAlbumJobType refreshes one album from the library's lists.
+const RefreshAlbumJobType = jobs.Type("music.refresh_album")
+
+// RefreshAlbumDefinition shares the metadata lane with the artist refresh.
+var RefreshAlbumDefinition = jobs.Definition{
+	Name: "Refreshing an album",
+	Type: RefreshAlbumJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 2,
+}
+
+// RefreshAlbumPayload names the album.
+type RefreshAlbumPayload struct {
+	WorkID int64 `json:"work_id"`
+}
+
+// EnqueueRefreshAlbum asks for one album's metadata again; a second click while one runs is folded in.
+func EnqueueRefreshAlbum(ctx context.Context, queue *jobs.Queue, workID int64) (jobs.EnqueueResult, error) {
+	payload, err := json.Marshal(RefreshAlbumPayload{WorkID: workID})
+	if err != nil {
+		return jobs.EnqueueResult{}, err
+	}
+	return queue.Enqueue(ctx, jobs.Request{
+		Type: RefreshAlbumJobType, ActionKey: fmt.Sprintf("%s:%d", RefreshAlbumJobType, workID),
+		Priority: jobs.PriorityNormal, Payload: payload,
+	})
+}
+
+// RefreshAlbumJob runs EnrichJob.RefreshAlbum for one album.
+type RefreshAlbumJob struct{ Enrich *EnrichJob }
+
+func (j RefreshAlbumJob) Run(ctx context.Context, job jobs.Job) error {
+	var payload RefreshAlbumPayload
+	if err := json.Unmarshal(job.Payload, &payload); err != nil {
+		return jobs.Terminalf("refresh_album.payload", string(job.Type), err)
+	}
+	return j.Enrich.RefreshAlbum(ctx, payload.WorkID)
+}
+
 // RefreshArtist fetches one artist's details, image and albums again, past the metadata cache,
 // then has their folders rescanned as the library's "Rescan after refresh" says for a manual or
 // a scheduled refresh.
@@ -109,35 +191,13 @@ func (j *EnrichJob) RefreshArtist(ctx context.Context, personID int64, manual bo
 	if err != nil {
 		return fmt.Errorf("music: refresh artist %d: discography: %w", personID, err)
 	}
-	var refreshed []int64
-	var answers []albumAnswer
-	artists := artistMemo{}
-	for _, work := range works {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		releaseGroupMBID, ok, err := j.identity.WorkExternalID(ctx, work.ID, ProviderReleaseGroup)
-		if err != nil || !ok {
-			continue
-		}
-		rg, _, err := j.provider.Album(fresh, musicbrainz.PriorityRefresh, releaseGroupMBID, "")
-		if err != nil {
-			j.logger.WarnContext(ctx, "artist refresh: album not refreshed", slog.Int64("work_id", work.ID), slog.Any("error", err))
-			continue
-		}
-		j.enrichCreditsAndGenres(ctx, work.ID, rg, artists)
-		refreshed = append(refreshed, work.ID)
-		answers = append(answers, albumAnswer{rg: rg})
+	workIDs := make([]int64, len(works))
+	for index, work := range works {
+		workIDs[index] = work.ID
 	}
-	j.describeAlbums(ctx, answers)
-	for index, workID := range refreshed {
-		j.enrichDescription(ctx, workID, answers[index].description)
-	}
-
-	if j.realigner != nil && len(refreshed) > 0 {
-		if err := j.realigner.RealignWorks(ctx, refreshed, manual); err != nil {
-			j.logger.WarnContext(ctx, "artist refresh: rescan failed", slog.Int64("person_id", personID), slog.Any("error", err))
-		}
+	refreshed, err := j.refreshAlbums(ctx, fresh, workIDs, manual)
+	if err != nil {
+		return err
 	}
 	if err := j.people.RecordRefresh(ctx, personID, j.clock.Now().Unix()); err != nil {
 		return fmt.Errorf("music: refresh artist %d: %w", personID, err)

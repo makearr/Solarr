@@ -63,3 +63,21 @@ func (a ArtistActions) MonitorAll(ctx context.Context, personID int64) (int64, e
 	}
 	return monitored, nil
 }
+
+// AlbumRefresher enqueues one album's refresh.
+type AlbumRefresher struct {
+	Works library.Works
+	Queue *jobs.Queue
+}
+
+// RefreshAlbum enqueues the album's refresh; a second while one runs is folded in.
+func (a AlbumRefresher) RefreshAlbum(ctx context.Context, workID int64) (bool, error) {
+	if _, err := a.Works.Detail(ctx, workID); err != nil {
+		return false, err
+	}
+	result, err := music.EnqueueRefreshAlbum(ctx, a.Queue, workID)
+	if err != nil {
+		return false, err
+	}
+	return result.Duplicate, nil
+}

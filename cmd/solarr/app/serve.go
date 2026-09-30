@@ -603,6 +603,7 @@ func (p *process) startServer(ctx context.Context) error {
 		ArtistActions: adapters.ArtistActions{
 			People: library.NewPeople(p.library), Monitor: p.worksMonitor(), Queue: p.queue,
 		},
+		AlbumRefresher: adapters.AlbumRefresher{Works: library.NewWorks(p.library), Queue: p.queue},
 		PeopleSubscriber: adapters.People{Subscriptions: library.NewSubscriptions(p.library),
 			People: library.NewPeople(p.library), Categories: adapters.Categories{Cache: p.cache},
 			Clock: clock.NewSystem(),
