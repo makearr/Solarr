@@ -788,6 +788,15 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 		}
 		params.Wanted = &wanted
 	}
+	if raw := query.Get("cutoff_unmet"); raw != "" {
+		cutoffUnmet, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"Bad request", "cutoff_unmet must be a boolean")
+			return
+		}
+		params.CutoffUnmet = &cutoffUnmet
+	}
 
 	s.ListWorks(w, r, params)
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/identify/score"
 )
 
@@ -239,11 +240,11 @@ func annotateFileQuality(access authz.Access, categoryIDs []int64, parts []gen.W
 			if file == nil || file.AudioCodec == nil {
 				continue
 			}
-			quality, judged := fileQualityFor(access.Snapshot(), category, partFileFacts(*file))
+			judgement, judged := quality.Judge(access.Snapshot(), category, partFileFacts(*file))
 			if !judged {
 				return
 			}
-			meetsTarget, meetsCutoff := quality.MeetsTarget, quality.MeetsCutoff
+			meetsTarget, meetsCutoff := judgement.MeetsTarget, judgement.MeetsCutoff
 			if category.QualityTarget != nil {
 				file.MeetsTarget = &meetsTarget
 			}

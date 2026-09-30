@@ -27,12 +27,13 @@ func (a Works) ListWorks(
 	}
 	rows, err := a.Works.List(ctx,
 		library.WorkFilter{
-			RootFolderIDs: filter.RootFolderIDs,
-			CategoryIDs:   filter.CategoryIDs,
-			Sort:          library.WorkSort(filter.Sort),
-			Direction:     library.SortDirection(filter.Direction),
-			FreshSince:    freshSince,
-			WantedOnly:    filter.Wanted,
+			RootFolderIDs:   filter.RootFolderIDs,
+			CategoryIDs:     filter.CategoryIDs,
+			Sort:            library.WorkSort(filter.Sort),
+			Direction:       library.SortDirection(filter.Direction),
+			FreshSince:      freshSince,
+			WantedOnly:      filter.Wanted,
+			CutoffUnmetOnly: filter.CutoffUnmet,
 		},
 		library.WorkCursor{
 			SortTitle: cursor.SortTitle, SortYear: cursor.SortYear, SortAdded: cursor.SortAdded,

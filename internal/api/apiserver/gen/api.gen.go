@@ -3629,6 +3629,9 @@ type ListWorksParams struct {
 
 	// Wanted Only works with a monitored desired_item that is not yet COMPLETE (the per-library Wanted screen). Its own state, when the work has one, comes back as wanted_state.
 	Wanted *bool `form:"wanted,omitempty" json:"wanted,omitempty"`
+
+	// CutoffUnmet Only works whose monitored album has every track but a file below the library's cutoff (UPGRADABLE; Lidarr's Wanted -> Cutoff Unmet). Wanted, by contrast, is MISSING or PARTIAL.
+	CutoffUnmet *bool `form:"cutoff_unmet,omitempty" json:"cutoff_unmet,omitempty"`
 }
 
 // ListWorksParamsSort defines parameters for ListWorks.
@@ -11099,6 +11102,14 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	err = runtime.BindQueryParameter("form", true, false, "wanted", r.URL.Query(), &params.Wanted)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wanted", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cutoff_unmet" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cutoff_unmet", r.URL.Query(), &params.CutoffUnmet)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cutoff_unmet", Err: err})
 		return
 	}
 

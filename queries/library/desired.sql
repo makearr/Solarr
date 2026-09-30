@@ -369,3 +369,11 @@ FROM hunt_queue WHERE desired_item_id = ?;
 -- ready_queue is bounded (section 10.5), so no index is needed to ask this.
 -- name: CountHeldForItem :one
 SELECT COUNT(*) AS held FROM ready_queue WHERE desired_item_id = ?;
+
+-- M1d's cutoff check walks every monitored album that has all its tracks, by id.
+-- name: ListAlbumItemsForCutoff :many
+SELECT id, work_id, category_id, state, present_count
+FROM desired_item
+WHERE monitored = 1 AND satisfaction_kind = 'SET' AND state IN ('COMPLETE', 'UPGRADABLE') AND id > sqlc.arg(after_id)
+ORDER BY id
+LIMIT sqlc.arg(page_size);

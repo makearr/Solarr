@@ -471,6 +471,57 @@ func (q *Queries) GetItemReleaseDate(ctx context.Context, arg GetItemReleaseDate
 	return release_date, err
 }
 
+const listAlbumItemsForCutoff = `-- name: ListAlbumItemsForCutoff :many
+SELECT id, work_id, category_id, state, present_count
+FROM desired_item
+WHERE monitored = 1 AND satisfaction_kind = 'SET' AND state IN ('COMPLETE', 'UPGRADABLE') AND id > ?1
+ORDER BY id
+LIMIT ?2
+`
+
+type ListAlbumItemsForCutoffParams struct {
+	AfterID  int64
+	PageSize int64
+}
+
+type ListAlbumItemsForCutoffRow struct {
+	ID           int64
+	WorkID       int64
+	CategoryID   int64
+	State        string
+	PresentCount int64
+}
+
+// M1d's cutoff check walks every monitored album that has all its tracks, by id.
+func (q *Queries) ListAlbumItemsForCutoff(ctx context.Context, arg ListAlbumItemsForCutoffParams) ([]ListAlbumItemsForCutoffRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAlbumItemsForCutoff, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAlbumItemsForCutoffRow{}
+	for rows.Next() {
+		var i ListAlbumItemsForCutoffRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkID,
+			&i.CategoryID,
+			&i.State,
+			&i.PresentCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCountersForScope = `-- name: ListCountersForScope :many
 SELECT scope, metric, value, updated_at FROM counter WHERE scope = ? ORDER BY metric
 `

@@ -56,6 +56,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/clock", "internal/platform/config", "internal/platform/events", "internal/platform/fsx",
 		"internal/jobs", "internal/identify/model", "internal/platform/paginate", "internal/identify/parse",
 		"internal/platform/privilege", "internal/identify/score", "internal/db/settings", "internal/platform/secrets",
+		"internal/identify/quality",
 	},
 	"internal/platform/clock": {},
 	// A bounded in-memory slog handler (revision 7.16). Stdlib only: it wraps
@@ -182,6 +183,8 @@ var allowedInternalImports = map[string][]string{
 	// not exist yet), the same shape those two packages were before their
 	// own callers existed.
 	"internal/identify/priority": {},
+	// A file judged against its library's target and cutoff; one judgment for the album page and M1d.
+	"internal/identify/quality": {"internal/db/settings", "internal/identify/score"},
 	// ADR-49's archive support: List (no writes) and Extract (workspace
 	// only, via fsx's SafeJoin choke point, Invariant 76). Reading the
 	// source archive itself uses the real filesystem directly, the same
@@ -212,7 +215,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/metadata/acoustid", "internal/metadata/musicbrainz",
 		"internal/moving/naming", "internal/moving/placement",
 		"internal/identify/parse", "internal/identify/score", "internal/scanning/scan", "internal/db/settings",
-		"internal/metadata/wikidata",
+		"internal/metadata/wikidata", "internal/identify/quality",
 	},
 	"internal/platform/paginate": {},
 	// The section 10.4 sweep: a walk over the filesystem seam and nothing else.

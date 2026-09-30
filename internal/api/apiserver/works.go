@@ -60,6 +60,8 @@ type WorksFilter struct {
 	// Wanted restricts to works with a monitored, not-yet-COMPLETE
 	// desired_item -- the per-library Wanted screen, 2026-09-11.
 	Wanted bool
+	// CutoffUnmet restricts to albums whose files fall short of the library's cutoff (M1d).
+	CutoffUnmet bool
 }
 
 // WorksCursor is a position in the list. Only the field matching the active
@@ -142,7 +144,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 	rows, err := s.works.ListWorks(r.Context(),
 		WorksFilter{
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Sort: sort, Direction: direction,
-			Fresh: derefOr(params.Fresh, false), Wanted: derefOr(params.Wanted, false),
+			Fresh: derefOr(params.Fresh, false), Wanted: derefOr(params.Wanted, false), CutoffUnmet: derefOr(params.CutoffUnmet, false),
 		},
 		worksCursorFor(sort, cursor), limit+1)
 	if err != nil {

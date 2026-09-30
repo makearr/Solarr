@@ -98,6 +98,9 @@ type WorkFilter struct {
 	// asked for 2026-09-11. Reuses this list's own pagination/sort/visibility
 	// rather than a second query.
 	WantedOnly bool
+	// CutoffUnmetOnly restricts to works whose monitored album falls short of its cutoff (M1d, Lidarr's
+	// Wanted -> Cutoff Unmet).
+	CutoffUnmetOnly bool
 }
 
 // WorkCursor is a position in the list: the id always breaks ties, since without it a
@@ -164,8 +167,10 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	// A work with no tracks yet is waiting for metadata, not missing: Lidarr never calls an album
 	// missing before it knows its tracks (answered 2026-09-28).
 	predicates.AddIf(filter.WantedOnly,
-		"EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = work.id AND di.monitored = 1 AND di.state != 'COMPLETE')"+
+		"EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = work.id AND di.monitored = 1 AND di.state IN ('MISSING', 'PARTIAL'))"+
 			" AND EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = work.id)")
+	predicates.AddIf(filter.CutoffUnmetOnly,
+		"EXISTS (SELECT 1 FROM desired_item cu WHERE cu.work_id = work.id AND cu.monitored = 1 AND cu.state = 'UPGRADABLE')")
 
 	operator := ">"
 	orderDirection := ""
