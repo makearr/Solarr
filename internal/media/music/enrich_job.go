@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
@@ -577,7 +578,7 @@ func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArt
 
 // replaceRetiredRelease handles an edition whose release no source knows any more: while its
 // release group lives, an edition is chosen by the files, as for a text-search match, and the
-// dead one withdrawn. A retired release group is only reported: its files need identifying again.
+// dead one withdrawn. A retired release group sends the album's files back to Review.
 func (j *EnrichJob) replaceRetiredRelease(
 	ctx context.Context, edition library.PlaceholderEdition, album albumKey, artists artistMemo,
 ) bool {
@@ -586,8 +587,7 @@ func (j *EnrichJob) replaceRetiredRelease(
 	}
 	group, _, err := j.provider.Album(ctx, musicbrainz.PriorityEnrich, album.releaseGroup, "")
 	if errors.Is(err, musicbrainz.ErrNotFound) {
-		j.logger.WarnContext(ctx, "release group retired: the album's files need identifying again",
-			slog.Int64("work_id", edition.WorkID), slog.String("release_group", album.releaseGroup))
+		j.returnRetiredToReview(ctx, edition.WorkID, album.releaseGroup)
 		return false
 	}
 	if err != nil || !j.chooseEdition(ctx, library.EditionlessWork{WorkID: edition.WorkID, ReleaseGroupMBID: album.releaseGroup}, group, artists) {
@@ -599,6 +599,28 @@ func (j *EnrichJob) replaceRetiredRelease(
 	j.logger.InfoContext(ctx, "retired release replaced by one chosen from the files",
 		slog.Int64("work_id", edition.WorkID), slog.String("retired_release", edition.ExternalID))
 	return true
+}
+
+// retiredCandidateConfidence keeps a retired release group a suggestion in Review, never a match.
+const retiredCandidateConfidence = 0.2
+
+// returnRetiredToReview hands an album whose release group exists nowhere any more back to Review:
+// its files need identifying again, with the retired id as a weak hint (M1f).
+func (j *EnrichJob) returnRetiredToReview(ctx context.Context, workID int64, releaseGroupMBID string) {
+	returned, err := j.identity.ReturnToReview(ctx, workID, model.Identification{
+		Strategy: "retired release group", Confidence: retiredCandidateConfidence,
+		ExternalID: &model.ExternalID{
+			Provider: ProviderReleaseGroup, ExternalID: releaseGroupMBID, Confidence: retiredCandidateConfidence,
+		},
+	}, j.clock.Now().Unix())
+	if err != nil {
+		j.logger.WarnContext(ctx, "retired release group: files not returned to review",
+			slog.Int64("work_id", workID), slog.Any("error", err))
+		return
+	}
+	j.logger.InfoContext(ctx, "release group retired: the album's files went back to Review",
+		slog.Int64("work_id", workID), slog.String("release_group", releaseGroupMBID),
+		slog.Int("files", returned.Files), slog.Bool("work_deleted", returned.WorkDeleted))
 }
 
 // albumKey is one album lookup; err set means there is nothing to look up.

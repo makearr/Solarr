@@ -90,6 +90,8 @@ type Querier interface {
 	// What a SET requires follows the monitored parts, so unmonitoring an episode
 	// shrinks the season rather than leaving it permanently incomplete (Appendix E, D3).
 	CountMonitoredParts(ctx context.Context, workID int64) (int64, error)
+	// A person added this album (Discover, the add dialog), rather than a scan or an artist's expansion.
+	CountPersonAddedItems(ctx context.Context, workID int64) (int64, error)
 	// kind='unknown' is the cross-media-type placeholder marker an Identifier chain
 	// leaves behind when it resolves an edition's external id but has no real
 	// metadata yet (internal/db/library.EditionLink, internal/media/music's newEditionLink):
@@ -199,6 +201,7 @@ type Querier interface {
 	// widened the key). Removing an album is removing the intent to have it.
 	// A download's record outlives the want it served: history keeps its own copy of the names.
 	DetachAcquisitionsForWork(ctx context.Context, workID int64) error
+	DetachDesiredFilesForWork(ctx context.Context, workID int64) error
 	// Removes the file from the item entirely, every part it covered with it.
 	DetachFile(ctx context.Context, arg DetachFileParams) error
 	// Removes one part's coverage, for a file that turned out to cover less than claimed.
@@ -547,6 +550,8 @@ type Querier interface {
 	// Where each named work's files live, every path of every one. The directories
 	// they sit in are what a scoped rescan reads once the work's tracklist exists.
 	ListWorkFileLocations(ctx context.Context, workIds interface{}) ([]ListWorkFileLocationsRow, error)
+	// Every path of every file of one work, for returning the files to the identification queue.
+	ListWorkFilePaths(ctx context.Context, workID int64) ([]ListWorkFilePathsRow, error)
 	// Every file of one work, for deleting an album's files along with it.
 	ListWorkFiles(ctx context.Context, workID int64) ([]int64, error)
 	ListWorkPartExternalIDs(ctx context.Context, partID int64) ([]WorkPartExternalID, error)
@@ -661,6 +666,7 @@ type Querier interface {
 	// and never overwrites CANCELLING with itself. :execrows lets the caller
 	// distinguish "already stopped/never running" (0 rows) from "now stopping".
 	RequestImportSessionCancel(ctx context.Context, id int64) (int64, error)
+	ResetDesiredItemsForWork(ctx context.Context, workID int64) error
 	// A later placement (todo 4.9's ManualCommitter, an "assign a category
 	// later" or "commit what was held" action reaching a unit that turned out
 	// to belong to a pack) moves that one member from QUEUED to RESOLVED --
@@ -762,6 +768,7 @@ type Querier interface {
 	// missing mark (section 10.4): a file coming back is exactly the case this exists
 	// for.
 	TouchLibraryPath(ctx context.Context, arg TouchLibraryPathParams) error
+	UnlinkWorkFiles(ctx context.Context, workID int64) error
 	// A library's "Unmonitor Deleted Tracks": items holding a file a full scan just found gone.
 	UnmonitorDesiredItemsWithMissingFiles(ctx context.Context, arg UnmonitorDesiredItemsWithMissingFilesParams) (int64, error)
 	UpdateEdition(ctx context.Context, arg UpdateEditionParams) error

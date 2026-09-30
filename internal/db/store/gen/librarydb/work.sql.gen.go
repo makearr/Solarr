@@ -218,6 +218,18 @@ func (q *Queries) CountMonitoredParts(ctx context.Context, workID int64) (int64,
 	return monitored_parts, err
 }
 
+const countPersonAddedItems = `-- name: CountPersonAddedItems :one
+SELECT CAST(COUNT(*) AS INTEGER) AS total FROM desired_item WHERE work_id = ? AND added_by IS NOT NULL
+`
+
+// A person added this album (Discover, the add dialog), rather than a scan or an artist's expansion.
+func (q *Queries) CountPersonAddedItems(ctx context.Context, workID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPersonAddedItems, workID)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const countPlaceholderEditions = `-- name: CountPlaceholderEditions :one
 SELECT CAST(COUNT(*) AS INTEGER) AS total FROM edition WHERE kind = 'unknown'
 `
@@ -424,6 +436,15 @@ DELETE FROM work_part WHERE id = ?
 
 func (q *Queries) DeleteWorkPart(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteWorkPart, id)
+	return err
+}
+
+const detachDesiredFilesForWork = `-- name: DetachDesiredFilesForWork :exec
+DELETE FROM desired_item_file WHERE desired_item_id IN (SELECT id FROM desired_item WHERE work_id = ?)
+`
+
+func (q *Queries) DetachDesiredFilesForWork(ctx context.Context, workID int64) error {
+	_, err := q.db.ExecContext(ctx, detachDesiredFilesForWork, workID)
 	return err
 }
 
@@ -1313,6 +1334,44 @@ func (q *Queries) ListWorkFields(ctx context.Context, workID int64) ([]WorkField
 	return items, nil
 }
 
+const listWorkFilePaths = `-- name: ListWorkFilePaths :many
+SELECT f.media_object_id, lp.root_folder_id, lp.rel_path
+FROM work_file f
+JOIN library_path lp ON lp.media_object_id = f.media_object_id
+WHERE f.work_id = ?
+ORDER BY f.media_object_id, lp.is_primary DESC, lp.id
+`
+
+type ListWorkFilePathsRow struct {
+	MediaObjectID int64
+	RootFolderID  int64
+	RelPath       string
+}
+
+// Every path of every file of one work, for returning the files to the identification queue.
+func (q *Queries) ListWorkFilePaths(ctx context.Context, workID int64) ([]ListWorkFilePathsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkFilePaths, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkFilePathsRow{}
+	for rows.Next() {
+		var i ListWorkFilePathsRow
+		if err := rows.Scan(&i.MediaObjectID, &i.RootFolderID, &i.RelPath); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkFiles = `-- name: ListWorkFiles :many
 SELECT media_object_id FROM work_file WHERE work_id = ? ORDER BY media_object_id
 `
@@ -1541,6 +1600,15 @@ func (q *Queries) RepointWorkExternalID(ctx context.Context, arg RepointWorkExte
 	return result.RowsAffected()
 }
 
+const resetDesiredItemsForWork = `-- name: ResetDesiredItemsForWork :exec
+UPDATE desired_item SET present_count = 0, state = 'MISSING', dirty = 1 WHERE work_id = ?
+`
+
+func (q *Queries) ResetDesiredItemsForWork(ctx context.Context, workID int64) error {
+	_, err := q.db.ExecContext(ctx, resetDesiredItemsForWork, workID)
+	return err
+}
+
 const setWorkClassification = `-- name: SetWorkClassification :exec
 INSERT INTO work_classification (work_id, kind, value, source)
 VALUES (?, ?, ?, ?)
@@ -1686,6 +1754,15 @@ func (q *Queries) SetWorkTitle(ctx context.Context, arg SetWorkTitleParams) erro
 		arg.UpdatedAt,
 		arg.ID,
 	)
+	return err
+}
+
+const unlinkWorkFiles = `-- name: UnlinkWorkFiles :exec
+DELETE FROM work_file WHERE work_id = ?
+`
+
+func (q *Queries) UnlinkWorkFiles(ctx context.Context, workID int64) error {
+	_, err := q.db.ExecContext(ctx, unlinkWorkFiles, workID)
 	return err
 }
 

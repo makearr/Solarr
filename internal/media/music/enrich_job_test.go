@@ -1696,3 +1696,44 @@ func TestEnrichJob_FollowsAMergedReleaseGroup(t *testing.T) {
 		t.Errorf("the work is not found under the release group it was merged into: %v", err)
 	}
 }
+
+// goneSource answers 404 for every album: the release group was removed from MusicBrainz.
+type goneSource struct{ releaseListingSource }
+
+func (f *goneSource) Album(context.Context, string, string) (musicbrainz.ReleaseGroup, musicbrainz.Release, error) {
+	return musicbrainz.ReleaseGroup{}, musicbrainz.Release{}, &httpx.StatusError{Provider: "fake", Status: http.StatusNotFound}
+}
+
+// M1f: an album whose release group exists nowhere any more goes back to Review instead of being
+// logged and left a placeholder forever.
+func TestEnrichJob_ReturnsAnAlbumWhoseReleaseGroupIsGoneToReview(t *testing.T) {
+	job, opened, queries := newEnrichJobRealigning(t, &goneSource{}, nil, &fakeRealigner{}, fakeTags{})
+	registered, err := library.NewPhysical(opened).RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "Heka/Detisisu Binip (1991)/01.m4a", SizeBytes: 1, QuickHash: "h1", FirstSeenAt: firstSeen},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	if _, err := library.NewIdentity(opened).ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-gone", Confidence: 1, RootFolderID: 1,
+		Work:          library.WorkIdentity{MediaType: "music", CanonicalTitle: "Detisisu Binip", SortTitle: "detisisu binip"},
+		MediaObjectID: registered[0].MediaObjectID,
+		Edition: &library.EditionLink{Provider: music.ProviderRelease, ExternalID: "rel-gone", Confidence: 1,
+			Edition: library.EditionIdentity{Kind: "unknown", Label: "rel-gone"}},
+	}}); err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	entry, err := queries.GetUnidentified(t.Context(), registered[0].MediaObjectID)
+	if err != nil || !strings.Contains(entry.CandidatesJson, `"external_id":"rg-gone"`) {
+		t.Fatalf("queue entry = %+v, %v; want the file back in Review with the gone release group as a hint", entry, err)
+	}
+	if _, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-gone",
+	}); err == nil {
+		t.Error("the album nobody asked for is still in the library")
+	}
+}
