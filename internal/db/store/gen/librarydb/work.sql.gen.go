@@ -1483,6 +1483,64 @@ func (q *Queries) ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle
 	return items, nil
 }
 
+const repointEditionExternalID = `-- name: RepointEditionExternalID :execrows
+UPDATE edition_external_id SET external_id = ?1
+WHERE edition_external_id.provider = ?2 AND edition_external_id.external_id = ?3
+  AND edition_external_id.edition_id = ?4
+  AND NOT EXISTS (SELECT 1 FROM edition_external_id held
+                  WHERE held.provider = ?2 AND held.external_id = ?1)
+`
+
+type RepointEditionExternalIDParams struct {
+	NewID     string
+	Provider  string
+	OldID     string
+	EditionID int64
+}
+
+func (q *Queries) RepointEditionExternalID(ctx context.Context, arg RepointEditionExternalIDParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, repointEditionExternalID,
+		arg.NewID,
+		arg.Provider,
+		arg.OldID,
+		arg.EditionID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const repointWorkExternalID = `-- name: RepointWorkExternalID :execrows
+UPDATE work_external_id SET external_id = ?1
+WHERE work_external_id.provider = ?2 AND work_external_id.external_id = ?3
+  AND work_external_id.work_id = ?4
+  AND NOT EXISTS (SELECT 1 FROM work_external_id held
+                  WHERE held.provider = ?2 AND held.external_id = ?1)
+`
+
+type RepointWorkExternalIDParams struct {
+	NewID    string
+	Provider string
+	OldID    string
+	WorkID   int64
+}
+
+// A merged MusicBrainz id answers under its new id: the work follows it, unless another work
+// already holds the new one (M1f, 2026-09-25).
+func (q *Queries) RepointWorkExternalID(ctx context.Context, arg RepointWorkExternalIDParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, repointWorkExternalID,
+		arg.NewID,
+		arg.Provider,
+		arg.OldID,
+		arg.WorkID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setWorkClassification = `-- name: SetWorkClassification :exec
 INSERT INTO work_classification (work_id, kind, value, source)
 VALUES (?, ?, ?, ?)

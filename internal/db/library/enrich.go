@@ -68,6 +68,48 @@ func (i Identity) WorkExternalID(ctx context.Context, workID int64, provider str
 	return row.ExternalID, true, nil
 }
 
+// FollowMergedIDs moves a work's and an edition's ids from what was asked to what the provider now
+// answers with (a merged MusicBrainz id redirects), unless another work or edition already holds the
+// new id. Answers what moved.
+func (i Identity) FollowMergedIDs(ctx context.Context, merged MergedIDs) (workMoved, editionMoved bool, err error) {
+	err = i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		if merged.WorkProvider != "" && merged.OldWorkID != "" && merged.NewWorkID != "" && merged.OldWorkID != merged.NewWorkID {
+			rows, err := queries.RepointWorkExternalID(ctx, librarydb.RepointWorkExternalIDParams{
+				NewID: merged.NewWorkID, Provider: merged.WorkProvider, OldID: merged.OldWorkID, WorkID: merged.WorkID,
+			})
+			if err != nil {
+				return err
+			}
+			workMoved = rows > 0
+		}
+		if merged.EditionProvider != "" && merged.OldEditionID != "" && merged.NewEditionID != "" &&
+			merged.OldEditionID != merged.NewEditionID {
+			rows, err := queries.RepointEditionExternalID(ctx, librarydb.RepointEditionExternalIDParams{
+				NewID: merged.NewEditionID, Provider: merged.EditionProvider, OldID: merged.OldEditionID,
+				EditionID: merged.EditionID,
+			})
+			if err != nil {
+				return err
+			}
+			editionMoved = rows > 0
+		}
+		return nil
+	})
+	if err != nil {
+		return false, false, fmt.Errorf("library: follow merged ids: %w", err)
+	}
+	return workMoved, editionMoved, nil
+}
+
+// MergedIDs is one enrichment's asked-for and answered ids; an empty pair is left alone.
+type MergedIDs struct {
+	WorkID                                      int64
+	WorkProvider, OldWorkID, NewWorkID          string
+	EditionID                                   int64
+	EditionProvider, OldEditionID, NewEditionID string
+}
+
 // KnownWorkNaming is what an already known work is named by: its canonical title, year and artist.
 type KnownWorkNaming struct {
 	Title      string

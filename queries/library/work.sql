@@ -380,3 +380,19 @@ FROM (
 )
 GROUP BY release_date
 ORDER BY release_date;
+
+-- A merged MusicBrainz id answers under its new id: the work follows it, unless another work
+-- already holds the new one (M1f, 2026-09-25).
+-- name: RepointWorkExternalID :execrows
+UPDATE work_external_id SET external_id = sqlc.arg(new_id)
+WHERE work_external_id.provider = sqlc.arg(provider) AND work_external_id.external_id = sqlc.arg(old_id)
+  AND work_external_id.work_id = sqlc.arg(work_id)
+  AND NOT EXISTS (SELECT 1 FROM work_external_id held
+                  WHERE held.provider = sqlc.arg(provider) AND held.external_id = sqlc.arg(new_id));
+
+-- name: RepointEditionExternalID :execrows
+UPDATE edition_external_id SET external_id = sqlc.arg(new_id)
+WHERE edition_external_id.provider = sqlc.arg(provider) AND edition_external_id.external_id = sqlc.arg(old_id)
+  AND edition_external_id.edition_id = sqlc.arg(edition_id)
+  AND NOT EXISTS (SELECT 1 FROM edition_external_id held
+                  WHERE held.provider = sqlc.arg(provider) AND held.external_id = sqlc.arg(new_id));
