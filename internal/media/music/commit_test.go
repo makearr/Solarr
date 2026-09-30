@@ -926,3 +926,33 @@ func TestCommitUnit_ReportsAPermissionFailureWithoutFailingTheImport(t *testing.
 		t.Errorf("warnings = %v, want the group named", warnings)
 	}
 }
+
+// A unit with no artist or album tag is named by its release-named folder, path included: the files
+// began "- 01" with no artist folder when only the tags were read (found 2026-09-30).
+func TestCommitUnit_NamesAnUntaggedUnitByItsFolder(t *testing.T) {
+	committer, opened, fsys := newCommitter(t, true)
+	writeCommitSourceFile(t, fsys, "Qozuvek Tarimo-Ilvaran Sepho-2020-WEB/01 - Varosu Neki.flac", []byte("one"))
+	unit := testUnit("Qozuvek Tarimo-Ilvaran Sepho-2020-WEB", []inspect.File{
+		{RelPath: "Qozuvek Tarimo-Ilvaran Sepho-2020-WEB/01 - Varosu Neki.flac", SizeBytes: 3},
+	})
+	tags := music.UnitTagSourceFor(commitSourceRoot, []mediatool.Probe{{
+		Path: path.Join(commitSourceRoot, "Qozuvek Tarimo-Ilvaran Sepho-2020-WEB/01 - Varosu Neki.flac"),
+		Tags: mediatool.Tags{"tracknumber": "1", "title": "Varosu Neki"},
+	}})
+
+	placed, err := committer.CommitUnit(t.Context(), commitSourceRoot, unit, model.Identification{
+		Strategy: "parse", Confidence: 0.95,
+		ExternalID: &model.ExternalID{Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 0.95},
+	}, tags, commitCategoryID)
+	if err != nil {
+		t.Fatalf("CommitUnit: %v", err)
+	}
+	var relPath string
+	if err := opened.Read().QueryRowContext(t.Context(),
+		"SELECT rel_path FROM library_path WHERE media_object_id = ?", placed.MediaObjectIDs[0]).Scan(&relPath); err != nil {
+		t.Fatalf("read path: %v", err)
+	}
+	if !strings.HasPrefix(relPath, "Qozuvek Tarimo/Ilvaran Sepho") || !strings.Contains(relPath, "/Qozuvek Tarimo - 01 - Varosu Neki.flac") {
+		t.Errorf("placed at %q, want under Qozuvek Tarimo/Ilvaran Sepho and named with the artist", relPath)
+	}
+}

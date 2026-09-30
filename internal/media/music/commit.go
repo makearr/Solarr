@@ -305,7 +305,7 @@ func (c Committer) CommitMatchedUnit(
 	if err != nil {
 		return Placed{}, fmt.Errorf("music: commit unit %q: %w", unit.Directory, err)
 	}
-	work := unitWorkIdentity(unit, representative)
+	work := unitWorkIdentity(sourceRoot, unit, representative)
 	edition := unitEditionLink(representative)
 	if matched != nil && matched.ReleaseMBID != "" {
 		// Album matching already chose the release; keeping it saves enrichment choosing a
@@ -313,6 +313,10 @@ func (c Committer) CommitMatchedUnit(
 		edition = releaseEditionLink(matched.ReleaseMBID, best.Confidence)
 	}
 	artist := representative.First("albumartist", "album_artist", "artist")
+	if artist == "" {
+		// Without it the path lost its artist folder and the files began "- 01" (found 2026-09-30).
+		artist, _ = folderNames(sourceRoot, unit.Directory)
+	}
 	year := parseYear(representative.First("date", "year"))
 	known, found, err := c.identity.KnownWork(ctx, best.ExternalID.Provider, best.ExternalID.ExternalID)
 	if err != nil {
@@ -665,10 +669,10 @@ func artistAffinityKey(artist string) string {
 // created -- the same tag-first, directory-fallback rule newWorkIdentity
 // already applies to one scanned file, read here from the unit's own
 // representative (first file's) tags instead.
-func unitWorkIdentity(unit inspect.Unit, tags mediatool.Tags) library.WorkIdentity {
+func unitWorkIdentity(sourceRoot string, unit inspect.Unit, tags mediatool.Tags) library.WorkIdentity {
 	title := tags.First("album")
 	if title == "" {
-		title = albumTitleFallback(unit.Directory)
+		_, title = folderNames(sourceRoot, unit.Directory)
 	}
 	return library.WorkIdentity{MediaType: "music", CanonicalTitle: title, SortTitle: SortTitle(title)}
 }
