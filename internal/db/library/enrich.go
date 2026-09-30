@@ -68,9 +68,8 @@ func (i Identity) WorkExternalID(ctx context.Context, workID int64, provider str
 	return row.ExternalID, true, nil
 }
 
-// FollowMergedIDs moves a work's and an edition's ids from what was asked to what the provider now
-// answers with (a merged MusicBrainz id redirects), unless another work or edition already holds the
-// new id. Answers what moved.
+// FollowMergedIDs moves a work's and an edition's ids to what the provider now answers with (a
+// merged MusicBrainz id), unless another holds the new id. Answers what moved.
 func (i Identity) FollowMergedIDs(ctx context.Context, merged MergedIDs) (workMoved, editionMoved bool, err error) {
 	err = i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)

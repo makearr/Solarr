@@ -374,9 +374,8 @@ type ReturnedToReview struct {
 	WorkDeleted bool
 }
 
-// ReturnToReview hands an album's files back to the identification queue with candidate as a weak
-// suggestion -- its release group no longer exists anywhere (M1f) -- and detaches them. The work is
-// deleted unless a person added it; then it stays, wanted and MISSING.
+// ReturnToReview queues an album's files for identification with candidate as a weak hint and detaches
+// them (M1f: its release group is gone); the work goes unless a person added it.
 func (i Identity) ReturnToReview(ctx context.Context, workID int64, candidate model.Identification, at int64) (ReturnedToReview, error) {
 	var result ReturnedToReview
 	candidatesJSON, err := encodeCandidates([]model.Identification{candidate})
