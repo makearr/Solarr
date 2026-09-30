@@ -27,6 +27,7 @@ func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, 
 	physical := library.NewPhysical(p.library)
 	provider := p.musicBrainzProvider()
 	desired := library.NewDesired(p.library)
+	people := library.NewPeople(p.library)
 	attempts := library.NewAttempts(p.library)
 	consumer := music.NewConsumer(music.ConsumerConfig{
 		FS:           p.fsys,
@@ -44,6 +45,7 @@ func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, 
 		// One identification threshold for scan and import (2026-09-24).
 		Threshold:  func() float64 { return p.cache.Snapshot().ImportAutoCommitConfidence() },
 		Desired:    &desired,
+		People:     &people,
 		Categories: adapters.Categories{Cache: p.cache},
 		// The user's own default when they haven't configured one for the
 		// category yet -- ensureDefaultQualityProfile seeded it at startup.

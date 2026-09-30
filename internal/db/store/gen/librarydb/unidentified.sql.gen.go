@@ -226,7 +226,9 @@ INSERT INTO identification_queue (media_object_id, root_folder_id, rel_path, can
 SELECT ?1, ?2, ?3,
        ?4, ?5, ?6
 WHERE NOT EXISTS (SELECT 1 FROM not_media nm WHERE nm.media_object_id = ?1)
-  AND NOT EXISTS (SELECT 1 FROM work_file wf WHERE wf.media_object_id = ?1)
+  AND NOT EXISTS (SELECT 1 FROM work_file wf WHERE wf.media_object_id = ?1
+                    AND EXISTS (SELECT 1 FROM work_external_id vx
+                                WHERE vx.work_id = wf.work_id AND vx.provider NOT LIKE 'local:%'))
 ON CONFLICT (media_object_id) DO UPDATE SET
   root_folder_id = excluded.root_folder_id, rel_path = excluded.rel_path,
   candidates_json = excluded.candidates_json, last_seen_at = excluded.last_seen_at
@@ -244,7 +246,8 @@ type UpsertUnidentifiedParams struct {
 // F29: the manual identification queue (migration 0014). Column lists follow table
 // order, or sqlc stops reusing models.
 // A file marked "not media" is never queued again, nor one that already belongs to a work: a
-// person's resolve survives a full rescan the chain still cannot decide (found 2026-09-24).
+// person's resolve survives a full rescan the chain still cannot decide (found 2026-09-24). An
+// unverified album (only local ids, D6) does not count: its files still await identification.
 func (q *Queries) UpsertUnidentified(ctx context.Context, arg UpsertUnidentifiedParams) error {
 	_, err := q.db.ExecContext(ctx, upsertUnidentified,
 		arg.MediaObjectID,

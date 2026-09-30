@@ -476,6 +476,71 @@ func (i Identity) ReleaseWork(ctx context.Context, workID int64) (deleted bool, 
 	return deleted, nil
 }
 
+// AnyUnverified reports whether the library holds any unverified album (D6).
+func (i Identity) AnyUnverified(ctx context.Context) (bool, error) {
+	present, err := librarydb.New(i.store.Read()).AnyUnverifiedWork(ctx)
+	if err != nil {
+		return false, fmt.Errorf("library: any unverified: %w", err)
+	}
+	return present == 1, nil
+}
+
+// LeaveUnverified takes identified files off every unverified album they were on (D6), deleting an album
+// left with no files unless a person added it; one batch, one transaction. Answers albums deleted.
+func (i Identity) LeaveUnverified(ctx context.Context, mediaObjectIDs []int64) (deleted int, err error) {
+	if len(mediaObjectIDs) == 0 {
+		return 0, nil
+	}
+	err = i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		for _, mediaObjectID := range mediaObjectIDs {
+			n, err := leaveUnverified(ctx, queries, mediaObjectID)
+			if err != nil {
+				return err
+			}
+			deleted += n
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, fmt.Errorf("library: leave unverified: %w", err)
+	}
+	return deleted, nil
+}
+
+func leaveUnverified(ctx context.Context, queries *librarydb.Queries, mediaObjectID int64) (deleted int, err error) {
+	workIDs, err := queries.ListUnverifiedWorksForFile(ctx, mediaObjectID)
+	if err != nil {
+		return 0, err
+	}
+	for _, workID := range workIDs {
+		if err := queries.DetachDesiredFileForWork(ctx, librarydb.DetachDesiredFileForWorkParams{
+			MediaObjectID: mediaObjectID, WorkID: workID,
+		}); err != nil {
+			return deleted, err
+		}
+		if err := queries.UnlinkWorkFile(ctx, librarydb.UnlinkWorkFileParams{WorkID: workID, MediaObjectID: mediaObjectID}); err != nil {
+			return deleted, err
+		}
+		files, err := queries.CountWorkFiles(ctx, workID)
+		if err != nil {
+			return deleted, err
+		}
+		asked, err := queries.CountPersonAddedItems(ctx, workID)
+		if err != nil {
+			return deleted, err
+		}
+		if files > 0 || asked > 0 {
+			continue
+		}
+		if err := deleteFilelessWork(ctx, queries, workID); err != nil {
+			return deleted, err
+		}
+		deleted++
+	}
+	return deleted, nil
+}
+
 // deleteFilelessWork removes a work and everything pointing at it; the caller has checked it has no files.
 func deleteFilelessWork(ctx context.Context, queries *librarydb.Queries, workID int64) error {
 	if err := queries.DetachAcquisitionsForWork(ctx, workID); err != nil {

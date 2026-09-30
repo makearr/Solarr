@@ -105,6 +105,18 @@ func (q *Queries) AddWorkTitle(ctx context.Context, arg AddWorkTitleParams) (Wor
 	return i, err
 }
 
+const anyUnverifiedWork = `-- name: AnyUnverifiedWork :one
+SELECT CAST(EXISTS (SELECT 1 FROM work_external_id WHERE provider = 'local:album') AS INTEGER) AS present
+`
+
+// Whether any unverified album exists, so a scan skips the per-file check on a library with none.
+func (q *Queries) AnyUnverifiedWork(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, anyUnverifiedWork)
+	var present int64
+	err := row.Scan(&present)
+	return present, err
+}
+
 const clearWorkClassification = `-- name: ClearWorkClassification :exec
 DELETE FROM work_classification WHERE work_id = ? AND kind = ?
 `
@@ -436,6 +448,22 @@ DELETE FROM work_part WHERE id = ?
 
 func (q *Queries) DeleteWorkPart(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteWorkPart, id)
+	return err
+}
+
+const detachDesiredFileForWork = `-- name: DetachDesiredFileForWork :exec
+DELETE FROM desired_item_file
+WHERE media_object_id = ?1
+  AND desired_item_id IN (SELECT id FROM desired_item WHERE work_id = ?2)
+`
+
+type DetachDesiredFileForWorkParams struct {
+	MediaObjectID int64
+	WorkID        int64
+}
+
+func (q *Queries) DetachDesiredFileForWork(ctx context.Context, arg DetachDesiredFileForWorkParams) error {
+	_, err := q.db.ExecContext(ctx, detachDesiredFileForWork, arg.MediaObjectID, arg.WorkID)
 	return err
 }
 
@@ -1199,6 +1227,38 @@ func (q *Queries) ListPlaceholderEditions(ctx context.Context, arg ListPlacehold
 	return items, nil
 }
 
+const listUnverifiedWorksForFile = `-- name: ListUnverifiedWorksForFile :many
+SELECT wf.work_id FROM work_file wf
+WHERE wf.media_object_id = ?
+  AND EXISTS (SELECT 1 FROM work_external_id ux WHERE ux.work_id = wf.work_id)
+  AND NOT EXISTS (SELECT 1 FROM work_external_id vx WHERE vx.work_id = wf.work_id AND vx.provider NOT LIKE 'local:%')
+ORDER BY wf.work_id
+`
+
+// The unverified albums (only local ids, D6) a file is linked to, for when it is identified.
+func (q *Queries) ListUnverifiedWorksForFile(ctx context.Context, mediaObjectID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listUnverifiedWorksForFile, mediaObjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var work_id int64
+		if err := rows.Scan(&work_id); err != nil {
+			return nil, err
+		}
+		items = append(items, work_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkClassifications = `-- name: ListWorkClassifications :many
 SELECT work_id, kind, value, source
 FROM work_classification WHERE work_id = ? ORDER BY kind, value
@@ -1754,6 +1814,20 @@ func (q *Queries) SetWorkTitle(ctx context.Context, arg SetWorkTitleParams) erro
 		arg.UpdatedAt,
 		arg.ID,
 	)
+	return err
+}
+
+const unlinkWorkFile = `-- name: UnlinkWorkFile :exec
+DELETE FROM work_file WHERE work_id = ? AND media_object_id = ?
+`
+
+type UnlinkWorkFileParams struct {
+	WorkID        int64
+	MediaObjectID int64
+}
+
+func (q *Queries) UnlinkWorkFile(ctx context.Context, arg UnlinkWorkFileParams) error {
+	_, err := q.db.ExecContext(ctx, unlinkWorkFile, arg.WorkID, arg.MediaObjectID)
 	return err
 }
 

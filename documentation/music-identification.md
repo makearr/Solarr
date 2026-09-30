@@ -250,5 +250,9 @@ The unit stays queued in the import's review. Committing it there with a candida
 files onto that album (they are not placed a second time), deletes the unverified album unless a
 person added it, and leaves the paths to a rename preview.
 
-Not built yet: the scan path (a library folder nothing identified still goes to Unidentified), the
-badge on posters and the artist page, and "Identify as..." for a unit with no candidate at all.
+A **library scan** does the same for a folder in which nothing at all was identified: one unverified
+album per folder, while every file also stays under Unidentified. Resolving a file there (or a later
+scan identifying it) takes it off the unverified album, which goes with its last file unless a person
+added it. The badge shows on the album page, posters, the albums table and the artist page.
+
+Not built yet: "Identify as..." for an import unit with no candidate at all.
