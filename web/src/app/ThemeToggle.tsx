@@ -1,42 +1,54 @@
 import { useEffect, useState } from "react";
-import { Palette } from "lucide-react";
+import { Palette, SunMoon } from "lucide-react";
 
-import { apply, stored, THEMES, type Theme } from "@/lib/theme";
+import { apply, followsMode, MODES, SCHEMES, stored, type Mode } from "@/lib/theme";
 
-/** A picker rather than a switch: themes are named sets, and "system" is the
- *  only one that follows the OS. */
+const selectStyle =
+  "rounded-md border border-border-subtle bg-canvas px-1.5 py-0.5 text-xs text-ink focus-visible:outline-2 " +
+  "focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50";
+
+/** Two pickers (asked 2026-09-30): light, dark or the OS's choice, and the colour scheme. */
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(() => stored());
+  const [initial] = useState(() => stored());
+  const [mode, setMode] = useState<Mode>(initial.mode);
+  const [scheme, setScheme] = useState(initial.scheme);
 
-  useEffect(() => apply(theme), [theme]);
+  useEffect(() => apply(mode, scheme), [mode, scheme]);
 
-  // A stored theme wins; only "system" should follow the OS changing.
+  // Only "system" follows the OS changing.
   useEffect(() => {
-    if (theme !== "system") return;
+    if (mode !== "system") return;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const follow = () => apply("system");
+    const follow = () => apply("system", scheme);
     media.addEventListener("change", follow);
     return () => media.removeEventListener("change", follow);
-  }, [theme]);
+  }, [mode, scheme]);
 
+  const single = !followsMode(scheme);
   return (
-    <label className="flex items-center gap-1.5 text-ink-muted" title="Theme">
-      <Palette aria-hidden className="size-3.5" />
-      <span className="sr-only">Theme</span>
-      <select
-        value={theme}
-        onChange={(event) => setTheme(event.target.value)}
-        className="rounded-md border border-border-subtle bg-canvas px-1.5 py-0.5 text-xs
-                   text-ink focus-visible:outline-2 focus-visible:outline-offset-2
-                   focus-visible:outline-accent"
-      >
-        <option value="system">System</option>
-        {THEMES.map((entry) => (
-          <option key={entry.id} value={entry.id}>
-            {entry.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <div className="flex items-center gap-2 text-ink-muted">
+      <label className="flex items-center gap-1.5" title={single ? "This colour scheme has only one variant" : "Light or dark"}>
+        <SunMoon aria-hidden className="size-3.5" />
+        <span className="sr-only">Light or dark</span>
+        <select value={mode} disabled={single} onChange={(event) => setMode(event.target.value as Mode)} className={selectStyle}>
+          {MODES.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-1.5" title="Colour scheme">
+        <Palette aria-hidden className="size-3.5" />
+        <span className="sr-only">Colour scheme</span>
+        <select value={scheme} onChange={(event) => setScheme(event.target.value)} className={selectStyle}>
+          {SCHEMES.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
   );
 }

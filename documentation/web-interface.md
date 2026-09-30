@@ -36,8 +36,14 @@ light flash on every load for anyone who chose dark.
 This is the one thing kept in browser storage, because it is needed before any request can be
 made. View state stays server-side per architecture section 21.2.
 
-A scheme is a block of token values in `src/index.css`, an entry in `THEMES` (`src/lib/theme.ts`)
-and, if dark, a name in `index.html`'s pre-paint list. The Lidarr, Sonarr and Radarr schemes
+Two settings (2026-09-30): the mode (System, Light, Dark) and the colour scheme. A scheme in
+`SCHEMES` (`src/lib/theme.ts`) names its light and dark token set; one with a single set (Jellyfin,
+Arr, Nord, Paper) keeps it whatever the mode, and the mode picker is disabled for it. Stored as
+`solarr.mode` and `solarr.scheme`; a single `solarr.theme` from before the split is read once and
+mapped to its scheme and base.
+
+A token set is a block of values in `src/index.css`, an entry in `THEMES`, and its place in
+`SCHEMES` and in `index.html`'s pre-paint copy of it. The Lidarr, Sonarr and Radarr schemes
 (2026-09-29) come light and dark; the light ones colour the sidebar and header differently from
 the page. Those two elements carry `data-region="sidebar"` / `"header"`, and a scheme redefines
 the same tokens inside that scope (plus `--color-header`, the header bar's ground, which is the

@@ -25,46 +25,94 @@ export const THEMES = [
   { id: "radarr-dark", label: "Radarr dark", base: "dark" },
 ] as const satisfies readonly ThemeDefinition[];
 
-/** "system" follows the OS and resolves to light or dark, never to a named theme:
- *  the OS reports a preference between two, and has no opinion about Jellyfin. */
-export type Theme = "system" | (string & {});
+/** A colour scheme names its light and dark variant; a scheme with only one ignores the mode.
+ *  Mode and scheme are two settings (asked 2026-09-30), so "Lidarr" follows the OS like "Solarr". */
+export interface SchemeDefinition {
+  readonly id: string;
+  readonly label: string;
+  readonly light?: string;
+  readonly dark?: string;
+}
 
-const STORAGE_KEY = "solarr.theme";
+export const SCHEMES = [
+  { id: "solarr", label: "Solarr", light: "light", dark: "dark" },
+  { id: "lidarr", label: "Lidarr", light: "lidarr", dark: "lidarr-dark" },
+  { id: "sonarr", label: "Sonarr", light: "sonarr", dark: "sonarr-dark" },
+  { id: "radarr", label: "Radarr", light: "radarr", dark: "radarr-dark" },
+  { id: "jellyfin", label: "Jellyfin", dark: "jellyfin" },
+  { id: "arr", label: "Arr", dark: "arr" },
+  { id: "nord", label: "Nord", dark: "nord" },
+  { id: "paper", label: "Paper", light: "paper" },
+] as const satisfies readonly SchemeDefinition[] as readonly SchemeDefinition[];
+
+export type Mode = "system" | "light" | "dark";
+export const MODES: readonly { id: Mode; label: string }[] = [
+  { id: "system", label: "System" },
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
+];
+
+// index.html's pre-paint script reads the same two keys.
+const MODE_KEY = "solarr.mode";
+const SCHEME_KEY = "solarr.scheme";
+const LEGACY_KEY = "solarr.theme";
 const DEFAULT_BASE: ThemeDefinition = { id: "light", label: "Light", base: "light" };
 
 export function definition(id: string): ThemeDefinition {
   return THEMES.find((theme) => theme.id === id) ?? DEFAULT_BASE;
 }
 
-export function resolve(theme: Theme): ThemeDefinition {
-  if (theme === "system") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? definition("dark")
-      : definition("light");
-  }
-  return definition(theme);
+export function scheme(id: string): SchemeDefinition {
+  return SCHEMES.find((entry) => entry.id === id) ?? SCHEMES[0]!;
 }
 
-export function apply(theme: Theme): void {
-  const resolved = resolve(theme);
+/** Whether a scheme has both variants, so the mode means something for it. */
+export function followsMode(id: string): boolean {
+  const entry = scheme(id);
+  return entry.light !== undefined && entry.dark !== undefined;
+}
+
+export function resolve(mode: Mode, schemeID: string, prefersDark: boolean): ThemeDefinition {
+  const entry = scheme(schemeID);
+  const wantsDark = mode === "dark" || (mode === "system" && prefersDark);
+  const id = (wantsDark ? entry.dark : entry.light) ?? entry.light ?? entry.dark ?? "light";
+  return definition(id);
+}
+
+export function apply(mode: Mode, schemeID: string): void {
+  const resolved = resolve(mode, schemeID, window.matchMedia("(prefers-color-scheme: dark)").matches);
   const root = document.documentElement;
   root.dataset.theme = resolved.id;
-  // Kept in step so Tailwind's dark: variant still means what it says under a
-  // named dark theme, rather than only under the one called "dark".
+  // Kept in step so Tailwind's dark: variant still means what it says under a named dark theme.
   root.classList.toggle("dark", resolved.base === "dark");
   try {
-    if (theme === "system") localStorage.removeItem(STORAGE_KEY);
-    else localStorage.setItem(STORAGE_KEY, theme);
+    localStorage.setItem(MODE_KEY, mode);
+    localStorage.setItem(SCHEME_KEY, scheme(schemeID).id);
+    localStorage.removeItem(LEGACY_KEY);
   } catch {
     // Denied storage loses only the next load's pre-paint hint.
   }
 }
 
-export function stored(): Theme {
+/** The stored mode and scheme; a single theme stored before the split becomes its scheme and base. */
+export function stored(): { mode: Mode; scheme: string } {
   try {
-    const value = localStorage.getItem(STORAGE_KEY);
-    return value && THEMES.some((theme) => theme.id === value) ? value : "system";
+    const mode = localStorage.getItem(MODE_KEY);
+    const schemeID = localStorage.getItem(SCHEME_KEY);
+    if (mode || schemeID) {
+      return {
+        mode: MODES.some((entry) => entry.id === mode) ? (mode as Mode) : "system",
+        scheme: scheme(schemeID ?? "").id,
+      };
+    }
+    return fromLegacy(localStorage.getItem(LEGACY_KEY));
   } catch {
-    return "system";
+    return { mode: "system", scheme: "solarr" };
   }
+}
+
+export function fromLegacy(themeID: string | null): { mode: Mode; scheme: string } {
+  const owner = SCHEMES.find((entry) => entry.light === themeID || entry.dark === themeID);
+  if (!themeID || !owner) return { mode: "system", scheme: "solarr" };
+  return { mode: definition(themeID).base, scheme: owner.id };
 }

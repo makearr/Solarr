@@ -405,7 +405,7 @@ export function TransferLadderControl() {
   );
 }
 
-/** Edits one transfer order; the Import screen's and each download folder's use it. */
+/** Edits one import method order; the Import screen's and each download folder's use it. */
 export function TransferLadderEditor({
   ladder,
   busy,
@@ -437,11 +437,11 @@ export function TransferLadderEditor({
   return (
     <fieldset className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
       <legend className="flex items-center gap-1 px-1 text-ink-muted">
-        Transfer order
+        Import method
         <button
           type="button"
           className="rounded p-0.5 text-ink-muted hover:text-ink"
-          aria-label="What do the transfer methods do?"
+          aria-label="What do the import methods do?"
           onClick={() => setExplaining(true)}
         >
           <HelpCircle size={12} />
@@ -577,7 +577,8 @@ function InspectForm() {
   );
   const [preview, setPreview] = useState(false);
   // D6: what nothing identified still becomes an album, marked unverified.
-  const [addUnverified, setAddUnverified] = useState(true);
+  // Off by default (asked 2026-09-30): an unrecognised folder waits for review unless asked for.
+  const [addUnverified, setAddUnverified] = useState(false);
   const categories = useCategories();
 
   const inspect = useMutation({
@@ -999,12 +1000,52 @@ function UnitList({ sessionId }: { sessionId: number }) {
     },
   });
 
+  const queryClient = useQueryClient();
+  const importSettings = useQuery({
+    queryKey: ["import-settings"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/import/settings");
+      if (error) throw error;
+      return data;
+    },
+  });
+  // "Place all identified" (asked 2026-09-30): every waiting unit matched at or above the import's own
+  // confidence; the uncertain ones stay for review.
+  const threshold = importSettings.data?.auto_commit_confidence ?? 0.9;
+  const identified = (units.data ?? []).filter(
+    (unit) => unit.decision === "QUEUE" && (unit.candidates?.length ?? 0) > 0 && unit.confidence >= threshold,
+  );
+  const placeAll = useMutation({
+    mutationFn: async (ids: number[]) => {
+      for (const unitId of ids) {
+        const { error } = await api.POST("/import/sessions/{id}/units/{unitId}/commit", {
+          params: { path: { id: sessionId, unitId } },
+        });
+        if (error) throw error;
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["import-units", sessionId] });
+      void queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
+    },
+  });
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border-subtle bg-surface">
       {units.data && units.data.length > 0 && (
-        <p className="border-b border-border-subtle px-3 py-2 text-xs text-ink-muted">
-          {describeSessionTransfers(units.data)}
-        </p>
+        <div className="flex flex-wrap items-center gap-3 border-b border-border-subtle px-3 py-2 text-xs text-ink-muted">
+          <span className="flex-1">{describeSessionTransfers(units.data)}</span>
+          {placeAll.isError && <span className="text-danger">Placing stopped at a unit that could not be committed.</span>}
+          <button
+            type="button"
+            disabled={identified.length === 0 || placeAll.isPending}
+            onClick={() => placeAll.mutate(identified.map((unit) => unit.id))}
+            title={`Places every waiting unit identified at ${Math.round(threshold * 100)}% confidence or more; the rest stay for review`}
+            className="rounded-md bg-accent px-2.5 py-1 text-accent-ink disabled:opacity-50"
+          >
+            {placeAll.isPending ? "Placing…" : `Place all identified (${identified.length})`}
+          </button>
+        </div>
       )}
       {units.isLoading && <Message>Loading units…</Message>}
       {units.error !== null && <Message>Units could not be read.</Message>}

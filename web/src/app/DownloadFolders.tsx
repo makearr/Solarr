@@ -11,7 +11,7 @@ type DownloadFolder = components["schemas"]["DownloadFolder"];
 type LibraryCategory = components["schemas"]["LibraryCategory"];
 
 /** The folders upstream download clients write to (todo 4.18). Watched: every entry that has
- *  settled for ten minutes is imported once, into the folder's library, by its transfer order. */
+ *  settled for ten minutes is imported once, into the folder's library, by its import method. */
 export function DownloadFolders() {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -51,7 +51,7 @@ export function DownloadFolders() {
         <p className="text-sm leading-relaxed text-ink-muted">
           Folders your download clients write to. A watched folder is checked every five minutes:
           anything in it that has not changed for ten minutes is imported once, and shows up under
-          Import like any other import. Solarr only reads here, unless a transfer order lets it Move.
+          Import like any other import. Solarr only reads here, unless an import method lets it Move.
         </p>
       </header>
 
@@ -216,8 +216,8 @@ function DownloadFolderCard({
               })
             }
           />
-          Own transfer order
-          {!ownLadder && <span className="text-ink-muted">(uses the Import screen's)</span>}
+          Custom import method
+          {!ownLadder && <span className="text-ink-muted">(unticked: the default import order)</span>}
         </label>
       </div>
       {ownLadder && (

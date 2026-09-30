@@ -61,7 +61,7 @@ test("one help button opens a single dialog covering every method", async () => 
   await screen.findByText("Reflink");
 
   // Exactly one, not one per method.
-  const help = screen.getAllByLabelText(/What do the transfer methods do/);
+  const help = screen.getAllByLabelText(/What do the import methods do/);
   expect(help).toHaveLength(1);
 
   fireEvent.click(help[0]!);
@@ -75,7 +75,7 @@ test("the dialog closes again", async () => {
   mount();
   await screen.findByText("Reflink");
 
-  fireEvent.click(screen.getByLabelText(/What do the transfer methods do/));
+  fireEvent.click(screen.getByLabelText(/What do the import methods do/));
   await screen.findByRole("dialog");
 
   fireEvent.click(screen.getByText("Close"));

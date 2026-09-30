@@ -190,11 +190,11 @@ func NewDefaultRegistry() *Registry {
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyImportTransferLadder, Kind: KindStringList, Tier: TierNormal,
-		Name: "Import transfer order",
-		HelpText: "Transfer methods tried in order until one succeeds: reflink, " +
-			"hardlink, move, copy, symlink. Move deletes the source; symlink leaves " +
-			"the library depending on it.",
-		Default: `["reflink","hardlink","move","copy","symlink"]`,
+		Name: "Import method",
+		HelpText: "Methods tried in order until one succeeds: reflink, hardlink, move, " +
+			"copy, and symlink only if added. Move deletes the source; symlink leaves " +
+			"the library depending on it, so it is off by default (ADR-11).",
+		Default: `["reflink","hardlink","move","copy"]`,
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyImportExtraFiles, Kind: KindBool, Tier: TierNormal,

@@ -10,15 +10,22 @@
     <!-- Before first paint, or a dark-mode user sees a light flash. -->
     <script>
       (() => {
-        /* Kept in step with THEMES in src/lib/theme.ts. Duplicated deliberately:
-           this runs before any module loads, which is the whole point. */
-        const DARK = ["dark", "jellyfin", "arr", "nord", "lidarr-dark", "sonarr-dark", "radarr-dark"];
+        /* Kept in step with SCHEMES in src/lib/theme.ts. Duplicated deliberately:
+           this runs before any module loads, which is the whole point. [light, dark] per scheme. */
+        const SCHEMES = {
+          solarr: ["light", "dark"], lidarr: ["lidarr", "lidarr-dark"], sonarr: ["sonarr", "sonarr-dark"],
+          radarr: ["radarr", "radarr-dark"], jellyfin: [null, "jellyfin"], arr: [null, "arr"],
+          nord: [null, "nord"], paper: ["paper", null],
+        };
         try {
-          const stored = localStorage.getItem("solarr.theme");
-          const theme = stored
-            || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+          const legacy = localStorage.getItem("solarr.theme");
+          const mode = localStorage.getItem("solarr.mode") || "system";
+          const pair = SCHEMES[localStorage.getItem("solarr.scheme")] || SCHEMES.solarr;
+          const dark = mode === "dark" || (mode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          let theme = (dark ? pair[1] : pair[0]) || pair[0] || pair[1];
+          if (legacy && !localStorage.getItem("solarr.mode")) theme = legacy;
           document.documentElement.dataset.theme = theme;
-          document.documentElement.classList.toggle("dark", DARK.includes(theme));
+          document.documentElement.classList.toggle("dark", Object.values(SCHEMES).some((p) => p[1] === theme));
         } catch {
           /* Private mode denies storage; the OS preference still applies. */
         }
