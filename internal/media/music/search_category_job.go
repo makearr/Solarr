@@ -202,5 +202,8 @@ func (j *SearchCategoryJob) grabOne(
 		if result.Sent != nil {
 			tally.sent++
 		}
+		if len(result.Refusals) > 0 {
+			j.logger.Info("music: search category: releases refused", "item_id", itemID, "refused", result.Refusals)
+		}
 	}
 }

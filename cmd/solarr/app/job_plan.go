@@ -105,6 +105,9 @@ func (p *process) huntSearch(ctx context.Context, itemID int64) (plan.Outcome, e
 	if result.Sent != nil || result.Held {
 		p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
 	}
+	if len(result.Refusals) > 0 {
+		p.logger.Info("hunt: releases refused", slog.Int64("item_id", itemID), slog.Any("refused", result.Refusals))
+	}
 	return plan.OutcomeSearched, nil
 }
 

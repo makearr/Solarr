@@ -121,7 +121,8 @@ func (p *process) searchAgain(ctx context.Context, desiredItemID int64) error {
 	result, err := p.musicGrab().SearchAndSend(ctx, desiredItemID, indexers, music.GrabAutomatic, clock.NewSystem().Now())
 	if err == nil {
 		p.logger.Info("searched again after a failed download", slog.Int64("desired_item_id", desiredItemID),
-			slog.Int("found", len(result.Search.Decisions)), slog.Bool("sent", result.Sent != nil))
+			slog.Int("found", len(result.Search.Decisions)), slog.Bool("sent", result.Sent != nil), slog.Bool("held", result.Held),
+			slog.Int("no_room", result.NoRoom), slog.Any("refused", result.Refusals))
 	}
 	return err
 }

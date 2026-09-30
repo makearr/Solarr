@@ -31,6 +31,8 @@ type GrabResult struct {
 	Refused int
 	// NoRoom counts releases passed over because the library has no root with space for them.
 	NoRoom int
+	// Refusals says why each refused release was refused, in the order they were tried.
+	Refusals []string
 }
 
 // SearchAndSend searches itemID unless a download for it is already on its way, and sends the
@@ -75,6 +77,7 @@ func (g Grab) sendBest(ctx context.Context, itemID int64, found ItemSearchResult
 		return GrabResult{Search: found}, fmt.Errorf("music: grab item %d: %w", itemID, err)
 	}
 	refused, noRoom := 0, 0
+	var refusals []string
 	for _, detail := range found.Decisions {
 		if detail.Decision.Outcome != string(model.OutcomeAccept) {
 			continue
@@ -99,14 +102,15 @@ func (g Grab) sendBest(ctx context.Context, itemID int64, found ItemSearchResult
 		// The client declined this one (a duplicate, a broken NZB): Lidarr moves on to the next.
 		if errors.Is(err, download.ErrRefused) || errors.Is(err, ErrContentBlocklisted) {
 			refused++
+			refusals = append(refusals, detail.ReleaseCandidate.Title+": "+err.Error())
 			continue
 		}
 		if err != nil {
-			return GrabResult{Search: found, Refused: refused}, fmt.Errorf("music: grab item %d: %w", itemID, err)
+			return GrabResult{Search: found, Refused: refused, Refusals: refusals}, fmt.Errorf("music: grab item %d: %w", itemID, err)
 		}
-		return GrabResult{Search: found, Sent: &sent, Refused: refused, NoRoom: noRoom}, nil
+		return GrabResult{Search: found, Sent: &sent, Refused: refused, NoRoom: noRoom, Refusals: refusals}, nil
 	}
-	return GrabResult{Search: found, Refused: refused, NoRoom: noRoom}, nil
+	return GrabResult{Search: found, Refused: refused, NoRoom: noRoom, Refusals: refusals}, nil
 }
 
 // headroom is how much an automatic grab for itemID may bring in (ADR-12: free space is a hard

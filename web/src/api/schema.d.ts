@@ -8133,6 +8133,11 @@ export interface operations {
             content: {
                 "application/json": {
                     monitored: boolean;
+                    /**
+                     * @description Search the album at once when it becomes monitored (D16: the person's "Start search for missing albums" preference). Ignored when monitored is false.
+                     * @default false
+                     */
+                    search?: boolean;
                 };
             };
         };

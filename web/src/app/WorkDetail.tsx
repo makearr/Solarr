@@ -103,12 +103,14 @@ export function WorkDetail() {
     },
   });
 
+  // D16: the same remembered choice as Discover's "Start search for missing albums".
+  const [searchOnMonitor] = usePreference("discover.search_on_add", true);
   const setMonitored = useMutation({
     mutationFn: async (monitored: boolean) => {
       if (id === undefined) return;
       const { error } = await api.POST("/works/{id}/monitor", {
         params: { path: { id } },
-        body: { monitored },
+        body: { monitored, search: monitored && searchOnMonitor },
       });
       if (error) throw error;
     },
