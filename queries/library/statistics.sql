@@ -1,0 +1,34 @@
+-- What the statistics rollup measures (section 21.12): bounded aggregates, run by a background job and read back
+-- from stat_rollup, never live.
+
+-- Files and bytes per root folder and audio codec; a file with no measured codec yet is "unknown".
+-- name: AggregateFilesByRootAndCodec :many
+SELECT lp.root_folder_id,
+       CAST(COALESCE(NULLIF(ma.audio_codec, ''), 'unknown') AS TEXT) AS codec,
+       CAST(COUNT(*) AS INTEGER) AS files,
+       CAST(COALESCE(SUM(mo.size_bytes), 0) AS INTEGER) AS bytes
+FROM library_path lp
+JOIN media_object mo ON mo.id = lp.media_object_id
+LEFT JOIN media_attributes ma ON ma.id = mo.measured_attributes_id
+GROUP BY lp.root_folder_id, codec
+ORDER BY lp.root_folder_id, codec;
+
+-- Monitored albums per library and state.
+-- name: AggregateAlbumsByCategoryAndState :many
+SELECT category_id, state, CAST(COUNT(*) AS INTEGER) AS albums
+FROM desired_item
+WHERE satisfaction_kind = 'SET' AND monitored = 1
+GROUP BY category_id, state
+ORDER BY category_id, state;
+
+-- Downloads since a time, per library and outcome.
+-- name: AggregateAcquisitionsByCategoryAndState :many
+SELECT d.category_id, a.state, CAST(COUNT(*) AS INTEGER) AS downloads
+FROM acquisition a
+JOIN desired_item d ON d.id = a.desired_item_id
+WHERE a.created_at >= sqlc.arg(since)
+GROUP BY d.category_id, a.state
+ORDER BY d.category_id, a.state;
+
+-- name: DeleteStatRollupMetric :exec
+DELETE FROM stat_rollup WHERE metric = ?;

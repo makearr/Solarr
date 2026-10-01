@@ -2763,6 +2763,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * One library's statistics, as the last rollup computed them (section 21.12).
+         * @description Composition, completeness and acquisition figures read from stat_rollup; nothing is aggregated live. Empty, with no computed_at, until the first rollup has run. Needs read access to the library.
+         */
+        get: operations["getCategoryStatistics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/rootfolders": {
         parameters: {
             query?: never;
@@ -5612,6 +5634,31 @@ export interface components {
             tier_used: number | null;
             decisions: components["schemas"]["CandidateDecision"][];
             indexer_errors: components["schemas"]["IndexerSearchError"][];
+        };
+        CategoryStatistics: {
+            /**
+             * Format: date-time
+             * @description When the rollup last ran; absent before the first run.
+             */
+            computed_at?: string;
+            /** @description How many days back the download figures reach. */
+            window_days: number;
+            files_by_codec: components["schemas"]["StatisticsFiles"][];
+            albums_by_state: components["schemas"]["StatisticsCount"][];
+            downloads_by_state: components["schemas"]["StatisticsCount"][];
+        };
+        StatisticsFiles: {
+            /** @description The audio codec */
+            key: string;
+            /** Format: int64 */
+            files: number;
+            /** Format: int64 */
+            bytes: number;
+        };
+        StatisticsCount: {
+            key: string;
+            /** Format: int64 */
+            count: number;
         };
         ImageOptions: {
             options: components["schemas"]["ImageOption"][];
@@ -10444,6 +10491,30 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCategoryStatistics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The figures. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryStatistics"];
+                };
+            };
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };

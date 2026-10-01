@@ -398,6 +398,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerCategoryCountsJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerStatisticsJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerPollJob(registry, executor); err != nil {
 		return err
 	}
@@ -600,6 +603,7 @@ func (p *process) startServer(ctx context.Context) error {
 		},
 		Artwork:        adapters.Artwork{Artworks: library.NewArtworks(p.library)},
 		ArtworkChoices: p.artworkChoices(),
+		Statistics:     adapters.Statistics{Statistics: library.NewStatistics(p.library)},
 		FS:             p.fsys,
 		ImagesDir:      filepath.Join(p.config.Paths.CacheDir, "images"),
 		ConfigPath:     p.configPath,

@@ -468,6 +468,15 @@ function LibraryNode({
               <span className="truncate">Wanted</span>
             </Link>
           </li>
+          <li>
+            <Link
+              to="/library/$categoryId/statistics"
+              params={{ categoryId }}
+              className={sectionLinkClass(isActive && activePath === `/library/${library.id}/statistics`, false)}
+            >
+              <span className="truncate">Statistics</span>
+            </Link>
+          </li>
 
           {/* Advanced and an administrator's (2026-09-25 review). */}
           {administrator && isTierVisible(tier, "advanced") && (
