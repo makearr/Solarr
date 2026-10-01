@@ -2,9 +2,11 @@ package adapters
 
 import (
 	"context"
+	"errors"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/media/music"
 )
 
 // Artwork satisfies apiserver.ArtworkReader over library.Artworks.
@@ -27,4 +29,40 @@ func (a Artwork) GetPersonArtwork(ctx context.Context, personID int64) (apiserve
 		return apiserver.PersonArtworkRow{}, err
 	}
 	return apiserver.PersonArtworkRow{CacheKey: found.CacheKey, Found: found.Found}, nil
+}
+
+// ArtworkChoices satisfies apiserver.ArtworkChoices over music.ArtworkChoice.
+type ArtworkChoices struct{ Choice *music.ArtworkChoice }
+
+func (a ArtworkChoices) WorkOptions(ctx context.Context, workID int64) ([]apiserver.ImageOptionRow, error) {
+	options, err := a.Choice.WorkOptions(ctx, workID)
+	return imageOptionRows(options), err
+}
+
+func (a ArtworkChoices) PersonOptions(ctx context.Context, personID int64) ([]apiserver.ImageOptionRow, error) {
+	options, err := a.Choice.PersonOptions(ctx, personID)
+	return imageOptionRows(options), err
+}
+
+func (a ArtworkChoices) PickWork(ctx context.Context, workID int64, imageURL string) error {
+	return notOffered(a.Choice.PickWork(ctx, workID, imageURL))
+}
+
+func (a ArtworkChoices) PickPerson(ctx context.Context, personID int64, imageURL string) error {
+	return notOffered(a.Choice.PickPerson(ctx, personID, imageURL))
+}
+
+func notOffered(err error) error {
+	if errors.Is(err, music.ErrImageNotOffered) {
+		return apiserver.ErrImageNotOffered
+	}
+	return err
+}
+
+func imageOptionRows(options []music.ImageOption) []apiserver.ImageOptionRow {
+	rows := make([]apiserver.ImageOptionRow, len(options))
+	for index, option := range options {
+		rows[index] = apiserver.ImageOptionRow{URL: option.URL, ThumbURL: option.ThumbURL, Source: option.Source, Label: option.Label}
+	}
+	return rows
 }

@@ -291,6 +291,7 @@ type Querier interface {
 	GetPack(ctx context.Context, id int64) (Pack, error)
 	GetPathByLocation(ctx context.Context, arg GetPathByLocationParams) (LibraryPath, error)
 	GetPerson(ctx context.Context, id int64) (Person, error)
+	GetPersonArtistMBID(ctx context.Context, personID int64) (string, error)
 	GetPersonByExternalID(ctx context.Context, arg GetPersonByExternalIDParams) (Person, error)
 	GetRecycleBin(ctx context.Context, id int64) (RecycleBin, error)
 	GetRequest(ctx context.Context, id int64) (Request, error)
@@ -315,6 +316,8 @@ type Querier interface {
 	// An import names an album it already knows by the canonical title and artist, never the tags.
 	GetWorkNamingByExternalID(ctx context.Context, arg GetWorkNamingByExternalIDParams) (GetWorkNamingByExternalIDRow, error)
 	GetWorkPart(ctx context.Context, id int64) (WorkPart, error)
+	// The ids a user's image picker asks the providers with.
+	GetWorkReleaseGroupMBID(ctx context.Context, workID int64) (string, error)
 	// What a library's downloads still on their way will take when they land, so the free-space gate
 	// does not count the same room twice between capacity measurements (ADR-12).
 	InFlightBytesForCategory(ctx context.Context, categoryID int64) (int64, error)
@@ -583,6 +586,7 @@ type Querier interface {
 	ListWorkPartTitles(ctx context.Context, partID int64) ([]WorkPartTitle, error)
 	// Ordered by the module's sort key. Core never parses media_ref to order parts.
 	ListWorkParts(ctx context.Context, workID int64) ([]WorkPart, error)
+	ListWorkReleaseMBIDs(ctx context.Context, workID int64) ([]string, error)
 	ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle, error)
 	// Cover art attaches to the work (subject_type='work'), but Cover Art Archive is
 	// queried by release (edition) MBID -- any refined (kind != 'unknown') edition

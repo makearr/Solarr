@@ -1746,6 +1746,29 @@ export interface paths {
          * @description WebP bytes straight from the on-disk cache ArtworkJob wrote -- never fetched live, never re-encoded per request. 404 both when the work is not visible to the caller (ADR-27, indistinguishable from missing) and when no cover has been recorded yet; a client cannot and need not tell the two apart.
          */
         get: operations["getWorkArtwork"];
+        /** Make one of the offered pictures this work's image; it is kept over later refreshes. */
+        put: operations["chooseWorkArtwork"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/works/{id}/artwork/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * The pictures providers hold for this work, to pick one from.
+         * @description Asked of the providers live (Cover Art Archive, TheAudioDB, Wikidata), so it can be slow; a provider that is down is left out as long as another answered. Visibility as for the image itself.
+         */
+        get: operations["getWorkArtworkOptions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2835,6 +2858,29 @@ export interface paths {
          * @description WebP bytes straight from the on-disk cache EnrichJob wrote from the artist's own Wikidata P18 claim, when they have one -- most people do not, so 404 is the common case, indistinguishable from "no such person" the same way GET /works/{id}/artwork's own 404 is. An album's own cover falls back to this same image when the album has none of its own (that fallback lives in GET /works/{id}/artwork itself, not here).
          */
         get: operations["getPersonArtwork"];
+        /** Make one of the offered pictures this person's image; it is kept over later refreshes. */
+        put: operations["choosePersonArtwork"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/{id}/artwork/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * The pictures providers hold for this person, to pick one from.
+         * @description Asked of the providers live (TheAudioDB, Wikidata), so it can be slow; a provider that is down is left out as long as another answered.
+         */
+        get: operations["getPersonArtworkOptions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5561,6 +5607,23 @@ export interface components {
             tier_used: number | null;
             decisions: components["schemas"]["CandidateDecision"][];
             indexer_errors: components["schemas"]["IndexerSearchError"][];
+        };
+        ImageOptions: {
+            options: components["schemas"]["ImageOption"][];
+        };
+        ImageOption: {
+            /** @description The picture to download and keep. */
+            url: string;
+            /** @description A small rendition to browse by. */
+            thumb_url: string;
+            /** @description The provider */
+            source: string;
+            /** @description What it shows */
+            label: string;
+        };
+        ImagePick: {
+            /** @description One of the offered urls */
+            url: string;
         };
         CategorySearchEnqueued: {
             /** @description True when a search for this category was already running. */
@@ -8602,6 +8665,60 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
+    chooseWorkArtwork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImagePick"];
+            };
+        };
+        responses: {
+            /** @description The image was replaced. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
+    getWorkArtworkOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The options, possibly none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageOptions"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
     listWorkCandidates: {
         parameters: {
             query?: never;
@@ -10461,6 +10578,60 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    choosePersonArtwork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImagePick"];
+            };
+        };
+        responses: {
+            /** @description The image was replaced. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
+    getPersonArtworkOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The options, possibly none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageOptions"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
         };
     };
     subscribePerson: {

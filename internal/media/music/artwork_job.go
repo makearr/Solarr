@@ -290,43 +290,70 @@ func (j *ArtworkJob) processOne(ctx context.Context, candidate library.ArtworkCa
 	if err != nil {
 		return err
 	}
+	source, err := j.download(ctx, imageURL)
+	if err != nil {
+		return err
+	}
+	return j.storeCover(ctx, candidate.WorkID, imageURL, source)
+}
 
+// download reads one image, bounded by maxImageBytes.
+func (j *ArtworkJob) download(ctx context.Context, imageURL string) ([]byte, error) {
 	response, err := j.http.Get(ctx, imageURL)
 	if err != nil {
-		return fmt.Errorf("fetch image: %w", err)
+		return nil, fmt.Errorf("fetch image: %w", err)
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("fetch image: status %d", response.StatusCode)
+		return nil, fmt.Errorf("fetch image: status %d", response.StatusCode)
 	}
 	source, err := io.ReadAll(io.LimitReader(response.Body, maxImageBytes))
 	if err != nil {
-		return fmt.Errorf("read image: %w", err)
+		return nil, fmt.Errorf("read image: %w", err)
 	}
-	return j.storeCover(ctx, candidate.WorkID, imageURL, source)
+	return source, nil
 }
 
 // storeCover resizes, writes and records one work's cover from its source
 // bytes, however they were obtained. sourceURL is empty for art read from a file.
 func (j *ArtworkJob) storeCover(ctx context.Context, workID int64, sourceURL string, source []byte) error {
+	cacheKey := fmt.Sprintf("work-%d-cover", workID)
+	full, err := j.writeSizes(cacheKey, source)
+	if err != nil {
+		return err
+	}
+	return j.artworks.Record(ctx, workID, sourceURL, cacheKey, full.Width, full.Height, j.clock.Now().Unix())
+}
+
+// storeImage is storeCover for a person's image.
+func (j *ArtworkJob) storeImage(ctx context.Context, personID int64, sourceURL string, source []byte) error {
+	cacheKey := fmt.Sprintf("person-%d-cover", personID)
+	full, err := j.writeSizes(cacheKey, source)
+	if err != nil {
+		return err
+	}
+	return j.artworks.RecordForPerson(ctx, personID, sourceURL, cacheKey, full.Width, full.Height, j.clock.Now().Unix())
+}
+
+// writeSizes encodes source at every size under cacheKey and answers the full one.
+func (j *ArtworkJob) writeSizes(cacheKey string, source []byte) (artwork.Image, error) {
 	sizes, err := artwork.Process(source)
 	if err != nil {
-		return fmt.Errorf("process image: %w", err)
+		return artwork.Image{}, fmt.Errorf("process image: %w", err)
 	}
-
-	cacheKey := fmt.Sprintf("work-%d-cover", workID)
+	if err := j.fs.MkdirAll(j.imagesDir, 0o755); err != nil {
+		return artwork.Image{}, fmt.Errorf("create %s: %w", j.imagesDir, err)
+	}
 	for size, image := range sizes {
 		destination := filepath.Join(j.imagesDir, fmt.Sprintf("%s-%s.webp", cacheKey, artworkSizeName(size)))
 		if err := fsx.WriteAtomic(j.fs, destination, func(w io.Writer) error {
 			_, err := w.Write(image.Bytes)
 			return err
 		}); err != nil {
-			return fmt.Errorf("write %s: %w", destination, err)
+			return artwork.Image{}, fmt.Errorf("write %s: %w", destination, err)
 		}
 	}
-
-	full := sizes[artwork.Full]
-	return j.artworks.Record(ctx, workID, sourceURL, cacheKey, full.Width, full.Height, j.clock.Now().Unix())
+	return sizes[artwork.Full], nil
 }
 
 func artworkSizeName(size artwork.Size) string {

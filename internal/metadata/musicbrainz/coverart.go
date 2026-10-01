@@ -47,6 +47,7 @@ type coverArtImage struct {
 	Front      bool              `json:"front"`
 	Image      string            `json:"image"`
 	Thumbnails map[string]string `json:"thumbnails"`
+	Types      []string          `json:"types"`
 }
 
 // coverArtThumbnails are the archive's ready-made renditions, largest first.
@@ -81,32 +82,72 @@ func (c CoverArt) FetchReleaseGroup(ctx context.Context, releaseGroupMBID string
 	return c.fetch(ctx, "release-group", releaseGroupMBID)
 }
 
-func (c CoverArt) fetch(ctx context.Context, entity, mbid string) (string, error) {
-	url := fmt.Sprintf("%s/%s/%s", c.baseURL, entity, mbid)
-	response, err := c.client.Get(ctx, url)
+// CoverImage is one picture the archive holds for a release or release group.
+type CoverImage struct {
+	// URL is the rendition worth downloading; ThumbURL a small one to browse by.
+	URL, ThumbURL string
+	// Types are the archive's own labels: Front, Back, Booklet, Medium, ...
+	Types []string
+}
+
+// List answers every picture the archive holds for a release (entity "release") or release group,
+// for the user to pick from; none is not an error.
+func (c CoverArt) List(ctx context.Context, entity, mbid string) ([]CoverImage, error) {
+	parsed, err := c.get(ctx, entity, mbid)
+	if errors.Is(err, ErrNoCoverArt) {
+		return nil, nil
+	}
 	if err != nil {
-		var statusErr *httpx.StatusError
-		if errors.As(err, &statusErr) && statusErr.Status == http.StatusNotFound {
-			return "", ErrNoCoverArt
+		return nil, err
+	}
+	images := make([]CoverImage, 0, len(parsed.Images))
+	for _, image := range parsed.Images {
+		thumb := image.Thumbnails["250"]
+		if thumb == "" {
+			thumb = image.Thumbnails["small"]
 		}
-		return "", fmt.Errorf("musicbrainz: cover art %s %s: %w", entity, mbid, err)
+		if thumb == "" {
+			thumb = image.url()
+		}
+		images = append(images, CoverImage{URL: image.url(), ThumbURL: thumb, Types: image.Types})
 	}
-	defer func() { _ = response.Body.Close() }()
+	return images, nil
+}
 
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+func (c CoverArt) fetch(ctx context.Context, entity, mbid string) (string, error) {
+	parsed, err := c.get(ctx, entity, mbid)
 	if err != nil {
-		return "", fmt.Errorf("musicbrainz: cover art %s %s: read response: %w", entity, mbid, err)
+		return "", err
 	}
-	var parsed coverArtResponse
-	if err := json.Unmarshal(body, &parsed); err != nil {
-		return "", fmt.Errorf("musicbrainz: cover art %s %s: decode response: %w", entity, mbid, err)
-	}
-
 	image, ok := bestCoverArtImage(parsed.Images)
 	if !ok {
 		return "", ErrNoCoverArt
 	}
 	return image, nil
+}
+
+func (c CoverArt) get(ctx context.Context, entity, mbid string) (coverArtResponse, error) {
+	url := fmt.Sprintf("%s/%s/%s", c.baseURL, entity, mbid)
+	response, err := c.client.Get(ctx, url)
+	if err != nil {
+		var statusErr *httpx.StatusError
+		if errors.As(err, &statusErr) && statusErr.Status == http.StatusNotFound {
+			return coverArtResponse{}, ErrNoCoverArt
+		}
+		return coverArtResponse{}, fmt.Errorf("musicbrainz: cover art %s %s: %w", entity, mbid, err)
+	}
+	defer func() { _ = response.Body.Close() }()
+
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	if err != nil {
+		return coverArtResponse{}, fmt.Errorf("musicbrainz: cover art %s %s: read response: %w", entity, mbid, err)
+	}
+	var parsed coverArtResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return coverArtResponse{}, fmt.Errorf("musicbrainz: cover art %s %s: decode response: %w", entity, mbid, err)
+	}
+
+	return parsed, nil
 }
 
 // bestCoverArtImage prefers a front, approved image (section 21.6's cover
