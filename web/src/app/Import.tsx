@@ -579,7 +579,28 @@ function InspectForm() {
   // D6: what nothing identified still becomes an album, marked unverified.
   // Off by default (asked 2026-09-30): an unrecognised folder waits for review unless asked for.
   const [addUnverified, setAddUnverified] = useState(false);
+  // Instead of moving files: the folder itself becomes a root of the chosen library and is scanned in place.
+  const [asRoot, setAsRoot] = useState(false);
   const categories = useCategories();
+
+  const addRoot = useMutation({
+    mutationFn: async () => {
+      if (categoryId === "") return;
+      const { data: root, error: rootError } = await api.POST("/rootfolders", { body: { path: sourcePath.trim() } });
+      if (rootError) throw rootError;
+      const { error } = await api.POST("/categories/{id}/rootfolders", {
+        params: { path: { id: categoryId } },
+        body: { root_folder_id: root!.id },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      rememberPath(sourcePath);
+      setSourcePath("");
+      void queryClient.invalidateQueries({ queryKey: ["rootfolders"] });
+      void queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+  });
 
   const inspect = useMutation({
     mutationFn: async () => {
@@ -606,7 +627,8 @@ function InspectForm() {
       className="flex flex-wrap items-end gap-2 rounded-lg border border-border-subtle bg-surface p-3"
       onSubmit={(event) => {
         event.preventDefault();
-        inspect.mutate();
+        if (asRoot && categoryId !== "") addRoot.mutate();
+        else inspect.mutate();
       }}
     >
       <PathPicker
@@ -629,8 +651,11 @@ function InspectForm() {
           ))}
         </select>
       </label>
-      <label className="flex flex-col gap-1 text-xs text-ink-muted">
-        Library
+      <label
+        className="flex flex-col gap-1 text-xs text-ink-muted"
+        title="Only files that fit the library's content are placed in it. Decide later keeps every unit waiting for a library."
+      >
+        Only into library
         <select
           className={inputStyle}
           value={categoryId}
@@ -643,6 +668,17 @@ function InspectForm() {
             </option>
           ))}
         </select>
+      </label>
+      <label className="flex items-center gap-2 self-center pt-4 text-xs text-ink">
+        <input
+          type="checkbox"
+          checked={asRoot && categoryId !== ""}
+          disabled={categoryId === ""}
+          onChange={(event) => setAsRoot(event.target.checked)}
+        />
+        <span title="Nothing is moved or copied: the folder becomes a root folder of the chosen library and is scanned where it is. Needs a library.">
+          Add as a root instead of moving
+        </span>
       </label>
       <label className="flex items-center gap-2 self-center pt-4 text-xs text-ink">
         <input
@@ -667,12 +703,22 @@ function InspectForm() {
       </label>
       <button
         type="submit"
-        disabled={!sourcePath.trim() || inspect.isPending}
+        disabled={!sourcePath.trim() || inspect.isPending || addRoot.isPending}
         className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
                    focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
-        {inspect.isPending ? "Enqueuing…" : "Import"}
+        {inspect.isPending || addRoot.isPending ? "Working…" : asRoot && categoryId !== "" ? "Add root" : "Import"}
       </button>
+      {addRoot.isSuccess && (
+        <p className="w-full text-xs text-ink-muted">
+          Added as a root folder of the library; it is being scanned where it is. See Storage → Root folders.
+        </p>
+      )}
+      {addRoot.isError && (
+        <p className="w-full text-xs text-danger">
+          {(addRoot.error as { detail?: string }).detail ?? "That folder could not be added as a root."}
+        </p>
+      )}
       {inspect.isError && (
         <p className="w-full text-xs text-danger">
           That could not be enqueued -- check the path and that you are an administrator.
