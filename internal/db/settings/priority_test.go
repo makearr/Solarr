@@ -15,6 +15,7 @@ func TestPrioritySettings_DefaultsWhenNothingIsStored(t *testing.T) {
 		GapWeight:         settings.DefaultPriorityGapWeight,
 		UpgradeWeight:     settings.DefaultPriorityUpgradeWeight,
 		NewReleaseDays:    settings.DefaultPriorityNewReleaseDays,
+		HuntMode:          "oldest_searched",
 	}
 	if got.SearchesPerHour == nil || *got.SearchesPerHour != settings.DefaultSearchesPerHour {
 		t.Errorf("SearchesPerHour = %v, want %d", got.SearchesPerHour, settings.DefaultSearchesPerHour)
@@ -50,6 +51,7 @@ func TestSetPrioritySettings_RoundTrips(t *testing.T) {
 	cache, cl := newCache(t)
 	want := settings.PrioritySettings{
 		UserRequestWeight: 50, NewReleaseWeight: 35, GapWeight: 15, UpgradeWeight: 5, NewReleaseDays: 14,
+		HuntMode: "newest_release",
 	}
 	if err := cache.SetPrioritySettings(t.Context(), cl, want); err != nil {
 		t.Fatalf("SetPrioritySettings: %v", err)

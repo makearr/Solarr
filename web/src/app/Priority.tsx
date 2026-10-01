@@ -6,6 +6,15 @@ import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
 type PrioritySettings = components["schemas"]["PrioritySettings"];
+type HuntMode = NonNullable<PrioritySettings["hunt_mode"]>;
+
+const HUNT_MODES: readonly (readonly [HuntMode, string])[] = [
+  ["oldest_searched", "Oldest searched first"],
+  ["newest_searched", "Newest searched first"],
+  ["oldest_release", "Oldest release first"],
+  ["newest_release", "Newest release first"],
+  ["random_oldest_searched", "Random among the oldest searched"],
+];
 
 /** ADR-36/ADR-55's trigger weights and freshness window, and the automatic search budget (section 9.4). */
 export function Priority() {
@@ -62,6 +71,7 @@ function PriorityForm({
   const [upgradeWeight, setUpgradeWeight] = useState(priority.upgrade_weight);
   const [newReleaseDays, setNewReleaseDays] = useState(priority.new_release_days);
   const [searchesPerHour, setSearchesPerHour] = useState(priority.searches_per_hour ?? 12);
+  const [huntMode, setHuntMode] = useState<HuntMode>(priority.hunt_mode ?? "oldest_searched");
 
   const dirty =
     userRequestWeight !== priority.user_request_weight ||
@@ -69,7 +79,8 @@ function PriorityForm({
     gapWeight !== priority.gap_weight ||
     upgradeWeight !== priority.upgrade_weight ||
     newReleaseDays !== priority.new_release_days ||
-    searchesPerHour !== priority.searches_per_hour;
+    searchesPerHour !== priority.searches_per_hour ||
+    huntMode !== (priority.hunt_mode ?? "oldest_searched");
 
   return (
     <form
@@ -83,6 +94,7 @@ function PriorityForm({
           upgrade_weight: upgradeWeight,
           new_release_days: newReleaseDays,
           searches_per_hour: searchesPerHour,
+          hunt_mode: huntMode,
         });
       }}
     >
@@ -122,6 +134,26 @@ function PriorityForm({
         <span className="text-[0.6875rem]">
           Missing albums searched on their own each hour, most urgent first. 0 turns automatic
           searching off. Keep it low if an indexer limits API calls per day.
+        </span>
+      </label>
+
+      <label className="flex flex-col gap-1">
+        Automatic search order
+        <select
+          value={huntMode}
+          disabled={busy}
+          onChange={(event) => setHuntMode(event.target.value as HuntMode)}
+          className={`${inputStyle} w-64`}
+        >
+          {HUNT_MODES.map(([id, label]) => (
+            <option key={id} value={id}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <span className="text-[0.6875rem]">
+          Each hour's searches are split 40% new releases, 40% gaps and 20% upgrades; what one leaves unused goes to
+          the others. This is the order within each share.
         </span>
       </label>
 

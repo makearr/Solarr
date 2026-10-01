@@ -31,7 +31,11 @@ func (p *process) registerPlanJobs(registry *jobs.Registry, executor *jobs.Execu
 		Searchable: func(item library.PlanInput) bool { return music.SearchedOnItsOwn(item.SatisfactionKind) },
 	}))
 	executor.Handle(plan.HuntJobType, plan.NewHuntJob(plan.HuntConfig{
-		Hunt: hunt, PerHour: p.searchesPerHour, Search: p.huntSearch, Clock: clock.NewSystem(), Logger: p.logger,
+		Hunt: hunt, PerHour: p.searchesPerHour, Search: p.huntSearch,
+		Mode: func(context.Context) (library.HuntMode, error) {
+			return library.HuntMode(p.cache.Snapshot().PrioritySettings().HuntMode), nil
+		},
+		NewReleaseDays: func() int { return int(p.cache.Snapshot().PrioritySettings().NewReleaseDays) }, Clock: clock.NewSystem(), Logger: p.logger,
 	}))
 	if err := registry.Register(music.RSSDefinition); err != nil {
 		return err

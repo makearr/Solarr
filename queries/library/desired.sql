@@ -178,20 +178,50 @@ ON CONFLICT (desired_item_id) DO UPDATE SET after_failure = 1;
 -- name: RemoveFromHuntQueue :exec
 DELETE FROM hunt_queue WHERE desired_item_id = ?;
 
--- oldest_searched, the default hunt mode (section 9.3).
+-- The hunt's five modes (section 9.3), each within a class and, for the new-release and gap shares, a release-date range:
+-- release_from and release_before are Unix seconds, zero for no bound; an unknown release date counts as a gap.
+
+-- oldest_searched, the default.
 -- name: NextHuntByOldestSearched :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
        eligible_after, search_count, queued_since, after_failure
 FROM hunt_queue
 WHERE class = sqlc.arg(class) AND eligible_after <= sqlc.arg(now)
+  AND (CAST(sqlc.arg(release_from) AS INTEGER) = 0 OR release_date >= sqlc.arg(release_from))
+  AND (CAST(sqlc.arg(release_before) AS INTEGER) = 0 OR release_date IS NULL OR release_date < sqlc.arg(release_before))
 ORDER BY priority DESC, last_searched_at ASC
 LIMIT sqlc.arg(page_size);
 
+-- newest_searched.
+-- name: NextHuntByNewestSearched :many
+SELECT desired_item_id, class, priority, last_searched_at, release_date,
+       eligible_after, search_count, queued_since, after_failure
+FROM hunt_queue
+WHERE class = sqlc.arg(class) AND eligible_after <= sqlc.arg(now)
+  AND (CAST(sqlc.arg(release_from) AS INTEGER) = 0 OR release_date >= sqlc.arg(release_from))
+  AND (CAST(sqlc.arg(release_before) AS INTEGER) = 0 OR release_date IS NULL OR release_date < sqlc.arg(release_before))
+ORDER BY priority DESC, last_searched_at DESC
+LIMIT sqlc.arg(page_size);
+
+-- oldest_release.
+-- name: NextHuntByOldestRelease :many
+SELECT desired_item_id, class, priority, last_searched_at, release_date,
+       eligible_after, search_count, queued_since, after_failure
+FROM hunt_queue
+WHERE class = sqlc.arg(class) AND eligible_after <= sqlc.arg(now)
+  AND (CAST(sqlc.arg(release_from) AS INTEGER) = 0 OR release_date >= sqlc.arg(release_from))
+  AND (CAST(sqlc.arg(release_before) AS INTEGER) = 0 OR release_date IS NULL OR release_date < sqlc.arg(release_before))
+ORDER BY priority DESC, release_date ASC
+LIMIT sqlc.arg(page_size);
+
+-- newest_release.
 -- name: NextHuntByNewestRelease :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
        eligible_after, search_count, queued_since, after_failure
 FROM hunt_queue
 WHERE class = sqlc.arg(class) AND eligible_after <= sqlc.arg(now)
+  AND (CAST(sqlc.arg(release_from) AS INTEGER) = 0 OR release_date >= sqlc.arg(release_from))
+  AND (CAST(sqlc.arg(release_before) AS INTEGER) = 0 OR release_date IS NULL OR release_date < sqlc.arg(release_before))
 ORDER BY priority DESC, release_date DESC
 LIMIT sqlc.arg(page_size);
 

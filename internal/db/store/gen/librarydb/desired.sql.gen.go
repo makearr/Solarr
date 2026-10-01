@@ -1320,18 +1320,147 @@ SELECT desired_item_id, class, priority, last_searched_at, release_date,
        eligible_after, search_count, queued_since, after_failure
 FROM hunt_queue
 WHERE class = ?1 AND eligible_after <= ?2
+  AND (CAST(?3 AS INTEGER) = 0 OR release_date >= ?3)
+  AND (CAST(?4 AS INTEGER) = 0 OR release_date IS NULL OR release_date < ?4)
 ORDER BY priority DESC, release_date DESC
-LIMIT ?3
+LIMIT ?5
 `
 
 type NextHuntByNewestReleaseParams struct {
-	Class    string
-	Now      int64
-	PageSize int64
+	Class         string
+	Now           int64
+	ReleaseFrom   int64
+	ReleaseBefore int64
+	PageSize      int64
 }
 
+// newest_release.
 func (q *Queries) NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error) {
-	rows, err := q.db.QueryContext(ctx, nextHuntByNewestRelease, arg.Class, arg.Now, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, nextHuntByNewestRelease,
+		arg.Class,
+		arg.Now,
+		arg.ReleaseFrom,
+		arg.ReleaseBefore,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []HuntQueue{}
+	for rows.Next() {
+		var i HuntQueue
+		if err := rows.Scan(
+			&i.DesiredItemID,
+			&i.Class,
+			&i.Priority,
+			&i.LastSearchedAt,
+			&i.ReleaseDate,
+			&i.EligibleAfter,
+			&i.SearchCount,
+			&i.QueuedSince,
+			&i.AfterFailure,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const nextHuntByNewestSearched = `-- name: NextHuntByNewestSearched :many
+SELECT desired_item_id, class, priority, last_searched_at, release_date,
+       eligible_after, search_count, queued_since, after_failure
+FROM hunt_queue
+WHERE class = ?1 AND eligible_after <= ?2
+  AND (CAST(?3 AS INTEGER) = 0 OR release_date >= ?3)
+  AND (CAST(?4 AS INTEGER) = 0 OR release_date IS NULL OR release_date < ?4)
+ORDER BY priority DESC, last_searched_at DESC
+LIMIT ?5
+`
+
+type NextHuntByNewestSearchedParams struct {
+	Class         string
+	Now           int64
+	ReleaseFrom   int64
+	ReleaseBefore int64
+	PageSize      int64
+}
+
+// newest_searched.
+func (q *Queries) NextHuntByNewestSearched(ctx context.Context, arg NextHuntByNewestSearchedParams) ([]HuntQueue, error) {
+	rows, err := q.db.QueryContext(ctx, nextHuntByNewestSearched,
+		arg.Class,
+		arg.Now,
+		arg.ReleaseFrom,
+		arg.ReleaseBefore,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []HuntQueue{}
+	for rows.Next() {
+		var i HuntQueue
+		if err := rows.Scan(
+			&i.DesiredItemID,
+			&i.Class,
+			&i.Priority,
+			&i.LastSearchedAt,
+			&i.ReleaseDate,
+			&i.EligibleAfter,
+			&i.SearchCount,
+			&i.QueuedSince,
+			&i.AfterFailure,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const nextHuntByOldestRelease = `-- name: NextHuntByOldestRelease :many
+SELECT desired_item_id, class, priority, last_searched_at, release_date,
+       eligible_after, search_count, queued_since, after_failure
+FROM hunt_queue
+WHERE class = ?1 AND eligible_after <= ?2
+  AND (CAST(?3 AS INTEGER) = 0 OR release_date >= ?3)
+  AND (CAST(?4 AS INTEGER) = 0 OR release_date IS NULL OR release_date < ?4)
+ORDER BY priority DESC, release_date ASC
+LIMIT ?5
+`
+
+type NextHuntByOldestReleaseParams struct {
+	Class         string
+	Now           int64
+	ReleaseFrom   int64
+	ReleaseBefore int64
+	PageSize      int64
+}
+
+// oldest_release.
+func (q *Queries) NextHuntByOldestRelease(ctx context.Context, arg NextHuntByOldestReleaseParams) ([]HuntQueue, error) {
+	rows, err := q.db.QueryContext(ctx, nextHuntByOldestRelease,
+		arg.Class,
+		arg.Now,
+		arg.ReleaseFrom,
+		arg.ReleaseBefore,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1364,23 +1493,36 @@ func (q *Queries) NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNew
 }
 
 const nextHuntByOldestSearched = `-- name: NextHuntByOldestSearched :many
+
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
        eligible_after, search_count, queued_since, after_failure
 FROM hunt_queue
 WHERE class = ?1 AND eligible_after <= ?2
+  AND (CAST(?3 AS INTEGER) = 0 OR release_date >= ?3)
+  AND (CAST(?4 AS INTEGER) = 0 OR release_date IS NULL OR release_date < ?4)
 ORDER BY priority DESC, last_searched_at ASC
-LIMIT ?3
+LIMIT ?5
 `
 
 type NextHuntByOldestSearchedParams struct {
-	Class    string
-	Now      int64
-	PageSize int64
+	Class         string
+	Now           int64
+	ReleaseFrom   int64
+	ReleaseBefore int64
+	PageSize      int64
 }
 
-// oldest_searched, the default hunt mode (section 9.3).
+// The hunt's five modes (section 9.3), each within a class and, for the new-release and gap shares, a release-date range:
+// release_from and release_before are Unix seconds, zero for no bound; an unknown release date counts as a gap.
+// oldest_searched, the default.
 func (q *Queries) NextHuntByOldestSearched(ctx context.Context, arg NextHuntByOldestSearchedParams) ([]HuntQueue, error) {
-	rows, err := q.db.QueryContext(ctx, nextHuntByOldestSearched, arg.Class, arg.Now, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, nextHuntByOldestSearched,
+		arg.Class,
+		arg.Now,
+		arg.ReleaseFrom,
+		arg.ReleaseBefore,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}

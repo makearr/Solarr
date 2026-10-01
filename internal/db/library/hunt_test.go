@@ -2,6 +2,7 @@ package library_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -89,7 +90,7 @@ func TestApplyPlanSkipsAnItemChangedSinceItWasRead(t *testing.T) {
 	if err != nil || applied != 0 {
 		t.Fatalf("ApplyPlan = %d, %v; want 0", applied, err)
 	}
-	if next, _ := hunt.NextToHunt(t.Context(), "missing", 5_000, 10); len(next) != 0 {
+	if next, _ := hunt.NextToHunt(t.Context(), library.HuntSelection{Class: "missing", Mode: library.HuntOldestSearched, Now: 5_000, Limit: 10}); len(next) != 0 {
 		t.Fatalf("a stale plan queued %v", next)
 	}
 	after, err := queries.GetDesiredItem(t.Context(), item.ID)
@@ -111,7 +112,7 @@ func TestPostponeKeepsTheHuntAwayUntilThen(t *testing.T) {
 		t.Fatalf("Postpone: %v", err)
 	}
 	for now, want := range map[int64]int{8_999: 0, 9_000: 1} {
-		next, err := hunt.NextToHunt(t.Context(), "missing", now, 10)
+		next, err := hunt.NextToHunt(t.Context(), library.HuntSelection{Class: "missing", Mode: library.HuntOldestSearched, Now: now, Limit: 10})
 		if err != nil || len(next) != want {
 			t.Errorf("NextToHunt at %d = %v, %v; want %d items", now, next, err, want)
 		}
@@ -141,5 +142,73 @@ func TestWantedAlbumsByArtist_MatchesNameAndAlias(t *testing.T) {
 	}
 	if ids, _ := hunt.WantedAlbumsByArtist(t.Context(), "Katupoken", 10); len(ids) != 0 {
 		t.Errorf("an unrelated name matched %v", ids)
+	}
+}
+
+// Section 9.3: each mode orders the eligible items its own way, and a release range narrows to new releases or gaps.
+func TestNextToHunt_ModesAndReleaseRanges(t *testing.T) {
+	opened, _ := newLibrary(t)
+	hunt := library.NewHunt(opened)
+	desired := library.NewDesired(opened)
+	// searched[i] and released[i] are item i's last search and street date; the last has no date.
+	searched := []int64{300, 100, 200, 400}
+	released := []int64{5_000, 9_000, 7_000, 0}
+	ids := make([]int64, len(searched))
+	for index := range searched {
+		work := createWork(t, opened, "music", "Album "+string(rune('A'+index)))
+		item := createDesired(t, opened, work.ID, "SET", 10)
+		ids[index] = item.ID
+		mustRecordSearched(t, desired, item.ID, searched[index])
+	}
+	inputs, err := hunt.PlanInputs(t.Context(), true, 0, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	planned := make([]library.PlannedHunt, len(inputs))
+	for index, input := range inputs {
+		date := released[index]
+		planned[index] = library.PlannedHunt{Input: input, Class: "missing", Priority: 1}
+		if date != 0 {
+			planned[index].ReleaseDate = &date
+		}
+	}
+	if _, err := hunt.ApplyPlan(t.Context(), planned, 1); err != nil {
+		t.Fatal(err)
+	}
+	// ApplyPlan leaves the search record alone; set it again for the order tests.
+	for index, id := range ids {
+		mustRecordSearched(t, desired, id, searched[index]+1_000)
+	}
+
+	draw := func(mode library.HuntMode, from, before int64) []int64 {
+		got, err := hunt.NextToHunt(t.Context(), library.HuntSelection{
+			Class: "missing", Mode: mode, Now: 1_000_000, Limit: 10, ReleaseFrom: from, ReleaseBefore: before,
+		})
+		if err != nil {
+			t.Fatalf("NextToHunt %s: %v", mode, err)
+		}
+		return got
+	}
+	for _, check := range []struct {
+		mode library.HuntMode
+		want []int64
+	}{
+		{library.HuntOldestSearched, []int64{ids[1], ids[2], ids[0], ids[3]}},
+		{library.HuntNewestSearched, []int64{ids[3], ids[0], ids[2], ids[1]}},
+		{library.HuntOldestRelease, []int64{ids[3], ids[0], ids[2], ids[1]}},
+		{library.HuntNewestRelease, []int64{ids[1], ids[2], ids[0], ids[3]}},
+	} {
+		if got := draw(check.mode, 0, 0); !slices.Equal(got, check.want) {
+			t.Errorf("%s = %v, want %v", check.mode, got, check.want)
+		}
+	}
+	if got := draw(library.HuntRandomOldestSearched, 0, 0); len(got) != 4 {
+		t.Errorf("random_oldest_searched drew %v, want all four", got)
+	}
+	if got := draw(library.HuntOldestSearched, 6_000, 0); !slices.Equal(got, []int64{ids[1], ids[2]}) {
+		t.Errorf("new releases (from 6000) = %v, want the two released after it", got)
+	}
+	if got := draw(library.HuntOldestSearched, 0, 6_000); !slices.Equal(got, []int64{ids[0], ids[3]}) {
+		t.Errorf("gaps (before 6000) = %v, want the older one and the undated one", got)
 	}
 }
