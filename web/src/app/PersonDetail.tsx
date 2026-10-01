@@ -10,6 +10,7 @@ import type { components } from "@/api/schema";
 import { albumStatusLabel, albumStatusText } from "@/lib/albumStatus";
 import { discCountOf, formatTrackNumber } from "@/lib/trackNumber";
 
+import { ChooseImage } from "./ChooseImage";
 import { CoverArt } from "./CoverArt";
 
 type PersonWork = components["schemas"]["PersonWork"];
@@ -173,13 +174,16 @@ export function PersonDetail() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
         <header className="flex items-start gap-4">
-          <CoverArt
-            subject="people"
-            workId={person.id}
-            title={person.name}
-            size="full"
-            className="h-40 w-40 shrink-0 rounded-full object-cover"
-          />
+          <div className="flex shrink-0 flex-col items-center gap-2">
+            <CoverArt
+              subject="people"
+              workId={person.id}
+              title={person.name}
+              size="full"
+              className="h-40 w-40 shrink-0 rounded-full object-cover"
+            />
+            <ChooseImage subject="people" id={person.id} title={person.name} />
+          </div>
           <div className="flex flex-1 items-start justify-between gap-4 pt-1">
             <div className="flex flex-col gap-1.5">
               <h1 className="text-lg font-semibold">{person.name}</h1>

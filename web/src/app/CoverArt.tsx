@@ -2,6 +2,8 @@ import { useState } from "react";
 
 import { API_PREFIX } from "@/api/client";
 
+import { useArtworkVersion } from "./artworkVersion";
+
 type Size = "thumb" | "small" | "full";
 type Subject = "works" | "people";
 
@@ -24,7 +26,8 @@ interface CoverArtProps {
 // different subject does not keep showing a stale failure.
 export function CoverArt({ subject = "works", workId, title, size = "small", className }: CoverArtProps) {
   const [failed, setFailed] = useState(false);
-  const key = `${subject}-${workId}-${size}`;
+  const version = useArtworkVersion(subject, workId);
+  const key = `${subject}-${workId}-${size}-${version}`;
 
   if (failed) {
     return (
@@ -41,7 +44,7 @@ export function CoverArt({ subject = "works", workId, title, size = "small", cla
   return (
     <img
       key={key}
-      src={`${API_PREFIX}/${subject}/${workId}/artwork?size=${size}`}
+      src={`${API_PREFIX}/${subject}/${workId}/artwork?size=${size}${version > 0 ? `&v=${version}` : ""}`}
       alt={title}
       loading="lazy"
       className={className}

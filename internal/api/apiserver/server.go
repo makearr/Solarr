@@ -101,6 +101,9 @@ type Config struct {
 	// PeopleSubscriber subscribes a caller to a person. Optional: without it,
 	// SubscribePerson answers 503.
 	PeopleSubscriber PeopleSubscriber
+	// ArtworkChoices browses and picks provider images. Optional: nil answers 503.
+	ArtworkChoices ArtworkChoices
+
 	// ArtistActions are the artist page's bulk verbs. Optional: nil answers 503.
 	ArtistActions ArtistActions
 	// AlbumRefresher is an album's Refresh. Optional: nil answers 503.
@@ -238,6 +241,7 @@ type Server struct {
 	people                PeopleReader
 	peopleSubscriber      PeopleSubscriber
 	artistActions         ArtistActions
+	artworkChoices        ArtworkChoices
 	albumRefresher        AlbumRefresher
 	arrConnections        ArrConnections
 	subscriptionPreviewer SubscriptionPreviewer
@@ -329,6 +333,7 @@ func New(config Config) (*Server, error) {
 		people:                config.People,
 		peopleSubscriber:      config.PeopleSubscriber,
 		artistActions:         config.ArtistActions,
+		artworkChoices:        config.ArtworkChoices,
 		albumRefresher:        config.AlbumRefresher,
 		arrConnections:        config.ArrConnections,
 		subscriptionPreviewer: config.SubscriptionPreviewer,
@@ -445,6 +450,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/parts/{partId}/monitor", server.routeSetPartMonitored)
 			secured.Post("/works/{id}/parts/{partId}/wanted", server.routeSetTrackWanted)
 			secured.Get("/works/{id}/artwork", server.routeGetWorkArtwork)
+			secured.Put("/works/{id}/artwork", server.routeChooseWorkArtwork)
+			secured.Get("/works/{id}/artwork/options", server.routeGetWorkArtworkOptions)
 			secured.Get("/works/{id}/candidates", server.routeListWorkCandidates)
 			secured.Post("/works/{id}/candidates/{decisionId}/send", server.routeSendCandidate)
 			secured.Post("/works/{id}/candidates/{decisionId}/blocklist", server.routeBlocklistCandidate)
@@ -505,6 +512,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/people", server.routeListPeople)
 			secured.Get("/people/{id}", server.routeGetPerson)
 			secured.Get("/people/{id}/artwork", server.routeGetPersonArtwork)
+			secured.Put("/people/{id}/artwork", server.routeChoosePersonArtwork)
+			secured.Get("/people/{id}/artwork/options", server.routeGetPersonArtworkOptions)
 			secured.Post("/people/{id}/subscribe", server.routeSubscribePerson)
 			secured.Post("/people/{id}/remove", server.routeRemovePerson)
 			secured.Post("/people/{id}/search", server.routeSearchPersonMissing)

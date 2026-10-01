@@ -12,6 +12,7 @@ import { usePreference } from "@/lib/usePreference";
 
 import { IndexerProblems } from "./IndexerProblems";
 import { CandidateList } from "./CandidateList";
+import { ChooseImage } from "./ChooseImage";
 import { CoverArt } from "./CoverArt";
 import { statusLabel, useQueue } from "./Queue";
 
@@ -190,12 +191,15 @@ export function WorkDetail() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
         <header className="flex items-start gap-4">
-          <CoverArt
-            workId={work.id}
-            title={work.title}
-            size="full"
-            className="h-40 w-40 shrink-0 rounded-lg object-cover"
-          />
+          <div className="flex shrink-0 flex-col items-center gap-2">
+            <CoverArt
+              workId={work.id}
+              title={work.title}
+              size="full"
+              className="h-40 w-40 shrink-0 rounded-lg object-cover"
+            />
+            <ChooseImage subject="works" id={work.id} title={work.title} />
+          </div>
           <div className="flex flex-1 items-start justify-between gap-4 pt-1">
             <div className="flex flex-col gap-1.5">
               <h1 className="text-lg font-semibold">{work.title}</h1>

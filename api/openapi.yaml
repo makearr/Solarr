@@ -2791,6 +2791,46 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+    put:
+      operationId: chooseWorkArtwork
+      tags: [library]
+      summary: Make one of the offered pictures this work's image; it is kept over later refreshes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImagePick" }
+      responses:
+        "204": { description: The image was replaced. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+
+  /works/{id}/artwork/options:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getWorkArtworkOptions
+      tags: [library]
+      summary: The pictures providers hold for this work, to pick one from.
+      description: >-
+        Asked of the providers live (Cover Art Archive, TheAudioDB, Wikidata), so it can be slow; a provider
+        that is down is left out as long as another answered. Visibility as for the image itself.
+      responses:
+        "200":
+          description: The options, possibly none.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageOptions" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/candidates:
     parameters:
       - name: id
@@ -4587,6 +4627,46 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+
+    put:
+      operationId: choosePersonArtwork
+      tags: [library]
+      summary: Make one of the offered pictures this person's image; it is kept over later refreshes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImagePick" }
+      responses:
+        "204": { description: The image was replaced. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+
+  /people/{id}/artwork/options:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getPersonArtworkOptions
+      tags: [library]
+      summary: The pictures providers hold for this person, to pick one from.
+      description: >-
+        Asked of the providers live (TheAudioDB, Wikidata), so it can be slow; a provider that is down is
+        left out as long as another answered.
+      responses:
+        "200":
+          description: The options, possibly none.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageOptions" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
 
   /people/{id}/subscribe:
     parameters:
@@ -8393,6 +8473,29 @@ components:
         indexer_errors:
           type: array
           items: { $ref: "#/components/schemas/IndexerSearchError" }
+
+    ImageOptions:
+      type: object
+      required: [options]
+      properties:
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/ImageOption" }
+
+    ImageOption:
+      type: object
+      required: [url, thumb_url, source, label]
+      properties:
+        url: { type: string, description: The picture to download and keep. }
+        thumb_url: { type: string, description: A small rendition to browse by. }
+        source: { type: string, description: The provider, such as Cover Art Archive. }
+        label: { type: string, description: What it shows, such as Front or Fanart 2. }
+
+    ImagePick:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, description: One of the offered urls, exactly. }
 
     CategorySearchEnqueued:
       type: object

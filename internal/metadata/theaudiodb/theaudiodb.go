@@ -85,6 +85,53 @@ func (c Client) AlbumCover(ctx context.Context, releaseGroupMBID string) (string
 	return parsed.Album[0].Thumb, nil
 }
 
+// Picture is one image TheAudioDB holds and what it shows.
+type Picture struct{ URL, Label string }
+
+// ArtistPictures lists every photo and fanart image of one artist, by MusicBrainz artist id.
+func (c Client) ArtistPictures(ctx context.Context, artistMBID string) ([]Picture, error) {
+	var parsed struct {
+		Artists []map[string]any `json:"artists"`
+	}
+	if err := c.get(ctx, "artist-mb.php", artistMBID, &parsed); err != nil {
+		return nil, err
+	}
+	if len(parsed.Artists) == 0 {
+		return nil, ErrNotFound
+	}
+	return pictures(parsed.Artists[0], [][2]string{
+		{"strArtistThumb", "Photo"}, {"strArtistFanart", "Fanart"}, {"strArtistFanart2", "Fanart 2"},
+		{"strArtistFanart3", "Fanart 3"}, {"strArtistFanart4", "Fanart 4"}, {"strArtistWideThumb", "Wide photo"},
+	}), nil
+}
+
+// AlbumPictures lists every cover image of one release group, by its MusicBrainz id.
+func (c Client) AlbumPictures(ctx context.Context, releaseGroupMBID string) ([]Picture, error) {
+	var parsed struct {
+		Album []map[string]any `json:"album"`
+	}
+	if err := c.get(ctx, "album-mb.php", releaseGroupMBID, &parsed); err != nil {
+		return nil, err
+	}
+	if len(parsed.Album) == 0 {
+		return nil, ErrNotFound
+	}
+	return pictures(parsed.Album[0], [][2]string{
+		{"strAlbumThumbHQ", "Front (high quality)"}, {"strAlbumThumb", "Front"}, {"strAlbumThumbBack", "Back"},
+	}), nil
+}
+
+// pictures reads the named string fields of one record, in order, skipping the empty ones.
+func pictures(record map[string]any, fields [][2]string) []Picture {
+	var found []Picture
+	for _, field := range fields {
+		if address, ok := record[field[0]].(string); ok && address != "" {
+			found = append(found, Picture{URL: address, Label: field[1]})
+		}
+	}
+	return found
+}
+
 // get fetches one lookup. The key sits in the URL's path, where httpx cannot redact it, so no
 // error from the transport is passed on with it in.
 func (c Client) get(ctx context.Context, endpoint, mbid string, into any) error {

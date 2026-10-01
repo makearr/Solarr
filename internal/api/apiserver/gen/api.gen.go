@@ -1656,6 +1656,32 @@ type Identity struct {
 	Username string `json:"username"`
 }
 
+// ImageOption defines model for ImageOption.
+type ImageOption struct {
+	// Label What it shows
+	Label string `json:"label"`
+
+	// Source The provider
+	Source string `json:"source"`
+
+	// ThumbUrl A small rendition to browse by.
+	ThumbUrl string `json:"thumb_url"`
+
+	// Url The picture to download and keep.
+	Url string `json:"url"`
+}
+
+// ImageOptions defines model for ImageOptions.
+type ImageOptions struct {
+	Options []ImageOption `json:"options"`
+}
+
+// ImagePick defines model for ImagePick.
+type ImagePick struct {
+	// Url One of the offered urls
+	Url string `json:"url"`
+}
+
 // ImportCandidate One IDENTIFY strategy's ranked answer for a unit.
 type ImportCandidate struct {
 	Confidence float32 `json:"confidence"`
@@ -3950,6 +3976,9 @@ type SetTheAudioDBAPIKeyJSONRequestBody SetTheAudioDBAPIKeyJSONBody
 // UpdateNetworkSettingsJSONRequestBody defines body for UpdateNetworkSettings for application/json ContentType.
 type UpdateNetworkSettingsJSONRequestBody = NetworkSettingsUpdate
 
+// ChoosePersonArtworkJSONRequestBody defines body for ChoosePersonArtwork for application/json ContentType.
+type ChoosePersonArtworkJSONRequestBody = ImagePick
+
 // SubscribePersonJSONRequestBody defines body for SubscribePerson for application/json ContentType.
 type SubscribePersonJSONRequestBody SubscribePersonJSONBody
 
@@ -4009,6 +4038,9 @@ type SetUserAccessJSONRequestBody SetUserAccessJSONBody
 
 // BulkSetWorkMonitoredJSONRequestBody defines body for BulkSetWorkMonitored for application/json ContentType.
 type BulkSetWorkMonitoredJSONRequestBody BulkSetWorkMonitoredJSONBody
+
+// ChooseWorkArtworkJSONRequestBody defines body for ChooseWorkArtwork for application/json ContentType.
+type ChooseWorkArtworkJSONRequestBody = ImagePick
 
 // SetWorkMonitoredJSONRequestBody defines body for SetWorkMonitored for application/json ContentType.
 type SetWorkMonitoredJSONRequestBody SetWorkMonitoredJSONBody
@@ -4411,6 +4443,12 @@ type ServerInterface interface {
 	// A person's cached Wikidata image, if one was found.
 	// (GET /people/{id}/artwork)
 	GetPersonArtwork(w http.ResponseWriter, r *http.Request, id int64, params GetPersonArtworkParams)
+	// Make one of the offered pictures this person's image; it is kept over later refreshes.
+	// (PUT /people/{id}/artwork)
+	ChoosePersonArtwork(w http.ResponseWriter, r *http.Request, id int64)
+	// The pictures providers hold for this person, to pick one from.
+	// (GET /people/{id}/artwork/options)
+	GetPersonArtworkOptions(w http.ResponseWriter, r *http.Request, id int64)
 	// Monitor every album of this artist's discography. Administrator only.
 	// (POST /people/{id}/monitor-all)
 	MonitorPersonAll(w http.ResponseWriter, r *http.Request, id int64)
@@ -4585,6 +4623,12 @@ type ServerInterface interface {
 	// A work's cached cover art (section 21.6), if any has been fetched yet.
 	// (GET /works/{id}/artwork)
 	GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64, params GetWorkArtworkParams)
+	// Make one of the offered pictures this work's image; it is kept over later refreshes.
+	// (PUT /works/{id}/artwork)
+	ChooseWorkArtwork(w http.ResponseWriter, r *http.Request, id int64)
+	// The pictures providers hold for this work, to pick one from.
+	// (GET /works/{id}/artwork/options)
+	GetWorkArtworkOptions(w http.ResponseWriter, r *http.Request, id int64)
 	// Every release ever decided against this work's own wanted album item (section 12's own "why wasn't this downloaded"), newest first. Empty, never 404, for a work nobody has searched yet.
 	// (GET /works/{id}/candidates)
 	ListWorkCandidates(w http.ResponseWriter, r *http.Request, id int64)
@@ -5389,6 +5433,18 @@ func (_ Unimplemented) GetPersonArtwork(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Make one of the offered pictures this person's image; it is kept over later refreshes.
+// (PUT /people/{id}/artwork)
+func (_ Unimplemented) ChoosePersonArtwork(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The pictures providers hold for this person, to pick one from.
+// (GET /people/{id}/artwork/options)
+func (_ Unimplemented) GetPersonArtworkOptions(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Monitor every album of this artist's discography. Administrator only.
 // (POST /people/{id}/monitor-all)
 func (_ Unimplemented) MonitorPersonAll(w http.ResponseWriter, r *http.Request, id int64) {
@@ -5734,6 +5790,18 @@ func (_ Unimplemented) GetWork(w http.ResponseWriter, r *http.Request, id int64)
 // A work's cached cover art (section 21.6), if any has been fetched yet.
 // (GET /works/{id}/artwork)
 func (_ Unimplemented) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64, params GetWorkArtworkParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Make one of the offered pictures this work's image; it is kept over later refreshes.
+// (PUT /works/{id}/artwork)
+func (_ Unimplemented) ChooseWorkArtwork(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The pictures providers hold for this work, to pick one from.
+// (GET /works/{id}/artwork/options)
+func (_ Unimplemented) GetWorkArtworkOptions(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9830,6 +9898,72 @@ func (siw *ServerInterfaceWrapper) GetPersonArtwork(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ChoosePersonArtwork operation middleware
+func (siw *ServerInterfaceWrapper) ChoosePersonArtwork(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChoosePersonArtwork(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPersonArtworkOptions operation middleware
+func (siw *ServerInterfaceWrapper) GetPersonArtworkOptions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPersonArtworkOptions(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // MonitorPersonAll operation middleware
 func (siw *ServerInterfaceWrapper) MonitorPersonAll(w http.ResponseWriter, r *http.Request) {
 
@@ -11537,6 +11671,72 @@ func (siw *ServerInterfaceWrapper) GetWorkArtwork(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ChooseWorkArtwork operation middleware
+func (siw *ServerInterfaceWrapper) ChooseWorkArtwork(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChooseWorkArtwork(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWorkArtworkOptions operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkArtworkOptions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkArtworkOptions(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWorkCandidates operation middleware
 func (siw *ServerInterfaceWrapper) ListWorkCandidates(w http.ResponseWriter, r *http.Request) {
 
@@ -12482,6 +12682,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/people/{id}/artwork", wrapper.GetPersonArtwork)
 	})
 	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/people/{id}/artwork", wrapper.ChoosePersonArtwork)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/people/{id}/artwork/options", wrapper.GetPersonArtworkOptions)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/people/{id}/monitor-all", wrapper.MonitorPersonAll)
 	})
 	r.Group(func(r chi.Router) {
@@ -12654,6 +12860,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/{id}/artwork", wrapper.GetWorkArtwork)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/works/{id}/artwork", wrapper.ChooseWorkArtwork)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/{id}/artwork/options", wrapper.GetWorkArtworkOptions)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/{id}/candidates", wrapper.ListWorkCandidates)

@@ -247,3 +247,32 @@ func (a Artworks) RecordForPerson(
 		})
 	})
 }
+
+// WorkMBIDs are the MusicBrainz ids a work's cover is looked up by.
+type WorkMBIDs struct {
+	ReleaseGroup string
+	Releases     []string
+}
+
+// MBIDsForWork answers the release group and up to six releases of a work, either may be absent.
+func (a Artworks) MBIDsForWork(ctx context.Context, workID int64) (WorkMBIDs, error) {
+	queries := librarydb.New(a.store.Read())
+	releaseGroup, err := queries.GetWorkReleaseGroupMBID(ctx, workID)
+	if err != nil {
+		return WorkMBIDs{}, fmt.Errorf("library: release group of work %d: %w", workID, err)
+	}
+	releases, err := queries.ListWorkReleaseMBIDs(ctx, workID)
+	if err != nil {
+		return WorkMBIDs{}, fmt.Errorf("library: releases of work %d: %w", workID, err)
+	}
+	return WorkMBIDs{ReleaseGroup: releaseGroup, Releases: releases}, nil
+}
+
+// ArtistMBID answers a person's MusicBrainz artist id, empty when it has none.
+func (a Artworks) ArtistMBID(ctx context.Context, personID int64) (string, error) {
+	mbid, err := librarydb.New(a.store.Read()).GetPersonArtistMBID(ctx, personID)
+	if err != nil {
+		return "", fmt.Errorf("library: artist id of person %d: %w", personID, err)
+	}
+	return mbid, nil
+}
