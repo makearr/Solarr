@@ -12,19 +12,25 @@ package importjob
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"path"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/importing/pack"
+	"github.com/makearr/Solarr/internal/importing/unpack"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/platform/archive"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/events"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -110,10 +116,12 @@ type Committer interface {
 
 // Job runs one import.inspect execution: walk, identify, shape, decide, record.
 type Job struct {
-	fsys     fsx.FS
-	sessions library.ImportSessions
-	policy   Policy
-	tool     mediatool.Tool
+	workspace     string
+	archiveLimits archive.Limits
+	fsys          fsx.FS
+	sessions      library.ImportSessions
+	policy        Policy
+	tool          mediatool.Tool
 	// search is optional: when nil, IDENTIFY runs MBIDIdentifier alone (the
 	// same scope this pass's own live verification proved). Wiring a real
 	// Searcher is deliberately deferred to whichever caller needs real
@@ -155,14 +163,18 @@ type Config struct {
 	Albums   music.AlbumLookup
 	// Provenance is optional: the release groups an acquisition was grabbed for, which album
 	// identification always scores a download's files against (section 12).
-	Provenance  func(ctx context.Context, acquisitionID int64) ([]string, error)
-	AcoustID    music.AcoustIDLookup
-	Committer   Committer
-	Packs       library.Packs
-	Events      *events.Bus
-	OnCommitted func(context.Context)
-	Clock       clock.Clock
-	Logger      *slog.Logger
+	Provenance func(ctx context.Context, acquisitionID int64) ([]string, error)
+	AcoustID   music.AcoustIDLookup
+	Committer  Committer
+	Packs      library.Packs
+	// Workspace is where archives are opened (outside every library root); empty leaves archives unopened.
+	Workspace string
+	// ArchiveLimits bounds an expansion; zero is archive.DefaultLimits.
+	ArchiveLimits archive.Limits
+	Events        *events.Bus
+	OnCommitted   func(context.Context)
+	Clock         clock.Clock
+	Logger        *slog.Logger
 }
 
 // NewJob builds the handler.
@@ -175,7 +187,7 @@ func NewJob(config Config) *Job {
 		fsys: config.FS, sessions: config.Sessions, policy: config.Policy,
 		tool: config.Tool, search: config.Search, albums: config.Albums, provenance: config.Provenance,
 		acoustID:  config.AcoustID,
-		committer: config.Committer, packs: config.Packs,
+		committer: config.Committer, packs: config.Packs, workspace: config.Workspace, archiveLimits: config.ArchiveLimits,
 		events: config.Events, onCommitted: config.OnCommitted, clock: config.Clock, logger: logger,
 	}
 }
@@ -194,7 +206,120 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	if err := json.Unmarshal(job.Payload, &payload); err != nil {
 		return jobs.Terminalf("importjob.payload", string(job.Type), err)
 	}
+	// An archive is a folder (ADR-49): its contents are opened into a workspace and imported as one, then the
+	// source's own loose files, if it has any.
+	if workspace, opened := j.unpack(ctx, payload.SourcePath); opened > 0 {
+		inner := payload
+		inner.SourcePath = workspace
+		if err := j.runSession(ctx, job, inner); err != nil {
+			return err
+		}
+		// Units held for review still read their files from the workspace; the weekly sweep clears it later.
+		if !j.holdsQueuedUnits(ctx, workspace) {
+			if err := unpack.RemoveTree(j.fsys, workspace); err != nil {
+				j.logger.Warn("import workspace not removed", slog.String("workspace", workspace), slog.Any("error", err))
+			}
+		}
+		if !j.hasMedia(ctx, payload.SourcePath) {
+			return nil
+		}
+	}
+	return j.runSession(ctx, job, payload)
+}
 
+// holdsQueuedUnits reports whether the newest finished session of a source still has units waiting for a person.
+func (j *Job) holdsQueuedUnits(ctx context.Context, sourcePath string) bool {
+	sessions, err := j.sessions.List(ctx, library.ImportDone, true)
+	if err != nil {
+		return true
+	}
+	for _, session := range sessions {
+		if session.SourcePath != sourcePath {
+			continue
+		}
+		units, err := j.sessions.ListUnits(ctx, session.ID)
+		if err != nil {
+			return true
+		}
+		for _, unit := range units {
+			if unit.Decision == library.UnitQueue && unit.WorkID == nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// workspaceLifetime is how long a workspace kept for a review waits before it is swept.
+const workspaceLifetime = 7 * 24 * time.Hour
+
+// sweepWorkspaces removes the workspaces older than workspaceLifetime.
+func (j *Job) sweepWorkspaces() {
+	entries, err := j.fsys.ReadDir(j.workspace)
+	if err != nil {
+		return
+	}
+	cutoff := j.clock.Now().Add(-workspaceLifetime)
+	for _, entry := range entries {
+		folder := path.Join(j.workspace, entry.Name)
+		info, err := j.fsys.Stat(folder)
+		if err != nil || !info.ModTime.Before(cutoff) {
+			continue
+		}
+		if err := unpack.RemoveTree(j.fsys, folder); err != nil {
+			j.logger.Warn("old import workspace not removed", slog.String("workspace", folder), slog.Any("error", err))
+		}
+	}
+}
+
+// unpack opens the source's archives into a workspace of its own; none opened, or a failure, leaves the source to
+// be imported as it is. A workspace is never itself unpacked again.
+func (j *Job) unpack(ctx context.Context, sourcePath string) (workspace string, opened int) {
+	if j.workspace == "" || strings.HasPrefix(path.Clean(sourcePath), path.Clean(j.workspace)+"/") {
+		return "", 0
+	}
+	j.sweepWorkspaces()
+	sum := sha256.Sum256([]byte(sourcePath))
+	workspace = path.Join(j.workspace, hex.EncodeToString(sum[:])[:12])
+	if err := unpack.RemoveTree(j.fsys, workspace); err != nil {
+		j.logger.Warn("import workspace not cleared", slog.String("workspace", workspace), slog.Any("error", err))
+		return "", 0
+	}
+	opened, err := unpack.Expand(ctx, j.fsys, sourcePath, workspace, j.limits())
+	if err != nil {
+		j.logger.Warn("archives could not be opened", slog.String("source_path", sourcePath), slog.Any("error", err))
+		_ = unpack.RemoveTree(j.fsys, workspace)
+		return "", 0
+	}
+	if opened > 0 {
+		j.logger.Info("archives opened for import", slog.String("source_path", sourcePath), slog.Int("archives", opened))
+	}
+	return workspace, opened
+}
+
+func (j *Job) limits() archive.Limits {
+	if j.archiveLimits == (archive.Limits{}) {
+		return archive.DefaultLimits()
+	}
+	return j.archiveLimits
+}
+
+// hasMedia reports whether the source holds media files of its own, beside its archives.
+func (j *Job) hasMedia(ctx context.Context, sourcePath string) bool {
+	files, err := inspect.ListFiles(ctx, j.fsys, sourcePath, 0)
+	if err != nil {
+		return true
+	}
+	for _, file := range files {
+		if file.Class == inspect.ClassMedia {
+			return true
+		}
+	}
+	return false
+}
+
+// runSession imports one source folder as one session.
+func (j *Job) runSession(ctx context.Context, job jobs.Job, payload Payload) error {
 	sessionID, cursor, threshold, cancelling, err := j.resumeOrCreate(ctx, &payload)
 	if err != nil {
 		return err

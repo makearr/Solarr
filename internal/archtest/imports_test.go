@@ -137,6 +137,7 @@ var allowedInternalImports = map[string][]string{
 	// imports internal/platform/mediatool, internal/identify/parse or internal/media/music. fsx is
 	// the one dependency, for the walk itself.
 	"internal/importing/inspect": {"internal/platform/fsx"},
+	"internal/importing/unpack":  {"internal/importing/inspect", "internal/platform/archive", "internal/platform/fsx"},
 	// Watches download folders: lists, checks an entry has settled, enqueues an import.
 	"internal/importing/downloadwatch": {
 		"internal/db/library", "internal/db/settings", "internal/importing/importjob", "internal/jobs",
@@ -241,7 +242,7 @@ var allowedInternalImports = map[string][]string{
 	// the inspect.Unit-to-FileRef adapters -- the same shape internal/scanning/scan's
 	// own job has for its Consumer, generalised to import's own pipeline.
 	"internal/importing/importjob": {
-		"internal/platform/clock", "internal/platform/fsx", "internal/importing/inspect", "internal/importing/pack",
+		"internal/platform/clock", "internal/platform/fsx", "internal/importing/inspect", "internal/importing/unpack", "internal/platform/archive", "internal/importing/pack",
 		"internal/jobs", "internal/db/library", "internal/platform/mediatool", "internal/identify/model",
 		"internal/media/music", "internal/platform/events",
 	},

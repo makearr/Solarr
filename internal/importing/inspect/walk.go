@@ -10,10 +10,14 @@ import (
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
+// ListFiles is every file under root, classified: what the import decides what to do with, and what unpack looks
+// for archives in.
+func ListFiles(ctx context.Context, fsys fsx.FS, root string, sizeFloor int64) ([]File, error) {
+	return walk(ctx, fsys, root, sizeFloor)
+}
+
 // walk recurses to arbitrary depth under root and classifies every file it finds.
-// Archive expansion (ADR-48 step 1's "expand archives") is not attempted here --
-// internal/platform/archive (todo 4.10) does not exist yet, so an archive is classified and
-// left unopened, same as an in-library one (ADR-49) until that lands.
+// An archive is classified, not opened here: importing/unpack expands them into a workspace first (ADR-49).
 func walk(ctx context.Context, fsys fsx.FS, root string, sizeFloor int64) ([]File, error) {
 	var files []File
 	if err := walkDir(ctx, fsys, root, "", sizeFloor, &files); err != nil {
