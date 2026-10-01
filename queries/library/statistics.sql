@@ -32,3 +32,20 @@ ORDER BY d.category_id, a.state;
 
 -- name: DeleteStatRollupMetric :exec
 DELETE FROM stat_rollup WHERE metric = ?;
+
+-- The artists with something held in a library, and the release groups they hold there: what a discography is
+-- compared against. A held work without a release-group id yields an empty id.
+-- name: ListHeldReleaseGroupsByArtist :many
+SELECT p.id AS person_id, x.external_id AS artist_mbid, p.name,
+       CAST(COALESCE(g.external_id, '') AS TEXT) AS release_group_mbid
+FROM person p
+JOIN person_external_id x ON x.person_id = p.id AND x.provider = 'musicbrainz:artist'
+JOIN credit c ON c.person_id = p.id AND c.role = 'artist' AND c.edition_id = 0 AND c.part_id = 0
+JOIN desired_item di ON di.work_id = c.work_id AND di.category_id = sqlc.arg(category_id) AND di.satisfaction_kind = 'SET'
+LEFT JOIN work_external_id g ON g.work_id = c.work_id AND g.provider = 'musicbrainz:release-group'
+WHERE EXISTS (SELECT 1 FROM work_file wf WHERE wf.work_id = c.work_id)
+GROUP BY p.id, x.external_id, g.external_id
+ORDER BY p.id;
+
+-- name: DeleteStatRollupMetricForCategory :exec
+DELETE FROM stat_rollup WHERE metric = sqlc.arg(metric) AND dimension LIKE CAST(sqlc.arg(prefix) AS TEXT) || '%';

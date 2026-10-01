@@ -1900,6 +1900,35 @@ paths:
           $ref: "#/components/responses/Problem"
           description: category_id does not exist, or the caller cannot read it.
 
+  /discover/incomplete:
+    get:
+      operationId: listIncompleteDiscographies
+      tags: [library]
+      summary: Artists in a library whose discography has albums the library does not hold.
+      description: >-
+        Library-derived discovery: an artist with at least one album held, compared against the albums their
+        MusicBrainz discography has under the default filters (no live recordings, compilations and the like). Most
+        missing first. Computed by a weekly background job, so empty until it has run.
+      parameters:
+        - name: category_id
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: The artists, most missing first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/IncompleteDiscography" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /discover/add:
     post:
       operationId: discoverAdd
@@ -8507,6 +8536,16 @@ components:
         indexer_errors:
           type: array
           items: { $ref: "#/components/schemas/IndexerSearchError" }
+
+    IncompleteDiscography:
+      type: object
+      required: [person_id, name, held, total, monitored]
+      properties:
+        person_id: { type: integer, format: int64 }
+        name: { type: string }
+        held: { type: integer, format: int64, description: Albums of the discography the library holds. }
+        total: { type: integer, format: int64, description: Albums in the discography under the default filters. }
+        monitored: { type: boolean, description: Whether the artist is already followed. }
 
     CategoryStatistics:
       type: object

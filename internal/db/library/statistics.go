@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -128,4 +129,85 @@ func (s Statistics) ForCategory(ctx context.Context, metric string, categoryID i
 		})
 	}
 	return figures, nil
+}
+
+// StatDiscographyCoverage is the artists' coverage metric: dimension "<category id>|<person id>", value the albums
+// held, count the albums their discography has under the default filters.
+const StatDiscographyCoverage = "discography_coverage"
+
+// ArtistHeld is an artist with something held in a library: their MusicBrainz id and the release groups held.
+type ArtistHeld struct {
+	PersonID      int64
+	Name          string
+	ArtistMBID    string
+	ReleaseGroups []string
+}
+
+// ArtistsHeld lists the artists with an album held in categoryID, with the release groups held, by person id.
+func (s Statistics) ArtistsHeld(ctx context.Context, categoryID int64) ([]ArtistHeld, error) {
+	rows, err := librarydb.New(s.store.Read()).ListHeldReleaseGroupsByArtist(ctx, categoryID)
+	if err != nil {
+		return nil, fmt.Errorf("library: artists held: %w", err)
+	}
+	var artists []ArtistHeld
+	for _, row := range rows {
+		if len(artists) == 0 || artists[len(artists)-1].PersonID != row.PersonID {
+			artists = append(artists, ArtistHeld{PersonID: row.PersonID, Name: row.Name, ArtistMBID: row.ArtistMbid})
+		}
+		if row.ReleaseGroupMbid != "" {
+			last := &artists[len(artists)-1]
+			last.ReleaseGroups = append(last.ReleaseGroups, row.ReleaseGroupMbid)
+		}
+	}
+	return artists, nil
+}
+
+// DiscographyCoverage is one artist's held albums against their discography.
+type DiscographyCoverage struct {
+	PersonID    int64
+	Held, Total int64
+}
+
+// SetDiscographyCoverage replaces a library's coverage rows.
+func (s Statistics) SetDiscographyCoverage(ctx context.Context, categoryID int64, rows []DiscographyCoverage, now int64) error {
+	return s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		if err := queries.DeleteStatRollupMetricForCategory(ctx, librarydb.DeleteStatRollupMetricForCategoryParams{
+			Metric: StatDiscographyCoverage, Prefix: strconv.FormatInt(categoryID, 10) + "|",
+		}); err != nil {
+			return err
+		}
+		for _, row := range rows {
+			if err := queries.SetStatRollup(ctx, librarydb.SetStatRollupParams{
+				Metric: StatDiscographyCoverage, Dimension: dimensionOf(categoryID, strconv.FormatInt(row.PersonID, 10)),
+				Period: 0, Value: float64(row.Held), Count: sql.NullInt64{Int64: row.Total, Valid: true}, ComputedAt: now,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// IncompleteDiscographies lists a library's artists whose discography has albums not held, most missing first.
+func (s Statistics) IncompleteDiscographies(ctx context.Context, categoryID int64, limit int) ([]DiscographyCoverage, error) {
+	figures, err := s.ForCategory(ctx, StatDiscographyCoverage, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	var rows []DiscographyCoverage
+	for _, figure := range figures {
+		personID, err := strconv.ParseInt(figure.Key, 10, 64)
+		if err != nil || figure.Count <= int64(figure.Value) {
+			continue
+		}
+		rows = append(rows, DiscographyCoverage{PersonID: personID, Held: int64(figure.Value), Total: figure.Count})
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		return rows[i].Total-rows[i].Held > rows[j].Total-rows[j].Held
+	})
+	if limit > 0 && len(rows) > limit {
+		rows = rows[:limit]
+	}
+	return rows, nil
 }

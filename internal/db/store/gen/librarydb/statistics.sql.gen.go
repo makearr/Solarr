@@ -145,3 +145,67 @@ func (q *Queries) DeleteStatRollupMetric(ctx context.Context, metric string) err
 	_, err := q.db.ExecContext(ctx, deleteStatRollupMetric, metric)
 	return err
 }
+
+const deleteStatRollupMetricForCategory = `-- name: DeleteStatRollupMetricForCategory :exec
+DELETE FROM stat_rollup WHERE metric = ?1 AND dimension LIKE CAST(?2 AS TEXT) || '%'
+`
+
+type DeleteStatRollupMetricForCategoryParams struct {
+	Metric string
+	Prefix string
+}
+
+func (q *Queries) DeleteStatRollupMetricForCategory(ctx context.Context, arg DeleteStatRollupMetricForCategoryParams) error {
+	_, err := q.db.ExecContext(ctx, deleteStatRollupMetricForCategory, arg.Metric, arg.Prefix)
+	return err
+}
+
+const listHeldReleaseGroupsByArtist = `-- name: ListHeldReleaseGroupsByArtist :many
+SELECT p.id AS person_id, x.external_id AS artist_mbid, p.name,
+       CAST(COALESCE(g.external_id, '') AS TEXT) AS release_group_mbid
+FROM person p
+JOIN person_external_id x ON x.person_id = p.id AND x.provider = 'musicbrainz:artist'
+JOIN credit c ON c.person_id = p.id AND c.role = 'artist' AND c.edition_id = 0 AND c.part_id = 0
+JOIN desired_item di ON di.work_id = c.work_id AND di.category_id = ?1 AND di.satisfaction_kind = 'SET'
+LEFT JOIN work_external_id g ON g.work_id = c.work_id AND g.provider = 'musicbrainz:release-group'
+WHERE EXISTS (SELECT 1 FROM work_file wf WHERE wf.work_id = c.work_id)
+GROUP BY p.id, x.external_id, g.external_id
+ORDER BY p.id
+`
+
+type ListHeldReleaseGroupsByArtistRow struct {
+	PersonID         int64
+	ArtistMbid       string
+	Name             string
+	ReleaseGroupMbid string
+}
+
+// The artists with something held in a library, and the release groups they hold there: what a discography is
+// compared against. A held work without a release-group id yields an empty id.
+func (q *Queries) ListHeldReleaseGroupsByArtist(ctx context.Context, categoryID int64) ([]ListHeldReleaseGroupsByArtistRow, error) {
+	rows, err := q.db.QueryContext(ctx, listHeldReleaseGroupsByArtist, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListHeldReleaseGroupsByArtistRow{}
+	for rows.Next() {
+		var i ListHeldReleaseGroupsByArtistRow
+		if err := rows.Scan(
+			&i.PersonID,
+			&i.ArtistMbid,
+			&i.Name,
+			&i.ReleaseGroupMbid,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
