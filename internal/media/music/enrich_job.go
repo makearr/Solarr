@@ -551,7 +551,7 @@ func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArt
 	if err := j.people.BackfillDetails(ctx, candidate.PersonID, library.PersonIdentity{
 		Name: artist.Name, Disambiguation: artist.Disambiguation,
 		Kind: artist.Type, Gender: artist.Gender, Country: artist.Country,
-		Born: artist.Born, Died: artist.Died, Biography: biographyText(bio),
+		Born: artist.Born, Died: artist.Died, Biography: biographyText(bio), Aliases: artist.Aliases,
 	}); err != nil {
 		j.logger.WarnContext(ctx, "artist backfill details failed",
 			slog.Int64("person_id", candidate.PersonID), slog.Any("error", err))
@@ -829,7 +829,7 @@ func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.Artist
 	identity := library.PersonIdentity{
 		Name: artist.Name, Disambiguation: artist.Disambiguation,
 		Kind: artist.Type, Gender: artist.Gender, Country: artist.Country,
-		Born: artist.Born, Died: artist.Died, Biography: biographyText(bio),
+		Born: artist.Born, Died: artist.Died, Biography: biographyText(bio), Aliases: artist.Aliases,
 	}
 	personID, err := j.people.ResolvePerson(ctx, j.clock.Now(), library.PersonLink{
 		Provider: ProviderArtist, ExternalID: artist.MBID, Person: identity,

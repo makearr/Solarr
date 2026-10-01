@@ -45,7 +45,7 @@ const (
 	// rather than an MBID -- there is no id to key it on until a search answers.
 	cacheKindSearch = "musicbrainz:search"
 	// cacheKindArtist is one artist's own detail, keyed on their MBID.
-	cacheKindArtist = "musicbrainz:artist"
+	cacheKindArtist = "musicbrainz:artist:v2"
 	// cacheKindDiscography is one artist's full release-group list, keyed on
 	// their MBID -- refreshed by the same RefreshAfter policy as everything
 	// else, since a discography grows over time unlike a release group's own
