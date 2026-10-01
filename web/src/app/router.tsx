@@ -11,6 +11,7 @@ import { api } from "@/api/client";
 import { Activity } from "./Activity";
 import { History } from "./History";
 import { Queue } from "./Queue";
+import { Notifications } from "./Notifications";
 import { ArrImport } from "./ArrImport";
 import { Dashboard } from "./Dashboard";
 import { Discover } from "./Discover";
@@ -212,6 +213,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/quality-profiles", component: QualityProfilesPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity/queue", component: Queue }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity/history", component: History }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/activity/notifications", component: Notifications }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity/jobs", component: Activity }),
   // Settings split into General/User/Scheduler/Cache 2026-09-11 (asked for
   // twice before this) -- /settings itself now just redirects to the first
