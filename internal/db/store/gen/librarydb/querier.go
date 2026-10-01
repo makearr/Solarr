@@ -654,6 +654,7 @@ type Querier interface {
 	// fault, and counting it would make reputation measure the environment (ADR-45).
 	RecordGroupObservation(ctx context.Context, arg RecordGroupObservationParams) error
 	RecordImportDecision(ctx context.Context, arg RecordImportDecisionParams) (ImportDecision, error)
+	RecordItemDownloadFailed(ctx context.Context, desiredItemID int64) error
 	// Every search records when it ran, whoever started it (Wanted's "last searched"). The planner's
 	// own upsert sets priority and class and never touches these two columns.
 	RecordItemSearched(ctx context.Context, arg RecordItemSearchedParams) error

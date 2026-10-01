@@ -112,7 +112,7 @@ func (j *Job) apply(ctx context.Context, inputs []library.PlanInput, facts Facts
 			ID: input.ID, Monitored: input.Monitored, State: input.State,
 			Searchable: j.config.Searchable(input), ReleaseDate: input.ReleaseDate,
 			CategoryRank: facts.CategoryRank(input.CategoryID), LastSearchedAt: input.LastSearchedAt,
-			SearchCount: input.SearchCount, QueuedSince: input.QueuedSince,
+			SearchCount: input.SearchCount, QueuedSince: input.QueuedSince, AfterFailure: input.AfterFailure,
 		}, facts.Policy, now)
 		planned[index] = library.PlannedHunt{
 			Input: input, Class: entry.Class, Priority: entry.Priority, ReleaseDate: entry.ReleaseDate,

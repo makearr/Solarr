@@ -82,7 +82,7 @@ func TestRetryAfterDoublesToAWeek(t *testing.T) {
 		0: -1, 1: 6 * time.Hour, 2: 12 * time.Hour, 3: 24 * time.Hour, 5: 96 * time.Hour,
 		6: 7 * 24 * time.Hour, 60: 7 * 24 * time.Hour,
 	} {
-		got := RetryAfter(last, count)
+		got := RetryAfter(last, count, false)
 		if want < 0 {
 			if got != 0 {
 				t.Errorf("RetryAfter(%d) = %d, want 0", count, got)
@@ -91,6 +91,15 @@ func TestRetryAfterDoublesToAWeek(t *testing.T) {
 		}
 		if got != last+int64(want/time.Second) {
 			t.Errorf("RetryAfter(%d) = %s after, want %s", count, time.Duration(got-last)*time.Second, want)
+		}
+	}
+}
+
+func TestRetryAfterFailureStaysWithinADay(t *testing.T) {
+	const last = int64(1_000_000)
+	for count, want := range map[int64]time.Duration{1: 6 * time.Hour, 3: 24 * time.Hour, 6: 24 * time.Hour, 60: 24 * time.Hour} {
+		if got := RetryAfter(last, count, true); got != last+int64(want/time.Second) {
+			t.Errorf("RetryAfter(%d, after failure) = %s after, want %s", count, time.Duration(got-last)*time.Second, want)
 		}
 	}
 }

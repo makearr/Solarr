@@ -294,6 +294,7 @@ type HuntQueue struct {
 	EligibleAfter  int64
 	SearchCount    int64
 	QueuedSince    int64
+	AfterFailure   int64
 }
 
 type IdentificationAttempt struct {

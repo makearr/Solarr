@@ -5082,7 +5082,7 @@ export interface components {
             preview?: boolean;
             /**
              * @description A folder nothing identified still becomes an album, named by its own tags or folder and marked unverified (D6); not searched for, identified later from the review. Only for a manual, non-preview run.
-             * @default true
+             * @default false
              */
             add_unverified: boolean;
         };

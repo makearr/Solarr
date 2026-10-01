@@ -29,6 +29,8 @@ type PlanInput struct {
 	ReleaseDate                 string
 	LastSearchedAt, SearchCount int64
 	QueuedSince                 int64
+	// AfterFailure is set once a download of the item failed.
+	AfterFailure bool
 }
 
 // PlanInputs pages through the dirty set, or with dirtyOnly false through every item, by id.
@@ -45,6 +47,7 @@ func (h Hunt) PlanInputs(ctx context.Context, dirtyOnly bool, afterID, pageSize 
 			ID: row.ID, CategoryID: row.CategoryID, MediaRef: row.MediaRef, Monitored: row.Monitored == 1, SatisfactionKind: row.SatisfactionKind,
 			State: row.State, Generation: row.Generation, ReleaseDate: row.ReleaseDate,
 			LastSearchedAt: row.LastSearchedAt, SearchCount: row.SearchCount, QueuedSince: row.QueuedSince,
+			AfterFailure: row.AfterFailure == 1,
 		}
 	}
 	return inputs, nil
@@ -149,7 +152,8 @@ func (h Hunt) WantedAlbumsByArtist(ctx context.Context, artistName string, limit
 type HuntEntry struct {
 	LastSearchedAt, EligibleAfter, SearchCount int64
 	// ReleaseDate is the street date in Unix seconds, 0 when unknown.
-	ReleaseDate int64
+	ReleaseDate  int64
+	AfterFailure bool
 }
 
 // Entry answers itemID's hunt_queue row; found is false until the planner has seen the item.
@@ -163,7 +167,7 @@ func (h Hunt) Entry(ctx context.Context, itemID int64) (entry HuntEntry, found b
 	}
 	return HuntEntry{
 		LastSearchedAt: row.LastSearchedAt, EligibleAfter: row.EligibleAfter, SearchCount: row.SearchCount,
-		ReleaseDate: row.ReleaseDate.Int64,
+		ReleaseDate: row.ReleaseDate.Int64, AfterFailure: row.AfterFailure == 1,
 	}, true, nil
 }
 
