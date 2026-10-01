@@ -855,6 +855,13 @@ func (c *Cache) AttachRootFolder(ctx context.Context, attachment CategoryRoot) e
 	if _, found := snapshot.RootFolder(attachment.RootFolderID); !found {
 		return fmt.Errorf("%w: root folder %d", ErrNotFound, attachment.RootFolderID)
 	}
+	// A root folder belongs to at most one library (user, 2026-09-30).
+	for _, existing := range snapshot.CategoryRoots() {
+		if existing.RootFolderID == attachment.RootFolderID && existing.CategoryID != attachment.CategoryID {
+			return fmt.Errorf("%w: root folder %d already belongs to library %d; remove it from there first",
+				ErrInUse, attachment.RootFolderID, existing.CategoryID)
+		}
+	}
 
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		return queries.AttachRootFolderToCategory(ctx, settingsdb.AttachRootFolderToCategoryParams{

@@ -25,7 +25,7 @@ func TestDocument_RoundTrips(t *testing.T) {
 
 	attach(t, cache, music.ID, fast.ID, 0, 3, true)
 	attach(t, cache, music.ID, bulk.ID, 1, 1, false)
-	attach(t, cache, anime.ID, bulk.ID, 0, 1, true)
+	attach(t, cache, anime.ID, mustRoot(t, cache, "/media/anime", "").ID, 0, 1, true)
 
 	exported := cache.Export()
 
@@ -786,5 +786,20 @@ func TestImport_NamesTheKeysAGroupIsMissing(t *testing.T) {
 	}
 	if len(problems) != len(missing) {
 		t.Errorf("problems = %v, want only the missing keys", problems)
+	}
+}
+
+// A root folder belongs to at most one library: a document listing it under two does not validate.
+func TestDocument_RefusesARootInTwoLibraries(t *testing.T) {
+	cache, _ := newCache(t)
+	music := mustCategory(t, cache, "music", "Music", 10)
+	anime := mustCategory(t, cache, "tv", "Anime", 20)
+	attach(t, cache, music.ID, mustRoot(t, cache, "/media/fast", "").ID, 0, 1, true)
+	attach(t, cache, anime.ID, mustRoot(t, cache, "/media/anime", "").ID, 0, 1, true)
+
+	document := cache.Export()
+	document.Categories[1].Roots = append(document.Categories[1].Roots, document.Categories[0].Roots[0])
+	if problems := document.Validate(netip.Addr{}); len(problems) != 1 {
+		t.Fatalf("a root in two libraries gave %d problems, want 1: %v", len(problems), problems)
 	}
 }

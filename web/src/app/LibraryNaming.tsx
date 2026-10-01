@@ -529,8 +529,8 @@ function ApplyToLibrary({ categoryId, unsaved }: { categoryId: number; unsaved: 
       {plan && started && (
         <p className="text-sm">
           Renaming {moves.length} {moves.length === 1 ? "file" : "files"}. Progress is under{" "}
-          <Link to="/storage/moves" className="text-accent hover:underline">
-            Storage → Moves
+          <Link to="/storage/roots" className="text-accent hover:underline">
+            Storage → Root folders
           </Link>
           .
         </p>

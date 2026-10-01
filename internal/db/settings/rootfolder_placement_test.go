@@ -202,7 +202,7 @@ func TestSetRootFolderDrainState_RecordsStateAndJobID(t *testing.T) {
 	}
 }
 
-func TestSetAcceptsNewForRootFolder_FlipsEveryCategoryAttachment(t *testing.T) {
+func TestSetAcceptsNewForRootFolder_FlipsTheAttachmentAndRefusesASecondLibrary(t *testing.T) {
 	cache, _ := newCache(t)
 	music, err := cache.CreateCategory(t.Context(), "music", "Music", 100)
 	if err != nil {
@@ -216,12 +216,15 @@ func TestSetAcceptsNewForRootFolder_FlipsEveryCategoryAttachment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRootFolder: %v", err)
 	}
-	for _, category := range []settings.Category{music, videos} {
-		if err := cache.AttachRootFolder(t.Context(), settings.CategoryRoot{
-			CategoryID: category.ID, RootFolderID: root.ID, Weight: 1, AcceptsNew: true,
-		}); err != nil {
-			t.Fatalf("AttachRootFolder(%d): %v", category.ID, err)
-		}
+	if err := cache.AttachRootFolder(t.Context(), settings.CategoryRoot{
+		CategoryID: music.ID, RootFolderID: root.ID, Weight: 1, AcceptsNew: true,
+	}); err != nil {
+		t.Fatalf("AttachRootFolder: %v", err)
+	}
+	// A root folder belongs to at most one library (2026-09-30).
+	err = cache.AttachRootFolder(t.Context(), settings.CategoryRoot{CategoryID: videos.ID, RootFolderID: root.ID, Weight: 1})
+	if !errors.Is(err, settings.ErrInUse) {
+		t.Fatalf("attaching a root already in another library = %v, want ErrInUse", err)
 	}
 
 	if err := cache.SetAcceptsNewForRootFolder(t.Context(), root.ID, false); err != nil {
