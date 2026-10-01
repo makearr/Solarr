@@ -37,7 +37,8 @@ func (a Works) ListWorks(
 		},
 		library.WorkCursor{
 			SortTitle: cursor.SortTitle, SortYear: cursor.SortYear, SortAdded: cursor.SortAdded,
-			SortArtist: cursor.SortArtist, SortSearched: cursor.SortSearched, SortImported: cursor.SortImported, ID: cursor.ID,
+			SortArtist: cursor.SortArtist, SortSearched: cursor.SortSearched, SortImported: cursor.SortImported,
+			SortNumber: cursor.SortNumber, SortText: cursor.SortText, ID: cursor.ID,
 		},
 		pageSize)
 	if err != nil {
@@ -74,6 +75,7 @@ func (a Works) ListWorks(
 		view.OnDisk = row.OnDisk
 		view.Unverified = row.Unverified
 		view.ArrivedAt = row.ArrivedAt
+		view.SortNumber, view.SortText = row.SortNumber, row.SortText
 		view.ArtistCover = row.ArtistCover
 		view.Monitored, view.Description, view.SizeBytes = row.Monitored, row.Description, row.SizeBytes
 		if row.LastSearchedAt != 0 {

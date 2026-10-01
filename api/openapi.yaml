@@ -1819,7 +1819,7 @@ paths:
             grouping -- with a work that has no artist first. imported orders by when
             the newest file arrived and lists only works with files (the dashboard's
             Recently added).
-          schema: { type: string, enum: [title, year, added, artist, searched, imported] }
+          schema: { type: string, enum: [title, year, added, artist, searched, imported, size, profile, status, genre, tag] }
         - name: dir
           in: query
           schema: { type: string, enum: [asc, desc], default: asc }

@@ -680,8 +680,13 @@ const (
 const (
 	ListWorksParamsSortAdded    ListWorksParamsSort = "added"
 	ListWorksParamsSortArtist   ListWorksParamsSort = "artist"
+	ListWorksParamsSortGenre    ListWorksParamsSort = "genre"
 	ListWorksParamsSortImported ListWorksParamsSort = "imported"
+	ListWorksParamsSortProfile  ListWorksParamsSort = "profile"
 	ListWorksParamsSortSearched ListWorksParamsSort = "searched"
+	ListWorksParamsSortSize     ListWorksParamsSort = "size"
+	ListWorksParamsSortStatus   ListWorksParamsSort = "status"
+	ListWorksParamsSortTag      ListWorksParamsSort = "tag"
 	ListWorksParamsSortTitle    ListWorksParamsSort = "title"
 	ListWorksParamsSortYear     ListWorksParamsSort = "year"
 )
