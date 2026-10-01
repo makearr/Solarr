@@ -12,6 +12,7 @@ import { Activity } from "./Activity";
 import { History } from "./History";
 import { Queue } from "./Queue";
 import { Notifications } from "./Notifications";
+import { Statistics } from "./Statistics";
 import { ArrImport } from "./ArrImport";
 import { Dashboard } from "./Dashboard";
 import { Discover } from "./Discover";
@@ -146,6 +147,7 @@ const routes = [
     },
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/wanted", component: Wanted }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/statistics", component: Statistics }),
   // Packs moved here from Storage 2026-09-11 (a pack is one library's own
   // provenance fact, ADR-50, not a storage concern) -- still the same
   // global /packs data underneath (no category_id on pack itself, only on

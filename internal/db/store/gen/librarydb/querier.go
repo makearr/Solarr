@@ -27,6 +27,14 @@ type Querier interface {
 	AddWorkTitle(ctx context.Context, arg AddWorkTitleParams) (WorkTitle, error)
 	// excluded.value is the delta: sqlc cannot substitute a named argument inside DO UPDATE.
 	AdjustCounter(ctx context.Context, arg AdjustCounterParams) error
+	// Downloads since a time, per library and outcome.
+	AggregateAcquisitionsByCategoryAndState(ctx context.Context, since int64) ([]AggregateAcquisitionsByCategoryAndStateRow, error)
+	// Monitored albums per library and state.
+	AggregateAlbumsByCategoryAndState(ctx context.Context) ([]AggregateAlbumsByCategoryAndStateRow, error)
+	// What the statistics rollup measures (section 21.12): bounded aggregates, run by a background job and read back
+	// from stat_rollup, never live.
+	// Files and bytes per root folder and audio codec; a file with no measured codec yet is "unknown".
+	AggregateFilesByRootAndCodec(ctx context.Context) ([]AggregateFilesByRootAndCodecRow, error)
 	// Whether any unverified album exists, so a scan skips the per-file check on a library with none.
 	AnyUnverifiedWork(ctx context.Context) (int64, error)
 	AssignTag(ctx context.Context, arg AssignTagParams) error
@@ -194,6 +202,7 @@ type Querier interface {
 	DeleteRecycleBinEntry(ctx context.Context, id int64) error
 	// A root that is removed from configuration leaves no progress behind.
 	DeleteScanState(ctx context.Context, rootFolderID int64) error
+	DeleteStatRollupMetric(ctx context.Context, metric string) error
 	DeleteSubscription(ctx context.Context, id int64) error
 	// A file that resolves on a later sweep leaves the queue entirely -- there is no
 	// "resolved" state to keep around.

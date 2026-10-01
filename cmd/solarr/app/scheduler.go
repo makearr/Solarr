@@ -18,6 +18,7 @@ const (
 	subscriptionExpandScheduleCron = "10 */12 * * *" // every 12 hours
 	artworkScheduleCron            = "30 */6 * * *"  // every 6 hours
 	tagWritebackScheduleCron       = "45 * * * *"    // every hour, paced to 2000 files a run
+	statisticsScheduleCron         = "15 6 * * *"    // daily, after the counters; the statistics page reads what it wrote
 	categoryCountsScheduleCron     = "30 5 * * *"    // daily, after database maintenance; only corrects drift
 	freshCountsScheduleCron        = "40 * * * *"    // every hour
 	probeScheduleCron              = "0 2 * * *"     // daily at 02:00
@@ -74,6 +75,11 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Key: "category_counts", Name: "Category counters", DefaultCadence: categoryCountsScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryStatistics, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueCategoryCounts,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "statistics", Name: "Statistics", DefaultCadence: statisticsScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryStatistics, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueStatistics,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "fresh_counts", Name: "Fresh works counter", DefaultCadence: freshCountsScheduleCron,

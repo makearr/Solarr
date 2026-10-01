@@ -101,6 +101,9 @@ type Config struct {
 	// PeopleSubscriber subscribes a caller to a person. Optional: without it,
 	// SubscribePerson answers 503.
 	PeopleSubscriber PeopleSubscriber
+	// Statistics reads a library's rolled-up figures. Optional: nil answers 503.
+	Statistics StatisticsReader
+
 	// ArtworkChoices browses and picks provider images. Optional: nil answers 503.
 	ArtworkChoices ArtworkChoices
 
@@ -242,6 +245,7 @@ type Server struct {
 	peopleSubscriber      PeopleSubscriber
 	artistActions         ArtistActions
 	artworkChoices        ArtworkChoices
+	statistics            StatisticsReader
 	albumRefresher        AlbumRefresher
 	arrConnections        ArrConnections
 	subscriptionPreviewer SubscriptionPreviewer
@@ -334,6 +338,7 @@ func New(config Config) (*Server, error) {
 		peopleSubscriber:      config.PeopleSubscriber,
 		artistActions:         config.ArtistActions,
 		artworkChoices:        config.ArtworkChoices,
+		statistics:            config.Statistics,
 		albumRefresher:        config.AlbumRefresher,
 		arrConnections:        config.ArrConnections,
 		subscriptionPreviewer: config.SubscriptionPreviewer,
@@ -505,6 +510,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/categories", server.CreateCategory)
 			secured.Post("/categories/{id}/search", server.routeSearchCategory)
 			secured.Get("/categories/{id}", server.routeGetCategory)
+			secured.Get("/categories/{id}/statistics", server.routeGetCategoryStatistics)
 			secured.Patch("/categories/{id}", server.routeUpdateCategory)
 			secured.Delete("/categories/{id}", server.routeDeleteCategory)
 			secured.Post("/categories/{id}/rootfolders", server.routeAttachRootFolderToCategory)

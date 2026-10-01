@@ -4490,6 +4490,28 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /categories/{id}/statistics:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getCategoryStatistics
+      tags: [library]
+      summary: One library's statistics, as the last rollup computed them (section 21.12).
+      description: >-
+        Composition, completeness and acquisition figures read from stat_rollup; nothing is aggregated
+        live. Empty, with no computed_at, until the first rollup has run. Needs read access to the library.
+      responses:
+        "200":
+          description: The figures.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategoryStatistics" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/rootfolders:
     parameters:
       - name: id
@@ -8485,6 +8507,37 @@ components:
         indexer_errors:
           type: array
           items: { $ref: "#/components/schemas/IndexerSearchError" }
+
+    CategoryStatistics:
+      type: object
+      required: [files_by_codec, albums_by_state, downloads_by_state, window_days]
+      properties:
+        computed_at: { type: string, format: date-time, description: When the rollup last ran; absent before the first run. }
+        window_days: { type: integer, description: How many days back the download figures reach. }
+        files_by_codec:
+          type: array
+          items: { $ref: "#/components/schemas/StatisticsFiles" }
+        albums_by_state:
+          type: array
+          items: { $ref: "#/components/schemas/StatisticsCount" }
+        downloads_by_state:
+          type: array
+          items: { $ref: "#/components/schemas/StatisticsCount" }
+
+    StatisticsFiles:
+      type: object
+      required: [key, files, bytes]
+      properties:
+        key: { type: string, description: The audio codec, or unknown until the probe has measured the file. }
+        files: { type: integer, format: int64 }
+        bytes: { type: integer, format: int64 }
+
+    StatisticsCount:
+      type: object
+      required: [key, count]
+      properties:
+        key: { type: string }
+        count: { type: integer, format: int64 }
 
     ImageOptions:
       type: object

@@ -1194,6 +1194,19 @@ type CategorySettings struct {
 // CategorySettingsMonitorDiscovered What a scan does with an album it finds on disk that nobody asked for (section 19.6, todo 4.4).
 type CategorySettingsMonitorDiscovered string
 
+// CategoryStatistics defines model for CategoryStatistics.
+type CategoryStatistics struct {
+	AlbumsByState []StatisticsCount `json:"albums_by_state"`
+
+	// ComputedAt When the rollup last ran; absent before the first run.
+	ComputedAt       *time.Time        `json:"computed_at,omitempty"`
+	DownloadsByState []StatisticsCount `json:"downloads_by_state"`
+	FilesByCodec     []StatisticsFiles `json:"files_by_codec"`
+
+	// WindowDays How many days back the download figures reach.
+	WindowDays int `json:"window_days"`
+}
+
 // CategoryWrite defines model for CategoryWrite.
 type CategoryWrite struct {
 	// LanguageProfileId Absent or null clears it -- no default profile.
@@ -3037,6 +3050,21 @@ type SetupStatus struct {
 	NeedsAdministrator bool `json:"needs_administrator"`
 }
 
+// StatisticsCount defines model for StatisticsCount.
+type StatisticsCount struct {
+	Count int64  `json:"count"`
+	Key   string `json:"key"`
+}
+
+// StatisticsFiles defines model for StatisticsFiles.
+type StatisticsFiles struct {
+	Bytes int64 `json:"bytes"`
+	Files int64 `json:"files"`
+
+	// Key The audio codec
+	Key string `json:"key"`
+}
+
 // SubscriptionPreview defines model for SubscriptionPreview.
 type SubscriptionPreview struct {
 	// DefaultExcludedSecondaryTypes music.DefaultExcludedSecondaryTypes, so the client can pre-check the same boxes a subscription with no filter override would get.
@@ -4216,6 +4244,9 @@ type ServerInterface interface {
 	// Automatic search of every monitored, incomplete album in one library, or of the albums named in work_ids ("search this page"). Each album's best release is sent. Runs as a background job; GET /jobs shows its progress.
 	// (POST /categories/{id}/search)
 	SearchCategory(w http.ResponseWriter, r *http.Request, id int64)
+	// One library's statistics, as the last rollup computed them (section 21.12).
+	// (GET /categories/{id}/statistics)
+	GetCategoryStatistics(w http.ResponseWriter, r *http.Request, id int64)
 	// What the tag writer puts into a library's files. Administrator only.
 	// (GET /categories/{id}/tagging)
 	GetLibraryTagging(w http.ResponseWriter, r *http.Request, id int64)
@@ -4954,6 +4985,12 @@ func (_ Unimplemented) DetachRootFolderFromCategory(w http.ResponseWriter, r *ht
 // Automatic search of every monitored, incomplete album in one library, or of the albums named in work_ids ("search this page"). Each album's best release is sent. Runs as a background job; GET /jobs shows its progress.
 // (POST /categories/{id}/search)
 func (_ Unimplemented) SearchCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One library's statistics, as the last rollup computed them (section 21.12).
+// (GET /categories/{id}/statistics)
+func (_ Unimplemented) GetCategoryStatistics(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7290,6 +7327,39 @@ func (siw *ServerInterfaceWrapper) SearchCategory(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SearchCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCategoryStatistics operation middleware
+func (siw *ServerInterfaceWrapper) GetCategoryStatistics(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCategoryStatistics(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12453,6 +12523,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/search", wrapper.SearchCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/statistics", wrapper.GetCategoryStatistics)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories/{id}/tagging", wrapper.GetLibraryTagging)
