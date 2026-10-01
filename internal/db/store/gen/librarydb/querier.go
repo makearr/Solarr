@@ -203,6 +203,7 @@ type Querier interface {
 	// A root that is removed from configuration leaves no progress behind.
 	DeleteScanState(ctx context.Context, rootFolderID int64) error
 	DeleteStatRollupMetric(ctx context.Context, metric string) error
+	DeleteStatRollupMetricForCategory(ctx context.Context, arg DeleteStatRollupMetricForCategoryParams) error
 	DeleteSubscription(ctx context.Context, id int64) error
 	// A file that resolves on a later sweep leaves the queue entirely -- there is no
 	// "resolved" state to keep around.
@@ -449,6 +450,9 @@ type Querier interface {
 	// genre of its own (ADR-32's own fields are biographical, not stylistic).
 	ListGenresForPersonDiscography(ctx context.Context, personID int64) ([]string, error)
 	ListGroupObservations(ctx context.Context, arg ListGroupObservationsParams) ([]GroupObservation, error)
+	// The artists with something held in a library, and the release groups they hold there: what a discography is
+	// compared against. A held work without a release-group id yields an empty id.
+	ListHeldReleaseGroupsByArtist(ctx context.Context, categoryID int64) ([]ListHeldReleaseGroupsByArtistRow, error)
 	// When each of a work's desired items was last searched, for the album
 	// detail's own "last searched" column. Absent means never.
 	ListHuntSearchTimesForWork(ctx context.Context, workID int64) ([]ListHuntSearchTimesForWorkRow, error)

@@ -18,6 +18,7 @@ const (
 	subscriptionExpandScheduleCron = "10 */12 * * *" // every 12 hours
 	artworkScheduleCron            = "30 */6 * * *"  // every 6 hours
 	tagWritebackScheduleCron       = "45 * * * *"    // every hour, paced to 2000 files a run
+	discographyScheduleCron        = "0 4 * * 1"     // Mondays at 04:00; the provider caches, so only new artists cost requests
 	statisticsScheduleCron         = "15 6 * * *"    // daily, after the counters; the statistics page reads what it wrote
 	categoryCountsScheduleCron     = "30 5 * * *"    // daily, after database maintenance; only corrects drift
 	freshCountsScheduleCron        = "40 * * * *"    // every hour
@@ -75,6 +76,11 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Key: "category_counts", Name: "Category counters", DefaultCadence: categoryCountsScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryStatistics, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueCategoryCounts,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "discography_coverage", Name: "Compare discographies", DefaultCadence: discographyScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueDiscographyCoverage,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "statistics", Name: "Statistics", DefaultCadence: statisticsScheduleCron,

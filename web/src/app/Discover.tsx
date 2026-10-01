@@ -125,6 +125,8 @@ export function Discover() {
         />
       </div>
 
+      {query.trim().length === 0 && categoryId !== undefined && <IncompleteDiscographies categoryId={Number(categoryId)} />}
+
       {!searchable && query.trim().length > 0 && (
         <Message>Keep typing — at least {MINIMUM_QUERY_LENGTH} characters.</Message>
       )}
@@ -226,4 +228,75 @@ function resultKey(result: DiscoverResult): string {
 
 function Message({ children }: { children: React.ReactNode }) {
   return <p className="p-6 text-sm text-ink-muted">{children}</p>;
+}
+
+/** Library-derived discovery: artists the library holds an album of whose discography has albums it does not. */
+function IncompleteDiscographies({ categoryId }: { categoryId: number }) {
+  const queryClient = useQueryClient();
+  const artists = useQuery({
+    queryKey: ["discover-incomplete", categoryId],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/discover/incomplete", { params: { query: { category_id: categoryId, limit: 30 } } });
+      if (error) throw error;
+      return data;
+    },
+  });
+  const follow = useMutation({
+    mutationFn: async (personId: number) => {
+      const { error } = await api.POST("/people/{id}/subscribe", {
+        params: { path: { id: personId } },
+        body: { media_types: ["music"] },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["discover-incomplete", categoryId] });
+      void queryClient.invalidateQueries({ queryKey: ["people"] });
+    },
+  });
+
+  return (
+    <section className="flex min-h-0 flex-col gap-2 overflow-y-auto">
+      <h3 className="text-sm font-medium">Artists you have albums of, but not all</h3>
+      <p className="text-xs text-ink-muted">
+        From your library, compared with each artist's discography (no live albums or compilations). Updated weekly.
+      </p>
+      {artists.isLoading && <Message>Reading…</Message>}
+      {artists.data && artists.data.length === 0 && (
+        <Message>Nothing yet. This fills in after the weekly comparison has run (Settings → Scheduler → Compare discographies).</Message>
+      )}
+      <ul className="flex flex-col gap-1">
+        {artists.data?.map((artist) => (
+          <li
+            key={artist.person_id}
+            className="flex items-center gap-3 rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm"
+          >
+            <Link
+              to="/people/$id"
+              params={{ id: String(artist.person_id) }}
+              className="min-w-0 flex-1 truncate font-medium hover:underline"
+            >
+              {artist.name}
+            </Link>
+            <span className="shrink-0 text-xs tabular-nums text-ink-muted">
+              {artist.held} of {artist.total} albums · {artist.total - artist.held} missing
+            </span>
+            {artist.monitored ? (
+              <span className="shrink-0 text-xs text-ink-muted">Followed</span>
+            ) : (
+              <button
+                type="button"
+                disabled={follow.isPending}
+                onClick={() => follow.mutate(artist.person_id)}
+                className="shrink-0 rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50"
+              >
+                Monitor and add the rest
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {follow.isError && <p className="text-xs text-danger">That could not be started.</p>}
+    </section>
+  );
 }

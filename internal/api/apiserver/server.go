@@ -101,6 +101,9 @@ type Config struct {
 	// PeopleSubscriber subscribes a caller to a person. Optional: without it,
 	// SubscribePerson answers 503.
 	PeopleSubscriber PeopleSubscriber
+	// IncompleteDiscographies feeds Discover's library-derived suggestions. Optional: nil answers 503.
+	IncompleteDiscographies IncompleteDiscographies
+
 	// Statistics reads a library's rolled-up figures. Optional: nil answers 503.
 	Statistics StatisticsReader
 
@@ -228,57 +231,58 @@ type Server struct {
 	roots   RootChecker
 	address string
 
-	librarySize           LibrarySize
-	timezone              string
-	egress                EgressReporter
-	works                 WorksReader
-	workDetail            WorkDetailReader
-	worksMonitor          WorksMonitor
-	search                SearchReader
-	unidentified          UnidentifiedReader
-	unidentifiedResolver  UnidentifiedResolver
-	artwork               ArtworkReader
-	fsys                  fsx.FS
-	imagesDir             string
-	configPath            string
-	people                PeopleReader
-	peopleSubscriber      PeopleSubscriber
-	artistActions         ArtistActions
-	artworkChoices        ArtworkChoices
-	statistics            StatisticsReader
-	albumRefresher        AlbumRefresher
-	arrConnections        ArrConnections
-	subscriptionPreviewer SubscriptionPreviewer
-	blockedContent        BlockedContentLister
-	packs                 PackLister
-	removeAndBlocker      RemoveAndBlocker
-	importSessions        ImportSessionLister
-	importInspector       ImportInspector
-	fingerprintRetrier    FingerprintRetrier
-	drainStarter          DrainStarter
-	moveJobs              MoveJobLister
-	renameStarter         RenameStarter
-	namingSchemes         NamingSchemes
-	navigation            NavigationProvider
-	libraryTracks         LibraryTracksReader
-	libraryArtists        LibraryArtistsReader
-	downloadRoots         DownloadFolderChecker
-	scheduler             Scheduler
-	cacheManager          CacheManager
-	discover              Discover
-	arrSync               ArrSync
-	libraryHealth         LibraryHealth
-	systemHealth          SystemHealthSource
-	blocklist             Blocklist
-	history               History
-	queue                 Queue
-	backups               Backups
-	logReader             LogReader
-	calendar              CalendarReader
-	indexerTester         IndexerTester
-	prowlarr              ProwlarrLister
-	downloaderTester      DownloaderTester
-	candidateSearcher     CandidateSearcher
+	librarySize             LibrarySize
+	timezone                string
+	egress                  EgressReporter
+	works                   WorksReader
+	workDetail              WorkDetailReader
+	worksMonitor            WorksMonitor
+	search                  SearchReader
+	unidentified            UnidentifiedReader
+	unidentifiedResolver    UnidentifiedResolver
+	artwork                 ArtworkReader
+	fsys                    fsx.FS
+	imagesDir               string
+	configPath              string
+	people                  PeopleReader
+	peopleSubscriber        PeopleSubscriber
+	artistActions           ArtistActions
+	artworkChoices          ArtworkChoices
+	statistics              StatisticsReader
+	incompleteDiscographies IncompleteDiscographies
+	albumRefresher          AlbumRefresher
+	arrConnections          ArrConnections
+	subscriptionPreviewer   SubscriptionPreviewer
+	blockedContent          BlockedContentLister
+	packs                   PackLister
+	removeAndBlocker        RemoveAndBlocker
+	importSessions          ImportSessionLister
+	importInspector         ImportInspector
+	fingerprintRetrier      FingerprintRetrier
+	drainStarter            DrainStarter
+	moveJobs                MoveJobLister
+	renameStarter           RenameStarter
+	namingSchemes           NamingSchemes
+	navigation              NavigationProvider
+	libraryTracks           LibraryTracksReader
+	libraryArtists          LibraryArtistsReader
+	downloadRoots           DownloadFolderChecker
+	scheduler               Scheduler
+	cacheManager            CacheManager
+	discover                Discover
+	arrSync                 ArrSync
+	libraryHealth           LibraryHealth
+	systemHealth            SystemHealthSource
+	blocklist               Blocklist
+	history                 History
+	queue                   Queue
+	backups                 Backups
+	logReader               LogReader
+	calendar                CalendarReader
+	indexerTester           IndexerTester
+	prowlarr                ProwlarrLister
+	downloaderTester        DownloaderTester
+	candidateSearcher       CandidateSearcher
 	// effectivePort is the port this process actually bound to, resolved at
 	// startup (ADR-58). The Network screen reports it beside whatever
 	// settings.db now holds, since a port change written from the screen
@@ -321,60 +325,61 @@ func New(config Config) (*Server, error) {
 		webui:   config.WebUI,
 		roots:   config.Roots,
 
-		librarySize:           config.LibrarySize,
-		timezone:              config.Timezone,
-		egress:                config.Egress,
-		works:                 config.Works,
-		workDetail:            config.WorkDetail,
-		worksMonitor:          config.WorksMonitor,
-		search:                config.Search,
-		unidentified:          config.Unidentified,
-		unidentifiedResolver:  config.UnidentifiedResolver,
-		artwork:               config.Artwork,
-		fsys:                  config.FS,
-		imagesDir:             config.ImagesDir,
-		configPath:            config.ConfigPath,
-		people:                config.People,
-		peopleSubscriber:      config.PeopleSubscriber,
-		artistActions:         config.ArtistActions,
-		artworkChoices:        config.ArtworkChoices,
-		statistics:            config.Statistics,
-		albumRefresher:        config.AlbumRefresher,
-		arrConnections:        config.ArrConnections,
-		subscriptionPreviewer: config.SubscriptionPreviewer,
-		blockedContent:        config.BlockedContent,
-		packs:                 config.Packs,
-		removeAndBlocker:      config.RemoveAndBlocker,
-		importSessions:        config.ImportSessions,
-		importInspector:       config.ImportInspector,
-		fingerprintRetrier:    config.FingerprintRetrier,
-		drainStarter:          config.DrainStarter,
-		moveJobs:              config.MoveJobs,
-		renameStarter:         config.RenameStarter,
-		namingSchemes:         config.NamingSchemes,
-		navigation:            config.Navigation,
-		libraryTracks:         config.LibraryTracks,
-		libraryArtists:        config.LibraryArtists,
-		downloadRoots:         config.DownloadRoots,
-		scheduler:             config.Scheduler,
-		cacheManager:          config.CacheManager,
-		discover:              config.Discover,
-		arrSync:               config.ArrSync,
-		libraryHealth:         config.LibraryHealth,
-		systemHealth:          config.SystemHealth,
-		blocklist:             config.Blocklist,
-		history:               config.History,
-		queue:                 config.Queue,
-		backups:               config.Backups,
-		logReader:             config.LogReader,
-		calendar:              config.Calendar,
-		indexerTester:         config.IndexerTester,
-		prowlarr:              config.Prowlarr,
-		downloaderTester:      config.DownloaderTester,
-		candidateSearcher:     config.CandidateSearcher,
-		effectivePort:         config.Port,
-		healthPath:            base + APIPrefix + "/health",
-		address:               net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
+		librarySize:             config.LibrarySize,
+		timezone:                config.Timezone,
+		egress:                  config.Egress,
+		works:                   config.Works,
+		workDetail:              config.WorkDetail,
+		worksMonitor:            config.WorksMonitor,
+		search:                  config.Search,
+		unidentified:            config.Unidentified,
+		unidentifiedResolver:    config.UnidentifiedResolver,
+		artwork:                 config.Artwork,
+		fsys:                    config.FS,
+		imagesDir:               config.ImagesDir,
+		configPath:              config.ConfigPath,
+		people:                  config.People,
+		peopleSubscriber:        config.PeopleSubscriber,
+		artistActions:           config.ArtistActions,
+		artworkChoices:          config.ArtworkChoices,
+		statistics:              config.Statistics,
+		incompleteDiscographies: config.IncompleteDiscographies,
+		albumRefresher:          config.AlbumRefresher,
+		arrConnections:          config.ArrConnections,
+		subscriptionPreviewer:   config.SubscriptionPreviewer,
+		blockedContent:          config.BlockedContent,
+		packs:                   config.Packs,
+		removeAndBlocker:        config.RemoveAndBlocker,
+		importSessions:          config.ImportSessions,
+		importInspector:         config.ImportInspector,
+		fingerprintRetrier:      config.FingerprintRetrier,
+		drainStarter:            config.DrainStarter,
+		moveJobs:                config.MoveJobs,
+		renameStarter:           config.RenameStarter,
+		namingSchemes:           config.NamingSchemes,
+		navigation:              config.Navigation,
+		libraryTracks:           config.LibraryTracks,
+		libraryArtists:          config.LibraryArtists,
+		downloadRoots:           config.DownloadRoots,
+		scheduler:               config.Scheduler,
+		cacheManager:            config.CacheManager,
+		discover:                config.Discover,
+		arrSync:                 config.ArrSync,
+		libraryHealth:           config.LibraryHealth,
+		systemHealth:            config.SystemHealth,
+		blocklist:               config.Blocklist,
+		history:                 config.History,
+		queue:                   config.Queue,
+		backups:                 config.Backups,
+		logReader:               config.LogReader,
+		calendar:                config.Calendar,
+		indexerTester:           config.IndexerTester,
+		prowlarr:                config.Prowlarr,
+		downloaderTester:        config.DownloaderTester,
+		candidateSearcher:       config.CandidateSearcher,
+		effectivePort:           config.Port,
+		healthPath:              base + APIPrefix + "/health",
+		address:                 net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
 	}
 
 	router := chi.NewRouter()
@@ -511,6 +516,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/categories/{id}/search", server.routeSearchCategory)
 			secured.Get("/categories/{id}", server.routeGetCategory)
 			secured.Get("/categories/{id}/statistics", server.routeGetCategoryStatistics)
+			secured.Get("/discover/incomplete", server.routeListIncompleteDiscographies)
 			secured.Patch("/categories/{id}", server.routeUpdateCategory)
 			secured.Delete("/categories/{id}", server.routeDeleteCategory)
 			secured.Post("/categories/{id}/rootfolders", server.routeAttachRootFolderToCategory)

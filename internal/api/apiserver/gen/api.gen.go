@@ -1910,6 +1910,20 @@ type ImportUnitDecision string
 // ImportUnitShape defines model for ImportUnit.Shape.
 type ImportUnitShape string
 
+// IncompleteDiscography defines model for IncompleteDiscography.
+type IncompleteDiscography struct {
+	// Held Albums of the discography the library holds.
+	Held int64 `json:"held"`
+
+	// Monitored Whether the artist is already followed.
+	Monitored bool   `json:"monitored"`
+	Name      string `json:"name"`
+	PersonId  int64  `json:"person_id"`
+
+	// Total Albums in the discography under the default filters.
+	Total int64 `json:"total"`
+}
+
 // IncompleteWork defines model for IncompleteWork.
 type IncompleteWork struct {
 	CategoryId    int64               `json:"category_id"`
@@ -3436,6 +3450,12 @@ type SearchCategoryJSONBody struct {
 	WorkIds     *[]int64 `json:"work_ids,omitempty"`
 }
 
+// ListIncompleteDiscographiesParams defines parameters for ListIncompleteDiscographies.
+type ListIncompleteDiscographiesParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+	Limit      *int  `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // DiscoverSearchParams defines parameters for DiscoverSearch.
 type DiscoverSearchParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
@@ -4259,6 +4279,9 @@ type ServerInterface interface {
 	// Add a search result as intent: resolves or creates the work and ensures a monitored album-level desired_item for it -- never a download (ADR-56). Administrator or a manage grant on category_id.
 	// (POST /discover/add)
 	DiscoverAdd(w http.ResponseWriter, r *http.Request)
+	// Artists in a library whose discography has albums the library does not hold.
+	// (GET /discover/incomplete)
+	ListIncompleteDiscographies(w http.ResponseWriter, r *http.Request, params ListIncompleteDiscographiesParams)
 	// Search one category's own metadata provider for something not in the library yet (ADR-56's per-library half). The global, cross-media-type half with its destination-suggestion ladder is not built.
 	// (GET /discover/search)
 	DiscoverSearch(w http.ResponseWriter, r *http.Request, params DiscoverSearchParams)
@@ -5015,6 +5038,12 @@ func (_ Unimplemented) GetDashboard(w http.ResponseWriter, r *http.Request) {
 // Add a search result as intent: resolves or creates the work and ensures a monitored album-level desired_item for it -- never a download (ADR-56). Administrator or a manage grant on category_id.
 // (POST /discover/add)
 func (_ Unimplemented) DiscoverAdd(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Artists in a library whose discography has albums the library does not hold.
+// (GET /discover/incomplete)
+func (_ Unimplemented) ListIncompleteDiscographies(w http.ResponseWriter, r *http.Request, params ListIncompleteDiscographiesParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7470,6 +7499,56 @@ func (siw *ServerInterfaceWrapper) DiscoverAdd(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DiscoverAdd(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListIncompleteDiscographies operation middleware
+func (siw *ServerInterfaceWrapper) ListIncompleteDiscographies(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListIncompleteDiscographiesParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListIncompleteDiscographies(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12538,6 +12617,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/discover/add", wrapper.DiscoverAdd)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/discover/incomplete", wrapper.ListIncompleteDiscographies)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/discover/search", wrapper.DiscoverSearch)

@@ -1212,6 +1212,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/discover/incomplete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Artists in a library whose discography has albums the library does not hold.
+         * @description Library-derived discovery: an artist with at least one album held, compared against the albums their MusicBrainz discography has under the default filters (no live recordings, compilations and the like). Most missing first. Computed by a weekly background job, so empty until it has run.
+         */
+        get: operations["listIncompleteDiscographies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/discover/add": {
         parameters: {
             query?: never;
@@ -5635,6 +5655,23 @@ export interface components {
             decisions: components["schemas"]["CandidateDecision"][];
             indexer_errors: components["schemas"]["IndexerSearchError"][];
         };
+        IncompleteDiscography: {
+            /** Format: int64 */
+            person_id: number;
+            name: string;
+            /**
+             * Format: int64
+             * @description Albums of the discography the library holds.
+             */
+            held: number;
+            /**
+             * Format: int64
+             * @description Albums in the discography under the default filters.
+             */
+            total: number;
+            /** @description Whether the artist is already followed. */
+            monitored: boolean;
+        };
         CategoryStatistics: {
             /**
              * Format: date-time
@@ -7778,6 +7815,32 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             /** @description category_id does not exist, or the caller cannot read it. */
+            404: components["responses"]["Problem"];
+        };
+    };
+    listIncompleteDiscographies: {
+        parameters: {
+            query: {
+                category_id: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The artists, most missing first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncompleteDiscography"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };
