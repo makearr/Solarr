@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { API_PREFIX, api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { addDays, DayView, DaysView, isoDate, MonthView, parseIso, weekStart } from "./CalendarViews";
 
 type CalendarEntry = components["schemas"]["CalendarEntry"];
 
@@ -18,42 +19,123 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
   "October", "November", "December"] as const;
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"] as const;
 
-/** Releases in the libraries the caller can see: a year of month squares with a dot on every
- *  release day (history included), or the list of a window around today. */
+const VIEWS = [
+  ["month", "Month"],
+  ["week", "Week"],
+  ["forecast", "Forecast"],
+  ["day", "Day"],
+  ["agenda", "Agenda"],
+  ["year", "Year"],
+] as const;
+type View = (typeof VIEWS)[number][0];
+
+/** Releases in the libraries the caller can see, Lidarr-style: month, week, a seven-day forecast,
+ *  one day, an agenda list, and a year of month squares with a dot on every release day. */
 export function Calendar() {
-  const search = useSearch({ strict: false }) as { view?: string; year?: string };
-  const view = search.view === "list" ? "list" : "year";
+  const search = useSearch({ strict: false }) as { view?: string; year?: string; date?: string };
+  const requested = search.view === "list" ? "agenda" : search.view;
+  const view: View = VIEWS.some(([id]) => id === requested) ? (requested as View) : "month";
   const year = Number(search.year) || new Date().getFullYear();
+  const today = isoDate(new Date());
+  const anchor = parseIso(search.date);
+  const moved = (direction: number) => {
+    const next = new Date(anchor);
+    if (view === "month") next.setMonth(next.getMonth() + direction, 1);
+    else next.setDate(next.getDate() + direction * (view === "week" ? 7 : 1));
+    return isoDate(next);
+  };
+  const heading =
+    view === "month"
+      ? `${MONTHS[anchor.getMonth()]} ${anchor.getFullYear()}`
+      : view === "week"
+        ? `${weekStart(anchor).toLocaleDateString(undefined, { day: "numeric", month: "short" })} - ${addDays(weekStart(anchor), 6).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`
+        : view === "day"
+          ? anchor.toLocaleDateString()
+          : view === "forecast"
+            ? "Next 7 days"
+            : view === "year"
+              ? String(year)
+              : "Coming and recent";
+  const stepped = view === "month" || view === "week" || view === "day";
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto p-4">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-sm font-medium">Calendar</h2>
-        <div className="flex gap-1">
-          {(["year", "list"] as const).map((option) => (
+        {stepped && (
+          <div className="flex items-center gap-1">
             <Link
-              key={option}
               to="/calendar"
-              search={{ view: option, year: String(year) }}
-              aria-current={view === option ? "page" : undefined}
+              search={{ view, date: moved(-1) }}
+              aria-label="Previous"
+              className="rounded-md border border-border-subtle p-1 text-ink-muted hover:text-ink"
+            >
+              <ChevronLeft aria-hidden className="size-4" />
+            </Link>
+            <Link
+              to="/calendar"
+              search={{ view, date: today }}
+              className="rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink"
+            >
+              Today
+            </Link>
+            <Link
+              to="/calendar"
+              search={{ view, date: moved(1) }}
+              aria-label="Next"
+              className="rounded-md border border-border-subtle p-1 text-ink-muted hover:text-ink"
+            >
+              <ChevronRight aria-hidden className="size-4" />
+            </Link>
+          </div>
+        )}
+        <span className="text-sm tabular-nums">{heading}</span>
+        <div className="ml-auto flex gap-1">
+          {VIEWS.map(([id, label]) => (
+            <Link
+              key={id}
+              to="/calendar"
+              search={{ view: id, year: String(year), date: search.date }}
+              aria-current={view === id ? "page" : undefined}
               className={`rounded-md border px-2 py-1 text-xs ${
-                view === option
+                view === id
                   ? "border-accent bg-accent text-accent-ink"
                   : "border-border-subtle text-ink-muted hover:text-ink"
               }`}
             >
-              {option === "year" ? "Year" : "List"}
+              {label}
             </Link>
           ))}
         </div>
       </div>
-      <p className="text-xs text-ink-muted">
-        Releases by artists you follow, and albums you have asked for, in the libraries you can see.
-        Dates come from the metadata provider and are sometimes only a month or a year.
+      <p className="flex flex-wrap items-center gap-x-3 text-xs text-ink-muted">
+        <span>
+          Releases by artists you follow, and albums you have asked for, in the libraries you can see. Dates come from
+          the metadata provider and are sometimes only a month or a year.
+        </span>
+        <span className="flex items-center gap-2">
+          <Key className="border-l-ok" label="have it" />
+          <Key className="border-l-accent" label="wanted, not out yet" />
+          <Key className="border-l-danger" label="wanted, out" />
+        </span>
       </p>
       <FeedPanel />
-      {view === "year" ? <YearView year={year} /> : <ListView />}
+      {view === "month" && <MonthView anchor={anchor} today={today} />}
+      {view === "week" && <DaysView start={weekStart(anchor)} days={7} today={today} />}
+      {view === "forecast" && <DaysView start={parseIso(today)} days={7} today={today} />}
+      {view === "day" && <DayView date={anchor} today={today} />}
+      {view === "agenda" && <ListView />}
+      {view === "year" && <YearView year={year} />}
     </div>
+  );
+}
+
+function Key({ className, label }: { className: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1">
+      <span aria-hidden className={`inline-block h-3 w-1 rounded-sm border-l-4 ${className}`} />
+      {label}
+    </span>
   );
 }
 
