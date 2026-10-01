@@ -293,3 +293,27 @@ func TestResolveFolderArtist_JoinsTheOneIdentifiedPersonOfThatName(t *testing.T)
 		t.Errorf("ids = joined %d, unknown %d, again %d; want joined %d, one new local person reused", joined, unknown, again, identified)
 	}
 }
+
+// An artist renamed upstream is still found by the name its old folder carries (M1g 1.1).
+func TestResolveFolderArtist_JoinsThePersonByAnAlias(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	identified := resolvePersonNamed(t, people, "artist-1", "Vutu Doci")
+	if err := people.BackfillDetails(t.Context(), identified, library.PersonIdentity{
+		Name: "Vutu Doci", Aliases: []string{"Vudu Doci", " "},
+	}); err != nil {
+		t.Fatalf("BackfillDetails: %v", err)
+	}
+
+	joined, err := people.ResolveFolderArtist(t.Context(), firstSeen, "local:artist", "VUDU doci")
+	if err != nil {
+		t.Fatalf("ResolveFolderArtist: %v", err)
+	}
+	aliases, err := librarydb.New(opened.Read()).ListAliasesForPerson(t.Context(), identified)
+	if err != nil {
+		t.Fatalf("ListAliasesForPerson: %v", err)
+	}
+	if joined != identified || len(aliases) != 1 || aliases[0] != "Vudu Doci" {
+		t.Errorf("joined %d, aliases %v; want person %d and [Vudu Doci]", joined, aliases, identified)
+	}
+}

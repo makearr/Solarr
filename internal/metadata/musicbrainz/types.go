@@ -75,6 +75,8 @@ type Artist struct {
 	// one exists -- the cross-provider identity bridge (ADR-8) a real
 	// biography needs, since MusicBrainz itself has no biography field.
 	WikidataQID string
+	// Aliases are the other names MusicBrainz knows the artist by (renames, stage names, transliterations).
+	Aliases []string
 }
 
 // Release is edition-level data: work_external_id provider "musicbrainz:release".

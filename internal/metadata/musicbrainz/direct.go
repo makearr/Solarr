@@ -146,6 +146,9 @@ type directArtist struct {
 		End   string `json:"end"`
 	} `json:"life-span"`
 	Relations []directRelation `json:"relations"`
+	Aliases   []struct {
+		Name string `json:"name"`
+	} `json:"aliases"`
 }
 
 // Artist implements ArtistLookup: full artist detail, including the Wikidata
@@ -153,13 +156,17 @@ type directArtist struct {
 // relation, not a separate lookup.
 func (d direct) Artist(ctx context.Context, mbid string) (Artist, error) {
 	var parsed directArtist
-	url := fmt.Sprintf("%s/artist/%s?fmt=json&inc=url-rels", d.baseURL, mbid)
+	url := fmt.Sprintf("%s/artist/%s?fmt=json&inc=url-rels+aliases", d.baseURL, mbid)
 	if err := getJSON(ctx, d.client, url, &parsed); err != nil {
 		return Artist{}, fmt.Errorf("musicbrainz: artist %s: %w", mbid, err)
 	}
 
+	aliases := make([]string, 0, len(parsed.Aliases))
+	for _, alias := range parsed.Aliases {
+		aliases = append(aliases, alias.Name)
+	}
 	return Artist{
-		MBID: parsed.ID, Name: parsed.Name, SortName: parsed.SortName,
+		MBID: parsed.ID, Name: parsed.Name, SortName: parsed.SortName, Aliases: aliases,
 		Disambiguation: parsed.Disambiguation, Type: parsed.Type, Gender: parsed.Gender,
 		Country: parsed.Country, Area: parsed.Area.Name, BeginArea: parsed.BeginArea.Name,
 		Born: parsed.LifeSpan.Begin, Died: parsed.LifeSpan.End,

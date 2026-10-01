@@ -445,6 +445,38 @@ func (q *Queries) DeleteSubscription(ctx context.Context, id int64) error {
 	return err
 }
 
+const findIdentifiedPeopleByAlias = `-- name: FindIdentifiedPeopleByAlias :many
+SELECT DISTINCT p.id FROM person p
+JOIN person_alias a ON a.person_id = p.id
+WHERE a.alias = ?1 COLLATE NOCASE
+  AND EXISTS (SELECT 1 FROM person_external_id x WHERE x.person_id = p.id AND x.provider NOT LIKE 'local:%')
+ORDER BY p.id LIMIT 2
+`
+
+// The same by a MusicBrainz alias: an artist renamed upstream is still found by its old folder name.
+func (q *Queries) FindIdentifiedPeopleByAlias(ctx context.Context, name string) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, findIdentifiedPeopleByAlias, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const findIdentifiedPeopleByName = `-- name: FindIdentifiedPeopleByName :many
 SELECT p.id FROM person p
 WHERE p.name = ?1 COLLATE NOCASE

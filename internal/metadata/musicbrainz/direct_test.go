@@ -317,6 +317,7 @@ const kateBushMBID = "c9f2c95c-291d-49a8-8864-e820662adf39"
 const directArtistBody = `{
   "id": "c9f2c95c-291d-49a8-8864-e820662adf39",
   "name": "Vutu Doci",
+  "aliases": [{"name": "Vudu Doci", "type": "Artist name"}, {"name": "V. Doci"}],
   "sort-name": "Bush, Vutu",
   "disambiguation": "",
   "type": "Person",
@@ -333,7 +334,7 @@ const directArtistBody = `{
 
 func TestDirect_ArtistParsesTheRealFieldShapeAndFindsTheWikidataQID(t *testing.T) {
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://musicbrainz.invalid/artist/" + kateBushMBID + "?fmt=json&inc=url-rels": {
+		"https://musicbrainz.invalid/artist/" + kateBushMBID + "?fmt=json&inc=url-rels+aliases": {
 			status: http.StatusOK, body: directArtistBody,
 		},
 	}}
@@ -356,6 +357,9 @@ func TestDirect_ArtistParsesTheRealFieldShapeAndFindsTheWikidataQID(t *testing.T
 	}
 	if artist.Born != "1958-07-30" || artist.Died != "" {
 		t.Errorf("Artist = %+v, want life-span begin mapped to Born, no Died", artist)
+	}
+	if len(artist.Aliases) != 2 || artist.Aliases[0] != "Vudu Doci" || artist.Aliases[1] != "V. Doci" {
+		t.Errorf("Aliases = %v, want both names from inc=aliases", artist.Aliases)
 	}
 	if artist.WikidataQID != "Q636" {
 		t.Errorf("WikidataQID = %q, want Q636 extracted from the wikidata relation, ignoring the homepage one", artist.WikidataQID)

@@ -32,6 +32,8 @@ type PersonIdentity struct {
 	// none is available -- stored in fields_json, the schema's own extension
 	// point, since person carries no dedicated biography column.
 	Biography string
+	// Aliases are the provider's other names for the person; only BackfillDetails stores them.
+	Aliases []string
 }
 
 // PersonLink is one external id to resolve to a person.
@@ -79,7 +81,18 @@ func (p People) ResolvePerson(ctx context.Context, at time.Time, link PersonLink
 // biographical columns: a person first made from a release's credit name ("VUTU") gets the artist's own.
 func (p People) BackfillDetails(ctx context.Context, personID int64, identity PersonIdentity) error {
 	return p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		return librarydb.New(tx).BackfillPersonDetails(ctx, librarydb.BackfillPersonDetailsParams{
+		queries := librarydb.New(tx)
+		for _, alias := range identity.Aliases {
+			if strings.TrimSpace(alias) == "" {
+				continue
+			}
+			if err := queries.AddPersonAlias(ctx, librarydb.AddPersonAliasParams{
+				PersonID: personID, Alias: alias, Normalized: normalizedAlias(alias), Source: "musicbrainz",
+			}); err != nil {
+				return err
+			}
+		}
+		return queries.BackfillPersonDetails(ctx, librarydb.BackfillPersonDetailsParams{
 			ID:             personID,
 			Name:           identity.Name,
 			SortName:       identity.Name,
@@ -97,7 +110,11 @@ func (p People) BackfillDetails(ctx context.Context, personID int64, identity Pe
 // ResolveFolderArtist is the artist of an album known only by its folder (D6): the one provider-identified
 // person of that name when there is exactly one, else a local person keyed by the name.
 func (p People) ResolveFolderArtist(ctx context.Context, at time.Time, provider, name string) (int64, error) {
-	matches, err := librarydb.New(p.store.Read()).FindIdentifiedPeopleByName(ctx, name)
+	queries := librarydb.New(p.store.Read())
+	matches, err := queries.FindIdentifiedPeopleByName(ctx, name)
+	if err == nil && len(matches) == 0 {
+		matches, err = queries.FindIdentifiedPeopleByAlias(ctx, name)
+	}
 	if err != nil {
 		return 0, fmt.Errorf("library: find people named %q: %w", name, err)
 	}
@@ -108,6 +125,9 @@ func (p People) ResolveFolderArtist(ctx context.Context, at time.Time, provider,
 		Provider: provider, ExternalID: strings.ToLower(name), Person: PersonIdentity{Name: name},
 	})
 }
+
+// normalizedAlias is the lookup form of an alias: trimmed and lower-cased.
+func normalizedAlias(alias string) string { return strings.ToLower(strings.TrimSpace(alias)) }
 
 // FindByExternalID answers the person behind an external id, without
 // creating one -- the "did this call create it or only match it" question

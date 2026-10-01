@@ -57,6 +57,14 @@ WHERE p.name = sqlc.arg(name) COLLATE NOCASE
   AND EXISTS (SELECT 1 FROM person_external_id x WHERE x.person_id = p.id AND x.provider NOT LIKE 'local:%')
 ORDER BY p.id LIMIT 2;
 
+-- The same by a MusicBrainz alias: an artist renamed upstream is still found by its old folder name.
+-- name: FindIdentifiedPeopleByAlias :many
+SELECT DISTINCT p.id FROM person p
+JOIN person_alias a ON a.person_id = p.id
+WHERE a.alias = sqlc.arg(name) COLLATE NOCASE
+  AND EXISTS (SELECT 1 FROM person_external_id x WHERE x.person_id = p.id AND x.provider NOT LIKE 'local:%')
+ORDER BY p.id LIMIT 2;
+
 -- name: LinkPersonExternalID :exec
 INSERT INTO person_external_id (provider, external_id, person_id)
 VALUES (?, ?, ?)

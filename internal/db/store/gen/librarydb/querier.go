@@ -225,6 +225,8 @@ type Querier interface {
 	// fingerprinting exists -- a fuzzy hit is never folded into this exact check
 	// (architecture.md section 5.8's own "never treated as an exact one" rule).
 	FindBlockedContentByExactHash(ctx context.Context, arg FindBlockedContentByExactHashParams) ([]BlockedContent, error)
+	// The same by a MusicBrainz alias: an artist renamed upstream is still found by its old folder name.
+	FindIdentifiedPeopleByAlias(ctx context.Context, name string) ([]int64, error)
 	// A provider-identified person by this name, ignoring case: an unverified album's folder artist joins them.
 	FindIdentifiedPeopleByName(ctx context.Context, name string) ([]int64, error)
 	// The cheap identity check an incremental scan runs before reading a file.
