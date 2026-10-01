@@ -187,6 +187,10 @@ type Querier interface {
 	DeleteLibraryPath(ctx context.Context, id int64) error
 	DeleteMediaObject(ctx context.Context, id int64) error
 	DeletePerson(ctx context.Context, id int64) error
+	DeletePersonArtwork(ctx context.Context, subjectID int64) error
+	DeletePersonSubscriptions(ctx context.Context, subjectID int64) error
+	// What the winner already had stays; the loser's duplicates go with it.
+	DeletePersonTagAssignments(ctx context.Context, subjectID int64) error
 	DeleteRecycleBinEntry(ctx context.Context, id int64) error
 	// A root that is removed from configuration leaves no progress behind.
 	DeleteScanState(ctx context.Context, rootFolderID int64) error
@@ -353,6 +357,7 @@ type Querier interface {
 	ListActiveRecycleBinOldestFirst(ctx context.Context, limit int64) ([]RecycleBin, error)
 	// M1d's cutoff check walks every monitored album that has all its tracks, by id.
 	ListAlbumItemsForCutoff(ctx context.Context, arg ListAlbumItemsForCutoffParams) ([]ListAlbumItemsForCutoffRow, error)
+	ListAliasesForPeople(ctx context.Context, personIds []int64) ([]ListAliasesForPeopleRow, error)
 	// The person detail page's own need: every alias this person is known by.
 	ListAliasesForPerson(ctx context.Context, personID int64) ([]string, error)
 	// Every credit anywhere under a work, at any scope. Coverage counts use this;
@@ -462,6 +467,9 @@ type Querier interface {
 	ListIncompleteDesiredItems(ctx context.Context, arg ListIncompleteDesiredItemsParams) ([]ListIncompleteDesiredItemsRow, error)
 	// Which of a batch's files a person already identified; ids is a JSON array.
 	ListManuallyIdentified(ctx context.Context, mediaObjectIds string) ([]int64, error)
+	// The artists credited on a library's albums, with what a merge needs to rank them. shared is set
+	// when the person also has work in another library, which a merge in this one must leave alone.
+	ListMergeCandidatesForCategory(ctx context.Context, categoryID int64) ([]ListMergeCandidatesForCategoryRow, error)
 	ListMoveItems(ctx context.Context, moveJobID int64) ([]MoveItem, error)
 	// Small, operator-facing list -- move counts never approach library scale,
 	// the same reasoning ListImportSessions' own comment already gives.
@@ -616,6 +624,14 @@ type Querier interface {
 	MarkRecycleBinRestored(ctx context.Context, arg MarkRecycleBinRestoredParams) (int64, error)
 	MarkRequestFulfilled(ctx context.Context, id int64) (int64, error)
 	MaxDesiredItemID(ctx context.Context) (int64, error)
+	MergeAliasesInto(ctx context.Context, arg MergeAliasesIntoParams) error
+	MergeArtworkInto(ctx context.Context, arg MergeArtworkIntoParams) error
+	MergeCreditsInto(ctx context.Context, arg MergeCreditsIntoParams) error
+	MergeExternalIDsInto(ctx context.Context, arg MergeExternalIDsIntoParams) error
+	MergeMonitoredInto(ctx context.Context, arg MergeMonitoredIntoParams) error
+	MergePrimaryArtistInto(ctx context.Context, arg MergePrimaryArtistIntoParams) error
+	MergeSubscriptionsInto(ctx context.Context, arg MergeSubscriptionsIntoParams) error
+	MergeTagAssignmentsInto(ctx context.Context, arg MergeTagAssignmentsIntoParams) error
 	NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error)
 	// oldest_searched, the default hunt mode (section 9.3).
 	NextHuntByOldestSearched(ctx context.Context, arg NextHuntByOldestSearchedParams) ([]HuntQueue, error)

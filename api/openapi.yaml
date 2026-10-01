@@ -7604,7 +7604,7 @@ components:
         it keeps what this library removes is set here.
       required: [propers_repacks, rescan_after_refresh, change_file_date, recycle_retention_days,
                  delete_empty_folders, create_empty_artist_folders, unmonitor_deleted,
-                 set_permissions, chmod_folder, chown_group]
+                 merge_artist_aliases, set_permissions, chmod_folder, chown_group]
       properties:
         propers_repacks:
           type: string
@@ -7621,6 +7621,11 @@ components:
         unmonitor_deleted:
           type: boolean
           description: Lidarr's "Ignore Deleted Tracks" -- an album losing a file is unmonitored.
+        merge_artist_aliases:
+          type: boolean
+          description: >-
+            An artist stored under several names (folders, aliases) is merged into one after each
+            disk scan: the identified artist wins, else the name with the most albums.
         set_permissions: { type: boolean }
         chmod_folder:
           type: string

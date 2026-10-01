@@ -1489,13 +1489,16 @@ type FileManagement struct {
 	ChmodFolder string `json:"chmod_folder"`
 
 	// ChownGroup A group name or number; empty leaves the group alone.
-	ChownGroup               string                           `json:"chown_group"`
-	CreateEmptyArtistFolders bool                             `json:"create_empty_artist_folders"`
-	DeleteEmptyFolders       bool                             `json:"delete_empty_folders"`
-	PropersRepacks           FileManagementPropersRepacks     `json:"propers_repacks"`
-	RecycleRetentionDays     int64                            `json:"recycle_retention_days"`
-	RescanAfterRefresh       FileManagementRescanAfterRefresh `json:"rescan_after_refresh"`
-	SetPermissions           bool                             `json:"set_permissions"`
+	ChownGroup               string `json:"chown_group"`
+	CreateEmptyArtistFolders bool   `json:"create_empty_artist_folders"`
+	DeleteEmptyFolders       bool   `json:"delete_empty_folders"`
+
+	// MergeArtistAliases An artist stored under several names (folders, aliases) is merged into one after each disk scan: the identified artist wins, else the name with the most albums.
+	MergeArtistAliases   bool                             `json:"merge_artist_aliases"`
+	PropersRepacks       FileManagementPropersRepacks     `json:"propers_repacks"`
+	RecycleRetentionDays int64                            `json:"recycle_retention_days"`
+	RescanAfterRefresh   FileManagementRescanAfterRefresh `json:"rescan_after_refresh"`
+	SetPermissions       bool                             `json:"set_permissions"`
 
 	// UnmonitorDeleted Lidarr's "Ignore Deleted Tracks" -- an album losing a file is unmonitored.
 	UnmonitorDeleted bool `json:"unmonitor_deleted"`

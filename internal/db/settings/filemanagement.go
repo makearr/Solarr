@@ -51,7 +51,9 @@ type FileManagement struct {
 	CreateEmptyArtistFolders bool
 	// UnmonitorDeleted is Lidarr's "Ignore Deleted Tracks": an album losing a file is unmonitored.
 	UnmonitorDeleted bool
-	SetPermissions   bool
+	// MergeArtistAliases folds an artist stored under several names into one after each disk scan.
+	MergeArtistAliases bool
+	SetPermissions     bool
 	// ChmodFolder is octal, as Sonarr takes it; files get the same mode without execute bits.
 	ChmodFolder string
 	// ChownGroup is a group name or number; empty leaves the group alone.
@@ -156,6 +158,7 @@ func writeCategoryFileManagement(ctx context.Context, queries *settingsdb.Querie
 		SetPermissions: boolToInt(f.SetPermissions), ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup,
 		WriteIdsToTags: boolToInt(f.Tagging.WriteIDs), ReplaceIdsInTags: boolToInt(f.Tagging.ReplaceIDs),
 		WriteMetadataToTags: boolToInt(f.Tagging.WriteMetadata), EmbedCoverInTags: boolToInt(f.Tagging.EmbedCover),
+		MergeArtistAliases: boolToInt(f.MergeArtistAliases),
 	})
 }
 
@@ -175,8 +178,9 @@ func withFileManagement(categories []Category, rows []settingsdb.CategoryFileMan
 			PropersRepacks: PropersRepacks(row.PropersRepacks), RescanAfterRefresh: RescanAfterRefresh(row.RescanAfterRefresh),
 			ChangeFileDate: ChangeFileDate(row.ChangeFileDate), RecycleRetentionDays: row.RecycleRetentionDays,
 			DeleteEmptyFolders: row.DeleteEmptyFolders != 0, CreateEmptyArtistFolders: row.CreateEmptyArtistFolders != 0,
-			UnmonitorDeleted: row.UnmonitorDeleted != 0, SetPermissions: row.SetPermissions != 0,
-			ChmodFolder: row.ChmodFolder, ChownGroup: row.ChownGroup,
+			UnmonitorDeleted: row.UnmonitorDeleted != 0, MergeArtistAliases: row.MergeArtistAliases != 0,
+			SetPermissions: row.SetPermissions != 0,
+			ChmodFolder:    row.ChmodFolder, ChownGroup: row.ChownGroup,
 			Tagging: Tagging{
 				WriteIDs: row.WriteIdsToTags != 0, ReplaceIDs: row.ReplaceIdsInTags != 0,
 				WriteMetadata: row.WriteMetadataToTags != 0, EmbedCover: row.EmbedCoverInTags != 0,

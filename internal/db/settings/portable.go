@@ -205,6 +205,7 @@ type FileManagementEntry struct {
 	DeleteEmptyFolders       bool               `yaml:"delete_empty_folders"`
 	CreateEmptyArtistFolders bool               `yaml:"create_empty_artist_folders"`
 	UnmonitorDeleted         bool               `yaml:"unmonitor_deleted"`
+	MergeArtistAliases       bool               `yaml:"merge_artist_aliases,omitempty"`
 	SetPermissions           bool               `yaml:"set_permissions"`
 	ChmodFolder              string             `yaml:"chmod_folder"`
 	ChownGroup               string             `yaml:"chown_group,omitempty"`
@@ -220,7 +221,8 @@ func (e FileManagementEntry) fileManagement() FileManagement {
 		PropersRepacks: e.PropersRepacks, RescanAfterRefresh: e.RescanAfterRefresh, ChangeFileDate: e.ChangeFileDate,
 		RecycleRetentionDays: e.RecycleRetentionDays, DeleteEmptyFolders: e.DeleteEmptyFolders,
 		CreateEmptyArtistFolders: e.CreateEmptyArtistFolders, UnmonitorDeleted: e.UnmonitorDeleted,
-		SetPermissions: e.SetPermissions, ChmodFolder: e.ChmodFolder, ChownGroup: e.ChownGroup,
+		MergeArtistAliases: e.MergeArtistAliases,
+		SetPermissions:     e.SetPermissions, ChmodFolder: e.ChmodFolder, ChownGroup: e.ChownGroup,
 		Tagging: Tagging{
 			WriteIDs: e.WriteIDsToTags == nil || *e.WriteIDsToTags, ReplaceIDs: e.ReplaceIDsInTags,
 			WriteMetadata: e.WriteMetadataToTags, EmbedCover: e.EmbedCoverInTags,
@@ -234,7 +236,8 @@ func fileManagementEntry(f FileManagement) FileManagementEntry {
 		PropersRepacks: f.PropersRepacks, RescanAfterRefresh: f.RescanAfterRefresh, ChangeFileDate: f.ChangeFileDate,
 		RecycleRetentionDays: f.RecycleRetentionDays, DeleteEmptyFolders: f.DeleteEmptyFolders,
 		CreateEmptyArtistFolders: f.CreateEmptyArtistFolders, UnmonitorDeleted: f.UnmonitorDeleted,
-		SetPermissions: f.SetPermissions, ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup, WriteIDsToTags: &writeIDs,
+		MergeArtistAliases: f.MergeArtistAliases,
+		SetPermissions:     f.SetPermissions, ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup, WriteIDsToTags: &writeIDs,
 		ReplaceIDsInTags: f.Tagging.ReplaceIDs, WriteMetadataToTags: f.Tagging.WriteMetadata,
 		EmbedCoverInTags: f.Tagging.EmbedCover,
 	}

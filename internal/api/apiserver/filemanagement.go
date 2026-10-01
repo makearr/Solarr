@@ -54,7 +54,7 @@ func (s *Server) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request
 		PropersRepacks: settings.PropersRepacks(body.PropersRepacks), RescanAfterRefresh: settings.RescanAfterRefresh(body.RescanAfterRefresh),
 		ChangeFileDate: settings.ChangeFileDate(body.ChangeFileDate), RecycleRetentionDays: body.RecycleRetentionDays,
 		DeleteEmptyFolders: body.DeleteEmptyFolders, CreateEmptyArtistFolders: body.CreateEmptyArtistFolders,
-		UnmonitorDeleted: body.UnmonitorDeleted, SetPermissions: body.SetPermissions,
+		UnmonitorDeleted: body.UnmonitorDeleted, MergeArtistAliases: body.MergeArtistAliases, SetPermissions: body.SetPermissions,
 		ChmodFolder: body.ChmodFolder, ChownGroup: body.ChownGroup, Tagging: category.FileManagement.Tagging,
 	}
 	if err := s.auth.Settings.SetCategoryFileManagement(r.Context(), id, wanted); err != nil {
@@ -76,7 +76,7 @@ func fileManagementView(f settings.FileManagement) gen.FileManagement {
 		RescanAfterRefresh: gen.FileManagementRescanAfterRefresh(f.RescanAfterRefresh),
 		ChangeFileDate:     gen.FileManagementChangeFileDate(f.ChangeFileDate), RecycleRetentionDays: f.RecycleRetentionDays,
 		DeleteEmptyFolders: f.DeleteEmptyFolders, CreateEmptyArtistFolders: f.CreateEmptyArtistFolders,
-		UnmonitorDeleted: f.UnmonitorDeleted, SetPermissions: f.SetPermissions,
+		UnmonitorDeleted: f.UnmonitorDeleted, MergeArtistAliases: f.MergeArtistAliases, SetPermissions: f.SetPermissions,
 		ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup,
 	}
 }

@@ -5027,6 +5027,8 @@ export interface components {
             create_empty_artist_folders: boolean;
             /** @description Lidarr's "Ignore Deleted Tracks" -- an album losing a file is unmonitored. */
             unmonitor_deleted: boolean;
+            /** @description An artist stored under several names (folders, aliases) is merged into one after each disk scan: the identified artist wins, else the name with the most albums. */
+            merge_artist_aliases: boolean;
             set_permissions: boolean;
             /** @description Octal, such as 755; files get the same without the execute bits. */
             chmod_folder: string;

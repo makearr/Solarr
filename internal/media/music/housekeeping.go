@@ -64,6 +64,11 @@ func (h Housekeeping) AfterSweep(
 			failures = append(failures, err)
 		}
 	}
+	if fileManagement.MergeArtistAliases {
+		if err := h.mergeArtists(ctx, categoryID); err != nil {
+			failures = append(failures, err)
+		}
+	}
 	if fileManagement.DeleteEmptyFolders {
 		h.deleteEmptyFolders(root.Path, outcome.EmptyDirectories, !fileManagement.CreateEmptyArtistFolders)
 	}
@@ -73,6 +78,15 @@ func (h Housekeeping) AfterSweep(
 		}
 	}
 	return errors.Join(failures...)
+}
+
+// mergeArtists folds the library's artists stored under several names into one (M1g 1.2).
+func (h Housekeeping) mergeArtists(ctx context.Context, categoryID int64) error {
+	merges, err := h.people.PlanArtistMerges(ctx, categoryID)
+	if err != nil || len(merges) == 0 {
+		return err
+	}
+	return h.people.MergeArtists(ctx, merges)
 }
 
 // deleteEmptyFolders removes each empty folder and the parents it leaves empty. An artist folder

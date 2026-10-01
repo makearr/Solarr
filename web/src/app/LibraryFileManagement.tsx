@@ -85,6 +85,12 @@ export function LibraryFileManagement() {
           checked={draft.unmonitor_deleted}
           onChange={(checked) => set({ unmonitor_deleted: checked })}
         />
+        <Toggle
+          label="Merge Artists Stored Under Several Names"
+          help="After each disk scan, an artist found under several folder names or aliases becomes one artist: the identified artist wins, otherwise the name with the most albums. Files stay where they are."
+          checked={draft.merge_artist_aliases}
+          onChange={(checked) => set({ merge_artist_aliases: checked })}
+        />
         {advanced && (
         <>
         <Choice
