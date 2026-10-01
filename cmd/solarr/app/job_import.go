@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"os/user"
+	"path/filepath"
 	"strconv"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
@@ -51,6 +52,7 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		AcoustID:   p.acoustIDLookup(),
 		Committer:  p.importCommitter(),
 		Packs:      library.NewPacks(p.library),
+		Workspace:  filepath.Join(p.config.Paths.CacheDir, "import-workspace"),
 		Events:     p.bus,
 		// A new edition's tracklist is what lets the placed files count towards the album.
 		OnCommitted: func(ctx context.Context) {

@@ -1,7 +1,10 @@
 package importjob_test
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"os"
@@ -16,6 +19,7 @@ import (
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
+	"github.com/makearr/Solarr/internal/platform/archive"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
@@ -992,4 +996,71 @@ func TestJob_PreviewHoldsEvenAConfidentUnit(t *testing.T) {
 	if units[0].CandidatesJSON == "" {
 		t.Error("the held unit carries no candidates, so nothing could commit it later")
 	}
+}
+
+// An archive is a folder (ADR-49): a download that is only a zip is opened into the workspace and its contents are
+// inspected as one session, never the "nothing found" a bare archive used to give.
+func TestJob_ImportsTheContentsOfAnArchiveLikeAFolder(t *testing.T) {
+	fx := newFixture(t)
+	var packed bytes.Buffer
+	writer := zip.NewWriter(&packed)
+	for _, name := range []string{"01 One.flac", "02 Two.flac"} {
+		member, err := writer.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		noise := make([]byte, 200*1024)
+		if _, err := rand.Read(noise); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := member.Write(noise); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	archivePath := filepath.Join(root, "Artist - Album.zip")
+	file, err := fx.fsys.Create(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.Write(packed.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	_ = file.Close()
+
+	job := importjob.NewJob(importjob.Config{
+		FS: fx.fsys, Sessions: fx.sessions(), Policy: fixedPolicy(0.90), Tool: fx.tool, Packs: library.NewPacks(fx.store),
+		Workspace: "/workspace", ArchiveLimits: testArchiveLimits(), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+	})
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	done, err := fx.sessions().List(t.Context(), library.ImportDone, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(done) != 1 || !strings.HasPrefix(done[0].SourcePath, "/workspace/") {
+		t.Fatalf("sessions = %+v, want one over the workspace", done)
+	}
+	units, err := fx.sessions().ListUnits(t.Context(), done[0].ID)
+	if err != nil || len(units) != 1 || units[0].FileCount != 2 {
+		t.Fatalf("units = %+v, %v; want one unit of the archive's two tracks", units, err)
+	}
+	// Held for review, so the files stay readable; the source archive is untouched.
+	if _, err := fx.fsys.Stat(filepath.Join(done[0].SourcePath, units[0].RelPath, "01 One.flac")); err != nil {
+		t.Errorf("a held unit's file is gone: %v", err)
+	}
+	if _, err := fx.fsys.Stat(archivePath); err != nil {
+		t.Errorf("the source archive was touched: %v", err)
+	}
+}
+
+// testArchiveLimits is the shipped limits without the free-space margin, which an in-memory filesystem cannot report.
+func testArchiveLimits() archive.Limits {
+	limits := archive.DefaultLimits()
+	limits.MinFreeBytes = 0
+	return limits
 }
