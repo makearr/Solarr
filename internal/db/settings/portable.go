@@ -681,6 +681,7 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 	}
 
 	seenCategories := make(map[string]bool, len(d.Categories))
+	rootOwners := make(map[string]string)
 	for index, category := range d.Categories {
 		where := fmt.Sprintf("categories[%d]", index)
 		// The same rule the API path applies, so an import cannot introduce a
@@ -714,6 +715,14 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 					Expectation: "a path also listed under root_folders",
 				})
 			}
+			if owner, taken := rootOwners[attached.Path]; taken && owner != key {
+				problems = append(problems, config.Problem{
+					Path:        fmt.Sprintf("%s.roots[%d].path", where, rootIndex),
+					Value:       attached.Path,
+					Expectation: "a root folder in at most one library (also listed under " + owner + ")",
+				})
+			}
+			rootOwners[attached.Path] = key
 		}
 		names := category.qualityProfileNames()
 		for _, name := range names {

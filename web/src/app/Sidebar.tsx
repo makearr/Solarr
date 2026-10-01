@@ -2,7 +2,6 @@ import { Link, useParams, useRouterState, useSearch } from "@tanstack/react-rout
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
-  ArrowLeftRight,
   ChevronDown,
   ChevronRight,
   Download,
@@ -57,7 +56,6 @@ const ACTIVITY_SECTIONS: readonly { to: string; label: string; icon: LucideIcon;
 // nothing here is needed to run a library, and a move is irreversible work.
 const STORAGE_SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier?: Tier }[] = [
   { to: "/storage/roots", label: "Root folders", icon: HardDrive },
-  { to: "/storage/moves", label: "Move & drain", icon: ArrowLeftRight, tier: "expert" },
   { to: "/storage/downloads", label: "Download folders", icon: Download },
   { to: "/storage/import", label: "Import", icon: ScanSearch },
   { to: "/storage/recycle-bin", label: "Recycle bin", icon: Trash2 },

@@ -27,7 +27,6 @@ import { LibraryNaming } from "./LibraryNaming";
 import { UnknownConfigSection } from "./UnknownConfigSection";
 import { LibraryHealth } from "./LibraryHealth";
 import { LibraryLevelList } from "./LibraryLevelList";
-import { Moves } from "./Moves";
 import { Libraries } from "./Libraries";
 import { Packs } from "./Packs";
 import { People } from "./People";
@@ -165,7 +164,13 @@ const routes = [
   // Import are grouped under one section. /import and /moves redirect
   // rather than 404ing, the same courtesy the old flat /library got.
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/roots", component: RootFolders }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/storage/moves", component: Moves }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/storage/moves",
+    beforeLoad: () => {
+      throw redirect({ to: "/storage/roots" });
+    },
+  }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/downloads", component: DownloadFolders }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/import", component: Import }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/recycle-bin", component: RecycleBin }),
@@ -193,7 +198,7 @@ const routes = [
     getParentRoute: () => rootRoute,
     path: "/moves",
     beforeLoad: () => {
-      throw redirect({ to: "/storage/moves" });
+      throw redirect({ to: "/storage/roots" });
     },
   }),
   // Connections (stage 5, ADR-54/todo 5.2): indexers and download clients so

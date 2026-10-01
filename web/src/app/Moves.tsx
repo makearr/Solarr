@@ -8,57 +8,9 @@ type RootFolder = components["schemas"]["RootFolder"];
 type DrainPlan = components["schemas"]["DrainPlan"];
 type MoveJob = components["schemas"]["MoveJob"];
 
-/** ADR-51's own drain workflow: preview which files would move where and
- *  what each root ends up with, then commit -- the same preview-then-commit
- *  shape Library.tsx's bulk monitor action already uses. Rename, category
- *  migration and rebalance share the same move engine but have no screen of
- *  their own yet -- drain was the user's own original request. */
-export function Moves() {
-  return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-4">
-      <div className="flex items-center gap-3">
-        <h2 className="text-sm font-medium">Move, rebalance and drain</h2>
-        <span className="text-xs text-ink-muted">
-          Evacuate a root onto its siblings, grouped by artist so nothing splits across disks
-        </span>
-      </div>
-
-      <RootFolderList />
-      <MoveJobList />
-    </div>
-  );
-}
-
-function RootFolderList() {
-  const roots = useQuery({
-    queryKey: ["rootfolders"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/rootfolders");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  return (
-    <div className="rounded-lg border border-border-subtle bg-surface">
-      <h3 className="border-b border-border-subtle px-3 py-2 text-xs font-medium text-ink-muted">
-        Root folders
-      </h3>
-      {roots.isLoading && <Message>Loading root folders…</Message>}
-      {roots.error !== null && <Message>Root folders could not be read.</Message>}
-      {roots.data && roots.data.length === 0 && <Message>No root folders configured.</Message>}
-      {roots.data && roots.data.length > 0 && (
-        <ul className="divide-y divide-border-subtle">
-          {roots.data.map((root) => (
-            <RootFolderRow key={root.id} root={root} />
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function RootFolderRow({ root }: { root: RootFolder }) {
+/** ADR-51's own drain workflow, part of each root folder card (user, 2026-09-30): preview which files
+ *  would move where and what each root ends up with, then commit. */
+export function RootMoveControls({ root }: { root: RootFolder }) {
   const queryClient = useQueryClient();
   const [plan, setPlan] = useState<DrainPlan | null>(null);
   const [planError, setPlanError] = useState(false);
@@ -119,17 +71,8 @@ function RootFolderRow({ root }: { root: RootFolder }) {
   const draining = root.drain_state === "DRAINING" || root.drain_state === "PAUSED";
 
   return (
-    <li className="flex flex-col gap-2 px-3 py-2.5 text-xs">
+    <div className="flex flex-col gap-2 border-t border-border-subtle pt-2.5 text-xs">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="truncate font-mono text-sm text-ink" title={root.path}>
-          {root.label || root.path}
-        </span>
-        {root.drain_state && root.drain_state !== "NONE" && <DrainStateBadge state={root.drain_state} />}
-        {!root.online && (
-          <span className="rounded-full border border-danger px-1.5 py-px text-[0.6875rem] text-danger">
-            offline
-          </span>
-        )}
         <span className="flex-1" />
         {draining ? (
           <button
@@ -173,7 +116,7 @@ function RootFolderRow({ root }: { root: RootFolder }) {
           committing={commit.isPending}
         />
       )}
-    </li>
+    </div>
   );
 }
 
@@ -276,7 +219,7 @@ function DrainPreview({
   );
 }
 
-function MoveJobList() {
+export function MoveJobList() {
   const jobs = useQuery({
     queryKey: ["move-jobs"],
     queryFn: async () => {
@@ -329,19 +272,6 @@ function MoveJobRow({ job }: { job: MoveJob }) {
   );
 }
 
-function DrainStateBadge({ state }: { state: NonNullable<RootFolder["drain_state"]> }) {
-  return (
-    <span
-      className={`rounded-full border px-1.5 py-px text-[0.6875rem] ${
-        state === "DRAINED"
-          ? "border-border-subtle text-ink-muted"
-          : "border-accent text-accent"
-      }`}
-    >
-      {state}
-    </span>
-  );
-}
 
 function MoveJobStateBadge({ state }: { state: MoveJob["state"] }) {
   const isTerminal = state === "DONE" || state === "FAILED";

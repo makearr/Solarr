@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import type { components } from "@/api/schema";
 import { EditCategoryForm, MEDIA_TYPES } from "./Categories";
+import { MoveJobList, RootMoveControls } from "./Moves";
 
 type RootFolder = components["schemas"]["RootFolder"];
 type LibraryCategory = components["schemas"]["LibraryCategory"];
@@ -61,18 +62,24 @@ export function RootFolders() {
     onSuccess: invalidate,
   });
 
-  // Attach before detaching, so a moved root is never briefly in no library.
+  // A root belongs to one library, so it leaves one before joining the next; a refused join puts it back.
   const moveRoot = useMutation({
     mutationFn: async (args: { rootFolderId: number; fromId: number; toId: number }) => {
+      const { error: detachError } = await api.DELETE("/categories/{id}/rootfolders/{rootFolderId}", {
+        params: { path: { id: args.fromId, rootFolderId: args.rootFolderId } },
+      });
+      if (detachError) throw detachError;
       const { error: attachError } = await api.POST("/categories/{id}/rootfolders", {
         params: { path: { id: args.toId } },
         body: { root_folder_id: args.rootFolderId },
       });
-      if (attachError) throw attachError;
-      const { error } = await api.DELETE("/categories/{id}/rootfolders/{rootFolderId}", {
-        params: { path: { id: args.fromId, rootFolderId: args.rootFolderId } },
-      });
-      if (error) throw error;
+      if (attachError) {
+        await api.POST("/categories/{id}/rootfolders", {
+          params: { path: { id: args.fromId } },
+          body: { root_folder_id: args.rootFolderId },
+        });
+        throw attachError;
+      }
     },
     onSuccess: () => {
       invalidate();
@@ -124,39 +131,45 @@ export function RootFolders() {
         </p>
       </header>
 
-      {roots.data && roots.data.length > 0 && (
-        <CapacityByCategory roots={roots.data} categories={categories.data ?? []} />
-      )}
-
       {roots.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {roots.error !== null && <p className="text-sm text-danger">Root folders could not be read.</p>}
 
       {roots.data && roots.data.length > 0 ? (
-        <ul className="flex flex-col gap-3">
-          {roots.data.map((root) => (
-            <RootFolderCard
-              key={root.id}
-              root={root}
-              categories={categories.data ?? []}
-              onSavePolicy={(readOnly, allowRename, minFreeBytes) =>
-                setPolicy.mutate({ id: root.id, readOnly, allowRename, minFreeBytes })
-              }
-              onToggleOnline={() => setOnline.mutate({ id: root.id, online: !root.online })}
-              onAttachCategory={(categoryId) => attachCategory.mutate({ rootFolderId: root.id, categoryId })}
-              onDetachCategory={(categoryId) => detachCategory.mutate({ rootFolderId: root.id, categoryId })}
-              onMoveCategory={(fromId, toId) => moveRoot.mutate({ rootFolderId: root.id, fromId, toId })}
-              onLibraryEdited={() => {
-                invalidate();
-                void queryClient.invalidateQueries({ queryKey: ["categories"] });
-              }}
-              onRemove={() => remove.mutate(root.id)}
-              busy={setPolicy.isPending || setOnline.isPending}
-              categoryBusy={attachCategory.isPending || detachCategory.isPending || moveRoot.isPending}
-              removeBusy={remove.isPending && remove.variables === root.id}
-              removeError={remove.isError && remove.variables === root.id ? remove.error : null}
-            />
+        <div className="flex flex-col gap-6">
+          {groupByLibrary(roots.data, categories.data ?? []).map((group) => (
+            <section key={group.key} className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                <h2 className="text-sm font-medium">{group.name}</h2>
+                <span className="text-xs text-ink-muted">{libraryCapacity(group.roots)}</span>
+              </div>
+              <ul className="flex flex-col gap-3">
+                {group.roots.map((root) => (
+                  <RootFolderCard
+                    key={root.id}
+                    root={root}
+                    categories={categories.data ?? []}
+                    onSavePolicy={(readOnly, allowRename, minFreeBytes) =>
+                      setPolicy.mutate({ id: root.id, readOnly, allowRename, minFreeBytes })
+                    }
+                    onToggleOnline={() => setOnline.mutate({ id: root.id, online: !root.online })}
+                    onAttachCategory={(categoryId) => attachCategory.mutate({ rootFolderId: root.id, categoryId })}
+                    onDetachCategory={(categoryId) => detachCategory.mutate({ rootFolderId: root.id, categoryId })}
+                    onMoveCategory={(fromId, toId) => moveRoot.mutate({ rootFolderId: root.id, fromId, toId })}
+                    onLibraryEdited={() => {
+                      invalidate();
+                      void queryClient.invalidateQueries({ queryKey: ["categories"] });
+                    }}
+                    onRemove={() => remove.mutate(root.id)}
+                    busy={setPolicy.isPending || setOnline.isPending}
+                    categoryBusy={attachCategory.isPending || detachCategory.isPending || moveRoot.isPending}
+                    removeBusy={remove.isPending && remove.variables === root.id}
+                    removeError={remove.isError && remove.variables === root.id ? remove.error : null}
+                  />
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       ) : (
         !roots.isLoading && (
           <p className="rounded-lg border border-border-subtle bg-surface p-3 text-sm text-ink-muted">
@@ -176,8 +189,40 @@ export function RootFolders() {
           void queryClient.invalidateQueries({ queryKey: ["categories"] });
         }}
       />
+
+      <MoveJobList />
     </div>
   );
+}
+
+interface LibraryGroup {
+  key: string;
+  name: string;
+  roots: RootFolder[];
+}
+
+// A root folder sits under the one library it belongs to; one in none gets a group of its own.
+function groupByLibrary(roots: RootFolder[], categories: LibraryCategory[]): LibraryGroup[] {
+  const groups: LibraryGroup[] = categories
+    .map((category) => ({
+      key: `library-${category.id}`,
+      name: category.name,
+      roots: roots.filter((root) => (root.categories ?? []).some((attached) => attached.id === category.id)),
+    }))
+    .filter((group) => group.roots.length > 0);
+  const unassigned = roots.filter((root) => (root.categories ?? []).length === 0);
+  if (unassigned.length > 0) groups.push({ key: "none", name: "Not in a library", roots: unassigned });
+  return groups;
+}
+
+/** Section 11.7/10.4: an offline root's stale bytes are not free space, and roots on one filesystem count once. */
+function libraryCapacity(roots: RootFolder[]): string {
+  const online = oneRootPerFilesystem(roots.filter((root) => root.online && (root.total_bytes ?? 0) > 0));
+  const offline = roots.filter((root) => !root.online).length;
+  const total = online.reduce((sum, root) => sum + (root.total_bytes ?? 0), 0);
+  const free = online.reduce((sum, root) => sum + (root.free_bytes ?? 0), 0);
+  const measured = total > 0 ? `${formatBytes(free)} free of ${formatBytes(total)}` : "not measured yet";
+  return offline > 0 ? `${measured} · ${offline} offline, excluded` : measured;
 }
 
 // Two roots on one filesystem share its space; count it once. Separate ZFS datasets of one pool
@@ -190,66 +235,6 @@ function oneRootPerFilesystem(roots: RootFolder[]): RootFolder[] {
     seen.add(root.filesystem_id);
     return true;
   });
-}
-
-/** Section 11.7/10.4: an offline root's own stale bytes are not free space,
- *  so a category's total is summed only across its own online, measured
- *  roots -- a root sharing two categories counts fully in each, since each
- *  category's own placement really can use all of it. Nothing before this
- *  summed anything across roots at all. */
-function CapacityByCategory({
-  roots,
-  categories,
-}: {
-  roots: RootFolder[];
-  categories: LibraryCategory[];
-}) {
-  const rows = categories
-    .map((category) => {
-      const attached = roots.filter((root) => (root.categories ?? []).some((c) => c.id === category.id));
-      const online = oneRootPerFilesystem(
-        attached.filter((root) => root.online && (root.total_bytes ?? 0) > 0),
-      );
-      return {
-        category,
-        rootCount: attached.length,
-        offlineCount: attached.filter((root) => !root.online).length,
-        totalBytes: online.reduce((sum, root) => sum + (root.total_bytes ?? 0), 0),
-        freeBytes: online.reduce((sum, root) => sum + (root.free_bytes ?? 0), 0),
-      };
-    })
-    .filter((row) => row.rootCount > 0);
-
-  if (rows.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
-      <h2 className="text-sm font-medium">Capacity by library</h2>
-      <ul className="flex flex-col gap-1.5">
-        {rows.map(({ category, freeBytes, totalBytes, offlineCount }) => (
-          <li key={category.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-            <span className="font-medium">{category.name}</span>
-            <span className="text-ink-muted">
-              {totalBytes > 0
-                ? `${formatBytes(freeBytes)} free of ${formatBytes(totalBytes)}`
-                : "not measured yet"}
-            </span>
-            {offlineCount > 0 && (
-              <Badge tone="warn">
-                {offlineCount} root{offlineCount > 1 ? "s" : ""} offline, excluded
-              </Badge>
-            )}
-          </li>
-        ))}
-      </ul>
-      <p className="text-[0.6875rem] text-ink-muted">
-        Roots on the same filesystem are counted once. Separate ZFS datasets of one pool share free
-        space but cannot be told apart, so their totals may overlap.
-      </p>
-    </div>
-  );
 }
 
 function RootFolderCard({
@@ -352,12 +337,14 @@ function RootFolderCard({
             onMove={(toId) => onMoveCategory(onlyLibrary.id, toId)}
           />
         )}
-        <AttachCategory
+        {attached.length === 0 && (
+          <AttachCategory
           alreadyAttached={attached}
           categories={categories}
           busy={categoryBusy}
           onAttach={onAttachCategory}
         />
+        )}
       </div>
       {attached.length === 0 && (
         <p className="text-xs text-warn">
@@ -482,6 +469,8 @@ function RootFolderCard({
           Remove
         </button>
       </div>
+
+      <RootMoveControls root={root} />
 
       {removeError !== null && (
         <p className="text-xs text-danger">
