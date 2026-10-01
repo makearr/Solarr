@@ -117,3 +117,29 @@ func TestPostponeKeepsTheHuntAwayUntilThen(t *testing.T) {
 		}
 	}
 }
+
+// An RSS release by an artist's old name still finds the album wanted under its current one (M1g 1.1).
+func TestWantedAlbumsByArtist_MatchesNameAndAlias(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	artist := resolvePersonNamed(t, people, "artist-1", "Vutu Doci")
+	if err := people.BackfillDetails(t.Context(), artist, library.PersonIdentity{Name: "Vutu Doci", Aliases: []string{"Vudu Doci"}}); err != nil {
+		t.Fatalf("BackfillDetails: %v", err)
+	}
+	work := createWork(t, opened, "music", "Album")
+	if err := people.AddCredit(t.Context(), work.ID, artist, "artist", 0); err != nil {
+		t.Fatalf("AddCredit: %v", err)
+	}
+	item := createDesired(t, opened, work.ID, "SET", 10)
+
+	hunt := library.NewHunt(opened)
+	for _, name := range []string{"vutu doci", "VUDU DOCI"} {
+		ids, err := hunt.WantedAlbumsByArtist(t.Context(), name, 10)
+		if err != nil || len(ids) != 1 || ids[0] != item.ID {
+			t.Errorf("WantedAlbumsByArtist(%q) = %v, %v; want [%d]", name, ids, err, item.ID)
+		}
+	}
+	if ids, _ := hunt.WantedAlbumsByArtist(t.Context(), "Katupoken", 10); len(ids) != 0 {
+		t.Errorf("an unrelated name matched %v", ids)
+	}
+}

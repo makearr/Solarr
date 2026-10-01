@@ -1105,7 +1105,8 @@ SELECT DISTINCT di.id
 FROM person p
 JOIN credit c ON c.person_id = p.id AND c.role = 'artist' AND c.edition_id = 0 AND c.part_id = 0
 JOIN desired_item di ON di.work_id = c.work_id
-WHERE p.name = ?1 COLLATE NOCASE
+WHERE (p.name = ?1 COLLATE NOCASE
+       OR EXISTS (SELECT 1 FROM person_alias a WHERE a.person_id = p.id AND a.alias = ?1 COLLATE NOCASE))
   AND di.monitored = 1 AND di.state IN ('MISSING', 'PARTIAL') AND di.satisfaction_kind = 'SET'
 ORDER BY di.id
 LIMIT ?2
@@ -1116,7 +1117,7 @@ type ListWantedAlbumsByArtistNameParams struct {
 	PageSize int64
 }
 
-// RSS sync: the monitored, incomplete albums credited to an artist of this name, ignoring case.
+// RSS sync: the monitored, incomplete albums credited to an artist of this name or alias, ignoring case.
 func (q *Queries) ListWantedAlbumsByArtistName(ctx context.Context, arg ListWantedAlbumsByArtistNameParams) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, listWantedAlbumsByArtistName, arg.Name, arg.PageSize)
 	if err != nil {
