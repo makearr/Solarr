@@ -569,6 +569,8 @@ type Querier interface {
 	ListUnplacedCommitUnits(ctx context.Context, sessionID int64) ([]ImportUnit, error)
 	// The unverified albums (only local ids, D6) a file is linked to, for when it is identified.
 	ListUnverifiedWorksForFile(ctx context.Context, mediaObjectID int64) ([]int64, error)
+	// Monitored albums below their library's cutoff: what the Cutoff Unmet search walks.
+	ListUpgradableDesiredItems(ctx context.Context, arg ListUpgradableDesiredItemsParams) ([]ListUpgradableDesiredItemsRow, error)
 	// RSS sync: the monitored, incomplete albums credited to an artist of this name or alias, ignoring case.
 	ListWantedAlbumsByArtistName(ctx context.Context, arg ListWantedAlbumsByArtistNameParams) ([]int64, error)
 	ListWorkClassifications(ctx context.Context, workID int64) ([]WorkClassification, error)

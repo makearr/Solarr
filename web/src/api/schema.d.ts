@@ -8919,6 +8919,8 @@ export interface operations {
             content: {
                 "application/json": {
                     work_ids?: number[];
+                    /** @description Search the monitored albums below the library's cutoff (Lidarr's Cutoff Unmet "Search all") instead of the missing ones; each is judged strictly: only a better release is sent. */
+                    cutoff_unmet?: boolean;
                 };
             };
         };

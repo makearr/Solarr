@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/priority"
+	"github.com/makearr/Solarr/internal/identify/score"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -58,7 +61,8 @@ func (p *process) planFacts(context.Context) (plan.Facts, error) {
 		ranks[category.ID] = category.PriorityRank
 	}
 	return plan.Facts{
-		Policy: plan.Policy{Weights: weights, NewReleaseDays: int(stored.NewReleaseDays)},
+		Policy:  plan.Policy{Weights: weights, NewReleaseDays: int(stored.NewReleaseDays)},
+		Upgrade: p.upgradeRules(snapshot),
 		CategoryRank: func(categoryID int64) int64 {
 			if rank, found := ranks[categoryID]; found {
 				return rank
@@ -66,6 +70,34 @@ func (p *process) planFacts(context.Context) (plan.Facts, error) {
 			return 100
 		},
 	}, nil
+}
+
+// upgradeRules reads each library's upgrade hysteresis from its first quality profile (section 9.2), the
+// shipped 24 hours and three imports where it states none.
+func (p *process) upgradeRules(snapshot *settings.Snapshot) func(categoryID int64) plan.UpgradeRules {
+	rules := make(map[int64]plan.UpgradeRules)
+	for _, category := range snapshot.Categories() {
+		found := plan.UpgradeRules{MinFileAge: 24 * time.Hour, MaxPerWindow: 3}
+		if len(category.QualityProfileIDs) > 0 {
+			if profile, ok := snapshot.QualityProfile(category.QualityProfileIDs[0]); ok {
+				if policy, err := score.ParseUpgrade([]byte(profile.UpgradeJSON)); err == nil {
+					if policy.MinFileAge > 0 {
+						found.MinFileAge = time.Duration(policy.MinFileAge)
+					}
+					if policy.MaxPerWindow > 0 {
+						found.MaxPerWindow = int64(policy.MaxPerWindow)
+					}
+				}
+			}
+		}
+		rules[category.ID] = found
+	}
+	return func(categoryID int64) plan.UpgradeRules {
+		if found, ok := rules[categoryID]; ok {
+			return found
+		}
+		return plan.UpgradeRules{MinFileAge: 24 * time.Hour, MaxPerWindow: 3}
+	}
 }
 
 // searchesPerHour is the hunt's budget; with no indexer enabled there is nothing to spend it on.
@@ -83,7 +115,7 @@ func (p *process) huntSearch(ctx context.Context, itemID int64) (plan.Outcome, e
 	if err != nil {
 		return plan.OutcomeNotWanted, err
 	}
-	if item.Monitored != 1 || (item.State != "MISSING" && item.State != "PARTIAL") {
+	if item.Monitored != 1 || (item.State != "MISSING" && item.State != "PARTIAL" && item.State != "UPGRADABLE") {
 		return plan.OutcomeNotWanted, nil
 	}
 	if room, measured := p.cache.Snapshot().AcquisitionHeadroom(item.CategoryID); measured && room <= 0 {

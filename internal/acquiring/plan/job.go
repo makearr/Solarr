@@ -31,6 +31,16 @@ type Facts struct {
 	Policy Policy
 	// CategoryRank answers a library's priority rank (ADR-36); lower is more important.
 	CategoryRank func(categoryID int64) int64
+	// Upgrade answers a library's upgrade hysteresis.
+	Upgrade func(categoryID int64) UpgradeRules
+}
+
+// upgradeRules is Upgrade, or no hysteresis for a Facts that states none.
+func (f Facts) upgradeRules(categoryID int64) UpgradeRules {
+	if f.Upgrade == nil {
+		return UpgradeRules{}
+	}
+	return f.Upgrade(categoryID)
 }
 
 // JobConfig is what a Job needs; every field but Logger is required.
@@ -68,7 +78,7 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 		return fmt.Errorf("plan: settings: %w", err)
 	}
 	now := j.config.Clock.Now()
-	dirty, err := j.config.Hunt.PlanInputs(ctx, true, 0, dirtyBudget)
+	dirty, err := j.config.Hunt.PlanInputs(ctx, true, 0, dirtyBudget, now.Add(-UpgradeWindow).Unix())
 	if err != nil {
 		return err
 	}
@@ -95,7 +105,7 @@ func (j *Job) sweep(ctx context.Context, facts Facts, now time.Time) (int, error
 		j.sweepAfter = 0
 	}
 	slice := max((maxID+sweepSlices-1)/sweepSlices, 50)
-	inputs, err := j.config.Hunt.PlanInputs(ctx, false, j.sweepAfter, slice)
+	inputs, err := j.config.Hunt.PlanInputs(ctx, false, j.sweepAfter, slice, now.Add(-UpgradeWindow).Unix())
 	if err != nil {
 		return 0, err
 	}
@@ -113,6 +123,7 @@ func (j *Job) apply(ctx context.Context, inputs []library.PlanInput, facts Facts
 			Searchable: j.config.Searchable(input), ReleaseDate: input.ReleaseDate,
 			CategoryRank: facts.CategoryRank(input.CategoryID), LastSearchedAt: input.LastSearchedAt,
 			SearchCount: input.SearchCount, QueuedSince: input.QueuedSince, AfterFailure: input.AfterFailure,
+			ArrivedAt: input.ArrivedAt, RecentImports: input.RecentImports, Upgrade: facts.upgradeRules(input.CategoryID),
 		}, facts.Policy, now)
 		planned[index] = library.PlannedHunt{
 			Input: input, Class: entry.Class, Priority: entry.Priority, ReleaseDate: entry.ReleaseDate,

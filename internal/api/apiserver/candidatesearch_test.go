@@ -15,14 +15,15 @@ import (
 // fakeCandidateSearcher serves apiserver.CandidateSearcher over canned
 // results, recording every call it saw.
 type fakeCandidateSearcher struct {
-	searchResult apiserver.SearchItemResult
-	searchErr    error
-	candidates   []apiserver.CandidateDecision
-	candidateErr error
-	duplicate    bool
-	categoryErr  error
-	acquisition  apiserver.Acquisition
-	sendErr      error
+	searchResult   apiserver.SearchItemResult
+	searchErr      error
+	candidates     []apiserver.CandidateDecision
+	candidateErr   error
+	duplicate      bool
+	cutoffCategory int64
+	categoryErr    error
+	acquisition    apiserver.Acquisition
+	sendErr        error
 
 	lastSearchWorkID     int64
 	lastSearchTerms      *apiserver.SearchTerms
@@ -64,6 +65,11 @@ func (f *fakeCandidateSearcher) SearchTrack(_ context.Context, workID, partID in
 func (f *fakeCandidateSearcher) ListWorkCandidates(_ context.Context, workID int64) ([]apiserver.CandidateDecision, error) {
 	f.lastListCandidatesID = workID
 	return f.candidates, f.candidateErr
+}
+
+func (f *fakeCandidateSearcher) SearchCutoffUnmet(_ context.Context, categoryID int64) (bool, error) {
+	f.cutoffCategory = categoryID
+	return false, nil
 }
 
 func (f *fakeCandidateSearcher) SearchCategory(_ context.Context, categoryID int64, workIDs []int64) (bool, error) {
@@ -459,5 +465,24 @@ func TestGrabWork_AnswersWhatWasSent(t *testing.T) {
 		fixture.candidateSearcher.lastSearchWorkID != 42 {
 		t.Errorf("body = %+v, searched work %d; want 4 found, acquisition 9 sent, work 42",
 			body, fixture.candidateSearcher.lastSearchWorkID)
+	}
+}
+
+// Cutoff Unmet's "Search all" asks for the albums below the cutoff, not the missing ones.
+func TestSearchCategory_CutoffUnmetSearchesTheUpgrades(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	music, err := fixture.cache.CreateCategory(t.Context(), "music", "Music", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/categories/"+strconv.FormatInt(music.ID, 10)+"/search", `{"cutoff_unmet":true}`))
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if fixture.candidateSearcher.cutoffCategory != music.ID {
+		t.Errorf("cutoff search asked for category %d, want %d", fixture.candidateSearcher.cutoffCategory, music.ID)
 	}
 }

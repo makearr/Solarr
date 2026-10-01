@@ -22,7 +22,7 @@ func TestPlanInputsReadTheDirtySetWithReleaseDateAndSearchRecord(t *testing.T) {
 		t.Fatalf("RecordSearched: %v", err)
 	}
 
-	got, err := hunt.PlanInputs(t.Context(), true, 0, 10)
+	got, err := hunt.PlanInputs(t.Context(), true, 0, 10, 0)
 	if err != nil {
 		t.Fatalf("PlanInputs: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestApplyPlanClearsDirtyAndKeepsTheSearchRecord(t *testing.T) {
 	if err := desired.RecordSearched(t.Context(), item.ID, 4_000); err != nil {
 		t.Fatalf("RecordSearched: %v", err)
 	}
-	inputs, err := hunt.PlanInputs(t.Context(), true, 0, 10)
+	inputs, err := hunt.PlanInputs(t.Context(), true, 0, 10, 0)
 	if err != nil {
 		t.Fatalf("PlanInputs: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestApplyPlanClearsDirtyAndKeepsTheSearchRecord(t *testing.T) {
 	if len(rows) != 1 || rows[0] != want {
 		t.Fatalf("hunt rows = %+v, want %+v", rows, want)
 	}
-	if dirty, _ := hunt.PlanInputs(t.Context(), true, 0, 10); len(dirty) != 0 {
+	if dirty, _ := hunt.PlanInputs(t.Context(), true, 0, 10, 0); len(dirty) != 0 {
 		t.Fatalf("%d items still dirty after planning", len(dirty))
 	}
 }
@@ -77,7 +77,7 @@ func TestApplyPlanSkipsAnItemChangedSinceItWasRead(t *testing.T) {
 	work := createWork(t, opened, "music", "Tender Prey")
 	item := createDesired(t, opened, work.ID, "SET", 12)
 	hunt := library.NewHunt(opened)
-	inputs, err := hunt.PlanInputs(t.Context(), true, 0, 10)
+	inputs, err := hunt.PlanInputs(t.Context(), true, 0, 10, 0)
 	if err != nil {
 		t.Fatalf("PlanInputs: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestApplyPlanSkipsAnItemChangedSinceItWasRead(t *testing.T) {
 	if err != nil || applied != 0 {
 		t.Fatalf("ApplyPlan = %d, %v; want 0", applied, err)
 	}
-	if next, _ := hunt.NextToHunt(t.Context(), 5_000, 10); len(next) != 0 {
+	if next, _ := hunt.NextToHunt(t.Context(), "missing", 5_000, 10); len(next) != 0 {
 		t.Fatalf("a stale plan queued %v", next)
 	}
 	after, err := queries.GetDesiredItem(t.Context(), item.ID)
@@ -103,7 +103,7 @@ func TestPostponeKeepsTheHuntAwayUntilThen(t *testing.T) {
 	work := createWork(t, opened, "music", "Tender Prey")
 	item := createDesired(t, opened, work.ID, "SET", 12)
 	hunt := library.NewHunt(opened)
-	inputs, _ := hunt.PlanInputs(t.Context(), true, 0, 10)
+	inputs, _ := hunt.PlanInputs(t.Context(), true, 0, 10, 0)
 	if _, err := hunt.ApplyPlan(t.Context(), []library.PlannedHunt{{Input: inputs[0], Class: "missing"}}, 1); err != nil {
 		t.Fatalf("ApplyPlan: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestPostponeKeepsTheHuntAwayUntilThen(t *testing.T) {
 		t.Fatalf("Postpone: %v", err)
 	}
 	for now, want := range map[int64]int{8_999: 0, 9_000: 1} {
-		next, err := hunt.NextToHunt(t.Context(), now, 10)
+		next, err := hunt.NextToHunt(t.Context(), "missing", now, 10)
 		if err != nil || len(next) != want {
 			t.Errorf("NextToHunt at %d = %v, %v; want %d items", now, next, err, want)
 		}

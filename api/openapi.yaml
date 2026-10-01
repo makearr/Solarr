@@ -3038,6 +3038,11 @@ paths:
                   type: array
                   items: { type: integer, format: int64 }
                   maxItems: 200
+                cutoff_unmet:
+                  type: boolean
+                  description: >-
+                    Search the monitored albums below the library's cutoff (Lidarr's Cutoff Unmet "Search all")
+                    instead of the missing ones; each is judged strictly: only a better release is sent.
       responses:
         "202":
           description: Enqueued (or already running -- duplicate says which).

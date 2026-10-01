@@ -125,6 +125,8 @@ type CandidateSearcher interface {
 	// SearchCategory enqueues an automatic search of the library, or of workIDs only when given;
 	// duplicate reports whether the same run was already queued.
 	SearchCategory(ctx context.Context, categoryID int64, workIDs []int64) (duplicate bool, err error)
+	// SearchCutoffUnmet searches every monitored album of the library that is below its cutoff.
+	SearchCutoffUnmet(ctx context.Context, categoryID int64) (duplicate bool, err error)
 	// GrabWork is the automatic search of one album: search, then send the best release.
 	GrabWork(ctx context.Context, workID int64) (GrabResult, error)
 	// SendCandidate is ADR-57's own acquire.send: dispatch decisionID (which
@@ -327,7 +329,12 @@ func (s *Server) SearchCategory(w http.ResponseWriter, r *http.Request, id int64
 			return
 		}
 	}
-	duplicate, err := s.candidateSearcher.SearchCategory(r.Context(), id, derefOr(body.WorkIds, nil))
+	var duplicate bool
+	if derefOr(body.CutoffUnmet, false) {
+		duplicate, err = s.candidateSearcher.SearchCutoffUnmet(r.Context(), id)
+	} else {
+		duplicate, err = s.candidateSearcher.SearchCategory(r.Context(), id, derefOr(body.WorkIds, nil))
+	}
 	if err != nil {
 		writeCandidateSearchError(w, s, err)
 		return

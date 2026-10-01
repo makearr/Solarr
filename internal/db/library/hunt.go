@@ -31,12 +31,14 @@ type PlanInput struct {
 	QueuedSince                 int64
 	// AfterFailure is set once a download of the item failed.
 	AfterFailure bool
+	// ArrivedAt is when the work's newest file arrived; RecentImports the item's imports since the window began.
+	ArrivedAt, RecentImports int64
 }
 
 // PlanInputs pages through the dirty set, or with dirtyOnly false through every item, by id.
-func (h Hunt) PlanInputs(ctx context.Context, dirtyOnly bool, afterID, pageSize int64) ([]PlanInput, error) {
+func (h Hunt) PlanInputs(ctx context.Context, dirtyOnly bool, afterID, pageSize, importsSince int64) ([]PlanInput, error) {
 	rows, err := librarydb.New(h.store.Read()).ListPlanInputs(ctx, librarydb.ListPlanInputsParams{
-		Kind: WorkDateStreet, DirtyOnly: boolToInt(dirtyOnly), AfterID: afterID, PageSize: pageSize,
+		Kind: WorkDateStreet, DirtyOnly: boolToInt(dirtyOnly), AfterID: afterID, PageSize: pageSize, ImportsSince: importsSince,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: list plan inputs: %w", err)
@@ -47,7 +49,7 @@ func (h Hunt) PlanInputs(ctx context.Context, dirtyOnly bool, afterID, pageSize 
 			ID: row.ID, CategoryID: row.CategoryID, MediaRef: row.MediaRef, Monitored: row.Monitored == 1, SatisfactionKind: row.SatisfactionKind,
 			State: row.State, Generation: row.Generation, ReleaseDate: row.ReleaseDate,
 			LastSearchedAt: row.LastSearchedAt, SearchCount: row.SearchCount, QueuedSince: row.QueuedSince,
-			AfterFailure: row.AfterFailure == 1,
+			AfterFailure: row.AfterFailure == 1, ArrivedAt: row.ArrivedAt, RecentImports: row.RecentImports,
 		}
 	}
 	return inputs, nil
@@ -109,9 +111,9 @@ func (h Hunt) ApplyPlan(ctx context.Context, planned []PlannedHunt, at int64) (i
 
 // NextToHunt answers up to limit missing items eligible at now, most urgent and least recently
 // searched first (section 9.3's default mode).
-func (h Hunt) NextToHunt(ctx context.Context, now, limit int64) ([]int64, error) {
+func (h Hunt) NextToHunt(ctx context.Context, class string, now, limit int64) ([]int64, error) {
 	rows, err := librarydb.New(h.store.Read()).NextHuntByOldestSearched(ctx, librarydb.NextHuntByOldestSearchedParams{
-		Class: "missing", Now: now, PageSize: limit,
+		Class: class, Now: now, PageSize: limit,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: next to hunt: %w", err)

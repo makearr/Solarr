@@ -28,6 +28,10 @@ type Item struct {
 	SearchCount    int64
 	// AfterFailure caps the backoff at maxBackoffAfterFailure.
 	AfterFailure bool
+	// ArrivedAt is when the album's newest file arrived and RecentImports how many downloads of it were imported
+	// in the upgrade window: the hysteresis of section 9.2.
+	ArrivedAt, RecentImports int64
+	Upgrade                  UpgradeRules
 	// QueuedSince is when the item entered the hunt queue; zero when it is not in it.
 	QueuedSince int64
 }
@@ -48,8 +52,24 @@ type Entry struct {
 	QueuedSince   int64
 }
 
-// ClassMissing is the only class planned until upgrades land (M1d).
-const ClassMissing = "missing"
+// The classes of hunt_queue: what is missing, and what is below its cutoff (section 9.2).
+const (
+	ClassMissing = "missing"
+	ClassUpgrade = "upgrade"
+)
+
+// UpgradeRules is section 9.2's hysteresis for one library: a file must be this old before it is upgraded, and an
+// album already imported this often within UpgradeWindow waits.
+type UpgradeRules struct {
+	MinFileAge   time.Duration
+	MaxPerWindow int64
+}
+
+// UpgradeWindow is how far back an album's imports count against MaxPerWindow.
+const UpgradeWindow = 7 * 24 * time.Hour
+
+// upgradeHold is how long an album that used up its window is left alone before it is looked at again.
+const upgradeHold = 24 * time.Hour
 
 // releaseGrace is §9.2's medium-confidence grace: a street date says the day, not the hour.
 const releaseGrace = 12 * time.Hour
@@ -61,6 +81,9 @@ func Decide(item Item, policy Policy, now time.Time) Entry {
 	if known {
 		unix := released.Unix()
 		entry.ReleaseDate = &unix
+	}
+	if item.Monitored && item.Searchable && item.State == "UPGRADABLE" {
+		return decideUpgrade(item, entry, policy, now)
 	}
 	if !item.Monitored || !item.Searchable || (item.State != "MISSING" && item.State != "PARTIAL") {
 		return entry
@@ -80,6 +103,26 @@ func Decide(item Item, policy Policy, now time.Time) Entry {
 	entry.EligibleAfter = max(RetryAfter(item.LastSearchedAt, item.SearchCount, item.AfterFailure), 0)
 	if known {
 		entry.EligibleAfter = max(entry.EligibleAfter, released.Add(releaseGrace).Unix())
+	}
+	return entry
+}
+
+// decideUpgrade plans an album below its cutoff: after the file's minimum age, and not while the album has used
+// up its imports for the window.
+func decideUpgrade(item Item, entry Entry, policy Policy, now time.Time) Entry {
+	entry.Class = ClassUpgrade
+	if entry.QueuedSince == 0 {
+		entry.QueuedSince = now.Unix()
+	}
+	entry.Priority = priority.Compute(policy.Weights, priority.Input{
+		Trigger: priority.TriggerUpgrade, CategoryRank: item.CategoryRank, QueuedSince: time.Unix(entry.QueuedSince, 0),
+	}, now)
+	entry.EligibleAfter = max(RetryAfter(item.LastSearchedAt, item.SearchCount, item.AfterFailure), 0)
+	if item.ArrivedAt > 0 {
+		entry.EligibleAfter = max(entry.EligibleAfter, item.ArrivedAt+int64(item.Upgrade.MinFileAge/time.Second))
+	}
+	if item.Upgrade.MaxPerWindow > 0 && item.RecentImports >= item.Upgrade.MaxPerWindow {
+		entry.EligibleAfter = max(entry.EligibleAfter, now.Add(upgradeHold).Unix())
 	}
 	return entry
 }

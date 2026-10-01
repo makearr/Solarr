@@ -223,3 +223,40 @@ func TestHuntDoesNotChargeTheBudgetWhileTheLibraryHasNoRoom(t *testing.T) {
 		t.Fatalf("looked at %v within the hour, want them left alone until it passes", e.searched)
 	}
 }
+
+// upgradable makes a monitored album complete-but-below-cutoff, as the cutoff job does.
+func (e *env) upgradable(t *testing.T, title string) int64 {
+	t.Helper()
+	id := e.album(t, title, true)
+	desired := library.NewDesired(e.store)
+	if err := desired.SetAlbumState(t.Context(), id, "UPGRADABLE", 1); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+// Section 9.4: upgrades are promised a fifth of the hour's searches, and what a class leaves unused goes to the other.
+func TestHuntKeepsAFifthOfTheBudgetForUpgradesAndSpillsTheRest(t *testing.T) {
+	e := newEnv(t)
+	e.perHour = 5
+	for _, title := range []string{"A", "B", "C", "D", "E", "F"} {
+		e.album(t, title, true)
+	}
+	upgrade := e.upgradable(t, "Up")
+	e.planPass(t)
+	run(t, e.huntJob())
+	if len(e.searched) != 5 || !slices.Contains(e.searched, upgrade) {
+		t.Fatalf("searched %v, want 5 searches including the upgrade %d", e.searched, upgrade)
+	}
+
+	spill := newEnv(t)
+	spill.perHour = 5
+	for _, title := range []string{"A", "B", "C"} {
+		spill.upgradable(t, title)
+	}
+	spill.planPass(t)
+	run(t, spill.huntJob())
+	if len(spill.searched) != 3 {
+		t.Fatalf("with nothing missing, searched %v, want all 3 upgrades", spill.searched)
+	}
+}

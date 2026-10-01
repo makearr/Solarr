@@ -95,8 +95,7 @@ export function Wanted() {
   const pages = total === undefined ? undefined : Math.max(1, Math.ceil(total / size));
 
   const canRequest = useCanRequest((library) => String(library.id) === categoryId);
-  // Upgrades are not searched for yet (M1d's next step), so the cutoff list offers no search.
-  const searchable = canRequest && view === "missing";
+  const searchable = canRequest;
 
   const setView = (next: {
     sort?: Sort; dir?: "asc" | "desc"; size?: number; view?: "missing" | "cutoff"; layout?: IndexView;
@@ -134,7 +133,7 @@ export function Wanted() {
       if (!categoryId) return undefined;
       const { data, error } = await api.POST("/categories/{id}/search", {
         params: { path: { id: Number(categoryId) } },
-        body: workIds ? { work_ids: workIds } : undefined,
+        body: workIds ? { work_ids: workIds } : view === "cutoff" ? { cutoff_unmet: true } : undefined,
       });
       if (error) throw error;
       return data;
@@ -169,7 +168,7 @@ export function Wanted() {
         <span className="text-xs text-ink-muted">
           {view === "missing"
             ? "Monitored and not yet complete."
-            : "Complete, but a file is below the library's cutoff. Interactive search shows which releases would be upgrades; upgrading on its own is not built yet."}
+            : "Complete, but a file is below the library's cutoff. Search all looks for a strictly better release of each; the hunt also does it on its own, a few a day."}
         </span>
         <span className="ml-auto flex items-center gap-2 text-xs text-ink-muted">
           {layout === "poster" && <PosterOptionsMenu options={posterOptions} onChange={setOptions} />}

@@ -30,7 +30,6 @@ func TestDecideNeverSearchesWhatIsNotWanted(t *testing.T) {
 	cases := map[string]func(*Item){
 		"unmonitored":  func(item *Item) { item.Monitored = false },
 		"complete":     func(item *Item) { item.State = "COMPLETE" },
-		"upgradable":   func(item *Item) { item.State = "UPGRADABLE" },
 		"track itself": func(item *Item) { item.Searchable = false },
 	}
 	for name, change := range cases {
@@ -134,5 +133,38 @@ func assertEntry(t *testing.T, got, want Entry) {
 	got.ReleaseDate, want.ReleaseDate = nil, nil
 	if got != want || gotRelease != wantRelease {
 		t.Fatalf("Decide = %+v (release %d), want %+v (release %d)", got, gotRelease, want, wantRelease)
+	}
+}
+
+func upgradable() Item {
+	item := missing()
+	item.State = "UPGRADABLE"
+	item.QueuedSince = testNow.Add(-time.Hour).Unix()
+	item.Upgrade = UpgradeRules{MinFileAge: 24 * time.Hour, MaxPerWindow: 3}
+	return item
+}
+
+// Section 9.2's hysteresis: an upgrade waits for the file's minimum age, and for a window it has used up.
+func TestDecideUpgradeWaitsForTheFileToAgeAndTheWindowToFree(t *testing.T) {
+	item := upgradable()
+	item.ArrivedAt = testNow.Add(-2 * time.Hour).Unix()
+	got := Decide(item, testPolicy, testNow)
+	if got.Class != ClassUpgrade || got.EligibleAfter != item.ArrivedAt+int64(24*time.Hour/time.Second) {
+		t.Errorf("a two-hour-old file: class %q eligible %d, want upgrade after its 24 h", got.Class, got.EligibleAfter)
+	}
+
+	item.ArrivedAt = testNow.Add(-72 * time.Hour).Unix()
+	if got := Decide(item, testPolicy, testNow); got.Class != ClassUpgrade || got.EligibleAfter > testNow.Unix() {
+		t.Errorf("an old file: class %q eligible %d, want an upgrade already due", got.Class, got.EligibleAfter)
+	}
+
+	item.RecentImports = 3
+	if got := Decide(item, testPolicy, testNow); got.EligibleAfter != testNow.Add(upgradeHold).Unix() {
+		t.Errorf("three imports this week: eligible %d, want held a day", got.EligibleAfter)
+	}
+
+	item.Monitored = false
+	if got := Decide(item, testPolicy, testNow); got.EligibleAfter != Never {
+		t.Errorf("an unmonitored upgrade: eligible %d, want never", got.EligibleAfter)
 	}
 }
