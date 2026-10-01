@@ -145,7 +145,7 @@ func targetOutsideProfiles(snapshot *settings.Snapshot, profiles []gen.QualityPr
 // targetFacts is the target as the file facts a profile judges.
 func targetFacts(target settings.QualityTarget) score.Facts {
 	facts := score.Facts{File: score.FileFacts{
-		AudioCodec: target.AudioCodec, Container: target.Container, Lossless: target.BitrateKbps == nil,
+		AudioCodec: target.AudioCodec, Extension: target.Container, Lossless: target.BitrateKbps == nil,
 	}}
 	if target.BitrateKbps != nil {
 		facts.File.AudioBitrate = *target.BitrateKbps * 1000

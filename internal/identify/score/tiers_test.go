@@ -110,3 +110,25 @@ func TestBuildQualityVector_OneEntryPerCompareDimension(t *testing.T) {
 		}
 	}
 }
+
+// An extension and the container it holds are two dimensions; "m4a" in a container tier means MP4 (M1g 1.7).
+func TestListTier_ContainerMeansTheFormatAndExtensionTheName(t *testing.T) {
+	tiers := map[string][][]string{
+		"container": {{"m4a"}, {"flac"}, {"mp3"}},
+		"extension": {{"m4a"}, {"mp4"}},
+	}
+	m4a := Facts{File: FileFacts{Extension: ".M4A", Container: "mov,mp4,m4a,3gp,3g2,mj2"}}
+	if value := tierValueFor("container", tiers, m4a, nil); value.Rank != 0 || value.Label != "mp4" {
+		t.Errorf("container tier = rank %d %q, want rank 0 mp4 (m4a and the demuxer list are one container)", value.Rank, value.Label)
+	}
+	if value := tierValueFor("extension", tiers, m4a, nil); value.Rank != 0 || value.Label != "m4a" {
+		t.Errorf("extension tier = rank %d %q, want rank 0 m4a", value.Rank, value.Label)
+	}
+	mp4 := Facts{File: FileFacts{Extension: "mp4"}}
+	if value := tierValueFor("extension", tiers, mp4, nil); value.Rank != 1 {
+		t.Errorf("an .mp4 file ranks %d by extension, want 1: same container, different name", value.Rank)
+	}
+	if value := tierValueFor("container", tiers, mp4, nil); value.Rank != 0 {
+		t.Errorf("an .mp4 file ranks %d by container, want 0", value.Rank)
+	}
+}

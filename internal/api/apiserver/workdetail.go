@@ -264,8 +264,9 @@ func partFileFacts(file gen.PartFile) score.Facts {
 	}
 	// The file's own type, not ffprobe's demuxer list ("mov,mp4,m4a,3gp,3g2,mj2").
 	if file.Extension != nil {
-		facts.File.Container = *file.Extension
-	} else if file.Container != nil {
+		facts.File.Extension = *file.Extension
+	}
+	if file.Container != nil {
 		facts.File.Container = *file.Container
 	}
 	return facts
