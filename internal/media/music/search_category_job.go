@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
@@ -41,11 +42,19 @@ type SearchCategoryPayload struct {
 	PersonID   int64 `json:"person_id,omitempty"`
 	// ItemIDs searches exactly these albums: the Wanted page's "search this page".
 	ItemIDs []int64 `json:"item_ids,omitempty"`
+	// CutoffUnmet searches the albums below their library's cutoff instead of the missing ones.
+	CutoffUnmet bool `json:"cutoff_unmet,omitempty"`
 }
 
 // EnqueueSearchCategory submits one category's own search run.
 func EnqueueSearchCategory(ctx context.Context, queue *jobs.Queue, categoryID int64) (jobs.EnqueueResult, error) {
 	return enqueueSearch(ctx, queue, SearchCategoryPayload{CategoryID: categoryID}, SearchCategoryActionKey(categoryID))
+}
+
+// EnqueueSearchCutoffUnmet searches every monitored album of one library that falls short of its cutoff.
+func EnqueueSearchCutoffUnmet(ctx context.Context, queue *jobs.Queue, categoryID int64) (jobs.EnqueueResult, error) {
+	return enqueueSearch(ctx, queue, SearchCategoryPayload{CategoryID: categoryID, CutoffUnmet: true},
+		fmt.Sprintf("%s:%d:cutoff", SearchCategoryJobType, categoryID))
 }
 
 // EnqueueSearchItems searches exactly these albums of one library, one after another.
@@ -166,7 +175,13 @@ func (j *SearchCategoryJob) grabIncomplete(
 ) error {
 	afterID := int64(0)
 	for {
-		items, err := j.grab.Search.Desired.IncompleteItems(ctx, payload.CategoryID, payload.PersonID, afterID, searchCategoryPageSize)
+		var items []library.IncompleteItem
+		var err error
+		if payload.CutoffUnmet {
+			items, err = j.grab.Search.Desired.UpgradableItems(ctx, payload.CategoryID, afterID, searchCategoryPageSize)
+		} else {
+			items, err = j.grab.Search.Desired.IncompleteItems(ctx, payload.CategoryID, payload.PersonID, afterID, searchCategoryPageSize)
+		}
 		if err != nil {
 			return fmt.Errorf("music: search category %d: list items: %w", payload.CategoryID, err)
 		}

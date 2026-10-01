@@ -204,6 +204,15 @@ func (c CandidateSearch) SearchCategory(ctx context.Context, categoryID int64, w
 	return result.Duplicate, nil
 }
 
+// SearchCutoffUnmet enqueues the search of every album of categoryID that is below its cutoff.
+func (c CandidateSearch) SearchCutoffUnmet(ctx context.Context, categoryID int64) (bool, error) {
+	result, err := music.EnqueueSearchCutoffUnmet(ctx, c.Queue, categoryID)
+	if err != nil {
+		return false, err
+	}
+	return result.Duplicate, nil
+}
+
 // GrabWork is the automatic search of workID's wanted album: search, then send the best release.
 func (c CandidateSearch) GrabWork(ctx context.Context, workID int64) (apiserver.GrabResult, error) {
 	detail, err := c.Works.Detail(ctx, workID)

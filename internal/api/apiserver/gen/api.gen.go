@@ -3388,7 +3388,9 @@ type AttachRootFolderToCategoryJSONBody struct {
 
 // SearchCategoryJSONBody defines parameters for SearchCategory.
 type SearchCategoryJSONBody struct {
-	WorkIds *[]int64 `json:"work_ids,omitempty"`
+	// CutoffUnmet Search the monitored albums below the library's cutoff (Lidarr's Cutoff Unmet "Search all") instead of the missing ones; each is judged strictly: only a better release is sent.
+	CutoffUnmet *bool    `json:"cutoff_unmet,omitempty"`
+	WorkIds     *[]int64 `json:"work_ids,omitempty"`
 }
 
 // DiscoverSearchParams defines parameters for DiscoverSearch.

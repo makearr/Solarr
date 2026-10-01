@@ -639,6 +639,24 @@ func (d Desired) IncompleteItems(ctx context.Context, categoryID, personID, afte
 	return items, nil
 }
 
+// UpgradableItems pages through every monitored UPGRADABLE item, oldest id first; zero categoryID is every category.
+func (d Desired) UpgradableItems(ctx context.Context, categoryID, afterID, pageSize int64) ([]IncompleteItem, error) {
+	rows, err := librarydb.New(d.store.Read()).ListUpgradableDesiredItems(ctx, librarydb.ListUpgradableDesiredItemsParams{
+		CategoryID: categoryID, PersonID: 0, AfterID: afterID, PageSize: pageSize,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: list upgradable desired items: %w", err)
+	}
+	items := make([]IncompleteItem, len(rows))
+	for index, row := range rows {
+		items[index] = IncompleteItem{
+			ID: row.ID, WorkID: row.WorkID, Title: row.CanonicalTitle, CategoryID: row.CategoryID,
+			State: row.State, RequiredCount: row.RequiredCount.Int64, PresentCount: row.PresentCount,
+		}
+	}
+	return items, nil
+}
+
 // albumState derives MISSING/PARTIAL/COMPLETE from present against required.
 // UPGRADABLE is acquisition's own state to set (stage 5); nothing here ever
 // produces it.

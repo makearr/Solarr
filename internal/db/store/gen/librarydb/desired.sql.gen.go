@@ -1027,19 +1027,23 @@ SELECT di.id, di.category_id, di.media_ref, di.monitored, di.satisfaction_kind, 
        CAST(COALESCE(h.last_searched_at, 0) AS INTEGER) AS last_searched_at,
        CAST(COALESCE(h.search_count, 0) AS INTEGER) AS search_count,
        CAST(COALESCE(h.queued_since, 0) AS INTEGER) AS queued_since,
-       CAST(COALESCE(h.after_failure, 0) AS INTEGER) AS after_failure
+       CAST(COALESCE(h.after_failure, 0) AS INTEGER) AS after_failure,
+       CAST(COALESCE((SELECT a.arrived_at FROM work_arrival a WHERE a.work_id = di.work_id), 0) AS INTEGER) AS arrived_at,
+       CAST((SELECT COUNT(*) FROM acquisition aq WHERE aq.desired_item_id = di.id AND aq.state = 'IMPORTED'
+             AND aq.updated_at >= ?2) AS INTEGER) AS recent_imports
 FROM desired_item di
 LEFT JOIN hunt_queue h ON h.desired_item_id = di.id
-WHERE (CAST(?2 AS INTEGER) = 0 OR di.dirty = 1) AND di.id > ?3
+WHERE (CAST(?3 AS INTEGER) = 0 OR di.dirty = 1) AND di.id > ?4
 ORDER BY di.id
-LIMIT ?4
+LIMIT ?5
 `
 
 type ListPlanInputsParams struct {
-	Kind      string
-	DirtyOnly int64
-	AfterID   int64
-	PageSize  int64
+	Kind         string
+	ImportsSince int64
+	DirtyOnly    int64
+	AfterID      int64
+	PageSize     int64
 }
 
 type ListPlanInputsRow struct {
@@ -1055,6 +1059,8 @@ type ListPlanInputsRow struct {
 	SearchCount      int64
 	QueuedSince      int64
 	AfterFailure     int64
+	ArrivedAt        int64
+	RecentImports    int64
 }
 
 // The planner's facts for one page of items (section 9.1): the dirty set, or with dirty_only 0
@@ -1062,6 +1068,7 @@ type ListPlanInputsRow struct {
 func (q *Queries) ListPlanInputs(ctx context.Context, arg ListPlanInputsParams) ([]ListPlanInputsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPlanInputs,
 		arg.Kind,
+		arg.ImportsSince,
 		arg.DirtyOnly,
 		arg.AfterID,
 		arg.PageSize,
@@ -1086,6 +1093,76 @@ func (q *Queries) ListPlanInputs(ctx context.Context, arg ListPlanInputsParams) 
 			&i.SearchCount,
 			&i.QueuedSince,
 			&i.AfterFailure,
+			&i.ArrivedAt,
+			&i.RecentImports,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUpgradableDesiredItems = `-- name: ListUpgradableDesiredItems :many
+SELECT d.id, d.work_id, w.canonical_title, d.category_id, d.state,
+       d.required_count, d.present_count
+FROM desired_item d
+JOIN work w ON w.id = d.work_id
+WHERE d.monitored = 1 AND d.state = 'UPGRADABLE'
+  AND (CAST(?1 AS INTEGER) = 0 OR d.category_id = ?1)
+  AND (CAST(?2 AS INTEGER) = 0 OR EXISTS (
+    SELECT 1 FROM credit c WHERE c.work_id = d.work_id AND c.person_id = ?2))
+  AND d.id > ?3
+ORDER BY d.id
+LIMIT ?4
+`
+
+type ListUpgradableDesiredItemsParams struct {
+	CategoryID int64
+	PersonID   int64
+	AfterID    int64
+	PageSize   int64
+}
+
+type ListUpgradableDesiredItemsRow struct {
+	ID             int64
+	WorkID         int64
+	CanonicalTitle string
+	CategoryID     int64
+	State          string
+	RequiredCount  sql.NullInt64
+	PresentCount   int64
+}
+
+// Monitored albums below their library's cutoff: what the Cutoff Unmet search walks.
+func (q *Queries) ListUpgradableDesiredItems(ctx context.Context, arg ListUpgradableDesiredItemsParams) ([]ListUpgradableDesiredItemsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUpgradableDesiredItems,
+		arg.CategoryID,
+		arg.PersonID,
+		arg.AfterID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUpgradableDesiredItemsRow{}
+	for rows.Next() {
+		var i ListUpgradableDesiredItemsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkID,
+			&i.CanonicalTitle,
+			&i.CategoryID,
+			&i.State,
+			&i.RequiredCount,
+			&i.PresentCount,
 		); err != nil {
 			return nil, err
 		}

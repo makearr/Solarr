@@ -79,30 +79,60 @@ func (j *HuntJob) Run(ctx context.Context, job jobs.Job) error {
 	if left <= 0 {
 		return nil
 	}
+	// Section 9.4: each class gets its share first, then what one leaves unused goes to the other.
+	upgradeShare := (left*upgradeSharePercent + 99) / 100
+	shares := []struct {
+		class  string
+		budget int
+	}{{ClassMissing, left - upgradeShare}, {ClassUpgrade, upgradeShare}}
 	searched, looked := 0, 0
-	// Every item looked at is postponed past now, so each page is new; the cap guards a failing postpone.
-	for searched < left && looked < 10*left+100 {
-		ids, err := j.config.Hunt.NextToHunt(ctx, now.Unix(), int64(left-searched))
+	for _, share := range shares {
+		done, seen, err := j.huntClass(ctx, job, share.class, min(share.budget, left-searched), now, looked)
 		if err != nil {
 			return err
+		}
+		searched, looked = searched+done, looked+seen
+	}
+	for _, share := range shares {
+		done, seen, err := j.huntClass(ctx, job, share.class, left-searched, now, looked)
+		if err != nil {
+			return err
+		}
+		searched, looked = searched+done, looked+seen
+	}
+	if looked > 0 {
+		j.config.Logger.Info("plan: hunt done", "looked", looked, "searched", searched, "budget_left", left-searched)
+	}
+	return nil
+}
+
+// upgradeSharePercent is the part of each window's budget that upgrades are promised (section 9.4).
+const upgradeSharePercent = 20
+
+// huntClass searches up to budget eligible items of one class; answers how many searches ran and how many items were looked at.
+func (j *HuntJob) huntClass(
+	ctx context.Context, job jobs.Job, class string, budget int, now time.Time, lookedBefore int,
+) (searched, looked int, err error) {
+	// Every item looked at is postponed past now, so each page is new; the cap guards a failing postpone.
+	for searched < budget && looked < 10*budget+100 {
+		ids, err := j.config.Hunt.NextToHunt(ctx, class, now.Unix(), int64(budget-searched))
+		if err != nil {
+			return searched, looked, err
 		}
 		if len(ids) == 0 {
 			break
 		}
-		job.Progress.SetTotal(int64(looked + len(ids)))
+		job.Progress.SetTotal(int64(lookedBefore + looked + len(ids)))
 		for _, itemID := range ids {
 			if err := ctx.Err(); err != nil {
-				return err
+				return searched, looked, err
 			}
 			searched += j.huntOne(ctx, itemID)
 			looked++
 			job.Progress.Add(1)
 		}
 	}
-	if looked > 0 {
-		j.config.Logger.Info("plan: hunt done", "looked", looked, "searched", searched, "budget_left", left-searched)
-	}
-	return nil
+	return searched, looked, nil
 }
 
 // huntOne searches itemID and keeps the hunt off it until it is worth looking again; answers 1 when a search ran.

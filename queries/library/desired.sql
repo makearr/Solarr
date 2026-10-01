@@ -261,6 +261,20 @@ WHERE d.monitored = 1 AND d.state IN ('MISSING', 'PARTIAL')
 ORDER BY d.id
 LIMIT sqlc.arg(page_size);
 
+-- Monitored albums below their library's cutoff: what the Cutoff Unmet search walks.
+-- name: ListUpgradableDesiredItems :many
+SELECT d.id, d.work_id, w.canonical_title, d.category_id, d.state,
+       d.required_count, d.present_count
+FROM desired_item d
+JOIN work w ON w.id = d.work_id
+WHERE d.monitored = 1 AND d.state = 'UPGRADABLE'
+  AND (CAST(sqlc.arg(category_id) AS INTEGER) = 0 OR d.category_id = sqlc.arg(category_id))
+  AND (CAST(sqlc.arg(person_id) AS INTEGER) = 0 OR EXISTS (
+    SELECT 1 FROM credit c WHERE c.work_id = d.work_id AND c.person_id = sqlc.arg(person_id)))
+  AND d.id > sqlc.arg(after_id)
+ORDER BY d.id
+LIMIT sqlc.arg(page_size);
+
 -- Every desired item for one work, however many profiles target it (F33
 -- widened the key). Removing an album is removing the intent to have it.
 -- A download's record outlives the want it served: history keeps its own copy of the names.
@@ -324,7 +338,10 @@ SELECT di.id, di.category_id, di.media_ref, di.monitored, di.satisfaction_kind, 
        CAST(COALESCE(h.last_searched_at, 0) AS INTEGER) AS last_searched_at,
        CAST(COALESCE(h.search_count, 0) AS INTEGER) AS search_count,
        CAST(COALESCE(h.queued_since, 0) AS INTEGER) AS queued_since,
-       CAST(COALESCE(h.after_failure, 0) AS INTEGER) AS after_failure
+       CAST(COALESCE(h.after_failure, 0) AS INTEGER) AS after_failure,
+       CAST(COALESCE((SELECT a.arrived_at FROM work_arrival a WHERE a.work_id = di.work_id), 0) AS INTEGER) AS arrived_at,
+       CAST((SELECT COUNT(*) FROM acquisition aq WHERE aq.desired_item_id = di.id AND aq.state = 'IMPORTED'
+             AND aq.updated_at >= sqlc.arg(imports_since)) AS INTEGER) AS recent_imports
 FROM desired_item di
 LEFT JOIN hunt_queue h ON h.desired_item_id = di.id
 WHERE (CAST(sqlc.arg(dirty_only) AS INTEGER) = 0 OR di.dirty = 1) AND di.id > sqlc.arg(after_id)
