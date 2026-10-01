@@ -5029,6 +5029,11 @@ export interface components {
              * @description Missing albums searched automatically each hour, most urgent first; 0 turns automatic searching off. Default 12. Always answered; omitted on a PATCH leaves it alone.
              */
             searches_per_hour?: number;
+            /**
+             * @description The order the automatic search takes wanted albums in within a share of the budget (new releases 40%, gaps 40%, upgrades 20%, what one leaves unused going to the others). Default oldest_searched. Always answered; omitted on a PATCH leaves it alone.
+             * @enum {string}
+             */
+            hunt_mode?: "oldest_searched" | "newest_searched" | "oldest_release" | "newest_release" | "random_oldest_searched";
         };
         /**
          * @description A metadata source. brainzmash and musicbrainz-proxy are third-party proxies of musicbrainz; musicbrainz is the direct upstream and cannot be removed from the order, only reordered.

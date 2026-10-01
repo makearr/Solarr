@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -109,20 +110,82 @@ func (h Hunt) ApplyPlan(ctx context.Context, planned []PlannedHunt, at int64) (i
 	return applied, nil
 }
 
-// NextToHunt answers up to limit missing items eligible at now, most urgent and least recently
-// searched first (section 9.3's default mode).
-func (h Hunt) NextToHunt(ctx context.Context, class string, now, limit int64) ([]int64, error) {
-	rows, err := librarydb.New(h.store.Read()).NextHuntByOldestSearched(ctx, librarydb.NextHuntByOldestSearchedParams{
-		Class: class, Now: now, PageSize: limit,
-	})
+// HuntMode is which order the hunt takes eligible items in (section 9.3).
+type HuntMode string
+
+// The hunt's modes; oldest_searched is the default.
+const (
+	HuntOldestSearched       HuntMode = "oldest_searched"
+	HuntNewestSearched       HuntMode = "newest_searched"
+	HuntOldestRelease        HuntMode = "oldest_release"
+	HuntNewestRelease        HuntMode = "newest_release"
+	HuntRandomOldestSearched HuntMode = "random_oldest_searched"
+)
+
+// HuntSelection is one draw from the hunt queue: a class, how it is ordered, and optionally a release-date range
+// (Unix seconds, zero for no bound; an unknown date counts below ReleaseBefore).
+type HuntSelection struct {
+	Class                      string
+	Mode                       HuntMode
+	Now, Limit                 int64
+	ReleaseFrom, ReleaseBefore int64
+}
+
+// randomPool is how many times the limit random_oldest_searched draws from the oldest before choosing at random.
+const randomPool = 10
+
+// NextToHunt answers up to Limit eligible items of a class, most urgent first, in the mode's order.
+// random_oldest_searched chooses at random among the oldest searched, never ORDER BY RANDOM() over the table.
+func (h Hunt) NextToHunt(ctx context.Context, selection HuntSelection) ([]int64, error) {
+	queries := librarydb.New(h.store.Read())
+	limit := selection.Limit
+	if selection.Mode == HuntRandomOldestSearched {
+		limit *= randomPool
+	}
+	var ids []int64
+	var err error
+	switch selection.Mode {
+	case HuntNewestSearched:
+		var rows []librarydb.HuntQueue
+		rows, err = queries.NextHuntByNewestSearched(ctx, librarydb.NextHuntByNewestSearchedParams{
+			Class: selection.Class, Now: selection.Now, ReleaseFrom: selection.ReleaseFrom, ReleaseBefore: selection.ReleaseBefore, PageSize: limit,
+		})
+		ids = huntIDs(rows)
+	case HuntOldestRelease:
+		var rows []librarydb.HuntQueue
+		rows, err = queries.NextHuntByOldestRelease(ctx, librarydb.NextHuntByOldestReleaseParams{
+			Class: selection.Class, Now: selection.Now, ReleaseFrom: selection.ReleaseFrom, ReleaseBefore: selection.ReleaseBefore, PageSize: limit,
+		})
+		ids = huntIDs(rows)
+	case HuntNewestRelease:
+		var rows []librarydb.HuntQueue
+		rows, err = queries.NextHuntByNewestRelease(ctx, librarydb.NextHuntByNewestReleaseParams{
+			Class: selection.Class, Now: selection.Now, ReleaseFrom: selection.ReleaseFrom, ReleaseBefore: selection.ReleaseBefore, PageSize: limit,
+		})
+		ids = huntIDs(rows)
+	default:
+		var rows []librarydb.HuntQueue
+		rows, err = queries.NextHuntByOldestSearched(ctx, librarydb.NextHuntByOldestSearchedParams{
+			Class: selection.Class, Now: selection.Now, ReleaseFrom: selection.ReleaseFrom, ReleaseBefore: selection.ReleaseBefore, PageSize: limit,
+		})
+		ids = huntIDs(rows)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("library: next to hunt: %w", err)
 	}
+	if selection.Mode == HuntRandomOldestSearched {
+		rand.Shuffle(len(ids), func(i, j int) { ids[i], ids[j] = ids[j], ids[i] })
+		ids = ids[:min(len(ids), int(selection.Limit))]
+	}
+	return ids, nil
+}
+
+func huntIDs(rows []librarydb.HuntQueue) []int64 {
 	ids := make([]int64, len(rows))
 	for index, row := range rows {
 		ids[index] = row.DesiredItemID
 	}
-	return ids, nil
+	return ids
 }
 
 // Postpone keeps the hunt away from itemID until at.

@@ -2,7 +2,9 @@ package settings
 
 import (
 	"context"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
@@ -18,7 +20,12 @@ const (
 	KeyPriorityNewReleaseDays    = "priority.new_release_days"
 	// KeySearchesPerHour is the automatic search budget (section 9.4); zero turns it off.
 	KeySearchesPerHour = "search.automatic_per_hour"
+	// KeyHuntMode is the order the automatic search takes wanted items in (section 9.3).
+	KeyHuntMode = "search.hunt_mode"
 )
+
+// HuntModes are the orders section 9.3 names; the first is the default.
+var HuntModes = []string{"oldest_searched", "newest_searched", "oldest_release", "newest_release", "random_oldest_searched"}
 
 // DefaultSearchesPerHour spares an indexer's daily API limit; maxSearchesPerHour bounds a typo.
 const (
@@ -50,6 +57,8 @@ type PrioritySettings struct {
 	NewReleaseDays                                                int64
 	// SearchesPerHour is how many albums are searched automatically per hour; nil on a write leaves it alone.
 	SearchesPerHour *int64
+	// HuntMode is one of HuntModes; empty on a write leaves it alone.
+	HuntMode string
 }
 
 // PrioritySettings reads the configured policy, or the shipped defaults for
@@ -58,12 +67,20 @@ func (s *Snapshot) PrioritySettings() PrioritySettings {
 	perHour := s.policyInt(KeySearchesPerHour, DefaultSearchesPerHour)
 	return PrioritySettings{
 		SearchesPerHour:   &perHour,
+		HuntMode:          s.huntMode(),
 		UserRequestWeight: s.policyInt(KeyPriorityUserRequestWeight, DefaultPriorityUserRequestWeight),
 		NewReleaseWeight:  s.policyInt(KeyPriorityNewReleaseWeight, DefaultPriorityNewReleaseWeight),
 		GapWeight:         s.policyInt(KeyPriorityGapWeight, DefaultPriorityGapWeight),
 		UpgradeWeight:     s.policyInt(KeyPriorityUpgradeWeight, DefaultPriorityUpgradeWeight),
 		NewReleaseDays:    s.policyInt(KeyPriorityNewReleaseDays, DefaultPriorityNewReleaseDays),
 	}
+}
+
+func (s *Snapshot) huntMode() string {
+	if mode := s.policy[KeyHuntMode]; slices.Contains(HuntModes, mode) {
+		return mode
+	}
+	return HuntModes[0]
 }
 
 // SetPrioritySettings writes ADR-36's policy wholesale, like the cache budget
@@ -78,6 +95,11 @@ func (c *Cache) SetPrioritySettings(ctx context.Context, cl clock.Clock, ps Prio
 		KeyPriorityNewReleaseDays: ps.NewReleaseDays,
 	} {
 		if err := c.setPolicy(ctx, cl, key, strconv.FormatInt(value, 10)); err != nil {
+			return err
+		}
+	}
+	if ps.HuntMode != "" {
+		if err := c.setPolicy(ctx, cl, KeyHuntMode, ps.HuntMode); err != nil {
 			return err
 		}
 	}
@@ -109,6 +131,11 @@ func validatePrioritySettings(ps PrioritySettings) config.Problems {
 		problems = append(problems, config.Problem{
 			Path: "searches_per_hour", Value: strconv.FormatInt(*perHour, 10),
 			Expectation: "0 (off) to " + strconv.Itoa(maxSearchesPerHour),
+		})
+	}
+	if ps.HuntMode != "" && !slices.Contains(HuntModes, ps.HuntMode) {
+		problems = append(problems, config.Problem{
+			Path: "hunt_mode", Value: ps.HuntMode, Expectation: "one of " + strings.Join(HuntModes, ", "),
 		})
 	}
 	return problems

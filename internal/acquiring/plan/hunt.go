@@ -43,6 +43,10 @@ type HuntConfig struct {
 	Hunt library.Hunt
 	// PerHour is the search budget (section 9.4); zero turns automatic searching off.
 	PerHour func(ctx context.Context) (int, error)
+	// Mode is the order eligible items are taken in; nil is oldest_searched.
+	Mode func(ctx context.Context) (library.HuntMode, error)
+	// NewReleaseDays is the freshness window that tells a new release from a gap; nil is 7.
+	NewReleaseDays func() int
 	// Search searches one item and sends what it finds, re-checking first that it is still wanted.
 	Search func(ctx context.Context, itemID int64) (Outcome, error)
 	Clock  clock.Clock
@@ -79,22 +83,37 @@ func (j *HuntJob) Run(ctx context.Context, job jobs.Job) error {
 	if left <= 0 {
 		return nil
 	}
-	// Section 9.4: each class gets its share first, then what one leaves unused goes to the other.
-	upgradeShare := (left*upgradeSharePercent + 99) / 100
-	shares := []struct {
-		class  string
-		budget int
-	}{{ClassMissing, left - upgradeShare}, {ClassUpgrade, upgradeShare}}
+	mode := library.HuntOldestSearched
+	if j.config.Mode != nil {
+		if mode, err = j.config.Mode(ctx); err != nil {
+			return fmt.Errorf("plan: hunt mode: %w", err)
+		}
+	}
+	days := 7
+	if j.config.NewReleaseDays != nil {
+		days = j.config.NewReleaseDays()
+	}
+	freshFrom := now.Add(-time.Duration(days) * 24 * time.Hour).Unix()
+	// Section 9.4: each share gets its part of the budget first, then what one leaves unused goes to the others.
+	shares := []share{
+		{class: ClassMissing, releaseFrom: freshFrom},
+		{class: ClassMissing, releaseBefore: freshFrom},
+		{class: ClassUpgrade},
+	}
 	searched, looked := 0, 0
-	for _, share := range shares {
-		done, seen, err := j.huntClass(ctx, job, share.class, min(share.budget, left-searched), now, looked)
+	// Rounded up for the missing shares, so a budget of one goes to a missing album, not to an upgrade.
+	budgets := []int{(left*newReleasePercent + 99) / 100, 0, 0}
+	budgets[1] = min((left*gapPercent+99)/100, left-budgets[0])
+	budgets[2] = left - budgets[0] - budgets[1]
+	for index, one := range shares {
+		done, seen, err := j.huntShare(ctx, job, one, mode, min(budgets[index], left-searched), now, looked)
 		if err != nil {
 			return err
 		}
 		searched, looked = searched+done, looked+seen
 	}
-	for _, share := range shares {
-		done, seen, err := j.huntClass(ctx, job, share.class, left-searched, now, looked)
+	for _, one := range shares {
+		done, seen, err := j.huntShare(ctx, job, one, mode, left-searched, now, looked)
 		if err != nil {
 			return err
 		}
@@ -106,16 +125,29 @@ func (j *HuntJob) Run(ctx context.Context, job jobs.Job) error {
 	return nil
 }
 
-// upgradeSharePercent is the part of each window's budget that upgrades are promised (section 9.4).
-const upgradeSharePercent = 20
+// Section 9.4's split of each window's budget: new releases, gaps and upgrades.
+const (
+	newReleasePercent = 40
+	gapPercent        = 40
+)
 
-// huntClass searches up to budget eligible items of one class; answers how many searches ran and how many items were looked at.
-func (j *HuntJob) huntClass(
-	ctx context.Context, job jobs.Job, class string, budget int, now time.Time, lookedBefore int,
+// share is one slice of the queue the budget is split over: a class, and for missing albums the release-date range
+// that makes them new releases or gaps.
+type share struct {
+	class                      string
+	releaseFrom, releaseBefore int64
+}
+
+// huntShare searches up to budget eligible items of one share; answers how many searches ran and how many items were looked at.
+func (j *HuntJob) huntShare(
+	ctx context.Context, job jobs.Job, one share, mode library.HuntMode, budget int, now time.Time, lookedBefore int,
 ) (searched, looked int, err error) {
 	// Every item looked at is postponed past now, so each page is new; the cap guards a failing postpone.
 	for searched < budget && looked < 10*budget+100 {
-		ids, err := j.config.Hunt.NextToHunt(ctx, class, now.Unix(), int64(budget-searched))
+		ids, err := j.config.Hunt.NextToHunt(ctx, library.HuntSelection{
+			Class: one.class, Mode: mode, Now: now.Unix(), Limit: int64(budget - searched),
+			ReleaseFrom: one.releaseFrom, ReleaseBefore: one.releaseBefore,
+		})
 		if err != nil {
 			return searched, looked, err
 		}

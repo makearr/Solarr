@@ -423,6 +423,15 @@ const (
 	PersonWorkWantedStateUPGRADABLE PersonWorkWantedState = "UPGRADABLE"
 )
 
+// Defines values for PrioritySettingsHuntMode.
+const (
+	PrioritySettingsHuntModeNewestRelease        PrioritySettingsHuntMode = "newest_release"
+	PrioritySettingsHuntModeNewestSearched       PrioritySettingsHuntMode = "newest_searched"
+	PrioritySettingsHuntModeOldestRelease        PrioritySettingsHuntMode = "oldest_release"
+	PrioritySettingsHuntModeOldestSearched       PrioritySettingsHuntMode = "oldest_searched"
+	PrioritySettingsHuntModeRandomOldestSearched PrioritySettingsHuntMode = "random_oldest_searched"
+)
+
 // Defines values for ProblemType.
 const (
 	ProblemTypeBadRequest       ProblemType = "bad-request"
@@ -2580,6 +2589,9 @@ type PrioritySettings struct {
 	// GapWeight Bigger is more urgent. Default 20.
 	GapWeight int64 `json:"gap_weight"`
 
+	// HuntMode The order the automatic search takes wanted albums in within a share of the budget (new releases 40%, gaps 40%, upgrades 20%, what one leaves unused going to the others). Default oldest_searched. Always answered; omitted on a PATCH leaves it alone.
+	HuntMode *PrioritySettingsHuntMode `json:"hunt_mode,omitempty"`
+
 	// NewReleaseDays Days after release an item still counts as new rather than a gap. Default 7.
 	NewReleaseDays int64 `json:"new_release_days"`
 
@@ -2595,6 +2607,9 @@ type PrioritySettings struct {
 	// UserRequestWeight Bigger is more urgent. Default 40.
 	UserRequestWeight int64 `json:"user_request_weight"`
 }
+
+// PrioritySettingsHuntMode The order the automatic search takes wanted albums in within a share of the budget (new releases 40%, gaps 40%, upgrades 20%, what one leaves unused going to the others). Default oldest_searched. Always answered; omitted on a PATCH leaves it alone.
+type PrioritySettingsHuntMode string
 
 // Problem RFC 7807. Every error uses this, including 404 and 405.
 type Problem struct {

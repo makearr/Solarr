@@ -7615,6 +7615,13 @@ components:
           description: >-
             Missing albums searched automatically each hour, most urgent first; 0 turns automatic
             searching off. Default 12. Always answered; omitted on a PATCH leaves it alone.
+        hunt_mode:
+          type: string
+          enum: [oldest_searched, newest_searched, oldest_release, newest_release, random_oldest_searched]
+          description: >-
+            The order the automatic search takes wanted albums in within a share of the budget (new
+            releases 40%, gaps 40%, upgrades 20%, what one leaves unused going to the others). Default
+            oldest_searched. Always answered; omitted on a PATCH leaves it alone.
 
     MetadataSource:
       type: string

@@ -321,6 +321,13 @@ func NewDefaultRegistry() *Registry {
 		Default:  fmt.Sprintf("%d", DefaultSearchesPerHour),
 	})
 
+	registry.MustRegister(SettingDef{
+		Key: KeyHuntMode, Kind: KindString, Tier: TierAdvanced,
+		Name:     "Automatic search order",
+		HelpText: "Which wanted albums are searched first among equally urgent ones: oldest or newest searched, oldest or newest release, or a random pick among the oldest searched.",
+		Default:  "oldest_searched",
+	})
+
 	// Metadata providers: only needed while a provider filters agents, so advanced.
 	registry.MustRegister(SettingDef{
 		Key: KeyAcoustIDAPIKey, Kind: KindString, Tier: TierAdvanced,
