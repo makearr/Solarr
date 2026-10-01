@@ -2,6 +2,7 @@ import { useLocation } from "@tanstack/react-router";
 
 import { isAdministratorPath, useIsAdministrator } from "@/lib/useAdministrator";
 
+import { NotificationBell } from "./Notifications";
 import { SearchBox } from "./SearchBox";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
@@ -22,6 +23,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             className="flex shrink-0 items-center justify-end gap-3 border-b border-border-subtle bg-header px-4 py-2"
           >
             <SearchBox />
+            <NotificationBell />
             <ThemeToggle />
             <UserMenu />
           </header>

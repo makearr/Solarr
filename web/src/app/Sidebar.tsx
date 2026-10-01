@@ -2,6 +2,7 @@ import { Link, useParams, useRouterState, useSearch } from "@tanstack/react-rout
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
+  Bell,
   ChevronDown,
   ChevronRight,
   Download,
@@ -49,6 +50,7 @@ const SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier: Ti
 const ACTIVITY_SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier: Tier }[] = [
   { to: "/activity/queue", label: "Queue", icon: Download, tier: "normal" },
   { to: "/activity/history", label: "History", icon: HistoryIcon, tier: "normal" },
+  { to: "/activity/notifications", label: "Notifications", icon: Bell, tier: "normal" },
   { to: "/activity/jobs", label: "Jobs", icon: ListChecks, tier: "advanced" },
 ];
 
