@@ -419,7 +419,7 @@ func (q *Queries) GetDesiredItem(ctx context.Context, id int64) (DesiredItem, er
 
 const getHuntEntry = `-- name: GetHuntEntry :one
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since
+       eligible_after, search_count, queued_since, after_failure
 FROM hunt_queue WHERE desired_item_id = ?
 `
 
@@ -436,6 +436,7 @@ func (q *Queries) GetHuntEntry(ctx context.Context, desiredItemID int64) (HuntQu
 		&i.EligibleAfter,
 		&i.SearchCount,
 		&i.QueuedSince,
+		&i.AfterFailure,
 	)
 	return i, err
 }
@@ -1025,7 +1026,8 @@ SELECT di.id, di.category_id, di.media_ref, di.monitored, di.satisfaction_kind, 
                       WHERE wd.work_id = di.work_id AND wd.kind = ?1), '') AS TEXT) AS release_date,
        CAST(COALESCE(h.last_searched_at, 0) AS INTEGER) AS last_searched_at,
        CAST(COALESCE(h.search_count, 0) AS INTEGER) AS search_count,
-       CAST(COALESCE(h.queued_since, 0) AS INTEGER) AS queued_since
+       CAST(COALESCE(h.queued_since, 0) AS INTEGER) AS queued_since,
+       CAST(COALESCE(h.after_failure, 0) AS INTEGER) AS after_failure
 FROM desired_item di
 LEFT JOIN hunt_queue h ON h.desired_item_id = di.id
 WHERE (CAST(?2 AS INTEGER) = 0 OR di.dirty = 1) AND di.id > ?3
@@ -1052,6 +1054,7 @@ type ListPlanInputsRow struct {
 	LastSearchedAt   int64
 	SearchCount      int64
 	QueuedSince      int64
+	AfterFailure     int64
 }
 
 // The planner's facts for one page of items (section 9.1): the dirty set, or with dirty_only 0
@@ -1082,6 +1085,7 @@ func (q *Queries) ListPlanInputs(ctx context.Context, arg ListPlanInputsParams) 
 			&i.LastSearchedAt,
 			&i.SearchCount,
 			&i.QueuedSince,
+			&i.AfterFailure,
 		); err != nil {
 			return nil, err
 		}
@@ -1235,7 +1239,7 @@ func (q *Queries) MaxDesiredItemID(ctx context.Context) (int64, error) {
 
 const nextHuntByNewestRelease = `-- name: NextHuntByNewestRelease :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since
+       eligible_after, search_count, queued_since, after_failure
 FROM hunt_queue
 WHERE class = ?1 AND eligible_after <= ?2
 ORDER BY priority DESC, release_date DESC
@@ -1266,6 +1270,7 @@ func (q *Queries) NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNew
 			&i.EligibleAfter,
 			&i.SearchCount,
 			&i.QueuedSince,
+			&i.AfterFailure,
 		); err != nil {
 			return nil, err
 		}
@@ -1282,7 +1287,7 @@ func (q *Queries) NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNew
 
 const nextHuntByOldestSearched = `-- name: NextHuntByOldestSearched :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since
+       eligible_after, search_count, queued_since, after_failure
 FROM hunt_queue
 WHERE class = ?1 AND eligible_after <= ?2
 ORDER BY priority DESC, last_searched_at ASC
@@ -1314,6 +1319,7 @@ func (q *Queries) NextHuntByOldestSearched(ctx context.Context, arg NextHuntByOl
 			&i.EligibleAfter,
 			&i.SearchCount,
 			&i.QueuedSince,
+			&i.AfterFailure,
 		); err != nil {
 			return nil, err
 		}
@@ -1341,6 +1347,17 @@ WHERE id = ?
 // inevitable, so the repair path is not optional.
 func (q *Queries) RecomputePresentCount(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, recomputePresentCount, id)
+	return err
+}
+
+const recordItemDownloadFailed = `-- name: RecordItemDownloadFailed :exec
+INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at, search_count, after_failure)
+VALUES (?, 'missing', 0, 0, 0, 1)
+ON CONFLICT (desired_item_id) DO UPDATE SET after_failure = 1
+`
+
+func (q *Queries) RecordItemDownloadFailed(ctx context.Context, desiredItemID int64) error {
+	_, err := q.db.ExecContext(ctx, recordItemDownloadFailed, desiredItemID)
 	return err
 }
 

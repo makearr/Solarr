@@ -170,13 +170,18 @@ ON CONFLICT (desired_item_id) DO UPDATE SET
   last_searched_at = excluded.last_searched_at,
   search_count = hunt_queue.search_count + 1;
 
+-- name: RecordItemDownloadFailed :exec
+INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at, search_count, after_failure)
+VALUES (?, 'missing', 0, 0, 0, 1)
+ON CONFLICT (desired_item_id) DO UPDATE SET after_failure = 1;
+
 -- name: RemoveFromHuntQueue :exec
 DELETE FROM hunt_queue WHERE desired_item_id = ?;
 
 -- oldest_searched, the default hunt mode (section 9.3).
 -- name: NextHuntByOldestSearched :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since
+       eligible_after, search_count, queued_since, after_failure
 FROM hunt_queue
 WHERE class = sqlc.arg(class) AND eligible_after <= sqlc.arg(now)
 ORDER BY priority DESC, last_searched_at ASC
@@ -184,7 +189,7 @@ LIMIT sqlc.arg(page_size);
 
 -- name: NextHuntByNewestRelease :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since
+       eligible_after, search_count, queued_since, after_failure
 FROM hunt_queue
 WHERE class = sqlc.arg(class) AND eligible_after <= sqlc.arg(now)
 ORDER BY priority DESC, release_date DESC
@@ -318,7 +323,8 @@ SELECT di.id, di.category_id, di.media_ref, di.monitored, di.satisfaction_kind, 
                       WHERE wd.work_id = di.work_id AND wd.kind = sqlc.arg(kind)), '') AS TEXT) AS release_date,
        CAST(COALESCE(h.last_searched_at, 0) AS INTEGER) AS last_searched_at,
        CAST(COALESCE(h.search_count, 0) AS INTEGER) AS search_count,
-       CAST(COALESCE(h.queued_since, 0) AS INTEGER) AS queued_since
+       CAST(COALESCE(h.queued_since, 0) AS INTEGER) AS queued_since,
+       CAST(COALESCE(h.after_failure, 0) AS INTEGER) AS after_failure
 FROM desired_item di
 LEFT JOIN hunt_queue h ON h.desired_item_id = di.id
 WHERE (CAST(sqlc.arg(dirty_only) AS INTEGER) = 0 OR di.dirty = 1) AND di.id > sqlc.arg(after_id)
@@ -363,7 +369,7 @@ LIMIT sqlc.arg(page_size);
 -- An album's page says when it is next searched, and why not (F2).
 -- name: GetHuntEntry :one
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since
+       eligible_after, search_count, queued_since, after_failure
 FROM hunt_queue WHERE desired_item_id = ?;
 
 -- ready_queue is bounded (section 10.5), so no index is needed to ask this.

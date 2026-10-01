@@ -145,7 +145,7 @@ func (p *process) searchStatus(ctx context.Context, itemID int64) (apiserver.Wan
 	status := apiserver.WantedRow{LastSearchedAt: entry.LastSearchedAt, AutomaticSearch: string(why)}
 	if why == plan.WhyScheduled || why == plan.WhyWaitingForRelease {
 		// A search the planner has not replanned since still counts toward the backoff.
-		status.NextSearchAt = max(entry.EligibleAfter, plan.RetryAfter(entry.LastSearchedAt, entry.SearchCount), now.Unix())
+		status.NextSearchAt = max(entry.EligibleAfter, plan.RetryAfter(entry.LastSearchedAt, entry.SearchCount, entry.AfterFailure), now.Unix())
 	}
 	return status, nil
 }

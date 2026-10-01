@@ -114,6 +114,9 @@ func (p *process) importAcquisition(ctx context.Context, acquisition library.Acq
 // searchAgain searches a desired item after its download failed and sends the best release left,
 // Lidarr's "Redownload Failed"; the failed one is blocklisted by then.
 func (p *process) searchAgain(ctx context.Context, desiredItemID int64) error {
+	if err := library.NewDesired(p.library).RecordDownloadFailed(ctx, desiredItemID); err != nil {
+		p.logger.Warn("failed download not recorded on the hunt queue", slog.Int64("desired_item_id", desiredItemID), slog.Any("error", err))
+	}
 	indexers, err := p.indexerConns(ctx)
 	if err != nil || len(indexers) == 0 {
 		return err

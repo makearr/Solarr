@@ -208,7 +208,7 @@ func (s *Server) InspectImport(w http.ResponseWriter, r *http.Request) {
 
 	preview := body.Preview != nil && *body.Preview
 	if err := s.importInspector.InspectImport(r.Context(), body.SourcePath, origin, body.CategoryId, preview,
-		derefOr(body.AddUnverified, true)); err != nil {
+		derefOr(body.AddUnverified, false)); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}

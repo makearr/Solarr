@@ -200,6 +200,17 @@ func (d Desired) RecordSearched(ctx context.Context, itemID, at int64) error {
 	return nil
 }
 
+// RecordDownloadFailed caps itemID's search backoff at a day from now on.
+func (d Desired) RecordDownloadFailed(ctx context.Context, itemID int64) error {
+	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).RecordItemDownloadFailed(ctx, itemID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: record download failed: %w", err)
+	}
+	return nil
+}
+
 // UnmonitorItemsLosingFiles unmonitors categoryID's items that hold a file on rootFolderID marked
 // missing at missingSince (a library's "Unmonitor Deleted Tracks"), in batches; answers how many.
 func (d Desired) UnmonitorItemsLosingFiles(ctx context.Context, categoryID, rootFolderID, missingSince int64) (int, error) {

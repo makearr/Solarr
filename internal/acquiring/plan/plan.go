@@ -26,6 +26,8 @@ type Item struct {
 	CategoryRank   int64
 	LastSearchedAt int64
 	SearchCount    int64
+	// AfterFailure caps the backoff at maxBackoffAfterFailure.
+	AfterFailure bool
 	// QueuedSince is when the item entered the hunt queue; zero when it is not in it.
 	QueuedSince int64
 }
@@ -75,7 +77,7 @@ func Decide(item Item, policy Policy, now time.Time) Entry {
 		CategoryRank: item.CategoryRank,
 		QueuedSince:  time.Unix(entry.QueuedSince, 0),
 	}, now)
-	entry.EligibleAfter = max(RetryAfter(item.LastSearchedAt, item.SearchCount), 0)
+	entry.EligibleAfter = max(RetryAfter(item.LastSearchedAt, item.SearchCount, item.AfterFailure), 0)
 	if known {
 		entry.EligibleAfter = max(entry.EligibleAfter, released.Add(releaseGrace).Unix())
 	}
@@ -86,10 +88,12 @@ func Decide(item Item, policy Policy, now time.Time) Entry {
 const (
 	firstBackoff = 6 * time.Hour
 	maxBackoff   = 7 * 24 * time.Hour
+	// maxBackoffAfterFailure keeps a failed download's re-search a day away at most.
+	maxBackoffAfterFailure = 24 * time.Hour
 )
 
 // RetryAfter is when an item searched searchCount times, last at lastSearchedAt, may be searched again.
-func RetryAfter(lastSearchedAt, searchCount int64) int64 {
+func RetryAfter(lastSearchedAt, searchCount int64, afterFailure bool) int64 {
 	if searchCount <= 0 || lastSearchedAt <= 0 {
 		return 0
 	}
@@ -100,7 +104,11 @@ func RetryAfter(lastSearchedAt, searchCount int64) int64 {
 		}
 		delay *= 2
 	}
-	return lastSearchedAt + int64(min(delay, maxBackoff)/time.Second)
+	limit := maxBackoff
+	if afterFailure {
+		limit = maxBackoffAfterFailure
+	}
+	return lastSearchedAt + int64(min(delay, limit)/time.Second)
 }
 
 // EarliestRelease reads a street date at whatever precision it has, as the first day it could mean.

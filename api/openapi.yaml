@@ -7726,7 +7726,7 @@ components:
             Defaults to false.
         add_unverified:
           type: boolean
-          default: true
+          default: false
           description: >-
             A folder nothing identified still becomes an album, named by its own tags or folder and
             marked unverified (D6); not searched for, identified later from the review. Only for a
