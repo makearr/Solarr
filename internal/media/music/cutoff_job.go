@@ -294,7 +294,7 @@ func (j CutoffJob) stateFor(ctx context.Context, snapshot *settings.Snapshot, it
 // demuxer list, is its container.
 func measuredFacts(file library.MeasuredFile) score.Facts {
 	return score.Facts{File: score.FileFacts{
-		AudioCodec: file.AudioCodec, Container: file.Extension, Lossless: file.Lossless,
+		AudioCodec: file.AudioCodec, Extension: file.Extension, Lossless: file.Lossless,
 		AudioBitrate: file.BitrateKbps * 1000, OverallBitrate: file.BitrateKbps * 1000,
 	}}
 }

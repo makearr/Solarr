@@ -41,11 +41,21 @@ describe("quality rules", () => {
   it("builds a new profile from nothing", () => {
     const doc = JSON.parse(
       buildAudioRules("", "AAC 256", {
-        codecs: [["aac"]], containers: [["m4a"]], channels: [], rejectCodecs: [],
+        codecs: [["aac"]], extensions: [], containers: [["mp4"]], channels: [], rejectCodecs: [],
         bitrates: [{ codec: "aac", min: "224", ideal: "256", max: "320" }], sampleRate: null, bitDepth: null,
       }),
     );
     expect(doc.compare).toEqual(["audio_codec", "container", "bitrate_distance", "score"]);
     expect(doc.targets.bitrate).toEqual([{ when: { audio_codec: "aac" }, min: "224kbps", ideal: "256kbps", max: "320kbps" }]);
+  });
+
+  it("keeps extensions and containers apart, reading an older profile's m4a as the MP4 container", () => {
+    const older = '{"quality_profile":"x","compare":["container","score"],"tiers":{"container":[["m4a"],["flac"],["mp3"]]}}';
+    const rules = parseAudioRules(older);
+    expect(rules.containers).toEqual([["mp4"], ["flac"], ["mp3"]]);
+    rules.extensions = [["m4a"], ["mp4"]];
+    const rebuilt = JSON.parse(buildAudioRules(older, "x", rules));
+    expect(rebuilt.tiers.extension).toEqual([["m4a"], ["mp4"]]);
+    expect(rebuilt.compare).toEqual(["container", "extension", "score"]);
   });
 });

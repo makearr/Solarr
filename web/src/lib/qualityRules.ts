@@ -15,6 +15,8 @@ export interface BitrateTarget extends Range {
 
 export interface AudioRules {
   codecs: string[][];
+  /** File name endings and the container formats they hold: two dimensions, linked (M1g 1.7). */
+  extensions: string[][];
   containers: string[][];
   channels: string[][];
   rejectCodecs: string[];
@@ -36,12 +38,28 @@ type Document = {
 /** The compare entry each part of the form owns, in the order new ones are added. */
 const OWNED: readonly [keyof AudioRules, string][] = [
   ["codecs", "audio_codec"],
+  ["extensions", "extension"],
   ["containers", "container"],
   ["channels", "audio_channels"],
   ["bitrates", "bitrate_distance"],
   ["sampleRate", "sample_rate_distance"],
   ["bitDepth", "bit_depth_distance"],
 ];
+
+/** The container format a file extension (or an older profile's "m4a") stands for; the server's own table. */
+export const CONTAINER_OF: Record<string, string> = {
+  m4a: "mp4", m4b: "mp4", mp4: "mp4", mp3: "mp3", flac: "flac", wav: "wav", ogg: "ogg", oga: "ogg",
+  opus: "ogg", wma: "asf", asf: "asf", aac: "aac", ape: "ape", mka: "matroska", mkv: "matroska",
+};
+export const containerOf = (name: string) => CONTAINER_OF[name.toLowerCase().replace(/^\./, "")] ?? name.toLowerCase();
+
+// Tiers naming the same container twice (an older profile's "m4a" and "mp4") collapse to one entry.
+function canonicalTiers(tiers: string[][]): string[][] {
+  const seen = new Set<string>();
+  return tiers
+    .map((tier) => tier.map(containerOf).filter((name) => !seen.has(name) && seen.add(name)))
+    .filter((tier) => tier.length > 0);
+}
 
 const KBPS = /^(\d+(?:\.\d+)?)\s*kbps$/i;
 
@@ -60,7 +78,8 @@ export function parseAudioRules(json: string): AudioRules {
   const doc = JSON.parse(json || "{}") as Document;
   return {
     codecs: doc.tiers?.audio_codec ?? [],
-    containers: doc.tiers?.container ?? [],
+    extensions: doc.tiers?.extension ?? [],
+    containers: canonicalTiers(doc.tiers?.container ?? []),
     channels: doc.tiers?.audio_channels ?? [],
     rejectCodecs: doc.require?.reject_codecs ?? [],
     bitrates: (doc.targets?.bitrate ?? []).map((target) => ({
@@ -93,7 +112,7 @@ export function buildAudioRules(json: string, name: string, rules: AudioRules): 
   doc.quality_profile = name;
 
   const tiers = { ...(doc.tiers ?? {}) };
-  for (const [key, dimension] of [["codecs", "audio_codec"], ["containers", "container"], ["channels", "audio_channels"]] as const) {
+  for (const [key, dimension] of [["codecs", "audio_codec"], ["extensions", "extension"], ["containers", "container"], ["channels", "audio_channels"]] as const) {
     if (rules[key].length > 0) tiers[dimension] = rules[key];
     else delete tiers[dimension];
   }

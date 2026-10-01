@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
-import { buildAudioRules, parseAudioRules, summarise, type AudioRules, type Range } from "@/lib/qualityRules";
+import { buildAudioRules, containerOf, parseAudioRules, summarise, type AudioRules, type Range } from "@/lib/qualityRules";
 import { isTierVisible, useTier } from "@/lib/useTier";
 
 type QualityProfile = components["schemas"]["QualityProfile"];
@@ -19,7 +19,13 @@ const CODECS: Record<string, string> = {
   aac: "AAC", mp3: "MP3",
 };
 const LOSSLESS = new Set(["flac", "alac", "wav", "ape"]);
-const CONTAINERS: Record<string, string> = { flac: ".flac", m4a: ".m4a", mp3: ".mp3", ogg: ".ogg", opus: ".opus", wav: ".wav" };
+const EXTENSIONS: Record<string, string> = {
+  flac: ".flac", m4a: ".m4a", mp3: ".mp3", ogg: ".ogg", opus: ".opus", wav: ".wav", aac: ".aac", wma: ".wma", m4b: ".m4b",
+};
+// What the file holds, whatever it is called: an .m4a and an .mp4 are both MP4.
+const CONTAINERS: Record<string, string> = {
+  flac: "FLAC", mp4: "MP4 (.m4a, .m4b)", mp3: "MPEG audio (.mp3)", ogg: "Ogg (.ogg, .opus)", wav: "WAV", asf: "ASF (.wma)", aac: "AAC stream",
+};
 const CHANNELS: Record<string, string> = { "2.0": "Stereo (2.0)", "5.1": "Surround (5.1)", "1.0": "Mono (1.0)" };
 
 // What migration 0012 ships every profile with.
@@ -255,7 +261,26 @@ function AudioRulesForm({ rules, onChange }: { rules: AudioRules; onChange: (rul
         value={rules.rejectCodecs}
         onChange={(rejectCodecs) => set({ rejectCodecs })}
       />
-      <RankedList label="File types, best first" options={CONTAINERS} value={rules.containers} onChange={(containers) => set({ containers })} />
+      <RankedList
+        label="File extensions, best first"
+        help="Optional: rank by the ending of the file name. Adding one also adds the container it holds below."
+        options={EXTENSIONS}
+        value={rules.extensions}
+        onChange={(extensions) => {
+          // Linked: an extension brings its container along, which can be removed again.
+          const known = new Set(rules.containers.flat());
+          const added = extensions.flat().filter((name) => !rules.extensions.flat().includes(name));
+          const linked = added.map(containerOf).filter((name, index, all) => !known.has(name) && all.indexOf(name) === index);
+          set({ extensions, containers: linked.length > 0 ? [...rules.containers, ...linked.map((name) => [name])] : rules.containers });
+        }}
+      />
+      <RankedList
+        label="Containers, best first"
+        help="Optional: rank by the format inside, whatever the file is called."
+        options={CONTAINERS}
+        value={rules.containers}
+        onChange={(containers) => set({ containers })}
+      />
       <RankedList label="Channels, best first" options={CHANNELS} value={rules.channels} onChange={(channels) => set({ channels })} />
 
       <fieldset className="flex flex-col gap-2">

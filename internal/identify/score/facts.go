@@ -42,9 +42,11 @@ type FileFacts struct {
 	Height            int
 	FrameRate         float64
 	ScanType          string // "progressive" | "interlaced"
-	Container         string
-	Lossless          bool
-	SampleRate        int
+	// Container is ffprobe's own answer; Extension the file's name ending. Either alone stands for the container.
+	Container  string
+	Extension  string
+	Lossless   bool
+	SampleRate int
 }
 
 // stringField resolves a scoring spec's field name to a string. File-level facts
@@ -75,7 +77,14 @@ func (facts Facts) stringField(field string) (string, bool) {
 	case "scan_type":
 		return facts.File.ScanType, facts.File.ScanType != ""
 	case "container":
-		return facts.File.Container, facts.File.Container != ""
+		name := facts.File.Container
+		if name == "" {
+			name = facts.File.Extension
+		}
+		return CanonicalContainer(name), name != ""
+	case "extension":
+		extension := strings.ToLower(strings.TrimPrefix(facts.File.Extension, "."))
+		return extension, extension != ""
 	default:
 		return "", false
 	}

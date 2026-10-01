@@ -69,7 +69,13 @@ func judgeProfile(
 
 // MeetsTarget is codec and container equal, and the bitrate within the tolerance unless lossless.
 func MeetsTarget(target settings.QualityTarget, file score.FileFacts) bool {
-	if !strings.EqualFold(target.AudioCodec, file.AudioCodec) || !strings.EqualFold(target.Container, file.Container) {
+	// The target's file type is an extension ("m4a"), met by the same container as well as the same name.
+	name := file.Extension
+	if name == "" {
+		name = file.Container
+	}
+	if !strings.EqualFold(target.AudioCodec, file.AudioCodec) ||
+		score.CanonicalContainer(target.Container) != score.CanonicalContainer(name) {
 		return false
 	}
 	if target.BitrateKbps == nil {

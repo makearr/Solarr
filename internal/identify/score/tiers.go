@@ -19,6 +19,19 @@ func rankInGroups(groups [][]string, value string) (rank int, found bool) {
 	return len(groups), false
 }
 
+// rankInGroupsOf is rankInGroups with the dimension's own notion of "the same value".
+func rankInGroupsOf(dimension string, groups [][]string, value string) (rank int, found bool) {
+	want := canonicalFor(dimension, value)
+	for index, group := range groups {
+		for _, entry := range group {
+			if strings.EqualFold(canonicalFor(dimension, entry), want) {
+				return index, true
+			}
+		}
+	}
+	return len(groups), false
+}
+
 // buildQualityVector builds one TierValue per compare dimension, in order -- proof
 // of ADR-40's "no change to the interpreter": a video and a music profile run this same code.
 func buildQualityVector(compare []string, tiers map[string][][]string, facts Facts, distances map[string]targetResult) model.QualityVector {
@@ -68,7 +81,7 @@ func listTier(dimension string, groups [][]string, facts Facts) model.TierValue 
 	if !present {
 		return model.TierValue{Dimension: dimension, Rank: len(groups), Label: "unmeasured", Detail: "field not measured"}
 	}
-	rank, found := rankInGroups(groups, raw)
+	rank, found := rankInGroupsOf(dimension, groups, raw)
 	if !found {
 		return model.TierValue{Dimension: dimension, Rank: rank, Label: raw, Detail: fmt.Sprintf("%q not listed in any configured tier", raw)}
 	}
