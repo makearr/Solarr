@@ -80,6 +80,7 @@ type CategoryFileManagement struct {
 	ReplaceIdsInTags         int64
 	WriteMetadataToTags      int64
 	EmbedCoverInTags         int64
+	MergeArtistAliases       int64
 }
 
 type CategoryQualityProfile struct {

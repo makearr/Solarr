@@ -13,7 +13,7 @@ const listCategoryFileManagement = `-- name: ListCategoryFileManagement :many
 SELECT category_id, propers_repacks, rescan_after_refresh, change_file_date, recycle_retention_days,
        delete_empty_folders, create_empty_artist_folders, unmonitor_deleted, set_permissions,
        chmod_folder, chown_group, write_ids_to_tags, replace_ids_in_tags, write_metadata_to_tags,
-       embed_cover_in_tags
+       embed_cover_in_tags, merge_artist_aliases
 FROM category_file_management
 ORDER BY category_id
 `
@@ -43,6 +43,7 @@ func (q *Queries) ListCategoryFileManagement(ctx context.Context) ([]CategoryFil
 			&i.ReplaceIdsInTags,
 			&i.WriteMetadataToTags,
 			&i.EmbedCoverInTags,
+			&i.MergeArtistAliases,
 		); err != nil {
 			return nil, err
 		}
@@ -62,8 +63,8 @@ INSERT INTO category_file_management (
   category_id, propers_repacks, rescan_after_refresh, change_file_date, recycle_retention_days,
   delete_empty_folders, create_empty_artist_folders, unmonitor_deleted, set_permissions,
   chmod_folder, chown_group, write_ids_to_tags, replace_ids_in_tags, write_metadata_to_tags,
-  embed_cover_in_tags
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  embed_cover_in_tags, merge_artist_aliases
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (category_id) DO UPDATE SET
   propers_repacks = excluded.propers_repacks,
   rescan_after_refresh = excluded.rescan_after_refresh,
@@ -78,7 +79,8 @@ ON CONFLICT (category_id) DO UPDATE SET
   write_ids_to_tags = excluded.write_ids_to_tags,
   replace_ids_in_tags = excluded.replace_ids_in_tags,
   write_metadata_to_tags = excluded.write_metadata_to_tags,
-  embed_cover_in_tags = excluded.embed_cover_in_tags
+  embed_cover_in_tags = excluded.embed_cover_in_tags,
+  merge_artist_aliases = excluded.merge_artist_aliases
 `
 
 type UpsertCategoryFileManagementParams struct {
@@ -97,6 +99,7 @@ type UpsertCategoryFileManagementParams struct {
 	ReplaceIdsInTags         int64
 	WriteMetadataToTags      int64
 	EmbedCoverInTags         int64
+	MergeArtistAliases       int64
 }
 
 func (q *Queries) UpsertCategoryFileManagement(ctx context.Context, arg UpsertCategoryFileManagementParams) error {
@@ -116,6 +119,7 @@ func (q *Queries) UpsertCategoryFileManagement(ctx context.Context, arg UpsertCa
 		arg.ReplaceIdsInTags,
 		arg.WriteMetadataToTags,
 		arg.EmbedCoverInTags,
+		arg.MergeArtistAliases,
 	)
 	return err
 }
