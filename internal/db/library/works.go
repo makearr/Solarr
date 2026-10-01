@@ -51,6 +51,12 @@ const (
 	WorkSortSearched WorkSort = "searched"
 	// WorkSortImported orders by when the newest file arrived, and lists only works with files.
 	WorkSortImported WorkSort = "imported"
+	// The Radarr-style columns (M1g 1.4): size on disk, quality profile, status, genre and tag.
+	WorkSortSize    WorkSort = "size"
+	WorkSortProfile WorkSort = "profile"
+	WorkSortStatus  WorkSort = "status"
+	WorkSortGenre   WorkSort = "genre"
+	WorkSortTag     WorkSort = "tag"
 )
 
 // SortDirection is which way WorkSort orders. The zero value is ascending.
@@ -116,7 +122,10 @@ type WorkCursor struct {
 	SortArtist   string
 	SortSearched int64
 	SortImported int64
-	ID           int64
+	// SortNumber is read by the size and profile sorts, SortText by status, genre and tag.
+	SortNumber int64
+	SortText   string
+	ID         int64
 }
 
 // WorkListRow is one row of the library list plus its primary artist credit
@@ -143,6 +152,9 @@ type WorkListRow struct {
 	Unverified bool
 	// ArrivedAt is when the work's newest file arrived; 0 with none.
 	ArrivedAt int64
+	// SortNumber and SortText are the value the size/profile and status/genre/tag sorts ordered this row by.
+	SortNumber int64
+	SortText   string
 	// ArtistCover is an album with no cover of its own, shown by its primary artist's image instead.
 	ArtistCover bool
 	// Monitored, Description and SizeBytes are what Radarr's poster, overview and table show (2026-09-30).
@@ -202,6 +214,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	// seek. The OR form this replaced could not be seeked at all.
 	var orderBy string
 	join := workArtistJoin
+	numberColumn, textColumn := "0", "''"
 	switch filter.Sort {
 	case WorkSortImported:
 		// Joined, not a subquery, so the order walks work_arrival_at instead of sorting every work.
@@ -217,6 +230,14 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 			after.SortArtist, after.SortTitle, after.ID)
 		orderBy = artist + orderDirection + ", work.sort_title" + orderDirection +
 			", work.id" + orderDirection
+	case WorkSortSize, WorkSortProfile:
+		numberColumn = sortNumberColumn(filter.Sort)
+		predicates.AddIf(after.ID != 0, "("+numberColumn+", work.id) "+operator+" (?, ?)", after.SortNumber, after.ID)
+		orderBy = numberColumn + orderDirection + ", work.id" + orderDirection
+	case WorkSortStatus, WorkSortGenre, WorkSortTag:
+		textColumn = sortTextColumn(filter.Sort)
+		predicates.AddIf(after.ID != 0, "("+textColumn+", work.id) "+operator+" (?, ?)", after.SortText, after.ID)
+		orderBy = textColumn + orderDirection + ", work.id" + orderDirection
 	default:
 		column, cursorValue := sortColumn(filter.Sort, after)
 		predicates.AddIf(after.ID != 0,
@@ -236,6 +257,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		",\n       EXISTS (SELECT 1 FROM desired_item mon WHERE mon.work_id = work.id AND mon.monitored = 1" +
 		" AND mon.satisfaction_kind = 'SET') AS monitored" +
 		",\n       COALESCE(work.description, '') AS description" +
+		",\n       CAST(" + numberColumn + " AS INTEGER) AS sort_number, CAST(" + textColumn + " AS TEXT) AS sort_text" +
 		",\n       CAST(COALESCE((SELECT SUM(mo.size_bytes) FROM work_file wf JOIN media_object mo ON mo.id = wf.media_object_id" +
 		" WHERE wf.work_id = work.id), 0) AS INTEGER) AS size_bytes" +
 		"\nFROM work" + join +
@@ -257,6 +279,35 @@ func sortColumn(sort WorkSort, after WorkCursor) (column string, cursorValue any
 	default:
 		return "work.sort_title", after.SortTitle
 	}
+}
+
+// sortNumberColumn is the integer a size or profile sort orders by. Neither is indexed: they are
+// views the user asks for, and the list stays paged.
+func sortNumberColumn(sort WorkSort) string {
+	if sort == WorkSortProfile {
+		return "COALESCE((SELECT MIN(pd.profile_id) FROM desired_item pd WHERE pd.work_id = work.id), 0)"
+	}
+	return "CAST(COALESCE((SELECT SUM(mo.size_bytes) FROM work_file wf JOIN media_object mo ON mo.id = wf.media_object_id" +
+		" WHERE wf.work_id = work.id), 0) AS INTEGER)"
+}
+
+// sortTextColumn is the text a status, genre or tag sort orders by: the album's first genre or tag by name.
+func sortTextColumn(sort WorkSort) string {
+	switch sort {
+	case WorkSortGenre:
+		return tagNameColumn("=")
+	case WorkSortTag:
+		return tagNameColumn("<>")
+	default:
+		return "COALESCE((SELECT di.state FROM desired_item di WHERE di.work_id = work.id AND di.monitored = 1" +
+			" ORDER BY di.satisfaction_kind = 'SET' DESC, di.id LIMIT 1), '') COLLATE NOCASE"
+	}
+}
+
+// tagNameColumn reads the genres (source musicbrainz, operator =) or the user's own tags (<>).
+func tagNameColumn(operator string) string {
+	return "COALESCE((SELECT MIN(st.name) FROM tag_assignment sa JOIN tag st ON st.id = sa.tag_id" +
+		" WHERE sa.subject_type = 'work' AND sa.subject_id = work.id AND sa.source " + operator + " 'musicbrainz'), '') COLLATE NOCASE"
 }
 
 // unverifiedColumn is D6's "only local ids", over the per-work external-id index.
@@ -377,7 +428,7 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 			&work.UpdatedAt, &work.AddedBy, &work.Artist, &work.WantedState,
 			&work.PresentCount, &work.RequiredCount, &work.AvailableFrom, &work.Downloading,
 			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt, &work.Unverified, &work.ArrivedAt, &work.ArtistCover,
-			&work.Monitored, &work.Description, &work.SizeBytes); err != nil {
+			&work.Monitored, &work.Description, &work.SortNumber, &work.SortText, &work.SizeBytes); err != nil {
 			return nil, fmt.Errorf("library: scan work: %w", err)
 		}
 		works = append(works, work)

@@ -13,7 +13,8 @@ import { useGridMetrics } from "@/list/useGridMetrics";
 import { useNarrow } from "@/list/useNarrow";
 import { useRecordLastLevel } from "@/list/useRecordLastLevel";
 import type { SelectionRequest } from "@/list/selection";
-import type { components } from "@/api/schema";
+import type { components, paths } from "@/api/schema";
+import { albumStatusLabel } from "@/lib/albumStatus";
 import { CoverArt } from "./CoverArt";
 import {
   DEFAULT_POSTER_OPTIONS, IndexPoster, IndexViewToggle, OVERVIEW_ROW_HEIGHT, OverviewList, POSTER_GAP, POSTER_PADDING,
@@ -50,7 +51,7 @@ function bulkBody(request: SelectionRequest, monitored: boolean, preview: boolea
     preview,
   };
 }
-type WorkSort = "title" | "year" | "added" | "artist";
+type WorkSort = NonNullable<NonNullable<paths["/works"]["get"]["parameters"]["query"]>["sort"]>;
 
 // Title plus a year/media-type line, padding included.
 const CARD_HEIGHT = 68;
@@ -74,13 +75,14 @@ const entryOf = workEntry;
 
 // Cover and title are always shown -- they are how a row is identified at
 // all. The rest is what section 21's "configurable columns" picks among.
-const OPTIONAL_COLUMNS = ["artist", "year", "added_at", "size", "monitored", "actions"] as const;
+const OPTIONAL_COLUMNS = ["artist", "year", "added_at", "size", "status", "monitored", "actions"] as const;
 type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number];
 const COLUMN_LABELS: Record<OptionalColumn, string> = {
   artist: "Artist",
   year: "Released",
   added_at: "Added",
   size: "Size",
+  status: "Status",
   monitored: "Monitored",
   actions: "Actions",
 };
@@ -107,12 +109,30 @@ function saveVisibleColumns(columns: readonly OptionalColumn[]) {
 }
 
 // Maps a column key to the sort value the /works API understands.
-const SORT_KEYS: Partial<Record<OptionalColumn | "title", WorkSort>> = {
+const SORT_KEYS: Record<string, WorkSort> = {
   title: "title",
   artist: "artist",
   year: "year",
   added_at: "added",
+  size: "size",
+  status: "status",
+  profile: "profile",
+  genre: "genre",
+  tag: "tag",
 };
+
+// The Sort menu: Radarr's own list of what a view orders by.
+const SORT_CHOICES: readonly (readonly [string, string])[] = [
+  ["artist", "Artist"],
+  ["title", "Title"],
+  ["year", "Released"],
+  ["added_at", "Added"],
+  ["size", "Size on disk"],
+  ["profile", "Quality profile"],
+  ["status", "Status"],
+  ["genre", "Genres"],
+  ["tag", "Tags"],
+];
 
 // The poster wall's artist headers: room for one line of heading above a row.
 const POSTER_GROUP_HEADER_HEIGHT = 44;
@@ -162,7 +182,22 @@ function buildColumns(visible: ReadonlySet<OptionalColumn>): Column<Work>[] {
     });
   }
   if (visible.has("size")) {
-    columns.push({ key: "size", header: "Size", width: "6rem", render: (work) => (work.size_bytes ? formatBytes(work.size_bytes) : "") });
+    columns.push({
+      key: "size",
+      header: "Size",
+      width: "6rem",
+      sortable: true,
+      render: (work) => (work.size_bytes ? formatBytes(work.size_bytes) : ""),
+    });
+  }
+  if (visible.has("status")) {
+    columns.push({
+      key: "status",
+      header: "Status",
+      width: "8rem",
+      sortable: true,
+      render: (work) => (work.status ? albumStatusLabel(work.status) : ""),
+    });
   }
   if (visible.has("monitored")) {
     columns.push({ key: "monitored", header: "", width: "3rem", render: (work) => <RowActions column="monitored" entry={entryOf(work)} /> });
@@ -209,14 +244,19 @@ export function Library() {
   const isPoster = view === "poster";
   // Albums as posters are grouped by artist (asked for 2026-09-17), which only
   // works if they arrive ordered by artist, whatever the table was sorted by.
+  // Any other sort the user picks shows the wall flat, in that order.
+  const groupedByArtist = isPoster && (routeView.query.sort === null || routeView.query.sort === "artist");
   const listView = useMemo<ViewState>(
-    () => (isPoster ? { ...routeView, query: { ...routeView.query, sort: "artist", direction: "asc" } } : routeView),
-    [isPoster, routeView],
+    () =>
+      isPoster && groupedByArtist
+        ? { ...routeView, query: { ...routeView.query, sort: "artist", direction: "asc" } }
+        : routeView,
+    [isPoster, groupedByArtist, routeView],
   );
   const list = useLibraryList<Work>(
     {
       name: "works",
-      groupOf: isPoster ? artistOf : undefined,
+      groupOf: groupedByArtist ? artistOf : undefined,
       groupHeaderHeight: POSTER_GROUP_HEADER_HEIGHT,
       rowHeight: isPoster
         ? posterRowHeight(options, metrics.cellWidth)
@@ -228,7 +268,7 @@ export function Library() {
       itemsPerRow: isPoster ? metrics.columns : 1,
       idOf: (work) => work.id,
       fetchPage: async ({ cursor, query, signal }) => {
-        const sort = query.sort !== null ? SORT_KEYS[query.sort as OptionalColumn | "title"] : undefined;
+        const sort = query.sort !== null ? SORT_KEYS[query.sort] : undefined;
         const { data, error } = await api.GET("/works", {
           params: {
             query: {
@@ -359,6 +399,34 @@ export function Library() {
           )}
           <button type="button" onClick={list.selectAllMatching} className={quietButton}>
             Select all matching
+          </button>
+          <label className="flex items-center gap-1 text-ink-muted">
+            Sort
+            <select
+              value={routeView.query.sort ?? "artist"}
+              onChange={(event) => routeView.setQuery({ ...routeView.query, sort: event.target.value })}
+              className="rounded-md border border-border-subtle bg-surface px-1.5 py-1 text-ink"
+            >
+              {SORT_CHOICES.map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() =>
+              routeView.setQuery({
+                ...routeView.query,
+                sort: routeView.query.sort ?? "artist",
+                direction: routeView.query.direction === "desc" ? "asc" : "desc",
+              })
+            }
+            title="Reverse the order"
+            className={quietButton}
+          >
+            {routeView.query.direction === "desc" ? "Descending" : "Ascending"}
           </button>
           <div className="relative">
             <button type="button" onClick={() => setPickerOpen((open) => !open)} className={quietButton}>

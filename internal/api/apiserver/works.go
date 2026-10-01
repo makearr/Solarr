@@ -34,6 +34,12 @@ const (
 	WorkSortSearched WorkSort = "searched"
 	// WorkSortImported orders by when the newest file arrived; works with no file are left out.
 	WorkSortImported WorkSort = "imported"
+	// The Radarr-style columns: size on disk, quality profile, status, genre and tag.
+	WorkSortSize    WorkSort = "size"
+	WorkSortProfile WorkSort = "profile"
+	WorkSortStatus  WorkSort = "status"
+	WorkSortGenre   WorkSort = "genre"
+	WorkSortTag     WorkSort = "tag"
 )
 
 // SortDirection is which way a WorkSort orders. The zero value is ascending.
@@ -75,6 +81,8 @@ type WorksCursor struct {
 	SortArtist   string
 	SortSearched int64
 	SortImported int64
+	SortNumber   int64
+	SortText     string
 	ID           int64
 }
 
@@ -110,6 +118,9 @@ type WorkRow struct {
 	Unverified bool
 	// ArrivedAt is the Unix time the newest file arrived, 0 with none; the imported sort's cursor.
 	ArrivedAt int64
+	// SortNumber and SortText are the value the size/profile and status/genre/tag orders ranked the row by.
+	SortNumber int64
+	SortText   string
 	// ArtistCover is an album shown by its artist's image, having no cover of its own.
 	ArtistCover bool
 	Monitored   bool
@@ -181,6 +192,11 @@ func worksCursorFor(sort WorkSort, cursor paginate.TextCursor) WorksCursor {
 	case WorkSortImported:
 		value, _ := strconv.ParseInt(cursor.Sort, 10, 64)
 		return WorksCursor{SortImported: value, ID: cursor.ID}
+	case WorkSortSize, WorkSortProfile:
+		value, _ := strconv.ParseInt(cursor.Sort, 10, 64)
+		return WorksCursor{SortNumber: value, ID: cursor.ID}
+	case WorkSortStatus, WorkSortGenre, WorkSortTag:
+		return WorksCursor{SortText: cursor.Sort, ID: cursor.ID}
 	case WorkSortArtist:
 		artist, title, _ := strings.Cut(cursor.Sort, artistCursorSeparator)
 		return WorksCursor{SortArtist: artist, SortTitle: title, ID: cursor.ID}
@@ -295,6 +311,10 @@ func cursorValueFor(sort WorkSort, row WorkRow) string {
 		return strconv.FormatInt(row.LastSearchedAt.Unix(), 10)
 	case WorkSortImported:
 		return strconv.FormatInt(row.ArrivedAt, 10)
+	case WorkSortSize, WorkSortProfile:
+		return strconv.FormatInt(row.SortNumber, 10)
+	case WorkSortStatus, WorkSortGenre, WorkSortTag:
+		return row.SortText
 	case WorkSortArtist:
 		return row.ArtistSortName + artistCursorSeparator + row.SortTitle
 	default:

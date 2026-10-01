@@ -785,3 +785,62 @@ func TestListWorks_ArtistCoverMarksAnAlbumWithoutItsOwnCover(t *testing.T) {
 		t.Errorf("artist cover = %v, want %v", got, want)
 	}
 }
+
+// The Radarr-style orders (M1g 1.4) each walk every album exactly once, one row per page, in the order asked.
+func TestListWorks_ProfileAndTagSortsWalkEveryAlbumInOrder(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	titles := []string{"Alpha", "Bravo", "Charlie", "Delta"}
+	profiles := []int64{3, 1, 3, 2}
+	tags := []string{"jazz", "blues", "jazz", ""}
+	ids := make([]int64, len(titles))
+	for index, title := range titles {
+		work := createWork(t, opened, "music", title)
+		ids[index] = work.ID
+		write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+			if _, err := q.CreateDesiredItem(ctx, librarydb.CreateDesiredItemParams{
+				WorkID: work.ID, CategoryID: 1, ProfileID: profiles[index], Monitored: 1, Dirty: 1,
+				SatisfactionKind: "SET", State: "MISSING",
+			}); err != nil {
+				return err
+			}
+			if tags[index] == "" {
+				return nil
+			}
+			tag, err := q.CreateTag(ctx, librarydb.CreateTagParams{Name: tags[index], Slug: tags[index] + title, Source: "user"})
+			if err != nil {
+				return err
+			}
+			return q.AssignTag(ctx, librarydb.AssignTagParams{TagID: tag.ID, SubjectType: "work", SubjectID: work.ID, Source: "user"})
+		})
+	}
+	walk := func(sort library.WorkSort, direction library.SortDirection) []int64 {
+		var seen []int64
+		cursor := library.WorkCursor{}
+		for {
+			page, err := works.List(t.Context(), library.WorkFilter{Sort: sort, Direction: direction}, cursor, 1)
+			if err != nil {
+				t.Fatalf("List %q: %v", sort, err)
+			}
+			if len(page) == 0 {
+				return seen
+			}
+			seen = append(seen, page[0].ID)
+			cursor = library.WorkCursor{SortNumber: page[0].SortNumber, SortText: page[0].SortText, ID: page[0].ID}
+		}
+	}
+	for _, check := range []struct {
+		sort      library.WorkSort
+		direction library.SortDirection
+		want      []int64
+	}{
+		{library.WorkSortProfile, library.SortAscending, []int64{ids[1], ids[3], ids[0], ids[2]}},
+		{library.WorkSortProfile, library.SortDescending, []int64{ids[2], ids[0], ids[3], ids[1]}},
+		{library.WorkSortTag, library.SortAscending, []int64{ids[3], ids[1], ids[0], ids[2]}},
+		{library.WorkSortStatus, library.SortAscending, ids},
+	} {
+		if got := walk(check.sort, check.direction); !slices.Equal(got, check.want) {
+			t.Errorf("sort %q %q = %v, want %v", check.sort, check.direction, got, check.want)
+		}
+	}
+}
