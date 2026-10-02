@@ -30,6 +30,7 @@ type WorksMonitor struct {
 	DefaultProfileID int64
 	// Clock resolves the Fresh filter of a bulk selection.
 	Clock  clock.Clock
+	Fresh  FreshWindow
 	Logger *slog.Logger
 }
 
@@ -197,7 +198,7 @@ func (a WorksMonitor) matchingWorkIDs(ctx context.Context, selection apiserver.B
 		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, WantedOnly: selection.Wanted, CutoffUnmetOnly: selection.CutoffUnmet,
 	}
 	if selection.Fresh {
-		filter.FreshSince, filter.FreshRSSSince = FreshSinceCutoff(a.Clock), FreshRSSCutoff(a.Clock)
+		filter.FreshSince, filter.FreshRSSSince = a.Fresh.Cutoffs(a.Clock)
 	}
 	var matched []int64
 	cursor := library.WorkCursor{}

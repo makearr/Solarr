@@ -18,6 +18,8 @@ const (
 	KeyPriorityGapWeight         = "priority.weight.gap"
 	KeyPriorityUpgradeWeight     = "priority.weight.upgrade"
 	KeyPriorityNewReleaseDays    = "priority.new_release_days"
+	// KeyRSSFreshHours is how long after an RSS feed first showed a release for an item it still counts as new (ADR-55).
+	KeyRSSFreshHours = "priority.rss_fresh_hours"
 	// KeySearchesPerHour is the automatic search budget (section 9.4); zero turns it off.
 	KeySearchesPerHour = "search.automatic_per_hour"
 	// KeyHuntMode is the order the automatic search takes wanted items in (section 9.3).
@@ -31,6 +33,9 @@ var HuntModes = []string{"oldest_searched", "newest_searched", "oldest_release",
 const (
 	DefaultSearchesPerHour = 12
 	maxSearchesPerHour     = 1000
+	// DefaultRSSFreshHours is ADR-55's availability window; maxRSSFreshHours bounds a typo (a year).
+	DefaultRSSFreshHours = 48
+	maxRSSFreshHours     = 24 * 365
 )
 
 // ADR-36/ADR-55's own shipped defaults -- duplicated from
@@ -57,6 +62,8 @@ type PrioritySettings struct {
 	NewReleaseDays                                                int64
 	// SearchesPerHour is how many albums are searched automatically per hour; nil on a write leaves it alone.
 	SearchesPerHour *int64
+	// RSSFreshHours is how long an RSS sighting keeps an item new; nil on a write leaves it alone.
+	RSSFreshHours *int64
 	// HuntMode is one of HuntModes; empty on a write leaves it alone.
 	HuntMode string
 }
@@ -65,8 +72,10 @@ type PrioritySettings struct {
 // whatever nothing has stored yet.
 func (s *Snapshot) PrioritySettings() PrioritySettings {
 	perHour := s.policyInt(KeySearchesPerHour, DefaultSearchesPerHour)
+	rssHours := s.policyInt(KeyRSSFreshHours, DefaultRSSFreshHours)
 	return PrioritySettings{
 		SearchesPerHour:   &perHour,
+		RSSFreshHours:     &rssHours,
 		HuntMode:          s.huntMode(),
 		UserRequestWeight: s.policyInt(KeyPriorityUserRequestWeight, DefaultPriorityUserRequestWeight),
 		NewReleaseWeight:  s.policyInt(KeyPriorityNewReleaseWeight, DefaultPriorityNewReleaseWeight),
@@ -103,6 +112,11 @@ func (c *Cache) SetPrioritySettings(ctx context.Context, cl clock.Clock, ps Prio
 			return err
 		}
 	}
+	if ps.RSSFreshHours != nil {
+		if err := c.setPolicy(ctx, cl, KeyRSSFreshHours, strconv.FormatInt(*ps.RSSFreshHours, 10)); err != nil {
+			return err
+		}
+	}
 	if ps.SearchesPerHour != nil {
 		return c.setPolicy(ctx, cl, KeySearchesPerHour, strconv.FormatInt(*ps.SearchesPerHour, 10))
 	}
@@ -125,6 +139,12 @@ func validatePrioritySettings(ps PrioritySettings) config.Problems {
 		problems = append(problems, config.Problem{
 			Path: "new_release_days", Value: strconv.FormatInt(ps.NewReleaseDays, 10),
 			Expectation: "a positive number of days",
+		})
+	}
+	if hours := ps.RSSFreshHours; hours != nil && (*hours < 1 || *hours > maxRSSFreshHours) {
+		problems = append(problems, config.Problem{
+			Path: "rss_fresh_hours", Value: strconv.FormatInt(*hours, 10),
+			Expectation: "1 to " + strconv.Itoa(maxRSSFreshHours) + " hours",
 		})
 	}
 	if perHour := ps.SearchesPerHour; perHour != nil && (*perHour < 0 || *perHour > maxSearchesPerHour) {

@@ -5258,6 +5258,11 @@ export interface components {
             new_release_days: number;
             /**
              * Format: int64
+             * @description Hours after an RSS feed first shows a release for a wanted album that it still counts as new. Default 48. Always answered; omitted on a PATCH leaves it alone.
+             */
+            rss_fresh_hours?: number;
+            /**
+             * Format: int64
              * @description Missing albums searched automatically each hour, most urgent first; 0 turns automatic searching off. Default 12. Always answered; omitted on a PATCH leaves it alone.
              */
             searches_per_hour?: number;

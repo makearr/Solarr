@@ -86,7 +86,9 @@ On an album's or artist's page, **Choose image** lists the pictures the metadata
 Three scheduled tasks (Settings → Scheduler) find what is missing without you pressing anything:
 
 - **RSS sync** (every 15 minutes) reads each indexer's newest releases and grabs one a wanted album
-  accepts.
+  accepts. An album an RSS feed first showed a release for counts as newly arrived for the **RSS freshness
+  window** (Settings → Libraries → Priority, advanced; default 48 hours), as one released within the
+  **Freshness window** (default 7 days) does.
 - **Search for missing albums** (every 15 minutes) searches the most urgent wanted albums, within
   **Automatic searches per hour** (Settings → Libraries → Priority, advanced; default 12, 0 turns it off). Each
   hour's searches are split 40% new releases, 40% older gaps and 20% **upgrades** (albums below the

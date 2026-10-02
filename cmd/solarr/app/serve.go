@@ -538,7 +538,7 @@ func (p *process) startServer(ctx context.Context) error {
 			Sweep: p.cacheSweep, Cache: p.cache, Registry: p.settingsRegistry, Clock: clock.NewSystem(),
 		},
 		LibrarySize:  library.NewCounters(p.library),
-		Works:        adapters.Works{Works: library.NewWorks(p.library), Clock: clock.NewSystem()},
+		Works:        adapters.Works{Works: library.NewWorks(p.library), Clock: clock.NewSystem(), Fresh: p.freshWindow},
 		WorkDetail:   adapters.WorkDetail{Works: library.NewWorks(p.library), SearchStatus: p.searchStatus},
 		WorksMonitor: p.worksMonitor(),
 		WorkEditor: adapters.WorkEdit{
@@ -795,7 +795,7 @@ func (p *process) worksMonitor() adapters.WorksMonitor {
 		Identity: library.NewIdentity(p.library), Works: library.NewWorks(p.library),
 		Desired: library.NewDesired(p.library), Categories: adapters.Categories{Cache: p.cache},
 		Libraries: adapters.Categories{Cache: p.cache}, Remover: p.fileRemover(),
-		DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Logger: p.logger,
+		DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Fresh: p.freshWindow, Logger: p.logger,
 	}
 }
 

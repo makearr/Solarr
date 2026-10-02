@@ -7938,6 +7938,12 @@ components:
           type: integer
           format: int64
           description: Days after release an item still counts as new rather than a gap. Default 7.
+        rss_fresh_hours:
+          type: integer
+          format: int64
+          description: >-
+            Hours after an RSS feed first shows a release for a wanted album that it still counts as new. Default 48.
+            Always answered; omitted on a PATCH leaves it alone.
         searches_per_hour:
           type: integer
           format: int64

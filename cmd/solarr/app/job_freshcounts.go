@@ -30,18 +30,25 @@ var freshCountsDefinition = jobs.Definition{
 type freshCountsJob struct {
 	counts library.FreshCounts
 	clock  clock.Clock
+	fresh  adapters.FreshWindow
 	logger *slog.Logger
 }
 
 func (j freshCountsJob) Run(ctx context.Context, _ jobs.Job) error {
-	since := adapters.FreshSinceCutoff(j.clock)
+	since, rssSince := j.fresh.Cutoffs(j.clock)
 
-	corrections, err := j.counts.Reconcile(ctx, since, adapters.FreshRSSCutoff(j.clock))
+	corrections, err := j.counts.Reconcile(ctx, since, rssSince)
 	if err != nil {
 		return err
 	}
 	j.logger.Info("fresh works counter reconciled", slog.Int("corrections", len(corrections)))
 	return nil
+}
+
+// freshWindow is the instance's configured freshness windows (priority settings).
+func (p *process) freshWindow() (days, rssHours int64) {
+	stored := p.cache.Snapshot().PrioritySettings()
+	return stored.NewReleaseDays, *stored.RSSFreshHours
 }
 
 // registerFreshCountsJob wires the sweep into the registry and the executor.
@@ -52,6 +59,7 @@ func (p *process) registerFreshCountsJob(registry *jobs.Registry, executor *jobs
 	job := freshCountsJob{
 		counts: library.NewFreshCounts(p.library, clock.NewSystem()),
 		clock:  clock.NewSystem(),
+		fresh:  p.freshWindow,
 		logger: p.logger,
 	}
 	executor.Handle(freshCountsJobType, job)
