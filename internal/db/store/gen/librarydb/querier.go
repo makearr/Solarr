@@ -60,6 +60,7 @@ type Querier interface {
 	// own curation (ADR-33).
 	ClearProviderTagAssignments(ctx context.Context, arg ClearProviderTagAssignmentsParams) error
 	ClearWorkClassification(ctx context.Context, arg ClearWorkClassificationParams) error
+	ClearWorkOrganisationRole(ctx context.Context, arg ClearWorkOrganisationRoleParams) error
 	// "You have 4 of 6 Ihaol films" is the first thing library-derived discovery
 	// looks for, so held and stated counts come back together (ADR-38).
 	CollectionCoverage(ctx context.Context, id int64) (CollectionCoverageRow, error)
@@ -127,6 +128,7 @@ type Querier interface {
 	// The Wanted page's total for one category: the works CountWorksVisibleToCategory counts that
 	// have a monitored item not yet complete and a tracklist, the wanted list's own condition.
 	CountWantedWorksVisibleToCategory(ctx context.Context, arg CountWantedWorksVisibleToCategoryParams) (int64, error)
+	CountWorkFieldManual(ctx context.Context, arg CountWorkFieldManualParams) (int64, error)
 	// How many files the library actually holds for one work. Removing an album
 	// deletes the work row only when this is zero: with files on disk the work
 	// would be recreated by the next scan, so deleting it would be a lie.
@@ -217,6 +219,8 @@ type Querier interface {
 	DeleteUserTag(ctx context.Context, id int64) (int64, error)
 	DeleteWork(ctx context.Context, id int64) error
 	DeleteWorkPart(ctx context.Context, id int64) error
+	DeleteWorkRating(ctx context.Context, arg DeleteWorkRatingParams) error
+	DeleteWorkTitlesBySource(ctx context.Context, arg DeleteWorkTitlesBySourceParams) error
 	DequeueReady(ctx context.Context, candidateID int64) error
 	// One held release per album: a later decision replaces the earlier one.
 	DequeueReadyForItem(ctx context.Context, desiredItemID int64) error
@@ -252,6 +256,7 @@ type Querier interface {
 	FindIdentifiedPeopleByName(ctx context.Context, name string) ([]int64, error)
 	// The cheap identity check an incremental scan runs before reading a file.
 	FindMediaObjectsByQuickHash(ctx context.Context, quickHash string) ([]MediaObject, error)
+	FindOrganisationByName(ctx context.Context, arg FindOrganisationByNameParams) (Organisation, error)
 	// Anime absolute numbering: episode 137 of a series resolves to the part that
 	// aired numbers do not name (ADR-41). Scoped to the work, or two series collide.
 	FindPartByAltNumber(ctx context.Context, arg FindPartByAltNumberParams) (WorkPart, error)
@@ -619,6 +624,7 @@ type Querier interface {
 	// Every file of one work, for deleting an album's files along with it.
 	ListWorkFiles(ctx context.Context, workID int64) ([]int64, error)
 	ListWorkPartExternalIDs(ctx context.Context, partID int64) ([]WorkPartExternalID, error)
+	ListWorkPartRefs(ctx context.Context, workID int64) ([]ListWorkPartRefsRow, error)
 	ListWorkPartTitles(ctx context.Context, partID int64) ([]WorkPartTitle, error)
 	// Ordered by the module's sort key. Core never parses media_ref to order parts.
 	ListWorkParts(ctx context.Context, workID int64) ([]WorkPart, error)
@@ -829,6 +835,7 @@ type Querier interface {
 	// Progress mid-sweep: the cursor advances, the watermark does not.
 	SetScanCursor(ctx context.Context, arg SetScanCursorParams) error
 	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error
+	SetWorkCertification(ctx context.Context, arg SetWorkCertificationParams) error
 	SetWorkClassification(ctx context.Context, arg SetWorkClassificationParams) error
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error
 	SetWorkDescription(ctx context.Context, arg SetWorkDescriptionParams) error
@@ -838,6 +845,7 @@ type Querier interface {
 	// doc comment) -- written only by internal/db/library.People.AddCredit, the one place a
 	// role='artist' ord=0 credit is ever recorded.
 	SetWorkPrimaryArtist(ctx context.Context, arg SetWorkPrimaryArtistParams) error
+	SetWorkRating(ctx context.Context, arg SetWorkRatingParams) error
 	// Unlike year, unconditional: nothing else writes a work's description yet,
 	// so there is no earlier value worth protecting.
 	// A work is named after its release group once enrichment has it, not after whichever file came first.
@@ -861,6 +869,8 @@ type Querier interface {
 	// created before this column existed, or from a source with no MusicBrainz
 	// answer, only gets its primary_type backfilled here.
 	UpdateWorkPrimaryTypeIfNull(ctx context.Context, arg UpdateWorkPrimaryTypeIfNullParams) error
+	// A provider fills what a work lacks and corrects what it measured; year and language, once set, stay.
+	UpdateWorkSeriesDetails(ctx context.Context, arg UpdateWorkSeriesDetailsParams) error
 	// The list surface composes its own WHERE in internal/db/library/works.go: a filter
 	// written here as an is-it-empty test is not sargable, so SQLite uses no index for that
 	// column and sorts the whole table for every page (documentation/sql-and-sqlc.md).
@@ -881,6 +891,9 @@ type Querier interface {
 	// person's resolve survives a full rescan the chain still cannot decide (found 2026-09-24). An
 	// unverified album (only local ids, D6) does not count: its files still await identification.
 	UpsertUnidentified(ctx context.Context, arg UpsertUnidentifiedParams) error
+	// Series (TV works) refresh: provider data written without disturbing what a person set.
+	// A refresh never changes monitoring: monitored is left out of the update.
+	UpsertWorkPart(ctx context.Context, arg UpsertWorkPartParams) (WorkPart, error)
 	// A placeholder whose release no source knows any more, replaced by one chosen from the files:
 	// no longer a placeholder, so enrichment stops asking about it.
 	WithdrawEdition(ctx context.Context, id int64) error
