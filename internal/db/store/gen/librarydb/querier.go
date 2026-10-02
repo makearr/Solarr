@@ -44,6 +44,7 @@ type Querier interface {
 	// had a source, not a refresh (a manual override must always win, ADR-8).
 	BackfillPersonDetails(ctx context.Context, arg BackfillPersonDetailsParams) error
 	BlocklistRelease(ctx context.Context, arg BlocklistReleaseParams) (BlocklistedRelease, error)
+	ClearDesiredProfileOverride(ctx context.Context, desiredItemID int64) error
 	// Import revert's own first step for one unit (todo 4.9): work_id/edition_id
 	// going back to NULL is what makes it safe to then delete the work/edition
 	// row itself (import_unit's own FK to either carries no ON DELETE CASCADE,
@@ -279,6 +280,7 @@ type Querier interface {
 	// A dashboard figure is one lookup regardless of library size (ADR-28).
 	GetCounter(ctx context.Context, arg GetCounterParams) (Counter, error)
 	GetDesiredItem(ctx context.Context, id int64) (DesiredItem, error)
+	GetDesiredProfileOverride(ctx context.Context, desiredItemID int64) (int64, error)
 	GetEdition(ctx context.Context, id int64) (Edition, error)
 	GetEditionByExternalID(ctx context.Context, arg GetEditionByExternalIDParams) (Edition, error)
 	// Scoring reads the bounded value, never the raw rate (ADR-45).
@@ -552,6 +554,8 @@ type Querier interface {
 	ListStatRollup(ctx context.Context, arg ListStatRollupParams) ([]StatRollup, error)
 	// "This tag or any descendant" is one join because the closure is materialised.
 	ListSubjectsForTagTree(ctx context.Context, arg ListSubjectsForTagTreeParams) ([]ListSubjectsForTagTreeRow, error)
+	ListTagNames(ctx context.Context) ([]ListTagNamesRow, error)
+	ListTagNamesForSubjectBySource(ctx context.Context, arg ListTagNamesForSubjectBySourceParams) ([]ListTagNamesForSubjectBySourceRow, error)
 	// Identified files under the given roots with everything their tags could take and the digest
 	// of what was last written. Providers are arguments: the query knows no media type.
 	ListTagWritebackCandidates(ctx context.Context, arg ListTagWritebackCandidatesParams) ([]ListTagWritebackCandidatesRow, error)
@@ -770,6 +774,7 @@ type Querier interface {
 	// toggle changes how many of them count (Appendix E, D3's shape, one level up).
 	SetDesiredItemRequiredCount(ctx context.Context, arg SetDesiredItemRequiredCountParams) error
 	SetDesiredItemState(ctx context.Context, arg SetDesiredItemStateParams) error
+	SetDesiredProfileOverride(ctx context.Context, arg SetDesiredProfileOverrideParams) error
 	// Persisted before bytes move, so a restart resumes rather than restarts (ADR-46).
 	SetDownloadProgress(ctx context.Context, arg SetDownloadProgressParams) error
 	SetFingerprints(ctx context.Context, arg SetFingerprintsParams) error

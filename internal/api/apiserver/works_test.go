@@ -60,6 +60,7 @@ type worksFixture struct {
 	works                *fakeWorksReader
 	workDetail           *fakeWorkDetailReader
 	worksMonitor         *fakeWorksMonitor
+	workEditor           *fakeWorkEditor
 	search               *fakeSearchReader
 	unidentified         *fakeUnidentifiedReader
 	unidentifiedResolver *fakeUnidentifiedResolver
@@ -225,6 +226,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	works := &fakeWorksReader{}
 	workDetail := &fakeWorkDetailReader{}
 	worksMonitor := &fakeWorksMonitor{}
+	workEditor := &fakeWorkEditor{}
 	search := &fakeSearchReader{}
 	unidentified := &fakeUnidentifiedReader{}
 	unidentifiedResolver := &fakeUnidentifiedResolver{}
@@ -263,6 +265,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		Works:                 works,
 		WorkDetail:            workDetail,
 		WorksMonitor:          worksMonitor,
+		WorkEditor:            workEditor,
 		Search:                search,
 		Unidentified:          unidentified,
 		UnidentifiedResolver:  unidentifiedResolver,
@@ -313,7 +316,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		t.Fatalf("New: %v", err)
 	}
 	return worksFixture{
-		server: server, running: running, jobRegistry: jobRegistry, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor,
+		server: server, running: running, jobRegistry: jobRegistry, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor, workEditor: workEditor,
 		search: search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,
 		artwork: artwork, people: people, subscriber: subscriber, artistActions: artistActions,
 		subscriptionPreview: subscriptionPreview,

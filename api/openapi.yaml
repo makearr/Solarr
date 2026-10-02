@@ -2671,6 +2671,62 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/{id}/edit:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getWorkEdit
+      tags: [library]
+      summary: What an album's Edit dialog shows (Radarr's Edit).
+      responses:
+        "200":
+          description: The album's own monitoring, quality profile and tags.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkEdit" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: saveWorkEdit
+      tags: [library]
+      summary: Save an album's Edit dialog in one call.
+      description: >-
+        Replaces monitored, the quality profile and the user's tags together. A null profile returns the
+        album to its library's profiles; a named one replaces them for this album's search and upgrades.
+        Tags the user assigned are replaced; tags a provider assigned are never touched (ADR-33).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkEdit" }
+      responses:
+        "200":
+          description: The album as saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkEdit" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /tags:
+    get:
+      operationId: listTags
+      tags: [library]
+      summary: Every tag, by name, for the Edit dialog's tag picker.
+      responses:
+        "200":
+          description: The tags.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: string }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/parts/{partId}/monitor:
     parameters:
       - name: id
@@ -7230,6 +7286,21 @@ components:
       required: [count]
       properties:
         count: { type: integer, format: int64 }
+
+    WorkEdit:
+      type: object
+      required: [monitored, profile_id, tags]
+      properties:
+        monitored: { type: boolean }
+        profile_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: The album's own quality profile; null is its library's.
+        tags:
+          type: array
+          items: { type: string }
+          description: Tags the user assigned, by name.
 
     Wanted:
       type: object

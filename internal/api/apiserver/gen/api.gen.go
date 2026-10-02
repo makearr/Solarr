@@ -3335,6 +3335,17 @@ type WorkDetail struct {
 	Year   *int    `json:"year,omitempty"`
 }
 
+// WorkEdit defines model for WorkEdit.
+type WorkEdit struct {
+	Monitored bool `json:"monitored"`
+
+	// ProfileId The album's own quality profile; null is its library's.
+	ProfileId *int64 `json:"profile_id"`
+
+	// Tags Tags the user assigned, by name.
+	Tags []string `json:"tags"`
+}
+
 // WorkPage defines model for WorkPage.
 type WorkPage struct {
 	Items []Work `json:"items"`
@@ -4115,6 +4126,9 @@ type BulkSetWorkMonitoredJSONRequestBody BulkSetWorkMonitoredJSONBody
 // ChooseWorkArtworkJSONRequestBody defines body for ChooseWorkArtwork for application/json ContentType.
 type ChooseWorkArtworkJSONRequestBody = ImagePick
 
+// SaveWorkEditJSONRequestBody defines body for SaveWorkEdit for application/json ContentType.
+type SaveWorkEditJSONRequestBody = WorkEdit
+
 // SetWorkMonitoredJSONRequestBody defines body for SetWorkMonitored for application/json ContentType.
 type SetWorkMonitoredJSONRequestBody SetWorkMonitoredJSONBody
 
@@ -4675,6 +4689,9 @@ type ServerInterface interface {
 	// The most recent log records, newest first.
 	// (GET /system/logs)
 	ListLogs(w http.ResponseWriter, r *http.Request, params ListLogsParams)
+	// Every tag, by name, for the Edit dialog's tag picker.
+	// (GET /tags)
+	ListTags(w http.ResponseWriter, r *http.Request)
 	// Every account, with its role and category grants.
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -4717,6 +4734,12 @@ type ServerInterface interface {
 	// Dispatch one ACCEPTed decision's own release to a matching downloader (ADR-57's acquire.send). No resource gate yet -- every dispatch here is a user's own explicit action (ADR-12's own "user request: never paused"), since nothing automatic calls this until stage 6's planner exists.
 	// (POST /works/{id}/candidates/{decisionId}/send)
 	SendCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64)
+	// What an album's Edit dialog shows (Radarr's Edit).
+	// (GET /works/{id}/edit)
+	GetWorkEdit(w http.ResponseWriter, r *http.Request, id int64)
+	// Save an album's Edit dialog in one call.
+	// (PUT /works/{id}/edit)
+	SaveWorkEdit(w http.ResponseWriter, r *http.Request, id int64)
 	// Automatic search, as in Lidarr: search this work's wanted album and send its best accepted release to a download client. Nothing is searched while a download for the album is already on its way.
 	// (POST /works/{id}/grab)
 	GrabWork(w http.ResponseWriter, r *http.Request, id int64)
@@ -5830,6 +5853,12 @@ func (_ Unimplemented) ListLogs(w http.ResponseWriter, r *http.Request, params L
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Every tag, by name, for the Edit dialog's tag picker.
+// (GET /tags)
+func (_ Unimplemented) ListTags(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Every account, with its role and category grants.
 // (GET /users)
 func (_ Unimplemented) ListUsers(w http.ResponseWriter, r *http.Request) {
@@ -5911,6 +5940,18 @@ func (_ Unimplemented) BlocklistCandidate(w http.ResponseWriter, r *http.Request
 // Dispatch one ACCEPTed decision's own release to a matching downloader (ADR-57's acquire.send). No resource gate yet -- every dispatch here is a user's own explicit action (ADR-12's own "user request: never paused"), since nothing automatic calls this until stage 6's planner exists.
 // (POST /works/{id}/candidates/{decisionId}/send)
 func (_ Unimplemented) SendCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What an album's Edit dialog shows (Radarr's Edit).
+// (GET /works/{id}/edit)
+func (_ Unimplemented) GetWorkEdit(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Save an album's Edit dialog in one call.
+// (PUT /works/{id}/edit)
+func (_ Unimplemented) SaveWorkEdit(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11512,6 +11553,28 @@ func (siw *ServerInterfaceWrapper) ListLogs(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// ListTags operation middleware
+func (siw *ServerInterfaceWrapper) ListTags(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTags(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -12019,6 +12082,72 @@ func (siw *ServerInterfaceWrapper) SendCandidate(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SendCandidate(w, r, id, decisionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWorkEdit operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkEdit(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkEdit(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SaveWorkEdit operation middleware
+func (siw *ServerInterfaceWrapper) SaveWorkEdit(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SaveWorkEdit(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13015,6 +13144,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/system/logs", wrapper.ListLogs)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/tags", wrapper.ListTags)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/users", wrapper.ListUsers)
 	})
 	r.Group(func(r chi.Router) {
@@ -13055,6 +13187,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/candidates/{decisionId}/send", wrapper.SendCandidate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/{id}/edit", wrapper.GetWorkEdit)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/works/{id}/edit", wrapper.SaveWorkEdit)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/grab", wrapper.GrabWork)

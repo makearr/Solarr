@@ -277,7 +277,7 @@ func (s Search) judgeFor(ctx context.Context, item librarydb.DesiredItem) (judge
 		return judge{}, fmt.Errorf("alternate titles: %w", err)
 	}
 	snapshot := s.Settings.Snapshot()
-	rules, err := libraryProfiles(snapshot, item.CategoryID, item.ProfileID)
+	rules, err := libraryProfiles(ctx, s.Desired, snapshot, item.ID, item.CategoryID, item.ProfileID)
 	if err != nil {
 		return judge{}, err
 	}
@@ -825,12 +825,21 @@ type rankedProfile struct {
 	rules score.Profile
 }
 
-// libraryProfiles is the library's ordered list (2026-09-24), or the item's own profile when the
-// library has none.
-func libraryProfiles(snapshot *settings.Snapshot, categoryID, itemProfileID int64) ([]rankedProfile, error) {
+// libraryProfiles is the profile an album picked for itself, else the library's ordered list
+// (2026-09-24), else the item's own profile when the library has none.
+func libraryProfiles(
+	ctx context.Context, desired library.Desired, snapshot *settings.Snapshot, itemID, categoryID, itemProfileID int64,
+) ([]rankedProfile, error) {
 	ids := []int64{itemProfileID}
 	if category, found := snapshot.Category(categoryID); found && len(category.QualityProfileIDs) > 0 {
 		ids = category.QualityProfileIDs
+	}
+	override, overridden, err := desired.ProfileOverride(ctx, itemID)
+	if err != nil {
+		return nil, err
+	}
+	if overridden {
+		ids = []int64{override}
 	}
 	profiles := make([]rankedProfile, 0, len(ids))
 	for _, id := range ids {

@@ -4,6 +4,8 @@ import { Bookmark, BookmarkCheck, RefreshCw, Search } from "lucide-react";
 
 import { api } from "@/api/client";
 
+import { EditAlbumButton } from "./EditAlbum";
+
 /** Radarr's per-item actions on an album or artist (asked 2026-09-30): monitor, search, refresh.
  *  Every click stops at the button, since the tile or row around it is a link. */
 export function useItemActions(level: string | undefined, id: number, monitored: boolean | undefined) {
@@ -43,7 +45,7 @@ export function useItemActions(level: string | undefined, id: number, monitored:
     onSuccess: () => void queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith("library-level") }),
     onError: () => setNote("Monitoring could not be changed"),
   });
-  return { album, refresh, search, monitor, monitored, note };
+  return { album, id, refresh, search, monitor, monitored, note };
 }
 
 type Actions = ReturnType<typeof useItemActions>;
@@ -101,6 +103,7 @@ export function ActionButtons({ actions, showNote = true }: { actions: Actions; 
       >
         <RefreshCw aria-hidden className={`size-3.5 ${actions.refresh.isPending ? "animate-spin" : ""}`} />
       </button>
+      {actions.album && <EditAlbumButton id={actions.id} />}
       {showNote && actions.note && <span className="truncate text-xs text-ink-muted">{actions.note}</span>}
     </span>
   );

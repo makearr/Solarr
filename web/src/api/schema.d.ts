@@ -1686,6 +1686,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** What an album's Edit dialog shows (Radarr's Edit). */
+        get: operations["getWorkEdit"];
+        /**
+         * Save an album's Edit dialog in one call.
+         * @description Replaces monitored, the quality profile and the user's tags together. A null profile returns the album to its library's profiles; a named one replaces them for this album's search and upgrades. Tags the user assigned are replaced; tags a provider assigned are never touched (ADR-33).
+         */
+        put: operations["saveWorkEdit"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every tag, by name, for the Edit dialog's tag picker. */
+        get: operations["listTags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}/parts/{partId}/monitor": {
         parameters: {
             query?: never;
@@ -4753,6 +4793,16 @@ export interface components {
         BulkResult: {
             /** Format: int64 */
             count: number;
+        };
+        WorkEdit: {
+            monitored: boolean;
+            /**
+             * Format: int64
+             * @description The album's own quality profile; null is its library's.
+             */
+            profile_id: number | null;
+            /** @description Tags the user assigned, by name. */
+            tags: string[];
         };
         /** @description The work's own album-level SET desired_item (section 19.6) -- what makes "9 of 12 tracks" a fact rather than on_disk's coarse badge. */
         Wanted: {
@@ -8655,6 +8705,80 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getWorkEdit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The album's own monitoring, quality profile and tags. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkEdit"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    saveWorkEdit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkEdit"];
+            };
+        };
+        responses: {
+            /** @description The album as saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkEdit"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listTags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tags. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            401: components["responses"]["Problem"];
         };
     };
     setPartMonitored: {
