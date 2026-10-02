@@ -195,6 +195,8 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
   const [maxQueued, setMaxQueued] = useState(DEFAULT_MAX_QUEUED);
   const [sendUser, setSendUser] = useState(true);
   const [sendRSS, setSendRSS] = useState(true);
+  const [seedRatio, setSeedRatio] = useState("");
+  const [seedMinutes, setSeedMinutes] = useState("");
   const [addFolder, setAddFolder] = useState(true);
   const [localFolder, setLocalFolder] = useState("");
 
@@ -220,6 +222,8 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
         max_queued: maxQueued,
         always_send_user_grabs: sendUser,
         always_send_rss_grabs: sendRSS,
+        seed_ratio: Number(seedRatio) > 0 ? Number(seedRatio) : undefined,
+        seed_minutes: Number(seedMinutes) > 0 ? Math.round(Number(seedMinutes)) : undefined,
         remote_path: mapped ? reported : undefined,
         local_path: mapped ? localFolder : undefined,
       };
@@ -315,6 +319,7 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
         onSendUser={setSendUser}
         sendRSS={sendRSS}
         onSendRSS={setSendRSS}
+        seed={kind === "qbittorrent" ? { ratio: seedRatio, onRatio: setSeedRatio, minutes: seedMinutes, onMinutes: setSeedMinutes } : undefined}
       />
       {test.data && (
         <p className={`text-xs ${test.data.ok ? "text-ok" : "text-danger"}`}>{test.data.message}</p>
@@ -373,6 +378,7 @@ function OptionFields({
   onSendUser,
   sendRSS,
   onSendRSS,
+  seed,
 }: {
   category: string;
   onCategory: (value: string) => void;
@@ -384,6 +390,8 @@ function OptionFields({
   onSendUser: (value: boolean) => void;
   sendRSS: boolean;
   onSendRSS: (value: boolean) => void;
+  /** Torrent clients only: how long an imported torrent keeps seeding before it is removed. */
+  seed?: { ratio: string; onRatio: (value: string) => void; minutes: string; onMinutes: (value: string) => void };
 }) {
   return (
     <div className="flex flex-wrap items-end gap-3 text-xs">
@@ -423,6 +431,18 @@ function OptionFields({
         <input type="checkbox" checked={sendRSS} onChange={(event) => onSendRSS(event.target.checked)} />
         Always send RSS grabs
       </label>
+      {seed && removeCompleted && (
+        <>
+          <label className="flex w-32 flex-col gap-1 text-ink-muted" title="Empty keeps no ratio limit. With neither limit set an imported torrent is removed at once">
+            Seed to ratio
+            <input className={inputStyle} type="number" min={0} step={0.1} value={seed.ratio} placeholder="no limit" onChange={(event) => seed.onRatio(event.target.value)} />
+          </label>
+          <label className="flex w-36 flex-col gap-1 text-ink-muted" title="Whichever limit is reached first removes the torrent and its files">
+            Seed for (minutes)
+            <input className={inputStyle} type="number" min={0} step={10} value={seed.minutes} placeholder="no limit" onChange={(event) => seed.onMinutes(event.target.value)} />
+          </label>
+        </>
+      )}
     </div>
   );
 }
@@ -437,6 +457,8 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
   const [maxQueued, setMaxQueued] = useState(current.max_queued ?? DEFAULT_MAX_QUEUED);
   const [sendUser, setSendUser] = useState(current.always_send_user_grabs ?? true);
   const [sendRSS, setSendRSS] = useState(current.always_send_rss_grabs ?? true);
+  const [seedRatio, setSeedRatio] = useState(current.seed_ratio ? String(current.seed_ratio) : "");
+  const [seedMinutes, setSeedMinutes] = useState(current.seed_minutes ? String(current.seed_minutes) : "");
   const torrent = downloader.impl === "qbittorrent";
   // The stored secret is never shown, so a new one is typed in full or left alone.
   const [signInUser, setSignInUser] = useState("");
@@ -479,6 +501,8 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
           options: {
             category: category || undefined, remove_completed: removeCompleted, max_queued: maxQueued,
             always_send_user_grabs: sendUser, always_send_rss_grabs: sendRSS,
+            seed_ratio: Number(seedRatio) > 0 ? Number(seedRatio) : undefined,
+            seed_minutes: Number(seedMinutes) > 0 ? Math.round(Number(seedMinutes)) : undefined,
             remote_path: remotePath || undefined, local_path: localPath || undefined,
           },
         },
@@ -500,6 +524,7 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
         onSendUser={setSendUser}
         sendRSS={sendRSS}
         onSendRSS={setSendRSS}
+        seed={torrent ? { ratio: seedRatio, onRatio: setSeedRatio, minutes: seedMinutes, onMinutes: setSeedMinutes } : undefined}
       />
       <div className="flex flex-wrap items-end gap-3 text-xs">
         {torrent && (

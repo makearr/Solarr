@@ -178,6 +178,8 @@ type Torrent struct {
 	ContentPath string  `json:"content_path"`
 	DLSpeed     int64   `json:"dlspeed"`
 	Progress    float64 `json:"progress"`
+	Ratio       float64 `json:"ratio"`
+	SeedingTime int64   `json:"seeding_time"`
 }
 
 // Torrents answers the torrents in category, or every torrent for "".

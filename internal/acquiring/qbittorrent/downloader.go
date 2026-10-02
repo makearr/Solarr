@@ -40,6 +40,7 @@ func (d Downloader) Downloads(ctx context.Context, category string) ([]download.
 		downloads[i] = download.Download{
 			ClientRef: torrent.Hash, Name: torrent.Name, Category: torrent.Category, State: stateOf(torrent.State),
 			SizeBytes: torrent.Size, SizeLeftBytes: torrent.AmountLeft,
+			Ratio: torrent.Ratio, SeedingSeconds: torrent.SeedingTime,
 		}
 		if downloads[i].State == download.StateCompleted {
 			downloads[i].Path = torrent.ContentPath

@@ -69,11 +69,13 @@ func (p *process) pollClients(ctx context.Context) (map[int64]poll.Client, error
 			continue
 		}
 		options := downloader.Options()
+		seedRatio, seedMinutes := options.SeedGoal()
 		clients[downloader.ID] = poll.Client{
 			Name:            downloader.Name,
 			Client:          client,
 			RemoveCompleted: options.RemovesCompleted(),
-			LocalPath:       options.LocalPathFor,
+			SeedRatio:       seedRatio, SeedMinutes: seedMinutes,
+			LocalPath: options.LocalPathFor,
 		}
 	}
 	return clients, nil

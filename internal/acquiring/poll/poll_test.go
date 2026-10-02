@@ -67,6 +67,8 @@ type env struct {
 	clock        *clock.Fake
 	client       *fakeClient
 	removeDone   bool
+	seedRatio    float64
+	seedMinutes  int
 	imported     []string
 	searched     []int64
 	history      []string
@@ -109,7 +111,7 @@ func (e *env) job() *poll.Job {
 	return poll.NewJob(poll.Config{
 		Acquisitions: e.acquisitions, Sessions: e.sessions, Blocklist: e.blocklist, FS: e.fsys,
 		Clients: func(context.Context) (map[int64]poll.Client, error) {
-			return map[int64]poll.Client{1: {Name: "Home SABnzbd", Client: e.client, RemoveCompleted: e.removeDone,
+			return map[int64]poll.Client{1: {Name: "Home SABnzbd", Client: e.client, RemoveCompleted: e.removeDone, SeedRatio: e.seedRatio, SeedMinutes: e.seedMinutes,
 				LocalPath: func(reported string) string { return reported }}}, nil
 		},
 		DownloadFolders: func(context.Context) ([]string, error) { return []string{"/downloads"}, nil },
@@ -351,6 +353,37 @@ func TestPoll_AFinishedImportIsCleanedUp(t *testing.T) {
 		}
 		if wantHistory := []string{"download.imported nzo-1 "}; !slices.Equal(e.history, wantHistory) {
 			t.Errorf("history = %q, want %q", e.history, wantHistory)
+		}
+	}
+}
+
+// With a seed goal the imported torrent stays in the client until it has shared enough, then goes with its files.
+func TestPoll_AnImportedTorrentSeedsUntilItsGoalIsMet(t *testing.T) {
+	seeding := func(ratio float64, seconds int64) []download.Download {
+		return []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: download.StateCompleted, Ratio: ratio, SeedingSeconds: seconds}}
+	}
+	for name, step := range map[string]struct {
+		downloads []download.Download
+		removed   []string
+		state     string
+	}{
+		"below both limits":   {seeding(0.5, 600), nil, poll.StateImported},
+		"ratio reached":       {seeding(1.2, 600), []string{"nzo-1+files"}, poll.StateCleaned},
+		"time reached":        {seeding(0.1, 90*60), []string{"nzo-1+files"}, poll.StateCleaned},
+		"removed by a person": {nil, nil, poll.StateCleaned},
+	} {
+		e := newEnv(t)
+		e.seedRatio, e.seedMinutes = 1, 60
+		sent := e.send(t, "nzo-1")
+		e.finishImport(t, sent, true, library.UnitCommit)
+		e.run(t)
+		if got := e.state(t, sent.ID); got.State != poll.StateImported || len(e.client.removed) != 0 {
+			t.Fatalf("%s: right after the import: %s, removed %v; want it kept to seed", name, got.State, e.client.removed)
+		}
+		e.client.downloads = step.downloads
+		e.run(t)
+		if got := e.state(t, sent.ID); got.State != step.state || !slices.Equal(e.client.removed, step.removed) {
+			t.Errorf("%s: %s, removed %v; want %s, %v", name, got.State, e.client.removed, step.state, step.removed)
 		}
 	}
 }

@@ -54,8 +54,20 @@ type Client struct {
 	Name            string
 	Client          download.Client
 	RemoveCompleted bool
+	// SeedRatio and SeedMinutes hold an imported download in the client until it has shared that much or for that
+	// long; both zero removes it at once.
+	SeedRatio   float64
+	SeedMinutes int
 	// LocalPath maps a path the client reports to where Solarr sees it.
 	LocalPath func(reported string) string
+}
+
+func (c Client) seeds() bool { return c.SeedRatio > 0 || c.SeedMinutes > 0 }
+
+// seedGoalMet is whether a download has shared enough: the ratio, or the time, whichever comes first.
+func (c Client) seedGoalMet(found download.Download) bool {
+	return (c.SeedRatio > 0 && found.Ratio >= c.SeedRatio) ||
+		(c.SeedMinutes > 0 && found.SeedingSeconds >= int64(c.SeedMinutes)*60)
 }
 
 // Config is what a Job needs; every function is required.
@@ -113,12 +125,23 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 
 func (j *Job) poll(ctx context.Context) error {
 	active, err := j.config.Acquisitions.ListActive(ctx)
-	if err != nil || len(active) == 0 {
+	if err != nil {
 		return err
+	}
+	imported, err := j.config.Acquisitions.ListImported(ctx)
+	if err != nil {
+		return err
+	}
+	if len(active) == 0 && len(imported) == 0 {
+		return nil
 	}
 	clients, err := j.config.Clients(ctx)
 	if err != nil {
 		return err
+	}
+	seeding := j.sweepSeeding(ctx, clients, imported)
+	if len(active) == 0 {
+		return seeding
 	}
 	byClient := make(map[int64][]library.Acquisition)
 	for _, acquisition := range active {
@@ -132,6 +155,47 @@ func (j *Job) poll(ctx context.Context) error {
 		}
 		if err := j.pollClient(ctx, client, acquisitions); err != nil {
 			failures = append(failures, fmt.Errorf("download client %d: %w", clientID, err))
+		}
+	}
+	return errors.Join(append(failures, seeding)...)
+}
+
+// sweepSeeding removes what a client with a seed goal has kept since the import, once the goal is met; a download a
+// person already removed from the client is simply done.
+func (j *Job) sweepSeeding(ctx context.Context, clients map[int64]Client, imported []library.Acquisition) error {
+	byClient := make(map[int64][]library.Acquisition)
+	for _, acquisition := range imported {
+		if client, ok := clients[acquisition.DownloaderID]; ok && client.RemoveCompleted && client.seeds() {
+			byClient[acquisition.DownloaderID] = append(byClient[acquisition.DownloaderID], acquisition)
+		}
+	}
+	var failures []error
+	for clientID, acquisitions := range byClient {
+		client := clients[clientID]
+		reported, err := client.Client.Downloads(ctx, "")
+		if err != nil {
+			failures = append(failures, fmt.Errorf("download client %d: %w", clientID, err))
+			continue
+		}
+		byRef := make(map[string]download.Download, len(reported))
+		for _, one := range reported {
+			byRef[one.ClientRef] = one
+		}
+		now := j.config.Clock.Now().Unix()
+		for _, acquisition := range acquisitions {
+			found, present := byRef[acquisition.DownloadClientRef]
+			if present && !client.seedGoalMet(found) {
+				continue
+			}
+			if present {
+				if err := client.Client.Remove(ctx, acquisition.DownloadClientRef, true); err != nil {
+					failures = append(failures, err)
+					continue
+				}
+			}
+			if err := j.config.Acquisitions.SetState(ctx, acquisition.ID, StateCleaned, "", now); err != nil {
+				failures = append(failures, err)
+			}
 		}
 	}
 	return errors.Join(failures...)
@@ -359,7 +423,7 @@ const WaitingForReview = "waiting for you to identify it on the Import page"
 // cleanUp removes an imported download from the client, files included, when the client is set
 // to (answered 2026-09-24); the import has already verified the library copy (Invariant 18).
 func (j *Job) cleanUp(ctx context.Context, client Client, acquisition library.Acquisition) error {
-	if !client.RemoveCompleted {
+	if !client.RemoveCompleted || client.seeds() {
 		return nil
 	}
 	if err := client.Client.Remove(ctx, acquisition.DownloadClientRef, true); err != nil {

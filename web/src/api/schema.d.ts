@@ -4672,6 +4672,13 @@ export interface components {
             always_send_user_grabs?: boolean;
             /** @description An RSS grab goes to this client even when it is full. Absent means yes. */
             always_send_rss_grabs?: boolean;
+            /**
+             * Format: double
+             * @description Torrent clients: an imported torrent stays (and seeds) until it has shared this ratio or seeded for seed_minutes, whichever comes first, then it is removed with its files. Needs remove_completed. 0 or absent is no ratio limit.
+             */
+            seed_ratio?: number;
+            /** @description Torrent clients: minutes an imported torrent seeds before removal. 0 or absent is no time limit. */
+            seed_minutes?: number;
         };
         TestDownloaderRequest: {
             impl: string;
