@@ -22,8 +22,9 @@ func (a Works) ListWorks(
 	ctx context.Context, filter apiserver.WorksFilter, cursor apiserver.WorksCursor, pageSize int,
 ) ([]apiserver.WorkRow, error) {
 	var freshSince string
+	var freshRSSSince int64
 	if filter.Fresh {
-		freshSince = FreshSinceCutoff(a.Clock)
+		freshSince, freshRSSSince = FreshSinceCutoff(a.Clock), FreshRSSCutoff(a.Clock)
 	}
 	rows, err := a.Works.List(ctx,
 		library.WorkFilter{
@@ -32,6 +33,7 @@ func (a Works) ListWorks(
 			Sort:            library.WorkSort(filter.Sort),
 			Direction:       library.SortDirection(filter.Direction),
 			FreshSince:      freshSince,
+			FreshRSSSince:   freshRSSSince,
 			WantedOnly:      filter.Wanted,
 			CutoffUnmetOnly: filter.CutoffUnmet,
 		},
@@ -85,6 +87,11 @@ func (a Works) ListWorks(
 		views[index] = view
 	}
 	return views, nil
+}
+
+// FreshRSSCutoff is ADR-55's availability window as a Unix time: what an RSS feed first showed since then is fresh.
+func FreshRSSCutoff(cl clock.Clock) int64 {
+	return cl.Now().Add(-priority.RSSFreshHours * time.Hour).Unix()
 }
 
 // FreshSinceCutoff resolves ADR-55's freshness window to a cutoff date

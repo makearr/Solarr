@@ -31,7 +31,9 @@ type Item struct {
 	// ArrivedAt is when the album's newest file arrived and RecentImports how many downloads of it were imported
 	// in the upgrade window: the hysteresis of section 9.2.
 	ArrivedAt, RecentImports int64
-	Upgrade                  UpgradeRules
+	// RSSSeenAt is when an RSS feed first showed a release for the item (ADR-55: new to this library for 48 hours).
+	RSSSeenAt int64
+	Upgrade   UpgradeRules
 	// QueuedSince is when the item entered the hunt queue; zero when it is not in it.
 	QueuedSince int64
 }
@@ -95,8 +97,12 @@ func Decide(item Item, policy Policy, now time.Time) Entry {
 	if known {
 		releasePtr = &released
 	}
+	trigger := priority.ClassifyTrigger(releasePtr, now, policy.NewReleaseDays)
+	if item.RSSSeenAt > 0 && now.Sub(time.Unix(item.RSSSeenAt, 0)) <= priority.RSSFreshHours*time.Hour {
+		trigger = priority.TriggerNewRelease
+	}
 	entry.Priority = priority.Compute(policy.Weights, priority.Input{
-		Trigger:      priority.ClassifyTrigger(releasePtr, now, policy.NewReleaseDays),
+		Trigger:      trigger,
 		CategoryRank: item.CategoryRank,
 		QueuedSince:  time.Unix(entry.QueuedSince, 0),
 	}, now)

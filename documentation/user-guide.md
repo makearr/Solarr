@@ -63,6 +63,8 @@ profile** (used instead of the library's profiles when it is searched or upgrade
 still decides whether it counts as upgradable) and your **tags** (new ones are created as you type).
 Tags a metadata provider assigned are never touched. With albums selected (Table view, or Select all
 matching), **Edit** in the toolbar applies only what you change to all of them, after showing the count.
+**Fresh** means released within a week, or shown by an RSS feed within 48 hours whatever the release date
+(a manual search never counts), and those albums are also searched first.
 Select all matching now respects the Fresh filter, for Monitor and Unmonitor too. **Settings → Tags** lists
 the tags you made, with how many albums carry each, and renames or deletes them (administrator).
 

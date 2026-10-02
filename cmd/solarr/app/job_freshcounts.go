@@ -36,7 +36,7 @@ type freshCountsJob struct {
 func (j freshCountsJob) Run(ctx context.Context, _ jobs.Job) error {
 	since := adapters.FreshSinceCutoff(j.clock)
 
-	corrections, err := j.counts.Reconcile(ctx, since)
+	corrections, err := j.counts.Reconcile(ctx, since, adapters.FreshRSSCutoff(j.clock))
 	if err != nil {
 		return err
 	}
