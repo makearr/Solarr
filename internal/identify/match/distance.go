@@ -221,6 +221,30 @@ func distinctiveSimilarity(a, b string) (float64, bool) {
 	return score, true
 }
 
+// ExtraDistinctiveWords reports whether claimed holds every distinctive (non-descriptor) word of wanted and at least
+// one more: "I Am Happy" for "I Am". It says nothing about whether that matters; the caller decides.
+func ExtraDistinctiveWords(wanted, claimed string) bool {
+	distinctive := func(title string) map[string]bool {
+		words := map[string]bool{}
+		for _, word := range strings.Fields(normalizeTitle(title)) {
+			if !descriptorWords[word] {
+				words[word] = true
+			}
+		}
+		return words
+	}
+	wantedWords, claimedWords := distinctive(wanted), distinctive(claimed)
+	if len(wantedWords) == 0 || len(claimedWords) <= len(wantedWords) {
+		return false
+	}
+	for word := range wantedWords {
+		if !claimedWords[word] {
+			return false
+		}
+	}
+	return true
+}
+
 // TitleSimilarity is section 10.2's title comparison (the better of token-set
 // overlap and Jaro-Winkler similarity, over case/accent/punctuation-normalised
 // titles), exported for a caller matching two titles directly rather than through
