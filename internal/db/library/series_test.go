@@ -124,3 +124,45 @@ func TestSeriesUpsertNeverStealsAnIDAndKeepsAManualTitle(t *testing.T) {
 		t.Errorf("title = %q: a manual title field stops a provider retitle", work.CanonicalTitle)
 	}
 }
+
+func TestSeasonItemsCountOnlyTheirOwnMonitoredParts(t *testing.T) {
+	opened, queries := newLibrary(t)
+	write := sampleSeries()
+	write.Parts = nil
+	for _, ref := range []string{"s01:e01", "s01:e02", "s01:e03", "s02:e01", "s02:e02"} {
+		write.Parts = append(write.Parts, library.SeriesPartWrite{MediaRef: ref, SortKey: ref, MonitoredIfNew: true})
+	}
+	result, err := library.NewSeries(opened).Upsert(t.Context(), seriesAt, write)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	desired := library.NewDesired(opened)
+	var seasons []librarydb.DesiredItem
+	for _, ref := range []string{"s01", "s02"} {
+		item, err := desired.EnsureSeasonItem(t.Context(), library.SeasonRequest{
+			WorkID: result.WorkID, MediaRef: ref, SortKey: ref, CategoryID: 1, ProfileID: 1, Monitored: true,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		seasons = append(seasons, item)
+	}
+	if seasons[0].RequiredCount.Int64 != 3 || seasons[1].RequiredCount.Int64 != 2 || seasons[0].State != "MISSING" {
+		t.Fatalf("seasons = %+v / %+v", seasons[0], seasons[1])
+	}
+
+	if err := desired.SetPartMonitored(t.Context(), result.WorkID, result.PartIDs["s01:e02"], false); err != nil {
+		t.Fatal(err)
+	}
+	first, _ := queries.GetDesiredItem(t.Context(), seasons[0].ID)
+	second, _ := queries.GetDesiredItem(t.Context(), seasons[1].ID)
+	if first.RequiredCount.Int64 != 2 || second.RequiredCount.Int64 != 2 {
+		t.Errorf("unmonitoring one episode shrinks only its own season: %d and %d", first.RequiredCount.Int64, second.RequiredCount.Int64)
+	}
+
+	again, err := desired.EnsureSeasonItem(t.Context(), library.SeasonRequest{WorkID: result.WorkID, MediaRef: "s01", CategoryID: 1, ProfileID: 9, Monitored: false})
+	if err != nil || again.ID != seasons[0].ID || again.Monitored != 1 || again.ProfileID != 1 {
+		t.Errorf("an existing season item is reused as it is: %+v, %v", again, err)
+	}
+}
