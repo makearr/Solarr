@@ -27,7 +27,9 @@ func TestQualityProfiles_ListedInSuggestedOrder(t *testing.T) {
 	cache, _ := newCache(t)
 	var names []string
 	for _, profile := range cache.Snapshot().QualityProfiles() {
-		names = append(names, profile.Name)
+		if profile.MediaType == "music" {
+			names = append(names, profile.Name)
+		}
 	}
 	want := []string{"Space conscious", "Lossy 320", "Lossless preferred"}
 	if !reflect.DeepEqual(names, want) {

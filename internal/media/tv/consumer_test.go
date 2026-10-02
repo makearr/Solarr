@@ -23,7 +23,8 @@ const scanRoot = "/library"
 
 type categories struct{}
 
-func (categories) Category(int64) (settings.Category, bool) { return settings.Category{}, false }
+func (categories) Category(int64) (settings.Category, bool)             { return settings.Category{}, false }
+func (categories) ProfileFor(_ settings.Category, fallback int64) int64 { return fallback }
 
 // searchSkyhook answers a search with the one series and the full series for any id.
 type searchSkyhook struct{ series skyhook.Series }
