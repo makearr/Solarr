@@ -498,6 +498,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/parts/{partId}/search", server.routeSearchTrack)
 			secured.Get("/series", server.routeListSeries)
 			secured.Post("/series", server.AddSeries)
+			secured.Get("/series/wanted", server.routeListWantedEpisodes)
 			secured.Get("/series/lookup", server.routeLookupSeries)
 			secured.Get("/series/{id}", server.routeGetSeries)
 			secured.Post("/series/{id}/refresh", server.routeRefreshSeries)

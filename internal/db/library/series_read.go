@@ -311,3 +311,50 @@ func (r SeriesReader) Titles(ctx context.Context, categoryID int64) ([]SeriesTit
 	}
 	return titles, nil
 }
+
+// WantedEpisode is a monitored episode that has aired and has no file.
+type WantedEpisode struct {
+	PartID      int64
+	WorkID      int64
+	SeriesTitle string
+	Season      int
+	Number      int
+	Title       string
+	Date        string
+	AvailableAt int64
+}
+
+// WantedCursor is where the next page of the missing list starts; the zero value is the first page.
+type WantedCursor struct {
+	Date string
+	ID   int64
+}
+
+// Wanted lists a category's missing episodes, newest first, up to pageSize after the cursor.
+func (r SeriesReader) Wanted(ctx context.Context, categoryID int64, after WantedCursor, pageSize int64, now time.Time) ([]WantedEpisode, error) {
+	afterDate := after.Date
+	if afterDate == "" {
+		afterDate = "9999-99-99"
+	}
+	afterID := after.ID
+	if after.Date == "" {
+		afterID = 1<<62 - 1
+	}
+	rows, err := librarydb.New(r.store.Read()).ListWantedEpisodes(ctx, librarydb.ListWantedEpisodesParams{
+		CategoryID: categoryID, Now: sql.NullInt64{Int64: now.Unix(), Valid: true},
+		Today:     sql.NullString{String: now.UTC().Format("2006-01-02"), Valid: true},
+		AfterDate: sql.NullString{String: afterDate, Valid: true}, AfterID: afterID, PageSize: pageSize,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: wanted episodes: %w", err)
+	}
+	episodes := make([]WantedEpisode, len(rows))
+	for i, row := range rows {
+		season, number := parseSeriesRef(row.MediaRef)
+		episodes[i] = WantedEpisode{
+			PartID: row.PartID, WorkID: row.WorkID, SeriesTitle: row.SeriesTitle, Season: season, Number: number,
+			Title: row.Title.String, Date: row.Date.String, AvailableAt: row.AvailableAt.Int64,
+		}
+	}
+	return episodes, nil
+}

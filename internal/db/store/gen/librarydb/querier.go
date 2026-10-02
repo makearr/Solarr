@@ -76,6 +76,7 @@ type Querier interface {
 	// How many releases fall on each date of a window, for the calendar's year view: the same works
 	// ListCalendarEntries answers, counted rather than listed, so a busy year is never truncated.
 	CountCalendarDates(ctx context.Context, arg CountCalendarDatesParams) ([]CountCalendarDatesRow, error)
+	CountCalendarEpisodeDates(ctx context.Context, arg CountCalendarEpisodeDatesParams) ([]CountCalendarEpisodeDatesRow, error)
 	// library.db references settings.db by id with no foreign key (ADR-25), so only the
 	// application can find a reference a restore has orphaned. The count is what makes
 	// the report worth reading.
@@ -421,6 +422,8 @@ type Querier interface {
 	// Only libraries the caller can see: a wanted work through its desired_item, a followed artist's
 	// release through the subscription that follows them.
 	ListCalendarEntries(ctx context.Context, arg ListCalendarEntriesParams) ([]ListCalendarEntriesRow, error)
+	// TV episodes in a date window, for the calendar: monitored episodes of series the caller's libraries hold.
+	ListCalendarEpisodes(ctx context.Context, arg ListCalendarEpisodesParams) ([]ListCalendarEpisodesRow, error)
 	ListCollectionMembers(ctx context.Context, collectionID int64) ([]CollectionMember, error)
 	ListCollectionsForWork(ctx context.Context, workID int64) ([]Collection, error)
 	ListCountersForScope(ctx context.Context, scope string) ([]Counter, error)
@@ -620,6 +623,8 @@ type Querier interface {
 	ListUserTagsWithUse(ctx context.Context) ([]ListUserTagsWithUseRow, error)
 	// RSS sync: the monitored, incomplete albums credited to an artist of this name or alias, ignoring case.
 	ListWantedAlbumsByArtistName(ctx context.Context, arg ListWantedAlbumsByArtistNameParams) ([]int64, error)
+	// Sonarr's Wanted > Missing: monitored episodes that have aired and have no file, newest first.
+	ListWantedEpisodes(ctx context.Context, arg ListWantedEpisodesParams) ([]ListWantedEpisodesRow, error)
 	ListWorkClassifications(ctx context.Context, workID int64) ([]WorkClassification, error)
 	ListWorkDates(ctx context.Context, workID int64) ([]WorkDate, error)
 	ListWorkExternalIDs(ctx context.Context, workID int64) ([]WorkExternalID, error)

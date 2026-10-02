@@ -1184,8 +1184,14 @@ type CalendarDate struct {
 type CalendarEntry struct {
 	Artist *string `json:"artist,omitempty"`
 
+	// CategoryId The TV library an episode is in, for linking to its series.
+	CategoryId *int64 `json:"category_id,omitempty"`
+
 	// OnDisk Whether the library already holds a file for this work.
 	OnDisk bool `json:"on_disk"`
+
+	// PartId Set for a TV episode, which then shows the series as title and the episode as artist.
+	PartId *int64 `json:"part_id,omitempty"`
 
 	// PrimaryType MusicBrainz's own vocabulary ("Album", "Single"), absent when unknown.
 	PrimaryType *string `json:"primary_type,omitempty"`
@@ -3573,6 +3579,24 @@ type WantedAutomaticSearch string
 // WantedState defines model for Wanted.State.
 type WantedState string
 
+// WantedEpisode defines model for WantedEpisode.
+type WantedEpisode struct {
+	AirDate     *string    `json:"air_date,omitempty"`
+	AirTime     *time.Time `json:"air_time,omitempty"`
+	Number      int        `json:"number"`
+	PartId      int64      `json:"part_id"`
+	Season      int        `json:"season"`
+	SeriesId    int64      `json:"series_id"`
+	SeriesTitle string     `json:"series_title"`
+	Title       *string    `json:"title,omitempty"`
+}
+
+// WantedEpisodePage defines model for WantedEpisodePage.
+type WantedEpisodePage struct {
+	Items      []WantedEpisode `json:"items"`
+	NextCursor *string         `json:"next_cursor,omitempty"`
+}
+
 // Work defines model for Work.
 type Work struct {
 	AddedAt time.Time `json:"added_at"`
@@ -4097,6 +4121,13 @@ type LookupSeriesParams struct {
 	CategoryId int64  `form:"category_id" json:"category_id"`
 	Q          string `form:"q" json:"q"`
 	Limit      *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListWantedEpisodesParams defines parameters for ListWantedEpisodes.
+type ListWantedEpisodesParams struct {
+	CategoryId int64   `form:"category_id" json:"category_id"`
+	Cursor     *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit      *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // GetSeriesParams defines parameters for GetSeries.
@@ -5094,6 +5125,9 @@ type ServerInterface interface {
 	// Search the metadata sources for a series to add.
 	// (GET /series/lookup)
 	LookupSeries(w http.ResponseWriter, r *http.Request, params LookupSeriesParams)
+	// Sonarr's Wanted, Missing: monitored episodes that have aired and have no file, newest first.
+	// (GET /series/wanted)
+	ListWantedEpisodes(w http.ResponseWriter, r *http.Request, params ListWantedEpisodesParams)
 	// A series with its seasons and episodes.
 	// (GET /series/{id})
 	GetSeries(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesParams)
@@ -6273,6 +6307,12 @@ func (_ Unimplemented) AddSeries(w http.ResponseWriter, r *http.Request) {
 // Search the metadata sources for a series to add.
 // (GET /series/lookup)
 func (_ Unimplemented) LookupSeries(w http.ResponseWriter, r *http.Request, params LookupSeriesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Sonarr's Wanted, Missing: monitored episodes that have aired and have no file, newest first.
+// (GET /series/wanted)
+func (_ Unimplemented) ListWantedEpisodes(w http.ResponseWriter, r *http.Request, params ListWantedEpisodesParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11978,6 +12018,64 @@ func (siw *ServerInterfaceWrapper) LookupSeries(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ListWantedEpisodes operation middleware
+func (siw *ServerInterfaceWrapper) ListWantedEpisodes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWantedEpisodesParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWantedEpisodes(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSeries operation middleware
 func (siw *ServerInterfaceWrapper) GetSeries(w http.ResponseWriter, r *http.Request) {
 
@@ -14534,6 +14632,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/series/lookup", wrapper.LookupSeries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/series/wanted", wrapper.ListWantedEpisodes)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/series/{id}", wrapper.GetSeries)

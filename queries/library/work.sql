@@ -440,3 +440,30 @@ WHERE media_object_id = sqlc.arg(media_object_id)
 -- Whether any unverified album exists, so a scan skips the per-file check on a library with none.
 -- name: AnyUnverifiedWork :one
 SELECT CAST(EXISTS (SELECT 1 FROM work_external_id WHERE provider = 'local:album') AS INTEGER) AS present;
+
+-- TV episodes in a date window, for the calendar: monitored episodes of series the caller's libraries hold.
+-- name: ListCalendarEpisodes :many
+SELECT p.id AS part_id, p.work_id, w.canonical_title, p.media_ref, p.title, p.date,
+       (SELECT MIN(d.category_id) FROM desired_item d WHERE d.work_id = w.id
+          AND d.category_id IN (SELECT value FROM json_each(sqlc.arg(category_ids)))) AS category_id,
+       EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d2 ON d2.id = f.desired_item_id
+               WHERE d2.work_id = p.work_id AND f.media_ref = p.media_ref AND f.role = 'primary') AS on_disk
+FROM work_part p
+JOIN work w ON w.id = p.work_id
+WHERE w.media_type = 'tv' AND p.monitored = 1
+  AND p.date >= sqlc.arg(from_date) AND p.date <= sqlc.arg(to_date)
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id
+              AND d.category_id IN (SELECT value FROM json_each(sqlc.arg(category_ids))))
+ORDER BY p.date, w.sort_title, p.sort_key
+LIMIT sqlc.arg(page_size);
+
+-- name: CountCalendarEpisodeDates :many
+SELECT p.date AS release_date, CAST(COUNT(*) AS INTEGER) AS releases
+FROM work_part p
+JOIN work w ON w.id = p.work_id
+WHERE w.media_type = 'tv' AND p.monitored = 1
+  AND p.date >= sqlc.arg(from_date) AND p.date <= sqlc.arg(to_date)
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id
+              AND d.category_id IN (SELECT value FROM json_each(sqlc.arg(category_ids))))
+GROUP BY p.date
+ORDER BY p.date;

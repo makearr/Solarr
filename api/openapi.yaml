@@ -4885,6 +4885,32 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "502": { $ref: "#/components/responses/Problem" }
 
+  /series/wanted:
+    get:
+      operationId: listWantedEpisodes
+      tags: [series]
+      summary: "Sonarr's Wanted, Missing: monitored episodes that have aired and have no file, newest first."
+      parameters:
+        - name: category_id
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WantedEpisodePage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /series/lookup:
     get:
       operationId: lookupSeries
@@ -7177,6 +7203,14 @@ components:
         on_disk:
           type: boolean
           description: Whether the library already holds a file for this work.
+        part_id:
+          type: integer
+          format: int64
+          description: Set for a TV episode, which then shows the series as title and the episode as artist.
+        category_id:
+          type: integer
+          format: int64
+          description: The TV library an episode is in, for linking to its series.
 
     LogRecord:
       type: object
@@ -7752,6 +7786,28 @@ components:
           type: array
           items: { $ref: "#/components/schemas/SeriesEpisode" }
         fanart_url: { type: string }
+
+    WantedEpisode:
+      type: object
+      required: [part_id, series_id, series_title, season, number]
+      properties:
+        part_id: { type: integer, format: int64 }
+        series_id: { type: integer, format: int64 }
+        series_title: { type: string }
+        season: { type: integer }
+        number: { type: integer }
+        title: { type: string }
+        air_date: { type: string }
+        air_time: { type: string, format: date-time }
+
+    WantedEpisodePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/WantedEpisode" }
+        next_cursor: { type: string }
 
     SeriesCandidate:
       type: object

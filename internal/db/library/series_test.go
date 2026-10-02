@@ -244,3 +244,65 @@ func TestRecomputeWorkItemsFollowsRemovedFiles(t *testing.T) {
 		t.Errorf("after removing the file = %+v: the counts follow the files", got)
 	}
 }
+
+func TestWantedListsAiredMonitoredEpisodesWithoutAFileNewestFirst(t *testing.T) {
+	opened, _ := newLibrary(t)
+	write := sampleSeries()
+	write.Parts = []library.SeriesPartWrite{
+		{MediaRef: "s01:e01", SortKey: "a", Date: "2020-01-05", MonitoredIfNew: true},
+		{MediaRef: "s01:e02", SortKey: "b", Date: "2020-01-12", MonitoredIfNew: true},
+		{MediaRef: "s01:e03", SortKey: "c", Date: "2020-01-19", MonitoredIfNew: false},
+		{MediaRef: "s01:e04", SortKey: "d", Date: "2999-01-01", MonitoredIfNew: true},
+	}
+	series := library.NewSeries(opened)
+	result, err := series.Upsert(t.Context(), seriesAt, write)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.NewDesired(opened).EnsureSeasonItem(t.Context(), library.SeasonRequest{WorkID: result.WorkID, MediaRef: "s01", CategoryID: 4, ProfileID: 1, Monitored: true}); err != nil {
+		t.Fatal(err)
+	}
+	physical := library.NewPhysical(opened)
+	registered, _ := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{{RelPath: "a.mkv", SizeBytes: 1, QuickHash: "h", FirstSeenAt: seriesAt}})
+	if _, err := series.AttachFiles(t.Context(), seriesAt, result.WorkID, 1, []library.SeriesFileLink{{MediaObjectID: registered[0].MediaObjectID, Parts: []library.PartKey{{MediaRef: "s01:e01"}}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	reader := library.NewSeriesReader(opened)
+	got, err := reader.Wanted(t.Context(), 4, library.WantedCursor{}, 10, seriesAt)
+	if err != nil || len(got) != 1 || got[0].Number != 2 || got[0].SeriesTitle != "Example Show" {
+		t.Fatalf("wanted = %+v, %v: only e02 is monitored, aired and missing", got, err)
+	}
+	if other, _ := reader.Wanted(t.Context(), 5, library.WantedCursor{}, 10, seriesAt); len(other) != 0 {
+		t.Errorf("another library sees %+v", other)
+	}
+}
+
+func TestCalendarListsMonitoredEpisodesAndCountsTheirDates(t *testing.T) {
+	opened, _ := newLibrary(t)
+	write := sampleSeries()
+	write.Parts = []library.SeriesPartWrite{
+		{MediaRef: "s01:e01", SortKey: "a", Title: "Pilot", Date: "2020-01-05", MonitoredIfNew: true},
+		{MediaRef: "s01:e02", SortKey: "b", Title: "Second", Date: "2020-01-05", MonitoredIfNew: true},
+		{MediaRef: "s01:e03", SortKey: "c", Title: "Skipped", Date: "2020-01-06", MonitoredIfNew: false},
+	}
+	result, err := library.NewSeries(opened).Upsert(t.Context(), seriesAt, write)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.NewDesired(opened).EnsureSeasonItem(t.Context(), library.SeasonRequest{WorkID: result.WorkID, MediaRef: "s01", CategoryID: 4, ProfileID: 1, Monitored: true}); err != nil {
+		t.Fatal(err)
+	}
+	calendar := library.NewCalendar(opened)
+	entries, err := calendar.Entries(t.Context(), "2020-01-01", "2020-01-31", []int64{4}, 50)
+	if err != nil || len(entries) != 2 || entries[0].PartID == 0 || entries[0].CategoryID != 4 || entries[0].Artist != "S01E01 Pilot" || entries[0].PrimaryType != "Episode" {
+		t.Fatalf("entries = %+v, %v", entries, err)
+	}
+	if other, _ := calendar.Entries(t.Context(), "2020-01-01", "2020-01-31", []int64{9}, 50); len(other) != 0 {
+		t.Errorf("another library sees %+v", other)
+	}
+	dates, err := calendar.Dates(t.Context(), "2020-01-01", "2020-01-31", []int64{4})
+	if err != nil || len(dates) != 1 || dates[0].Date != "2020-01-05" || dates[0].Releases != 2 {
+		t.Errorf("dates = %+v, %v", dates, err)
+	}
+}

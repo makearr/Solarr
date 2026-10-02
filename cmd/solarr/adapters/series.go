@@ -287,3 +287,23 @@ func derefString(value *string, fallback string) string {
 	}
 	return *value
 }
+
+// Wanted lists the library's missing episodes.
+func (c SeriesCatalog) Wanted(ctx context.Context, categoryID int64, after paginate.TextCursor, limit int) ([]gen.WantedEpisode, error) {
+	rows, err := c.Reader.Wanted(ctx, categoryID, library.WantedCursor{Date: after.Sort, ID: after.ID}, int64(limit), c.Clock.Now())
+	if err != nil {
+		return nil, err
+	}
+	views := make([]gen.WantedEpisode, len(rows))
+	for i, row := range rows {
+		view := gen.WantedEpisode{PartId: row.PartID, SeriesId: row.WorkID, SeriesTitle: row.SeriesTitle, Season: row.Season, Number: row.Number}
+		setString(&view.Title, row.Title)
+		setString(&view.AirDate, row.Date)
+		if row.AvailableAt > 0 {
+			at := time.Unix(row.AvailableAt, 0).UTC()
+			view.AirTime = &at
+		}
+		views[i] = view
+	}
+	return views, nil
+}

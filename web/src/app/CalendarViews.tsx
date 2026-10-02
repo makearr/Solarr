@@ -52,6 +52,22 @@ function byDate(entries: readonly CalendarEntry[] | undefined): Map<string, Cale
   return grouped;
 }
 
+/** An episode opens its series page, a release its album page. */
+export function entryTarget(entry: CalendarEntry) {
+  if (entry.part_id != null && entry.category_id != null) {
+    return {
+      to: "/library/$categoryId/series/$seriesId",
+      params: { categoryId: String(entry.category_id), seriesId: String(entry.work_id) },
+    } as const;
+  }
+  return { to: "/works/$id", params: { id: String(entry.work_id) } } as const;
+}
+
+/** Several episodes of one series share a work and a day, so the part is part of the key. */
+export function entryKey(entry: CalendarEntry): string {
+  return `${entry.work_id}:${entry.part_id ?? 0}`;
+}
+
 // Lidarr's colours: have it, wanted and coming, wanted and out.
 function tone(entry: CalendarEntry, today: string): string {
   if (entry.on_disk) return "border-l-ok";
@@ -60,16 +76,16 @@ function tone(entry: CalendarEntry, today: string): string {
 
 /** One release: cover, title and artist, coloured by whether it is held. */
 function ReleaseCard({ entry, today, compact }: { entry: CalendarEntry; today: string; compact?: boolean }) {
+  const target = entryTarget(entry);
   return (
     <Link
-      to="/works/$id"
-      params={{ id: String(entry.work_id) }}
+      {...target}
       title={`${entry.title}${entry.artist ? ` - ${entry.artist}` : ""} (${entry.on_disk ? "have it" : "wanted"})`}
       className={`flex items-center gap-2 rounded border border-l-4 border-border-subtle bg-surface hover:bg-canvas ${tone(entry, today)} ${
         compact ? "px-1.5 py-0.5 text-[0.6875rem]" : "p-2 text-xs"
       }`}
     >
-      {!compact && <CoverArt workId={entry.work_id} title={entry.title} size="thumb" className="size-10 shrink-0 rounded object-cover" />}
+      {!compact && entry.part_id == null && <CoverArt workId={entry.work_id} title={entry.title} size="thumb" className="size-10 shrink-0 rounded object-cover" />}
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium">{entry.title}</span>
         {!compact && entry.artist && <span className="block truncate text-ink-muted">{entry.artist}</span>}
@@ -87,7 +103,7 @@ function UndatedStrip({ entries, today }: { entries: readonly CalendarEntry[]; t
       <h3 className="text-xs font-medium text-ink-muted">Dated only by month or year</h3>
       <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
         {partial.map((entry) => (
-          <ReleaseCard key={entry.work_id} entry={entry} today={today} />
+          <ReleaseCard key={entryKey(entry)} entry={entry} today={today} />
         ))}
       </div>
     </section>
@@ -130,7 +146,7 @@ export function MonthView({ anchor, today }: { anchor: Date; today: string }) {
                 {date.getDate()}
               </Link>
               {entries.slice(0, 3).map((entry) => (
-                <ReleaseCard key={entry.work_id} entry={entry} today={today} compact />
+                <ReleaseCard key={entryKey(entry)} entry={entry} today={today} compact />
               ))}
               {entries.length > 3 && (
                 <Link to="/calendar" search={{ view: "day", date: iso }} className="px-1 text-[0.6875rem] text-ink-muted hover:text-ink">
@@ -170,7 +186,7 @@ export function DaysView({ start, days, today }: { start: Date; days: number; to
                 <span className="font-normal text-ink-muted">{date.toLocaleDateString(undefined, { day: "numeric", month: "short" })}</span>
               </Link>
               {entries.map((entry) => (
-                <ReleaseCard key={entry.work_id} entry={entry} today={today} />
+                <ReleaseCard key={entryKey(entry)} entry={entry} today={today} />
               ))}
               {entries.length === 0 && <span className="text-xs text-ink-muted">Nothing</span>}
             </section>
@@ -192,7 +208,7 @@ export function DayView({ date, today }: { date: Date; today: string }) {
       {releases.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {releases.data && releases.data.length === 0 && <p className="text-sm text-ink-muted">No releases on this day.</p>}
       {(releases.data ?? []).map((entry) => (
-        <ReleaseCard key={entry.work_id} entry={entry} today={today} />
+        <ReleaseCard key={entryKey(entry)} entry={entry} today={today} />
       ))}
     </section>
   );

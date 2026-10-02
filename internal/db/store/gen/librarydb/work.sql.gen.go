@@ -196,6 +196,52 @@ func (q *Queries) CountCalendarDates(ctx context.Context, arg CountCalendarDates
 	return items, nil
 }
 
+const countCalendarEpisodeDates = `-- name: CountCalendarEpisodeDates :many
+SELECT p.date AS release_date, CAST(COUNT(*) AS INTEGER) AS releases
+FROM work_part p
+JOIN work w ON w.id = p.work_id
+WHERE w.media_type = 'tv' AND p.monitored = 1
+  AND p.date >= ?1 AND p.date <= ?2
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id
+              AND d.category_id IN (SELECT value FROM json_each(?3)))
+GROUP BY p.date
+ORDER BY p.date
+`
+
+type CountCalendarEpisodeDatesParams struct {
+	FromDate    sql.NullString
+	ToDate      sql.NullString
+	CategoryIds interface{}
+}
+
+type CountCalendarEpisodeDatesRow struct {
+	ReleaseDate sql.NullString
+	Releases    int64
+}
+
+func (q *Queries) CountCalendarEpisodeDates(ctx context.Context, arg CountCalendarEpisodeDatesParams) ([]CountCalendarEpisodeDatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, countCalendarEpisodeDates, arg.FromDate, arg.ToDate, arg.CategoryIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountCalendarEpisodeDatesRow{}
+	for rows.Next() {
+		var i CountCalendarEpisodeDatesRow
+		if err := rows.Scan(&i.ReleaseDate, &i.Releases); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countFreshWorks = `-- name: CountFreshWorks :one
 SELECT CAST(COUNT(*) AS INTEGER) AS total FROM work
 WHERE EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = work.id AND wd.kind = ?1 AND wd.date >= ?2)
@@ -1060,6 +1106,78 @@ func (q *Queries) ListCalendarEntries(ctx context.Context, arg ListCalendarEntri
 			&i.PrimaryType,
 			&i.ArtistName,
 			&i.ReleaseDate,
+			&i.OnDisk,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCalendarEpisodes = `-- name: ListCalendarEpisodes :many
+SELECT p.id AS part_id, p.work_id, w.canonical_title, p.media_ref, p.title, p.date,
+       (SELECT MIN(d.category_id) FROM desired_item d WHERE d.work_id = w.id
+          AND d.category_id IN (SELECT value FROM json_each(?1))) AS category_id,
+       EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d2 ON d2.id = f.desired_item_id
+               WHERE d2.work_id = p.work_id AND f.media_ref = p.media_ref AND f.role = 'primary') AS on_disk
+FROM work_part p
+JOIN work w ON w.id = p.work_id
+WHERE w.media_type = 'tv' AND p.monitored = 1
+  AND p.date >= ?2 AND p.date <= ?3
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id
+              AND d.category_id IN (SELECT value FROM json_each(?1)))
+ORDER BY p.date, w.sort_title, p.sort_key
+LIMIT ?4
+`
+
+type ListCalendarEpisodesParams struct {
+	CategoryIds interface{}
+	FromDate    sql.NullString
+	ToDate      sql.NullString
+	PageSize    int64
+}
+
+type ListCalendarEpisodesRow struct {
+	PartID         int64
+	WorkID         int64
+	CanonicalTitle string
+	MediaRef       string
+	Title          sql.NullString
+	Date           sql.NullString
+	CategoryID     interface{}
+	OnDisk         bool
+}
+
+// TV episodes in a date window, for the calendar: monitored episodes of series the caller's libraries hold.
+func (q *Queries) ListCalendarEpisodes(ctx context.Context, arg ListCalendarEpisodesParams) ([]ListCalendarEpisodesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCalendarEpisodes,
+		arg.CategoryIds,
+		arg.FromDate,
+		arg.ToDate,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCalendarEpisodesRow{}
+	for rows.Next() {
+		var i ListCalendarEpisodesRow
+		if err := rows.Scan(
+			&i.PartID,
+			&i.WorkID,
+			&i.CanonicalTitle,
+			&i.MediaRef,
+			&i.Title,
+			&i.Date,
+			&i.CategoryID,
 			&i.OnDisk,
 		); err != nil {
 			return nil, err
