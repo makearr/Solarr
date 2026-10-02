@@ -343,8 +343,7 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 		}
 		return j.cleanUp(ctx, client, acquisition)
 	case waiting > 0:
-		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting,
-			"waiting for you to identify it on the Import page", now)
+		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, WaitingForReview, now)
 	default:
 		reason := "the import found nothing it could use"
 		if session.Error != "" {
@@ -353,6 +352,9 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 		return j.failed(ctx, client, acquisition, library.BlocklistImportFailed, reason)
 	}
 }
+
+// WaitingForReview is the note of a download whose import is held for a person: nothing is moving, so it may be removed.
+const WaitingForReview = "waiting for you to identify it on the Import page"
 
 // cleanUp removes an imported download from the client, files included, when the client is set
 // to (answered 2026-09-24); the import has already verified the library copy (Invariant 18).

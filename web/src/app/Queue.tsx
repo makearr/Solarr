@@ -151,7 +151,8 @@ function QueueRow({ item }: { item: QueueItem }) {
       void queryClient.invalidateQueries({ queryKey: ["history"] });
     },
   });
-  const removable = item.state !== "IMPORTING";
+  // An import held for a person moves nothing; only that kind of importing item carries a note.
+  const removable = item.state !== "IMPORTING" || Boolean(item.error);
 
   return (
     <tr className="border-b border-border-subtle align-top">
@@ -168,7 +169,19 @@ function QueueRow({ item }: { item: QueueItem }) {
         <span className="block truncate" title={item.release_title}>
           {item.release_title}
         </span>
-        {item.error && <span className="block text-danger">{item.error}</span>}
+        {item.error && (
+          <span className="block text-danger">
+            {item.error}
+            {item.state === "IMPORTING" && (
+              <>
+                {" "}
+                <Link to="/storage/import" className="underline">
+                  Review
+                </Link>
+              </>
+            )}
+          </span>
+        )}
       </td>
       <td className="px-2 py-2">{statusLabel(item)}</td>
       <td className="w-40 px-2 py-2">
