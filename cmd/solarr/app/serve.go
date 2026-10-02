@@ -577,7 +577,8 @@ func (p *process) startServer(ctx context.Context) error {
 			},
 		},
 		ArrSync: adapters.ArrSync{
-			Cache: p.cache, Identity: library.NewIdentity(p.library), People: library.NewPeople(p.library),
+			Progress: adapters.NewArrProgress(),
+			Cache:    p.cache, Identity: library.NewIdentity(p.library), People: library.NewPeople(p.library),
 			Subscriptions: library.NewSubscriptions(p.library), Desired: library.NewDesired(p.library),
 			Imports: library.NewArrImports(p.library),
 			Reverter: library.NewArrImportRevert(

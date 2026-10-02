@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -48,7 +49,50 @@ type ArrSync struct {
 	DefaultProfileID int64
 	Clock            clock.Clock
 	Lidarr           LidarrClientFactory
-	Logger           *slog.Logger
+	// Progress holds the live figure of running imports; nil keeps none.
+	Progress *ArrProgress
+	Logger   *slog.Logger
+}
+
+// ArrProgress is how far each running import has walked its artists; in memory, since it only matters while
+// the walk goroutine lives.
+type ArrProgress struct {
+	mu   sync.Mutex
+	runs map[int64][2]int64
+}
+
+// NewArrProgress builds an empty board.
+func NewArrProgress() *ArrProgress { return &ArrProgress{runs: map[int64][2]int64{}} }
+
+func (p *ArrProgress) set(importID, done, total int64) {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.runs[importID] = [2]int64{done, total}
+}
+
+func (p *ArrProgress) clear(importID int64) {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.runs, importID)
+}
+
+// annotate adds the live figure to a run still walking.
+func (p *ArrProgress) annotate(view apiserver.ArrImportRun) apiserver.ArrImportRun {
+	if p == nil || view.State != library.ArrImportRunning {
+		return view
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if figure, found := p.runs[view.ID]; found {
+		view.ArtistsDone, view.ArtistsTotal = figure[0], figure[1]
+	}
+	return view
 }
 
 // Sync starts one instance's own import and returns immediately with the
@@ -93,7 +137,7 @@ func (a ArrSync) Sync(ctx context.Context, instanceID int64, options apiserver.A
 	if err != nil {
 		return apiserver.ArrImportRun{}, err
 	}
-	return arrImportRunView(run), nil
+	return a.Progress.annotate(arrImportRunView(run)), nil
 }
 
 // runAndFinish is Sync's own detached second half: the real walk, then
@@ -105,6 +149,7 @@ func (a ArrSync) runAndFinish(
 	options apiserver.ArrSyncOptions,
 ) {
 	counts, syncErr := a.syncLidarr(ctx, importID, instance, client, options)
+	defer a.Progress.clear(importID)
 
 	finishedAt := a.Clock.Now().Unix()
 	errMsg := ""
@@ -172,7 +217,7 @@ func (a ArrSync) ListImports(ctx context.Context, instanceID int64) ([]apiserver
 	}
 	views := make([]apiserver.ArrImportRun, len(runs))
 	for index, run := range runs {
-		views[index] = arrImportRunView(run)
+		views[index] = a.Progress.annotate(arrImportRunView(run))
 	}
 	return views, nil
 }
@@ -191,7 +236,7 @@ func (a ArrSync) GetImport(ctx context.Context, id int64) (apiserver.ArrImportDe
 	for index, item := range items {
 		views[index] = arrImportItemView(item)
 	}
-	return apiserver.ArrImportDetail{Run: arrImportRunView(run), Items: views}, nil
+	return apiserver.ArrImportDetail{Run: a.Progress.annotate(arrImportRunView(run)), Items: views}, nil
 }
 
 // Revert undoes one run -- library.ErrArrImportNotDone translated to this
@@ -261,10 +306,19 @@ func (a ArrSync) syncLidarr(
 	wanted := func(monitored bool) bool {
 		return (monitored && options.Monitored) || (!monitored && options.Unmonitored)
 	}
+	var total int64
+	for _, artist := range artists {
+		if wanted(artist.Monitored) {
+			total++
+		}
+	}
+	var walked int64
 	for _, artist := range artists {
 		if !wanted(artist.Monitored) {
 			continue
 		}
+		a.Progress.set(importID, walked, total)
+		walked++
 		categoryID, ok := a.categoryFor(instance, rewritePath(artist.RootFolderPath, options.PathRewrites), roots)
 		if !ok {
 			fail("%s: no category matches root folder %q", artist.ArtistName, artist.RootFolderPath)

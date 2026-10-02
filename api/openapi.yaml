@@ -7254,6 +7254,8 @@ components:
         albums_created: { type: integer, format: int64 }
         albums_matched: { type: integer, format: int64 }
         items_parked: { type: integer, format: int64 }
+        artists_total: { type: integer, format: int64, description: Artists the running import will walk; absent once it has finished. }
+        artists_done: { type: integer, format: int64, description: Artists walked so far; absent once it has finished. }
 
     ArrImportItem:
       type: object

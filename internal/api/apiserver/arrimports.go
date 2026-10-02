@@ -55,6 +55,8 @@ type ArrImportRun struct {
 	ArtistsCreated, ArtistsMatched int64
 	AlbumsCreated, AlbumsMatched   int64
 	ItemsParked                    int64
+	// ArtistsTotal and ArtistsDone are the live figure of a running import; zero total means not known.
+	ArtistsTotal, ArtistsDone int64
 }
 
 // ArrImportItem is one entity a run touched.
@@ -299,6 +301,9 @@ func arrImportRunView(run ArrImportRun) gen.ArrImportRun {
 		Id: run.ID, InstanceId: run.InstanceID, App: gen.ArrApp(run.App), State: gen.ArrImportRunState(run.State),
 		StartedAt: unixTime(run.StartedAt), ArtistsCreated: run.ArtistsCreated, ArtistsMatched: run.ArtistsMatched,
 		AlbumsCreated: run.AlbumsCreated, AlbumsMatched: run.AlbumsMatched, ItemsParked: run.ItemsParked,
+	}
+	if run.ArtistsTotal > 0 {
+		view.ArtistsTotal, view.ArtistsDone = &run.ArtistsTotal, &run.ArtistsDone
 	}
 	if run.FinishedAt != nil {
 		at := unixTime(*run.FinishedAt)
