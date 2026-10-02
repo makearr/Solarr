@@ -47,7 +47,7 @@ export function UserSettings() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
         <header className="flex flex-col gap-1">
-          <h1 className="text-base font-semibold">User</h1>
+          <h1 className="text-lg font-semibold">User</h1>
         </header>
 
         {me.data && <MyTierSection tier={me.data.tier} tierMax={me.data.tier_max} />}
@@ -858,12 +858,16 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
 
   return (
     <form
-      className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3"
+      className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4"
       onSubmit={(event) => {
         event.preventDefault();
         create.mutate();
       }}
     >
+      <div className="flex flex-col gap-0.5">
+        <h3 className="text-sm font-medium">Add a user</h3>
+        <p className="max-w-xl text-xs text-ink-muted">Their role sets what they may change; the libraries below set what they may see.</p>
+      </div>
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex min-w-32 flex-1 flex-col gap-1 text-xs text-ink-muted">
           Username

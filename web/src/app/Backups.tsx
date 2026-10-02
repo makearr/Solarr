@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_PREFIX, api } from "@/api/client";
 import type { components } from "@/api/schema";
 
+import { Card } from "./SettingsCard";
+
 type ImportWarning = components["schemas"]["SettingsImportWarning"];
 
 /** ADR-15's database backups, read from disk, and the settings document (F9) to download and
@@ -28,53 +30,79 @@ export function Backups() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["backups"] }),
   });
 
+  const groups = groupByDatabase(files.data ?? []);
+
   return (
-    <div className="flex h-full flex-col gap-4 p-4">
-      <div className="flex items-center gap-3">
-        <h2 className="text-sm font-medium">Backups</h2>
-        <button
-          type="button"
-          disabled={runNow.isPending}
-          onClick={() => runNow.mutate()}
-          className="rounded-md border border-border-subtle px-3 py-1 text-xs text-ink-muted
-                     enabled:hover:text-ink disabled:opacity-50"
-        >
-          {runNow.isPending ? "Backing up…" : "Back up now"}
-        </button>
-      </div>
+    <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
+      <h1 className="text-lg font-semibold">Backups</h1>
       <SettingsDocument />
 
-      <h3 className="text-sm font-semibold text-ink">Database backups</h3>
-      <p className="max-w-2xl text-xs text-ink-muted">
-        Restoring a database is an offline procedure: stop the server and put the file back. There
-        is no button for it on purpose.
-      </p>
+      <Card
+        title="Database backups"
+        help="Taken automatically, and before every migration. Restoring a database is an offline procedure: stop the server and put the file back. There is no button for it on purpose."
+        toggle={
+          <button
+            type="button"
+            disabled={runNow.isPending}
+            onClick={() => runNow.mutate()}
+            className="shrink-0 rounded-md border border-border-subtle px-3 py-1 text-xs text-ink-muted enabled:hover:text-ink disabled:opacity-50"
+          >
+            {runNow.isPending ? "Backing up…" : "Back up now"}
+          </button>
+        }
+      >
+        {files.isLoading && <Message>Loading…</Message>}
+        {files.error !== null && <Message>The backup directory could not be read.</Message>}
+        {files.data && files.data.length === 0 && <Message>No backups yet.</Message>}
+        {groups.map((group) => (
+          <BackupGroup key={group.database} group={group} />
+        ))}
+        {runNow.isError && <p className="text-xs text-danger">The backup did not complete.</p>}
+      </Card>
+    </div>
+  );
+}
 
-      {files.isLoading && <Message>Loading…</Message>}
-      {files.error !== null && <Message>The backup directory could not be read.</Message>}
-      {files.data && files.data.length === 0 && <Message>No backups yet.</Message>}
+type BackupFile = components["schemas"]["BackupFile"];
 
-      {files.data && files.data.length > 0 && (
-        <ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
-          {files.data.map((file) => (
-            <li
-              key={file.name}
-              className="flex items-center gap-3 rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm"
-            >
-              <span className="min-w-0 flex-1 truncate font-mono text-xs">{file.name}</span>
-              {file.pre_migration === true && (
-                <span className="shrink-0 text-xs text-ink-muted">before a migration</span>
-              )}
-              <span className="shrink-0 text-xs text-ink-muted">{formatSize(file.size_bytes)}</span>
-              <span className="shrink-0 text-xs text-ink-muted">
-                {new Date(file.taken_at).toLocaleString()}
-              </span>
-            </li>
-          ))}
-        </ul>
+/** The database a backup file belongs to: its name up to ".db" ("library.db.rotation.2026-…" is library). */
+function groupByDatabase(files: readonly BackupFile[]): { database: string; files: BackupFile[] }[] {
+  const groups = new Map<string, BackupFile[]>();
+  for (const file of files) {
+    const database = file.name.includes(".db") ? file.name.slice(0, file.name.indexOf(".db")) : "other";
+    groups.set(database, [...(groups.get(database) ?? []), file]);
+  }
+  return [...groups.entries()].map(([database, grouped]) => ({ database, files: grouped }));
+}
+
+const newestShown = 4;
+
+function BackupGroup({ group }: { group: { database: string; files: BackupFile[] } }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? group.files : group.files.slice(0, newestShown);
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-border-subtle pt-3 first:border-t-0 first:pt-0">
+      <div className="flex items-baseline gap-2">
+        <h3 className="text-sm font-medium">{group.database}</h3>
+        <span className="text-xs text-ink-muted">
+          {group.files.length} {group.files.length === 1 ? "backup" : "backups"}, newest {new Date(group.files[0]!.taken_at).toLocaleString()}
+        </span>
+      </div>
+      <ul className="flex flex-col gap-1">
+        {shown.map((file) => (
+          <li key={file.name} className="flex items-center gap-3 rounded-md border border-border-subtle px-3 py-1.5 text-xs">
+            <span className="min-w-0 flex-1 truncate font-mono">{file.name}</span>
+            {file.pre_migration === true && <span className="shrink-0 text-ink-muted">before a migration</span>}
+            <span className="shrink-0 text-ink-muted">{formatSize(file.size_bytes)}</span>
+            <span className="shrink-0 text-ink-muted">{new Date(file.taken_at).toLocaleString()}</span>
+          </li>
+        ))}
+      </ul>
+      {group.files.length > newestShown && (
+        <button type="button" onClick={() => setAll(!all)} className="self-start text-xs text-accent hover:underline">
+          {all ? "Show fewer" : `Show all ${group.files.length}`}
+        </button>
       )}
-
-      {runNow.isError && <p className="text-xs text-danger">The backup did not complete.</p>}
     </div>
   );
 }
@@ -118,13 +146,11 @@ function SettingsDocument() {
   });
 
   return (
-    <section className="flex max-w-2xl flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
-      <h3 className="font-medium uppercase tracking-wide text-ink-muted">Settings</h3>
-      <p className="text-ink-muted">
-        Libraries, root folders, profiles, naming, schedules and every setting, as one file. Accounts
-        and API keys are never in it.
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
+    <Card
+      title="Settings file"
+      help="Libraries, root folders, profiles, naming, schedules and every setting, as one file. Accounts and API keys are never in it."
+    >
+      <div className="flex flex-wrap items-center gap-2 text-xs">
         <button
           type="button"
           disabled={download.isPending}
@@ -180,8 +206,8 @@ function SettingsDocument() {
         </div>
       )}
       {restore.isError && <pre className="whitespace-pre-wrap font-mono text-danger">{restore.error.message}</pre>}
-      {download.isError && <p className="text-danger">The settings could not be downloaded.</p>}
-    </section>
+      {download.isError && <p className="text-xs text-danger">The settings could not be downloaded.</p>}
+    </Card>
   );
 }
 
