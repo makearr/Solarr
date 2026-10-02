@@ -2749,6 +2749,9 @@ type PrioritySettings struct {
 	// NewReleaseWeight Bigger is more urgent. Default 30.
 	NewReleaseWeight int64 `json:"new_release_weight"`
 
+	// RssFreshHours Hours after an RSS feed first shows a release for a wanted album that it still counts as new. Default 48. Always answered; omitted on a PATCH leaves it alone.
+	RssFreshHours *int64 `json:"rss_fresh_hours,omitempty"`
+
 	// SearchesPerHour Missing albums searched automatically each hour, most urgent first; 0 turns automatic searching off. Default 12. Always answered; omitted on a PATCH leaves it alone.
 	SearchesPerHour *int64 `json:"searches_per_hour,omitempty"`
 

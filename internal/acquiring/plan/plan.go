@@ -42,6 +42,8 @@ type Item struct {
 type Policy struct {
 	Weights        priority.Weights
 	NewReleaseDays int
+	// RSSFreshHours is how long an RSS sighting keeps an item new; zero is the default window.
+	RSSFreshHours int
 }
 
 // Entry is an item's hunt queue row. EligibleAfter is Never when nothing should search it.
@@ -98,7 +100,11 @@ func Decide(item Item, policy Policy, now time.Time) Entry {
 		releasePtr = &released
 	}
 	trigger := priority.ClassifyTrigger(releasePtr, now, policy.NewReleaseDays)
-	if item.RSSSeenAt > 0 && now.Sub(time.Unix(item.RSSSeenAt, 0)) <= priority.RSSFreshHours*time.Hour {
+	rssWindow := time.Duration(policy.RSSFreshHours) * time.Hour
+	if policy.RSSFreshHours <= 0 {
+		rssWindow = priority.RSSFreshHours * time.Hour
+	}
+	if item.RSSSeenAt > 0 && now.Sub(time.Unix(item.RSSSeenAt, 0)) <= rssWindow {
 		trigger = priority.TriggerNewRelease
 	}
 	entry.Priority = priority.Compute(policy.Weights, priority.Input{

@@ -65,7 +65,7 @@ func (p *process) planFacts(context.Context) (plan.Facts, error) {
 		ranks[category.ID] = category.PriorityRank
 	}
 	return plan.Facts{
-		Policy:  plan.Policy{Weights: weights, NewReleaseDays: int(stored.NewReleaseDays)},
+		Policy:  plan.Policy{Weights: weights, NewReleaseDays: int(stored.NewReleaseDays), RSSFreshHours: int(*stored.RSSFreshHours)},
 		Upgrade: p.upgradeRules(snapshot),
 		CategoryRank: func(categoryID int64) int64 {
 			if rank, found := ranks[categoryID]; found {

@@ -65,6 +65,7 @@ function PriorityForm({
   const [upgradeWeight, setUpgradeWeight] = useState(priority.upgrade_weight);
   const [newReleaseDays, setNewReleaseDays] = useState(priority.new_release_days);
   const [searchesPerHour, setSearchesPerHour] = useState(priority.searches_per_hour ?? 12);
+  const [rssFreshHours, setRssFreshHours] = useState(priority.rss_fresh_hours ?? 48);
   const [huntMode, setHuntMode] = useState<HuntMode>(priority.hunt_mode ?? "oldest_searched");
 
   const dirty =
@@ -74,6 +75,7 @@ function PriorityForm({
     upgradeWeight !== priority.upgrade_weight ||
     newReleaseDays !== priority.new_release_days ||
     searchesPerHour !== priority.searches_per_hour ||
+    rssFreshHours !== (priority.rss_fresh_hours ?? 48) ||
     huntMode !== (priority.hunt_mode ?? "oldest_searched");
 
   const submit = () =>
@@ -84,6 +86,7 @@ function PriorityForm({
       upgrade_weight: upgradeWeight,
       new_release_days: newReleaseDays,
       searches_per_hour: searchesPerHour,
+      rss_fresh_hours: rssFreshHours,
       hunt_mode: huntMode,
     });
 
@@ -153,6 +156,20 @@ function PriorityForm({
             value={newReleaseDays}
             disabled={busy}
             onChange={(event) => setNewReleaseDays(Number(event.target.value))}
+            className={`${inputStyle} w-28`}
+          />
+        </Field>
+        <Field
+          label="RSS freshness window (hours)"
+          help="Hours after an RSS feed first shows a release for a wanted album that it still counts as newly arrived."
+          className="max-w-sm"
+        >
+          <input
+            type="number"
+            min={1}
+            value={rssFreshHours}
+            disabled={busy}
+            onChange={(event) => setRssFreshHours(Number(event.target.value))}
             className={`${inputStyle} w-28`}
           />
         </Field>

@@ -20,7 +20,8 @@ func TestPrioritySettings_DefaultsWhenNothingIsStored(t *testing.T) {
 	if got.SearchesPerHour == nil || *got.SearchesPerHour != settings.DefaultSearchesPerHour {
 		t.Errorf("SearchesPerHour = %v, want %d", got.SearchesPerHour, settings.DefaultSearchesPerHour)
 	}
-	if got.SearchesPerHour = nil; got != want {
+	got.RSSFreshHours, got.SearchesPerHour = nil, nil
+	if got != want {
 		t.Errorf("PrioritySettings = %+v, want the shipped defaults %+v", got, want)
 	}
 }
@@ -47,6 +48,32 @@ func TestSetPrioritySettings_KeepsTheSearchBudgetWhenLeftOut(t *testing.T) {
 	}
 }
 
+func TestSetPrioritySettings_TheRSSFreshnessWindowDefaultsKeepsAndIsBounded(t *testing.T) {
+	cache, cl := newCache(t)
+	if got := cache.Snapshot().PrioritySettings().RSSFreshHours; got == nil || *got != settings.DefaultRSSFreshHours {
+		t.Fatalf("RSSFreshHours = %v, want %d", got, settings.DefaultRSSFreshHours)
+	}
+	base := settings.PrioritySettings{UserRequestWeight: 40, NewReleaseWeight: 30, GapWeight: 20, UpgradeWeight: 10, NewReleaseDays: 7}
+	hours := int64(72)
+	withHours := base
+	withHours.RSSFreshHours = &hours
+	if err := cache.SetPrioritySettings(t.Context(), cl, withHours); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetPrioritySettings(t.Context(), cl, base); err != nil {
+		t.Fatal(err)
+	}
+	if got := cache.Snapshot().PrioritySettings().RSSFreshHours; got == nil || *got != 72 {
+		t.Errorf("RSSFreshHours = %v, want 72 kept when left out", got)
+	}
+	for _, bad := range []int64{0, -1, 1_000_000} {
+		withHours.RSSFreshHours = &bad
+		if err := cache.SetPrioritySettings(t.Context(), cl, withHours); err == nil {
+			t.Errorf("SetPrioritySettings accepted %d hours", bad)
+		}
+	}
+}
+
 func TestSetPrioritySettings_RoundTrips(t *testing.T) {
 	cache, cl := newCache(t)
 	want := settings.PrioritySettings{
@@ -57,7 +84,8 @@ func TestSetPrioritySettings_RoundTrips(t *testing.T) {
 		t.Fatalf("SetPrioritySettings: %v", err)
 	}
 	got := cache.Snapshot().PrioritySettings()
-	if got.SearchesPerHour = nil; got != want {
+	got.RSSFreshHours, got.SearchesPerHour = nil, nil
+	if got != want {
 		t.Errorf("PrioritySettings = %+v, want %+v", got, want)
 	}
 }

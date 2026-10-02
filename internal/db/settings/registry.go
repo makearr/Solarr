@@ -315,6 +315,12 @@ func NewDefaultRegistry() *Registry {
 		Default:  fmt.Sprintf("%d", DefaultPriorityNewReleaseDays),
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyRSSFreshHours, Kind: KindInt, Tier: TierAdvanced,
+		Name:     "RSS freshness window",
+		HelpText: "Hours after an RSS feed first shows a release for a wanted album that it still counts as newly arrived.",
+		Default:  fmt.Sprintf("%d", DefaultRSSFreshHours),
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeySearchesPerHour, Kind: KindInt, Tier: TierAdvanced,
 		Name:     "Automatic searches per hour",
 		HelpText: "Missing albums searched on their own each hour, most urgent first. 0 turns automatic searching off.",

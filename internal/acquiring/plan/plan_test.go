@@ -182,3 +182,21 @@ func TestDecideAnRSSHitMakesAnOldAlbumANewReleaseForFortyEightHours(t *testing.T
 		t.Errorf("seen 49h ago: priority %d, want the gap's %d again", got, gap)
 	}
 }
+
+// The window is the instance's setting, not a constant.
+func TestDecideTheRSSWindowFollowsThePolicy(t *testing.T) {
+	gap := Decide(missing(), testPolicy, testNow).Priority
+	item := missing()
+	item.RSSSeenAt = testNow.Add(-60 * time.Hour).Unix()
+	wide := testPolicy
+	wide.RSSFreshHours = 72
+	if got := Decide(item, wide, testNow).Priority; got <= gap {
+		t.Errorf("seen 60h ago with a 72h window: priority %d, want above the gap's %d", got, gap)
+	}
+	narrow := testPolicy
+	narrow.RSSFreshHours = 12
+	item.RSSSeenAt = testNow.Add(-13 * time.Hour).Unix()
+	if got := Decide(item, narrow, testNow).Priority; got != gap {
+		t.Errorf("seen 13h ago with a 12h window: priority %d, want the gap's %d", got, gap)
+	}
+}

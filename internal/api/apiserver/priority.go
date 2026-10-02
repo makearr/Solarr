@@ -41,7 +41,7 @@ func (s *Server) UpdatePrioritySettings(w http.ResponseWriter, r *http.Request) 
 	if err := s.auth.Registry.LookupAll(
 		settings.KeyPriorityUserRequestWeight, settings.KeyPriorityNewReleaseWeight,
 		settings.KeyPriorityGapWeight, settings.KeyPriorityUpgradeWeight, settings.KeyPriorityNewReleaseDays,
-		settings.KeySearchesPerHour, settings.KeyHuntMode,
+		settings.KeySearchesPerHour, settings.KeyHuntMode, settings.KeyRSSFreshHours,
 	); err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -50,7 +50,7 @@ func (s *Server) UpdatePrioritySettings(w http.ResponseWriter, r *http.Request) 
 	wanted := settings.PrioritySettings{
 		UserRequestWeight: body.UserRequestWeight, NewReleaseWeight: body.NewReleaseWeight,
 		GapWeight: body.GapWeight, UpgradeWeight: body.UpgradeWeight, NewReleaseDays: body.NewReleaseDays,
-		SearchesPerHour: body.SearchesPerHour, HuntMode: string(derefOr(body.HuntMode, "")),
+		SearchesPerHour: body.SearchesPerHour, RSSFreshHours: body.RssFreshHours, HuntMode: string(derefOr(body.HuntMode, "")),
 	}
 	if err := s.auth.Settings.SetPrioritySettings(r.Context(), clock.NewSystem(), wanted); err != nil {
 		var problems config.Problems
@@ -71,6 +71,6 @@ func (s *Server) prioritySettingsView() gen.PrioritySettings {
 	return gen.PrioritySettings{
 		UserRequestWeight: stored.UserRequestWeight, NewReleaseWeight: stored.NewReleaseWeight,
 		GapWeight: stored.GapWeight, UpgradeWeight: stored.UpgradeWeight, NewReleaseDays: stored.NewReleaseDays,
-		SearchesPerHour: stored.SearchesPerHour, HuntMode: &huntMode,
+		SearchesPerHour: stored.SearchesPerHour, RssFreshHours: stored.RSSFreshHours, HuntMode: &huntMode,
 	}
 }

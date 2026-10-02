@@ -16,6 +16,7 @@ import (
 type Works struct {
 	Works library.Works
 	Clock clock.Clock
+	Fresh FreshWindow
 }
 
 func (a Works) ListWorks(
@@ -24,7 +25,7 @@ func (a Works) ListWorks(
 	var freshSince string
 	var freshRSSSince int64
 	if filter.Fresh {
-		freshSince, freshRSSSince = FreshSinceCutoff(a.Clock), FreshRSSCutoff(a.Clock)
+		freshSince, freshRSSSince = a.Fresh.Cutoffs(a.Clock)
 	}
 	rows, err := a.Works.List(ctx,
 		library.WorkFilter{
@@ -90,8 +91,25 @@ func (a Works) ListWorks(
 }
 
 // FreshRSSCutoff is ADR-55's availability window as a Unix time: what an RSS feed first showed since then is fresh.
-func FreshRSSCutoff(cl clock.Clock) int64 {
-	return cl.Now().Add(-priority.RSSFreshHours * time.Hour).Unix()
+func FreshRSSCutoff(cl clock.Clock, hours int64) int64 {
+	return cl.Now().Add(-time.Duration(hours) * time.Hour).Unix()
+}
+
+// FreshWindow answers the configured freshness windows: days after release, and hours after an RSS sighting.
+type FreshWindow func() (days, rssHours int64)
+
+// values is the configured window, or ADR-55's defaults without one.
+func (f FreshWindow) values() (days, rssHours int64) {
+	if f == nil {
+		return priority.DefaultNewReleaseDays, priority.RSSFreshHours
+	}
+	return f()
+}
+
+// Cutoffs resolves both windows against the clock: the release-date cutoff and the RSS one.
+func (f FreshWindow) Cutoffs(cl clock.Clock) (since string, rssSince int64) {
+	days, hours := f.values()
+	return FreshSinceCutoff(cl, days), FreshRSSCutoff(cl, hours)
 }
 
 // FreshSinceCutoff resolves ADR-55's freshness window to a cutoff date
@@ -100,6 +118,6 @@ func FreshRSSCutoff(cl clock.Clock) int64 {
 // own fresh=true filter (ListWorks above) and the dashboard's fresh-works
 // counter sweep (cmd/solarr/app's freshCountsJob), so the two can never
 // disagree about what "fresh" means.
-func FreshSinceCutoff(cl clock.Clock) string {
-	return cl.Now().AddDate(0, 0, -priority.DefaultNewReleaseDays).Format(time.DateOnly)
+func FreshSinceCutoff(cl clock.Clock, days int64) string {
+	return cl.Now().AddDate(0, 0, -int(days)).Format(time.DateOnly)
 }
