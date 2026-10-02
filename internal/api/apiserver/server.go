@@ -448,6 +448,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/works", server.routeListWorks)
 			secured.Get("/works/{id}", server.routeGetWork)
 			secured.Post("/works/bulk/monitor", server.BulkSetWorkMonitored)
+			secured.Post("/works/bulk/edit", server.BulkEditWorks)
 			secured.Post("/works/{id}/monitor", server.routeSetWorkMonitored)
 			secured.Get("/works/{id}/edit", server.routeGetWorkEdit)
 			secured.Put("/works/{id}/edit", server.routeSaveWorkEdit)

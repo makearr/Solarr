@@ -2834,8 +2834,61 @@ paths:
                 excluded_ids:
                   type: array
                   items: { type: integer, format: int64 }
+                fresh: { type: boolean, default: false, description: The list's Fresh filter, when "select all matching" was made under it. }
+                wanted: { type: boolean, default: false, description: The list's Wanted filter. }
+                cutoff_unmet: { type: boolean, default: false, description: The list's Cutoff Unmet filter. }
                 monitored: { type: boolean }
                 preview: { type: boolean, default: false }
+      responses:
+        "200":
+          description: How many works matched (and, unless preview, were changed).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /works/bulk/edit:
+    post:
+      operationId: bulkEditWorks
+      tags: [library]
+      summary: Change monitoring, quality profile and tags of every work matching a selection (Radarr's Edit selected).
+      description: >-
+        The selection is the one /works/bulk/monitor takes, filters included, so "select all matching" under a
+        filter touches only what the list showed. Only what is present is changed: monitored, profile (an object
+        whose id null returns the albums to their library's profiles), and tags to add or remove. preview counts
+        and changes nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items: { type: integer, format: int64 }
+                category_id: { type: integer, format: int64 }
+                excluded_ids:
+                  type: array
+                  items: { type: integer, format: int64 }
+                fresh: { type: boolean, default: false }
+                wanted: { type: boolean, default: false }
+                cutoff_unmet: { type: boolean, default: false }
+                preview: { type: boolean, default: false }
+                monitored: { type: boolean }
+                profile:
+                  type: object
+                  required: [id]
+                  properties:
+                    id: { type: integer, format: int64, nullable: true }
+                add_tags:
+                  type: array
+                  items: { type: string }
+                remove_tags:
+                  type: array
+                  items: { type: string }
       responses:
         "200":
           description: How many works matched (and, unless preview, were changed).

@@ -121,6 +121,14 @@ type WorkDetailRow struct {
 	Wanted *WantedRow
 }
 
+// BulkSelection is a selection as a query (section 21.7): every work visible under RootFolderIDs or CategoryIDs
+// (ADR-27's two halves) that passes the list's own filters and whose id is in IDs (when non-empty) or is not in
+// ExcludedIDs otherwise.
+type BulkSelection struct {
+	RootFolderIDs, CategoryIDs, IDs, ExcludedIDs []int64
+	Fresh, Wanted, CutoffUnmet                   bool
+}
+
 // WorksMonitor toggles monitored state at the album and part level (section
 // 19.6). Defined here and implemented by the caller, same reasoning as
 // WorksReader's own doc comment.
@@ -140,14 +148,9 @@ type WorksMonitor interface {
 	// only resizes the album's own required_count. Answers a missing work
 	// or part id with an error wrapping sql.ErrNoRows.
 	SetTrackWanted(ctx context.Context, workID, partID int64, wanted bool) (WantedRow, error)
-	// BulkSetMonitored is SetWorkMonitored over a selection (section 21.7):
-	// every work visible under rootFolderIDs or categoryIDs (ADR-27's two
-	// halves) whose id is in ids (when non-empty) or is not in excludedIDs
-	// otherwise. Always returns how many works matched; when preview is true
-	// nothing is changed.
-	BulkSetMonitored(
-		ctx context.Context, rootFolderIDs, categoryIDs, ids, excludedIDs []int64, monitored, preview bool,
-	) (int64, error)
+	// BulkSetMonitored is SetWorkMonitored over a selection (section 21.7). Always returns how many works
+	// matched; when preview is true nothing is changed.
+	BulkSetMonitored(ctx context.Context, selection BulkSelection, monitored, preview bool) (int64, error)
 	// RemoveWork drops every desired item for the work, and the work itself
 	// only when no files remain for it. Never touches files. Answers a
 	// missing work id with an error wrapping sql.ErrNoRows.
@@ -475,8 +478,11 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count, err := s.worksMonitor.BulkSetMonitored(r.Context(), rootFolderIDs, categoryIDs,
-		derefOr(body.Ids, nil), derefOr(body.ExcludedIds, nil), body.Monitored, derefOr(body.Preview, false))
+	selection := BulkSelection{
+		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, IDs: derefOr(body.Ids, nil), ExcludedIDs: derefOr(body.ExcludedIds, nil),
+		Fresh: derefOr(body.Fresh, false), Wanted: derefOr(body.Wanted, false), CutoffUnmet: derefOr(body.CutoffUnmet, false),
+	}
+	count, err := s.worksMonitor.BulkSetMonitored(r.Context(), selection, body.Monitored, derefOr(body.Preview, false))
 	if err != nil {
 		writeError(w, s.logger, err)
 		return

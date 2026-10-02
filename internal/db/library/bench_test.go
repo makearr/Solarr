@@ -586,3 +586,42 @@ func TestADR28_DeepDescendingCursorSeeksRatherThanScans(t *testing.T) {
 		t.Errorf("a deep descending cursor scans the index from the start:\n%s", plan)
 	}
 }
+
+// albumSortTarget is looser than listPageTarget on purpose: these sorts compute an expression per work, so a page costs
+// O(works). Measured 2026-10-02 at 500k files: size p99 29ms, profile 49ms, genre 57ms, tag 65ms, status 117ms.
+const albumSortTarget = 150 * time.Millisecond
+
+// The Albums sorts that read a correlated subquery per work (M1g 1.4) have no index to walk: every page computes the
+// expression for every work. Measured at the corpus scale, with a desired item per work and a tag on a third of them.
+func TestADR28_AlbumSortsStayUnderTheirTarget(t *testing.T) {
+	timed(t)
+
+	opened := writableCorpus(t)
+	err := opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO desired_item (work_id, media_ref, media_sort_key, category_id, profile_id,
+			monitored, satisfaction_kind, present_count, state, dirty)
+			SELECT id, '', '', 1, 1 + id % 3, 1, 'SET', 0, 'MISSING', 0 FROM work`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO tag (id, name, slug, source) VALUES (1, 'rock', 'rock', 'user')`); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO tag_assignment (tag_id, subject_type, subject_id, source)
+			SELECT 1, 'work', id, 'user' FROM work WHERE id % 3 = 0`)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("populate: %v", err)
+	}
+
+	works := library.NewWorks(opened)
+	for _, sort := range []library.WorkSort{library.WorkSortSize, library.WorkSortProfile, library.WorkSortStatus, library.WorkSortGenre, library.WorkSortTag} {
+		filter := library.WorkFilter{MediaType: "music", Sort: sort}
+		durations := measure(20, func(int) {
+			if _, err := works.List(t.Context(), filter, library.WorkCursor{}, listPageSize); err != nil {
+				t.Fatalf("List %q: %v", sort, err)
+			}
+		})
+		assertTarget(t, "albums sorted by "+string(sort), durations, albumSortTarget)
+	}
+}
