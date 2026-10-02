@@ -1,4 +1,5 @@
 import { Blocklist } from "./Blocklist";
+import { Tags } from "./Tags";
 import { Categories } from "./Categories";
 import { MetadataSettings } from "./MetadataSettings";
 import { Network } from "./Network";
@@ -55,6 +56,14 @@ export function BlocklistsSettings() {
       <UnwantedFiles />
       {/* Failed releases stay advanced (answered 2026-09-24): empty until acquisition runs. */}
       {isTierVisible(tier, "advanced") && <Blocklist />}
+    </SettingsPage>
+  );
+}
+
+export function TagsSettings() {
+  return (
+    <SettingsPage title="Tags">
+      <Tags />
     </SettingsPage>
   );
 }

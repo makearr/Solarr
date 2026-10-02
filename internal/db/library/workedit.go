@@ -106,3 +106,71 @@ func (p People) SetUserTags(ctx context.Context, workID int64, names []string) e
 	}
 	return nil
 }
+
+// ErrTagExists reports a rename onto a name another tag already has.
+var ErrTagExists = errors.New("library: a tag with that name exists")
+
+// UserTag is one of the user's own tags with the number of albums carrying it.
+type UserTag struct {
+	ID    int64
+	Name  string
+	Works int64
+}
+
+// ListUserTags answers the tags created from the Edit dialog, by name.
+func (p People) ListUserTags(ctx context.Context) ([]UserTag, error) {
+	rows, err := librarydb.New(p.store.Read()).ListUserTagsWithUse(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("library: list user tags: %w", err)
+	}
+	tags := make([]UserTag, len(rows))
+	for i, row := range rows {
+		tags[i] = UserTag{ID: row.ID, Name: row.Name, Works: row.Works}
+	}
+	return tags, nil
+}
+
+// RenameUserTag renames one of the user's tags; a missing or provider-owned id wraps sql.ErrNoRows and a name
+// another tag has is ErrTagExists.
+func (p People) RenameUserTag(ctx context.Context, id int64, name string) error {
+	slug := slugify(name)
+	if slug == "" {
+		return fmt.Errorf("library: rename tag %d: the name has no letters or digits", id)
+	}
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		if existing, err := queries.GetTagBySlug(ctx, slug); err == nil && existing.ID != id {
+			return ErrTagExists
+		}
+		changed, err := queries.RenameUserTag(ctx, librarydb.RenameUserTagParams{Name: name, Slug: slug, ID: id})
+		if err != nil {
+			return err
+		}
+		if changed == 0 {
+			return sql.ErrNoRows
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("library: rename tag %d: %w", id, err)
+	}
+	return nil
+}
+
+// DeleteUserTag removes one of the user's tags and every assignment of it; a missing or provider-owned id wraps sql.ErrNoRows.
+func (p People) DeleteUserTag(ctx context.Context, id int64) error {
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		changed, err := librarydb.New(tx).DeleteUserTag(ctx, id)
+		if err != nil {
+			return err
+		}
+		if changed == 0 {
+			return sql.ErrNoRows
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("library: delete tag %d: %w", id, err)
+	}
+	return nil
+}

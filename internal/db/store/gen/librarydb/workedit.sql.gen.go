@@ -18,6 +18,19 @@ func (q *Queries) ClearDesiredProfileOverride(ctx context.Context, desiredItemID
 	return err
 }
 
+const deleteUserTag = `-- name: DeleteUserTag :execrows
+DELETE FROM tag WHERE id = ? AND source = 'user'
+`
+
+// The assignments, closure rows and aliases go with it (ON DELETE CASCADE).
+func (q *Queries) DeleteUserTag(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteUserTag, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getDesiredProfileOverride = `-- name: GetDesiredProfileOverride :one
 SELECT profile_id FROM desired_profile_override WHERE desired_item_id = ?
 `
@@ -101,6 +114,63 @@ func (q *Queries) ListTagNamesForSubjectBySource(ctx context.Context, arg ListTa
 		return nil, err
 	}
 	return items, nil
+}
+
+const listUserTagsWithUse = `-- name: ListUserTagsWithUse :many
+SELECT t.id, t.name, CAST(COUNT(a.subject_id) AS INTEGER) AS works
+FROM tag t
+LEFT JOIN tag_assignment a ON a.tag_id = t.id AND a.subject_type = 'work'
+WHERE t.source = 'user'
+GROUP BY t.id, t.name
+ORDER BY t.name COLLATE NOCASE, t.id
+`
+
+type ListUserTagsWithUseRow struct {
+	ID    int64
+	Name  string
+	Works int64
+}
+
+// A tag is the user's own when it was created from the Edit dialog; a provider's genre is not offered for renaming.
+func (q *Queries) ListUserTagsWithUse(ctx context.Context) ([]ListUserTagsWithUseRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUserTagsWithUse)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUserTagsWithUseRow{}
+	for rows.Next() {
+		var i ListUserTagsWithUseRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.Works); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const renameUserTag = `-- name: RenameUserTag :execrows
+UPDATE tag SET name = ?, slug = ? WHERE id = ? AND source = 'user'
+`
+
+type RenameUserTagParams struct {
+	Name string
+	Slug string
+	ID   int64
+}
+
+func (q *Queries) RenameUserTag(ctx context.Context, arg RenameUserTagParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, renameUserTag, arg.Name, arg.Slug, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const setDesiredProfileOverride = `-- name: SetDesiredProfileOverride :exec

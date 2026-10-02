@@ -3807,6 +3807,11 @@ type ListLogsParams struct {
 // ListLogsParamsLevel defines parameters for ListLogs.
 type ListLogsParamsLevel string
 
+// RenameTagJSONBody defines parameters for RenameTag.
+type RenameTagJSONBody struct {
+	Name string `json:"name"`
+}
+
 // CreateUserJSONBody defines parameters for CreateUser.
 type CreateUserJSONBody struct {
 	// Access The libraries the account may use. An administrator manages every one regardless.
@@ -4142,6 +4147,9 @@ type SetUserDefaultsJSONRequestBody = UserDefaults
 
 // CreateFirstAdministratorJSONRequestBody defines body for CreateFirstAdministrator for application/json ContentType.
 type CreateFirstAdministratorJSONRequestBody CreateFirstAdministratorJSONBody
+
+// RenameTagJSONRequestBody defines body for RenameTag for application/json ContentType.
+type RenameTagJSONRequestBody RenameTagJSONBody
 
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody CreateUserJSONBody
@@ -4727,6 +4735,15 @@ type ServerInterface interface {
 	// Every tag, by name, for the Edit dialog's tag picker.
 	// (GET /tags)
 	ListTags(w http.ResponseWriter, r *http.Request)
+	// The tags created from the Edit dialog, with how many albums carry each.
+	// (GET /tags/own)
+	ListOwnTags(w http.ResponseWriter, r *http.Request)
+	// Delete one of the user's own tags and take it off every album. Administrator only.
+	// (DELETE /tags/{id})
+	DeleteTag(w http.ResponseWriter, r *http.Request, id int64)
+	// Rename one of the user's own tags. Administrator only.
+	// (PUT /tags/{id})
+	RenameTag(w http.ResponseWriter, r *http.Request, id int64)
 	// Every account, with its role and category grants.
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -5894,6 +5911,24 @@ func (_ Unimplemented) ListLogs(w http.ResponseWriter, r *http.Request, params L
 // Every tag, by name, for the Edit dialog's tag picker.
 // (GET /tags)
 func (_ Unimplemented) ListTags(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The tags created from the Edit dialog, with how many albums carry each.
+// (GET /tags/own)
+func (_ Unimplemented) ListOwnTags(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete one of the user's own tags and take it off every album. Administrator only.
+// (DELETE /tags/{id})
+func (_ Unimplemented) DeleteTag(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Rename one of the user's own tags. Administrator only.
+// (PUT /tags/{id})
+func (_ Unimplemented) RenameTag(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11619,6 +11654,94 @@ func (siw *ServerInterfaceWrapper) ListTags(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// ListOwnTags operation middleware
+func (siw *ServerInterfaceWrapper) ListOwnTags(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOwnTags(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteTag operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTag(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTag(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RenameTag operation middleware
+func (siw *ServerInterfaceWrapper) RenameTag(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RenameTag(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -13211,6 +13334,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/tags", wrapper.ListTags)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/tags/own", wrapper.ListOwnTags)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/tags/{id}", wrapper.DeleteTag)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/tags/{id}", wrapper.RenameTag)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/users", wrapper.ListUsers)

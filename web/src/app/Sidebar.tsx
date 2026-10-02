@@ -83,6 +83,7 @@ export function pageTier(path: string): Tier {
 // its own advanced parts, but Cache's entire content is expert-only.
 const SETTINGS_SECTIONS: readonly { to: string; label: string; tier?: Tier }[] = [
   { to: "/settings/libraries", label: "Libraries" },
+  { to: "/settings/tags", label: "Tags" },
   // An entry whose page shows nothing at a tier is hidden at that tier (2026-09-25).
   { to: "/settings/blocklists", label: "Blocklists", tier: "expert" },
   { to: "/settings/network", label: "Network", tier: "advanced" },

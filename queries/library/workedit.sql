@@ -17,3 +17,19 @@ FROM tag_assignment a
 JOIN tag t ON t.id = a.tag_id
 WHERE a.subject_type = ? AND a.subject_id = ? AND a.source = ?
 ORDER BY t.name COLLATE NOCASE, t.id;
+
+-- A tag is the user's own when it was created from the Edit dialog; a provider's genre is not offered for renaming.
+-- name: ListUserTagsWithUse :many
+SELECT t.id, t.name, CAST(COUNT(a.subject_id) AS INTEGER) AS works
+FROM tag t
+LEFT JOIN tag_assignment a ON a.tag_id = t.id AND a.subject_type = 'work'
+WHERE t.source = 'user'
+GROUP BY t.id, t.name
+ORDER BY t.name COLLATE NOCASE, t.id;
+
+-- name: RenameUserTag :execrows
+UPDATE tag SET name = ?, slug = ? WHERE id = ? AND source = 'user';
+
+-- The assignments, closure rows and aliases go with it (ON DELETE CASCADE).
+-- name: DeleteUserTag :execrows
+DELETE FROM tag WHERE id = ? AND source = 'user';

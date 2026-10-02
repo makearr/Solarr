@@ -213,6 +213,8 @@ type Querier interface {
 	// A file that resolves on a later sweep leaves the queue entirely -- there is no
 	// "resolved" state to keep around.
 	DeleteUnidentified(ctx context.Context, mediaObjectID int64) error
+	// The assignments, closure rows and aliases go with it (ON DELETE CASCADE).
+	DeleteUserTag(ctx context.Context, id int64) (int64, error)
 	DeleteWork(ctx context.Context, id int64) error
 	DeleteWorkPart(ctx context.Context, id int64) error
 	DequeueReady(ctx context.Context, candidateID int64) error
@@ -592,6 +594,8 @@ type Querier interface {
 	ListUnverifiedWorksForFile(ctx context.Context, mediaObjectID int64) ([]int64, error)
 	// Monitored albums below their library's cutoff: what the Cutoff Unmet search walks.
 	ListUpgradableDesiredItems(ctx context.Context, arg ListUpgradableDesiredItemsParams) ([]ListUpgradableDesiredItemsRow, error)
+	// A tag is the user's own when it was created from the Edit dialog; a provider's genre is not offered for renaming.
+	ListUserTagsWithUse(ctx context.Context) ([]ListUserTagsWithUseRow, error)
 	// RSS sync: the monitored, incomplete albums credited to an artist of this name or alias, ignoring case.
 	ListWantedAlbumsByArtistName(ctx context.Context, arg ListWantedAlbumsByArtistNameParams) ([]int64, error)
 	ListWorkClassifications(ctx context.Context, workID int64) ([]WorkClassification, error)
@@ -726,6 +730,7 @@ type Querier interface {
 	RemoveBlockedContent(ctx context.Context, id int64) error
 	RemoveFromBlocklist(ctx context.Context, id int64) error
 	RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error
+	RenameUserTag(ctx context.Context, arg RenameUserTagParams) (int64, error)
 	RepointEditionExternalID(ctx context.Context, arg RepointEditionExternalIDParams) (int64, error)
 	// A merged MusicBrainz id answers under its new id: the work follows it, unless another work
 	// already holds the new one (M1f, 2026-09-25).

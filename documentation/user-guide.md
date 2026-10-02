@@ -63,7 +63,8 @@ profile** (used instead of the library's profiles when it is searched or upgrade
 still decides whether it counts as upgradable) and your **tags** (new ones are created as you type).
 Tags a metadata provider assigned are never touched. With albums selected (Table view, or Select all
 matching), **Edit** in the toolbar applies only what you change to all of them, after showing the count.
-Select all matching now respects the Fresh filter, for Monitor and Unmonitor too.
+Select all matching now respects the Fresh filter, for Monitor and Unmonitor too. **Settings → Tags** lists
+the tags you made, with how many albums carry each, and renames or deletes them (administrator).
 
 With an empty search box, Discover lists **artists you have albums of, but not all**, from your own
 library compared with each artist's discography (live albums and compilations left out): the most
