@@ -10,8 +10,7 @@ type Downloader = components["schemas"]["Downloader"];
 type ConnectionTestResult = components["schemas"]["ConnectionTestResult"];
 
 
-/** Stage 5, ADR-46/57: download clients. SABnzbd is the only implementation
- *  wired up today; more protocols/clients arrive with their own stage.
+/** Stage 5, ADR-46/57: download clients. SABnzbd (usenet) and qBittorrent (torrent).
  *  Actually dispatching a download waits on the candidate pipeline -- this
  *  screen manages the connection record and can test it, nothing more. */
 export function Downloaders() {
@@ -171,7 +170,20 @@ type DownloaderOptions = components["schemas"]["DownloaderOptions"];
 
 /** Lidarr's add dialog: a name already filled in, "Test" before "Add", and SABnzbd's own download
  *  folder offered as a download folder, at the path Solarr sees it if that differs. */
+type ClientKind = "sabnzbd" | "qbittorrent";
+
+const KINDS: Record<ClientKind, { label: string; protocol: "usenet" | "torrent"; placeholder: string; secret: string; keepCompleted: boolean }> = {
+  sabnzbd: { label: "SABnzbd", protocol: "usenet", placeholder: "http://sabnzbd:8080", secret: "API key", keepCompleted: false },
+  // A torrent keeps seeding after import: removing it is a choice, never the default.
+  qbittorrent: {
+    label: "qBittorrent", protocol: "torrent", placeholder: "http://qbittorrent:8080",
+    secret: "User and password (user:password), empty if it lets this host in", keepCompleted: true,
+  },
+};
+
 function AddDownloader({ onAdded }: { onAdded: () => void }) {
+  const [kind, setKind] = useState<ClientKind>("sabnzbd");
+  const spec = KINDS[kind];
   const [name, setName] = useState("SABnzbd");
   const [baseUrl, setBaseUrl] = useState("");
   const [credentials, setCredentials] = useState("");
@@ -186,7 +198,7 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
   const test = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/downloaders/test", {
-        body: { impl: "sabnzbd", base_url: baseUrl, credentials: credentials || undefined, options: { category: category || undefined } },
+        body: { impl: kind, base_url: baseUrl, credentials: credentials || undefined, options: { category: category || undefined } },
       });
       if (error) throw error;
       return data;
@@ -209,7 +221,7 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
         local_path: mapped ? localFolder : undefined,
       };
       const { error } = await api.POST("/downloaders", {
-        body: { name, impl: "sabnzbd", base_url: baseUrl, protocol: "usenet", credentials: credentials || undefined, enabled: true, options },
+        body: { name, impl: kind, base_url: baseUrl, protocol: spec.protocol, credentials: credentials || undefined, enabled: true, options },
       });
       if (error) throw error;
       if (addFolder && localFolder) {
@@ -233,7 +245,25 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
         create.mutate();
       }}
     >
-      <h2 className="text-sm font-medium">Add SABnzbd</h2>
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-medium">Add</h2>
+        <select
+          aria-label="Download client"
+          value={kind}
+          onChange={(event) => {
+            const next = event.target.value as ClientKind;
+            setKind(next);
+            setName(KINDS[next].label);
+            setRemoveCompleted(!KINDS[next].keepCompleted);
+            test.reset();
+          }}
+          className={inputStyle}
+        >
+          {(Object.keys(KINDS) as ClientKind[]).map((one) => (
+            <option key={one} value={one}>{KINDS[one].label}</option>
+          ))}
+        </select>
+      </div>
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex min-w-32 flex-col gap-1 text-xs text-ink-muted">
           Name
@@ -244,13 +274,13 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
           <input
             className={inputStyle}
             value={baseUrl}
-            placeholder="http://sabnzbd:8080"
+            placeholder={spec.placeholder}
             autoComplete="off"
             onChange={(event) => setBaseUrl(event.target.value)}
           />
         </label>
         <label className="flex min-w-40 flex-col gap-1 text-xs text-ink-muted">
-          API key
+          {spec.secret}
           <input className={inputStyle} type="password" value={credentials} autoComplete="off" onChange={(event) => setCredentials(event.target.value)} />
         </label>
       </div>

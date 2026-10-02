@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/poll"
-	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -48,7 +48,7 @@ func (p *process) enqueuePoll(ctx context.Context) (jobs.EnqueueResult, error) {
 	})
 }
 
-// pollClients answers every enabled SABnzbd connection with its options, fresh each poll.
+// pollClients answers every enabled download connection with its options, fresh each poll.
 func (p *process) pollClients(ctx context.Context) (map[int64]poll.Client, error) {
 	configured, err := p.cache.Downloaders(ctx)
 	if err != nil {
@@ -57,17 +57,21 @@ func (p *process) pollClients(ctx context.Context) (map[int64]poll.Client, error
 	factory := p.downloaderClientFactory()
 	clients := make(map[int64]poll.Client, len(configured))
 	for _, downloader := range configured {
-		if !downloader.Enabled || downloader.Impl != "sabnzbd" {
+		if !downloader.Enabled {
 			continue
 		}
 		credentials, err := p.cache.DecryptedDownloaderCredentials(ctx, downloader.ID)
 		if err != nil {
 			return nil, err
 		}
+		client, known := adapters.NewDownloadClient(downloader.Impl, factory(downloader.ID, downloader.BaseURL), downloader.BaseURL, credentials.Reveal())
+		if !known {
+			continue
+		}
 		options := downloader.Options()
 		clients[downloader.ID] = poll.Client{
 			Name:            downloader.Name,
-			Client:          sabnzbd.Downloader{Client: factory(downloader.ID, downloader.BaseURL, credentials.Reveal())},
+			Client:          client,
 			RemoveCompleted: options.RemovesCompleted(),
 			LocalPath:       options.LocalPathFor,
 		}

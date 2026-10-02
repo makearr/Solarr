@@ -25,7 +25,7 @@ var allowedInternalImports = map[string][]string{
 	},
 	"cmd/solarr/app": {
 		"cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
-		"internal/acquiring/poll", "internal/acquiring/sabnzbd",
+		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
 		"internal/api/webui", "internal/db/library", "internal/db/recovery", "internal/db/settings",
 		"internal/db/store", "internal/identify/priority", "internal/identify/score", "internal/importing/unpack", "internal/importing/arrimport",
@@ -40,14 +40,14 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
 	"cmd/solarr/adapters": {
-		"internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/sabnzbd",
-		"internal/api/apiserver", "internal/db/library", "internal/db/settings",
+		"internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
+		"internal/acquiring/sabnzbd", "internal/api/apiserver", "internal/db/library", "internal/db/settings",
 		"internal/identify/model", "internal/identify/priority", "internal/importing/arrimport",
 		"internal/importing/importjob", "internal/importing/inspect", "internal/jobs",
 		"internal/jobs/cachebudget", "internal/media/music", "internal/metadata/musicbrainz",
 		"internal/moving/drainjob", "internal/moving/mover", "internal/moving/moverjob",
 		"internal/platform/clock", "internal/platform/egress", "internal/platform/fsx",
-		"internal/platform/paginate",
+		"internal/platform/httpx", "internal/platform/paginate",
 	},
 	"internal/api/auth":  {"internal/platform/clock", "internal/platform/secrets"},
 	"internal/api/authz": {"internal/db/settings"},
@@ -172,7 +172,8 @@ var allowedInternalImports = map[string][]string{
 		"internal/acquiring/download", "internal/db/library", "internal/jobs", "internal/platform/clock",
 		"internal/platform/fsx",
 	},
-	"internal/acquiring/sabnzbd": {"internal/platform/httpx", "internal/acquiring/download"},
+	"internal/acquiring/sabnzbd":     {"internal/platform/httpx", "internal/acquiring/download"},
+	"internal/acquiring/qbittorrent": {"internal/platform/httpx", "internal/acquiring/download"},
 	// ADR-6's planner and hunt: decides from desired items; searching is supplied by the media type.
 	"internal/acquiring/plan": {
 		"internal/db/library", "internal/identify/priority", "internal/jobs", "internal/platform/clock",

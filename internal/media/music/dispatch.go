@@ -134,8 +134,11 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 		return library.Acquisition{}, fmt.Errorf("music: dispatch: fetch release: %w", err)
 	}
 	contentHash := ""
-	if detail.ReleaseCandidate.Protocol == "usenet" {
+	switch detail.ReleaseCandidate.Protocol {
+	case "usenet":
 		contentHash = download.NZBContentHash(file)
+	case "torrent":
+		contentHash = download.TorrentContentHash(file)
 	}
 	if contentHash != "" && d.Blocklist != nil {
 		if blocked, err := d.Blocklist.IsBlocked(ctx, nil, "", contentHash, at.Unix()); err != nil {

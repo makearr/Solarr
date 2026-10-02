@@ -9,7 +9,6 @@ import (
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
-	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
 	"github.com/makearr/Solarr/internal/media/music"
@@ -265,11 +264,11 @@ func (p *process) indexerClientFactory() adapters.IndexerClientFactory {
 	}
 }
 
-// downloaderClientFactory builds adapters.DownloaderClientFactory, one
+// downloaderClientFactory builds adapters.DownloaderHTTPFactory, one
 // rate-limit/breaker bucket per connection id -- gentle by default (a
 // downloader is polled, not fanned out to), the global egress proxy applies
 // like any other outbound client (ADR-47 is indexer-specific, not this).
-func (p *process) downloaderClientFactory() adapters.DownloaderClientFactory {
+func (p *process) downloaderClientFactory() adapters.DownloaderHTTPFactory {
 	wall := clock.NewSystem()
 	limiter := httpx.NewLimiter(wall, httpx.Config{
 		Defaults: httpx.Limits{MinInterval: 200 * time.Millisecond},
@@ -277,12 +276,11 @@ func (p *process) downloaderClientFactory() adapters.DownloaderClientFactory {
 	breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
 	agent := httpx.UserAgent(p.build.Version)
 
-	return func(downloaderID int64, baseURL, credentials string) sabnzbd.Client {
-		client := httpx.NewClient(wall, connectionGuard(baseURL), limiter, breaker, httpx.ClientConfig{
+	return func(downloaderID int64, baseURL string) *httpx.Client {
+		return httpx.NewClient(wall, connectionGuard(baseURL), limiter, breaker, httpx.ClientConfig{
 			Provider: "downloader:" + strconv.FormatInt(downloaderID, 10), UserAgent: agent,
 			Proxy: p.liveProxyPolicy(),
 		})
-		return sabnzbd.NewClient(client, baseURL, credentials)
 	}
 }
 
