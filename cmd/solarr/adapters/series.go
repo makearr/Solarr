@@ -143,12 +143,9 @@ func (c SeriesCatalog) Add(ctx context.Context, userID int64, request gen.AddSer
 	if request.Monitor != nil {
 		monitor = tv.MonitorOption(*request.Monitor)
 	}
-	profile := c.DefaultProfileID
-	switch {
-	case request.QualityProfileId != nil:
+	profile := c.Categories.ProfileFor(category, c.DefaultProfileID)
+	if request.QualityProfileId != nil {
 		profile = *request.QualityProfileId
-	case category.QualityProfileID != nil:
-		profile = *category.QualityProfileID
 	}
 	result, err := c.Service.Add(ctx, tv.AddRequest{
 		IDs: tv.IDs{TVDB: id}, CategoryID: request.CategoryId, ProfileID: profile, Monitor: monitor,

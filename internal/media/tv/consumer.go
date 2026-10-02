@@ -63,6 +63,7 @@ type ConsumerConfig struct {
 	// Profile resolves a category's quality profile, or the default when it has none.
 	Categories interface {
 		Category(id int64) (settings.Category, bool)
+		ProfileFor(category settings.Category, fallback int64) int64
 	}
 }
 
@@ -280,8 +281,8 @@ func (c Consumer) inLibrary(ctx context.Context, categoryID int64, guess FolderG
 
 func (c Consumer) add(ctx context.Context, categoryID int64, ids IDs) int64 {
 	profile := c.config.DefaultProfileID
-	if category, ok := c.config.Categories.Category(categoryID); ok && category.QualityProfileID != nil {
-		profile = *category.QualityProfileID
+	if category, ok := c.config.Categories.Category(categoryID); ok {
+		profile = c.config.Categories.ProfileFor(category, profile)
 	}
 	result, err := c.config.Service.Add(ctx, AddRequest{IDs: ids, CategoryID: categoryID, ProfileID: profile, Monitor: MonitorExisting})
 	if err != nil {

@@ -248,7 +248,12 @@ func TestCategory_CarriesItsProfileAssignments(t *testing.T) {
 func TestQualityProfile_ShippedDefaultsAreSeeded(t *testing.T) {
 	cache, _ := newCache(t)
 
-	profiles := cache.Snapshot().QualityProfiles()
+	var profiles []settings.QualityProfile
+	for _, profile := range cache.Snapshot().QualityProfiles() {
+		if profile.MediaType == "music" {
+			profiles = append(profiles, profile)
+		}
+	}
 	// The fourth, AAC 160/48kHz/16-bit, was removed by migration 0023 (2026-09-25).
 	wantNames := []string{"Lossless preferred", "Lossy 320", "Space conscious"}
 	if len(profiles) != len(wantNames) {
@@ -271,5 +276,27 @@ func TestQualityProfile_ShippedDefaultsAreSeeded(t *testing.T) {
 		if _, err := score.ParseUpgrade([]byte(profile.UpgradeJSON)); err != nil {
 			t.Errorf("%q: upgrade_json does not parse: %v", name, err)
 		}
+	}
+}
+
+// The shipped TV profiles are data in a migration, which skips write-time validation: each must still be ADR-40's shape,
+// and each must say it judges TV, or no TV library could pick it.
+func TestShippedTVProfilesAreValid(t *testing.T) {
+	cache, _ := newCache(t)
+	found := 0
+	for _, profile := range cache.Snapshot().QualityProfiles() {
+		if profile.MediaType != "tv" {
+			continue
+		}
+		found++
+		if _, err := score.Parse([]byte(profile.RulesJSON)); err != nil {
+			t.Errorf("%s: %v", profile.Name, err)
+		}
+		if _, err := score.ParseUpgrade([]byte(profile.UpgradeJSON)); err != nil {
+			t.Errorf("%s upgrade: %v", profile.Name, err)
+		}
+	}
+	if found != 7 {
+		t.Errorf("shipped TV profiles = %d, want 7", found)
 	}
 }
