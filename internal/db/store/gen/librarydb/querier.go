@@ -441,6 +441,9 @@ type Querier interface {
 	// Which of an album's files a Solarr download brought in: placed by an import session a download
 	// started. Only those can replace an owned file (M1d).
 	ListDownloadedFilesForWork(ctx context.Context, workID int64) ([]int64, error)
+	// Files with the same size and the same sampled content, whatever their names: the likely copies of one file.
+	ListDuplicateGroups(ctx context.Context, pageSize int64) ([]ListDuplicateGroupsRow, error)
+	ListDuplicateMembers(ctx context.Context, arg ListDuplicateMembersParams) ([]ListDuplicateMembersRow, error)
 	ListEditionExternalIDs(ctx context.Context, editionID int64) ([]EditionExternalID, error)
 	// Works identified at release-group level only (the text search never picks an
 	// edition): no edition, and either not enriched yet (no credit) or with files on

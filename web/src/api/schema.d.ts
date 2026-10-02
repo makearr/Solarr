@@ -2882,6 +2882,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * Files of one library that are likely copies of one another (read only).
+         * @description Files with the same size and the same sampled content, wherever they sit, with what keeping one copy of each group would free. Nothing is linked or removed by looking; a library's largest groups come first.
+         */
+        get: operations["getCategoryDuplicates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/statistics": {
         parameters: {
             query?: never;
@@ -5796,6 +5818,25 @@ export interface components {
             total: number;
             /** @description Whether the artist is already followed. */
             monitored: boolean;
+        };
+        DuplicateReport: {
+            /**
+             * Format: int64
+             * @description What keeping one copy of every group would free.
+             */
+            reclaimable_bytes: number;
+            groups: {
+                /** Format: int64 */
+                size_bytes: number;
+                /** Format: int64 */
+                reclaimable_bytes: number;
+                /** @description Each stored file once, with every path that reaches it (a hardlinked file has several). */
+                copies: {
+                    /** Format: int64 */
+                    media_object_id: number;
+                    paths: string[];
+                }[];
+            }[];
         };
         CategoryStatistics: {
             /**
@@ -10906,6 +10947,30 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCategoryDuplicates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The groups, largest reclaimable first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateReport"];
+                };
+            };
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };

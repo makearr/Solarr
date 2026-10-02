@@ -30,6 +30,7 @@ import { UnknownConfigSection } from "./UnknownConfigSection";
 import { LibraryHealth } from "./LibraryHealth";
 import { LibraryLevelList } from "./LibraryLevelList";
 import { Libraries } from "./Libraries";
+import { Duplicates } from "./Duplicates";
 import { Packs } from "./Packs";
 import { People } from "./People";
 import { PersonDetail } from "./PersonDetail";
@@ -154,6 +155,7 @@ const routes = [
   // its own session, which can be null), so every library's Packs page
   // shows every pack today. Narrowing this is a real follow-up, not done here.
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/packs", component: Packs }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/duplicates", component: Duplicates }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/import", component: Import }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/activity", component: Activity }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/$level", component: LibraryLevelList }),
