@@ -94,39 +94,44 @@ func NewJob(config Config) *Job {
 // simply asks the same question again.
 func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 	started := j.clock.Now()
-	var afterID int64
 	total, failed := 0, 0
-	for {
-		if err := ctx.Err(); err != nil {
-			return jobs.Retryablef("probe.context", string(JobType), err)
-		}
-
-		batch, err := j.physical.ListUnmeasured(ctx, afterID, batchSize)
-		if err != nil {
-			return fmt.Errorf("probe: %w", err)
-		}
-		if len(batch) == 0 {
-			break
-		}
-
-		for _, file := range batch {
-			afterID = file.MediaObjectID
-			total++
-			if err := j.probeOne(ctx, file); err != nil {
-				failed++
-				// One file failing (an unmounted root, a corrupted file, a
-				// stalled network mount) is not a reason to stop the sweep --
-				// it simply stays unmeasured and is retried next run.
-				j.logger.WarnContext(ctx, "probe failed",
-					slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
+	// Unmeasured files first; then those measured before the probe read lyrics languages.
+	for _, list := range []func(context.Context, int64, int64) ([]library.UnmeasuredFile, error){
+		j.physical.ListUnmeasured, j.physical.ListStaleProbes,
+	} {
+		var afterID int64
+		for {
+			if err := ctx.Err(); err != nil {
+				return jobs.Retryablef("probe.context", string(JobType), err)
 			}
-		}
-		if len(batch) < batchSize {
-			break
-		}
-		if j.clock.Now().Sub(started) >= yieldAfter {
-			j.logger.Info("probe sweep yielding", slog.Int("processed", total), slog.Int("failed", failed))
-			return fmt.Errorf("probe: %d files in %s: %w", total, yieldAfter, jobs.ErrYield)
+
+			batch, err := list(ctx, afterID, batchSize)
+			if err != nil {
+				return fmt.Errorf("probe: %w", err)
+			}
+			if len(batch) == 0 {
+				break
+			}
+
+			for _, file := range batch {
+				afterID = file.MediaObjectID
+				total++
+				if err := j.probeOne(ctx, file); err != nil {
+					failed++
+					// One file failing (an unmounted root, a corrupted file, a
+					// stalled network mount) is not a reason to stop the sweep --
+					// it simply stays unmeasured and is retried next run.
+					j.logger.WarnContext(ctx, "probe failed",
+						slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
+				}
+			}
+			if len(batch) < batchSize {
+				break
+			}
+			if j.clock.Now().Sub(started) >= yieldAfter {
+				j.logger.Info("probe sweep yielding", slog.Int("processed", total), slog.Int("failed", failed))
+				return fmt.Errorf("probe: %d files in %s: %w", total, yieldAfter, jobs.ErrYield)
+			}
 		}
 	}
 	j.logger.Info("probe sweep finished", slog.Int("processed", total), slog.Int("failed", failed))

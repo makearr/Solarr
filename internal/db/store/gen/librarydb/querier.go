@@ -558,6 +558,8 @@ type Querier interface {
 	ListScanStates(ctx context.Context) ([]ScanState, error)
 	// Every live path of every media object that lives at more than one place; roots are filtered in Go.
 	ListSharedObjectPaths(ctx context.Context) ([]ListSharedObjectPathsRow, error)
+	// Files measured before the probe read the lyrics language: their stored probe has no such key, so they are read once more.
+	ListStaleProbes(ctx context.Context, arg ListStaleProbesParams) ([]ListStaleProbesRow, error)
 	// Every chart reads a rollup, never a live aggregate (ADR-28, section 21.12).
 	ListStatRollup(ctx context.Context, arg ListStatRollupParams) ([]StatRollup, error)
 	// "This tag or any descendant" is one join because the closure is materialised.

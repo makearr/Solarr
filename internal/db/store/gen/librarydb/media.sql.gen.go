@@ -685,6 +685,57 @@ func (q *Queries) ListPerceptualHashes(ctx context.Context) ([]ListPerceptualHas
 	return items, nil
 }
 
+const listStaleProbes = `-- name: ListStaleProbes :many
+SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
+WHERE o.measured_attributes_id IS NOT NULL AND o.probe_json IS NOT NULL
+  AND o.probe_json NOT LIKE '%"LyricsLanguages"%' AND o.id > ?1
+ORDER BY o.id
+LIMIT ?2
+`
+
+type ListStaleProbesParams struct {
+	AfterID  int64
+	PageSize int64
+}
+
+type ListStaleProbesRow struct {
+	ID           int64
+	SizeBytes    int64
+	RootFolderID int64
+	RelPath      string
+}
+
+// Files measured before the probe read the lyrics language: their stored probe has no such key, so they are read once more.
+func (q *Queries) ListStaleProbes(ctx context.Context, arg ListStaleProbesParams) ([]ListStaleProbesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listStaleProbes, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStaleProbesRow{}
+	for rows.Next() {
+		var i ListStaleProbesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SizeBytes,
+			&i.RootFolderID,
+			&i.RelPath,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUnfingerprinted = `-- name: ListUnfingerprinted :many
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
