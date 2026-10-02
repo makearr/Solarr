@@ -80,6 +80,8 @@ test("a folder previews, commits and reverts", async ({ page }) => {
   await page.goto("/library/1/import");
 
   await page.getByLabel("Source path").fill(DOWNLOAD_FIXTURE);
+  // The path picker's list covers the options below it until it is closed.
+  await page.keyboard.press("Escape");
   await page.getByText("Preview first").click();
   await page.getByRole("button", { name: "Import", exact: true }).click();
 
