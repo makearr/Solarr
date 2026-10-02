@@ -10,6 +10,7 @@ import { factsOf } from "@/lib/identificationEvidence";
 import { IdentificationCandidates } from "./IdentificationCandidates";
 import { IdentifyUnitAs } from "./IdentifyUnitAs";
 import { PathPicker, useRecentPaths } from "./PathPicker";
+import { SettingRow, Switch } from "./SettingsCard";
 
 type ImportSession = components["schemas"]["ImportSession"];
 type ImportUnit = components["schemas"]["ImportUnit"];
@@ -77,29 +78,43 @@ export function Import() {
   });
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-4">
-      <div className="flex items-center gap-3">
-        <h2 className="text-sm font-medium">Import</h2>
-        <span className="text-xs text-ink-muted">
-          Point at any path -- a downloaded release, a watched folder, an existing library
-        </span>
-      </div>
+    <div className="mx-auto flex max-w-6xl flex-col gap-5 p-6">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-lg font-semibold">Import</h1>
+        <p className="text-sm text-ink-muted">Bring existing files into the library: a downloaded release, a watched folder, an existing library.</p>
+      </header>
 
-      <div className="flex flex-wrap items-start gap-4">
-        <InspectForm />
-        <ThresholdControl />
-        <TransferLadderControl />
-        <RenameOnImportControl />
-        <ExtraFilesControl />
-      </div>
+      <InspectForm />
 
-      <div className="flex min-h-0 flex-1 gap-4">
+      <section className="flex flex-col gap-4 rounded-lg border border-border-subtle bg-surface p-4">
+        <div className="flex flex-col gap-0.5">
+          <h2 className="text-sm font-medium">How imports are judged and placed</h2>
+          <p className="text-xs text-ink-muted">These apply to every import, whichever folder it is.</p>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+          <ThresholdControl />
+          <TransferLadderControl />
+          <div className="flex flex-col gap-6">
+            <RenameOnImportControl />
+            <ExtraFilesControl />
+          </div>
+        </div>
+      </section>
+
+      <h2 className="text-sm font-semibold">Imports</h2>
+      <div className="flex items-start gap-4">
         <SessionList
           selectedId={selectedSessionId}
           onSelect={setSelectedSessionId}
           liveProgress={liveProgress}
         />
-        {selectedSessionId !== null && <UnitList sessionId={selectedSessionId} />}
+        {selectedSessionId !== null ? (
+          <UnitList sessionId={selectedSessionId} />
+        ) : (
+          <p className="min-w-0 flex-1 rounded-lg border border-dashed border-border-subtle p-6 text-sm text-ink-muted">
+            Pick an import on the left to see what was found in it, and what waits for your decision.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -136,8 +151,8 @@ function RenameOnImportControl() {
   const rename = settings.data.rename_on_import ?? true;
 
   return (
-    <fieldset className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
-      <legend className="px-1 text-ink-muted">Naming</legend>
+    <fieldset className="flex flex-col gap-1 border-0 p-0 text-xs">
+      <legend className="mb-1 p-0 text-sm font-medium text-ink">Naming</legend>
       <label className="flex items-start gap-2">
         <input
           type="checkbox"
@@ -190,8 +205,8 @@ function ExtraFilesControl() {
   const shown = draft ?? saved;
 
   return (
-    <fieldset className="flex flex-col gap-1.5 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
-      <legend className="px-1 text-ink-muted">Extra files</legend>
+    <fieldset className="flex flex-col gap-1.5 border-0 p-0 text-xs">
+      <legend className="mb-1 p-0 text-sm font-medium text-ink">Extra files</legend>
       <label className="flex items-start gap-2">
         <input
           type="checkbox"
@@ -277,8 +292,8 @@ function ThresholdControl() {
   const current = settings.data.auto_commit_confidence;
 
   return (
-    <fieldset className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
-      <legend className="px-1 text-ink-muted">Identification confidence</legend>
+    <fieldset className="flex flex-col gap-1 border-0 p-0 text-xs">
+      <legend className="mb-1 p-0 text-sm font-medium text-ink">Identification confidence</legend>
       {THRESHOLD_LEVELS.map((level) => (
         <label key={level.value} className="flex items-start gap-2">
           <input
@@ -436,8 +451,8 @@ export function TransferLadderEditor({
     TRANSFER_METHODS.find((method) => method.id === id)?.label ?? id;
 
   return (
-    <fieldset className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
-      <legend className="flex items-center gap-1 px-1 text-ink-muted">
+    <fieldset className="flex flex-col gap-1 border-0 p-0 text-xs">
+      <legend className="mb-1 flex items-center gap-1 p-0 text-sm font-medium text-ink">
         Import method
         <button
           type="button"
@@ -625,91 +640,90 @@ function InspectForm() {
 
   return (
     <form
-      className="flex flex-wrap items-end gap-2 rounded-lg border border-border-subtle bg-surface p-3"
+      className="flex flex-col gap-4 rounded-lg border border-border-subtle bg-surface p-4"
       onSubmit={(event) => {
         event.preventDefault();
         if (asRoot && categoryId !== "") addRoot.mutate();
         else inspect.mutate();
       }}
     >
-      <PathPicker
-        value={sourcePath}
-        onChange={setSourcePath}
-        recent={recentPaths}
-        placeholder="/downloads/incoming/Artist - Album"
-      />
-      <label className="flex flex-col gap-1 text-xs text-ink-muted">
-        Origin
-        <select
-          className={inputStyle}
-          value={origin}
-          onChange={(event) => setOrigin(event.target.value as ImportOrigin)}
-        >
-          {ORIGINS.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label
-        className="flex flex-col gap-1 text-xs text-ink-muted"
-        title="Only files that fit the library's content are placed in it. Decide later keeps every unit waiting for a library."
-      >
-        Only into library
-        <select
-          className={inputStyle}
-          value={categoryId}
-          onChange={(event) => setCategoryId(event.target.value === "" ? "" : Number(event.target.value))}
-        >
-          <option value="">Decide later</option>
-          {categories.data?.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex items-center gap-2 self-center pt-4 text-xs text-ink">
-        <input
-          type="checkbox"
-          checked={asRoot && categoryId !== ""}
-          disabled={categoryId === ""}
-          onChange={(event) => setAsRoot(event.target.checked)}
+      <div className="flex flex-col gap-0.5">
+        <h2 className="text-sm font-medium">Import a folder</h2>
+        <p className="text-xs text-ink-muted">
+          Point at a downloaded release, a watched folder or a whole library. Solarr works out what is in it.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <PathPicker
+          value={sourcePath}
+          onChange={setSourcePath}
+          recent={recentPaths}
+          placeholder="/downloads/incoming/Artist - Album"
         />
-        <span title="Nothing is moved or copied: the folder becomes a root folder of the chosen library and is scanned where it is. Needs a library.">
-          Add as a root instead of moving
-        </span>
-      </label>
-      <label className="flex items-center gap-2 self-center pt-4 text-xs text-ink">
-        <input
-          type="checkbox"
-          checked={preview}
-          onChange={(event) => setPreview(event.target.checked)}
-        />
-        <span title="Nothing is placed until you say so: every unit waits below with its candidates.">
-          Preview first
-        </span>
-      </label>
-      <label className="flex items-center gap-2 self-center pt-4 text-xs text-ink">
-        <input
-          type="checkbox"
-          checked={addUnverified && !preview}
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          Origin
+          <select className={inputStyle} value={origin} onChange={(event) => setOrigin(event.target.value as ImportOrigin)}>
+            {ORIGINS.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label
+          className="flex flex-col gap-1 text-xs text-ink-muted"
+          title="Only files that fit the library's content are placed in it. Decide later keeps every unit waiting for a library."
+        >
+          Only into library
+          <select
+            className={inputStyle}
+            value={categoryId}
+            onChange={(event) => setCategoryId(event.target.value === "" ? "" : Number(event.target.value))}
+          >
+            <option value="">Decide later</option>
+            {categories.data?.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="submit"
+          disabled={!sourcePath.trim() || inspect.isPending || addRoot.isPending}
+          className="rounded-md bg-accent px-4 py-1.5 text-sm text-accent-ink disabled:opacity-50
+                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          {inspect.isPending || addRoot.isPending ? "Working…" : asRoot && categoryId !== "" ? "Add root" : "Import"}
+        </button>
+      </div>
+      <div className="flex flex-col gap-3">
+        <SettingRow
+          label="Preview first"
+          help="Nothing is placed until you say so: every folder waits below with its candidates."
+        >
+          <Switch label="Preview first" checked={preview} onChange={setPreview} />
+        </SettingRow>
+        <SettingRow
+          label="Add unrecognised albums"
+          help="A folder no metadata source recognises still becomes an album, named by its own tags or folder and marked unverified. Identify it later from the review below."
           disabled={preview}
-          onChange={(event) => setAddUnverified(event.target.checked)}
-        />
-        <span title="A folder no metadata source recognises still becomes an album, named by its own tags or folder and marked unverified. It is not searched for; identify it later from the review below.">
-          Add unrecognised albums
-        </span>
-      </label>
-      <button
-        type="submit"
-        disabled={!sourcePath.trim() || inspect.isPending || addRoot.isPending}
-        className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-      >
-        {inspect.isPending || addRoot.isPending ? "Working…" : asRoot && categoryId !== "" ? "Add root" : "Import"}
-      </button>
+        >
+          <Switch label="Add unrecognised albums" checked={addUnverified && !preview} disabled={preview} onChange={setAddUnverified} />
+        </SettingRow>
+        <SettingRow
+          label="Add as a root instead of moving"
+          help="Nothing is moved or copied: the folder becomes a root folder of the chosen library and is scanned where it is. Needs a library."
+          disabled={categoryId === ""}
+        >
+          <Switch
+            label="Add as a root instead of moving"
+            checked={asRoot && categoryId !== ""}
+            disabled={categoryId === ""}
+            onChange={setAsRoot}
+          />
+        </SettingRow>
+      </div>
       {addRoot.isSuccess && (
         <p className="w-full text-xs text-ink-muted">
           Added as a root folder of the library; it is being scanned where it is. See Storage → Root folders.
@@ -794,7 +808,7 @@ function SessionList({
   });
 
   return (
-    <div className="flex w-96 shrink-0 flex-col gap-2 overflow-y-auto">
+    <div className="sticky top-0 flex max-h-[75vh] w-96 shrink-0 flex-col gap-2 overflow-y-auto">
       {sessions.isLoading && <Message>Loading sessions…</Message>}
       {sessions.error !== null && <Message>Sessions could not be read.</Message>}
       {sessions.data && sessions.data.length === 0 && (
@@ -1087,7 +1101,7 @@ function UnitList({ sessionId }: { sessionId: number }) {
   });
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border-subtle bg-surface">
+    <div className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-surface">
       {units.data && units.data.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 border-b border-border-subtle px-3 py-2 text-xs text-ink-muted">
           <span className="flex-1">{describeSessionTransfers(units.data)}</span>
