@@ -197,7 +197,7 @@ func (a WorksMonitor) matchingWorkIDs(ctx context.Context, selection apiserver.B
 		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, WantedOnly: selection.Wanted, CutoffUnmetOnly: selection.CutoffUnmet,
 	}
 	if selection.Fresh {
-		filter.FreshSince = FreshSinceCutoff(a.Clock)
+		filter.FreshSince, filter.FreshRSSSince = FreshSinceCutoff(a.Clock), FreshRSSCutoff(a.Clock)
 	}
 	var matched []int64
 	cursor := library.WorkCursor{}

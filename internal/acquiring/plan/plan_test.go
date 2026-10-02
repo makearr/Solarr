@@ -168,3 +168,17 @@ func TestDecideUpgradeWaitsForTheFileToAgeAndTheWindowToFree(t *testing.T) {
 		t.Errorf("an unmonitored upgrade: eligible %d, want never", got.EligibleAfter)
 	}
 }
+
+// ADR-55: an old album an RSS feed showed a release for ranks as a new release for 48 hours, then as a gap again.
+func TestDecideAnRSSHitMakesAnOldAlbumANewReleaseForFortyEightHours(t *testing.T) {
+	gap := Decide(missing(), testPolicy, testNow).Priority
+	item := missing()
+	item.RSSSeenAt = testNow.Add(-47 * time.Hour).Unix()
+	if got := Decide(item, testPolicy, testNow).Priority; got <= gap {
+		t.Errorf("seen 47h ago: priority %d, want above the gap's %d", got, gap)
+	}
+	item.RSSSeenAt = testNow.Add(-49 * time.Hour).Unix()
+	if got := Decide(item, testPolicy, testNow).Priority; got != gap {
+		t.Errorf("seen 49h ago: priority %d, want the gap's %d again", got, gap)
+	}
+}

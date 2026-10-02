@@ -625,3 +625,17 @@ func TestADR28_AlbumSortsStayUnderTheirTarget(t *testing.T) {
 		assertTarget(t, "albums sorted by "+string(sort), durations, albumSortTarget)
 	}
 }
+
+// The Fresh filter ORs the release-date window with RSS hits (ADR-55), so it cannot walk one index.
+func TestADR28_FreshListStaysUnderItsTarget(t *testing.T) {
+	timed(t)
+
+	works := library.NewWorks(corpus(t))
+	filter := library.WorkFilter{MediaType: "music", FreshSince: "2020-01-01", FreshRSSSince: 1}
+	durations := measure(20, func(int) {
+		if _, err := works.List(t.Context(), filter, library.WorkCursor{}, listPageSize); err != nil {
+			t.Fatalf("List: %v", err)
+		}
+	})
+	assertTarget(t, "fresh list page", durations, listPageTarget)
+}

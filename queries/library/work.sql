@@ -199,8 +199,11 @@ FROM work_date WHERE work_id = ? ORDER BY kind, region;
 -- work_date of kind on or after the cutoff. Distinct since a work can carry
 -- more than one region's own date row for the same kind.
 -- name: CountFreshWorks :one
-SELECT CAST(COUNT(DISTINCT work_id) AS INTEGER) AS total FROM work_date
-WHERE kind = ? AND date >= ?;
+SELECT CAST(COUNT(*) AS INTEGER) AS total FROM work
+WHERE EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = work.id AND wd.kind = sqlc.arg(kind) AND wd.date >= sqlc.arg(date))
+   OR EXISTS (SELECT 1 FROM candidate_decision cd JOIN candidate c ON c.id = cd.candidate_id
+              JOIN desired_item di ON di.id = cd.desired_item_id
+              WHERE di.work_id = work.id AND c.source = 'rss' AND c.first_seen_at >= sqlc.arg(rss_since));
 
 -- name: SetWorkClassification :exec
 INSERT INTO work_classification (work_id, kind, value, source)

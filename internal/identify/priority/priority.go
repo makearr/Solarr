@@ -75,6 +75,10 @@ const AgingInterval = time.Hour
 // for anything that actually shows up on an indexer.
 const DefaultNewReleaseDays = 7
 
+// RSSFreshHours is ADR-55's availability window: an item an RSS feed showed a release for is new to this library
+// for this many hours, whatever its release date. A fixed value until the setting is registered.
+const RSSFreshHours = 48
+
 // Input is what one hunt_queue-shaped item needs computed. CategoryRank is
 // 1-based and user-ordered (drag-to-reorder in settings): 1 is the most
 // preferred category, matching the list a user actually sees and edits.
@@ -133,9 +137,8 @@ func ParseReleaseDate(raw string) (parsed time.Time, ok bool) {
 	return parsed, err == nil
 }
 
-// IsFresh is ADR-55's release-date window alone -- its indexer/RSS half
-// (rss_fresh_hours) needs candidate.first_seen_at, which nothing can write
-// before stage 5. This is the one definition the new_release trigger, the
+// IsFresh is ADR-55's release-date window alone; the RSS half lives in SQL and the planner (RSSFreshHours).
+// This is the one definition the new_release trigger, the
 // Fresh list filter and the dashboard panel all read from.
 //
 // Deliberately not just ClassifyTrigger: that function treats a nil or

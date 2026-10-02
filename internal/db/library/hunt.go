@@ -34,6 +34,8 @@ type PlanInput struct {
 	AfterFailure bool
 	// ArrivedAt is when the work's newest file arrived; RecentImports the item's imports since the window began.
 	ArrivedAt, RecentImports int64
+	// RSSSeenAt is when an RSS feed first showed a release decided for this item; zero when none did.
+	RSSSeenAt int64
 }
 
 // PlanInputs pages through the dirty set, or with dirtyOnly false through every item, by id.
@@ -50,7 +52,7 @@ func (h Hunt) PlanInputs(ctx context.Context, dirtyOnly bool, afterID, pageSize,
 			ID: row.ID, CategoryID: row.CategoryID, MediaRef: row.MediaRef, Monitored: row.Monitored == 1, SatisfactionKind: row.SatisfactionKind,
 			State: row.State, Generation: row.Generation, ReleaseDate: row.ReleaseDate,
 			LastSearchedAt: row.LastSearchedAt, SearchCount: row.SearchCount, QueuedSince: row.QueuedSince,
-			AfterFailure: row.AfterFailure == 1, ArrivedAt: row.ArrivedAt, RecentImports: row.RecentImports,
+			AfterFailure: row.AfterFailure == 1, ArrivedAt: row.ArrivedAt, RecentImports: row.RecentImports, RSSSeenAt: row.RssSeenAt,
 		}
 	}
 	return inputs, nil

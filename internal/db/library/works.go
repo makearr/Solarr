@@ -97,6 +97,9 @@ type WorkFilter struct {
 	// any real cutoff in the plain string comparison this uses, which is
 	// the point -- freshness needs day precision, not a guess from less.
 	FreshSince string
+	// FreshRSSSince is ADR-55's other window as a Unix time: a work an RSS feed showed a release for since then is
+	// fresh too. Read only when FreshSince is set.
+	FreshRSSSince int64
 	// Sort and Direction pick the list's order (section 21.2's configurable,
 	// sortable columns).
 	Sort      WorkSort
@@ -185,8 +188,11 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	addPrefix(&predicates, filter.TitlePrefix)
 	addVisibility(&predicates, filter.RootFolderIDs, filter.CategoryIDs)
 	predicates.AddIf(filter.FreshSince != "",
-		"EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = work.id AND wd.kind = ? AND wd.date >= ?)",
-		WorkDateStreet, filter.FreshSince)
+		"(EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = work.id AND wd.kind = ? AND wd.date >= ?)"+
+			" OR EXISTS (SELECT 1 FROM candidate_decision fcd JOIN candidate fc ON fc.id = fcd.candidate_id"+
+			" JOIN desired_item fdi ON fdi.id = fcd.desired_item_id"+
+			" WHERE fdi.work_id = work.id AND fc.source = 'rss' AND fc.first_seen_at >= ?))",
+		WorkDateStreet, filter.FreshSince, filter.FreshRSSSince)
 	// A work with no tracks yet is waiting for metadata, not missing: Lidarr never calls an album
 	// missing before it knows its tracks (answered 2026-09-28).
 	predicates.AddIf(filter.WantedOnly,

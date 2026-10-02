@@ -197,20 +197,24 @@ func (q *Queries) CountCalendarDates(ctx context.Context, arg CountCalendarDates
 }
 
 const countFreshWorks = `-- name: CountFreshWorks :one
-SELECT CAST(COUNT(DISTINCT work_id) AS INTEGER) AS total FROM work_date
-WHERE kind = ? AND date >= ?
+SELECT CAST(COUNT(*) AS INTEGER) AS total FROM work
+WHERE EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = work.id AND wd.kind = ?1 AND wd.date >= ?2)
+   OR EXISTS (SELECT 1 FROM candidate_decision cd JOIN candidate c ON c.id = cd.candidate_id
+              JOIN desired_item di ON di.id = cd.desired_item_id
+              WHERE di.work_id = work.id AND c.source = 'rss' AND c.first_seen_at >= ?3)
 `
 
 type CountFreshWorksParams struct {
-	Kind string
-	Date string
+	Kind     string
+	Date     string
+	RssSince int64
 }
 
 // The dashboard's fresh-works count (ADR-55, todo 4.20): every work with a
 // work_date of kind on or after the cutoff. Distinct since a work can carry
 // more than one region's own date row for the same kind.
 func (q *Queries) CountFreshWorks(ctx context.Context, arg CountFreshWorksParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countFreshWorks, arg.Kind, arg.Date)
+	row := q.db.QueryRowContext(ctx, countFreshWorks, arg.Kind, arg.Date, arg.RssSince)
 	var total int64
 	err := row.Scan(&total)
 	return total, err

@@ -371,7 +371,9 @@ SELECT di.id, di.category_id, di.media_ref, di.monitored, di.satisfaction_kind, 
        CAST(COALESCE(h.after_failure, 0) AS INTEGER) AS after_failure,
        CAST(COALESCE((SELECT a.arrived_at FROM work_arrival a WHERE a.work_id = di.work_id), 0) AS INTEGER) AS arrived_at,
        CAST((SELECT COUNT(*) FROM acquisition aq WHERE aq.desired_item_id = di.id AND aq.state = 'IMPORTED'
-             AND aq.updated_at >= sqlc.arg(imports_since)) AS INTEGER) AS recent_imports
+             AND aq.updated_at >= sqlc.arg(imports_since)) AS INTEGER) AS recent_imports,
+       CAST(COALESCE((SELECT MAX(rc.first_seen_at) FROM candidate_decision rd JOIN candidate rc ON rc.id = rd.candidate_id
+                      WHERE rd.desired_item_id = di.id AND rc.source = 'rss'), 0) AS INTEGER) AS rss_seen_at
 FROM desired_item di
 LEFT JOIN hunt_queue h ON h.desired_item_id = di.id
 WHERE (CAST(sqlc.arg(dirty_only) AS INTEGER) = 0 OR di.dirty = 1) AND di.id > sqlc.arg(after_id)

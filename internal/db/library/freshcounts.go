@@ -40,9 +40,9 @@ func NewFreshCounts(opened *store.Store, cl clock.Clock) FreshCounts {
 // same way cmd/solarr/adapters.Works already does for the Library
 // list's own fresh=true filter, and the two can never disagree about what
 // "fresh" means.
-func (c FreshCounts) Reconcile(ctx context.Context, since string) ([]Correction, error) {
+func (c FreshCounts) Reconcile(ctx context.Context, since string, rssSince int64) ([]Correction, error) {
 	reader := librarydb.New(c.store.Read())
-	fresh, err := reader.CountFreshWorks(ctx, librarydb.CountFreshWorksParams{Kind: WorkDateStreet, Date: since})
+	fresh, err := reader.CountFreshWorks(ctx, librarydb.CountFreshWorksParams{Kind: WorkDateStreet, Date: since, RssSince: rssSince})
 	if err != nil {
 		return nil, fmt.Errorf("library: fresh counts: %w", err)
 	}
