@@ -1443,6 +1443,12 @@ type DownloaderOptions struct {
 
 	// RemoveCompleted Remove a download from the client once imported. Absent means yes.
 	RemoveCompleted *bool `json:"remove_completed,omitempty"`
+
+	// SeedMinutes Torrent clients: minutes an imported torrent seeds before removal. 0 or absent is no time limit.
+	SeedMinutes *int `json:"seed_minutes,omitempty"`
+
+	// SeedRatio Torrent clients: an imported torrent stays (and seeds) until it has shared this ratio or seeded for seed_minutes, whichever comes first, then it is removed with its files. Needs remove_completed. 0 or absent is no ratio limit.
+	SeedRatio *float64 `json:"seed_ratio,omitempty"`
 }
 
 // DrainMove defines model for DrainMove.

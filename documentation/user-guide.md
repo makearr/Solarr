@@ -45,7 +45,7 @@ advanced): automatic downloads stop before they would eat into it.
   in the client and only ever touches downloads in it.
   **qBittorrent** (torrents) is added the same way, with a user name and password (empty when it lets Solarr's
   address in); Lidarr's qBittorrent can be taken from its Connections page, its user name filled in for you. A torrent is followed by its info hash; it is not removed after import unless you tick that
-  (it keeps seeding). If qBittorrent names its download folder differently from Solarr, set the path
+  (it keeps seeding). With that ticked, **Seed to ratio** and **Seed for (minutes)** keep an imported torrent in qBittorrent until it has shared that much or seeded that long, whichever comes first, and only then remove it with its files; neither set removes it at once. A torrent you removed in qBittorrent yourself is simply considered done. If qBittorrent names its download folder differently from Solarr, set the path
   mapping on the client. A client serves the protocol it is added with, so a torrent release needs a
   torrent client.
 

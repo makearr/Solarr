@@ -156,6 +156,19 @@ func (a Acquisitions) ListActive(ctx context.Context) ([]Acquisition, error) {
 	return acquisitions, nil
 }
 
+// ListImported answers the imported downloads that may still sit in their client, oldest first.
+func (a Acquisitions) ListImported(ctx context.Context) ([]Acquisition, error) {
+	rows, err := librarydb.New(a.store.Read()).ListImportedAcquisitions(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("library: list imported acquisitions: %w", err)
+	}
+	acquisitions := make([]Acquisition, len(rows))
+	for i, row := range rows {
+		acquisitions[i] = acquisitionFromRow(row)
+	}
+	return acquisitions, nil
+}
+
 // SetPath records where the client says a download's files are, re-read on every poll.
 func (a Acquisitions) SetPath(ctx context.Context, id int64, path string, at int64) error {
 	return a.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {

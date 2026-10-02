@@ -23,6 +23,21 @@ type DownloaderOptions struct {
 	// queue (2026-09-29, default on); off, they are held too, ahead of automatic ones.
 	AlwaysSendUserGrabs *bool `json:"always_send_user_grabs,omitempty"`
 	AlwaysSendRSSGrabs  *bool `json:"always_send_rss_grabs,omitempty"`
+	// SeedRatio and SeedMinutes keep an imported torrent in the client until it has shared that much, or for
+	// that long, whichever comes first; both unset removes it at once (2026-10-02, off by default).
+	SeedRatio   *float64 `json:"seed_ratio,omitempty"`
+	SeedMinutes *int     `json:"seed_minutes,omitempty"`
+}
+
+// SeedGoal is the ratio and minutes an imported torrent seeds for; 0 is no limit of that kind, and both 0 means none.
+func (o DownloaderOptions) SeedGoal() (ratio float64, minutes int) {
+	if o.SeedRatio != nil {
+		ratio = *o.SeedRatio
+	}
+	if o.SeedMinutes != nil {
+		minutes = *o.SeedMinutes
+	}
+	return ratio, minutes
 }
 
 // DefaultMaxQueued is ADR-57's default queue depth per client.

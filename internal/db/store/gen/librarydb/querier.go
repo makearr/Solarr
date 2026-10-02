@@ -483,6 +483,8 @@ type Querier interface {
 	// ListImportUnits itself stays as-is for the job's own small, in-process needs
 	// (resumeOrCreate's "the last unit committed so far" lookup).
 	ListImportUnitsPage(ctx context.Context, arg ListImportUnitsPageParams) ([]ImportUnit, error)
+	// Imported downloads still in their client: kept there to seed until a client's goal is met.
+	ListImportedAcquisitions(ctx context.Context) ([]Acquisition, error)
 	// Library health's own "missing tracks" list (todo 4.8): every monitored
 	// item still short of its own required_count, using desired_by_category's
 	// own (category_id, state) index. UPGRADABLE is deliberately excluded --

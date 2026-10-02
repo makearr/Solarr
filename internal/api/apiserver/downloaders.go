@@ -237,7 +237,7 @@ func optionsJSON(options *gen.DownloaderOptions) string {
 		RemoveCompleted: options.RemoveCompleted, Category: derefOr(options.Category, ""),
 		RemotePath: derefOr(options.RemotePath, ""), LocalPath: derefOr(options.LocalPath, ""),
 		MaxQueued: options.MaxQueued, AlwaysSendUserGrabs: options.AlwaysSendUserGrabs,
-		AlwaysSendRSSGrabs: options.AlwaysSendRssGrabs,
+		AlwaysSendRSSGrabs: options.AlwaysSendRssGrabs, SeedRatio: positiveFloat(options.SeedRatio), SeedMinutes: positiveInt(options.SeedMinutes),
 	}
 	encoded, err := json.Marshal(stored)
 	if err != nil || string(encoded) == "{}" {
@@ -280,11 +280,32 @@ func downloaderOptionsView(options settings.DownloaderOptions) *gen.DownloaderOp
 		RemotePath: strPtr(options.RemotePath), LocalPath: strPtr(options.LocalPath),
 		MaxQueued: options.MaxQueued, AlwaysSendUserGrabs: options.AlwaysSendUserGrabs,
 		AlwaysSendRssGrabs: options.AlwaysSendRSSGrabs,
+		SeedRatio:          positiveFloat(options.SeedRatio), SeedMinutes: positiveInt(options.SeedMinutes),
 	}
+}
+
+// positiveFloat and positiveInt drop a zero limit: 0 means no limit, which is how it is stored.
+func positiveFloat(value *float64) *float64 {
+	if value == nil || *value <= 0 {
+		return nil
+	}
+	return value
+}
+
+func positiveInt(value *int) *int {
+	if value == nil || *value <= 0 {
+		return nil
+	}
+	return value
 }
 
 // validOptions refuses a queue depth that would hold everything or nothing (ADR-44: on write).
 func (s *Server) validOptions(w http.ResponseWriter, options *gen.DownloaderOptions) bool {
+	if options != nil && ((options.SeedRatio != nil && *options.SeedRatio < 0) || (options.SeedMinutes != nil && *options.SeedMinutes < 0)) {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "seed_ratio and seed_minutes cannot be negative")
+		return false
+	}
 	if options != nil && options.MaxQueued != nil && (*options.MaxQueued < 1 || *options.MaxQueued > 1000) {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
 			"Bad request", "max_queued must be between 1 and 1000")

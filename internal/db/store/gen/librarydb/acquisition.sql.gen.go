@@ -865,6 +865,63 @@ func (q *Queries) ListImportDecisionsNeedingReview(ctx context.Context, limit in
 	return items, nil
 }
 
+const listImportedAcquisitions = `-- name: ListImportedAcquisitions :many
+SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
+       candidate_title, search_terms, downloader_id, download_client_ref,
+       download_dir, client_category, client_fingerprint, protocol,
+       ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
+       created_at, updated_at, content_hash
+FROM acquisition
+WHERE state = 'IMPORTED'
+ORDER BY id
+`
+
+// Imported downloads still in their client: kept there to seed until a client's goal is met.
+func (q *Queries) ListImportedAcquisitions(ctx context.Context) ([]Acquisition, error) {
+	rows, err := q.db.QueryContext(ctx, listImportedAcquisitions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Acquisition{}
+	for rows.Next() {
+		var i Acquisition
+		if err := rows.Scan(
+			&i.ID,
+			&i.DesiredItemID,
+			&i.CandidateID,
+			&i.IndexerID,
+			&i.CandidateGuid,
+			&i.CandidateTitle,
+			&i.SearchTerms,
+			&i.DownloaderID,
+			&i.DownloadClientRef,
+			&i.DownloadDir,
+			&i.ClientCategory,
+			&i.ClientFingerprint,
+			&i.Protocol,
+			&i.DdlResolvedUrl,
+			&i.DdlBytesDone,
+			&i.DdlResumable,
+			&i.State,
+			&i.LastError,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ContentHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markRecycleBinRestored = `-- name: MarkRecycleBinRestored :execrows
 UPDATE recycle_bin SET restored_at = ? WHERE id = ? AND restored_at IS NULL
 `

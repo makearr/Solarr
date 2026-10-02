@@ -65,6 +65,9 @@ type Download struct {
 	Path string
 	// Error is the client's reason for a failure.
 	Error string
+	// Ratio and SeedingSeconds are what a torrent has shared and for how long; zero for a client that does not seed.
+	Ratio          float64
+	SeedingSeconds int64
 }
 
 // AddRequest is one release sent to a client: the file Solarr fetched from the indexer, named.

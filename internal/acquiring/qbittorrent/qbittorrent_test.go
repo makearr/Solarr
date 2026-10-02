@@ -100,7 +100,7 @@ func TestDownloader_AddSendsTheTorrentUnderTheCategoryAndAnswersTheInfoHash(t *t
 
 func TestDownloader_DownloadsMapsStatesAndOnlyACompletedOneHasAPath(t *testing.T) {
 	server := &fakeServer{routes: map[string]route{"/api/v2/torrents/info": {body: `[
-	 {"hash":"a","name":"seeding","category":"c","state":"stalledUP","size":10,"amount_left":0,"content_path":"/downloads/x"},
+	 {"hash":"a","name":"seeding","category":"c","state":"stalledUP","size":10,"amount_left":0,"content_path":"/downloads/x","ratio":1.5,"seeding_time":3600},
 	 {"hash":"b","name":"going","category":"c","state":"downloading","size":10,"amount_left":4,"content_path":"/downloads/y"},
 	 {"hash":"c","name":"stopped","category":"c","state":"stoppedDL","size":10,"amount_left":9},
 	 {"hash":"d","name":"bad","category":"c","state":"missingFiles","size":10,"amount_left":9}]`}}}
@@ -120,6 +120,9 @@ func TestDownloader_DownloadsMapsStatesAndOnlyACompletedOneHasAPath(t *testing.T
 	}
 	if got[0].Path != "/downloads/x" || got[1].Path != "" || got[3].Error == "" {
 		t.Errorf("paths and errors wrong: %+v", got)
+	}
+	if got[0].Ratio != 1.5 || got[0].SeedingSeconds != 3600 {
+		t.Errorf("seeding figures = %v and %d s, want 1.5 and 3600", got[0].Ratio, got[0].SeedingSeconds)
 	}
 	if server.requested[0].URL.RawQuery != "category=c" {
 		t.Errorf("query = %q", server.requested[0].URL.RawQuery)
