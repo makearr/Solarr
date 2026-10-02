@@ -45,6 +45,7 @@ type fakeWorksMonitor struct {
 	lastBulkMonitored     *bool
 	lastBulkPreview       *bool
 	bulkCalls             int
+	lastBulkSelection     apiserver.BulkSelection
 }
 
 func (f *fakeWorksMonitor) SetWorkMonitored(_ context.Context, _ int64, monitored bool) (apiserver.WantedRow, error) {
@@ -74,13 +75,14 @@ func (f *fakeWorksMonitor) SetTrackWanted(_ context.Context, _, partID int64, wa
 }
 
 func (f *fakeWorksMonitor) BulkSetMonitored(
-	_ context.Context, rootFolderIDs, categoryIDs, ids, excludedIDs []int64, monitored, preview bool,
+	_ context.Context, selection apiserver.BulkSelection, monitored, preview bool,
 ) (int64, error) {
 	f.bulkCalls++
-	f.lastBulkRootFolderIDs = rootFolderIDs
-	f.lastBulkCategoryIDs = categoryIDs
-	f.lastBulkIDs = ids
-	f.lastBulkExcludedIDs = excludedIDs
+	f.lastBulkRootFolderIDs = selection.RootFolderIDs
+	f.lastBulkCategoryIDs = selection.CategoryIDs
+	f.lastBulkIDs = selection.IDs
+	f.lastBulkExcludedIDs = selection.ExcludedIDs
+	f.lastBulkSelection = selection
 	f.lastBulkMonitored = &monitored
 	f.lastBulkPreview = &preview
 	if f.bulkErr != nil {
@@ -594,5 +596,19 @@ func TestSetWorkMonitored_SearchesAtOnceWhenAsked(t *testing.T) {
 			t.Errorf("%s: searched = %v (category %d, works %v), want %v", test.body, searched,
 				fixture.candidateSearcher.lastSearchCategoryID, fixture.candidateSearcher.lastSearchWorkIDs, test.wantSearch)
 		}
+	}
+}
+
+// A bulk action under the list's own filters must reach the selection, or "select all matching" under Fresh
+// would act on every album of the library.
+func TestBulkSetWorkMonitored_ForwardsTheListFilters(t *testing.T) {
+	fixture, cookies := visibleWorksFixture(t)
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/bulk/monitor",
+		`{"category_id":1,"fresh":true,"cutoff_unmet":true,"monitored":false,"preview":true}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if got := fixture.worksMonitor.lastBulkSelection; !got.Fresh || !got.CutoffUnmet || got.Wanted {
+		t.Errorf("selection = %+v, want fresh and cutoff_unmet only", got)
 	}
 }

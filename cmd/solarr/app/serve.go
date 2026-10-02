@@ -789,7 +789,7 @@ func (p *process) worksMonitor() adapters.WorksMonitor {
 		Identity: library.NewIdentity(p.library), Works: library.NewWorks(p.library),
 		Desired: library.NewDesired(p.library), Categories: adapters.Categories{Cache: p.cache},
 		Libraries: adapters.Categories{Cache: p.cache}, Remover: p.fileRemover(),
-		DefaultProfileID: p.defaultQualityProfileID, Logger: p.logger,
+		DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Logger: p.logger,
 	}
 }
 

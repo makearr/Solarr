@@ -211,14 +211,21 @@ func worksCursorFor(sort WorkSort, cursor paginate.TextCursor) WorksCursor {
 // scoped to categoryID when given. A category the caller cannot read answers
 // authz.ErrNotVisible, which writeError already maps to 404 (Invariant 37).
 func (s *Server) visibility(access authz.Access, categoryID *int64) (rootFolderIDs, categoryIDs []int64, err error) {
+	return s.visibilityAt(access, categoryID, settings.PermissionRead)
+}
+
+// visibilityAt is visibility for an action needing required rather than read.
+func (s *Server) visibilityAt(
+	access authz.Access, categoryID *int64, required settings.Permission,
+) (rootFolderIDs, categoryIDs []int64, err error) {
 	if categoryID != nil {
-		if _, err := access.Category(*categoryID, settings.PermissionRead); err != nil {
+		if _, err := access.Category(*categoryID, required); err != nil {
 			return nil, nil, err
 		}
 		categoryIDs = []int64{*categoryID}
 		return s.rootsOf(categoryIDs), categoryIDs, nil
 	}
-	rootFolderIDs, categoryIDs = s.visibleAt(access, settings.PermissionRead)
+	rootFolderIDs, categoryIDs = s.visibleAt(access, required)
 	return rootFolderIDs, categoryIDs, nil
 }
 

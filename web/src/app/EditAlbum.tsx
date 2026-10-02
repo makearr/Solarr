@@ -193,3 +193,126 @@ function EditAlbumDialog({ id, onClose }: { id: number; onClose: () => void }) {
     </Dialog.Root>
   );
 }
+
+type Selection = { ids?: number[]; category_id?: number; excluded_ids?: number[]; fresh?: boolean };
+type Choice = "keep" | "yes" | "no";
+
+/** Radarr's Edit selected: what the dialog sets is applied to every album of the selection, after the count is shown. */
+export function BulkEditDialog({ selection, onClose, onDone }: { selection: Selection; onClose: () => void; onDone: () => void }) {
+  const [monitored, setMonitored] = useState<Choice>("keep");
+  const [profile, setProfile] = useState<"keep" | "default" | number>("keep");
+  const [addTags, setAddTags] = useState("");
+  const [removeTags, setRemoveTags] = useState("");
+  const [count, setCount] = useState<number | null>(null);
+  const profiles = useQuery({
+    queryKey: ["qualityProfiles"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/qualityprofiles");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const names = (raw: string) => raw.split(",").map((name) => name.trim()).filter((name) => name !== "");
+  const send = useMutation({
+    mutationFn: async (preview: boolean) => {
+      const { data, error } = await api.POST("/works/bulk/edit", {
+        body: {
+          ...selection,
+          preview,
+          monitored: monitored === "keep" ? undefined : monitored === "yes",
+          profile: profile === "keep" ? undefined : { id: profile === "default" ? null : profile },
+          add_tags: names(addTags),
+          remove_tags: names(removeTags),
+        },
+      });
+      if (error) throw error;
+      return { count: data.count, preview };
+    },
+    onSuccess: (result) => {
+      if (result.preview) setCount(result.count);
+      else onDone();
+    },
+  });
+  const nothing =
+    monitored === "keep" && profile === "keep" && names(addTags).length === 0 && names(removeTags).length === 0;
+  const field = "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm";
+  return (
+    <Dialog.Root open onOpenChange={(next) => !next && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
+        <Dialog.Content
+          className="fixed top-1/2 left-1/2 z-50 flex w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2
+                     flex-col gap-4 rounded-lg border border-border-subtle bg-canvas p-4 shadow-xl"
+        >
+          <div className="flex items-center gap-2">
+            <Dialog.Title className="text-sm font-medium">Edit selected albums</Dialog.Title>
+            <Dialog.Close aria-label="Close" className="ml-auto rounded-md p-1 text-ink-muted hover:text-ink">
+              <X aria-hidden className="size-4" />
+            </Dialog.Close>
+          </div>
+          <Dialog.Description className="text-xs text-ink-muted">
+            Only what you change is applied; the rest of each album stays as it is.
+          </Dialog.Description>
+          <label className="flex flex-col gap-1 text-sm">
+            Monitored
+            <select value={monitored} onChange={(event) => { setMonitored(event.target.value as Choice); setCount(null); }} className={field}>
+              <option value="keep">No change</option>
+              <option value="yes">Monitor</option>
+              <option value="no">Unmonitor</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Quality profile
+            <select
+              value={String(profile)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setProfile(value === "keep" || value === "default" ? value : Number(value));
+                setCount(null);
+              }}
+              className={field}
+            >
+              <option value="keep">No change</option>
+              <option value="default">Library default</option>
+              {(profiles.data ?? []).filter((one) => one.media_type === "music").map((one) => (
+                <option key={one.id} value={one.id}>{one.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Add tags
+            <input value={addTags} onChange={(event) => { setAddTags(event.target.value); setCount(null); }} placeholder="comma separated" className={field} />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Remove tags
+            <input value={removeTags} onChange={(event) => { setRemoveTags(event.target.value); setCount(null); }} placeholder="comma separated" className={field} />
+          </label>
+          {send.error !== null && <p className="text-sm text-danger">That could not be applied.</p>}
+          <div className="flex items-center justify-end gap-2">
+            {count !== null && <span className="mr-auto text-sm">Change {count} {count === 1 ? "album" : "albums"}?</span>}
+            <Dialog.Close className="rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted hover:text-ink">Cancel</Dialog.Close>
+            {count === null ? (
+              <button
+                type="button"
+                disabled={nothing || send.isPending}
+                onClick={() => send.mutate(true)}
+                className="rounded-md bg-accent px-3 py-1.5 text-sm text-white disabled:opacity-50"
+              >
+                Review
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={send.isPending}
+                onClick={() => send.mutate(false)}
+                className="rounded-md bg-accent px-3 py-1.5 text-sm text-white disabled:opacity-50"
+              >
+                {send.isPending ? "Applying…" : "Apply"}
+              </button>
+            )}
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}

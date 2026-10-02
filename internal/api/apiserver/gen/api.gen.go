@@ -3864,15 +3864,41 @@ type ListWorksParamsSort string
 // ListWorksParamsDir defines parameters for ListWorks.
 type ListWorksParamsDir string
 
+// BulkEditWorksJSONBody defines parameters for BulkEditWorks.
+type BulkEditWorksJSONBody struct {
+	AddTags     *[]string `json:"add_tags,omitempty"`
+	CategoryId  *int64    `json:"category_id,omitempty"`
+	CutoffUnmet *bool     `json:"cutoff_unmet,omitempty"`
+	ExcludedIds *[]int64  `json:"excluded_ids,omitempty"`
+	Fresh       *bool     `json:"fresh,omitempty"`
+	Ids         *[]int64  `json:"ids,omitempty"`
+	Monitored   *bool     `json:"monitored,omitempty"`
+	Preview     *bool     `json:"preview,omitempty"`
+	Profile     *struct {
+		Id *int64 `json:"id"`
+	} `json:"profile,omitempty"`
+	RemoveTags *[]string `json:"remove_tags,omitempty"`
+	Wanted     *bool     `json:"wanted,omitempty"`
+}
+
 // BulkSetWorkMonitoredJSONBody defines parameters for BulkSetWorkMonitored.
 type BulkSetWorkMonitoredJSONBody struct {
-	CategoryId  *int64   `json:"category_id,omitempty"`
+	CategoryId *int64 `json:"category_id,omitempty"`
+
+	// CutoffUnmet The list's Cutoff Unmet filter.
+	CutoffUnmet *bool    `json:"cutoff_unmet,omitempty"`
 	ExcludedIds *[]int64 `json:"excluded_ids,omitempty"`
+
+	// Fresh The list's Fresh filter
+	Fresh *bool `json:"fresh,omitempty"`
 
 	// Ids Explicit ids ("select all matching" was never used). Takes precedence over category_id/excluded_ids when non-empty.
 	Ids       *[]int64 `json:"ids,omitempty"`
 	Monitored bool     `json:"monitored"`
 	Preview   *bool    `json:"preview,omitempty"`
+
+	// Wanted The list's Wanted filter.
+	Wanted *bool `json:"wanted,omitempty"`
 }
 
 // GetWorkArtworkParams defines parameters for GetWorkArtwork.
@@ -4125,6 +4151,9 @@ type UpdateUserJSONRequestBody UpdateUserJSONBody
 
 // SetUserAccessJSONRequestBody defines body for SetUserAccess for application/json ContentType.
 type SetUserAccessJSONRequestBody SetUserAccessJSONBody
+
+// BulkEditWorksJSONRequestBody defines body for BulkEditWorks for application/json ContentType.
+type BulkEditWorksJSONRequestBody BulkEditWorksJSONBody
 
 // BulkSetWorkMonitoredJSONRequestBody defines body for BulkSetWorkMonitored for application/json ContentType.
 type BulkSetWorkMonitoredJSONRequestBody BulkSetWorkMonitoredJSONBody
@@ -4716,6 +4745,9 @@ type ServerInterface interface {
 	// A page of the library the caller may see (ADR-27).
 	// (GET /works)
 	ListWorks(w http.ResponseWriter, r *http.Request, params ListWorksParams)
+	// Change monitoring, quality profile and tags of every work matching a selection (Radarr's Edit selected).
+	// (POST /works/bulk/edit)
+	BulkEditWorks(w http.ResponseWriter, r *http.Request)
 	// Monitor or unmonitor every work matching a selection (section 21.7).
 	// (POST /works/bulk/monitor)
 	BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request)
@@ -5898,6 +5930,12 @@ func (_ Unimplemented) SetUserAccess(w http.ResponseWriter, r *http.Request, id 
 // A page of the library the caller may see (ADR-27).
 // (GET /works)
 func (_ Unimplemented) ListWorks(w http.ResponseWriter, r *http.Request, params ListWorksParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change monitoring, quality profile and tags of every work matching a selection (Radarr's Edit selected).
+// (POST /works/bulk/edit)
+func (_ Unimplemented) BulkEditWorks(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11815,6 +11853,28 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// BulkEditWorks operation middleware
+func (siw *ServerInterfaceWrapper) BulkEditWorks(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BulkEditWorks(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // BulkSetWorkMonitored operation middleware
 func (siw *ServerInterfaceWrapper) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 
@@ -13169,6 +13229,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works", wrapper.ListWorks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/bulk/edit", wrapper.BulkEditWorks)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/bulk/monitor", wrapper.BulkSetWorkMonitored)

@@ -1792,6 +1792,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/bulk/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change monitoring, quality profile and tags of every work matching a selection (Radarr's Edit selected).
+         * @description The selection is the one /works/bulk/monitor takes, filters included, so "select all matching" under a filter touches only what the list showed. Only what is present is changed: monitored, profile (an object whose id null returns the albums to their library's profiles), and tags to add or remove. preview counts and changes nothing.
+         */
+        post: operations["bulkEditWorks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}/artwork": {
         parameters: {
             query?: never;
@@ -8862,9 +8882,71 @@ export interface operations {
                     /** Format: int64 */
                     category_id?: number;
                     excluded_ids?: number[];
+                    /**
+                     * @description The list's Fresh filter
+                     * @default false
+                     */
+                    fresh?: boolean;
+                    /**
+                     * @description The list's Wanted filter.
+                     * @default false
+                     */
+                    wanted?: boolean;
+                    /**
+                     * @description The list's Cutoff Unmet filter.
+                     * @default false
+                     */
+                    cutoff_unmet?: boolean;
                     monitored: boolean;
                     /** @default false */
                     preview?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description How many works matched (and, unless preview, were changed). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    bulkEditWorks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    ids?: number[];
+                    /** Format: int64 */
+                    category_id?: number;
+                    excluded_ids?: number[];
+                    /** @default false */
+                    fresh?: boolean;
+                    /** @default false */
+                    wanted?: boolean;
+                    /** @default false */
+                    cutoff_unmet?: boolean;
+                    /** @default false */
+                    preview?: boolean;
+                    monitored?: boolean;
+                    profile?: {
+                        /** Format: int64 */
+                        id: number | null;
+                    };
+                    add_tags?: string[];
+                    remove_tags?: string[];
                 };
             };
         };

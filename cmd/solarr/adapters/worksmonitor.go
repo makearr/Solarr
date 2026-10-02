@@ -10,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // WorksMonitor satisfies apiserver.WorksMonitor over library.Desired,
@@ -27,7 +28,9 @@ type WorksMonitor struct {
 	// Libraries gives a removal its library's recycling bin.
 	Libraries        LibraryLookup
 	DefaultProfileID int64
-	Logger           *slog.Logger
+	// Clock resolves the Fresh filter of a bulk selection.
+	Clock  clock.Clock
+	Logger *slog.Logger
 }
 
 // FileRemover puts one file into the recycle bin. Narrow on purpose: deleting an
@@ -136,9 +139,9 @@ const bulkPageSize = 200
 // type with no category configured, a since-deleted work) is logged and
 // skipped rather than aborting the rest of the selection.
 func (a WorksMonitor) BulkSetMonitored(
-	ctx context.Context, rootFolderIDs, categoryIDs, ids, excludedIDs []int64, monitored, preview bool,
+	ctx context.Context, selection apiserver.BulkSelection, monitored, preview bool,
 ) (int64, error) {
-	matched, err := a.matchingWorkIDs(ctx, rootFolderIDs, categoryIDs, ids, excludedIDs)
+	matched, err := a.matchingWorkIDs(ctx, selection)
 	if err != nil {
 		return 0, err
 	}
@@ -163,17 +166,16 @@ func (a WorksMonitor) BulkSetMonitored(
 // categoryIDs (ADR-27's two halves) and not excluded; otherwise every visible
 // work not excluded is enumerated (an "all matching" selection), paged so no
 // single read pulls the whole library into memory at once.
-func (a WorksMonitor) matchingWorkIDs(
-	ctx context.Context, rootFolderIDs, categoryIDs, ids, excludedIDs []int64,
-) ([]int64, error) {
-	excluded := make(map[int64]bool, len(excludedIDs))
-	for _, id := range excludedIDs {
+func (a WorksMonitor) matchingWorkIDs(ctx context.Context, selection apiserver.BulkSelection) ([]int64, error) {
+	rootFolderIDs, categoryIDs := selection.RootFolderIDs, selection.CategoryIDs
+	excluded := make(map[int64]bool, len(selection.ExcludedIDs))
+	for _, id := range selection.ExcludedIDs {
 		excluded[id] = true
 	}
 
-	if len(ids) > 0 {
-		matched := make([]int64, 0, len(ids))
-		for _, id := range ids {
+	if len(selection.IDs) > 0 {
+		matched := make([]int64, 0, len(selection.IDs))
+		for _, id := range selection.IDs {
 			if excluded[id] {
 				continue
 			}
@@ -191,11 +193,16 @@ func (a WorksMonitor) matchingWorkIDs(
 		return matched, nil
 	}
 
+	filter := library.WorkFilter{
+		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, WantedOnly: selection.Wanted, CutoffUnmetOnly: selection.CutoffUnmet,
+	}
+	if selection.Fresh {
+		filter.FreshSince = FreshSinceCutoff(a.Clock)
+	}
 	var matched []int64
 	cursor := library.WorkCursor{}
 	for {
-		rows, err := a.Works.List(ctx,
-			library.WorkFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs}, cursor, bulkPageSize)
+		rows, err := a.Works.List(ctx, filter, cursor, bulkPageSize)
 		if err != nil {
 			return nil, err
 		}

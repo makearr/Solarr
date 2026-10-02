@@ -16,6 +16,7 @@ import type { SelectionRequest } from "@/list/selection";
 import type { components, paths } from "@/api/schema";
 import { albumStatusLabel } from "@/lib/albumStatus";
 import { CoverArt } from "./CoverArt";
+import { BulkEditDialog } from "./EditAlbum";
 import {
   DEFAULT_POSTER_OPTIONS, IndexPoster, IndexViewToggle, OVERVIEW_ROW_HEIGHT, OverviewList, POSTER_GAP, POSTER_PADDING,
   POSTER_WIDTHS, PosterOptionsMenu, RowActions, posterRowHeight, workEntry, type IndexView, type PosterOptions,
@@ -32,6 +33,7 @@ interface BulkMonitorBody {
   ids?: number[];
   category_id?: number;
   excluded_ids?: number[];
+  fresh?: boolean;
   monitored: boolean;
   preview?: boolean;
 }
@@ -39,17 +41,19 @@ interface BulkMonitorBody {
 // Selection is a query, never a fetched list of ids (section 21.7) -- the
 // request carries either explicit ids or the current filter plus what the
 // user deselected from "select all matching".
-function bulkBody(request: SelectionRequest, monitored: boolean, preview: boolean): BulkMonitorBody {
-  if (request.kind === "ids") {
-    return { ids: request.ids, monitored, preview };
-  }
+function selectionBody(request: SelectionRequest) {
+  if (request.kind === "ids") return { ids: request.ids };
   const categoryId = request.filters.category_id;
+  // The list's own filters ride along, or "select all matching" under Fresh would act on every album.
   return {
     category_id: categoryId ? Number(categoryId) : undefined,
     excluded_ids: request.excluded,
-    monitored,
-    preview,
+    fresh: request.filters.fresh === "1" ? true : undefined,
   };
+}
+
+function bulkBody(request: SelectionRequest, monitored: boolean, preview: boolean): BulkMonitorBody {
+  return { ...selectionBody(request), monitored, preview };
 }
 type WorkSort = NonNullable<NonNullable<paths["/works"]["get"]["parameters"]["query"]>["sort"]>;
 
@@ -237,6 +241,7 @@ export function Library() {
   const [visibleColumns, setVisibleColumns] = useState<OptionalColumn[]>(loadVisibleColumns);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [confirm, setConfirm] = useState<{ monitored: boolean; count: number } | null>(null);
+  const [editing, setEditing] = useState(false);
   const queryClient = useQueryClient();
 
   const narrow = useNarrow();
@@ -385,6 +390,9 @@ export function Library() {
               >
                 Unmonitor
               </button>
+              <button type="button" onClick={() => setEditing(true)} className={quietButton}>
+                Edit
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -475,6 +483,19 @@ export function Library() {
           )}
         </div>
       </div>
+
+      {editing && list.selectionRequest && (
+        <BulkEditDialog
+          selection={selectionBody(list.selectionRequest)}
+          onClose={() => setEditing(false)}
+          onDone={() => {
+            setEditing(false);
+            list.clearSelection();
+            void queryClient.invalidateQueries({ queryKey: ["works"] });
+            void queryClient.invalidateQueries({ queryKey: ["tags"] });
+          }}
+        />
+      )}
 
       {confirm && (
         <div
