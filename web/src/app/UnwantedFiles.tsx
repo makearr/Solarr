@@ -69,7 +69,7 @@ function ExclusionPatterns() {
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+      <h2 className="text-sm font-semibold text-ink">
         Unwanted files
       </h2>
       <p className="text-xs text-ink-muted">
@@ -268,7 +268,7 @@ function BlockedContent() {
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+      <h2 className="text-sm font-semibold text-ink">
         Blocked content
       </h2>
       <p className="text-xs text-ink-muted">

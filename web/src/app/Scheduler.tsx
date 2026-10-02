@@ -174,7 +174,7 @@ export function Scheduler() {
         if (tasks.length === 0) return null;
         return (
           <div key={category.id} className="flex flex-col gap-2">
-            <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">{category.label}</h2>
+            <h2 className="text-sm font-semibold text-ink">{category.label}</h2>
             <ul className="flex flex-col gap-2">
               {tasks.map((schedule) => (
                 <ScheduleRow

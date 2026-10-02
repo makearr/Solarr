@@ -5,6 +5,8 @@ import { api } from "@/api/client";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
+import { Card, Field, SaveBar } from "./SettingsCard";
+
 type PrioritySettings = components["schemas"]["PrioritySettings"];
 type HuntMode = NonNullable<PrioritySettings["hunt_mode"]>;
 
@@ -41,17 +43,9 @@ export function Priority() {
   if (priority.error !== null || !priority.data) return null;
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Priority</h2>
-      <p className="text-xs text-ink-muted">
-        How urgently something is fetched: four trigger weights (bigger is more urgent) and
-        how long a release counts as newly released before it competes as a gap instead.
-      </p>
-
-      <div className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3">
-        <PriorityForm priority={priority.data} onSave={(body) => update.mutate(body)} busy={update.isPending} />
-        {update.isError && <p className="text-xs text-danger">That change was refused.</p>}
-      </div>
+    <section className="flex flex-col gap-3">
+      <PriorityForm priority={priority.data} onSave={(body) => update.mutate(body)} busy={update.isPending} />
+      {update.isError && <p className="text-sm text-danger">That change was refused.</p>}
     </section>
   );
 }
@@ -82,91 +76,89 @@ function PriorityForm({
     searchesPerHour !== priority.searches_per_hour ||
     huntMode !== (priority.hunt_mode ?? "oldest_searched");
 
+  const submit = () =>
+    onSave({
+      user_request_weight: userRequestWeight,
+      new_release_weight: newReleaseWeight,
+      gap_weight: gapWeight,
+      upgrade_weight: upgradeWeight,
+      new_release_days: newReleaseDays,
+      searches_per_hour: searchesPerHour,
+      hunt_mode: huntMode,
+    });
+
   return (
     <form
-      className="flex flex-col gap-3 text-xs text-ink-muted"
+      className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault();
-        onSave({
-          user_request_weight: userRequestWeight,
-          new_release_weight: newReleaseWeight,
-          gap_weight: gapWeight,
-          upgrade_weight: upgradeWeight,
-          new_release_days: newReleaseDays,
-          searches_per_hour: searchesPerHour,
-          hunt_mode: huntMode,
-        });
+        submit();
       }}
     >
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <WeightField label="User request" value={userRequestWeight} onChange={setUserRequestWeight} busy={busy} />
-        <WeightField label="New release" value={newReleaseWeight} onChange={setNewReleaseWeight} busy={busy} />
-        <WeightField label="Gap" value={gapWeight} onChange={setGapWeight} busy={busy} />
-        <WeightField label="Upgrade" value={upgradeWeight} onChange={setUpgradeWeight} busy={busy} />
-      </div>
+      <Card
+        title="Automatic searching"
+        help="Missing albums are searched on their own every hour, most urgent first. Keep the number low if an indexer limits API calls per day."
+      >
+        <div className="flex flex-wrap items-start gap-4">
+          <Field label="Searches per hour" help="0 turns automatic searching off." className="w-44">
+            <input
+              type="number"
+              min={0}
+              max={1000}
+              value={searchesPerHour}
+              disabled={busy}
+              onChange={(event) => setSearchesPerHour(Number(event.target.value))}
+              className={inputStyle}
+            />
+          </Field>
+          <Field
+            label="Order"
+            help="Each hour's searches are split 40% new releases, 40% gaps and 20% upgrades; what one leaves unused goes to the others. This is the order within each share."
+            className="min-w-64 flex-1"
+          >
+            <select
+              value={huntMode}
+              disabled={busy}
+              onChange={(event) => setHuntMode(event.target.value as HuntMode)}
+              className={`${inputStyle} max-w-sm`}
+            >
+              {HUNT_MODES.map(([id, label]) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      </Card>
 
-      <label className="flex flex-col gap-1">
-        Freshness window (days)
-        <input
-          type="number"
-          min={1}
-          value={newReleaseDays}
-          disabled={busy}
-          onChange={(event) => setNewReleaseDays(Number(event.target.value))}
-          className={`${inputStyle} w-24`}
-        />
-        <span className="text-[0.6875rem]">
-          Days after release an item still counts as newly released rather than a gap.
-        </span>
-      </label>
-
-      <label className="flex flex-col gap-1">
-        Automatic searches per hour
-        <input
-          type="number"
-          min={0}
-          max={1000}
-          value={searchesPerHour}
-          disabled={busy}
-          onChange={(event) => setSearchesPerHour(Number(event.target.value))}
-          className={`${inputStyle} w-24`}
-        />
-        <span className="text-[0.6875rem]">
-          Missing albums searched on their own each hour, most urgent first. 0 turns automatic
-          searching off. Keep it low if an indexer limits API calls per day.
-        </span>
-      </label>
-
-      <label className="flex flex-col gap-1">
-        Automatic search order
-        <select
-          value={huntMode}
-          disabled={busy}
-          onChange={(event) => setHuntMode(event.target.value as HuntMode)}
-          className={`${inputStyle} w-64`}
+      <Card
+        title="Urgency"
+        help="How urgently each kind of wish is fetched: a bigger weight is searched sooner. Waiting also raises an item's urgency, so nothing starves."
+      >
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <WeightField label="User request" value={userRequestWeight} onChange={setUserRequestWeight} busy={busy} />
+          <WeightField label="New release" value={newReleaseWeight} onChange={setNewReleaseWeight} busy={busy} />
+          <WeightField label="Gap" value={gapWeight} onChange={setGapWeight} busy={busy} />
+          <WeightField label="Upgrade" value={upgradeWeight} onChange={setUpgradeWeight} busy={busy} />
+        </div>
+        <Field
+          label="Freshness window (days)"
+          help="Days after release an item still counts as newly released rather than a gap."
+          className="max-w-sm"
         >
-          {HUNT_MODES.map(([id, label]) => (
-            <option key={id} value={id}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <span className="text-[0.6875rem]">
-          Each hour's searches are split 40% new releases, 40% gaps and 20% upgrades; what one leaves unused goes to
-          the others. This is the order within each share.
-        </span>
-      </label>
+          <input
+            type="number"
+            min={1}
+            value={newReleaseDays}
+            disabled={busy}
+            onChange={(event) => setNewReleaseDays(Number(event.target.value))}
+            className={`${inputStyle} w-28`}
+          />
+        </Field>
+      </Card>
 
-      {dirty && (
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-fit rounded-md bg-accent px-2 py-1 text-accent-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          Save
-        </button>
-      )}
+      <SaveBar dirty={dirty} busy={busy} onSave={submit} />
     </form>
   );
 }
@@ -183,7 +175,7 @@ function WeightField({
   busy: boolean;
 }) {
   return (
-    <label className="flex flex-col gap-1">
+    <label className="flex flex-col gap-1 text-xs text-ink-muted">
       {label}
       <input
         type="number"
@@ -198,5 +190,5 @@ function WeightField({
 }
 
 const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-1.5 py-1 text-xs text-ink " +
+  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

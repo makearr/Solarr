@@ -8,6 +8,7 @@ import type { components } from "@/api/schema";
 import { isTierVisible, useTier } from "@/lib/useTier";
 
 import { Message, Toggle, inputStyle } from "./LibraryNaming";
+import { SaveBar, SettingRow } from "./SettingsCard";
 
 type FileManagement = components["schemas"]["FileManagement"];
 
@@ -53,7 +54,7 @@ export function LibraryFileManagement() {
   const set = (patch: Partial<FileManagement>) => setDraft({ ...draft, ...patch });
 
   return (
-    <div className="mx-auto flex h-full max-w-3xl flex-col gap-5 overflow-y-auto p-6">
+    <div className="mx-auto flex max-w-3xl flex-col gap-5 p-6">
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold">File management</h1>
         <p className="text-sm leading-relaxed text-ink-muted">
@@ -132,8 +133,10 @@ export function LibraryFileManagement() {
         </>
         )}
         {advanced && (
-        <label className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-          <span className="w-48 shrink-0">Recycling Bin Cleanup</span>
+        <SettingRow
+          label="Recycling Bin Cleanup"
+          help="Days, for this library. Deleted files go to each root folder's recycle bin, never straight to deletion, and are removed after this, or sooner once the bin passes its size limit under Storage."
+        >
           <input
             type="number"
             min={1}
@@ -142,12 +145,7 @@ export function LibraryFileManagement() {
             onChange={(event) => set({ recycle_retention_days: Number(event.target.value) || 1 })}
             className={`${inputStyle} w-20`}
           />
-          <span className="text-xs text-ink-muted">
-            days, for this library. Deleted files go to each root folder&apos;s recycle bin, never straight to
-            deletion, and are removed after this -- or sooner once the bin passes its size limit under
-            Storage.
-          </span>
-        </label>
+        </SettingRow>
         )}
       </section>
 
@@ -162,51 +160,27 @@ export function LibraryFileManagement() {
         />
         {draft.set_permissions && (
           <>
-            <label className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-              <span className="w-48 shrink-0">chmod Folder</span>
+            <SettingRow label="chmod Folder" help="Octal. Files get the same without the execute bits.">
               <input
                 value={draft.chmod_folder}
                 onChange={(event) => set({ chmod_folder: event.target.value })}
                 className={`${inputStyle} w-20 font-mono`}
               />
-              <span className="text-xs text-ink-muted">Octal. Files get the same without the execute bits.</span>
-            </label>
-            <label className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-              <span className="w-48 shrink-0">chown Group</span>
+            </SettingRow>
+            <SettingRow label="chown Group" help="Group name or gid. Use the gid for network filesystems.">
               <input
                 value={draft.chown_group}
                 placeholder="unchanged"
                 onChange={(event) => set({ chown_group: event.target.value })}
                 className={`${inputStyle} w-32 font-mono`}
               />
-              <span className="text-xs text-ink-muted">Group name or gid. Use the gid for network filesystems.</span>
-            </label>
+            </SettingRow>
           </>
         )}
       </section>
       )}
 
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          disabled={!dirty || save.isPending}
-          onClick={() => save.mutate(draft)}
-          className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          Save
-        </button>
-        {dirty && (
-          <button
-            type="button"
-            onClick={() => setDraft(saved.data)}
-            className="rounded-md border border-border-subtle px-3 py-1.5 text-sm hover:text-ink"
-          >
-            Undo
-          </button>
-        )}
-        {save.isError && <span className="text-xs text-danger">{save.error.message}</span>}
-      </div>
+      <SaveBar dirty={dirty} busy={save.isPending} onSave={() => save.mutate(draft)} onUndo={() => setDraft(saved.data)} error={save.isError ? save.error.message : null} />
     </div>
   );
 }
@@ -225,8 +199,7 @@ function Choice({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-      <span className="w-48 shrink-0">{label}</span>
+    <SettingRow label={label} help={help}>
       <select value={value} onChange={(event) => onChange(event.target.value)} className={inputStyle}>
         {options.map(([optionValue, optionLabel]) => (
           <option key={optionValue} value={optionValue}>
@@ -234,7 +207,6 @@ function Choice({
           </option>
         ))}
       </select>
-      <span className="text-xs text-ink-muted">{help}</span>
-    </label>
+    </SettingRow>
   );
 }

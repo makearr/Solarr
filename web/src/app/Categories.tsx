@@ -75,7 +75,7 @@ export function Categories() {
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Libraries</h2>
+      <h2 className="text-sm font-semibold text-ink">Libraries</h2>
 
       {categories.data && categories.data.length > 0 ? (
         <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">

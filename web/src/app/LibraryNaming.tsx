@@ -7,6 +7,7 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
 import { useDebouncedValue } from "./useDebouncedValue";
+import { SettingRow, Switch } from "./SettingsCard";
 
 type NamingSettings = components["schemas"]["NamingSettings"];
 type Tagging = components["schemas"]["Tagging"];
@@ -331,16 +332,9 @@ export function Toggle({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-sm ${disabled ? "opacity-50" : ""}`}>
-      <span className="w-48 shrink-0">{label}</span>
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
-      />
-      <span className="text-xs text-ink-muted">{help}</span>
-    </label>
+    <SettingRow label={label} help={help} disabled={disabled}>
+      <Switch label={label} checked={checked} disabled={disabled} onChange={onChange} />
+    </SettingRow>
   );
 }
 

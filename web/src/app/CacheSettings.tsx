@@ -6,6 +6,8 @@ import { api } from "@/api/client";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
+import { Card, Field, SaveBar } from "./SettingsCard";
+
 type CacheReport = components["schemas"]["CacheReport"];
 
 /** The Cache settings page: CacheSettings' own section, given its own page
@@ -76,14 +78,13 @@ export function CacheSettings() {
   if (report.error !== null || !report.data) return null;
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Cache</h2>
-      <p className="text-xs text-ink-muted">
-        Provider responses and resized artwork. Never the only copy of anything -- a miss just
-        costs a re-fetch, so clearing it is always safe.
+    <section className="flex flex-col gap-4">
+      <p className="max-w-2xl text-sm text-ink-muted">
+        Provider responses and resized artwork. Never the only copy of anything: a miss just costs a re-fetch, so clearing it
+        is always safe.
       </p>
 
-      <div className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3">
+      <Card title="Usage" help="How much of its budget each part of the cache uses.">
         <NamespaceBar
           label="Images"
           bytes={report.data.images_bytes}
@@ -94,18 +95,20 @@ export function CacheSettings() {
           bytes={report.data.metadata_bytes}
           budgetBytes={(report.data.max_bytes * report.data.metadata_share_percent) / 100}
         />
-        <p className="text-[0.6875rem] text-ink-muted">
+        <p className="text-xs text-ink-muted">
           {report.data.measured_at
-            ? `measured ${new Date(report.data.measured_at).toLocaleString()}`
-            : "not measured yet -- the cache maintenance task has not run"}
+            ? `Measured ${new Date(report.data.measured_at).toLocaleString()}.`
+            : "Not measured yet: the cache maintenance task has not run."}
         </p>
+      </Card>
 
-        <BudgetForm report={report.data} onSave={(budget) => update.mutate(budget)} busy={update.isPending} />
-        {update.isError && <p className="text-xs text-danger">That budget was refused.</p>}
+      <BudgetForm report={report.data} onSave={(budget) => update.mutate(budget)} busy={update.isPending} />
+      {update.isError && <p className="text-sm text-danger">That budget was refused.</p>}
 
+      <Card title="Clear the cache" help="Throws everything away; it is fetched again as it is needed.">
         <ClearButton onClear={() => clear.mutate()} busy={clear.isPending} />
         {clear.isError && <p className="text-xs text-danger">The cache could not be cleared.</p>}
-      </div>
+      </Card>
     </section>
   );
 }
@@ -121,7 +124,7 @@ function NamespaceBar({ label, bytes, budgetBytes }: { label: string; bytes?: nu
           {bytes === undefined ? "not measured" : `${formatBytes(used)} / ${formatBytes(budgetBytes)}`}
         </span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-canvas">
+      <div className="h-2.5 overflow-hidden rounded-full bg-canvas">
         <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -151,64 +154,47 @@ function BudgetForm({
     maxAgeDays !== report.max_age_days ||
     imagesShare !== report.images_share_percent;
 
+  const submit = () =>
+    onSave({
+      max_bytes: maxGB * 1_000_000_000,
+      max_age_days: maxAgeDays,
+      images_share_percent: imagesShare,
+      metadata_share_percent: 100 - imagesShare,
+    });
+  const number = (value: number, set: (next: number) => void, min: number, max?: number) => (
+    <input
+      type="number"
+      min={min}
+      max={max}
+      value={value}
+      disabled={busy}
+      onChange={(event) => set(Number(event.target.value))}
+      className={inputStyle}
+    />
+  );
+
   return (
     <form
-      className="flex flex-wrap items-end gap-3 border-t border-border-subtle pt-2.5 text-xs text-ink-muted"
+      className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault();
-        onSave({
-          max_bytes: maxGB * 1_000_000_000,
-          max_age_days: maxAgeDays,
-          images_share_percent: imagesShare,
-          metadata_share_percent: 100 - imagesShare,
-        });
+        submit();
       }}
     >
-      <label className="flex flex-col gap-1">
-        Max size (GB)
-        <input
-          type="number"
-          min={1}
-          value={maxGB}
-          disabled={busy}
-          onChange={(event) => setMaxGB(Number(event.target.value))}
-          className={inputStyle}
-        />
-      </label>
-      <label className="flex flex-col gap-1">
-        Max age (days)
-        <input
-          type="number"
-          min={1}
-          value={maxAgeDays}
-          disabled={busy}
-          onChange={(event) => setMaxAgeDays(Number(event.target.value))}
-          className={inputStyle}
-        />
-      </label>
-      <label className="flex flex-col gap-1">
-        Images share (%)
-        <input
-          type="number"
-          min={0}
-          max={100}
-          value={imagesShare}
-          disabled={busy}
-          onChange={(event) => setImagesShare(Number(event.target.value))}
-          className={inputStyle}
-        />
-      </label>
-      <span>metadata gets {100 - imagesShare}%</span>
-      {dirty && (
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-md bg-accent px-2 py-1 text-accent-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          Save
-        </button>
-      )}
+      <Card title="Limits" help="The cache is trimmed when it passes its size, and anything older than the age is dropped.">
+        <div className="flex flex-wrap items-start gap-4">
+          <Field label="Max size (GB)" className="w-36">
+            {number(maxGB, setMaxGB, 1)}
+          </Field>
+          <Field label="Max age (days)" className="w-36">
+            {number(maxAgeDays, setMaxAgeDays, 1)}
+          </Field>
+          <Field label="Images share (%)" help={`Metadata gets ${100 - imagesShare}%.`} className="w-36">
+            {number(imagesShare, setImagesShare, 0, 100)}
+          </Field>
+        </div>
+      </Card>
+      <SaveBar dirty={dirty} busy={busy} onSave={submit} />
     </form>
   );
 }
@@ -265,5 +251,5 @@ function formatBytes(bytes: number): string {
 }
 
 const inputStyle =
-  "w-20 rounded-md border border-border-subtle bg-canvas px-1.5 py-1 text-xs text-ink " +
+  "w-full rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

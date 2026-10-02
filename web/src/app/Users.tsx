@@ -69,7 +69,7 @@ function MyTierSection({ tier, tierMax }: { tier: Tier; tierMax: Tier }) {
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+      <h2 className="text-sm font-semibold text-ink">
         Interface level
       </h2>
       <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
@@ -152,7 +152,7 @@ function APIKeysSection() {
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">API keys</h2>
+      <h2 className="text-sm font-semibold text-ink">API keys</h2>
       <div className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3">
         <p className="text-xs text-ink-muted">
           For an upstream app that authenticates as you (an *Arr-style X-Api-Key or Bearer
@@ -295,7 +295,7 @@ function AccessSection() {
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Access</h2>
+      <h2 className="text-sm font-semibold text-ink">Access</h2>
       <div
         className={`flex flex-col gap-3 rounded-lg border bg-surface p-3 ${
           required ? "border-border-subtle" : "border-warn"
@@ -432,7 +432,7 @@ export function Users({ currentUserId }: { currentUserId: number }) {
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Users</h2>
+      <h2 className="text-sm font-semibold text-ink">Users</h2>
 
       <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
         {(users.data ?? []).map((user) => (
