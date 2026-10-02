@@ -514,6 +514,15 @@ function LibraryNode({
               </li>
               <li>
                 <Link
+                  to="/library/$categoryId/duplicates"
+                  params={{ categoryId }}
+                  className={sectionLinkClass(isActive && activePath === `/library/${library.id}/duplicates`, false)}
+                >
+                  <span className="truncate">Duplicates</span>
+                </Link>
+              </li>
+              <li>
+                <Link
                   to="/library/$categoryId/activity"
                   params={{ categoryId }}
                   className={sectionLinkClass(isActive && activePath === `/library/${library.id}/activity`, false)}

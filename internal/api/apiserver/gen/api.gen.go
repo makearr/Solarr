@@ -1457,6 +1457,22 @@ type DrainRefusal struct {
 	Reason        string `json:"reason"`
 }
 
+// DuplicateReport defines model for DuplicateReport.
+type DuplicateReport struct {
+	Groups []struct {
+		// Copies Each stored file once, with every path that reaches it (a hardlinked file has several).
+		Copies []struct {
+			MediaObjectId int64    `json:"media_object_id"`
+			Paths         []string `json:"paths"`
+		} `json:"copies"`
+		ReclaimableBytes int64 `json:"reclaimable_bytes"`
+		SizeBytes        int64 `json:"size_bytes"`
+	} `json:"groups"`
+
+	// ReclaimableBytes What keeping one copy of every group would free.
+	ReclaimableBytes int64 `json:"reclaimable_bytes"`
+}
+
 // Edition defines model for Edition.
 type Edition struct {
 	Barcode         *string      `json:"barcode,omitempty"`
@@ -4328,6 +4344,9 @@ type ServerInterface interface {
 	// Rename a category, reprioritise it, or change its default quality/ language profile or monitor-discovered policy. Administrator only. `media_type` never changes -- it is identity, not policy.
 	// (PATCH /categories/{id})
 	UpdateCategory(w http.ResponseWriter, r *http.Request, id int64)
+	// Files of one library that are likely copies of one another (read only).
+	// (GET /categories/{id}/duplicates)
+	GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64)
 	// A library's File Management and Permissions (Sonarr's). Administrator only.
 	// (GET /categories/{id}/file-management)
 	GetLibraryFileManagement(w http.ResponseWriter, r *http.Request, id int64)
@@ -5060,6 +5079,12 @@ func (_ Unimplemented) GetCategory(w http.ResponseWriter, r *http.Request, id in
 // Rename a category, reprioritise it, or change its default quality/ language profile or monitor-discovered policy. Administrator only. `media_type` never changes -- it is identity, not policy.
 // (PATCH /categories/{id})
 func (_ Unimplemented) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Files of one library that are likely copies of one another (read only).
+// (GET /categories/{id}/duplicates)
+func (_ Unimplemented) GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7144,6 +7169,39 @@ func (siw *ServerInterfaceWrapper) UpdateCategory(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCategoryDuplicates operation middleware
+func (siw *ServerInterfaceWrapper) GetCategoryDuplicates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCategoryDuplicates(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12927,6 +12985,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/categories/{id}", wrapper.UpdateCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/duplicates", wrapper.GetCategoryDuplicates)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories/{id}/file-management", wrapper.GetLibraryFileManagement)

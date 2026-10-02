@@ -4698,6 +4698,28 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /categories/{id}/duplicates:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getCategoryDuplicates
+      tags: [library]
+      summary: Files of one library that are likely copies of one another (read only).
+      description: >-
+        Files with the same size and the same sampled content, wherever they sit, with what keeping one copy of each
+        group would free. Nothing is linked or removed by looking; a library's largest groups come first.
+      responses:
+        "200":
+          description: The groups, largest reclaimable first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DuplicateReport" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/statistics:
     parameters:
       - name: id
@@ -8755,6 +8777,31 @@ components:
         held: { type: integer, format: int64, description: Albums of the discography the library holds. }
         total: { type: integer, format: int64, description: Albums in the discography under the default filters. }
         monitored: { type: boolean, description: Whether the artist is already followed. }
+
+    DuplicateReport:
+      type: object
+      required: [groups, reclaimable_bytes]
+      properties:
+        reclaimable_bytes: { type: integer, format: int64, description: What keeping one copy of every group would free. }
+        groups:
+          type: array
+          items:
+            type: object
+            required: [size_bytes, reclaimable_bytes, copies]
+            properties:
+              size_bytes: { type: integer, format: int64 }
+              reclaimable_bytes: { type: integer, format: int64 }
+              copies:
+                type: array
+                description: Each stored file once, with every path that reaches it (a hardlinked file has several).
+                items:
+                  type: object
+                  required: [media_object_id, paths]
+                  properties:
+                    media_object_id: { type: integer, format: int64 }
+                    paths:
+                      type: array
+                      items: { type: string, description: The full path. }
 
     CategoryStatistics:
       type: object
