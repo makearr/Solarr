@@ -128,8 +128,8 @@ func (a Prowlarr) InstanceDownloadClients(ctx context.Context, instanceID int64)
 		impl := strings.ToLower(client.Implementation)
 		rows[i] = apiserver.ArrDownloadClientRow{
 			Name: client.Name, Impl: impl, Protocol: client.Protocol, BaseURL: client.BaseURL(), Category: client.Category,
-			// SABnzbd is the one kind Solarr talks to until the torrent stage.
-			Enabled: client.Enabled, Supported: impl == "sabnzbd", AlreadyAdded: here[client.BaseURL()],
+			Username: client.Username,
+			Enabled:  client.Enabled, Supported: impl == ImplSABnzbd || impl == ImplQBittorrent, AlreadyAdded: here[client.BaseURL()],
 		}
 	}
 	return rows, nil

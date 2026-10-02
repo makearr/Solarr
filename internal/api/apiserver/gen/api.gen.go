@@ -824,6 +824,9 @@ type ArrDownloadClient struct {
 
 	// Supported Solarr can use a client of this kind.
 	Supported bool `json:"supported"`
+
+	// Username The user name the *Arr signs in with
+	Username *string `json:"username,omitempty"`
 }
 
 // ArrImportDetail defines model for ArrImportDetail.

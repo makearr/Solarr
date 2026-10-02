@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
+import { joinCredentials } from "@/lib/downloadCredentials";
 import type { components } from "@/api/schema";
 
 type Downloader = components["schemas"]["Downloader"];
@@ -177,7 +178,7 @@ const KINDS: Record<ClientKind, { label: string; protocol: "usenet" | "torrent";
   // A torrent keeps seeding after import: removing it is a choice, never the default.
   qbittorrent: {
     label: "qBittorrent", protocol: "torrent", placeholder: "http://qbittorrent:8080",
-    secret: "User and password (user:password), empty if it lets this host in", keepCompleted: true,
+    secret: "Password", keepCompleted: true,
   },
 };
 
@@ -187,6 +188,8 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
   const [name, setName] = useState("SABnzbd");
   const [baseUrl, setBaseUrl] = useState("");
   const [credentials, setCredentials] = useState("");
+  const [username, setUsername] = useState("");
+  const secret = kind === "qbittorrent" ? joinCredentials(username, credentials) : credentials;
   const [category, setCategory] = useState("");
   const [removeCompleted, setRemoveCompleted] = useState(true);
   const [maxQueued, setMaxQueued] = useState(DEFAULT_MAX_QUEUED);
@@ -198,7 +201,7 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
   const test = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/downloaders/test", {
-        body: { impl: kind, base_url: baseUrl, credentials: credentials || undefined, options: { category: category || undefined } },
+        body: { impl: kind, base_url: baseUrl, credentials: secret || undefined, options: { category: category || undefined } },
       });
       if (error) throw error;
       return data;
@@ -221,7 +224,7 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
         local_path: mapped ? localFolder : undefined,
       };
       const { error } = await api.POST("/downloaders", {
-        body: { name, impl: kind, base_url: baseUrl, protocol: spec.protocol, credentials: credentials || undefined, enabled: true, options },
+        body: { name, impl: kind, base_url: baseUrl, protocol: spec.protocol, credentials: secret || undefined, enabled: true, options },
       });
       if (error) throw error;
       if (addFolder && localFolder) {
@@ -232,6 +235,7 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
     onSuccess: () => {
       setBaseUrl("");
       setCredentials("");
+      setUsername("");
       test.reset();
       onAdded();
     },
@@ -279,6 +283,12 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
             onChange={(event) => setBaseUrl(event.target.value)}
           />
         </label>
+        {kind === "qbittorrent" && (
+          <label className="flex min-w-32 flex-col gap-1 text-xs text-ink-muted">
+            User name
+            <input className={inputStyle} value={username} autoComplete="off" placeholder="empty if it lets this host in" onChange={(event) => setUsername(event.target.value)} />
+          </label>
+        )}
         <label className="flex min-w-40 flex-col gap-1 text-xs text-ink-muted">
           {spec.secret}
           <input className={inputStyle} type="password" value={credentials} autoComplete="off" onChange={(event) => setCredentials(event.target.value)} />
@@ -417,8 +427,20 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
   const [maxQueued, setMaxQueued] = useState(current.max_queued ?? DEFAULT_MAX_QUEUED);
   const [sendUser, setSendUser] = useState(current.always_send_user_grabs ?? true);
   const [sendRSS, setSendRSS] = useState(current.always_send_rss_grabs ?? true);
+  const torrent = downloader.impl === "qbittorrent";
+  // The stored secret is never shown, so a new one is typed in full or left alone.
+  const [signInUser, setSignInUser] = useState("");
+  const [signInSecret, setSignInSecret] = useState("");
+  const newSecret = torrent ? (signInSecret === "" && signInUser === "" ? "" : joinCredentials(signInUser, signInSecret)) : signInSecret;
   const save = useMutation({
     mutationFn: async () => {
+      if (newSecret !== "") {
+        const changed = await api.POST("/downloaders/{id}/credentials", {
+          params: { path: { id: downloader.id } },
+          body: { credentials: newSecret },
+        });
+        if (changed.error) throw changed.error;
+      }
       const { error } = await api.PATCH("/downloaders/{id}", {
         params: { path: { id: downloader.id } },
         body: {
@@ -449,6 +471,25 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
         sendRSS={sendRSS}
         onSendRSS={setSendRSS}
       />
+      <div className="flex flex-wrap items-end gap-3 text-xs">
+        {torrent && (
+          <label className="flex min-w-40 flex-col gap-1 text-ink-muted">
+            New user name
+            <input className={inputStyle} value={signInUser} autoComplete="off" onChange={(event) => setSignInUser(event.target.value)} />
+          </label>
+        )}
+        <label className="flex min-w-40 flex-col gap-1 text-ink-muted">
+          {torrent ? "New password" : "New API key"}
+          <input
+            className={inputStyle}
+            type="password"
+            value={signInSecret}
+            autoComplete="off"
+            placeholder={downloader.credentials.has_value ? "leave empty to keep the one set" : ""}
+            onChange={(event) => setSignInSecret(event.target.value)}
+          />
+        </label>
+      </div>
       <div className="flex flex-wrap items-end gap-3 text-xs">
         <label className="flex min-w-48 flex-1 flex-col gap-1 text-ink-muted">
           The client says its downloads are in
