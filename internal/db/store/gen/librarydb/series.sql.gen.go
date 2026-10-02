@@ -230,6 +230,49 @@ func (q *Queries) ListSeriesInCategory(ctx context.Context, arg ListSeriesInCate
 	return items, nil
 }
 
+const listSeriesTitles = `-- name: ListSeriesTitles :many
+SELECT w.id AS work_id, w.canonical_title AS title, w.year AS year
+FROM work w
+WHERE w.media_type = 'tv'
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1)
+UNION ALL
+SELECT t.work_id, t.title, w.year
+FROM work_title t
+JOIN work w ON w.id = t.work_id
+WHERE w.media_type = 'tv'
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1)
+`
+
+type ListSeriesTitlesRow struct {
+	WorkID int64
+	Title  string
+	Year   sql.NullInt64
+}
+
+// Every title a library's series answers to, canonical and alias, for matching folder names (ADR-41).
+func (q *Queries) ListSeriesTitles(ctx context.Context, categoryID int64) ([]ListSeriesTitlesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSeriesTitles, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSeriesTitlesRow{}
+	for rows.Next() {
+		var i ListSeriesTitlesRow
+		if err := rows.Scan(&i.WorkID, &i.Title, &i.Year); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkPartRefs = `-- name: ListWorkPartRefs :many
 SELECT id, media_ref FROM work_part WHERE work_id = ?
 `

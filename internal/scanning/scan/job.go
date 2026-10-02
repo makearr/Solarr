@@ -29,6 +29,15 @@ var Definition = jobs.Definition{
 	Type: JobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3,
 }
 
+// TVJobType is the registered type of a TV library scan: the same sweep with the TV module's consumer.
+const TVJobType = jobs.Type("library.scan.tv")
+
+// TVDefinition declares the TV scan, bulk work like the music one.
+var TVDefinition = jobs.Definition{
+	Name: "Scanning the TV library",
+	Type: TVJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3,
+}
+
 // Payload is what a scan job carries.
 type Payload struct {
 	RootFolderID int64 `json:"root_folder_id"`
@@ -354,6 +363,20 @@ func EnqueueDirectories(
 	return queue.Enqueue(ctx, jobs.Request{
 		Type:      JobType,
 		ActionKey: fmt.Sprintf("%s:directories:%x", ActionKeyFor(rootFolderID), digest[:8]),
+		Priority:  jobs.PriorityLow,
+		Payload:   payload,
+	})
+}
+
+// EnqueueTV submits a TV scan of one root, deduplicated per root like Enqueue.
+func EnqueueTV(ctx context.Context, queue *jobs.Queue, rootFolderID, categoryID int64, full bool) (jobs.EnqueueResult, error) {
+	payload, err := json.Marshal(Payload{RootFolderID: rootFolderID, CategoryID: categoryID, Full: full})
+	if err != nil {
+		return jobs.EnqueueResult{}, fmt.Errorf("scan: encode payload: %w", err)
+	}
+	return queue.Enqueue(ctx, jobs.Request{
+		Type:      TVJobType,
+		ActionKey: fmt.Sprintf("%s:%d", TVJobType, rootFolderID),
 		Priority:  jobs.PriorityLow,
 		Payload:   payload,
 	})

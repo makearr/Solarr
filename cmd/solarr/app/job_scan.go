@@ -9,6 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/scanning/scan"
@@ -71,6 +72,25 @@ func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, 
 		OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx); _, _ = p.enqueueEnrichment(ctx) },
 	})
 	executor.Handle(scan.JobType, job)
+	return p.registerTVScanJob(registry, executor, tool, physical)
+}
+
+// registerTVScanJob wires the TV sweep: the same job with the TV module's consumer and video files.
+func (p *process) registerTVScanJob(registry *jobs.Registry, executor *jobs.Executor, tool mediatool.Tool, physical library.Physical) error {
+	if err := registry.Register(scan.TVDefinition); err != nil {
+		return err
+	}
+	consumer := tv.NewConsumer(tv.ConsumerConfig{
+		FS: p.fsys, Physical: physical, Unidentified: library.NewUnidentified(p.library), Service: p.tvService(),
+		Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
+		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+	})
+	job := scan.NewJob(scan.Config{
+		FS: p.fsys, Scans: library.NewScans(p.library), Roots: adapters.Roots{Cache: p.cache}, Tool: tool, Consumer: consumer,
+		Physical: physical, Clock: clock.NewSystem(), Logger: p.logger, Include: tv.IsVideo,
+		OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+	})
+	executor.Handle(scan.TVJobType, job)
 	return nil
 }
 
@@ -118,7 +138,7 @@ func (p *process) enqueueScans(ctx context.Context, full bool) (jobs.EnqueueResu
 	var errs []error
 	attempted, duplicates := 0, 0
 	for _, category := range snapshot.Categories() {
-		if category.MediaType != "music" {
+		if category.MediaType != "music" && category.MediaType != "tv" {
 			continue
 		}
 		for _, root := range snapshot.RootFoldersForCategory(category.ID) {
@@ -126,7 +146,11 @@ func (p *process) enqueueScans(ctx context.Context, full bool) (jobs.EnqueueResu
 				continue
 			}
 			attempted++
-			result, err := scan.Enqueue(ctx, p.queue, root.ID, category.ID, full)
+			enqueue := scan.Enqueue
+			if category.MediaType == "tv" {
+				enqueue = scan.EnqueueTV
+			}
+			result, err := enqueue(ctx, p.queue, root.ID, category.ID, full)
 			if err != nil {
 				p.logger.Warn("enqueue library scan",
 					slog.Int64("root_folder_id", root.ID), slog.Bool("full", full), slog.Any("error", err))

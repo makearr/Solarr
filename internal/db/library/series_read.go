@@ -291,3 +291,23 @@ func (r SeriesReader) ProviderIDs(ctx context.Context, workID int64) (map[string
 	}
 	return ids, nil
 }
+
+// SeriesTitle is one name a series answers to.
+type SeriesTitle struct {
+	WorkID int64
+	Title  string
+	Year   int64
+}
+
+// Titles lists every canonical and alias title of a category's series.
+func (r SeriesReader) Titles(ctx context.Context, categoryID int64) ([]SeriesTitle, error) {
+	rows, err := librarydb.New(r.store.Read()).ListSeriesTitles(ctx, categoryID)
+	if err != nil {
+		return nil, fmt.Errorf("library: series titles: %w", err)
+	}
+	titles := make([]SeriesTitle, len(rows))
+	for i, row := range rows {
+		titles[i] = SeriesTitle{WorkID: row.WorkID, Title: row.Title, Year: row.Year.Int64}
+	}
+	return titles, nil
+}
