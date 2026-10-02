@@ -278,7 +278,20 @@ func (j CutoffJob) stateFor(ctx context.Context, snapshot *settings.Snapshot, it
 			return "", false, nil
 		}
 	}
+	override, overridden, err := j.Desired.ProfileOverride(ctx, item.ID)
+	if err != nil {
+		return "", false, err
+	}
 	for _, file := range files {
+		if overridden {
+			// An album's own profile is its whole wish: the file meets it or the album can still be upgraded.
+			if fits, known, _ := quality.ProfileFits(snapshot, override, measuredFacts(file)); known {
+				if !fits {
+					return ItemStateUpgradable, true, nil
+				}
+				continue
+			}
+		}
 		judgement, judged := quality.Judge(snapshot, category, measuredFacts(file))
 		if !judged {
 			return ItemStateComplete, true, nil

@@ -71,4 +71,5 @@ a track (replace in place), not between releases, whose names state no language.
 existed has no lyrics language until it is probed again.
 
 **Edit on an album.** Its own quality profile replaces the library's profile list for that album's search
-and upgrade decisions (`desired_profile_override`); the cutoff state (upgradable or not) is still the library's.
+and upgrade decisions (`desired_profile_override`), and the cutoff check judges its files against that profile alone (a file meets it
+when it fits the profile). The per-file target/cutoff badges on the album page still show the library's.
