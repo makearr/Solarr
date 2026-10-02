@@ -61,6 +61,21 @@ func TestRemove_WithBlocklistBlocksTheReleaseAndSearchesAgain(t *testing.T) {
 	}
 }
 
+// An import held for a person moves nothing, so the download can be given up, like Lidarr's "remove from queue".
+func TestRemove_AllowsADownloadWaitingForAPersonToIdentifyIt(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	if err := e.acquisitions.SetState(t.Context(), sent.ID, poll.StateImporting, poll.WaitingForReview, 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.job().Remove(t.Context(), sent.ID, true); err != nil {
+		t.Fatalf("Remove = %v, want it removed", err)
+	}
+	if e.state(t, sent.ID).State != poll.StateCancelled {
+		t.Errorf("state = %s, want cancelled", e.state(t, sent.ID).State)
+	}
+}
+
 // Files already moving into the library are not pulled out from under the import.
 func TestRemove_RefusesADownloadBeingImported(t *testing.T) {
 	e := newEnv(t)

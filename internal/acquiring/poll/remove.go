@@ -11,7 +11,7 @@ import (
 )
 
 // ErrNotRemovable refuses a download whose files are already moving into the library, or that ended.
-var ErrNotRemovable = errors.New("poll: only a queued, downloading or finished download can be removed")
+var ErrNotRemovable = errors.New("poll: only a queued, downloading, finished or held-for-review download can be removed")
 
 // Remove is Lidarr's "remove from queue": cancelled here first, so a poll never mistakes it for a
 // failure, then taken out of the client with its files. With blocklist the release is never grabbed
@@ -21,8 +21,9 @@ func (j *Job) Remove(ctx context.Context, acquisitionID int64, blocklist bool) e
 	if err != nil {
 		return err
 	}
-	switch acquisition.State {
-	case StateQueued, StateDownloading, StateCompleted:
+	switch {
+	case acquisition.State == StateQueued, acquisition.State == StateDownloading, acquisition.State == StateCompleted:
+	case acquisition.State == StateImporting && acquisition.LastError == WaitingForReview:
 	default:
 		return ErrNotRemovable
 	}
