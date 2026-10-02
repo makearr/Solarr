@@ -129,7 +129,7 @@ func (s *Server) SetLibraryTagging(w http.ResponseWriter, r *http.Request, id in
 	}
 	wanted := category.FileManagement
 	wanted.Tagging = settings.Tagging{
-		WriteIDs: body.WriteIds, ReplaceIDs: body.ReplaceIds, WriteMetadata: body.WriteMetadata, EmbedCover: body.EmbedCover,
+		WriteIDs: body.WriteIds, ReplaceIDs: body.ReplaceIds, WriteMetadata: body.WriteMetadata, EmbedCover: body.EmbedCover, Navidrome: body.Navidrome,
 	}
 	if err := s.auth.Settings.SetCategoryFileManagement(r.Context(), id, wanted); err != nil {
 		writeError(w, s.logger, err)
@@ -144,5 +144,5 @@ func (s *Server) SetLibraryTagging(w http.ResponseWriter, r *http.Request, id in
 }
 
 func taggingView(t settings.Tagging) gen.Tagging {
-	return gen.Tagging{WriteIds: t.WriteIDs, ReplaceIds: t.ReplaceIDs, WriteMetadata: t.WriteMetadata, EmbedCover: t.EmbedCover}
+	return gen.Tagging{WriteIds: t.WriteIDs, ReplaceIds: t.ReplaceIDs, WriteMetadata: t.WriteMetadata, EmbedCover: t.EmbedCover, Navidrome: t.Navidrome}
 }

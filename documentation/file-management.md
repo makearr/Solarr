@@ -49,6 +49,7 @@ saved, and hourly.
 | Replace existing MusicBrainz IDs | off | the same ids, overwriting a value that differs from the current one (only with the first) |
 | Write other tags | off | `album`, `albumartist`, `title`, `tracknumber`, `discnumber`, `date` (the release's year), `genre` (MusicBrainz genres joined by `; `), overwriting what the file says. No track artist: Solarr keeps no per-track credits yet |
 | Embed cover art | off | the fetched album cover as a JPEG front cover, only into a file that carries no picture |
+| Navidrome profile (D10) | off | also fills `musicbrainz_artistid`, `artist`, `artists` and `albumartists` (fill-only: what a file has is kept) and writes a `cover.jpg` into each album folder that has no cover file (`cover`/`folder`/`front`, jpg or png); never replaces either | `music.TagWritebackJob` |
 
 - **Only the library's own root folders**, never a download folder, and never a root that is
   read-only, offline or not writable, whatever the library says (Invariant 69).

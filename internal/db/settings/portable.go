@@ -214,6 +214,7 @@ type FileManagementEntry struct {
 	ReplaceIDsInTags    bool  `yaml:"replace_ids_in_tags,omitempty"`
 	WriteMetadataToTags bool  `yaml:"write_metadata_to_tags,omitempty"`
 	EmbedCoverInTags    bool  `yaml:"embed_cover_in_tags,omitempty"`
+	NavidromeProfile    bool  `yaml:"navidrome_profile,omitempty"`
 }
 
 func (e FileManagementEntry) fileManagement() FileManagement {
@@ -225,7 +226,7 @@ func (e FileManagementEntry) fileManagement() FileManagement {
 		SetPermissions:     e.SetPermissions, ChmodFolder: e.ChmodFolder, ChownGroup: e.ChownGroup,
 		Tagging: Tagging{
 			WriteIDs: e.WriteIDsToTags == nil || *e.WriteIDsToTags, ReplaceIDs: e.ReplaceIDsInTags,
-			WriteMetadata: e.WriteMetadataToTags, EmbedCover: e.EmbedCoverInTags,
+			WriteMetadata: e.WriteMetadataToTags, EmbedCover: e.EmbedCoverInTags, Navidrome: e.NavidromeProfile,
 		},
 	}
 }
@@ -239,7 +240,7 @@ func fileManagementEntry(f FileManagement) FileManagementEntry {
 		MergeArtistAliases: f.MergeArtistAliases,
 		SetPermissions:     f.SetPermissions, ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup, WriteIDsToTags: &writeIDs,
 		ReplaceIDsInTags: f.Tagging.ReplaceIDs, WriteMetadataToTags: f.Tagging.WriteMetadata,
-		EmbedCoverInTags: f.Tagging.EmbedCover,
+		EmbedCoverInTags: f.Tagging.EmbedCover, NavidromeProfile: f.Tagging.Navidrome,
 	}
 }
 

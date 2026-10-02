@@ -261,6 +261,12 @@ export function LibraryNaming() {
             checked={taggingDraft.embed_cover}
             onChange={(checked) => setTaggingDraft({ ...taggingDraft, embed_cover: checked })}
           />
+          <Toggle
+            label="Navidrome profile"
+            help="Also fills the track artist's tags and MusicBrainz id, and puts a cover.jpg in each album folder that has no cover file. Nothing already there is replaced."
+            checked={taggingDraft.navidrome}
+            onChange={(checked) => setTaggingDraft({ ...taggingDraft, navidrome: checked })}
+          />
         </section>
       )}
 
