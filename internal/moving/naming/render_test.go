@@ -30,6 +30,17 @@ func TestRenderPath_TheUsersDefault(t *testing.T) {
 	}
 }
 
+// An album whose year is not known yet is "Tender Prey", never a "Tender Prey ()" folder beside the real one.
+func TestRenderPath_AnUnknownYearLeavesNoEmptyBrackets(t *testing.T) {
+	ctx := naming.Context{"Artist Name": "Heka", "Album Title": "Tender Prey", "track": "5", "Track Title": "Pihudoc Zaze"}
+	got := renderPath(t, "{Album Title} ({Release Year})/{Artist Name} - {track:00} - {Track Title} [{Release Year}]",
+		ctx, naming.DefaultOptions)
+	want := "Tender Prey/Heka - 05 - Pihudoc Zaze.flac"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 // The user's multi-disc default has a literal colon; smart replacement turns it into the
 // "1-05" the library already uses (answered 2026-09-24: literals are cleaned too).
 func TestRenderPath_MultiDiscColonIsReplacedLikeAnyOther(t *testing.T) {

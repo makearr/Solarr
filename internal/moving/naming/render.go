@@ -237,8 +237,11 @@ var illegalReplacements = map[rune]string{
 // trailingSeparators is Lidarr's cleanup for an empty last token: "Title - " is not a name.
 var trailingSeparators = regexp.MustCompile(`[- ._]+$`)
 
+// emptyBrackets is what "({Release Year})" leaves behind when the year is unknown.
+var emptyBrackets = regexp.MustCompile(`\s*(?:\(\s*\)|\[\s*\])`)
+
 func cleanComponent(raw string, opts Options) string {
-	cleaned := replaceColons(raw, opts)
+	cleaned := emptyBrackets.ReplaceAllString(replaceColons(raw, opts), "")
 	var b strings.Builder
 	for _, r := range cleaned {
 		replacement, illegal := illegalReplacements[r]
