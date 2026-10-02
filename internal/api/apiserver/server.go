@@ -76,6 +76,8 @@ type Config struct {
 	// (section 19.6). Optional: without it, SetWorkMonitored/SetPartMonitored
 	// answer 503.
 	WorksMonitor WorksMonitor
+	// WorkEditor backs an album's Edit dialog and the tag picker. Optional: without it they answer 503.
+	WorkEditor WorkEditor
 	// Search ranks the library by title. Optional: without it, Search answers 503.
 	Search SearchReader
 	// Unidentified lists F29's manual identification queue. Optional: without
@@ -237,6 +239,7 @@ type Server struct {
 	works                   WorksReader
 	workDetail              WorkDetailReader
 	worksMonitor            WorksMonitor
+	workEditor              WorkEditor
 	search                  SearchReader
 	unidentified            UnidentifiedReader
 	unidentifiedResolver    UnidentifiedResolver
@@ -331,6 +334,7 @@ func New(config Config) (*Server, error) {
 		works:                   config.Works,
 		workDetail:              config.WorkDetail,
 		worksMonitor:            config.WorksMonitor,
+		workEditor:              config.WorkEditor,
 		search:                  config.Search,
 		unidentified:            config.Unidentified,
 		unidentifiedResolver:    config.UnidentifiedResolver,
@@ -445,6 +449,9 @@ func New(config Config) (*Server, error) {
 			secured.Get("/works/{id}", server.routeGetWork)
 			secured.Post("/works/bulk/monitor", server.BulkSetWorkMonitored)
 			secured.Post("/works/{id}/monitor", server.routeSetWorkMonitored)
+			secured.Get("/works/{id}/edit", server.routeGetWorkEdit)
+			secured.Put("/works/{id}/edit", server.routeSaveWorkEdit)
+			secured.Get("/tags", server.ListTags)
 			secured.Post("/works/{id}/remove", server.routeRemoveWork)
 			secured.Post("/works/{id}/parts/{partId}/remove", server.routeRemovePart)
 			secured.Get("/categories/{id}/quality", server.routeGetLibraryQuality)

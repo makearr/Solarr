@@ -58,6 +58,11 @@ fixed.
 
 Monitoring an album later from its own page also searches it at once while that box is ticked.
 
+**Edit** (the pencil on an album's poster or row, as in Radarr) sets monitored, the album's **own quality
+profile** (used instead of the library's profiles when it is searched or upgraded; the library's cutoff
+still decides whether it counts as upgradable) and your **tags** (new ones are created as you type).
+Tags a metadata provider assigned are never touched.
+
 With an empty search box, Discover lists **artists you have albums of, but not all**, from your own
 library compared with each artist's discography (live albums and compilations left out): the most
 missing first, with one click to follow the artist and add the rest. It fills in after the weekly

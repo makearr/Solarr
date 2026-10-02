@@ -1,186 +1,262 @@
+<p align="center"><img src="web/public/icon-192.png" alt="Solarr" width="96"></p>
+
 # Solarr
 
-One application for your entire media library — music, TV, movies, audiobooks, books, comics
-and more. It works out what you want, what you have, what's missing, and goes and gets it.
+**Your music library, managed properly.** Solarr finds out what you have, what's missing and what
+could be better, then goes and gets it. It is a new engine built to replace the \*Arr apps, starting
+with Lidarr.
 
-Solarr replaces Radarr, Sonarr and Lidarr with a single engine, and can run alongside them
-while you decide whether to switch.
+> **Pre-release, music only, usenet only.** The Lidarr-replacement milestone is largely built and is
+> being verified against a real library. TV and movies are designed but not built. Expect rough
+> edges, and don't point it at the only copy of anything you care about. See
+> [What works today](#what-works-today).
 
 ---
 
-## What it does
+## Why switch from Lidarr?
 
-### Finds what's missing, continuously
+Lidarr is good at the tidy case: sorted folders, well-tagged files, one album at a time. Solarr is
+built for the messy case, and for the people who run a library across several disks for years.
 
-You describe the library you want. Solarr works out the difference between that and what's
-on disk, and closes the gap — new releases as they appear, gaps in old collections, and
-upgrades when something better shows up. It keeps a running picture of what's still outstanding
-and works through it at a pace your indexers and download client can sustain.
+### 1. Import anything, from anywhere
 
-**New releases come first by default.** A film released last week matters more than a gap in a
-collection from 2009, and that's how the queue is ordered — adjustable if you disagree, and
-built so nothing at the bottom of the list waits forever.
+Point Solarr at **any folder, at any depth**: one album, a whole collection, a messy download
+directory. It works out what's inside from tags, tracklists, durations and folder names. No
+pre-sorting, no `Artist/Album` layout required.
 
-### Point it at a folder — any folder
+You see a **preview first**, then commit, and you can **undo the whole import in one click** if you
+don't like what it did.
 
-Give it a path and it works out what's in there. Content three levels down, several unrelated
-artists in one directory, an album split across `CD1` and `CD2`, a discography whose folders
-sit two levels deep — all handled. Folder names are read as clues, so
-`Artist/Album (Year)/track.mp3` identifies correctly even when the files themselves are
-untagged.
+### 2. Packs, box sets and archives just work
 
-You are never asked to tidy up first, or to point at one album at a time.
+A discography or a 3-CD box set is **one download that becomes many correctly named albums**.
+Archives (zip, rar, 7z, tar) are read in place and **never unpacked into your library**.
 
-### Handles packs, box sets and archives
+### 3. Nothing is left in limbo
 
-A discography, a multi-season pack or a box set arrives as one thing and becomes many correctly
-named albums or seasons in the right places — each identified on its own, while the download
-stays a single unit for verification and seeding. A pack that covers five seasons of an
-eight-season show closes five gaps and leaves the other three open, visibly.
+Music that nothing recognises still becomes a visible, unverified album instead of sitting in an
+import screen forever. Fix it later, in the library, with "Identify as…".
 
-Packed content is opened for you — zip, rar, 7z, tar, including multi-part sets. Archives
-already sitting in your library are read rather than unpacked, so an album stored as a `.rar`
-counts as present instead of showing up as something to download again.
+### 4. Libraries that span many disks
 
-### Keeps fakes and junk out
+A library can have any number of root folders. An artist stays on one disk, new content goes where
+there's room, and **retiring a disk is one button**: Solarr previews the move, checks the space and
+drains it. Folders can be read-only or declared offline without anything being treated as missing
+and re-downloaded.
 
-Files that are obviously not media — executables, scripts, shortcuts, checksum files — are
-recognised for what they are. An `.exe` inside a music release doesn't get quietly stepped over;
-it stops the import and tells you, because that's usually the most useful thing in the folder.
-The list is yours to edit.
+### 5. It tells you why
 
-And when something turns out to be a fake, **remove and block** does the whole job in one
-action: the file goes to the recycle bin, its *contents* are blocked so those exact bytes can never
-be imported again — blocking by name would be defeated by a rename — the release it came from is
-blocklisted so it isn't grabbed a second time, and what you actually wanted goes back on the
-list to be found properly. Any other copies of the same file in your library are cleared out
-with it.
+Every decision keeps its reasons: why a release was rejected, why an album isn't being searched yet,
+why downloads are paused. Open an album and read it. No digging through logs.
 
-### Explains every decision
+### 6. Quality that means it
 
-Any time Solarr does something — or doesn't — you can ask why and get a real answer:
+The **file is the evidence, not the release name.** Solarr measures what it downloaded, so fake
+upgrades are refused, ties keep what you have, and a bigger number doesn't automatically win (192 kHz
+does not beat a clean 48 kHz just for being larger).
 
+### 7. Fakes and junk, handled in one click
+
+**Remove and block** recycles the file, blocks its exact bytes (renaming it can't sneak it back),
+blocklists the release and puts the album back on the want list.
+
+### 8. Safe by default
+
+Nothing is deleted directly, it goes to a recycle bin first. Every move is copy → verify → repoint →
+delete. A download is never removed before the library copy is verified. Solarr never takes
+ownership of your media.
+
+### 9. Easy to run, easy to use
+
+One small container, no database server or message broker. Everything is done from the browser,
+and settings come in **normal / advanced / expert** levels so you only see what you need. Multiple
+users can have access to different libraries.
+
+### 10. Move over without starting again
+
+Read your existing **Lidarr** and **Prowlarr** setup (it is only ever read, never changed). Naming
+defaults match Lidarr's, so adopting an existing library proposes **no renames**.
+
+---
+
+## What works today
+
+| | |
+|---|---|
+| **Library** | Libraries with their own folders, quality and naming · artists, albums and editions (remasters, deluxe) · posters, table and list views · add artist or album with monitoring · calendar (basic) |
+| **Recognition** | Embedded MusicBrainz IDs → whole-tracklist matching → per-file search → folder-name evidence · optional AcoustID fingerprinting · BrainzMash, Lidarr's metadata server and MusicBrainz, tried in order |
+| **Finding music** | Newznab indexers (Prowlarr works as-is), searched in parallel · automatic and RSS search · manual search with scores and rejection reasons |
+| **Downloading** | SABnzbd · queue, history, held releases, free-space protection · failed releases are blocklisted and re-searched |
+| **After download** | Import, rename by template (with a preview), tag write-back of MusicBrainz IDs, reflink → hardlink → copy |
+| **Upgrades** | Better files replace worse ones in place, never the other way round |
+| **Running it** | Web UI · multiple users · encrypted secrets · automatic backups · scheduled tasks you can run on demand |
+
+## Performance
+
+Numbers measured on the developer's machine, not guarantees. The shape of the thing: the database
+is fast, and a first scan is limited by how quickly your disks can be read.
+
+**A real library, first scan.** About 200,000 audio files (16,000 folders, 700+ artists) on an NFS
+NAS, scanned and identified from an empty database:
+
+| | |
+|---|---|
+| Files identified | **99.9%** (202,734 of 202,860); the other 126 are in a review queue |
+| Time | roughly **1 h 10 min to 3 h 35 min** across recent runs, depending on NAS load |
+| Bottleneck | the NAS: about 25 random reads per second, and a cold file costs about 7 reads. Solarr keeps it busy rather than idle |
+
+An interrupted scan resumes from where it stopped.
+
+**The database, on a synthetic 500,000-file library:**
+
+| Operation | Typical (p50) | Worst case (p99) | Target |
+|---|---|---|---|
+| A page of the library list, filtered | 1.7 ms | 3.5 ms | 100 ms |
+| Search-as-you-type over titles | n/a | 17 ms | 150 ms |
+| Import 200 rows | 3.7 ms | 5.7 ms | 50 ms |
+| A user's edit while a bulk write runs | 4.3 ms | 19 ms | 25 ms |
+
+These targets are enforced by the test suite (`make bench`, see
+[benchmarks](documentation/benchmarks.md)). Lists use cursors, so page 1,000 costs the same as page 1.
+
+**Everything else:** one static binary, SQLite only, no database server or broker. Metadata lookups
+from BrainzMash answer in about 0.4 to 1.1 s and are cached; each source has its own rate limit.
+
+## Not there yet
+
+Being honest about the gaps:
+
+- **Usenet only.** Music is often on torrents, so expect thinner results until qBittorrent support
+  lands (it's next).
+- **Music only.** TV and movies are planned in the same app, after music is solid.
+- **Artist aliases:** an artist renamed upstream can show up twice. A fix and a merge tool are next.
+- **Archives containing music** are being made to behave exactly like folders, for imports and for downloads.
+- **Automatic upgrade hunting** and the *Cutoff Unmet* search button are not open yet.
+- **Notifications, statistics, richer calendar views** and an Edit dialog on every item are coming.
+- **Lidarr import** is built but hasn't been re-verified against a live Lidarr since its options
+  were expanded. It is read-only either way.
+- **Deduplicating the same file in two places** (the same song under two artists, or in two libraries) is
+  planned, not built. Solarr will recognise it (by content, even across formats) and keep one copy
+  linked from both places with a reflink or hardlink. Links only work within one filesystem, so on
+  separate disks you'll choose between keeping a duplicate and a symlink.
+- Not API-compatible with the \*Arrs, on purpose: their data model can't express editions, packs or
+  files shared between libraries.
+
+## Roadmap
+
+1. **Finish the Lidarr replacement:** aliases, upgrade hunting, notifications, statistics, calendar, views,
+   and **archives that contain music imported correctly** (zip, rar, 7z, tar, multi-part, read in place).
+2. **Torrents** (qBittorrent) and delay profiles.
+3. **Coexistence:** run beside your existing \*Arrs and compare, then import from Sonarr and Radarr.
+4. **TV**, then **movies**.
+5. **Linking and deduplication:** find the same file in two libraries or folders and share one copy via reflink or hardlink.
+6. **Discovery** from your own library first, then subscriptions and external lists.
+7. Later: books, audiobooks, comics and other media types.
+
+---
+
+## Installation
+
+Solarr ships as one Docker image with everything it needs (`ffprobe`, `fpcalc`, the tag writer).
+
+> The image is at `ghcr.io/makearr/solarr`, currently **private**. If you can't pull it, build it
+> yourself (below).
+
+```yaml
+# docker-compose.yml
+services:
+  solarr:
+    image: ghcr.io/makearr/solarr:latest
+    container_name: solarr
+    restart: unless-stopped
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: Europe/Berlin
+    ports:
+      - "5454:5454"
+    volumes:
+      - ./config:/config        # settings, databases, backups: local disk, not NFS/SMB
+      - /media:/media           # your library
+      - /downloads:/downloads   # the same path your download client reports
 ```
-Cige: Part Two (2024)                                          WAITING
 
-  ✓ Monitored                    ✓ Upgrade threshold met (+31, min 15)
-  ✓ Available since 2024-03-01   ✗ Downloader queue full (47/40)
-  ✓ Found 2160p REMUX, score 94  ✗ Est. 4h 10m at current speed
+Then open **http://localhost:5454**. There's also a ready-made [docker-compose.yml](docker-compose.yml).
 
-  +30 2160p   +25 disc source   +20 HEVC   +10 TrueHD   −15 slow
-```
+Things worth knowing:
 
-No log spelunking. Every rejected release keeps its reasons, so "why didn't this download?"
-is a question with an answer, days later.
+- **`PUID`/`PGID`** set who Solarr runs as. It takes ownership of its own folders only, never your
+  media. Don't set `user:`.
+- **Keep `/config` on local storage.** SQLite doesn't work reliably over NFS/SMB.
+- **Hardlinks need one filesystem.** Put the library and the completed-downloads folder on the same
+  mount, or Solarr copies instead.
+- Port 5454 can be changed with `SOLARR_SERVER_PORT` or on the Network screen.
 
-### Judges quality on what a file *is*
+### Build from source
 
-The release name is a claim; the file itself is the evidence, and the evidence wins. A release
-labelled 2160p that turns out to be an upscale doesn't get treated as an upgrade. Neither does a
-bigger number for its own sake — a well-encoded 48kHz file can beat a bloated 192kHz one if
-that's what you asked for, and an "upgrade" that isn't actually better is simply not made.
+Toolchains run in Docker; no local Go or Node is needed.
 
-### Understands editions and versions
-
-The 1977 theatrical cut, the 1997 Special Edition and the 2004 remaster are different things,
-not duplicates of each other. Same for album remasters with different track listings, and
-director's cuts. Keep one, keep several — and never have a cleanup tool delete the wrong one.
-
-### Knows when one file belongs in two places
-
-A crossover episode that's canonically in two series. A track credited to two artists. One file
-on disk, appearing correctly in both places, counted once — not flagged as a duplicate.
-
-### Handles a library across several disks
-
-A category can span as many drives as you like. Related content stays together — a series or an
-artist's discography lands on one disk rather than being scattered — and you choose how new
-content is distributed: most free space, fill one drive at a time, proportional weighting, or by
-hand.
-
-Retiring a drive is a button. Mark it for draining and Solarr moves everything off it onto
-your other disks, keeping artists and series intact, showing you what it will do before it
-starts, and telling you up front if there isn't enough room rather than filling the others and
-giving up half way.
-
-### Organises the way you want
-
-Every media type and every category gets its own folder and its own rules. Anime and regular
-series can live on different drives, with different naming, different indexers, and different
-language preferences — Japanese audio with English subtitles for one, English audio for the
-other.
-
-Renaming shows you the exact changes as a list before anything moves, and the shipped naming
-matches what Radarr, Sonarr and Lidarr already produce — so adopting an existing library
-proposes no renames at all.
-
-### Music, done properly
-
-Solarr was built music-first, because music is the hardest case. Album completeness is
-tracked track by track. Existing tags are read and trusted, never trampled — it fills gaps
-rather than overwriting the work you've already done. Collaborations, compilations, multi-disc
-releases and classical credits all work.
-
-### Tells you when it's doing less
-
-If Solarr slows down, it says so, in plain terms:
-
-```
-⚠ Hunt searches paused
-  Queue at 47 items (limit 40). Resumes below 40.
-  New releases from RSS are still being acquired.
+```sh
+make verify        # format, vet, lint, tests
+make web           # build the frontend
+make image-local   # build a local image
 ```
 
 ---
 
-## Fast, and one thing to run
+## First steps
 
-Solarr is written in Go and ships as a single binary with the web interface built into it —
-nothing to install alongside it, no database server, no message broker, no cache. It's built to
-stay quick with hundreds of thousands of files: lists stay smooth however far you scroll, counts
-appear instantly instead of being recalculated every time you look at them, and long jobs like
-imports and library scans run in the background where you can watch them rather than behind a
-spinner you have to wait on. Speed targets are measured on every change, so "it got slower" is
-something the project catches rather than something you report.
+The full walk-through is the [user guide](documentation/user-guide.md). In short:
 
----
+1. **Setup wizard:** create the administrator and your first library (a name and a folder). Solarr
+   scans it; covers and artist photos arrive over the next few minutes.
+2. **Connect an indexer and SABnzbd** under *Connections*, or pull them from Prowlarr with
+   *Connections → Arr*. The dashboard tells you what's still missing.
+3. **Add music** with *Add new* or *Discover*, choosing whether to monitor it and search straight away.
+4. **Let it run.** Solarr checks RSS and searches for missing albums on a schedule.
+5. **Follow along** in *Activity → Queue / History* and on each album's page, which says when it was
+   last searched, when it will be again, or why it won't be.
 
-## Made to be usable
-
-Three interface levels — **normal**, **advanced** and **expert** — so the settings you need are
-visible and the ones you don't stay out of the way until you ask for them. Nothing is hidden;
-search finds every setting at any level.
-
-Multi-user, with per-library visibility: different people can see different parts of the
-collection.
+Settings are edited in the UI and can be exported as YAML. `config.yml` only holds bootstrap values.
+An invalid one stops startup with every error listed at once.
 
 ---
 
-## Moving from Radarr, Sonarr, Lidarr and friends
+## Solarr and Lidarr, side by side
 
-Connect Solarr to your existing setup — Sonarr, Radarr, Lidarr, Readarr, Whisparr or
-Prowlarr — and it imports what's monitored, along with your root folders, quality profiles,
-indexers and download clients. You see exactly what it will bring across before it does, and
-anything that doesn't translate cleanly is shown to you rather than silently guessed at.
-
-Run it in observe mode to see what it *would* do without touching anything, then in shadow mode
-to compare its decisions against your current setup side by side, with every difference
-explained. Switch over when you're satisfied. Your existing installation is never modified.
+| | Lidarr | Solarr |
+|---|---|---|
+| Media types | Music | Music now; TV and movies planned in the same app |
+| Import | Sorted folders, one at a time | Any folder, any depth, previewed, fully revertible |
+| Packs and box sets | Weak | One download → many albums |
+| Archives | Extracted | Read in place |
+| Unrecognised music | Stuck in the import screen | Visible as an unverified album |
+| Fakes | Blocklist by release name | Blocks the exact bytes, re-wants the album |
+| Quality | Ordered format list | Gates, tiers and a score, judged from the real file; ties keep yours |
+| Why did it do that? | A rejection string | Structured reasons kept per decision |
+| Several disks | Root folders | Affinity, read-only / offline / draining, one-button drain |
+| Deleting | Optional recycle bin | Always recycled first |
+| Users | One login | Multiple, with per-library access |
+| Settings | One long list | Normal / advanced / expert |
+| Deployment | .NET app | One Go binary, SQLite only |
+| **Torrents** | Yes | **Not yet** |
+| **Notifications** | Many connectors | **Not yet** |
+| **Maturity** | Years in production | Pre-release |
 
 ---
 
-## Running it
+## More
 
-A single Docker container, one volume for configuration and your library mounted where you
-already keep it.
-
----
-
-## Status
-
-In development, pre-release. Not yet usable.
+- **Documentation:** [documentation/](documentation/README.md): [user guide](documentation/user-guide.md),
+  [music identification](documentation/music-identification.md), [naming](documentation/naming.md),
+  [downloads](documentation/downloads.md), [file management](documentation/file-management.md),
+  [container runtime](documentation/container-runtime.md).
+- **Contributing:** Go, SQLite with sqlc, OpenAPI spec-first, React frontend. Start at
+  [codebase-map.md](documentation/codebase-map.md) and [coding-standards.md](documentation/coding-standards.md);
+  `make verify` must pass.
+- **Third-party reuse:** [ATTRIBUTION.md](ATTRIBUTION.md). **History:** [CHANGELOG.md](CHANGELOG.md).
 
 ## Licence
 
-[AGPL-3.0-or-later](LICENSE). Free to use, modify and self-host. If you run a modified version
-as a service for others, you must make your changes available to them.
+[AGPL-3.0-or-later](LICENSE). Free to use, modify and self-host. If you run a modified version as a
+service for others, you must make your changes available to them.

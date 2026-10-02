@@ -538,6 +538,10 @@ func (p *process) startServer(ctx context.Context) error {
 		Works:        adapters.Works{Works: library.NewWorks(p.library), Clock: clock.NewSystem()},
 		WorkDetail:   adapters.WorkDetail{Works: library.NewWorks(p.library), SearchStatus: p.searchStatus},
 		WorksMonitor: p.worksMonitor(),
+		WorkEditor: adapters.WorkEdit{
+			Monitor: p.worksMonitor(), Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),
+			Settings: p.cache,
+		},
 		SystemHealth: adapters.SystemHealth{Cache: p.cache},
 		Blocklist:    adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
 		History:      adapters.History{Log: jobs.NewHistory(p.jobs, clock.NewSystem())},

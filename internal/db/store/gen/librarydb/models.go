@@ -236,6 +236,11 @@ type DesiredItemFile struct {
 	AddedAt       int64
 }
 
+type DesiredProfileOverride struct {
+	DesiredItemID int64
+	ProfileID     int64
+}
+
 type Edition struct {
 	ID              int64
 	WorkID          int64

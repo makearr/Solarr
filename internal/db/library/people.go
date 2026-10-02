@@ -232,7 +232,7 @@ func (p People) AssignGenres(ctx context.Context, workID int64, genres []GenreLi
 			return fmt.Errorf("clear existing: %w", err)
 		}
 		for _, genre := range genres {
-			tagID, err := findOrCreateTag(ctx, queries, genre.Name)
+			tagID, err := findOrCreateTag(ctx, queries, genre.Name, providerSourceMusicBrainz)
 			if err != nil {
 				return fmt.Errorf("tag %q: %w", genre.Name, err)
 			}
@@ -255,7 +255,7 @@ func (p People) AssignGenres(ctx context.Context, workID int64, genres []GenreLi
 // rows (ADR-33), so this string is the boundary of what a refresh may touch.
 const providerSourceMusicBrainz = "musicbrainz"
 
-func findOrCreateTag(ctx context.Context, queries *librarydb.Queries, name string) (int64, error) {
+func findOrCreateTag(ctx context.Context, queries *librarydb.Queries, name, source string) (int64, error) {
 	slug := slugify(name)
 	existing, err := queries.GetTagBySlug(ctx, slug)
 	if err == nil {
@@ -266,7 +266,7 @@ func findOrCreateTag(ctx context.Context, queries *librarydb.Queries, name strin
 	}
 
 	tag, err := queries.CreateTag(ctx, librarydb.CreateTagParams{
-		Name: name, Slug: slug, Source: providerSourceMusicBrainz,
+		Name: name, Slug: slug, Source: source,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("create: %w", err)
