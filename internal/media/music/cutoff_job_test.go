@@ -86,6 +86,69 @@ func TestCutoffJob_MarksAnAlbumBelowTheCutoffUpgradable(t *testing.T) {
 	}
 }
 
+// An album given a profile of its own is judged against that profile alone: a library with no target would call an
+// mp3 enough, the album's own flac-first profile does not.
+func TestCutoffJob_AnAlbumsOwnProfileDecidesWhetherItIsUpgradable(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	physical := library.NewPhysical(env.library)
+	registered, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "Nosi Zada/Discovery/01.mp3", SizeBytes: 1, QuickHash: "h1", FirstSeenAt: time.Unix(1, 0)},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	object := registered[0].MediaObjectID
+	if err := env.library.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).AttachFile(ctx, librarydb.AttachFileParams{
+			DesiredItemID: item.ID, MediaObjectID: object, Role: "primary", MediaRef: "1", AddedAt: 1,
+		})
+	}); err != nil {
+		t.Fatalf("AttachFile: %v", err)
+	}
+	desired := library.NewDesired(env.library)
+	if err := desired.SetAlbumState(t.Context(), item.ID, "COMPLETE", 1); err != nil {
+		t.Fatalf("SetAlbumState: %v", err)
+	}
+	if err := physical.RecordMeasured(t.Context(), object, library.AttributeClaim{AudioCodec: "mp3", Container: "mp3"},
+		library.MeasuredScalars{AudioBitrate: 320_000, OverallBitrate: 320_000}, "", 1); err != nil {
+		t.Fatalf("RecordMeasured: %v", err)
+	}
+	flacFirst, err := env.settings.CreateQualityProfile(t.Context(), "flac-first",
+		`{"quality_profile":"flac-first","compare":["audio_codec","score"],"tiers":{"audio_codec":[["flac"],["mp3"]]}}`, "{}")
+	if err != nil {
+		t.Fatalf("CreateQualityProfile: %v", err)
+	}
+	job := music.CutoffJob{Desired: desired, Settings: env.settings, Logger: slog.New(slog.DiscardHandler)}
+	stateAfterRun := func() string {
+		t.Helper()
+		if err := job.Run(t.Context(), jobs.Job{Type: music.CutoffJobType}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		got, err := desired.Get(t.Context(), item.ID)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		return got.State
+	}
+
+	if state := stateAfterRun(); state != "COMPLETE" {
+		t.Fatalf("no profile of its own and no library target: state %s, want COMPLETE", state)
+	}
+	if err := desired.SetProfileOverride(t.Context(), item.ID, &flacFirst.ID); err != nil {
+		t.Fatalf("SetProfileOverride: %v", err)
+	}
+	if state := stateAfterRun(); state != "UPGRADABLE" {
+		t.Fatalf("an mp3 under a flac-first profile of its own: state %s, want UPGRADABLE", state)
+	}
+	if err := desired.SetProfileOverride(t.Context(), item.ID, nil); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	if state := stateAfterRun(); state != "COMPLETE" {
+		t.Fatalf("back to the library's profile: state %s, want COMPLETE", state)
+	}
+}
+
 // M1d: searching an album below its cutoff offers only releases strictly better than the files it has;
 // an equal one is refused as no upgrade (Invariant 72: ties keep the incumbent).
 func TestSearchItem_AnUpgradableAlbumAcceptsOnlyABetterRelease(t *testing.T) {
