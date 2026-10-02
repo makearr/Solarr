@@ -383,3 +383,13 @@ func (p *process) seriesCatalog() adapters.SeriesCatalog {
 		Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(),
 	}
 }
+
+// seasonSearch is the TV seasons' interactive search and send.
+func (p *process) seasonSearch() adapters.SeasonSearch {
+	grab := p.tvGrab()
+	return adapters.SeasonSearch{
+		Acquire: grab, Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library),
+		Conns: p.tvIndexerConns, Clock: clock.NewSystem(),
+		Views: adapters.CandidateSearch{Search: p.musicSearch(), Dispatch: p.musicDispatch(), Clock: clock.NewSystem()},
+	}
+}

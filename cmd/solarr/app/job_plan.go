@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/makearr/Solarr/internal/acquiring/dispatch"
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -14,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/identify/score"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -125,6 +127,9 @@ func (p *process) huntSearch(ctx context.Context, itemID int64) (plan.Outcome, e
 	if room, measured := p.cache.Snapshot().AcquisitionHeadroom(item.CategoryID); measured && room <= 0 {
 		return plan.OutcomeNoRoom, nil
 	}
+	if p.isTV(item.CategoryID) {
+		return p.tvHuntSearch(ctx, itemID)
+	}
 	indexers, err := p.indexerConns(ctx)
 	if err != nil {
 		return plan.OutcomeSearched, err
@@ -196,4 +201,30 @@ func (p *process) enqueueHunt(ctx context.Context) (jobs.EnqueueResult, error) {
 	return p.queue.Enqueue(ctx, jobs.Request{
 		Type: plan.HuntJobType, ActionKey: string(plan.HuntJobType), Priority: jobs.PriorityLow, Payload: []byte("{}"),
 	})
+}
+
+func (p *process) isTV(categoryID int64) bool {
+	category, found := p.cache.Snapshot().Category(categoryID)
+	return found && category.MediaType == "tv"
+}
+
+// tvHuntSearch searches one season the hunt chose and sends the best release, if it is still wanted.
+func (p *process) tvHuntSearch(ctx context.Context, itemID int64) (plan.Outcome, error) {
+	conns, err := p.tvIndexerConns(ctx)
+	if err != nil {
+		return plan.OutcomeSearched, err
+	}
+	result, err := p.tvGrab().SearchAndSend(ctx, itemID, conns, dispatch.GrabAutomatic, clock.NewSystem().Now())
+	switch {
+	case errors.Is(err, tv.ErrNotSearchable):
+		return plan.OutcomeNotWanted, nil
+	case err != nil:
+		return plan.OutcomeSearched, err
+	case result.AlreadyInFlight:
+		return plan.OutcomeInFlight, nil
+	}
+	if result.Sent != nil || result.Held {
+		p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
+	}
+	return plan.OutcomeSearched, nil
 }

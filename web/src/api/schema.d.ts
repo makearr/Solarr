@@ -3096,6 +3096,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/series/{id}/seasons/{season}/search": {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                season: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Interactive search: ask every indexer for this season (id query first, then text) and record a decision per release that covers a wanted episode. Nothing is sent. */
+        post: operations["searchSeason"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/{id}/seasons/{season}/grab": {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                season: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Automatic search, as in Sonarr: search the season and send its best accepted release to a download client. */
+        post: operations["grabSeason"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/{id}/seasons/{season}/candidates": {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                season: number;
+            };
+            cookie?: never;
+        };
+        /** The latest search's decisions for this season, best first. Empty for a season nobody has searched. */
+        get: operations["listSeasonCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/{id}/seasons/{season}/candidates/{decision_id}/send": {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                season: number;
+                decision_id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send one accepted release to a matching download client (a person's own pick, never gated). */
+        post: operations["sendSeasonCandidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/series/{id}/seasons/{season}/monitored": {
         parameters: {
             query: {
@@ -11629,6 +11722,146 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    searchSeason: {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                season: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What this run found, decided and persisted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchItemResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description Nothing is wanted in the season, or no indexer is enabled. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    grabSeason: {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                season: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the search found and what, if anything, was sent. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrabResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description Nothing is wanted in the season, no indexer is enabled, or no client takes the release. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSeasonCandidates: {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                season: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The decisions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateDecision"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    sendSeasonCandidate: {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                season: number;
+                decision_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The acquisition this created. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Acquisition"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The decision is not accepted, no client takes its protocol, or a download is already on its way. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     setSeasonMonitored: {

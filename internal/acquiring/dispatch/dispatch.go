@@ -1,4 +1,6 @@
-package music
+// Package dispatch sends a decided release to a download client and holds it when the client is full: every media
+// type's, extracted from music for stage 8.
+package dispatch
 
 import (
 	"context"
@@ -12,21 +14,21 @@ import (
 
 // ErrDecisionNotFound reports a decision id that does not belong to the
 // item it was asked to dispatch from.
-var ErrDecisionNotFound = errors.New("music: dispatch: decision not found for this item")
+var ErrDecisionNotFound = errors.New("dispatch: decision not found for this item")
 
 // ErrDecisionNotAccepted reports a REJECT/DEFER decision -- ADR-57's
 // acquire.send only ever fires on an ACCEPT; a rejected or deferred release
 // is not something to hand to a download client.
-var ErrDecisionNotAccepted = errors.New("music: dispatch: decision is not ACCEPT")
+var ErrDecisionNotAccepted = errors.New("dispatch: decision is not ACCEPT")
 
 // ErrContentBlocklisted is a release whose content failed before, found again under another
 // listing (section 10.11); refused before the client sees it, and the next best is tried.
-var ErrContentBlocklisted = errors.New("music: dispatch: the same content failed before and is blocklisted")
+var ErrContentBlocklisted = errors.New("dispatch: the same content failed before and is blocklisted")
 
 // ErrNoDownloaderForProtocol reports no enabled downloader matching the
 // candidate's own protocol -- a usenet release with only a torrent client
 // configured, for instance.
-var ErrNoDownloaderForProtocol = errors.New("music: dispatch: no enabled downloader for this candidate's protocol")
+var ErrNoDownloaderForProtocol = errors.New("dispatch: no enabled downloader for this candidate's protocol")
 
 // DownloaderConn is one configured, enabled download client ready to
 // dispatch to -- building the client (credentials, protocol) is the
@@ -35,7 +37,7 @@ type DownloaderConn struct {
 	ID       int64
 	Protocol string // "usenet" | "torrent" | "ddl" (ADR-46) -- only usenet has a sender today
 	Client   download.Client
-	// Category is the client category music is sent under, "music" unless the client says otherwise.
+	// Category is the client category the media type is sent under.
 	Category string
 	// MaxQueued is ADR-57's queue depth: an automatic send beyond it is held. 0 means no limit.
 	MaxQueued int
@@ -101,7 +103,7 @@ type Dispatch struct {
 // protocol.
 func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Time) (library.Acquisition, error) {
 	if _, err := d.Desired.Get(ctx, itemID); err != nil {
-		return library.Acquisition{}, fmt.Errorf("music: dispatch: %w", err)
+		return library.Acquisition{}, fmt.Errorf("dispatch: %w", err)
 	}
 
 	detail, err := d.findDecision(ctx, itemID, decisionID)
@@ -114,14 +116,14 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 
 	// Before the client is involved: refusing after the send leaves a duplicate in its queue.
 	if _, inFlight, err := d.Acquisitions.InFlightForItem(ctx, itemID); err != nil {
-		return library.Acquisition{}, fmt.Errorf("music: dispatch: %w", err)
+		return library.Acquisition{}, fmt.Errorf("dispatch: %w", err)
 	} else if inFlight {
 		return library.Acquisition{}, library.ErrAcquisitionAlreadyInFlight
 	}
 
 	downloaders, err := d.Downloaders(ctx)
 	if err != nil {
-		return library.Acquisition{}, fmt.Errorf("music: dispatch: downloaders: %w", err)
+		return library.Acquisition{}, fmt.Errorf("dispatch: downloaders: %w", err)
 	}
 	downloader, found := firstMatchingProtocol(downloaders, detail.ReleaseCandidate.Protocol)
 	if !found {
@@ -131,7 +133,7 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 	category := downloader.Category
 	file, err := d.Fetch(ctx, detail.ReleaseCandidate.IndexerID, detail.ReleaseCandidate.DownloadURL)
 	if err != nil {
-		return library.Acquisition{}, fmt.Errorf("music: dispatch: fetch release: %w", err)
+		return library.Acquisition{}, fmt.Errorf("dispatch: fetch release: %w", err)
 	}
 	contentHash := ""
 	switch detail.ReleaseCandidate.Protocol {
@@ -142,7 +144,7 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 	}
 	if contentHash != "" && d.Blocklist != nil {
 		if blocked, err := d.Blocklist.IsBlocked(ctx, nil, "", contentHash, at.Unix()); err != nil {
-			return library.Acquisition{}, fmt.Errorf("music: dispatch: %w", err)
+			return library.Acquisition{}, fmt.Errorf("dispatch: %w", err)
 		} else if blocked {
 			return library.Acquisition{}, ErrContentBlocklisted
 		}
@@ -151,7 +153,7 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 		Name: detail.ReleaseCandidate.Title, File: file, Category: category,
 	})
 	if err != nil {
-		return library.Acquisition{}, fmt.Errorf("music: dispatch: %w", err)
+		return library.Acquisition{}, fmt.Errorf("dispatch: %w", err)
 	}
 
 	size := int64(0)
@@ -177,7 +179,7 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 		CreatedAt: at.Unix(), UpdatedAt: at.Unix(), ContentHash: contentHash,
 	})
 	if err != nil {
-		return library.Acquisition{}, fmt.Errorf("music: dispatch: %w", err)
+		return library.Acquisition{}, fmt.Errorf("dispatch: %w", err)
 	}
 	if d.History != nil {
 		d.History(ctx, download.HistoryGrabbed, created, "")
@@ -186,9 +188,9 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 }
 
 func (d Dispatch) findDecision(ctx context.Context, itemID, decisionID int64) (library.DecisionDetail, error) {
-	details, err := d.Candidates.ListDecisionsForItem(ctx, itemID, dispatchDecisionLookupLimit)
+	details, err := d.Candidates.ListDecisionsForItem(ctx, itemID, DecisionLookupLimit)
 	if err != nil {
-		return library.DecisionDetail{}, fmt.Errorf("music: dispatch: list decisions: %w", err)
+		return library.DecisionDetail{}, fmt.Errorf("dispatch: list decisions: %w", err)
 	}
 	for _, detail := range details {
 		if detail.Decision.ID == decisionID {
@@ -198,10 +200,10 @@ func (d Dispatch) findDecision(ctx context.Context, itemID, decisionID int64) (l
 	return library.DecisionDetail{}, ErrDecisionNotFound
 }
 
-// dispatchDecisionLookupLimit bounds findDecision's own lookup -- generous
+// DecisionLookupLimit bounds findDecision's own lookup -- generous
 // for a manual, low-frequency action; the same ceiling
 // adapters.CandidateSearch's own history listing already uses.
-const dispatchDecisionLookupLimit = 100
+const DecisionLookupLimit = 100
 
 func firstMatchingProtocol(downloaders []DownloaderConn, protocol string) (DownloaderConn, bool) {
 	for _, downloader := range downloaders {

@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bookmark, BookmarkCheck, ChevronDown, ChevronRight, RefreshCw, Tv } from "lucide-react";
+import { Bookmark, BookmarkCheck, ChevronDown, ChevronRight, RefreshCw, Search, Tv, User } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useLibrary } from "@/lib/useLibrary";
+
+import { SeasonSearchDialog } from "./SeasonSearch";
 
 type Episode = components["schemas"]["SeriesEpisode"];
 type Season = components["schemas"]["SeriesSeason"];
@@ -32,6 +34,9 @@ function SeasonSection({
   canManage,
   onSeason,
   onEpisode,
+  onAutoSearch,
+  onInteractive,
+  searchNote,
   initiallyOpen,
 }: {
   season: Season;
@@ -39,6 +44,9 @@ function SeasonSection({
   canManage: boolean;
   onSeason: (monitored: boolean) => void;
   onEpisode: (episode: Episode, monitored: boolean) => void;
+  onAutoSearch: () => void;
+  onInteractive: () => void;
+  searchNote: string | undefined;
   initiallyOpen: boolean;
 }) {
   const [open, setOpen] = useState(initiallyOpen);
@@ -62,6 +70,27 @@ function SeasonSection({
           <span className="text-xs text-ink-muted">
             {present}/{monitored} · {episodes.length} episodes
           </span>
+        </button>
+        {searchNote && <span className="text-xs text-ink-muted">{searchNote}</span>}
+        <button
+          type="button"
+          title="Search this season and send the best release"
+          aria-label={`Search ${seasonLabel(season.number)}`}
+          disabled={!canManage}
+          onClick={onAutoSearch}
+          className="text-ink-muted enabled:hover:text-ink disabled:opacity-50"
+        >
+          <Search aria-hidden className="size-4" />
+        </button>
+        <button
+          type="button"
+          title="Interactive search: choose the release yourself"
+          aria-label={`Interactive search ${seasonLabel(season.number)}`}
+          disabled={!canManage}
+          onClick={onInteractive}
+          className="text-ink-muted enabled:hover:text-ink disabled:opacity-50"
+        >
+          <User aria-hidden className="size-4" />
         </button>
       </header>
       {open && (
@@ -147,6 +176,24 @@ export function SeriesPage() {
     onSuccess: changed,
   });
 
+  const [dialogSeason, setDialogSeason] = useState<number | null>(null);
+  const [notes, setNotes] = useState<Record<number, string>>({});
+  const grab = useMutation({
+    mutationFn: async (season: number) => {
+      const { data, error } = await api.POST("/series/{id}/seasons/{season}/grab", {
+        params: { path: { id: Number(seriesId), season }, query: { category_id: Number(categoryId) } },
+      });
+      if (error) throw error;
+      return { season, data };
+    },
+    onSuccess: ({ season, data }) => {
+      const note = data.sent ? "Sent to the download client" : data.already_downloading ? "Already downloading" : data.held ? "Held for room in the client's queue" : data.found === 0 ? "Nothing found" : "Found releases, none could be sent";
+      setNotes((current) => ({ ...current, [season]: note }));
+      changed();
+    },
+    onError: (_error, season) => setNotes((current) => ({ ...current, [season]: "Search failed: is an indexer connected, and is anything missing?" })),
+  });
+
   if (detail.isLoading) return <p className="p-4 text-sm text-ink-muted">Loading…</p>;
   if (detail.isError || !detail.data) return <p className="p-4 text-sm text-danger">This series could not be found.</p>;
 
@@ -224,8 +271,20 @@ export function SeriesPage() {
           initiallyOpen={season.number === newest}
           onSeason={(monitored) => setSeason.mutate({ season: season.number, monitored })}
           onEpisode={(episode, monitored) => setEpisode.mutate({ episode, monitored })}
+          onAutoSearch={() => grab.mutate(season.number)}
+          onInteractive={() => setDialogSeason(season.number)}
+          searchNote={grab.isPending && grab.variables === season.number ? "Searching…" : notes[season.number]}
         />
       ))}
+      {dialogSeason !== null && (
+        <SeasonSearchDialog
+          categoryId={Number(categoryId)}
+          seriesId={Number(seriesId)}
+          season={dialogSeason}
+          title={`${series.title}, ${seasonLabel(dialogSeason)}`}
+          onClose={() => setDialogSeason(null)}
+        />
+      )}
     </div>
   );
 }

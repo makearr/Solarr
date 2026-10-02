@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/makearr/Solarr/internal/acquiring/dispatch"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -589,7 +590,7 @@ func (s Search) BlocklistRelease(ctx context.Context, itemID, decisionID int64, 
 	if s.Blocklist == nil {
 		return errors.New("music: blocklist is not available")
 	}
-	details, err := s.Candidates.ListDecisionsForItem(ctx, itemID, dispatchDecisionLookupLimit)
+	details, err := s.Candidates.ListDecisionsForItem(ctx, itemID, dispatch.DecisionLookupLimit)
 	if err != nil {
 		return fmt.Errorf("music: blocklist release: %w", err)
 	}

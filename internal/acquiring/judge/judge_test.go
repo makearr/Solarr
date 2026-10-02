@@ -1,0 +1,130 @@
+package judge_test
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/acquiring/judge"
+	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/score"
+)
+
+const webProfile = `{"quality_profile":"WEB 1080p","require":{"resolution":{"min":"720p","max":"1080p"}},"compare":["resolution","source","score"],"tiers":{"resolution":[["1080p"],["720p"]],"source":[["webdl"],["webrip"],["hdtv"]]}}`
+const hdProfile = `{"quality_profile":"HD","require":{"resolution":{"min":"720p","max":"1080p"}},"compare":["resolution","source","score"],"tiers":{"resolution":[["1080p"],["720p"]],"source":[["hdtv"],["webdl"]]}}`
+
+func profiles(t *testing.T, documents ...string) []judge.RankedProfile {
+	t.Helper()
+	var ranked []judge.RankedProfile
+	for _, document := range documents {
+		rules, err := score.Parse([]byte(document))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ranked = append(ranked, judge.RankedProfile{Name: rules.Name, Rules: rules})
+	}
+	return ranked
+}
+
+func facts(resolution, source string) score.Facts {
+	return score.Facts{File: score.FileFacts{Resolution: resolution, Source: source}}
+}
+
+func TestEvaluateInOrderPrefersWhatTheFirstProfileWants(t *testing.T) {
+	ranked := profiles(t, webProfile, hdProfile)
+	web := judge.EvaluateInOrder(ranked, facts("1080p", "webdl"), nil)
+	hd := judge.EvaluateInOrder(ranked, facts("1080p", "hdtv"), nil)
+	if web.Outcome != model.OutcomeAccept || hd.Outcome != model.OutcomeAccept {
+		t.Fatalf("outcomes = %v, %v", web.Outcome, hd.Outcome)
+	}
+	if !judge.StrictlyBetter(web, hd) || judge.StrictlyBetter(hd, web) {
+		t.Error("the release the first profile fits must beat one only a later profile accepts")
+	}
+	if tooSmall := judge.EvaluateInOrder(ranked, facts("480p", "hdtv"), nil); tooSmall.Outcome == model.OutcomeAccept {
+		t.Error("480p is below every profile's minimum")
+	}
+}
+
+func TestRevisionBreaksTiesOnlyAfterQuality(t *testing.T) {
+	ranked := profiles(t, webProfile)
+	original := judge.WithRevision(judge.EvaluateInOrder(ranked, facts("1080p", "webdl"), nil), false, true)
+	proper := judge.WithRevision(judge.EvaluateInOrder(ranked, facts("1080p", "webdl"), nil), true, true)
+	worseButProper := judge.WithRevision(judge.EvaluateInOrder(ranked, facts("720p", "webdl"), nil), true, true)
+	if !judge.StrictlyBetter(proper, original) {
+		t.Error("a proper beats the same quality")
+	}
+	if judge.StrictlyBetter(worseButProper, original) {
+		t.Error("a proper never beats better quality")
+	}
+}
+
+func TestFindsRankAcceptedFirstThenQualityThenDistance(t *testing.T) {
+	ranked := profiles(t, webProfile)
+	good := judge.Find{Raw: indexer.RawItem{Title: "good"}, Decision: judge.EvaluateInOrder(ranked, facts("1080p", "webdl"), nil)}
+	lower := judge.Find{Raw: indexer.RawItem{Title: "lower"}, Decision: judge.EvaluateInOrder(ranked, facts("720p", "webdl"), nil)}
+	rejected := judge.Find{Raw: indexer.RawItem{Title: "rejected"}, Decision: judge.EvaluateInOrder(ranked, facts("480p", "dvd"), nil)}
+	finds := []judge.Find{rejected, lower, good}
+	judge.SortBestFirst(finds)
+	if finds[0].Raw.Title != "good" || finds[1].Raw.Title != "lower" || finds[2].Raw.Title != "rejected" {
+		t.Errorf("order = %s, %s, %s", finds[0].Raw.Title, finds[1].Raw.Title, finds[2].Raw.Title)
+	}
+}
+
+func TestDuplicatesAcrossIndexersKeepTheFirst(t *testing.T) {
+	a := judge.Find{Conn: judge.Conn{ID: 1}, Raw: indexer.RawItem{Title: "Show.S01E01.1080p", SizeBytes: 1000}}
+	b := judge.Find{Conn: judge.Conn{ID: 2}, Raw: indexer.RawItem{Title: "show s01e01 1080p", SizeBytes: 1005}}
+	c := judge.Find{Conn: judge.Conn{ID: 2}, Raw: indexer.RawItem{Title: "Show.S01E01.1080p", SizeBytes: 5000}}
+	kept := judge.WithoutCrossIndexerDuplicates([]judge.Find{a, b, c})
+	if len(kept) != 2 || kept[0].Conn.ID != 1 || kept[1].Raw.SizeBytes != 5000 {
+		t.Errorf("kept = %+v", kept)
+	}
+}
+
+func TestProtocolDelayDefersTheOtherProtocolInsideTheWindow(t *testing.T) {
+	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+	accepted := model.Decision{Outcome: model.OutcomeAccept}
+	finds := []judge.Find{
+		{Conn: judge.Conn{Impl: "newznab"}, Raw: indexer.RawItem{PublishedAt: now.Add(-time.Hour)}, Decision: accepted},
+		{Conn: judge.Conn{Impl: "torznab"}, Raw: indexer.RawItem{PublishedAt: now.Add(-time.Hour)}, Decision: accepted},
+		{Conn: judge.Conn{Impl: "torznab"}, Raw: indexer.RawItem{PublishedAt: now.Add(-5 * time.Hour)}, Decision: accepted},
+	}
+	judge.ProtocolDelay{Preferred: "usenet", Window: 3 * time.Hour, Now: now}.Apply(finds)
+	if finds[0].Decision.Outcome != model.OutcomeAccept || finds[1].Decision.Outcome != model.OutcomeDefer || finds[2].Decision.Outcome != model.OutcomeAccept {
+		t.Errorf("outcomes = %v %v %v", finds[0].Decision.Outcome, finds[1].Decision.Outcome, finds[2].Decision.Outcome)
+	}
+}
+
+type fakeSearcher struct {
+	items []indexer.RawItem
+	err   error
+	seen  []indexer.SearchRequest
+}
+
+func (f *fakeSearcher) Search(_ context.Context, request indexer.SearchRequest) ([]indexer.RawItem, error) {
+	f.seen = append(f.seen, request)
+	return f.items, f.err
+}
+
+func TestAskSkipsQueriesAnIndexerCannotTakeAndDeduplicatesByGUID(t *testing.T) {
+	capable := &fakeSearcher{items: []indexer.RawItem{{GUID: "a"}, {GUID: "b"}}}
+	limited := &fakeSearcher{items: []indexer.RawItem{{GUID: "c"}}}
+	conns := []judge.Conn{
+		{ID: 1, Client: capable, Params: map[string][]string{"tvsearch": {"q", "tvdbid", "season", "ep"}}},
+		{ID: 2, Client: limited, Params: map[string][]string{"tvsearch": {"q"}}},
+	}
+	queries := []judge.Query{
+		{Function: "tvsearch", Extra: map[string]string{"tvdbid": "1"}, Needs: []string{"tvdbid"}},
+		{Function: "tvsearch", Text: "show s01"},
+	}
+	answers, err := judge.AskEveryIndexer(t.Context(), conns, queries, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(capable.seen) != 2 || len(limited.seen) != 1 || limited.seen[0].Query != "show s01" {
+		t.Errorf("requests: capable %d, limited %+v", len(capable.seen), limited.seen)
+	}
+	if len(answers[0].Raws) != 2 {
+		t.Errorf("a release listed by both queries is one: %+v", answers[0].Raws)
+	}
+}

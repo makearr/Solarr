@@ -86,7 +86,7 @@ func (g Grab) sendBest(ctx context.Context, itemID int64, found ItemSearchResult
 			noRoom++
 			continue
 		}
-		if held, err := g.Dispatch.holdIfFull(ctx, itemID, detail, origin, at); err != nil {
+		if held, err := g.Dispatch.HoldIfFull(ctx, itemID, detail, origin, at); err != nil {
 			return GrabResult{Search: found}, fmt.Errorf("music: grab item %d: %w", itemID, err)
 		} else if held {
 			return GrabResult{Search: found, Held: true}, nil

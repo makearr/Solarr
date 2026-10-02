@@ -102,6 +102,8 @@ type Config struct {
 	People PeopleReader
 	// Series feeds the TV screens. Optional: nil answers 503.
 	Series SeriesCatalog
+	// Seasons searches and downloads TV seasons. Optional: nil answers 503.
+	Seasons SeasonAcquirer
 	// PeopleSubscriber subscribes a caller to a person. Optional: without it,
 	// SubscribePerson answers 503.
 	PeopleSubscriber PeopleSubscriber
@@ -255,6 +257,7 @@ type Server struct {
 	configPath              string
 	people                  PeopleReader
 	series                  SeriesCatalog
+	seasons                 SeasonAcquirer
 	peopleSubscriber        PeopleSubscriber
 	artistActions           ArtistActions
 	artworkChoices          ArtworkChoices
@@ -353,6 +356,7 @@ func New(config Config) (*Server, error) {
 		configPath:              config.ConfigPath,
 		people:                  config.People,
 		series:                  config.Series,
+		seasons:                 config.Seasons,
 		peopleSubscriber:        config.PeopleSubscriber,
 		artistActions:           config.ArtistActions,
 		artworkChoices:          config.ArtworkChoices,
@@ -499,6 +503,10 @@ func New(config Config) (*Server, error) {
 			secured.Post("/series/{id}/refresh", server.routeRefreshSeries)
 			secured.Put("/series/{id}/episodes/{part_id}/monitored", server.routeSetEpisodeMonitored)
 			secured.Put("/series/{id}/seasons/{season}/monitored", server.routeSetSeasonMonitored)
+			secured.Post("/series/{id}/seasons/{season}/search", server.routeSearchSeason)
+			secured.Post("/series/{id}/seasons/{season}/grab", server.routeGrabSeason)
+			secured.Get("/series/{id}/seasons/{season}/candidates", server.routeListSeasonCandidates)
+			secured.Post("/series/{id}/seasons/{season}/candidates/{decision_id}/send", server.routeSendSeasonCandidate)
 			secured.Get("/discover/search", server.routeDiscoverSearch)
 			secured.Post("/discover/add", server.DiscoverAdd)
 			secured.Get("/arr/instances", server.ListArrInstances)
