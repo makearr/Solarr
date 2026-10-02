@@ -359,6 +359,21 @@ func (q *Queries) SetCategoryLanguageProfile(ctx context.Context, arg SetCategor
 	return err
 }
 
+const setCategoryProtocolDelay = `-- name: SetCategoryProtocolDelay :exec
+UPDATE category SET preferred_protocol = ?, protocol_delay_minutes = ? WHERE id = ?
+`
+
+type SetCategoryProtocolDelayParams struct {
+	PreferredProtocol    string
+	ProtocolDelayMinutes int64
+	ID                   int64
+}
+
+func (q *Queries) SetCategoryProtocolDelay(ctx context.Context, arg SetCategoryProtocolDelayParams) error {
+	_, err := q.db.ExecContext(ctx, setCategoryProtocolDelay, arg.PreferredProtocol, arg.ProtocolDelayMinutes, arg.ID)
+	return err
+}
+
 const setCategoryQualityCutoff = `-- name: SetCategoryQualityCutoff :exec
 UPDATE category SET quality_cutoff_profile_id = ? WHERE id = ?
 `

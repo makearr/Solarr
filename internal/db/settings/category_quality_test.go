@@ -169,3 +169,44 @@ func TestSetCategoryQuality_RefusesAnotherMediaTypesProfile(t *testing.T) {
 		t.Error("created a profile for an unknown media type")
 	}
 }
+
+func TestSetCategoryProtocolDelay_ValidatesAndSurvivesAnExportImport(t *testing.T) {
+	cache, _ := newCache(t)
+	music := mustCategory(t, cache, "music", "Music", 10)
+	if err := cache.SetCategoryProtocolDelay(t.Context(), music.ID, "gopher", 5); err == nil {
+		t.Fatal("an unknown protocol was accepted")
+	}
+	if err := cache.SetCategoryProtocolDelay(t.Context(), music.ID, "usenet", 8*24*60); err == nil {
+		t.Fatal("a delay of over a week was accepted")
+	}
+	if err := cache.SetCategoryProtocolDelay(t.Context(), music.ID, "usenet", 120); err != nil {
+		t.Fatalf("SetCategoryProtocolDelay: %v", err)
+	}
+	got, _ := cache.Snapshot().Category(music.ID)
+	if got.PreferredProtocol != "usenet" || got.ProtocolDelayMinutes != 120 {
+		t.Fatalf("category = %+v, want usenet and 120", got)
+	}
+
+	exported := cache.Export()
+	encoded, err := yaml.Marshal(exported)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded settings.Document
+	if err := yaml.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	fresh, freshClock := newCache(t)
+	if err := fresh.Import(t.Context(), freshClock, netip.Addr{}, decoded); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	var imported settings.Category
+	for _, category := range fresh.Snapshot().Categories() {
+		if category.Name == "Music" {
+			imported = category
+		}
+	}
+	if imported.PreferredProtocol != "usenet" || imported.ProtocolDelayMinutes != 120 {
+		t.Errorf("imported %+v, want the delay profile back", imported)
+	}
+}

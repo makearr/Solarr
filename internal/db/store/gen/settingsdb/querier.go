@@ -133,6 +133,7 @@ type Querier interface {
 	SetCategoryMonitorDiscovered(ctx context.Context, arg SetCategoryMonitorDiscoveredParams) error
 	SetCategoryMonitorReleaseTypes(ctx context.Context, arg SetCategoryMonitorReleaseTypesParams) error
 	SetCategoryNamingProfile(ctx context.Context, arg SetCategoryNamingProfileParams) error
+	SetCategoryProtocolDelay(ctx context.Context, arg SetCategoryProtocolDelayParams) error
 	SetCategoryQualityCutoff(ctx context.Context, arg SetCategoryQualityCutoffParams) error
 	SetCategoryQualityProfile(ctx context.Context, arg SetCategoryQualityProfileParams) error
 	SetCategoryQualityUpgrades(ctx context.Context, arg SetCategoryQualityUpgradesParams) error

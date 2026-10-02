@@ -73,3 +73,9 @@ existed has no lyrics language until it is probed again.
 **Edit on an album.** Its own quality profile replaces the library's profile list for that album's search
 and upgrade decisions (`desired_profile_override`), and the cutoff check judges its files against that profile alone (a file meets it
 when it fits the profile). The per-file target/cutoff badges on the album page still show the library's.
+
+**Delay profile** (Library -> Quality, D16): a library may prefer usenet or torrents and give it a head start. A release
+of the other protocol is judged as usual, but while it is younger than the delay (counted from when the indexer posted it,
+or from now when it states none) an acceptable one is held as a DEFER (`protocol-delay`, with the time it stops waiting),
+then taken like any other. Nothing is ever filtered out, so an album only the other protocol has is still found. Default:
+no preference, no delay; at most a week.

@@ -3709,6 +3709,16 @@ export interface components {
             target?: components["schemas"]["QualityTarget"];
             /** @description Lidarr's "Upgrades Allowed". Omitted leaves it as it is. */
             upgrades_allowed?: boolean;
+            /**
+             * @description The delay profile's preferred protocol; the other's releases wait. Omitted leaves it as it is.
+             * @enum {string}
+             */
+            preferred_protocol?: "" | "usenet" | "torrent";
+            /**
+             * Format: int64
+             * @description How long after a release was posted the other protocol waits; 0 is no delay. Omitted leaves it as it is.
+             */
+            protocol_delay_minutes?: number;
         };
         QualityProfileRef: {
             /** Format: int64 */
@@ -3716,6 +3726,10 @@ export interface components {
             name: string;
         };
         LibraryQuality: {
+            /** @enum {string} */
+            preferred_protocol: "" | "usenet" | "torrent";
+            /** Format: int64 */
+            protocol_delay_minutes: number;
             /** @description Lidarr's "Upgrades Allowed". Off, an album with every track is complete whatever its quality: nothing is upgradable and nothing is searched for an upgrade. */
             upgrades_allowed: boolean;
             /** @description The library's own list, earlier preferred. Empty means the instance default. */

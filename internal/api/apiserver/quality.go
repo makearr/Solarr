@@ -87,6 +87,20 @@ func (s *Server) SetLibraryQuality(w http.ResponseWriter, r *http.Request, id in
 			}
 		}
 	}
+	if body.PreferredProtocol != nil || body.ProtocolDelayMinutes != nil {
+		protocol, minutes := category.PreferredProtocol, category.ProtocolDelayMinutes
+		if body.PreferredProtocol != nil {
+			protocol = string(*body.PreferredProtocol)
+		}
+		if body.ProtocolDelayMinutes != nil {
+			minutes = *body.ProtocolDelayMinutes
+		}
+		if err := s.auth.Settings.SetCategoryProtocolDelay(r.Context(), id, protocol, minutes); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+		category.PreferredProtocol, category.ProtocolDelayMinutes = protocol, minutes
+	}
 	// The request's Access is frozen at its start (ADR-27), so the answer is what was saved.
 	category.QualityProfileIDs = body.ProfileIds
 	category.QualityCutoffID = body.CutoffProfileId
@@ -99,6 +113,7 @@ func (s *Server) libraryQualityView(category settings.Category) gen.LibraryQuali
 	view := gen.LibraryQuality{
 		Profiles: []gen.QualityProfileRef{}, Available: []gen.QualityProfileRef{}, Warnings: []string{},
 		CutoffProfileId: category.QualityCutoffID, UpgradesAllowed: category.QualityUpgrades,
+		PreferredProtocol: gen.LibraryQualityPreferredProtocol(category.PreferredProtocol), ProtocolDelayMinutes: category.ProtocolDelayMinutes,
 	}
 	for _, id := range category.QualityProfileIDs {
 		if profile, found := snapshot.QualityProfile(id); found {

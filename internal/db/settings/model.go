@@ -105,6 +105,10 @@ type Category struct {
 	QualityTarget *QualityTarget
 	// QualityUpgrades is Lidarr's "Upgrades Allowed": off, an album with every track is complete.
 	QualityUpgrades bool
+	// PreferredProtocol and ProtocolDelayMinutes are the delay profile (D16): the other protocol's releases wait this long
+	// after they were posted. No preference ("") or zero minutes is no delay.
+	PreferredProtocol    string
+	ProtocolDelayMinutes int64
 	// FileManagement is Sonarr's File Management and Permissions; the defaults when never saved.
 	FileManagement FileManagement
 }

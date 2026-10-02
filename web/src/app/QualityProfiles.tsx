@@ -83,6 +83,8 @@ function LibraryQualityEditor() {
   const [order, setOrder] = useState<number[] | undefined>();
   const [cutoff, setCutoff] = useState<number | undefined>();
   const [upgrades, setUpgrades] = useState(true);
+  const [preferred, setPreferred] = useState<"" | "usenet" | "torrent">("");
+  const [delayMinutes, setDelayMinutes] = useState(0);
   const [target, setTarget] = useState<QualityTarget | undefined>();
   useEffect(() => {
     if (!quality.data) return;
@@ -90,13 +92,15 @@ function LibraryQualityEditor() {
     setCutoff(quality.data.cutoff_profile_id ?? undefined);
     setTarget(quality.data.target ?? undefined);
     setUpgrades(quality.data.upgrades_allowed);
+    setPreferred(quality.data.preferred_protocol);
+    setDelayMinutes(quality.data.protocol_delay_minutes);
   }, [quality.data]);
 
   const save = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.PUT("/categories/{id}/quality", {
         params: { path: { id: id! } },
-        body: { profile_ids: order ?? [], cutoff_profile_id: cutoff, target, upgrades_allowed: upgrades },
+        body: { profile_ids: order ?? [], cutoff_profile_id: cutoff, target, upgrades_allowed: upgrades, preferred_protocol: preferred, protocol_delay_minutes: delayMinutes },
       });
       if (error) throw error;
       return data;
@@ -111,12 +115,14 @@ function LibraryQualityEditor() {
   const names = new Map(quality.data.available.map((profile) => [profile.id, profile.name]));
   const unused = quality.data.available.filter((profile) => !order.includes(profile.id));
   const dirty =
-    JSON.stringify([order, cutoff ?? null, target ?? null, upgrades]) !==
+    JSON.stringify([order, cutoff ?? null, target ?? null, upgrades, preferred, delayMinutes]) !==
     JSON.stringify([
       quality.data.profiles.map((profile) => profile.id),
       quality.data.cutoff_profile_id ?? null,
       quality.data.target ?? null,
       quality.data.upgrades_allowed,
+      quality.data.preferred_protocol,
+      quality.data.protocol_delay_minutes,
     ]);
 
   const move = (index: number, by: number) => {
@@ -235,6 +241,40 @@ function LibraryQualityEditor() {
       </section>
 
       <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
+        <h2 className="text-sm font-medium">Delay profile</h2>
+        <p className="text-xs text-ink-muted">
+          Prefer one kind of download and give it a head start: a release of the other kind is held back until it has been
+          posted this long, then taken like any other. Nothing is refused, so an album only one kind has is still found.
+        </p>
+        <div className="flex flex-wrap items-end gap-3 text-xs text-ink-muted">
+          <label className="flex flex-col gap-1">
+            Prefer
+            <select
+              value={preferred}
+              onChange={(event) => setPreferred(event.target.value as "" | "usenet" | "torrent")}
+              className={inputStyle}
+            >
+              <option value="">No preference</option>
+              <option value="usenet">Usenet</option>
+              <option value="torrent">Torrents</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            Wait for the other (minutes)
+            <input
+              type="number"
+              min={0}
+              max={10080}
+              disabled={preferred === ""}
+              value={delayMinutes}
+              onChange={(event) => setDelayMinutes(Math.max(0, Number(event.target.value) || 0))}
+              className={`${inputStyle} w-28`}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">Target</h2>
         <p className="text-xs text-ink-muted">
           The quality you would pick if you could choose freely. A file meets it with the same codec and
@@ -350,6 +390,8 @@ function LibraryQualityEditor() {
               setCutoff(quality.data.cutoff_profile_id ?? undefined);
               setTarget(quality.data.target ?? undefined);
               setUpgrades(quality.data.upgrades_allowed);
+              setPreferred(quality.data.preferred_protocol);
+              setDelayMinutes(quality.data.protocol_delay_minutes);
             }}
             className="rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted hover:text-ink"
           >
