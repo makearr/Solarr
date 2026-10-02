@@ -8,6 +8,7 @@ package librarydb
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const clearWorkOrganisationRole = `-- name: ClearWorkOrganisationRole :exec
@@ -39,6 +40,37 @@ func (q *Queries) CountWorkFieldManual(ctx context.Context, arg CountWorkFieldMa
 	var manual int64
 	err := row.Scan(&manual)
 	return manual, err
+}
+
+const coveredPartRefs = `-- name: CoveredPartRefs :many
+SELECT DISTINCT f.media_ref
+FROM desired_item_file f
+JOIN desired_item d ON d.id = f.desired_item_id
+WHERE d.work_id = ? AND f.role = 'primary' AND f.media_ref <> ''
+`
+
+// Which parts of a work have a file, by any item.
+func (q *Queries) CoveredPartRefs(ctx context.Context, workID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, coveredPartRefs, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var media_ref string
+		if err := rows.Scan(&media_ref); err != nil {
+			return nil, err
+		}
+		items = append(items, media_ref)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const deleteWorkRating = `-- name: DeleteWorkRating :exec
@@ -96,6 +128,108 @@ func (q *Queries) FindOrganisationByName(ctx context.Context, arg FindOrganisati
 	return i, err
 }
 
+const getSeriesInCategory = `-- name: GetSeriesInCategory :one
+SELECT w.id, w.canonical_title, w.sort_title, w.year, w.added_at, w.description, w.original_language, w.runtime_ms
+FROM work w
+WHERE w.id = ?1 AND w.media_type = 'tv'
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?2)
+`
+
+type GetSeriesInCategoryParams struct {
+	ID         int64
+	CategoryID int64
+}
+
+type GetSeriesInCategoryRow struct {
+	ID               int64
+	CanonicalTitle   string
+	SortTitle        string
+	Year             sql.NullInt64
+	AddedAt          int64
+	Description      sql.NullString
+	OriginalLanguage sql.NullString
+	RuntimeMs        sql.NullInt64
+}
+
+func (q *Queries) GetSeriesInCategory(ctx context.Context, arg GetSeriesInCategoryParams) (GetSeriesInCategoryRow, error) {
+	row := q.db.QueryRowContext(ctx, getSeriesInCategory, arg.ID, arg.CategoryID)
+	var i GetSeriesInCategoryRow
+	err := row.Scan(
+		&i.ID,
+		&i.CanonicalTitle,
+		&i.SortTitle,
+		&i.Year,
+		&i.AddedAt,
+		&i.Description,
+		&i.OriginalLanguage,
+		&i.RuntimeMs,
+	)
+	return i, err
+}
+
+const listSeriesInCategory = `-- name: ListSeriesInCategory :many
+SELECT w.id, w.canonical_title, w.sort_title, w.year, w.added_at, w.description
+FROM work w
+WHERE w.media_type = 'tv'
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1)
+  AND (w.sort_title > ?2 OR (w.sort_title = ?2 AND w.id > ?3))
+ORDER BY w.sort_title, w.id
+LIMIT ?4
+`
+
+type ListSeriesInCategoryParams struct {
+	CategoryID int64
+	AfterSort  string
+	AfterID    int64
+	PageSize   int64
+}
+
+type ListSeriesInCategoryRow struct {
+	ID             int64
+	CanonicalTitle string
+	SortTitle      string
+	Year           sql.NullInt64
+	AddedAt        int64
+	Description    sql.NullString
+}
+
+// A TV library's series: works with a desired item in the category (visibility is desired-item membership, ADR-27),
+// ordered by sort title with the id as the tie-break.
+func (q *Queries) ListSeriesInCategory(ctx context.Context, arg ListSeriesInCategoryParams) ([]ListSeriesInCategoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSeriesInCategory,
+		arg.CategoryID,
+		arg.AfterSort,
+		arg.AfterID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSeriesInCategoryRow{}
+	for rows.Next() {
+		var i ListSeriesInCategoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CanonicalTitle,
+			&i.SortTitle,
+			&i.Year,
+			&i.AddedAt,
+			&i.Description,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkPartRefs = `-- name: ListWorkPartRefs :many
 SELECT id, media_ref FROM work_part WHERE work_id = ?
 `
@@ -126,6 +260,150 @@ func (q *Queries) ListWorkPartRefs(ctx context.Context, workID int64) ([]ListWor
 		return nil, err
 	}
 	return items, nil
+}
+
+const seasonItemsForWorks = `-- name: SeasonItemsForWorks :many
+SELECT d.id, d.work_id, d.media_ref, d.monitored, d.profile_id, d.required_count, d.present_count, d.state
+FROM desired_item d
+WHERE d.work_id IN (/*SLICE:work_ids*/?) AND d.satisfaction_kind = 'SET' AND d.media_ref <> ''
+ORDER BY d.work_id, d.media_sort_key
+`
+
+type SeasonItemsForWorksRow struct {
+	ID            int64
+	WorkID        int64
+	MediaRef      string
+	Monitored     int64
+	ProfileID     int64
+	RequiredCount sql.NullInt64
+	PresentCount  int64
+	State         string
+}
+
+// The season items of the given works, with their counts.
+func (q *Queries) SeasonItemsForWorks(ctx context.Context, workIds []int64) ([]SeasonItemsForWorksRow, error) {
+	query := seasonItemsForWorks
+	var queryParams []interface{}
+	if len(workIds) > 0 {
+		for _, v := range workIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:work_ids*/?", strings.Repeat(",?", len(workIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:work_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SeasonItemsForWorksRow{}
+	for rows.Next() {
+		var i SeasonItemsForWorksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkID,
+			&i.MediaRef,
+			&i.Monitored,
+			&i.ProfileID,
+			&i.RequiredCount,
+			&i.PresentCount,
+			&i.State,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const seriesPartCounts = `-- name: SeriesPartCounts :many
+SELECT p.work_id,
+       CAST(COUNT(*) AS INTEGER) AS total,
+       CAST(COALESCE(SUM(CASE WHEN p.monitored = 1 THEN 1 ELSE 0 END), 0) AS INTEGER) AS monitored,
+       CAST(COALESCE(SUM(CASE WHEN p.monitored = 1 AND p.date IS NOT NULL AND p.date <= ?1 THEN 1 ELSE 0 END), 0) AS INTEGER) AS monitored_aired,
+       CAST(COALESCE(MIN(CASE WHEN p.available_at IS NOT NULL AND p.available_at > ?2 THEN p.available_at END), 0) AS INTEGER) AS next_available
+FROM work_part p
+WHERE p.work_id IN (/*SLICE:work_ids*/?) AND p.media_ref NOT LIKE 's00:%'
+GROUP BY p.work_id
+`
+
+type SeriesPartCountsParams struct {
+	Today   sql.NullString
+	Now     sql.NullInt64
+	WorkIds []int64
+}
+
+type SeriesPartCountsRow struct {
+	WorkID         int64
+	Total          int64
+	Monitored      int64
+	MonitoredAired int64
+	NextAvailable  int64
+}
+
+// Per series: its parts, the monitored ones that have aired by the given date and the next air time still to come.
+// Specials (season 0) are left out of every count.
+func (q *Queries) SeriesPartCounts(ctx context.Context, arg SeriesPartCountsParams) ([]SeriesPartCountsRow, error) {
+	query := seriesPartCounts
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.Today)
+	queryParams = append(queryParams, arg.Now)
+	if len(arg.WorkIds) > 0 {
+		for _, v := range arg.WorkIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:work_ids*/?", strings.Repeat(",?", len(arg.WorkIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:work_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SeriesPartCountsRow{}
+	for rows.Next() {
+		var i SeriesPartCountsRow
+		if err := rows.Scan(
+			&i.WorkID,
+			&i.Total,
+			&i.Monitored,
+			&i.MonitoredAired,
+			&i.NextAvailable,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setSeasonPartsMonitored = `-- name: SetSeasonPartsMonitored :exec
+UPDATE work_part SET monitored = ?1 WHERE work_id = ?2 AND media_ref LIKE ?3
+`
+
+type SetSeasonPartsMonitoredParams struct {
+	Monitored int64
+	WorkID    int64
+	Scope     string
+}
+
+func (q *Queries) SetSeasonPartsMonitored(ctx context.Context, arg SetSeasonPartsMonitoredParams) error {
+	_, err := q.db.ExecContext(ctx, setSeasonPartsMonitored, arg.Monitored, arg.WorkID, arg.Scope)
+	return err
 }
 
 const setWorkCertification = `-- name: SetWorkCertification :exec

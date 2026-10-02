@@ -9,13 +9,17 @@ import (
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/metacache"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/theaudiodb"
+	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
@@ -346,5 +350,36 @@ func theAudioDBCover(client theaudiodb.Client) func(ctx context.Context, release
 			return "", musicbrainz.ErrNoCoverArt
 		}
 		return cover, err
+	}
+}
+
+// tvService is the process's one TV service: Skyhook and TVmaze each on their own ADR-13 bucket, TVmaze at its
+// published 20 calls per 10 seconds.
+func (p *process) tvService() tv.Service {
+	p.tvOnce.Do(func() {
+		wall := clock.NewSystem()
+		guard := httpx.NewGuard(nil, nil, nil)
+		limiter := httpx.NewLimiter(wall, httpx.Config{Providers: map[string]httpx.Limits{
+			"skyhook": {MinInterval: 250 * time.Millisecond},
+			"tvmaze":  {MinInterval: 500 * time.Millisecond},
+		}}, nil)
+		client := func(name string) *httpx.Client {
+			return httpx.NewClient(wall, guard, limiter, httpx.NewBreaker(wall, httpx.BreakerConfig{}), httpx.ClientConfig{
+				Provider: name, UserAgent: httpx.UserAgent(p.build.Version), Proxy: p.liveProxyPolicy(),
+			})
+		}
+		p.tvShared = tv.Service{
+			Skyhook: skyhook.New(client("skyhook"), "en"), TVmaze: tvmaze.New(client("tvmaze")),
+			Series: library.NewSeries(p.library), Desired: library.NewDesired(p.library), Clock: wall, Logger: p.logger,
+		}
+	})
+	return p.tvShared
+}
+
+// seriesCatalog is the TV screens' data source.
+func (p *process) seriesCatalog() adapters.SeriesCatalog {
+	return adapters.SeriesCatalog{
+		Service: p.tvService(), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library),
+		Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(),
 	}
 }

@@ -3,6 +3,7 @@ package library_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -164,5 +165,46 @@ func TestSeasonItemsCountOnlyTheirOwnMonitoredParts(t *testing.T) {
 	again, err := desired.EnsureSeasonItem(t.Context(), library.SeasonRequest{WorkID: result.WorkID, MediaRef: "s01", CategoryID: 1, ProfileID: 9, Monitored: false})
 	if err != nil || again.ID != seasons[0].ID || again.Monitored != 1 || again.ProfileID != 1 {
 		t.Errorf("an existing season item is reused as it is: %+v, %v", again, err)
+	}
+}
+
+func TestSeriesReaderListsAndDetailsOnlyWhatTheCategoryHolds(t *testing.T) {
+	opened, _ := newLibrary(t)
+	write := sampleSeries()
+	write.Parts = nil
+	for _, ref := range []string{"s00:e01", "s01:e01", "s01:e02"} {
+		date := "2020-01-05"
+		write.Parts = append(write.Parts, library.SeriesPartWrite{MediaRef: ref, SortKey: ref, Date: date, MonitoredIfNew: ref != "s00:e01"})
+	}
+	result, err := library.NewSeries(opened).Upsert(t.Context(), seriesAt, write)
+	if err != nil {
+		t.Fatal(err)
+	}
+	desired := library.NewDesired(opened)
+	for _, ref := range []string{"s00", "s01"} {
+		if _, err := desired.EnsureSeasonItem(t.Context(), library.SeasonRequest{WorkID: result.WorkID, MediaRef: ref, CategoryID: 5, ProfileID: 2, Monitored: ref == "s01"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	reader := library.NewSeriesReader(opened)
+	list, err := reader.List(t.Context(), 5, library.SeriesCursor{}, 10, seriesAt)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("list = %+v, %v", list, err)
+	}
+	row := list[0]
+	if row.Counts.Total != 2 || row.Counts.Monitored != 2 || row.Counts.AiredMissing != 2 || !row.Monitored || row.ProfileID != 2 ||
+		row.Fields["network"] != "" || len(row.Seasons) != 2 || row.Genres[0] != "Drama" {
+		t.Errorf("row = %+v", row)
+	}
+	if other, _ := reader.List(t.Context(), 6, library.SeriesCursor{}, 10, seriesAt); len(other) != 0 {
+		t.Errorf("another category sees %+v", other)
+	}
+	if _, err := reader.Get(t.Context(), 6, result.WorkID, seriesAt); !errors.Is(err, library.ErrSeriesNotFound) {
+		t.Errorf("Get in the wrong category: %v", err)
+	}
+	detail, err := reader.Get(t.Context(), 5, result.WorkID, seriesAt)
+	if err != nil || len(detail.Episodes) != 3 || detail.IDs["tvdb"] != "1234" || detail.Episodes[1].Season != 1 || detail.Episodes[1].Number != 1 {
+		t.Errorf("detail = %+v, %v", detail, err)
 	}
 }

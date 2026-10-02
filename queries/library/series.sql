@@ -54,3 +54,49 @@ ON CONFLICT (work_id, provider) DO UPDATE SET score = excluded.score, votes = ex
 INSERT INTO work_certification (work_id, system, rating)
 VALUES (?, ?, ?)
 ON CONFLICT (work_id, system) DO UPDATE SET rating = excluded.rating;
+
+-- A TV library's series: works with a desired item in the category (visibility is desired-item membership, ADR-27),
+-- ordered by sort title with the id as the tie-break.
+-- name: ListSeriesInCategory :many
+SELECT w.id, w.canonical_title, w.sort_title, w.year, w.added_at, w.description
+FROM work w
+WHERE w.media_type = 'tv'
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id))
+  AND (w.sort_title > sqlc.arg(after_sort) OR (w.sort_title = sqlc.arg(after_sort) AND w.id > sqlc.arg(after_id)))
+ORDER BY w.sort_title, w.id
+LIMIT sqlc.arg(page_size);
+
+-- name: GetSeriesInCategory :one
+SELECT w.id, w.canonical_title, w.sort_title, w.year, w.added_at, w.description, w.original_language, w.runtime_ms
+FROM work w
+WHERE w.id = sqlc.arg(id) AND w.media_type = 'tv'
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id));
+
+-- Per series: its parts, the monitored ones that have aired by the given date and the next air time still to come.
+-- Specials (season 0) are left out of every count.
+-- name: SeriesPartCounts :many
+SELECT p.work_id,
+       CAST(COUNT(*) AS INTEGER) AS total,
+       CAST(COALESCE(SUM(CASE WHEN p.monitored = 1 THEN 1 ELSE 0 END), 0) AS INTEGER) AS monitored,
+       CAST(COALESCE(SUM(CASE WHEN p.monitored = 1 AND p.date IS NOT NULL AND p.date <= sqlc.arg(today) THEN 1 ELSE 0 END), 0) AS INTEGER) AS monitored_aired,
+       CAST(COALESCE(MIN(CASE WHEN p.available_at IS NOT NULL AND p.available_at > sqlc.arg(now) THEN p.available_at END), 0) AS INTEGER) AS next_available
+FROM work_part p
+WHERE p.work_id IN (sqlc.slice(work_ids)) AND p.media_ref NOT LIKE 's00:%'
+GROUP BY p.work_id;
+
+-- The season items of the given works, with their counts.
+-- name: SeasonItemsForWorks :many
+SELECT d.id, d.work_id, d.media_ref, d.monitored, d.profile_id, d.required_count, d.present_count, d.state
+FROM desired_item d
+WHERE d.work_id IN (sqlc.slice(work_ids)) AND d.satisfaction_kind = 'SET' AND d.media_ref <> ''
+ORDER BY d.work_id, d.media_sort_key;
+
+-- Which parts of a work have a file, by any item.
+-- name: CoveredPartRefs :many
+SELECT DISTINCT f.media_ref
+FROM desired_item_file f
+JOIN desired_item d ON d.id = f.desired_item_id
+WHERE d.work_id = ? AND f.role = 'primary' AND f.media_ref <> '';
+
+-- name: SetSeasonPartsMonitored :exec
+UPDATE work_part SET monitored = sqlc.arg(monitored) WHERE work_id = sqlc.arg(work_id) AND media_ref LIKE sqlc.arg(scope);

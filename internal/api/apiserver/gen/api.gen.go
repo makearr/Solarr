@@ -33,6 +33,19 @@ const (
 	AddDownloaderRequestProtocolUsenet  AddDownloaderRequestProtocol = "usenet"
 )
 
+// Defines values for AddSeriesRequestMonitor.
+const (
+	AddSeriesRequestMonitorAll         AddSeriesRequestMonitor = "all"
+	AddSeriesRequestMonitorExisting    AddSeriesRequestMonitor = "existing"
+	AddSeriesRequestMonitorFirstSeason AddSeriesRequestMonitor = "first_season"
+	AddSeriesRequestMonitorFuture      AddSeriesRequestMonitor = "future"
+	AddSeriesRequestMonitorLastSeason  AddSeriesRequestMonitor = "last_season"
+	AddSeriesRequestMonitorMissing     AddSeriesRequestMonitor = "missing"
+	AddSeriesRequestMonitorNone        AddSeriesRequestMonitor = "none"
+	AddSeriesRequestMonitorPilot       AddSeriesRequestMonitor = "pilot"
+	AddSeriesRequestMonitorRecent      AddSeriesRequestMonitor = "recent"
+)
+
 // Defines values for ArrApp.
 const (
 	ArrAppLidarr   ArrApp = "lidarr"
@@ -557,6 +570,36 @@ const (
 	ScheduleTierNormal   ScheduleTier = "normal"
 )
 
+// Defines values for SeriesCandidateStatus.
+const (
+	SeriesCandidateStatusContinuing SeriesCandidateStatus = "continuing"
+	SeriesCandidateStatusEnded      SeriesCandidateStatus = "ended"
+	SeriesCandidateStatusUpcoming   SeriesCandidateStatus = "upcoming"
+)
+
+// Defines values for SeriesEpisodeAirConfidence.
+const (
+	SeriesEpisodeAirConfidenceHigh    SeriesEpisodeAirConfidence = "high"
+	SeriesEpisodeAirConfidenceLow     SeriesEpisodeAirConfidence = "low"
+	SeriesEpisodeAirConfidenceMedium  SeriesEpisodeAirConfidence = "medium"
+	SeriesEpisodeAirConfidenceUnknown SeriesEpisodeAirConfidence = "unknown"
+)
+
+// Defines values for SeriesEpisodeState.
+const (
+	SeriesEpisodeStateMissing     SeriesEpisodeState = "missing"
+	SeriesEpisodeStatePresent     SeriesEpisodeState = "present"
+	SeriesEpisodeStateUnaired     SeriesEpisodeState = "unaired"
+	SeriesEpisodeStateUnmonitored SeriesEpisodeState = "unmonitored"
+)
+
+// Defines values for SeriesSummaryStatus.
+const (
+	SeriesSummaryStatusContinuing SeriesSummaryStatus = "continuing"
+	SeriesSummaryStatusEnded      SeriesSummaryStatus = "ended"
+	SeriesSummaryStatusUpcoming   SeriesSummaryStatus = "upcoming"
+)
+
 // Defines values for SettingDefinitionKind.
 const (
 	SettingDefinitionKindBool       SettingDefinitionKind = "bool"
@@ -818,6 +861,29 @@ type AddIndexerRequest struct {
 
 	// Priority Lower is preferred when several indexers list the same release.
 	Priority *int64 `json:"priority,omitempty"`
+}
+
+// AddSeriesRequest defines model for AddSeriesRequest.
+type AddSeriesRequest struct {
+	CategoryId      int64                    `json:"category_id"`
+	ExternalId      string                   `json:"external_id"`
+	Monitor         *AddSeriesRequestMonitor `json:"monitor,omitempty"`
+	MonitorSpecials *bool                    `json:"monitor_specials,omitempty"`
+	Provider        *string                  `json:"provider,omitempty"`
+
+	// QualityProfileId The library's default when absent.
+	QualityProfileId *int64 `json:"quality_profile_id,omitempty"`
+}
+
+// AddSeriesRequestMonitor defines model for AddSeriesRequest.Monitor.
+type AddSeriesRequestMonitor string
+
+// AddSeriesResult defines model for AddSeriesResult.
+type AddSeriesResult struct {
+	Created  bool  `json:"created"`
+	Episodes int   `json:"episodes"`
+	Seasons  int   `json:"seasons"`
+	SeriesId int64 `json:"series_id"`
 }
 
 // ArrApp Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships. prowlarr has no library: its active indexers and download clients are used from it.
@@ -3152,6 +3218,125 @@ type SecretMask struct {
 	Masked *string `json:"masked,omitempty"`
 }
 
+// SeriesCandidate defines model for SeriesCandidate.
+type SeriesCandidate struct {
+	ExternalId string `json:"external_id"`
+
+	// LibraryId The series when the library already holds it.
+	LibraryId *int64                 `json:"library_id,omitempty"`
+	Network   *string                `json:"network,omitempty"`
+	Overview  *string                `json:"overview,omitempty"`
+	PosterUrl *string                `json:"poster_url,omitempty"`
+	Provider  string                 `json:"provider"`
+	Status    *SeriesCandidateStatus `json:"status,omitempty"`
+	Title     string                 `json:"title"`
+	Year      *int64                 `json:"year,omitempty"`
+}
+
+// SeriesCandidateStatus defines model for SeriesCandidate.Status.
+type SeriesCandidateStatus string
+
+// SeriesCounts Episode counts of one series or season. present counts monitored episodes with a file.
+type SeriesCounts struct {
+	// AiredMissing Monitored episodes that have aired and have no file.
+	AiredMissing int `json:"aired_missing"`
+	Monitored    int `json:"monitored"`
+	Present      int `json:"present"`
+	Total        int `json:"total"`
+}
+
+// SeriesDetail defines model for SeriesDetail.
+type SeriesDetail struct {
+	// AirTime Local clock time and zone, e.g. 22:00 America/New_York.
+	AirTime       *string         `json:"air_time,omitempty"`
+	Aliases       *[]string       `json:"aliases,omitempty"`
+	Certification *string         `json:"certification,omitempty"`
+	Episodes      []SeriesEpisode `json:"episodes"`
+	FanartUrl     *string         `json:"fanart_url,omitempty"`
+	FirstAired    *string         `json:"first_aired,omitempty"`
+
+	// Ids Provider to id, e.g. tvdb, tvmaze, tmdb, imdb.
+	Ids              map[string]string `json:"ids"`
+	LastAired        *string           `json:"last_aired,omitempty"`
+	OriginalCountry  *string           `json:"original_country,omitempty"`
+	OriginalLanguage *string           `json:"original_language,omitempty"`
+	Rating           *float32          `json:"rating,omitempty"`
+	RuntimeMinutes   *int              `json:"runtime_minutes,omitempty"`
+	Seasons          []SeriesSeason    `json:"seasons"`
+	Summary          SeriesSummary     `json:"summary"`
+}
+
+// SeriesEpisode defines model for SeriesEpisode.
+type SeriesEpisode struct {
+	Absolute      *int                        `json:"absolute,omitempty"`
+	AirConfidence *SeriesEpisodeAirConfidence `json:"air_confidence,omitempty"`
+	AirDate       *string                     `json:"air_date,omitempty"`
+	AirTime       *time.Time                  `json:"air_time,omitempty"`
+
+	// Id The part id.
+	Id             int64   `json:"id"`
+	Monitored      bool    `json:"monitored"`
+	Number         int     `json:"number"`
+	Overview       *string `json:"overview,omitempty"`
+	RuntimeMinutes *int    `json:"runtime_minutes,omitempty"`
+	Season         int     `json:"season"`
+
+	// State What a person wants to see in the column.
+	State SeriesEpisodeState `json:"state"`
+	Title *string            `json:"title,omitempty"`
+}
+
+// SeriesEpisodeAirConfidence defines model for SeriesEpisode.AirConfidence.
+type SeriesEpisodeAirConfidence string
+
+// SeriesEpisodeState What a person wants to see in the column.
+type SeriesEpisodeState string
+
+// SeriesPage defines model for SeriesPage.
+type SeriesPage struct {
+	Items      []SeriesSummary `json:"items"`
+	NextCursor *string         `json:"next_cursor,omitempty"`
+}
+
+// SeriesSeason defines model for SeriesSeason.
+type SeriesSeason struct {
+	// Counts Episode counts of one series or season. present counts monitored episodes with a file.
+	Counts        SeriesCounts `json:"counts"`
+	DesiredItemId *int64       `json:"desired_item_id,omitempty"`
+	Monitored     bool         `json:"monitored"`
+	Number        int          `json:"number"`
+	PosterUrl     *string      `json:"poster_url,omitempty"`
+}
+
+// SeriesSummary defines model for SeriesSummary.
+type SeriesSummary struct {
+	// AddedAt Unix seconds.
+	AddedAt int64 `json:"added_at"`
+
+	// Counts Episode counts of one series or season. present counts monitored episodes with a file.
+	Counts SeriesCounts `json:"counts"`
+	Genres *[]string    `json:"genres,omitempty"`
+	Id     int64        `json:"id"`
+
+	// Monitored At least one season is monitored.
+	Monitored        bool       `json:"monitored"`
+	Network          *string    `json:"network,omitempty"`
+	NextAiring       *time.Time `json:"next_airing,omitempty"`
+	Overview         *string    `json:"overview,omitempty"`
+	PosterUrl        *string    `json:"poster_url,omitempty"`
+	QualityProfileId *int64     `json:"quality_profile_id,omitempty"`
+
+	// Seasons Seasons with episodes
+	Seasons   int                  `json:"seasons"`
+	SortTitle string               `json:"sort_title"`
+	Status    *SeriesSummaryStatus `json:"status,omitempty"`
+	Title     string               `json:"title"`
+	Year      *int64               `json:"year,omitempty"`
+}
+
+// SeriesSummaryStatus defines model for SeriesSummary.Status.
+type SeriesSummaryStatus string
+
 // SettingDefinition One setting registered once in Go (ADR-26, todo 4.14) -- the single source for its tier, default and help text. Either a scalar instance_setting key, or (kind entity, since the non-scalar audit's own deep pass) a whole settings surface such as quality profiles or categories, which has no single value and so an always-empty default.
 type SettingDefinition struct {
 	// Default Encoded the same way the value itself is stored (a JSON array for string_list). Always empty for kind entity.
@@ -3898,6 +4083,56 @@ type SearchParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListSeriesParams defines parameters for ListSeries.
+type ListSeriesParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+
+	// Cursor From `next_cursor` of the previous page. Absent on the first page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// LookupSeriesParams defines parameters for LookupSeries.
+type LookupSeriesParams struct {
+	CategoryId int64  `form:"category_id" json:"category_id"`
+	Q          string `form:"q" json:"q"`
+	Limit      *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetSeriesParams defines parameters for GetSeries.
+type GetSeriesParams struct {
+	// CategoryId The library the series is in; access is checked against it.
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// SetEpisodeMonitoredJSONBody defines parameters for SetEpisodeMonitored.
+type SetEpisodeMonitoredJSONBody struct {
+	Monitored bool `json:"monitored"`
+}
+
+// SetEpisodeMonitoredParams defines parameters for SetEpisodeMonitored.
+type SetEpisodeMonitoredParams struct {
+	// CategoryId The library the series is in; access is checked against it.
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// RefreshSeriesParams defines parameters for RefreshSeries.
+type RefreshSeriesParams struct {
+	// CategoryId The library the series is in; access is checked against it.
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// SetSeasonMonitoredJSONBody defines parameters for SetSeasonMonitored.
+type SetSeasonMonitoredJSONBody struct {
+	Monitored bool `json:"monitored"`
+}
+
+// SetSeasonMonitoredParams defines parameters for SetSeasonMonitored.
+type SetSeasonMonitoredParams struct {
+	// CategoryId The library the series is in; access is checked against it.
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
 // SetAuthPolicyJSONBody defines parameters for SetAuthPolicy.
 type SetAuthPolicyJSONBody struct {
 	AuthRequired bool    `json:"auth_required"`
@@ -4265,6 +4500,15 @@ type UpdateScheduleJSONRequestBody UpdateScheduleJSONBody
 
 // SimulateScoreJSONRequestBody defines body for SimulateScore for application/json ContentType.
 type SimulateScoreJSONRequestBody SimulateScoreJSONBody
+
+// AddSeriesJSONRequestBody defines body for AddSeries for application/json ContentType.
+type AddSeriesJSONRequestBody = AddSeriesRequest
+
+// SetEpisodeMonitoredJSONRequestBody defines body for SetEpisodeMonitored for application/json ContentType.
+type SetEpisodeMonitoredJSONRequestBody SetEpisodeMonitoredJSONBody
+
+// SetSeasonMonitoredJSONRequestBody defines body for SetSeasonMonitored for application/json ContentType.
+type SetSeasonMonitoredJSONRequestBody SetSeasonMonitoredJSONBody
 
 // SetAuthPolicyJSONRequestBody defines body for SetAuthPolicy for application/json ContentType.
 type SetAuthPolicyJSONRequestBody SetAuthPolicyJSONBody
@@ -4817,6 +5061,27 @@ type ServerInterface interface {
 	// Ranked cross-media title search (section 21.5), category-filtered (ADR-27).
 	// (GET /search)
 	Search(w http.ResponseWriter, r *http.Request, params SearchParams)
+	// A page of one TV library's series, ordered by sort title.
+	// (GET /series)
+	ListSeries(w http.ResponseWriter, r *http.Request, params ListSeriesParams)
+	// Add a series to a library (Sonarr's add dialog).
+	// (POST /series)
+	AddSeries(w http.ResponseWriter, r *http.Request)
+	// Search the metadata sources for a series to add.
+	// (GET /series/lookup)
+	LookupSeries(w http.ResponseWriter, r *http.Request, params LookupSeriesParams)
+	// A series with its seasons and episodes.
+	// (GET /series/{id})
+	GetSeries(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesParams)
+	// Monitor or unmonitor one episode.
+	// (PUT /series/{id}/episodes/{part_id}/monitored)
+	SetEpisodeMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64, params SetEpisodeMonitoredParams)
+	// Re-read the series from the metadata sources. Never changes monitoring.
+	// (POST /series/{id}/refresh)
+	RefreshSeries(w http.ResponseWriter, r *http.Request, id int64, params RefreshSeriesParams)
+	// Monitor or unmonitor every episode of a season.
+	// (PUT /series/{id}/seasons/{season}/monitored)
+	SetSeasonMonitored(w http.ResponseWriter, r *http.Request, id int64, season int, params SetSeasonMonitoredParams)
 	// Whether a login is required.
 	// (GET /settings/auth)
 	GetAuthPolicy(w http.ResponseWriter, r *http.Request)
@@ -5954,6 +6219,48 @@ func (_ Unimplemented) SimulateScore(w http.ResponseWriter, r *http.Request) {
 // Ranked cross-media title search (section 21.5), category-filtered (ADR-27).
 // (GET /search)
 func (_ Unimplemented) Search(w http.ResponseWriter, r *http.Request, params SearchParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A page of one TV library's series, ordered by sort title.
+// (GET /series)
+func (_ Unimplemented) ListSeries(w http.ResponseWriter, r *http.Request, params ListSeriesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add a series to a library (Sonarr's add dialog).
+// (POST /series)
+func (_ Unimplemented) AddSeries(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Search the metadata sources for a series to add.
+// (GET /series/lookup)
+func (_ Unimplemented) LookupSeries(w http.ResponseWriter, r *http.Request, params LookupSeriesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A series with its seasons and episodes.
+// (GET /series/{id})
+func (_ Unimplemented) GetSeries(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Monitor or unmonitor one episode.
+// (PUT /series/{id}/episodes/{part_id}/monitored)
+func (_ Unimplemented) SetEpisodeMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64, params SetEpisodeMonitoredParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Re-read the series from the metadata sources. Never changes monitoring.
+// (POST /series/{id}/refresh)
+func (_ Unimplemented) RefreshSeries(w http.ResponseWriter, r *http.Request, id int64, params RefreshSeriesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Monitor or unmonitor every episode of a season.
+// (PUT /series/{id}/seasons/{season}/monitored)
+func (_ Unimplemented) SetSeasonMonitored(w http.ResponseWriter, r *http.Request, id int64, season int, params SetSeasonMonitoredParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11466,6 +11773,373 @@ func (siw *ServerInterfaceWrapper) Search(w http.ResponseWriter, r *http.Request
 	handler.ServeHTTP(w, r)
 }
 
+// ListSeries operation middleware
+func (siw *ServerInterfaceWrapper) ListSeries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSeriesParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSeries(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddSeries operation middleware
+func (siw *ServerInterfaceWrapper) AddSeries(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddSeries(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LookupSeries operation middleware
+func (siw *ServerInterfaceWrapper) LookupSeries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params LookupSeriesParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "q" -------------
+
+	if paramValue := r.URL.Query().Get("q"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LookupSeries(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSeries operation middleware
+func (siw *ServerInterfaceWrapper) GetSeries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSeriesParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSeries(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetEpisodeMonitored operation middleware
+func (siw *ServerInterfaceWrapper) SetEpisodeMonitored(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "part_id" -------------
+	var partId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "part_id", chi.URLParam(r, "part_id"), &partId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "part_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetEpisodeMonitoredParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetEpisodeMonitored(w, r, id, partId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RefreshSeries operation middleware
+func (siw *ServerInterfaceWrapper) RefreshSeries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RefreshSeriesParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefreshSeries(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetSeasonMonitored operation middleware
+func (siw *ServerInterfaceWrapper) SetSeasonMonitored(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "season" -------------
+	var season int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "season", chi.URLParam(r, "season"), &season, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "season", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetSeasonMonitoredParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetSeasonMonitored(w, r, id, season, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetAuthPolicy operation middleware
 func (siw *ServerInterfaceWrapper) GetAuthPolicy(w http.ResponseWriter, r *http.Request) {
 
@@ -13542,6 +14216,27 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/search", wrapper.Search)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/series", wrapper.ListSeries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/series", wrapper.AddSeries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/series/lookup", wrapper.LookupSeries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/series/{id}", wrapper.GetSeries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/series/{id}/episodes/{part_id}/monitored", wrapper.SetEpisodeMonitored)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/series/{id}/refresh", wrapper.RefreshSeries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/series/{id}/seasons/{season}/monitored", wrapper.SetSeasonMonitored)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/auth", wrapper.GetAuthPolicy)

@@ -3,6 +3,7 @@ package adapters
 import (
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/media/tv"
 )
 
 // Navigation satisfies apiserver.NavigationProvider by dispatching on
@@ -21,4 +22,5 @@ func (Navigation) LevelsFor(mediaType string) ([]model.Level, bool) {
 
 var navigationByMediaType = map[string]model.NavigationLevels{
 	"music": music.Navigation{},
+	"tv":    tv.Navigation{},
 }

@@ -59,6 +59,12 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		errors.Is(err, jobs.ErrNotFound), errors.Is(err, jobs.ErrUnknownTask):
 		writeProblem(w, logger, http.StatusNotFound, TypeNotFound, "Not found", err.Error())
 
+	case errors.Is(err, ErrSeriesNotFound):
+		writeProblem(w, logger, http.StatusNotFound, TypeNotFound, "Not found", err.Error())
+
+	case errors.Is(err, ErrSeriesSourceUnavailable):
+		writeProblem(w, logger, http.StatusBadGateway, TypeUnavailable, "Metadata sources unavailable", err.Error())
+
 	case errors.Is(err, jobs.ErrAlreadyRunning):
 		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Already running", err.Error())
 

@@ -2994,6 +2994,131 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A page of one TV library's series, ordered by sort title. */
+        get: operations["listSeries"];
+        put?: never;
+        /** Add a series to a library (Sonarr's add dialog). */
+        post: operations["addSeries"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search the metadata sources for a series to add. */
+        get: operations["lookupSeries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/{id}": {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** A series with its seasons and episodes. */
+        get: operations["getSeries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/{id}/refresh": {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-read the series from the metadata sources. Never changes monitoring. */
+        post: operations["refreshSeries"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/{id}/episodes/{part_id}/monitored": {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                part_id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Monitor or unmonitor one episode. */
+        put: operations["setEpisodeMonitored"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/{id}/seasons/{season}/monitored": {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                season: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Monitor or unmonitor every episode of a season. */
+        put: operations["setSeasonMonitored"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/people": {
         parameters: {
             query?: never;
@@ -4812,6 +4937,142 @@ export interface components {
             born?: string;
             died?: string;
             monitored: boolean;
+        };
+        /** @description Episode counts of one series or season. present counts monitored episodes with a file. */
+        SeriesCounts: {
+            total: number;
+            monitored: number;
+            present: number;
+            /** @description Monitored episodes that have aired and have no file. */
+            aired_missing: number;
+        };
+        SeriesSummary: {
+            /** Format: int64 */
+            id: number;
+            title: string;
+            sort_title: string;
+            /** Format: int64 */
+            year?: number;
+            /** @enum {string} */
+            status?: "continuing" | "ended" | "upcoming";
+            network?: string;
+            poster_url?: string;
+            overview?: string;
+            /** @description At least one season is monitored. */
+            monitored: boolean;
+            /** @description Seasons with episodes */
+            seasons: number;
+            counts: components["schemas"]["SeriesCounts"];
+            /** Format: date-time */
+            next_airing?: string;
+            /** Format: int64 */
+            quality_profile_id?: number;
+            genres?: string[];
+            /**
+             * Format: int64
+             * @description Unix seconds.
+             */
+            added_at: number;
+        };
+        SeriesPage: {
+            items: components["schemas"]["SeriesSummary"][];
+            next_cursor?: string;
+        };
+        SeriesEpisode: {
+            /**
+             * Format: int64
+             * @description The part id.
+             */
+            id: number;
+            season: number;
+            number: number;
+            absolute?: number;
+            title?: string;
+            overview?: string;
+            air_date?: string;
+            /** Format: date-time */
+            air_time?: string;
+            /** @enum {string} */
+            air_confidence?: "unknown" | "low" | "medium" | "high";
+            runtime_minutes?: number;
+            monitored: boolean;
+            /**
+             * @description What a person wants to see in the column.
+             * @enum {string}
+             */
+            state: "present" | "missing" | "unaired" | "unmonitored";
+        };
+        SeriesSeason: {
+            number: number;
+            monitored: boolean;
+            counts: components["schemas"]["SeriesCounts"];
+            poster_url?: string;
+            /** Format: int64 */
+            desired_item_id?: number;
+        };
+        SeriesDetail: {
+            summary: components["schemas"]["SeriesSummary"];
+            aliases?: string[];
+            runtime_minutes?: number;
+            certification?: string;
+            rating?: number;
+            original_language?: string;
+            original_country?: string;
+            /** @description Local clock time and zone, e.g. 22:00 America/New_York. */
+            air_time?: string;
+            first_aired?: string;
+            last_aired?: string;
+            /** @description Provider to id, e.g. tvdb, tvmaze, tmdb, imdb. */
+            ids: {
+                [key: string]: string;
+            };
+            seasons: components["schemas"]["SeriesSeason"][];
+            episodes: components["schemas"]["SeriesEpisode"][];
+            fanart_url?: string;
+        };
+        SeriesCandidate: {
+            /** @example tvdb */
+            provider: string;
+            external_id: string;
+            title: string;
+            /** Format: int64 */
+            year?: number;
+            network?: string;
+            /** @enum {string} */
+            status?: "continuing" | "ended" | "upcoming";
+            overview?: string;
+            poster_url?: string;
+            /**
+             * Format: int64
+             * @description The series when the library already holds it.
+             */
+            library_id?: number;
+        };
+        AddSeriesRequest: {
+            /** Format: int64 */
+            category_id: number;
+            /** @default tvdb */
+            provider: string;
+            external_id: string;
+            /**
+             * @default all
+             * @enum {string}
+             */
+            monitor: "all" | "future" | "missing" | "existing" | "recent" | "pilot" | "first_season" | "last_season" | "none";
+            /** @default false */
+            monitor_specials: boolean;
+            /**
+             * Format: int64
+             * @description The library's default when absent.
+             */
+            quality_profile_id?: number;
+        };
+        AddSeriesResult: {
+            /** Format: int64 */
+            series_id: number;
+            created: boolean;
+            episodes: number;
+            seasons: number;
         };
         PersonPage: {
             items: components["schemas"]["Person"][];
@@ -11194,6 +11455,213 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    listSeries: {
+        parameters: {
+            query: {
+                category_id: number;
+                /** @description From `next_cursor` of the previous page. Absent on the first page. */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    addSeries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddSeriesRequest"];
+            };
+        };
+        responses: {
+            /** @description What was stored. Adding a series the library already holds refreshes it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddSeriesResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
+    lookupSeries: {
+        parameters: {
+            query: {
+                category_id: number;
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Candidates, best first, each marked when the library already holds it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesCandidate"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
+    getSeries: {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The series. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesDetail"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    refreshSeries: {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the refresh did. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddSeriesResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
+    setEpisodeMonitored: {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                part_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    monitored: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setSeasonMonitored: {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                season: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    monitored: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     listPeople: {

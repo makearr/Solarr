@@ -100,6 +100,8 @@ type Config struct {
 	// People lists and reads people (ADR-32). Optional: without it, the people
 	// endpoints answer 503.
 	People PeopleReader
+	// Series feeds the TV screens. Optional: nil answers 503.
+	Series SeriesCatalog
 	// PeopleSubscriber subscribes a caller to a person. Optional: without it,
 	// SubscribePerson answers 503.
 	PeopleSubscriber PeopleSubscriber
@@ -252,6 +254,7 @@ type Server struct {
 	imagesDir               string
 	configPath              string
 	people                  PeopleReader
+	series                  SeriesCatalog
 	peopleSubscriber        PeopleSubscriber
 	artistActions           ArtistActions
 	artworkChoices          ArtworkChoices
@@ -349,6 +352,7 @@ func New(config Config) (*Server, error) {
 		imagesDir:               config.ImagesDir,
 		configPath:              config.ConfigPath,
 		people:                  config.People,
+		series:                  config.Series,
 		peopleSubscriber:        config.PeopleSubscriber,
 		artistActions:           config.ArtistActions,
 		artworkChoices:          config.ArtworkChoices,
@@ -488,6 +492,13 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/grab", server.routeGrabWork)
 			secured.Post("/works/{id}/refresh", server.routeRefreshWork)
 			secured.Post("/works/{id}/parts/{partId}/search", server.routeSearchTrack)
+			secured.Get("/series", server.routeListSeries)
+			secured.Post("/series", server.AddSeries)
+			secured.Get("/series/lookup", server.routeLookupSeries)
+			secured.Get("/series/{id}", server.routeGetSeries)
+			secured.Post("/series/{id}/refresh", server.routeRefreshSeries)
+			secured.Put("/series/{id}/episodes/{part_id}/monitored", server.routeSetEpisodeMonitored)
+			secured.Put("/series/{id}/seasons/{season}/monitored", server.routeSetSeasonMonitored)
 			secured.Get("/discover/search", server.routeDiscoverSearch)
 			secured.Post("/discover/add", server.DiscoverAdd)
 			secured.Get("/arr/instances", server.ListArrInstances)
