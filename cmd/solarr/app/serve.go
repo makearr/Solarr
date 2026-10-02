@@ -27,6 +27,7 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/jobs/cachebudget"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/moving/drainjob"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -102,6 +103,9 @@ type process struct {
 	// import must share AcoustID's own 3 req/s bucket, not take one each.
 	acoustIDOnce   sync.Once
 	acoustIDShared acoustid.Client
+	// tvOnce builds the TV providers once so every caller shares their rate buckets (ADR-13).
+	tvOnce   sync.Once
+	tvShared tv.Service
 }
 
 // Serve is the startup sequence of architecture section 15.1, in order.
@@ -623,6 +627,7 @@ func (p *process) startServer(ctx context.Context) error {
 		ImagesDir:  filepath.Join(p.config.Paths.CacheDir, "images"),
 		ConfigPath: p.configPath,
 		People:     adapters.People{People: library.NewPeople(p.library)},
+		Series:     p.seriesCatalog(),
 		ArtistActions: adapters.ArtistActions{
 			People: library.NewPeople(p.library), Monitor: p.worksMonitor(), Queue: p.queue,
 		},

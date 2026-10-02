@@ -81,19 +81,23 @@ type Key struct{ Season, Number int }
 
 // Season carries a season's artwork.
 type Season struct {
-	Number int
-	Poster string
-	Banner string
+	Number int    `json:"number"`
+	Poster string `json:"poster,omitempty"`
+	Banner string `json:"banner,omitempty"`
 }
 
 // Person is a cast member and the character played.
 type Person struct {
-	Name, Character, Image string
+	Name      string `json:"name"`
+	Character string `json:"character,omitempty"`
+	Image     string `json:"image,omitempty"`
 }
 
 // Image is one piece of series artwork of a kind: poster, banner, fanart, logo, clearart.
 type Image struct {
-	Kind, URL, Source string
+	Kind   string `json:"kind"`
+	URL    string `json:"url"`
+	Source string `json:"source,omitempty"`
 }
 
 // Series is one show, merged from every source that knew it.

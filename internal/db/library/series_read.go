@@ -1,0 +1,293 @@
+package library
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+)
+
+// ErrSeriesNotFound reports a series id that is not a TV series visible in the category asked about.
+var ErrSeriesNotFound = errors.New("library: series not found")
+
+// SeriesCounts are the episode counts of a series or a season. Present counts monitored episodes with a file.
+type SeriesCounts struct {
+	Total, Monitored, Present, AiredMissing int64
+}
+
+// SeasonSummary is one season item of a series.
+type SeasonSummary struct {
+	Number        int
+	DesiredItemID int64
+	ProfileID     int64
+	Monitored     bool
+	Counts        SeriesCounts
+}
+
+// SeriesSummary is a series as a list row shows it.
+type SeriesSummary struct {
+	WorkID      int64
+	Title       string
+	SortTitle   string
+	Year        int64
+	Description string
+	AddedAt     int64
+	// Fields are the merged provider fields (status, network, air_time, ...): a person's own value, else the first provider's.
+	Fields map[string]string
+	Genres []string
+	// Seasons lists regular seasons then specials; Counts leave specials out.
+	Seasons       []SeasonSummary
+	Counts        SeriesCounts
+	NextAvailable int64
+	ProfileID     int64
+	Monitored     bool
+}
+
+// SeriesEpisode is one part of a series with its coverage.
+type SeriesEpisode struct {
+	PartID              int64
+	Season, Number      int
+	Title               string
+	Date                string
+	RuntimeMs           int64
+	Monitored           bool
+	Present             bool
+	AvailableAt         int64
+	AvailableConfidence string
+	Absolute            string
+}
+
+// SeriesDetailRow is a series with every episode, alias and external id.
+type SeriesDetailRow struct {
+	Summary   SeriesSummary
+	Aliases   []string
+	Episodes  []SeriesEpisode
+	IDs       map[string]string
+	Language  string
+	RuntimeMs int64
+}
+
+// SeriesCursor is where the next page of a series list starts.
+type SeriesCursor struct {
+	SortTitle string
+	ID        int64
+}
+
+// SeriesReader answers the TV screens' questions.
+type SeriesReader struct{ store *store.Store }
+
+// NewSeriesReader builds it over an open library store.
+func NewSeriesReader(opened *store.Store) SeriesReader { return SeriesReader{store: opened} }
+
+// fieldPriority orders whose value of a field wins: a person's own, then the providers in merge order.
+var fieldPriority = []string{"__manual__", "skyhook", "tvmaze"}
+
+// List returns up to pageSize series of one category after the cursor, with counts as of now.
+func (r SeriesReader) List(ctx context.Context, categoryID int64, after SeriesCursor, pageSize int64, now time.Time) ([]SeriesSummary, error) {
+	queries := librarydb.New(r.store.Read())
+	rows, err := queries.ListSeriesInCategory(ctx, librarydb.ListSeriesInCategoryParams{
+		CategoryID: categoryID, AfterSort: after.SortTitle, AfterID: after.ID, PageSize: pageSize,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: list series: %w", err)
+	}
+	summaries := make([]SeriesSummary, len(rows))
+	ids := make([]int64, len(rows))
+	for i, row := range rows {
+		ids[i] = row.ID
+		summaries[i] = SeriesSummary{
+			WorkID: row.ID, Title: row.CanonicalTitle, SortTitle: row.SortTitle, Year: row.Year.Int64,
+			Description: row.Description.String, AddedAt: row.AddedAt,
+		}
+	}
+	if err := r.fill(ctx, queries, summaries, ids, now); err != nil {
+		return nil, err
+	}
+	return summaries, nil
+}
+
+// Get returns one series of a category with every episode; ErrSeriesNotFound when it is not there.
+func (r SeriesReader) Get(ctx context.Context, categoryID, workID int64, now time.Time) (SeriesDetailRow, error) {
+	queries := librarydb.New(r.store.Read())
+	row, err := queries.GetSeriesInCategory(ctx, librarydb.GetSeriesInCategoryParams{ID: workID, CategoryID: categoryID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return SeriesDetailRow{}, ErrSeriesNotFound
+	}
+	if err != nil {
+		return SeriesDetailRow{}, fmt.Errorf("library: get series: %w", err)
+	}
+	summaries := []SeriesSummary{{
+		WorkID: row.ID, Title: row.CanonicalTitle, SortTitle: row.SortTitle, Year: row.Year.Int64,
+		Description: row.Description.String, AddedAt: row.AddedAt,
+	}}
+	if err := r.fill(ctx, queries, summaries, []int64{workID}, now); err != nil {
+		return SeriesDetailRow{}, err
+	}
+	detail := SeriesDetailRow{Summary: summaries[0], Language: row.OriginalLanguage.String, RuntimeMs: row.RuntimeMs.Int64, IDs: map[string]string{}}
+
+	externals, err := queries.ListWorkExternalIDs(ctx, workID)
+	if err != nil {
+		return SeriesDetailRow{}, fmt.Errorf("library: series ids: %w", err)
+	}
+	for _, external := range externals {
+		if _, have := detail.IDs[external.Provider]; !have {
+			detail.IDs[external.Provider] = external.ExternalID
+		}
+	}
+	titles, err := queries.ListWorkTitles(ctx, workID)
+	if err != nil {
+		return SeriesDetailRow{}, fmt.Errorf("library: series aliases: %w", err)
+	}
+	for _, title := range titles {
+		detail.Aliases = append(detail.Aliases, title.Title)
+	}
+
+	parts, err := queries.ListWorkParts(ctx, workID)
+	if err != nil {
+		return SeriesDetailRow{}, fmt.Errorf("library: series parts: %w", err)
+	}
+	covered, err := queries.CoveredPartRefs(ctx, workID)
+	if err != nil {
+		return SeriesDetailRow{}, fmt.Errorf("library: covered parts: %w", err)
+	}
+	hasFile := make(map[string]bool, len(covered))
+	for _, ref := range covered {
+		hasFile[ref] = true
+	}
+	for _, part := range parts {
+		season, number := parseSeriesRef(part.MediaRef)
+		detail.Episodes = append(detail.Episodes, SeriesEpisode{
+			PartID: part.ID, Season: season, Number: number, Title: part.Title.String, Date: part.Date.String,
+			RuntimeMs: part.RuntimeMs.Int64, Monitored: part.Monitored == 1, Present: hasFile[part.MediaRef],
+			AvailableAt: part.AvailableAt.Int64, AvailableConfidence: part.AvailableConfidence,
+		})
+	}
+	return detail, nil
+}
+
+func (r SeriesReader) fill(ctx context.Context, queries *librarydb.Queries, summaries []SeriesSummary, ids []int64, now time.Time) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	counts, err := queries.SeriesPartCounts(ctx, librarydb.SeriesPartCountsParams{
+		Today: sql.NullString{String: now.UTC().Format("2006-01-02"), Valid: true}, Now: sql.NullInt64{Int64: now.Unix(), Valid: true}, WorkIds: ids,
+	})
+	if err != nil {
+		return fmt.Errorf("library: series counts: %w", err)
+	}
+	countsByWork := make(map[int64]librarydb.SeriesPartCountsRow, len(counts))
+	for _, row := range counts {
+		countsByWork[row.WorkID] = row
+	}
+	items, err := queries.SeasonItemsForWorks(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("library: season items: %w", err)
+	}
+	itemsByWork := map[int64][]librarydb.SeasonItemsForWorksRow{}
+	for _, item := range items {
+		itemsByWork[item.WorkID] = append(itemsByWork[item.WorkID], item)
+	}
+
+	for i := range summaries {
+		summary := &summaries[i]
+		row := countsByWork[summary.WorkID]
+		summary.NextAvailable = row.NextAvailable
+		summary.Counts.Total = row.Total
+		var present int64
+		for _, item := range itemsByWork[summary.WorkID] {
+			number, _ := parseSeriesRef(item.MediaRef + ":")
+			season := SeasonSummary{
+				Number: number, DesiredItemID: item.ID, ProfileID: item.ProfileID, Monitored: item.Monitored == 1,
+				Counts: SeriesCounts{Monitored: item.RequiredCount.Int64, Present: item.PresentCount},
+			}
+			summary.Seasons = append(summary.Seasons, season)
+			if number == 0 {
+				continue
+			}
+			present += item.PresentCount
+			summary.Monitored = summary.Monitored || season.Monitored
+			if summary.ProfileID == 0 {
+				summary.ProfileID = item.ProfileID
+			}
+		}
+		summary.Counts.Monitored = row.Monitored
+		summary.Counts.Present = present
+		summary.Counts.AiredMissing = max(0, row.MonitoredAired-present)
+
+		fields, err := queries.ListWorkFields(ctx, summary.WorkID)
+		if err != nil {
+			return fmt.Errorf("library: series fields: %w", err)
+		}
+		summary.Fields = mergeFields(fields)
+		classifications, err := queries.ListWorkClassifications(ctx, summary.WorkID)
+		if err != nil {
+			return fmt.Errorf("library: series genres: %w", err)
+		}
+		for _, classification := range classifications {
+			if classification.Kind == "genre" {
+				summary.Genres = append(summary.Genres, classification.Value)
+			}
+		}
+	}
+	return nil
+}
+
+// mergeFields picks one value per field: a person's own, then the first provider in fieldPriority, then any.
+func mergeFields(fields []librarydb.WorkField) map[string]string {
+	best := map[string]int{}
+	merged := map[string]string{}
+	for _, field := range fields {
+		if !field.Value.Valid {
+			continue
+		}
+		rank := len(fieldPriority)
+		for i, provider := range fieldPriority {
+			if provider == field.Provider {
+				rank = i
+			}
+		}
+		if have, found := best[field.Field]; !found || rank < have {
+			best[field.Field] = rank
+			merged[field.Field] = field.Value.String
+		}
+	}
+	return merged
+}
+
+// parseSeriesRef reads "s03:e10" (or a season item's "s03:") into season and episode; zero when absent.
+func parseSeriesRef(ref string) (season, episode int) {
+	head, tail, _ := strings.Cut(ref, ":")
+	season, _ = strconv.Atoi(strings.TrimPrefix(head, "s"))
+	episode, _ = strconv.Atoi(strings.TrimPrefix(tail, "e"))
+	return season, episode
+}
+
+// InCategory reports whether the series is a TV series held by the category.
+func (r SeriesReader) InCategory(ctx context.Context, categoryID, workID int64) error {
+	_, err := librarydb.New(r.store.Read()).GetSeriesInCategory(ctx, librarydb.GetSeriesInCategoryParams{ID: workID, CategoryID: categoryID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrSeriesNotFound
+	}
+	return err
+}
+
+// ProviderIDs answers a series' provider ids (tvdb, tvmaze, ...), for a refresh that must find it again.
+func (r SeriesReader) ProviderIDs(ctx context.Context, workID int64) (map[string]string, error) {
+	rows, err := librarydb.New(r.store.Read()).ListWorkExternalIDs(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: series ids: %w", err)
+	}
+	ids := make(map[string]string, len(rows))
+	for _, row := range rows {
+		if _, have := ids[row.Provider]; !have {
+			ids[row.Provider] = row.ExternalID
+		}
+	}
+	return ids, nil
+}

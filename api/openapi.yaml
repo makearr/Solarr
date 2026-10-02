@@ -13,6 +13,8 @@ servers:
   - url: /api/v1
 
 tags:
+  - name: series
+    description: TV series, seasons and episodes (stage 8).
   - name: system
     description: Liveness, readiness and build identity. Unauthenticated.
   - name: auth
@@ -4836,6 +4838,201 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /series:
+    get:
+      operationId: listSeries
+      tags: [series]
+      summary: A page of one TV library's series, ordered by sort title.
+      parameters:
+        - name: category_id
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: cursor
+          in: query
+          description: From `next_cursor` of the previous page. Absent on the first page.
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SeriesPage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: addSeries
+      tags: [series]
+      summary: Add a series to a library (Sonarr's add dialog).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddSeriesRequest" }
+      responses:
+        "200":
+          description: What was stored. Adding a series the library already holds refreshes it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AddSeriesResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+
+  /series/lookup:
+    get:
+      operationId: lookupSeries
+      tags: [series]
+      summary: Search the metadata sources for a series to add.
+      parameters:
+        - name: category_id
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          description: Candidates, best first, each marked when the library already holds it.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SeriesCandidate" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+
+  /series/{id}:
+    parameters:
+      - name: category_id
+        in: query
+        required: true
+        description: The library the series is in; access is checked against it.
+        schema: { type: integer, format: int64 }
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getSeries
+      tags: [series]
+      summary: A series with its seasons and episodes.
+      responses:
+        "200":
+          description: The series.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SeriesDetail" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /series/{id}/refresh:
+    parameters:
+      - name: category_id
+        in: query
+        required: true
+        description: The library the series is in; access is checked against it.
+        schema: { type: integer, format: int64 }
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: refreshSeries
+      tags: [series]
+      summary: Re-read the series from the metadata sources. Never changes monitoring.
+      responses:
+        "200":
+          description: What the refresh did.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AddSeriesResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+
+  /series/{id}/episodes/{part_id}/monitored:
+    parameters:
+      - name: category_id
+        in: query
+        required: true
+        description: The library the series is in; access is checked against it.
+        schema: { type: integer, format: int64 }
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: part_id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: setEpisodeMonitored
+      tags: [series]
+      summary: Monitor or unmonitor one episode.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [monitored]
+              properties:
+                monitored: { type: boolean }
+      responses:
+        "204": { description: Done. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /series/{id}/seasons/{season}/monitored:
+    parameters:
+      - name: category_id
+        in: query
+        required: true
+        description: The library the series is in; access is checked against it.
+        schema: { type: integer, format: int64 }
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: season
+        in: path
+        required: true
+        schema: { type: integer }
+    put:
+      operationId: setSeasonMonitored
+      tags: [series]
+      summary: Monitor or unmonitor every episode of a season.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [monitored]
+              properties:
+                monitored: { type: boolean }
+      responses:
+        "204": { description: Done. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /people:
     get:
       operationId: listPeople
@@ -7321,6 +7518,142 @@ components:
         born: { type: string, example: "1958-07-30" }
         died: { type: string }
         monitored: { type: boolean }
+
+    SeriesCounts:
+      type: object
+      description: Episode counts of one series or season. present counts monitored episodes with a file.
+      required: [total, monitored, present, aired_missing]
+      properties:
+        total: { type: integer }
+        monitored: { type: integer }
+        present: { type: integer }
+        aired_missing: { type: integer, description: Monitored episodes that have aired and have no file. }
+
+    SeriesSummary:
+      type: object
+      required: [id, title, sort_title, monitored, counts, seasons, added_at]
+      properties:
+        id: { type: integer, format: int64 }
+        title: { type: string }
+        sort_title: { type: string }
+        year: { type: integer, format: int64 }
+        status: { type: string, enum: [continuing, ended, upcoming] }
+        network: { type: string }
+        poster_url: { type: string }
+        overview: { type: string }
+        monitored: { type: boolean, description: At least one season is monitored. }
+        seasons: { type: integer, description: Seasons with episodes, specials not counted. }
+        counts: { $ref: "#/components/schemas/SeriesCounts" }
+        next_airing: { type: string, format: date-time }
+        quality_profile_id: { type: integer, format: int64 }
+        genres:
+          type: array
+          items: { type: string }
+        added_at: { type: integer, format: int64, description: Unix seconds. }
+
+    SeriesPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SeriesSummary" }
+        next_cursor: { type: string }
+
+    SeriesEpisode:
+      type: object
+      required: [id, season, number, monitored, state]
+      properties:
+        id: { type: integer, format: int64, description: The part id. }
+        season: { type: integer }
+        number: { type: integer }
+        absolute: { type: integer }
+        title: { type: string }
+        overview: { type: string }
+        air_date: { type: string }
+        air_time: { type: string, format: date-time }
+        air_confidence: { type: string, enum: [unknown, low, medium, high] }
+        runtime_minutes: { type: integer }
+        monitored: { type: boolean }
+        state:
+          type: string
+          enum: [present, missing, unaired, unmonitored]
+          description: What a person wants to see in the column.
+
+    SeriesSeason:
+      type: object
+      required: [number, monitored, counts]
+      properties:
+        number: { type: integer }
+        monitored: { type: boolean }
+        counts: { $ref: "#/components/schemas/SeriesCounts" }
+        poster_url: { type: string }
+        desired_item_id: { type: integer, format: int64 }
+
+    SeriesDetail:
+      type: object
+      required: [summary, seasons, episodes, ids]
+      properties:
+        summary: { $ref: "#/components/schemas/SeriesSummary" }
+        aliases:
+          type: array
+          items: { type: string }
+        runtime_minutes: { type: integer }
+        certification: { type: string }
+        rating: { type: number }
+        original_language: { type: string }
+        original_country: { type: string }
+        air_time: { type: string, description: "Local clock time and zone, e.g. 22:00 America/New_York." }
+        first_aired: { type: string }
+        last_aired: { type: string }
+        ids:
+          type: object
+          additionalProperties: { type: string }
+          description: Provider to id, e.g. tvdb, tvmaze, tmdb, imdb.
+        seasons:
+          type: array
+          items: { $ref: "#/components/schemas/SeriesSeason" }
+        episodes:
+          type: array
+          items: { $ref: "#/components/schemas/SeriesEpisode" }
+        fanart_url: { type: string }
+
+    SeriesCandidate:
+      type: object
+      required: [provider, external_id, title]
+      properties:
+        provider: { type: string, example: "tvdb" }
+        external_id: { type: string }
+        title: { type: string }
+        year: { type: integer, format: int64 }
+        network: { type: string }
+        status: { type: string, enum: [continuing, ended, upcoming] }
+        overview: { type: string }
+        poster_url: { type: string }
+        library_id: { type: integer, format: int64, description: The series when the library already holds it. }
+
+    AddSeriesRequest:
+      type: object
+      required: [category_id, external_id]
+      properties:
+        category_id: { type: integer, format: int64 }
+        provider: { type: string, default: tvdb }
+        external_id: { type: string }
+        monitor:
+          type: string
+          enum: [all, future, missing, existing, recent, pilot, first_season, last_season, none]
+          default: all
+        monitor_specials: { type: boolean, default: false }
+        quality_profile_id: { type: integer, format: int64, description: The library's default when absent. }
+
+    AddSeriesResult:
+      type: object
+      required: [series_id, created, episodes, seasons]
+      properties:
+        series_id: { type: integer, format: int64 }
+        created: { type: boolean }
+        episodes: { type: integer }
+        seasons: { type: integer }
 
     PersonPage:
       type: object

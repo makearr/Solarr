@@ -324,3 +324,15 @@ func orDefault(value, fallback string) string {
 	}
 	return value
 }
+
+// WorkByProviderID answers the series a provider id names, if the library has one.
+func (s Series) WorkByProviderID(ctx context.Context, provider, externalID string) (int64, bool, error) {
+	work, err := librarydb.New(s.store.Read()).GetWorkByExternalID(ctx, librarydb.GetWorkByExternalIDParams{Provider: provider, ExternalID: externalID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("library: look up work %s:%s: %w", provider, externalID, err)
+	}
+	return work.ID, true, nil
+}

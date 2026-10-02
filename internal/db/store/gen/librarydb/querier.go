@@ -152,6 +152,8 @@ type Querier interface {
 	// category (private/next.md's work_root_folder retirement). Distinct because a
 	// scanned, monitored work has rows on both sides and must count once.
 	CountWorksVisibleToCategory(ctx context.Context, arg CountWorksVisibleToCategoryParams) (int64, error)
+	// Which parts of a work have a file, by any item.
+	CoveredPartRefs(ctx context.Context, workID int64) ([]string, error)
 	CreateAcquisition(ctx context.Context, arg CreateAcquisitionParams) (Acquisition, error)
 	// *Arr import runs (todo 4.13, ADR-52). Column lists follow table order.
 	CreateArrImport(ctx context.Context, arg CreateArrImportParams) (ArrImport, error)
@@ -321,6 +323,7 @@ type Querier interface {
 	// Per-root sweep progress (section 10.4). Column lists follow table order, or sqlc
 	// stops reusing models.
 	GetScanState(ctx context.Context, rootFolderID int64) (ScanState, error)
+	GetSeriesInCategory(ctx context.Context, arg GetSeriesInCategoryParams) (GetSeriesInCategoryRow, error)
 	// Subscribe's own idempotency check (Invariant 80): the UNIQUE(subject_type,
 	// subject_id, user_id) constraint means a second Subscribe call for the same
 	// person and user must look before it inserts, not rely on the constraint to
@@ -563,6 +566,9 @@ type Querier interface {
 	ListRequestsForUser(ctx context.Context, arg ListRequestsForUserParams) ([]Request, error)
 	ListRootFoldersForWork(ctx context.Context, workID int64) ([]int64, error)
 	ListScanStates(ctx context.Context) ([]ScanState, error)
+	// A TV library's series: works with a desired item in the category (visibility is desired-item membership, ADR-27),
+	// ordered by sort title with the id as the tie-break.
+	ListSeriesInCategory(ctx context.Context, arg ListSeriesInCategoryParams) ([]ListSeriesInCategoryRow, error)
 	// Every live path of every media object that lives at more than one place; roots are filtered in Go.
 	ListSharedObjectPaths(ctx context.Context) ([]ListSharedObjectPathsRow, error)
 	// Files measured before the probe read the lyrics language: their stored probe has no such key, so they are read once more.
@@ -780,6 +786,11 @@ type Querier interface {
 	// (json_each of jobs.sql's visible_categories is the precedent for passing a Go slice as
 	// a JSON array).
 	SearchWorks(ctx context.Context, arg SearchWorksParams) ([]SearchWorksRow, error)
+	// The season items of the given works, with their counts.
+	SeasonItemsForWorks(ctx context.Context, workIds []int64) ([]SeasonItemsForWorksRow, error)
+	// Per series: its parts, the monitored ones that have aired by the given date and the next air time still to come.
+	// Specials (season 0) are left out of every count.
+	SeriesPartCounts(ctx context.Context, arg SeriesPartCountsParams) ([]SeriesPartCountsRow, error)
 	// The client's own name and size, recorded when first seen (section 10.9's fingerprint).
 	SetAcquisitionFingerprint(ctx context.Context, arg SetAcquisitionFingerprintParams) error
 	SetAcquisitionPath(ctx context.Context, arg SetAcquisitionPathParams) error
@@ -834,6 +845,7 @@ type Querier interface {
 	SetPersonMonitored(ctx context.Context, arg SetPersonMonitoredParams) error
 	// Progress mid-sweep: the cursor advances, the watermark does not.
 	SetScanCursor(ctx context.Context, arg SetScanCursorParams) error
+	SetSeasonPartsMonitored(ctx context.Context, arg SetSeasonPartsMonitoredParams) error
 	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error
 	SetWorkCertification(ctx context.Context, arg SetWorkCertificationParams) error
 	SetWorkClassification(ctx context.Context, arg SetWorkClassificationParams) error

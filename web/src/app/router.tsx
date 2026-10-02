@@ -3,6 +3,7 @@ import {
   createRoute,
   createRouter,
   Outlet,
+  useParams,
   redirect,
 } from "@tanstack/react-router";
 
@@ -29,6 +30,10 @@ import { LibraryNaming } from "./LibraryNaming";
 import { UnknownConfigSection } from "./UnknownConfigSection";
 import { LibraryHealth } from "./LibraryHealth";
 import { LibraryLevelList } from "./LibraryLevelList";
+import { AddSeries } from "./AddSeries";
+import { SeriesIndex } from "./SeriesIndex";
+import { SeriesPage } from "./SeriesPage";
+import { useLibrary } from "@/lib/useLibrary";
 import { Libraries } from "./Libraries";
 import { Duplicates } from "./Duplicates";
 import { Packs } from "./Packs";
@@ -60,6 +65,20 @@ async function redirectToLibrary(categoryId: string) {
   return redirect(
     level ? { to: "/library/$categoryId/$level", params: { categoryId, level } } : { to: "/libraries" },
   );
+}
+
+/** Search-and-add is a per-media-type screen: series for a TV library, albums and artists for music. */
+function DiscoverForLibrary() {
+  const { categoryId } = useParams({ strict: false }) as { categoryId: string };
+  const library = useLibrary(categoryId);
+  return library?.media_type === "tv" ? <AddSeries /> : <Discover />;
+}
+
+/** A level key is the media type's own: TV's Series screen, everything else the shared level list. */
+function LevelForLibrary() {
+  const { categoryId, level } = useParams({ strict: false }) as { categoryId: string; level: string };
+  const library = useLibrary(categoryId);
+  return library?.media_type === "tv" && level === "series" ? <SeriesIndex /> : <LibraryLevelList />;
 }
 
 const rootRoute = createRootRoute({
@@ -136,7 +155,7 @@ const routes = [
   }),
   // Registered ahead of the $level catch-all below, or these would each
   // resolve as an (invalid) level key instead of their own screen.
-  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/discover", component: Discover }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/discover", component: DiscoverForLibrary }),
   // Overview removed 2026-09-13 (the user's own word: it showed nothing the
   // level views do not). Redirected rather than 404ing, the same courtesy the
   // old flat /library got.
@@ -158,7 +177,8 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/duplicates", component: Duplicates }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/import", component: Import }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/activity", component: Activity }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/$level", component: LibraryLevelList }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/series/$seriesId", component: SeriesPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/$level", component: LevelForLibrary }),
   createRoute({ getParentRoute: () => rootRoute, path: "/works/$id", component: WorkDetail }),
   createRoute({ getParentRoute: () => rootRoute, path: "/people", component: People }),
   createRoute({ getParentRoute: () => rootRoute, path: "/people/$id", component: PersonDetail }),

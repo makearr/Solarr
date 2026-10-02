@@ -62,3 +62,36 @@ func (d Desired) EnsureSeasonItem(ctx context.Context, request SeasonRequest) (l
 	}
 	return item, nil
 }
+
+// SetSeasonMonitored sets the monitored flag of a season item and of every part in its scope in one transaction. It
+// reports false when the work has no such season item.
+func (d Desired) SetSeasonMonitored(ctx context.Context, workID int64, seasonRef string, monitored bool) (bool, error) {
+	found := false
+	err := d.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		items, err := queries.ListDesiredItemsForWork(ctx, workID)
+		if err != nil {
+			return fmt.Errorf("list items: %w", err)
+		}
+		for _, item := range items {
+			if item.SatisfactionKind != "SET" || item.MediaRef != seasonRef {
+				continue
+			}
+			found = true
+			if err := queries.SetSeasonPartsMonitored(ctx, librarydb.SetSeasonPartsMonitoredParams{
+				Monitored: boolToInt(monitored), WorkID: workID, Scope: seasonRef + ":%",
+			}); err != nil {
+				return fmt.Errorf("set parts: %w", err)
+			}
+			if err := queries.SetDesiredItemMonitored(ctx, librarydb.SetDesiredItemMonitoredParams{Monitored: boolToInt(monitored), ID: item.ID}); err != nil {
+				return fmt.Errorf("set item: %w", err)
+			}
+			return recomputeAlbumTx(ctx, queries, item.ID, workID)
+		}
+		return nil
+	})
+	if err != nil {
+		return false, fmt.Errorf("library: set season monitored: %w", err)
+	}
+	return found, nil
+}
