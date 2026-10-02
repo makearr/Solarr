@@ -323,6 +323,20 @@ const (
 	LibraryQualityWritePreferredProtocolUsenet  LibraryQualityWritePreferredProtocol = "usenet"
 )
 
+// Defines values for LinkPreviewLinksMethod.
+const (
+	LinkPreviewLinksMethodHardlink LinkPreviewLinksMethod = "hardlink"
+	LinkPreviewLinksMethodReflink  LinkPreviewLinksMethod = "reflink"
+)
+
+// Defines values for LinkPreviewSkippedReason.
+const (
+	LinkPreviewSkippedReasonMissing         LinkPreviewSkippedReason = "missing"
+	LinkPreviewSkippedReasonNoMethod        LinkPreviewSkippedReason = "no-method"
+	LinkPreviewSkippedReasonOtherFilesystem LinkPreviewSkippedReason = "other-filesystem"
+	LinkPreviewSkippedReasonSizeChanged     LinkPreviewSkippedReason = "size-changed"
+)
+
 // Defines values for LogoutStatusStatus.
 const (
 	LogoutStatusStatusSignedOut LogoutStatusStatus = "signed-out"
@@ -2285,6 +2299,38 @@ type LibraryQualityWritePreferredProtocol string
 type LibraryRenamePlan struct {
 	Roots []RootRenamePlan `json:"roots"`
 }
+
+// LinkPreview defines model for LinkPreview.
+type LinkPreview struct {
+	Links []struct {
+		// Keep The path whose file stays.
+		Keep          string                 `json:"keep"`
+		MediaObjectId int64                  `json:"media_object_id"`
+		Method        LinkPreviewLinksMethod `json:"method"`
+
+		// Replace The path that becomes a link to it.
+		Replace   string `json:"replace"`
+		SizeBytes int64  `json:"size_bytes"`
+	} `json:"links"`
+
+	// ReclaimableBytes What sharing the bytes would free.
+	ReclaimableBytes int64 `json:"reclaimable_bytes"`
+
+	// Skipped Paths left alone, counted by reason.
+	Skipped []struct {
+		Count  int                      `json:"count"`
+		Reason LinkPreviewSkippedReason `json:"reason"`
+	} `json:"skipped"`
+
+	// Total How many paths would become links; links lists the first of them.
+	Total int `json:"total"`
+}
+
+// LinkPreviewLinksMethod defines model for LinkPreview.Links.Method.
+type LinkPreviewLinksMethod string
+
+// LinkPreviewSkippedReason defines model for LinkPreview.Skipped.Reason.
+type LinkPreviewSkippedReason string
 
 // LogRecord One captured log line.
 type LogRecord struct {
@@ -4369,6 +4415,12 @@ type ServerInterface interface {
 	// Save a library's File Management and Permissions. Administrator only.
 	// (PUT /categories/{id}/file-management)
 	SetLibraryFileManagement(w http.ResponseWriter, r *http.Request, id int64)
+	// Preview linking the identical copies one library holds (read only).
+	// (GET /categories/{id}/links)
+	GetCategoryLinks(w http.ResponseWriter, r *http.Request, id int64)
+	// Link the identical copies of one library (manage access).
+	// (POST /categories/{id}/links)
+	LinkCategoryCopies(w http.ResponseWriter, r *http.Request, id int64)
 	// A library's naming, its media type's naming scheme, and rendered examples. Administrator only.
 	// (GET /categories/{id}/naming)
 	GetLibraryNaming(w http.ResponseWriter, r *http.Request, id int64)
@@ -5113,6 +5165,18 @@ func (_ Unimplemented) GetLibraryFileManagement(w http.ResponseWriter, r *http.R
 // Save a library's File Management and Permissions. Administrator only.
 // (PUT /categories/{id}/file-management)
 func (_ Unimplemented) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Preview linking the identical copies one library holds (read only).
+// (GET /categories/{id}/links)
+func (_ Unimplemented) GetCategoryLinks(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Link the identical copies of one library (manage access).
+// (POST /categories/{id}/links)
+func (_ Unimplemented) LinkCategoryCopies(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7284,6 +7348,72 @@ func (siw *ServerInterfaceWrapper) SetLibraryFileManagement(w http.ResponseWrite
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetLibraryFileManagement(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCategoryLinks operation middleware
+func (siw *ServerInterfaceWrapper) GetCategoryLinks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCategoryLinks(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LinkCategoryCopies operation middleware
+func (siw *ServerInterfaceWrapper) LinkCategoryCopies(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LinkCategoryCopies(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13010,6 +13140,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/categories/{id}/file-management", wrapper.SetLibraryFileManagement)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/links", wrapper.GetCategoryLinks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/categories/{id}/links", wrapper.LinkCategoryCopies)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories/{id}/naming", wrapper.GetLibraryNaming)

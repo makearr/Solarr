@@ -556,6 +556,8 @@ type Querier interface {
 	ListRequestsForUser(ctx context.Context, arg ListRequestsForUserParams) ([]Request, error)
 	ListRootFoldersForWork(ctx context.Context, workID int64) ([]int64, error)
 	ListScanStates(ctx context.Context) ([]ScanState, error)
+	// Every live path of every media object that lives at more than one place; roots are filtered in Go.
+	ListSharedObjectPaths(ctx context.Context) ([]ListSharedObjectPathsRow, error)
 	// Every chart reads a rollup, never a live aggregate (ADR-28, section 21.12).
 	ListStatRollup(ctx context.Context, arg ListStatRollupParams) ([]StatRollup, error)
 	// "This tag or any descendant" is one join because the closure is materialised.
@@ -812,6 +814,7 @@ type Querier interface {
 	// ResolveWorksDetailed have all succeeded for one unit -- work_id becoming
 	// non-null is what "actually placed" means from here on.
 	SetImportUnitPlacement(ctx context.Context, arg SetImportUnitPlacementParams) error
+	SetLibraryPathLinkKind(ctx context.Context, arg SetLibraryPathLinkKindParams) error
 	// Measured attributes replace claimed ones after probing; the claim is kept so a
 	// mismatch stays visible (ADR-39). The scalars land on the object, not the
 	// interned row, because they are unique per file.

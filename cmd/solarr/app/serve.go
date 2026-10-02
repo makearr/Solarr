@@ -428,6 +428,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerImportJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerLinkJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerMoverJob(registry, executor); err != nil {
 		return err
 	}
@@ -630,6 +633,7 @@ func (p *process) startServer(ctx context.Context) error {
 		SubscriptionPreviewer: adapters.People{
 			People: library.NewPeople(p.library), Provider: p.musicBrainzProvider(), Clock: clock.NewSystem(),
 		},
+		Links:            adapters.Links{Config: p.linkConfig(), Queue: p.queue},
 		BlockedContent:   adapters.BlockedContent{Blocks: library.NewBlockedContentStore(p.library)},
 		Packs:            adapters.Packs{Packs: library.NewPacks(p.library)},
 		RemoveAndBlocker: p.fileRemover(),

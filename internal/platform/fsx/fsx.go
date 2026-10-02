@@ -38,6 +38,8 @@ type FileInfo struct {
 	// -1 where unreported, so "not known" differs from "owned by root".
 	UID int
 	GID int
+	// Inode names the bytes on disk: two paths on one filesystem with the same Inode are one file. 0 where unreported.
+	Inode uint64
 }
 
 // DirEntry carries only what a directory read yields for free (ADR-22).

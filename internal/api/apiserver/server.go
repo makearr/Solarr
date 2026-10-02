@@ -110,6 +110,8 @@ type Config struct {
 	Statistics StatisticsReader
 	// Duplicates finds a library's likely copies. Optional: nil answers 503.
 	Duplicates DuplicateReader
+	// Links previews and queues the linking of a library's identical copies. Optional: nil answers 503.
+	Links LinkManager
 
 	// ArtworkChoices browses and picks provider images. Optional: nil answers 503.
 	ArtworkChoices ArtworkChoices
@@ -255,6 +257,7 @@ type Server struct {
 	artworkChoices          ArtworkChoices
 	statistics              StatisticsReader
 	duplicates              DuplicateReader
+	links                   LinkManager
 	incompleteDiscographies IncompleteDiscographies
 	albumRefresher          AlbumRefresher
 	arrConnections          ArrConnections
@@ -351,6 +354,7 @@ func New(config Config) (*Server, error) {
 		artworkChoices:          config.ArtworkChoices,
 		statistics:              config.Statistics,
 		duplicates:              config.Duplicates,
+		links:                   config.Links,
 		incompleteDiscographies: config.IncompleteDiscographies,
 		albumRefresher:          config.AlbumRefresher,
 		arrConnections:          config.ArrConnections,
@@ -532,6 +536,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/categories/{id}", server.routeGetCategory)
 			secured.Get("/categories/{id}/statistics", server.routeGetCategoryStatistics)
 			secured.Get("/categories/{id}/duplicates", server.routeGetCategoryDuplicates)
+			secured.Get("/categories/{id}/links", server.routeGetCategoryLinks)
+			secured.Post("/categories/{id}/links", server.routeLinkCategoryCopies)
 			secured.Get("/discover/incomplete", server.routeListIncompleteDiscographies)
 			secured.Patch("/categories/{id}", server.routeUpdateCategory)
 			secured.Delete("/categories/{id}", server.routeDeleteCategory)

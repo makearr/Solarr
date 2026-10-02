@@ -70,7 +70,7 @@ Tags a metadata provider assigned are never touched. With albums selected (Table
 matching), **Edit** in the toolbar applies only what you change to all of them, after showing the count.
 **Fresh** means released within a week, or shown by an RSS feed within 48 hours whatever the release date
 (a manual search never counts), and those albums are also searched first.
-Select all matching now respects the Fresh filter, for Monitor and Unmonitor too. **Library → Duplicates** (advanced) lists tracks held more than once, found by artist, title and length (a flac and a 96 kbit mp3 of one song, on any albums), and recommends the copy closer to the library's target quality; it only looks. **Settings → Tags** lists
+Select all matching now respects the Fresh filter, for Monitor and Unmonitor too. **Library → Duplicates** (advanced) lists tracks held more than once, found by artist, title and length (a flac and a 96 kbit mp3 of one song, on any albums), and recommends the copy closer to the library's target quality; that list only looks. Above it, **Identical files** covers the other case, the very same bytes stored at two paths: a preview of which second paths can become a reflink (else a hardlink) of the first, per pair on one filesystem, and a **Link identical files** button (manage access) that compares every byte again before swapping a path atomically. Roots that are offline, not writable or read-only are never touched. **Settings → Tags** lists
 the tags you made, with how many albums carry each, and renames or deletes them (administrator).
 
 With an empty search box, Discover lists **artists you have albums of, but not all**, from your own

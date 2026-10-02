@@ -1,9 +1,97 @@
 import { useParams } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { api } from "@/api/client";
 
 import { formatBytes } from "./Queue";
+
+const skipReasons: Record<string, string> = {
+  missing: "not found on disk",
+  "size-changed": "changed since the scan",
+  "other-filesystem": "on another filesystem",
+  "no-method": "the filesystem allows neither a reflink nor a hardlink",
+};
+
+/** Identical copies a library holds at two paths can share one file. The plan is read first; the button queues the run,
+ *  which compares every byte again before swapping a path for the link. */
+function IdenticalCopies({ categoryId }: { categoryId: number }) {
+  const queryClient = useQueryClient();
+  const [queued, setQueued] = useState(false);
+  const plan = useQuery({
+    queryKey: ["links", categoryId],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/categories/{id}/links", { params: { path: { id: categoryId } } });
+      if (error) throw error;
+      return data;
+    },
+  });
+  const start = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST("/categories/{id}/links", { params: { path: { id: categoryId } } });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setQueued(true);
+      void queryClient.invalidateQueries({ queryKey: ["links", categoryId] });
+    },
+  });
+  const data = plan.data;
+  if (!data) return null;
+  if (data.total === 0 && data.skipped.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
+      <h2 className="text-sm font-medium">Identical files</h2>
+      <p className="max-w-xl text-xs text-ink-muted">
+        The same bytes stored at two paths of this library can be stored once: the second path becomes a reflink of the first
+        where the filesystem offers it, otherwise a hardlink. Both paths keep working and stay in every folder they are in.
+      </p>
+      {data.total > 0 ? (
+        <p className="text-sm">
+          {data.total} {data.total === 1 ? "file" : "files"} can share bytes, freeing{" "}
+          <span className="font-medium">{formatBytes(data.reclaimable_bytes)}</span>.
+        </p>
+      ) : (
+        <p className="text-sm text-ink-muted">Nothing left to link.</p>
+      )}
+      {data.skipped.length > 0 && (
+        <ul className="text-xs text-ink-muted">
+          {data.skipped.map((skip) => (
+            <li key={skip.reason}>
+              {skip.count} left alone: {skipReasons[skip.reason] ?? skip.reason}
+            </li>
+          ))}
+        </ul>
+      )}
+      {data.links.length > 0 && (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-ink-muted">Show {data.links.length < data.total ? `the first ${data.links.length}` : "them"}</summary>
+          <ul className="mt-1 flex flex-col gap-1">
+            {data.links.map((link) => (
+              <li key={link.replace} className="break-all font-mono text-ink-muted">
+                {link.replace} → {link.keep} ({link.method})
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {data.total > 0 && (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={start.isPending || queued}
+            onClick={() => start.mutate()}
+            className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50"
+          >
+            {queued ? "Queued" : "Link identical files"}
+          </button>
+          {start.isError && <span className="text-xs text-danger">Not queued: this needs manage access to the library.</span>}
+          {queued && <span className="text-xs text-ink-muted">Running in the background; see Activity.</span>}
+        </div>
+      )}
+    </section>
+  );
+}
 
 /** Tracks this library holds more than once, found by artist, title and length and not by their bytes: a flac and a
  *  96 kbit mp3 of one song are one track twice. Each group says which copy to keep, the one closer to the library's
@@ -30,6 +118,7 @@ export function Duplicates() {
           removed. Files the probe has not measured yet are not compared.
         </p>
       </header>
+      {categoryId !== undefined && <IdenticalCopies categoryId={Number(categoryId)} />}
       {report.isLoading && <p className="text-sm text-ink-muted">Looking…</p>}
       {report.error !== null && !report.isLoading && <p className="text-sm text-danger">The report could not be made.</p>}
       {data && data.groups.length === 0 && <p className="text-sm text-ink-muted">No duplicate tracks found.</p>}

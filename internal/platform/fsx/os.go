@@ -154,6 +154,7 @@ func infoFrom(info fs.FileInfo) FileInfo {
 	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
 		converted.UID = int(stat.Uid)
 		converted.GID = int(stat.Gid)
+		converted.Inode = stat.Ino
 	}
 	return converted
 }
