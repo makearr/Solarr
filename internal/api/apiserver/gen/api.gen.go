@@ -3091,6 +3091,9 @@ type Tagging struct {
 	// EmbedCover Embed the fetched cover into files that carry no picture.
 	EmbedCover bool `json:"embed_cover"`
 
+	// Navidrome Navidrome's profile: also fill the track artist's tags and MusicBrainz id, and put a cover.jpg in each album folder that has no cover file. Nothing a file or folder already has is replaced.
+	Navidrome bool `json:"navidrome"`
+
 	// ReplaceIds Overwrite ids a file carries that differ from the current ones.
 	ReplaceIds bool `json:"replace_ids"`
 

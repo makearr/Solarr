@@ -46,6 +46,7 @@ const (
 	tagReleaseID      = "musicbrainz_albumid"
 	tagRecordingID    = "musicbrainz_trackid"
 	tagAlbumArtistID  = "musicbrainz_albumartistid"
+	tagArtistID       = "musicbrainz_artistid"
 	tagAlbum          = "album"
 	tagAlbumArtist    = "albumartist"
 	tagTitle          = "title"
@@ -59,9 +60,11 @@ const (
 // TagOptions are one library's tagging choices (settings.Tagging, beside naming).
 type TagOptions struct {
 	WriteIDs, ReplaceIDs, WriteMetadata, EmbedCover bool
+	// Navidrome is its consumer profile (D10): track-artist tags and id, and a cover.jpg beside the tracks.
+	Navidrome bool
 }
 
-func (o TagOptions) any() bool { return o.WriteIDs || o.WriteMetadata || o.EmbedCover }
+func (o TagOptions) any() bool { return o.WriteIDs || o.WriteMetadata || o.EmbedCover || o.Navidrome }
 
 // TagRoot is one root folder the writer may touch: online, writable, not read-only, in a music
 // library, with that library's options. Download folders are never roots.
@@ -104,6 +107,7 @@ var tagProviders = library.TagProviders{
 type tagRun struct {
 	roots                    map[int64]TagRoot
 	covers                   map[string]string
+	folderCovers             map[string]bool
 	written, current, failed int
 	// progress counts files sent to the helper, for the status bar.
 	progress *jobs.Progress
@@ -115,7 +119,7 @@ func (j *TagWritebackJob) Run(ctx context.Context, job jobs.Job) error {
 	if err != nil {
 		return err
 	}
-	run := &tagRun{roots: map[int64]TagRoot{}, covers: map[string]string{}, progress: job.Progress}
+	run := &tagRun{roots: map[int64]TagRoot{}, covers: map[string]string{}, folderCovers: map[string]bool{}, progress: job.Progress}
 	var ids []int64
 	for _, root := range roots {
 		if root.Options.any() {
@@ -156,6 +160,9 @@ func (j *TagWritebackJob) writePage(ctx context.Context, run *tagRun, candidates
 	var editOf []library.TagCandidate
 	for _, candidate := range candidates {
 		root := run.roots[candidate.RootFolderID]
+		if root.Options.Navidrome && candidate.CoverKey != "" {
+			j.folderCover(ctx, run, path.Dir(path.Join(root.Path, candidate.RelPath)), candidate.CoverKey)
+		}
 		edit, digest := tagEditFor(candidate, root.Options)
 		if digest == candidate.Digest || (len(edit.Fill) == 0 && len(edit.Set) == 0 && edit.Cover == "") {
 			continue
@@ -202,6 +209,38 @@ func (j *TagWritebackJob) writePage(ctx context.Context, run *tagRun, candidates
 	return nil
 }
 
+// coverFileNames are the folder pictures players look for; a folder with any of them is left alone.
+var coverFileNames = []string{"cover.jpg", "folder.jpg", "front.jpg", "cover.png", "folder.png", "front.png"}
+
+// folderCover puts the album's cover into its folder as cover.jpg (Navidrome reads it), once per folder per run,
+// and never where a cover file already is.
+func (j *TagWritebackJob) folderCover(ctx context.Context, run *tagRun, folder, cacheKey string) {
+	if run.folderCovers[folder] {
+		return
+	}
+	run.folderCovers[folder] = true
+	for _, name := range coverFileNames {
+		if _, err := j.config.FS.Stat(path.Join(folder, name)); err == nil {
+			return
+		}
+	}
+	converted := j.coverJPEG(ctx, run, cacheKey)
+	if converted == "" {
+		return
+	}
+	source, err := j.config.FS.Open(converted)
+	if err != nil {
+		return
+	}
+	defer func() { _ = source.Close() }()
+	if err := fsx.WriteAtomic(j.config.FS, path.Join(folder, "cover.jpg"), func(w io.Writer) error {
+		_, err := io.Copy(w, source)
+		return err
+	}); err != nil {
+		j.config.Logger.WarnContext(ctx, "folder cover not written", slog.String("folder", folder), slog.Any("error", err))
+	}
+}
+
 // tagEditFor is what the options ask of one file, and a digest of it that stays the same until
 // the ids, the metadata, the cover or the options change. Edit.Cover holds the cover's key.
 func tagEditFor(candidate library.TagCandidate, options TagOptions) (mediatool.TagEdit, string) {
@@ -229,6 +268,13 @@ func tagEditFor(candidate library.TagCandidate, options TagOptions) (mediatool.T
 			putTag(edit.Set, tagTrackNumber, strconv.Itoa(track))
 		}
 	}
+	if options.Navidrome {
+		// Fill-only: what the file says about its track artists stays; the primary artist is all Solarr knows.
+		putTag(edit.Fill, tagArtistID, candidate.PersonExternalID)
+		putTag(edit.Fill, "artist", candidate.ArtistName)
+		putTag(edit.Fill, "artists", candidate.ArtistName)
+		putTag(edit.Fill, "albumartists", candidate.ArtistName)
+	}
 	coverVersion := ""
 	if options.EmbedCover && candidate.CoverKey != "" {
 		edit.Cover = candidate.CoverKey
@@ -249,7 +295,7 @@ func tagEditFor(candidate library.TagCandidate, options TagOptions) (mediatool.T
 			_, _ = fmt.Fprintf(hash, "%s\x00%s\x00%s\x00", part.mode, key, part.tags[key])
 		}
 	}
-	_, _ = fmt.Fprintf(hash, "cover\x00%s", coverVersion)
+	_, _ = fmt.Fprintf(hash, "cover\x00%s\x00navidrome\x00%t", coverVersion, options.Navidrome)
 	return edit, hex.EncodeToString(hash.Sum(nil))
 }
 

@@ -81,6 +81,7 @@ type CategoryFileManagement struct {
 	WriteMetadataToTags      int64
 	EmbedCoverInTags         int64
 	MergeArtistAliases       int64
+	NavidromeProfile         int64
 }
 
 type CategoryQualityProfile struct {

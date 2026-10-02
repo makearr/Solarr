@@ -201,3 +201,50 @@ func TestTagWriteback_NothingAskedNothingWritten(t *testing.T) {
 		t.Errorf("wrote %v with every option off", edits)
 	}
 }
+
+// Navidrome's profile (D10): the track artist's tags are filled, and the album's cover is put in its folder as
+// cover.jpg once, never over a cover file the folder already has.
+func TestTagWriteback_NavidromeProfileFillsArtistTagsAndWritesCoverJpg(t *testing.T) {
+	fixture := newTagWritebackJob(t, music.TagRoot{ID: 1, Path: "/music", Options: music.TagOptions{Navidrome: true}})
+	workID := identifyFile(t, fixture.opened, "Heka/Zanuvode/01.m4a", "rg-1", "rel-1")
+	identifyFile(t, fixture.opened, "Heka/Zanuvode/02.m4a", "rg-1", "rel-1")
+
+	encoded, err := artwork.EncodeWebP(image.NewRGBA(image.Rect(0, 0, 8, 8)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.fs.MkdirAll("/cache/images", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := fsx.WriteAtomic(fixture.fs, "/cache/images/work-1-cover-full.webp", func(w io.Writer) error {
+		_, err := w.Write(encoded)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := library.NewArtworks(fixture.opened).Record(t.Context(), workID, "", "work-1-cover", 8, 8, 5); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := fixture.fs.MkdirAll("/music/Heka/Zanuvode", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fixture.run(t)
+	info, err := fixture.fs.Stat("/music/Heka/Zanuvode/cover.jpg")
+	if err != nil || info.Size == 0 {
+		t.Fatalf("cover.jpg = %+v, %v; want it written beside the tracks", info, err)
+	}
+
+	// A folder that already has a cover keeps it.
+	if err := fixture.fs.Remove("/music/Heka/Zanuvode/cover.jpg"); err != nil {
+		t.Fatal(err)
+	}
+	if err := fsx.WriteAtomic(fixture.fs, "/music/Heka/Zanuvode/folder.jpg", func(w io.Writer) error { _, err := w.Write([]byte("mine")); return err }); err != nil {
+		t.Fatal(err)
+	}
+	fixture.roots[0].Options.WriteIDs = true // a changed request, so the files are visited again
+	fixture.run(t)
+	if _, err := fixture.fs.Stat("/music/Heka/Zanuvode/cover.jpg"); err == nil {
+		t.Error("cover.jpg was written into a folder that already had folder.jpg")
+	}
+}

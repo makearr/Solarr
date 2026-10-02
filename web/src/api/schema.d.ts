@@ -5138,6 +5138,8 @@ export interface components {
             write_metadata: boolean;
             /** @description Embed the fetched cover into files that carry no picture. */
             embed_cover: boolean;
+            /** @description Navidrome's profile: also fill the track artist's tags and MusicBrainz id, and put a cover.jpg in each album folder that has no cover file. Nothing a file or folder already has is replaced. */
+            navidrome: boolean;
         };
         /** @description ADR-48's commit-line knob (import.auto_commit_confidence) and the transfer ladder import walks when it places a file. */
         ImportSettings: {

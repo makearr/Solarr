@@ -7783,7 +7783,7 @@ components:
         What the tag writer puts into this library's files once enrichment has
         identified them (revision D3, widened 2026-09-29). Only the library's own
         root folders are written, never a read-only one and never a download folder.
-      required: [write_ids, replace_ids, write_metadata, embed_cover]
+      required: [write_ids, replace_ids, write_metadata, embed_cover, navidrome]
       properties:
         write_ids:
           type: boolean
@@ -7797,6 +7797,11 @@ components:
         embed_cover:
           type: boolean
           description: Embed the fetched cover into files that carry no picture.
+        navidrome:
+          type: boolean
+          description: >-
+            Navidrome's profile: also fill the track artist's tags and MusicBrainz id, and put a cover.jpg in each
+            album folder that has no cover file. Nothing a file or folder already has is replaced.
 
     ImportSettings:
       type: object

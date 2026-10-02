@@ -73,6 +73,8 @@ type Tagging struct {
 	WriteMetadata bool
 	// EmbedCover embeds the fetched cover into a file that carries no picture.
 	EmbedCover bool
+	// Navidrome adds what Navidrome reads (D10): the track artist's tags and MusicBrainz id, and a cover.jpg in each album folder.
+	Navidrome bool
 }
 
 // DefaultFileManagement is Sonarr's defaults, with Solarr's 7-day recycle bin as the bin.
@@ -158,6 +160,7 @@ func writeCategoryFileManagement(ctx context.Context, queries *settingsdb.Querie
 		SetPermissions: boolToInt(f.SetPermissions), ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup,
 		WriteIdsToTags: boolToInt(f.Tagging.WriteIDs), ReplaceIdsInTags: boolToInt(f.Tagging.ReplaceIDs),
 		WriteMetadataToTags: boolToInt(f.Tagging.WriteMetadata), EmbedCoverInTags: boolToInt(f.Tagging.EmbedCover),
+		NavidromeProfile:   boolToInt(f.Tagging.Navidrome),
 		MergeArtistAliases: boolToInt(f.MergeArtistAliases),
 	})
 }
@@ -184,6 +187,7 @@ func withFileManagement(categories []Category, rows []settingsdb.CategoryFileMan
 			Tagging: Tagging{
 				WriteIDs: row.WriteIdsToTags != 0, ReplaceIDs: row.ReplaceIdsInTags != 0,
 				WriteMetadata: row.WriteMetadataToTags != 0, EmbedCover: row.EmbedCoverInTags != 0,
+				Navidrome: row.NavidromeProfile != 0,
 			},
 		}
 	}
