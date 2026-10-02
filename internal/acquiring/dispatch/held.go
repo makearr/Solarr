@@ -1,4 +1,4 @@
-package music
+package dispatch
 
 import (
 	"context"
@@ -15,10 +15,10 @@ import (
 // heldBatch bounds how many held releases one pass looks at; the rest wait for the next poll.
 const heldBatch = 50
 
-// holdIfFull holds detail instead of sending it when its client already has MaxQueued of Solarr's
+// HoldIfFull holds detail instead of sending it when its client already has MaxQueued of Solarr's
 // downloads (ADR-57): once sent, the client decides the order, not Solarr's priority. A user's or an
 // RSS grab goes regardless when the client says so.
-func (d Dispatch) holdIfFull(
+func (d Dispatch) HoldIfFull(
 	ctx context.Context, itemID int64, detail library.DecisionDetail, origin GrabOrigin, at time.Time,
 ) (bool, error) {
 	if d.Ready == nil {
@@ -141,7 +141,7 @@ func (d Dispatch) stillSendable(ctx context.Context, entry library.ReadyEntry, a
 	if _, inFlight, err := d.Acquisitions.InFlightForItem(ctx, entry.DesiredItemID); err != nil || inFlight {
 		return library.DecisionDetail{}, false, err
 	}
-	details, err := d.Candidates.ListDecisionsForItem(ctx, entry.DesiredItemID, dispatchDecisionLookupLimit)
+	details, err := d.Candidates.ListDecisionsForItem(ctx, entry.DesiredItemID, DecisionLookupLimit)
 	if err != nil {
 		return library.DecisionDetail{}, false, err
 	}

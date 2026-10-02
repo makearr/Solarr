@@ -62,6 +62,12 @@ type indexerSettingsJSON struct {
 // television (2026-09-30).
 var DefaultMusicCategories = []int{3000}
 
+// DefaultTVCategories is Newznab's TV parent category, which covers its sub-categories.
+var DefaultTVCategories = []int{5000}
+
+// TVCategories are the categories TV is searched and read in.
+func (i Indexer) TVCategories() []int { return slices.Clone(DefaultTVCategories) }
+
 // maxMusicCategories bounds the list; a real indexer's music tree has a dozen at most.
 const maxMusicCategories = 32
 

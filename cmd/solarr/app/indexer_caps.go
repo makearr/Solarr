@@ -13,6 +13,11 @@ import (
 // asked again; one request a day per indexer.
 const indexerCapsTTL = 24 * time.Hour
 
+type capsKey struct {
+	indexerID int64
+	search    string
+}
+
 type indexerCapsEntry struct {
 	baseURL   string
 	params    []string
@@ -24,19 +29,29 @@ type indexerCapsEntry struct {
 type indexerCapsCache struct {
 	mu      sync.Mutex
 	clock   clock.Clock
-	entries map[int64]indexerCapsEntry
+	entries map[capsKey]indexerCapsEntry
 }
 
 func newIndexerCapsCache(cl clock.Clock) *indexerCapsCache {
-	return &indexerCapsCache{clock: cl, entries: map[int64]indexerCapsEntry{}}
+	return &indexerCapsCache{clock: cl, entries: map[capsKey]indexerCapsEntry{}}
 }
 
 // musicParams answers the cached parameters, asking the indexer when they are missing, stale or
 // for another address; nil when it cannot say, so the search sends everything as before.
 func (c *indexerCapsCache) musicParams(ctx context.Context, indexerID int64, baseURL string, client indexer.Client) []string {
+	return c.searchParams(ctx, indexerID, baseURL, client, "music-search")
+}
+
+// tvParams is musicParams for the TV search function.
+func (c *indexerCapsCache) tvParams(ctx context.Context, indexerID int64, baseURL string, client indexer.Client) []string {
+	return c.searchParams(ctx, indexerID, baseURL, client, "tv-search")
+}
+
+func (c *indexerCapsCache) searchParams(ctx context.Context, indexerID int64, baseURL string, client indexer.Client, search string) []string {
 	now := c.clock.Now()
+	key := capsKey{indexerID, search}
 	c.mu.Lock()
-	entry, found := c.entries[indexerID]
+	entry, found := c.entries[key]
 	c.mu.Unlock()
 	if found && entry.baseURL == baseURL && now.Sub(entry.fetchedAt) < indexerCapsTTL {
 		return entry.params
@@ -45,16 +60,16 @@ func (c *indexerCapsCache) musicParams(ctx context.Context, indexerID int64, bas
 	if err != nil {
 		return nil
 	}
-	music, ok := caps.Search["music-search"]
-	if !ok || !music.Available {
+	function, ok := caps.Search[search]
+	if !ok || !function.Available {
 		return nil
 	}
-	params := music.SupportedParams
+	params := function.SupportedParams
 	if params == nil {
 		params = []string{}
 	}
 	c.mu.Lock()
-	c.entries[indexerID] = indexerCapsEntry{baseURL: baseURL, params: params, fetchedAt: now}
+	c.entries[key] = indexerCapsEntry{baseURL: baseURL, params: params, fetchedAt: now}
 	c.mu.Unlock()
 	return params
 }

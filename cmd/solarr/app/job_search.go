@@ -6,9 +6,11 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
+	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -42,6 +44,46 @@ func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error)
 		conns = append(conns, conn)
 	}
 	return conns, nil
+}
+
+// tvIndexerConns is indexerConns for TV: the same connections, searched in TV's categories with tvsearch's parameters.
+func (p *process) tvIndexerConns(ctx context.Context) ([]judge.Conn, error) {
+	configured, err := p.cache.Indexers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	factory := p.indexerClientFactory()
+	conns := make([]judge.Conn, 0, len(configured))
+	for _, found := range configured {
+		if !found.Enabled {
+			continue
+		}
+		apiKey, err := p.cache.DecryptedIndexerAPIKey(ctx, found.ID)
+		if err != nil {
+			return nil, err
+		}
+		client := factory(found.ID, found.BaseURL, apiKey.Reveal(), found.Egress())
+		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Client: client, Categories: found.TVCategories()}
+		if p.indexerCaps != nil {
+			if params := p.indexerCaps.tvParams(ctx, found.ID, found.BaseURL, client); params != nil {
+				conn.Params = map[string][]string{"tvsearch": params}
+			}
+		}
+		conns = append(conns, conn)
+	}
+	return conns, nil
+}
+
+// tvGrab builds the TV module's automatic search over the real stores.
+func (p *process) tvGrab() tv.Grab {
+	blocklist := library.NewBlocklistStore(p.library)
+	return tv.Grab{
+		Search: tv.Search{
+			Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library),
+			Candidates: library.NewCandidates(p.library), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist,
+		},
+		Dispatch: p.musicDispatch(),
+	}
 }
 
 // musicSearch builds internal/media/music.Search over the real stores.

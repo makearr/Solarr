@@ -123,6 +123,10 @@ func (p *process) searchAgain(ctx context.Context, desiredItemID int64) error {
 	if err := library.NewDesired(p.library).RecordDownloadFailed(ctx, desiredItemID); err != nil {
 		p.logger.Warn("failed download not recorded on the hunt queue", slog.Int64("desired_item_id", desiredItemID), slog.Any("error", err))
 	}
+	if item, err := library.NewDesired(p.library).Get(ctx, desiredItemID); err == nil && p.isTV(item.CategoryID) {
+		_, err := p.tvHuntSearch(ctx, desiredItemID)
+		return err
+	}
 	indexers, err := p.indexerConns(ctx)
 	if err != nil || len(indexers) == 0 {
 		return err

@@ -628,6 +628,7 @@ func (p *process) startServer(ctx context.Context) error {
 		ConfigPath: p.configPath,
 		People:     adapters.People{People: library.NewPeople(p.library)},
 		Series:     p.seriesCatalog(),
+		Seasons:    p.seasonSearch(),
 		ArtistActions: adapters.ArtistActions{
 			People: library.NewPeople(p.library), Monitor: p.worksMonitor(), Queue: p.queue,
 		},

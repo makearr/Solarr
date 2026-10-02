@@ -4999,6 +4999,141 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /series/{id}/seasons/{season}/search:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: season
+        in: path
+        required: true
+        schema: { type: integer }
+      - name: category_id
+        in: query
+        required: true
+        description: The library the series is in; access is checked against it.
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: searchSeason
+      tags: [series]
+      summary: >-
+        Interactive search: ask every indexer for this season (id query first, then text) and record a decision per
+        release that covers a wanted episode. Nothing is sent.
+      responses:
+        "200":
+          description: What this run found, decided and persisted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchItemResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          description: Nothing is wanted in the season, or no indexer is enabled.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /series/{id}/seasons/{season}/grab:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: season
+        in: path
+        required: true
+        schema: { type: integer }
+      - name: category_id
+        in: query
+        required: true
+        description: The library the series is in; access is checked against it.
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: grabSeason
+      tags: [series]
+      summary: "Automatic search, as in Sonarr: search the season and send its best accepted release to a download client."
+      responses:
+        "200":
+          description: What the search found and what, if anything, was sent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GrabResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          description: Nothing is wanted in the season, no indexer is enabled, or no client takes the release.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /series/{id}/seasons/{season}/candidates:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: season
+        in: path
+        required: true
+        schema: { type: integer }
+      - name: category_id
+        in: query
+        required: true
+        description: The library the series is in; access is checked against it.
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listSeasonCandidates
+      tags: [series]
+      summary: The latest search's decisions for this season, best first. Empty for a season nobody has searched.
+      responses:
+        "200":
+          description: The decisions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CandidateDecision" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /series/{id}/seasons/{season}/candidates/{decision_id}/send:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: season
+        in: path
+        required: true
+        schema: { type: integer }
+      - name: category_id
+        in: query
+        required: true
+        description: The library the series is in; access is checked against it.
+        schema: { type: integer, format: int64 }
+      - name: decision_id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: sendSeasonCandidate
+      tags: [series]
+      summary: Send one accepted release to a matching download client (a person's own pick, never gated).
+      responses:
+        "200":
+          description: The acquisition this created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Acquisition" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          description: The decision is not accepted, no client takes its protocol, or a download is already on its way.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
   /series/{id}/seasons/{season}/monitored:
     parameters:
       - name: category_id

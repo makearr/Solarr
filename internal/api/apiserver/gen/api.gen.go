@@ -4122,6 +4122,24 @@ type RefreshSeriesParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
 
+// ListSeasonCandidatesParams defines parameters for ListSeasonCandidates.
+type ListSeasonCandidatesParams struct {
+	// CategoryId The library the series is in; access is checked against it.
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// SendSeasonCandidateParams defines parameters for SendSeasonCandidate.
+type SendSeasonCandidateParams struct {
+	// CategoryId The library the series is in; access is checked against it.
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// GrabSeasonParams defines parameters for GrabSeason.
+type GrabSeasonParams struct {
+	// CategoryId The library the series is in; access is checked against it.
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
 // SetSeasonMonitoredJSONBody defines parameters for SetSeasonMonitored.
 type SetSeasonMonitoredJSONBody struct {
 	Monitored bool `json:"monitored"`
@@ -4129,6 +4147,12 @@ type SetSeasonMonitoredJSONBody struct {
 
 // SetSeasonMonitoredParams defines parameters for SetSeasonMonitored.
 type SetSeasonMonitoredParams struct {
+	// CategoryId The library the series is in; access is checked against it.
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// SearchSeasonParams defines parameters for SearchSeason.
+type SearchSeasonParams struct {
 	// CategoryId The library the series is in; access is checked against it.
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
@@ -5079,9 +5103,21 @@ type ServerInterface interface {
 	// Re-read the series from the metadata sources. Never changes monitoring.
 	// (POST /series/{id}/refresh)
 	RefreshSeries(w http.ResponseWriter, r *http.Request, id int64, params RefreshSeriesParams)
+	// The latest search's decisions for this season, best first. Empty for a season nobody has searched.
+	// (GET /series/{id}/seasons/{season}/candidates)
+	ListSeasonCandidates(w http.ResponseWriter, r *http.Request, id int64, season int, params ListSeasonCandidatesParams)
+	// Send one accepted release to a matching download client (a person's own pick, never gated).
+	// (POST /series/{id}/seasons/{season}/candidates/{decision_id}/send)
+	SendSeasonCandidate(w http.ResponseWriter, r *http.Request, id int64, season int, decisionId int64, params SendSeasonCandidateParams)
+	// Automatic search, as in Sonarr: search the season and send its best accepted release to a download client.
+	// (POST /series/{id}/seasons/{season}/grab)
+	GrabSeason(w http.ResponseWriter, r *http.Request, id int64, season int, params GrabSeasonParams)
 	// Monitor or unmonitor every episode of a season.
 	// (PUT /series/{id}/seasons/{season}/monitored)
 	SetSeasonMonitored(w http.ResponseWriter, r *http.Request, id int64, season int, params SetSeasonMonitoredParams)
+	// Interactive search: ask every indexer for this season (id query first, then text) and record a decision per release that covers a wanted episode. Nothing is sent.
+	// (POST /series/{id}/seasons/{season}/search)
+	SearchSeason(w http.ResponseWriter, r *http.Request, id int64, season int, params SearchSeasonParams)
 	// Whether a login is required.
 	// (GET /settings/auth)
 	GetAuthPolicy(w http.ResponseWriter, r *http.Request)
@@ -6258,9 +6294,33 @@ func (_ Unimplemented) RefreshSeries(w http.ResponseWriter, r *http.Request, id 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// The latest search's decisions for this season, best first. Empty for a season nobody has searched.
+// (GET /series/{id}/seasons/{season}/candidates)
+func (_ Unimplemented) ListSeasonCandidates(w http.ResponseWriter, r *http.Request, id int64, season int, params ListSeasonCandidatesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Send one accepted release to a matching download client (a person's own pick, never gated).
+// (POST /series/{id}/seasons/{season}/candidates/{decision_id}/send)
+func (_ Unimplemented) SendSeasonCandidate(w http.ResponseWriter, r *http.Request, id int64, season int, decisionId int64, params SendSeasonCandidateParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Automatic search, as in Sonarr: search the season and send its best accepted release to a download client.
+// (POST /series/{id}/seasons/{season}/grab)
+func (_ Unimplemented) GrabSeason(w http.ResponseWriter, r *http.Request, id int64, season int, params GrabSeasonParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Monitor or unmonitor every episode of a season.
 // (PUT /series/{id}/seasons/{season}/monitored)
 func (_ Unimplemented) SetSeasonMonitored(w http.ResponseWriter, r *http.Request, id int64, season int, params SetSeasonMonitoredParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Interactive search: ask every indexer for this season (id query first, then text) and record a decision per release that covers a wanted episode. Nothing is sent.
+// (POST /series/{id}/seasons/{season}/search)
+func (_ Unimplemented) SearchSeason(w http.ResponseWriter, r *http.Request, id int64, season int, params SearchSeasonParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12080,6 +12140,195 @@ func (siw *ServerInterfaceWrapper) RefreshSeries(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ListSeasonCandidates operation middleware
+func (siw *ServerInterfaceWrapper) ListSeasonCandidates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "season" -------------
+	var season int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "season", chi.URLParam(r, "season"), &season, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "season", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSeasonCandidatesParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSeasonCandidates(w, r, id, season, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SendSeasonCandidate operation middleware
+func (siw *ServerInterfaceWrapper) SendSeasonCandidate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "season" -------------
+	var season int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "season", chi.URLParam(r, "season"), &season, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "season", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "decision_id" -------------
+	var decisionId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "decision_id", chi.URLParam(r, "decision_id"), &decisionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "decision_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SendSeasonCandidateParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SendSeasonCandidate(w, r, id, season, decisionId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GrabSeason operation middleware
+func (siw *ServerInterfaceWrapper) GrabSeason(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "season" -------------
+	var season int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "season", chi.URLParam(r, "season"), &season, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "season", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GrabSeasonParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GrabSeason(w, r, id, season, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetSeasonMonitored operation middleware
 func (siw *ServerInterfaceWrapper) SetSeasonMonitored(w http.ResponseWriter, r *http.Request) {
 
@@ -12131,6 +12380,66 @@ func (siw *ServerInterfaceWrapper) SetSeasonMonitored(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetSeasonMonitored(w, r, id, season, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchSeason operation middleware
+func (siw *ServerInterfaceWrapper) SearchSeason(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "season" -------------
+	var season int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "season", chi.URLParam(r, "season"), &season, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "season", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchSeasonParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchSeason(w, r, id, season, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -14236,7 +14545,19 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/series/{id}/refresh", wrapper.RefreshSeries)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/series/{id}/seasons/{season}/candidates", wrapper.ListSeasonCandidates)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/series/{id}/seasons/{season}/candidates/{decision_id}/send", wrapper.SendSeasonCandidate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/series/{id}/seasons/{season}/grab", wrapper.GrabSeason)
+	})
+	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/series/{id}/seasons/{season}/monitored", wrapper.SetSeasonMonitored)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/series/{id}/seasons/{season}/search", wrapper.SearchSeason)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/auth", wrapper.GetAuthPolicy)
