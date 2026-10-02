@@ -7,10 +7,12 @@ import (
 	"path/filepath"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/importing/unpack"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/jobs/cachebudget"
 	"github.com/makearr/Solarr/internal/metadata/metacache"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // cacheJobType is the registered type of ADR-60's cache maintenance sweep.
@@ -30,6 +32,10 @@ type cacheJob struct {
 	sweep  *cachebudget.Sweep
 	cache  *settings.Cache
 	logger *slog.Logger
+	// workspaces are where archives are opened for an import (importing/unpack); they sit in the cache, so the
+	// same max age bounds them (Invariant 91).
+	workspaces string
+	fs         fsx.FS
 }
 
 func (j cacheJob) Run(ctx context.Context, _ jobs.Job) error {
@@ -37,6 +43,12 @@ func (j cacheJob) Run(ctx context.Context, _ jobs.Job) error {
 	result, err := j.sweep.Enforce(ctx, budget)
 	if err != nil {
 		return fmt.Errorf("cache maintenance: %w", err)
+	}
+	cutoff := clock.NewSystem().Now().AddDate(0, 0, -int(budget.MaxAgeDays))
+	if removed, err := unpack.SweepOlderThan(j.fs, j.workspaces, cutoff); err != nil {
+		j.logger.Warn("import workspaces not pruned", slog.Any("error", err))
+	} else if removed > 0 {
+		j.logger.Info("import workspaces pruned", slog.Int("removed", removed))
 	}
 	j.logger.Info("cache maintenance finished",
 		slog.Int64("images_bytes", result.Report.Images.Bytes),
@@ -57,7 +69,10 @@ func (p *process) registerCacheJob(registry *jobs.Registry, executor *jobs.Execu
 		FS: p.fsys, ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"),
 		Metadata: metacache.New(p.metadata), Cache: p.cache, Clock: clock.NewSystem(), Logger: p.logger,
 	})
-	executor.Handle(cacheJobType, cacheJob{sweep: p.cacheSweep, cache: p.cache, logger: p.logger})
+	executor.Handle(cacheJobType, cacheJob{
+		sweep: p.cacheSweep, cache: p.cache, logger: p.logger,
+		workspaces: filepath.Join(p.config.Paths.CacheDir, "import-workspace"), fs: p.fsys,
+	})
 	return nil
 }
 

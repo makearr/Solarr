@@ -7,6 +7,7 @@ import (
 	"path"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/importing/unpack"
 	"github.com/makearr/Solarr/internal/platform/archive"
@@ -108,5 +109,24 @@ func TestRemoveTree_DeletesChildrenFirst(t *testing.T) {
 	}
 	if _, err := fsys.Stat("/ws"); err == nil {
 		t.Error("the workspace is still there")
+	}
+}
+
+func TestSweepOlderThan_RemovesOnlyTheOldWorkspaces(t *testing.T) {
+	clk := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(clk)
+	put(t, fsys, "/ws/old/a.mp3", []byte("x"))
+	clk.Advance(48 * time.Hour)
+	put(t, fsys, "/ws/new/b.mp3", []byte("x"))
+
+	removed, err := unpack.SweepOlderThan(fsys, "/ws", clk.Now().Add(-24*time.Hour))
+	if err != nil || removed != 1 {
+		t.Fatalf("SweepOlderThan = %d, %v; want the one old workspace", removed, err)
+	}
+	if _, err := fsys.Stat("/ws/new/b.mp3"); err != nil {
+		t.Errorf("the new workspace went too: %v", err)
+	}
+	if removed, err := unpack.SweepOlderThan(fsys, "/nowhere", clk.Now()); err != nil || removed != 0 {
+		t.Errorf("a missing directory = %d, %v; want none", removed, err)
 	}
 }

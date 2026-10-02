@@ -255,20 +255,8 @@ const workspaceLifetime = 7 * 24 * time.Hour
 
 // sweepWorkspaces removes the workspaces older than workspaceLifetime.
 func (j *Job) sweepWorkspaces() {
-	entries, err := j.fsys.ReadDir(j.workspace)
-	if err != nil {
-		return
-	}
-	cutoff := j.clock.Now().Add(-workspaceLifetime)
-	for _, entry := range entries {
-		folder := path.Join(j.workspace, entry.Name)
-		info, err := j.fsys.Stat(folder)
-		if err != nil || !info.ModTime.Before(cutoff) {
-			continue
-		}
-		if err := unpack.RemoveTree(j.fsys, folder); err != nil {
-			j.logger.Warn("old import workspace not removed", slog.String("workspace", folder), slog.Any("error", err))
-		}
+	if _, err := unpack.SweepOlderThan(j.fsys, j.workspace, j.clock.Now().Add(-workspaceLifetime)); err != nil {
+		j.logger.Warn("old import workspaces not removed", slog.String("workspace", j.workspace), slog.Any("error", err))
 	}
 }
 
