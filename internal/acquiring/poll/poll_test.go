@@ -1,12 +1,14 @@
 package poll_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,6 +70,7 @@ type env struct {
 	imported     []string
 	searched     []int64
 	history      []string
+	logger       *slog.Logger
 }
 
 func newEnv(t *testing.T) *env {
@@ -121,8 +124,15 @@ func (e *env) job() *poll.Job {
 		History: func(_ context.Context, kind download.HistoryKind, acquisition library.Acquisition, detail string) {
 			e.history = append(e.history, fmt.Sprintf("%s %s %s", kind, acquisition.DownloadClientRef, detail))
 		},
-		Clock: e.clock, Logger: slog.New(slog.DiscardHandler),
+		Clock: e.clock, Logger: cmpLogger(e.logger),
 	})
+}
+
+func cmpLogger(logger *slog.Logger) *slog.Logger {
+	if logger != nil {
+		return logger
+	}
+	return slog.New(slog.DiscardHandler)
 }
 
 func (e *env) run(t *testing.T) {
@@ -366,5 +376,38 @@ func TestPoll_AnImportThatPlacedNothingFails(t *testing.T) {
 	e.run(t)
 	if got := e.state(t, sent.ID); got.State != poll.StateFailed || len(e.searched) != 1 {
 		t.Errorf("= %s, searched %v; want FAILED and searched again", got.State, e.searched)
+	}
+}
+
+// The poll runs every minute and a mass loss outlasts it: it is reported once, with what is missing, then again
+// after six hours or when another set is missing.
+func TestPoll_AMassLossIsReportedOnceAndNamesWhatIsMissing(t *testing.T) {
+	e := newEnv(t)
+	var logged bytes.Buffer
+	e.logger = slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelError}))
+	for _, ref := range []string{"a", "b", "c", "d"} {
+		e.send(t, ref)
+	}
+	e.client.downloads = []download.Download{{ClientRef: "a", Name: "a", State: download.StateDownloading}}
+	job := e.job()
+	run := func() {
+		t.Helper()
+		if err := job.Run(t.Context(), jobs.Job{Type: poll.JobType}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	}
+	run()
+	e.clock.Advance(time.Minute)
+	run()
+	if got := strings.Count(logged.String(), "no longer has"); got != 1 {
+		t.Fatalf("reported %d times in two minutes, want once:\n%s", got, logged.String())
+	}
+	if !strings.Contains(logged.String(), "Home SABnzbd") || !strings.Contains(logged.String(), "missing=3") {
+		t.Errorf("the report names neither the client nor how many: %s", logged.String())
+	}
+	e.clock.Advance(7 * time.Hour)
+	run()
+	if got := strings.Count(logged.String(), "no longer has"); got != 2 {
+		t.Errorf("reported %d times after seven hours, want again", got)
 	}
 }

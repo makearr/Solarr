@@ -1463,16 +1463,29 @@ type DrainRefusal struct {
 // DuplicateReport defines model for DuplicateReport.
 type DuplicateReport struct {
 	Groups []struct {
-		// Copies Each stored file once, with every path that reaches it (a hardlinked file has several).
+		Artist string `json:"artist"`
 		Copies []struct {
+			Album       string `json:"album"`
+			AudioCodec  string `json:"audio_codec"`
+			BitrateKbps int64  `json:"bitrate_kbps"`
+			DurationMs  int64  `json:"duration_ms"`
+
+			// Keep The copy to keep.
+			Keep          bool     `json:"keep"`
+			Lossless      bool     `json:"lossless"`
 			MediaObjectId int64    `json:"media_object_id"`
 			Paths         []string `json:"paths"`
+			SizeBytes     int64    `json:"size_bytes"`
+			WorkId        int64    `json:"work_id"`
 		} `json:"copies"`
-		ReclaimableBytes int64 `json:"reclaimable_bytes"`
-		SizeBytes        int64 `json:"size_bytes"`
+
+		// KeepReason Why the recommended copy is the one to keep.
+		KeepReason       string `json:"keep_reason"`
+		ReclaimableBytes int64  `json:"reclaimable_bytes"`
+		Title            string `json:"title"`
 	} `json:"groups"`
 
-	// ReclaimableBytes What keeping one copy of every group would free.
+	// ReclaimableBytes What dropping every copy but the recommended one would free.
 	ReclaimableBytes int64 `json:"reclaimable_bytes"`
 }
 
@@ -4347,7 +4360,7 @@ type ServerInterface interface {
 	// Rename a category, reprioritise it, or change its default quality/ language profile or monitor-discovered policy. Administrator only. `media_type` never changes -- it is identity, not policy.
 	// (PATCH /categories/{id})
 	UpdateCategory(w http.ResponseWriter, r *http.Request, id int64)
-	// Files of one library that are likely copies of one another (read only).
+	// Tracks one library holds more than once, found by artist, title and length (read only).
 	// (GET /categories/{id}/duplicates)
 	GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64)
 	// A library's File Management and Permissions (Sonarr's). Administrator only.
@@ -5085,7 +5098,7 @@ func (_ Unimplemented) UpdateCategory(w http.ResponseWriter, r *http.Request, id
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Files of one library that are likely copies of one another (read only).
+// Tracks one library holds more than once, found by artist, title and length (read only).
 // (GET /categories/{id}/duplicates)
 func (_ Unimplemented) GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)

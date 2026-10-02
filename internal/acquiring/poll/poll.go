@@ -10,7 +10,10 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
+	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
@@ -80,14 +83,23 @@ type Config struct {
 }
 
 // Job is one poll.
-type Job struct{ config Config }
+type Job struct {
+	config Config
+	mu     sync.Mutex
+	// vanishLogged is when each client's mass loss was last reported: a poll runs every minute and the condition
+	// outlasts it, so it is reported again only after vanishRepeat.
+	vanishLogged map[string]time.Time
+}
+
+// vanishRepeat is how long a mass loss is left unmentioned after it was reported.
+const vanishRepeat = 6 * time.Hour
 
 // NewJob builds the handler.
 func NewJob(config Config) *Job {
 	if config.Logger == nil {
 		config.Logger = slog.Default()
 	}
-	return &Job{config: config}
+	return &Job{config: config, vanishLogged: map[string]time.Time{}}
 }
 
 // Run polls every client with a download in flight and moves each download on.
@@ -136,8 +148,7 @@ func (j *Job) pollClient(ctx context.Context, client Client, acquisitions []libr
 	}
 	massVanish := j.massVanish(acquisitions, byRef)
 	if massVanish {
-		j.config.Logger.Error("a download client lost most of Solarr's downloads at once; nothing is marked "+
-			"failed or sent again until it is looked at", slog.Int("downloads", len(acquisitions)))
+		j.reportMassVanish(client, acquisitions, byRef)
 	}
 	var failures []error
 	for _, acquisition := range acquisitions {
@@ -147,6 +158,32 @@ func (j *Job) pollClient(ctx context.Context, client Client, acquisitions []libr
 		}
 	}
 	return errors.Join(failures...)
+}
+
+// reportMassVanish says which downloads the client no longer has, once per vanishRepeat and again whenever a
+// different set is missing.
+func (j *Job) reportMassVanish(client Client, acquisitions []library.Acquisition, byRef map[string]download.Download) {
+	var missing []string
+	for _, acquisition := range acquisitions {
+		if _, found := byRef[acquisition.DownloadClientRef]; !found && (acquisition.State == StateQueued || acquisition.State == StateDownloading) {
+			missing = append(missing, strconv.FormatInt(acquisition.ID, 10)+" "+acquisition.CandidateTitle)
+		}
+	}
+	slices.Sort(missing)
+	key := client.Name + "\x00" + strings.Join(missing, "\x00")
+	now := j.config.Clock.Now()
+	j.mu.Lock()
+	last, reported := j.vanishLogged[key]
+	if !reported || now.Sub(last) >= vanishRepeat {
+		j.vanishLogged = map[string]time.Time{key: now}
+	}
+	j.mu.Unlock()
+	if reported && now.Sub(last) < vanishRepeat {
+		return
+	}
+	j.config.Logger.Error("a download client no longer has most of Solarr's downloads; nothing is marked failed or "+
+		"sent again until you look: remove the ones that are gone from Activity -> Queue",
+		slog.String("client", client.Name), slog.Int("missing", len(missing)), slog.Any("downloads", missing))
 }
 
 func (j *Job) massVanish(acquisitions []library.Acquisition, byRef map[string]download.Download) bool {

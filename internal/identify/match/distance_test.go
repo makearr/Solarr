@@ -261,3 +261,19 @@ func TestDistance_NoApplicableDimensionsGivesMaximalDistance(t *testing.T) {
 		t.Errorf("Total = %v, want 1 (no evidence, never a free match)", distance.Total)
 	}
 }
+
+// Soundtracks share their descriptor words and are different albums: only the distinctive words may agree.
+func TestTitleDistance_ADescriptorOnlyOverlapIsNotAMatch(t *testing.T) {
+	part, _ := titleDistance("Wijdt Sirtuvz 3: Original Motion Picture Soundtrack", "Trainspotting Music From the Motion Picture [1996] [FLAC]")
+	if part.Distance < 0.5 {
+		t.Errorf("distance = %.2f (%s), want far apart", part.Distance, part.Detail)
+	}
+	same, _ := titleDistance("Wijdt Sirtuvz 3: Original Motion Picture Soundtrack", "Wijdt Sirtuvz 3 OST")
+	if same.Distance > 0.2 {
+		t.Errorf("same album, descriptors differ: distance = %.2f (%s), want close", same.Distance, same.Detail)
+	}
+	bare, _ := titleDistance("Soundtrack", "Original Soundtrack")
+	if bare.Distance > 0.5 {
+		t.Errorf("a title of nothing but descriptors keeps the whole-title comparison, got %.2f", bare.Distance)
+	}
+}

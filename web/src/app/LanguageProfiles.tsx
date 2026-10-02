@@ -5,21 +5,15 @@ import { Trash2 } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
-type LanguageProfile = components["schemas"]["LanguageProfile"];
+import { LanguagePicker } from "./LanguagePicker";
 
-function splitCodes(raw: string): string[] {
-  return raw
-    .split(",")
-    .map((code) => code.trim())
-    .filter((code) => code.length > 0);
-}
+type LanguageProfile = components["schemas"]["LanguageProfile"];
 
 /** Section 19.8's policy CRUD: internal/db/settings.Cache already validates
  *  and stores it -- this is the REST API and builder UI
  *  LibraryConfigPlaceholder's own "language" section had been standing in
- *  for (todo 4.3, 2026-09-12). Each language list is a plain comma-separated
- *  field of codes (BCP-47 or whatever the probe reports, e.g. "en, de") --
- *  no fixed enum exists to pick from. Global, not per-library, same as
+ *  for (todo 4.3, 2026-09-12). Each language list is chosen from a drop-down
+ *  of languages, stored by two-letter code. Global, not per-library, same as
  *  QualityProfiles' own doc comment explains. */
 export function LanguageProfiles() {
   const queryClient = useQueryClient();
@@ -160,14 +154,10 @@ function LanguageProfileForm({
   onCancel: () => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
-  const [audioPreferred, setAudioPreferred] = useState((initial?.audio_preferred ?? []).join(", "));
-  const [audioRequired, setAudioRequired] = useState((initial?.audio_required ?? []).join(", "));
-  const [subtitlePreferred, setSubtitlePreferred] = useState(
-    (initial?.subtitle_preferred ?? []).join(", "),
-  );
-  const [subtitleRequired, setSubtitleRequired] = useState(
-    (initial?.subtitle_required ?? []).join(", "),
-  );
+  const [audioPreferred, setAudioPreferred] = useState<string[]>(initial?.audio_preferred ?? []);
+  const [audioRequired, setAudioRequired] = useState<string[]>(initial?.audio_required ?? []);
+  const [subtitlePreferred, setSubtitlePreferred] = useState<string[]>(initial?.subtitle_preferred ?? []);
+  const [subtitleRequired, setSubtitleRequired] = useState<string[]>(initial?.subtitle_required ?? []);
   const [preferOriginalAudio, setPreferOriginalAudio] = useState(initial?.prefer_original_audio ?? false);
   const [rejectDubbed, setRejectDubbed] = useState(initial?.reject_dubbed ?? false);
 
@@ -175,10 +165,10 @@ function LanguageProfileForm({
     mutationFn: async () => {
       const body = {
         name,
-        audio_preferred: splitCodes(audioPreferred),
-        audio_required: splitCodes(audioRequired),
-        subtitle_preferred: splitCodes(subtitlePreferred),
-        subtitle_required: splitCodes(subtitleRequired),
+        audio_preferred: audioPreferred,
+        audio_required: audioRequired,
+        subtitle_preferred: subtitlePreferred,
+        subtitle_required: subtitleRequired,
         prefer_original_audio: preferOriginalAudio,
         reject_dubbed: rejectDubbed,
       };
@@ -208,45 +198,11 @@ function LanguageProfileForm({
           onChange={(event) => setName(event.target.value)}
         />
       </label>
-      <div className="grid grid-cols-2 gap-2">
-        <label className="flex flex-col gap-1 text-xs text-ink-muted">
-          Audio preferred
-          <input
-            className={inputStyle}
-            value={audioPreferred}
-            placeholder="en, de"
-            autoComplete="off"
-            onChange={(event) => setAudioPreferred(event.target.value)}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-ink-muted">
-          Audio required (any_of)
-          <input
-            className={inputStyle}
-            value={audioRequired}
-            placeholder="en"
-            autoComplete="off"
-            onChange={(event) => setAudioRequired(event.target.value)}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-ink-muted">
-          Subtitle preferred
-          <input
-            className={inputStyle}
-            value={subtitlePreferred}
-            autoComplete="off"
-            onChange={(event) => setSubtitlePreferred(event.target.value)}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-ink-muted">
-          Subtitle required (any_of)
-          <input
-            className={inputStyle}
-            value={subtitleRequired}
-            autoComplete="off"
-            onChange={(event) => setSubtitleRequired(event.target.value)}
-          />
-        </label>
+      <div className="grid grid-cols-2 gap-3">
+        <LanguagePicker label="Audio preferred" value={audioPreferred} onChange={setAudioPreferred} />
+        <LanguagePicker label="Audio required (any of)" value={audioRequired} onChange={setAudioRequired} />
+        <LanguagePicker label="Subtitle preferred" value={subtitlePreferred} onChange={setSubtitlePreferred} />
+        <LanguagePicker label="Subtitle required (any of)" value={subtitleRequired} onChange={setSubtitleRequired} />
       </div>
       <label className="flex items-center gap-2 text-xs text-ink-muted">
         <input

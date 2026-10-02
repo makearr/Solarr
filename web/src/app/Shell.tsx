@@ -27,7 +27,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <ThemeToggle />
             <UserMenu />
           </header>
-          <main className="min-h-0 flex-1">
+          <main className="min-h-0 flex-1 overflow-y-auto">
             <AdministratorGate>{children}</AdministratorGate>
           </main>
         </div>

@@ -2,59 +2,72 @@ package library_test
 
 import (
 	"context"
-	"reflect"
+	"database/sql"
+	"fmt"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
-func TestDuplicates_GroupsSameSizeAndSampleAcrossFoldersAndLeavesOtherRootsOut(t *testing.T) {
+// One song on its album as a flac and on a compilation as a 96 kbit mp3 is one track twice, whatever the bytes are.
+func TestDuplicates_FindsTheSameTrackInDifferentFormatsAndLeavesDifferentOnesAlone(t *testing.T) {
 	opened, _ := newLibrary(t)
-	files := []struct {
-		hash string
-		size int64
-		root int64
-		path string
-	}{
-		{"same", 100, 1, "A/01.flac"},
-		{"same", 100, 1, "Copy of A/01.flac"},
-		{"same", 100, 2, "elsewhere/01.flac"}, // another library: not counted for root 1
-		{"other", 100, 1, "B/01.flac"},        // same size, different content
-		{"big", 900, 1, "C/01.flac"},
-		{"big", 900, 1, "D/01.flac"},
+	type file struct {
+		album, title, codec string
+		duration            int64
+		bitrate             int64
+		path                string
 	}
-	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
-		for _, file := range files {
-			id, err := q.CreateMediaObject(ctx, librarydb.CreateMediaObjectParams{SizeBytes: file.size, QuickHash: file.hash, FirstSeenAt: 1})
-			if err != nil {
-				return err
-			}
-			if _, err := q.AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
-				MediaObjectID: id, RootFolderID: file.root, RelPath: file.path, LinkKind: "primary", IsPrimary: 1, CreatedAt: 1,
+	files := []file{
+		{"Album", "Song (Remastered 2011)", "flac", 215_000, 900_000, "Album/01.flac"},
+		{"Compilation", "Song", "mp3", 216_500, 96_000, "Comp/07.mp3"},
+		{"Album", "Other", "flac", 180_000, 900_000, "Album/02.flac"},
+		{"Compilation", "Other", "mp3", 240_000, 96_000, "Comp/08.mp3"}, // a different length: another recording
+		{"Compilation", "Song", "mp3", 0, 96_000, "Comp/09.mp3"},        // no measured length: cannot be told apart
+	}
+	works := map[string]int64{}
+	items := map[string]int64{}
+	for _, f := range files {
+		if _, ok := works[f.album]; !ok {
+			works[f.album] = createWork(t, opened, "music", f.album).ID
+			items[f.album] = createDesired(t, opened, works[f.album], "SET", 10).ID
+		}
+	}
+	for index, f := range files {
+		ref := fmt.Sprintf("1:%d", index+1)
+		createPart(t, opened, works[f.album], ref, fmt.Sprintf("%03d", index), f.title)
+		object := createObject(t, opened, fmt.Sprintf("h%d", index), 1000+int64(index))
+		attributes := intern(t, opened, "attr-"+f.codec, "")
+		err := opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			if _, err := librarydb.New(tx).AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+				MediaObjectID: object.ID, RootFolderID: 1, RelPath: f.path, LinkKind: "primary", IsPrimary: 1, CreatedAt: 1,
 			}); err != nil {
 				return err
 			}
+			_, err := tx.ExecContext(ctx, `UPDATE media_object SET duration_ms = ?, overall_bitrate = ?, measured_attributes_id = ? WHERE id = ?`,
+				sql.NullInt64{Int64: f.duration, Valid: f.duration > 0}, f.bitrate, attributes.ID, object.ID)
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
 		}
-		return nil
-	})
+		attach(t, opened, items[f.album], object.ID, "primary", ref)
+	}
 
-	groups, err := library.NewDuplicates(opened).Groups(t.Context(), []int64{1}, 50)
+	groups, err := library.NewDuplicates(opened).Groups(t.Context(), 1, []int64{1}, 50)
 	if err != nil {
 		t.Fatalf("Groups: %v", err)
 	}
-	var got [][2]any
-	for _, group := range groups {
-		var paths []string
-		for _, copy := range group.Copies {
-			for _, path := range copy.Paths {
-				paths = append(paths, path.RelPath)
-			}
-		}
-		got = append(got, [2]any{group.Reclaimable(), paths})
+	if len(groups) != 1 {
+		t.Fatalf("groups = %+v, want one: Song as a flac and an mp3", groups)
 	}
-	want := [][2]any{{int64(900), []string{"C/01.flac", "D/01.flac"}}, {int64(100), []string{"A/01.flac", "Copy of A/01.flac"}}}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("groups = %v, want %v (largest reclaimable first)", got, want)
+	var paths []string
+	for _, copy := range groups[0].Copies {
+		paths = append(paths, copy.Paths[0].RelPath)
+	}
+	if len(paths) != 2 || paths[0] != "Album/01.flac" || paths[1] != "Comp/07.mp3" {
+		t.Errorf("copies = %v, want the flac and the 96k mp3 of Song", paths)
 	}
 }

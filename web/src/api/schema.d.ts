@@ -2892,8 +2892,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Files of one library that are likely copies of one another (read only).
-         * @description Files with the same size and the same sampled content, wherever they sit, with what keeping one copy of each group would free. Nothing is linked or removed by looking; a library's largest groups come first.
+         * Tracks one library holds more than once, found by artist, title and length (read only).
+         * @description Files that are one recording (the same artist and title, lengths within a few seconds), in whatever format and on whichever album, with the copy to keep: the one that meets the library's target quality, else its profiles' first choice. Nothing is changed by looking; the groups with the most to free come first.
          */
         get: operations["getCategoryDuplicates"];
         put?: never;
@@ -5824,18 +5824,32 @@ export interface components {
         DuplicateReport: {
             /**
              * Format: int64
-             * @description What keeping one copy of every group would free.
+             * @description What dropping every copy but the recommended one would free.
              */
             reclaimable_bytes: number;
             groups: {
-                /** Format: int64 */
-                size_bytes: number;
+                artist: string;
+                title: string;
+                /** @description Why the recommended copy is the one to keep. */
+                keep_reason: string;
                 /** Format: int64 */
                 reclaimable_bytes: number;
-                /** @description Each stored file once, with every path that reaches it (a hardlinked file has several). */
                 copies: {
                     /** Format: int64 */
                     media_object_id: number;
+                    /** Format: int64 */
+                    work_id: number;
+                    album: string;
+                    /** Format: int64 */
+                    size_bytes: number;
+                    /** Format: int64 */
+                    duration_ms: number;
+                    /** Format: int64 */
+                    bitrate_kbps: number;
+                    audio_codec: string;
+                    lossless: boolean;
+                    /** @description The copy to keep. */
+                    keep: boolean;
                     paths: string[];
                 }[];
             }[];
