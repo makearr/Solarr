@@ -35,6 +35,8 @@ type SeriesCatalog interface {
 	Refresh(ctx context.Context, categoryID, seriesID int64) (gen.AddSeriesResult, error)
 	SetEpisodeMonitored(ctx context.Context, categoryID, seriesID, partID int64, monitored bool) error
 	SetSeasonMonitored(ctx context.Context, categoryID, seriesID int64, season int, monitored bool) error
+	// Wanted returns up to limit+1 missing episodes after the cursor (date, id), newest first.
+	Wanted(ctx context.Context, categoryID int64, after paginate.TextCursor, limit int) ([]gen.WantedEpisode, error)
 }
 
 // seriesAccess checks the caller against one library and the catalogue being wired; false means it answered.
@@ -295,4 +297,52 @@ func (s *Server) setSeasonMonitored(w http.ResponseWriter, r *http.Request, id i
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) routeListWantedEpisodes(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	categoryID, err := strconv.ParseInt(query.Get("category_id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "category_id is required and must be a number")
+		return
+	}
+	params := gen.ListWantedEpisodesParams{CategoryId: categoryID}
+	if raw := query.Get("cursor"); raw != "" {
+		params.Cursor = &raw
+	}
+	if raw := query.Get("limit"); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "limit must be a number")
+			return
+		}
+		params.Limit = &limit
+	}
+	s.ListWantedEpisodes(w, r, params)
+}
+
+// ListWantedEpisodes answers one page of a TV library's missing episodes.
+func (s *Server) ListWantedEpisodes(w http.ResponseWriter, r *http.Request, params gen.ListWantedEpisodesParams) {
+	if _, ok := s.seriesAccess(w, r, params.CategoryId, settings.PermissionRead); !ok {
+		return
+	}
+	cursor, err := paginate.DecodeText(derefOr(params.Cursor, ""))
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
+		return
+	}
+	limit := paginate.ClampLimit(derefOr(params.Limit, 0))
+	rows, err := s.series.Wanted(r.Context(), params.CategoryId, cursor, limit+1)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	page := gen.WantedEpisodePage{Items: rows}
+	if len(rows) > limit {
+		page.Items = rows[:limit]
+		last := page.Items[len(page.Items)-1]
+		next := paginate.TextCursor{Sort: derefOr(last.AirDate, ""), ID: last.PartId}.Encode()
+		page.NextCursor = &next
+	}
+	writeJSON(w, s.logger, http.StatusOK, page)
 }

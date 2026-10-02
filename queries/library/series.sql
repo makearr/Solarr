@@ -113,3 +113,19 @@ FROM work_title t
 JOIN work w ON w.id = t.work_id
 WHERE w.media_type = 'tv'
   AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id));
+
+-- Sonarr's Wanted > Missing: monitored episodes that have aired and have no file, newest first.
+-- name: ListWantedEpisodes :many
+SELECT p.id AS part_id, p.work_id, w.canonical_title AS series_title, p.media_ref, p.title, p.date, p.available_at
+FROM work_part p
+JOIN work w ON w.id = p.work_id
+WHERE w.media_type = 'tv'
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id))
+  AND p.monitored = 1
+  AND ((p.available_at IS NOT NULL AND p.available_at <= sqlc.arg(now))
+       OR (p.available_at IS NULL AND p.date IS NOT NULL AND p.date <= sqlc.arg(today)))
+  AND NOT EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d2 ON d2.id = f.desired_item_id
+                  WHERE d2.work_id = p.work_id AND f.media_ref = p.media_ref AND f.role = 'primary')
+  AND (COALESCE(p.date, '') < sqlc.arg(after_date) OR (COALESCE(p.date, '') = sqlc.arg(after_date) AND p.id < sqlc.arg(after_id)))
+ORDER BY COALESCE(p.date, '') DESC, p.id DESC
+LIMIT sqlc.arg(page_size);

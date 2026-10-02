@@ -33,6 +33,7 @@ import { LibraryLevelList } from "./LibraryLevelList";
 import { AddSeries } from "./AddSeries";
 import { SeriesIndex } from "./SeriesIndex";
 import { SeriesPage } from "./SeriesPage";
+import { SeriesWanted } from "./SeriesWanted";
 import { useLibrary } from "@/lib/useLibrary";
 import { Libraries } from "./Libraries";
 import { Duplicates } from "./Duplicates";
@@ -72,6 +73,13 @@ function DiscoverForLibrary() {
   const { categoryId } = useParams({ strict: false }) as { categoryId: string };
   const library = useLibrary(categoryId);
   return library?.media_type === "tv" ? <AddSeries /> : <Discover />;
+}
+
+/** Wanted is per media type: missing episodes for a TV library, albums for music. */
+function WantedForLibrary() {
+  const { categoryId } = useParams({ strict: false }) as { categoryId: string };
+  const library = useLibrary(categoryId);
+  return library?.media_type === "tv" ? <SeriesWanted /> : <Wanted />;
 }
 
 /** A level key is the media type's own: TV's Series screen, everything else the shared level list. */
@@ -166,7 +174,7 @@ const routes = [
       throw await redirectToLibrary((params as { categoryId: string }).categoryId);
     },
   }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/wanted", component: Wanted }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/wanted", component: WantedForLibrary }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/statistics", component: Statistics }),
   // Packs moved here from Storage 2026-09-11 (a pack is one library's own
   // provenance fact, ADR-50, not a storage concern) -- still the same

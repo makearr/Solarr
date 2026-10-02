@@ -19,6 +19,8 @@ type CalendarRow struct {
 	PrimaryType string
 	ReleaseDate string
 	OnDisk      bool
+	// PartID and CategoryID are set for a TV episode.
+	PartID, CategoryID int64
 }
 
 // CalendarReader answers releases in a date window. Defined here and
@@ -106,6 +108,9 @@ func (s *Server) ListCalendar(w http.ResponseWriter, r *http.Request, params gen
 		}
 		if row.PrimaryType != "" {
 			view.PrimaryType = &row.PrimaryType
+		}
+		if row.PartID != 0 {
+			view.PartId, view.CategoryId = &row.PartID, &row.CategoryID
 		}
 		views[i] = view
 	}

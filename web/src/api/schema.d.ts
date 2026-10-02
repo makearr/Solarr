@@ -3012,6 +3012,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/series/wanted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sonarr's Wanted, Missing: monitored episodes that have aired and have no file, newest first. */
+        get: operations["listWantedEpisodes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/series/lookup": {
         parameters: {
             query?: never;
@@ -4623,6 +4640,16 @@ export interface components {
             release_date: string;
             /** @description Whether the library already holds a file for this work. */
             on_disk: boolean;
+            /**
+             * Format: int64
+             * @description Set for a TV episode, which then shows the series as title and the episode as artist.
+             */
+            part_id?: number;
+            /**
+             * Format: int64
+             * @description The TV library an episode is in, for linking to its series.
+             */
+            category_id?: number;
         };
         /** @description One captured log line. */
         LogRecord: {
@@ -5122,6 +5149,23 @@ export interface components {
             seasons: components["schemas"]["SeriesSeason"][];
             episodes: components["schemas"]["SeriesEpisode"][];
             fanart_url?: string;
+        };
+        WantedEpisode: {
+            /** Format: int64 */
+            part_id: number;
+            /** Format: int64 */
+            series_id: number;
+            series_title: string;
+            season: number;
+            number: number;
+            title?: string;
+            air_date?: string;
+            /** Format: date-time */
+            air_time?: string;
+        };
+        WantedEpisodePage: {
+            items: components["schemas"]["WantedEpisode"][];
+            next_cursor?: string;
         };
         SeriesCandidate: {
             /** @example tvdb */
@@ -11605,6 +11649,33 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
+        };
+    };
+    listWantedEpisodes: {
+        parameters: {
+            query: {
+                category_id: number;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WantedEpisodePage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     lookupSeries: {

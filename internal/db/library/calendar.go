@@ -1,9 +1,12 @@
 package library
 
 import (
+	"cmp"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -22,6 +25,9 @@ type CalendarEntry struct {
 	// date, since a month-precision release is a real thing to say.
 	ReleaseDate string
 	OnDisk      bool
+	// PartID is the episode, zero for a release; CategoryID is the TV library an episode is in.
+	PartID     int64
+	CategoryID int64
 }
 
 // Calendar reads upcoming and recent releases.
@@ -58,7 +64,33 @@ func (c Calendar) Entries(
 			OnDisk: row.OnDisk,
 		}
 	}
+	episodes, err := librarydb.New(c.store.Read()).ListCalendarEpisodes(ctx, librarydb.ListCalendarEpisodesParams{
+		CategoryIds: string(encoded), FromDate: sql.NullString{String: from, Valid: true}, ToDate: sql.NullString{String: to, Valid: true}, PageSize: int64(pageSize),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: calendar episodes %s..%s: %w", from, to, err)
+	}
+	for _, row := range episodes {
+		season, number := parseSeriesRef(row.MediaRef)
+		entries = append(entries, CalendarEntry{
+			WorkID: row.WorkID, Title: row.CanonicalTitle, Artist: fmt.Sprintf("S%02dE%02d %s", season, number, row.Title.String),
+			PrimaryType: "Episode", ReleaseDate: row.Date.String, OnDisk: row.OnDisk, PartID: row.PartID, CategoryID: asInt(row.CategoryID),
+		})
+	}
+	if len(episodes) > 0 {
+		slices.SortStableFunc(entries, func(a, b CalendarEntry) int { return cmp.Compare(a.ReleaseDate, b.ReleaseDate) })
+	}
 	return entries, nil
+}
+
+func asInt(value any) int64 {
+	switch number := value.(type) {
+	case int64:
+		return number
+	case float64:
+		return int64(number)
+	}
+	return 0
 }
 
 // asString normalises MIN()'s own any-typed result: sqlc types an aggregate as
@@ -88,9 +120,23 @@ func (c Calendar) Dates(ctx context.Context, from, to string, categoryIDs []int6
 	if err != nil {
 		return nil, fmt.Errorf("library: calendar dates %s..%s: %w", from, to, err)
 	}
-	dates := make([]CalendarDate, len(rows))
-	for i, row := range rows {
-		dates[i] = CalendarDate{Date: asString(row.ReleaseDate), Releases: row.Releases}
+	byDate := map[string]int64{}
+	for _, row := range rows {
+		byDate[asString(row.ReleaseDate)] += row.Releases
 	}
+	episodeRows, err := librarydb.New(c.store.Read()).CountCalendarEpisodeDates(ctx, librarydb.CountCalendarEpisodeDatesParams{
+		CategoryIds: string(encoded), FromDate: sql.NullString{String: from, Valid: true}, ToDate: sql.NullString{String: to, Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: calendar episode dates %s..%s: %w", from, to, err)
+	}
+	for _, row := range episodeRows {
+		byDate[row.ReleaseDate.String] += row.Releases
+	}
+	dates := make([]CalendarDate, 0, len(byDate))
+	for date, releases := range byDate {
+		dates = append(dates, CalendarDate{Date: date, Releases: releases})
+	}
+	slices.SortFunc(dates, func(a, b CalendarDate) int { return cmp.Compare(a.Date, b.Date) })
 	return dates, nil
 }
