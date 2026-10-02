@@ -96,6 +96,12 @@ func (s *Server) SetLibraryQuality(w http.ResponseWriter, r *http.Request, id in
 			minutes = *body.ProtocolDelayMinutes
 		}
 		if err := s.auth.Settings.SetCategoryProtocolDelay(r.Context(), id, protocol, minutes); err != nil {
+			var problems config.Problems
+			if errors.As(err, &problems) {
+				writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+					"The delay profile has problems", problems.Report("the delay profile", "Nothing was changed."))
+				return
+			}
 			writeError(w, s.logger, err)
 			return
 		}

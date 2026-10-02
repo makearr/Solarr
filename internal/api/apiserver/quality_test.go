@@ -121,6 +121,17 @@ func TestLibraryQuality_ProblemsAreA400(t *testing.T) {
 	}
 }
 
+// A delay beyond the bound is the caller's mistake, named, never a 500 (found 2026-10-02).
+func TestLibraryQuality_ATooLongDelayIsA400(t *testing.T) {
+	fixture, cookies, id := adminWithLibrary(t)
+	path := "/api/v1/categories/" + strconv.FormatInt(id, 10) + "/quality"
+	recorder := fixture.do(authedPut(t, cookies, path,
+		`{"profile_ids":[],"preferred_protocol":"usenet","protocol_delay_minutes":43200}`))
+	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "protocol_delay_minutes") {
+		t.Fatalf("status = %d (%s), want 400 naming protocol_delay_minutes", recorder.Code, recorder.Body)
+	}
+}
+
 // "The items in the library should also show if a file satisfies the target or cutoff."
 func TestGetWork_MarksFilesAgainstTheTargetAndCutoff(t *testing.T) {
 	fixture := newWorksFixture(t)
