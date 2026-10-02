@@ -15,6 +15,9 @@ import (
 	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
+// ErrNotBuiltForMediaType is a feature the media type has no engine for yet; answered as 409 with the reason.
+var ErrNotBuiltForMediaType = errors.New("apiserver: not built for this media type")
+
 // ErrSeriesNotFound is a series id that is not in the library asked about; answered as 404.
 var ErrSeriesNotFound = errors.New("apiserver: series not found")
 

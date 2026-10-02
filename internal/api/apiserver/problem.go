@@ -59,6 +59,9 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		errors.Is(err, jobs.ErrNotFound), errors.Is(err, jobs.ErrUnknownTask):
 		writeProblem(w, logger, http.StatusNotFound, TypeNotFound, "Not found", err.Error())
 
+	case errors.Is(err, ErrNotBuiltForMediaType):
+		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Not available yet", err.Error())
+
 	case errors.Is(err, ErrSeriesNotFound):
 		writeProblem(w, logger, http.StatusNotFound, TypeNotFound, "Not found", err.Error())
 
