@@ -57,8 +57,8 @@ export function ArrImport() {
         <h1 className="text-lg font-semibold">*Arr import</h1>
         <p className="text-sm leading-relaxed text-ink-muted">
           Connect an existing Sonarr/Radarr/Lidarr/Readarr/Whisparr and bring in what it already
-          monitors as intent -- never a download, never a write back to the source. Only Lidarr
-          has a real sync today; the others connect and wait for their own stage. Connect Prowlarr to use
+          monitors as intent -- never a download, never a write back to the source. Lidarr (artists
+          and albums) and Sonarr (series and seasons) sync today; the others connect and wait for their own stage. Connect Prowlarr to use
           its active indexers and download clients here.
         </p>
       </header>
@@ -206,15 +206,19 @@ function RunSummary({ run }: { run: ArrImportRun }) {
     return (
       <p className="rounded-md bg-canvas px-2 py-1.5 text-xs text-ink-muted">
         {run.artists_total
-          ? `Walking artist ${Math.min((run.artists_done ?? 0) + 1, run.artists_total)} of ${run.artists_total}.`
+          ? `Walking ${run.app === "sonarr" ? "series" : "artist"} ${Math.min((run.artists_done ?? 0) + 1, run.artists_total)} of ${run.artists_total}.`
           : "Started."}{" "}
-        A real library takes a while (one Albums call per artist); expand history below to watch it finish.
+        A real library takes a while (one call per artist or series); expand history below to watch it finish.
       </p>
     );
   }
   return (
     <p className="rounded-md bg-canvas px-2 py-1.5 text-xs text-ink-muted">
-      {run.state === "DONE" ? (
+      {run.state === "DONE" && run.app === "sonarr" ? (
+        <>
+          {run.artists_created} series added, {run.artists_matched} matched
+        </>
+      ) : run.state === "DONE" ? (
         <>
           {run.artists_created} artist{run.artists_created === 1 ? "" : "s"} added,{" "}
           {run.artists_matched} matched · {run.albums_created} album{run.albums_created === 1 ? "" : "s"} added,{" "}

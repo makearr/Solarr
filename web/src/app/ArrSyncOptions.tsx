@@ -133,12 +133,13 @@ export function ArrSyncOptions({
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={monitored} onChange={(event) => setMonitored(event.target.checked)} />
-          Monitored artists and albums
+          {instance.app === "sonarr" ? "Monitored series" : "Monitored artists and albums"}
         </label>
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={unmonitored} onChange={(event) => setUnmonitored(event.target.checked)} />
           Unmonitored ones (they stay unmonitored)
         </label>
+        {instance.app !== "sonarr" && (
         <label className="flex items-center gap-1.5">
           Albums
           <select value={albums} onChange={(event) => setAlbums(event.target.value as typeof albums)} className={input}>
@@ -147,6 +148,7 @@ export function ArrSyncOptions({
             <option value="complete">Complete in Lidarr</option>
           </select>
         </label>
+        )}
       </div>
       <div className="flex items-center gap-2">
         <button
