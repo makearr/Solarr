@@ -74,7 +74,8 @@ func TestDownloader_AddSendsTheTorrentUnderTheCategoryAndAnswersTheInfoHash(t *t
 	if len(ref) != 40 {
 		t.Errorf("ref = %q, want an info hash", ref)
 	}
-	if body := server.bodies[0]; !strings.Contains(body, "solarr-music") || !strings.Contains(body, `name="torrents"`) {
+	if body := server.bodies[0]; !strings.Contains(body, "solarr-music") || !strings.Contains(body, `name="torrents"`) ||
+		!strings.Contains(body, "Subfolder") {
 		t.Errorf("add body missing the category or the file: %q", body)
 	}
 	if got := server.requested[0].Header.Get("Referer"); got != "http://qbit.test:8086" {
