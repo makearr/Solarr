@@ -43,8 +43,8 @@ advanced): automatic downloads stop before they would eat into it.
   are what every search and RSS read asks for; narrow them (3040 is lossless) if you only want some.
 - **Connections → Download clients → Add**: SABnzbd, with its API key. Solarr uses its own category
   in the client and only ever touches downloads in it.
-  **qBittorrent** (torrents) is added the same way, with `user:password` or nothing when it lets Solarr's
-  address in. A torrent is followed by its info hash; it is not removed after import unless you tick that
+  **qBittorrent** (torrents) is added the same way, with a user name and password (empty when it lets Solarr's
+  address in); Lidarr's qBittorrent can be taken from its Connections page, its user name filled in for you. A torrent is followed by its info hash; it is not removed after import unless you tick that
   (it keeps seeding). If qBittorrent names its download folder differently from Solarr, set the path
   mapping on the client. A client serves the protocol it is added with, so a torrent release needs a
   torrent client.

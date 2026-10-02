@@ -4519,6 +4519,8 @@ export interface components {
             enabled: boolean;
             base_url: string;
             category?: string;
+            /** @description The user name the *Arr signs in with */
+            username?: string;
             /** @description Solarr can use a client of this kind. */
             supported: boolean;
             /** @description A download client with this address is already here. */

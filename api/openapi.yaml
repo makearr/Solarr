@@ -6986,6 +6986,7 @@ components:
         enabled: { type: boolean }
         base_url: { type: string }
         category: { type: string }
+        username: { type: string, description: The user name the *Arr signs in with, where it keeps one; its password is hidden. }
         supported: { type: boolean, description: Solarr can use a client of this kind. }
         already_added: { type: boolean, description: A download client with this address is already here. }
 

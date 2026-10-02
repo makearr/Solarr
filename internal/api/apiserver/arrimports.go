@@ -324,8 +324,8 @@ func arrImportItemView(item ArrImportItem) gen.ArrImportItem {
 
 // ArrDownloadClientRow is one download client an *Arr connection uses, and whether Solarr can and does.
 type ArrDownloadClientRow struct {
-	Name, Impl, Protocol, BaseURL, Category string
-	Enabled, Supported, AlreadyAdded        bool
+	Name, Impl, Protocol, BaseURL, Category, Username string
+	Enabled, Supported, AlreadyAdded                  bool
 }
 
 // ArrConnections reads a connection's indexers and download clients, and uses its indexers here.
@@ -434,6 +434,10 @@ func (s *Server) ListArrInstanceDownloadClients(w http.ResponseWriter, r *http.R
 		views[i] = gen.ArrDownloadClient{
 			Name: row.Name, Impl: row.Impl, Protocol: row.Protocol, Enabled: row.Enabled, BaseUrl: row.BaseURL,
 			Supported: row.Supported, AlreadyAdded: row.AlreadyAdded,
+		}
+		if row.Username != "" {
+			username := row.Username
+			views[i].Username = &username
 		}
 		if row.Category != "" {
 			category := row.Category

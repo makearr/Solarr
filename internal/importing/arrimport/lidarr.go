@@ -179,6 +179,8 @@ type DownloadClient struct {
 	UseSSL         bool
 	URLBase        string
 	Category       string
+	// Username is where the *Arr keeps one (qBittorrent); the password comes back masked, so none is read.
+	Username string
 }
 
 type downloadClientWire struct {
@@ -213,6 +215,8 @@ func (c LidarrClient) DownloadClients(ctx context.Context) ([]DownloadClient, er
 				_ = json.Unmarshal(field.Value, &client.UseSSL)
 			case "urlBase":
 				_ = json.Unmarshal(field.Value, &client.URLBase)
+			case "username":
+				_ = json.Unmarshal(field.Value, &client.Username)
 			case "category", "musicCategory":
 				var category string
 				if json.Unmarshal(field.Value, &category) == nil && category != "" && client.Category == "" {

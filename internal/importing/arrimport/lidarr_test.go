@@ -166,7 +166,7 @@ func TestLidarrClient_DownloadClientsReadsAddressAndCategory(t *testing.T) {
 				{"name":"urlBase","value":"/sab/"},{"name":"apiKey","value":"********"},{"name":"category","value":"arr"}]},
 			{"name":"Torrent","implementation":"QBittorrent","protocol":"torrent","enable":false,"fields":[
 				{"name":"host","value":"qbit"},{"name":"port","value":8086},{"name":"useSsl","value":true},
-				{"name":"urlBase","value":null},{"name":"musicCategory","value":"music"}]}
+				{"name":"urlBase","value":null},{"name":"username","value":"admin"},{"name":"password","value":"********"},{"name":"musicCategory","value":"music"}]}
 		]`},
 	}}
 	client := arrimport.NewLidarrClient(newTestClient(t, transport), "http://prowlarr.local", "key")
@@ -177,7 +177,7 @@ func TestLidarrClient_DownloadClientsReadsAddressAndCategory(t *testing.T) {
 	}
 	want := []arrimport.DownloadClient{
 		{Name: "SABnzbd", Implementation: "Sabnzbd", Protocol: "usenet", Enabled: true, Host: "10.0.0.5", Port: 8080, URLBase: "/sab/", Category: "arr"},
-		{Name: "Torrent", Implementation: "QBittorrent", Protocol: "torrent", Host: "qbit", Port: 8086, UseSSL: true, Category: "music"},
+		{Name: "Torrent", Implementation: "QBittorrent", Protocol: "torrent", Host: "qbit", Port: 8086, UseSSL: true, Category: "music", Username: "admin"},
 	}
 	if !reflect.DeepEqual(clients, want) {
 		t.Errorf("clients = %+v, want %+v", clients, want)
