@@ -278,6 +278,24 @@ func TestTitleDistance_ADescriptorOnlyOverlapIsNotAMatch(t *testing.T) {
 	}
 }
 
+func TestExtraDistinctiveWords(t *testing.T) {
+	for _, c := range []struct {
+		wanted, claimed string
+		want            bool
+	}{
+		{"I Am", "I Am Happy", true},
+		{"Only Time", "Only Time - The Collection", true},
+		{"Album", "Album (Deluxe Edition)", false},
+		{"Guiding Lights", "Guiding Lights EP", false},
+		{"Guiding Lights", "Other Lights", false},
+		{"Soundtrack", "Original Soundtrack", false},
+	} {
+		if got := ExtraDistinctiveWords(c.wanted, c.claimed); got != c.want {
+			t.Errorf("ExtraDistinctiveWords(%q, %q) = %v, want %v", c.wanted, c.claimed, got, c.want)
+		}
+	}
+}
+
 // A neighbour in spelling is not the same album when its sequel number differs.
 func TestTitleDistance_ADifferentSequelNumberIsADifferentAlbum(t *testing.T) {
 	for _, pair := range [][2]string{

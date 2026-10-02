@@ -647,6 +647,10 @@ func evaluateRawItems(
 		if distance.Total > maxCandidateMatchDistance {
 			continue
 		}
+		// A single or EP named like the wanted album plus words ("I Am Happy" for "I Am") is another record.
+		if smallFormat(raw.Title) && match.ExtraDistinctiveWords(albumTarget.Title, claimed.Title) {
+			continue
+		}
 
 		facts := factsFromRelease(parsed, raw, conn.Impl)
 		decision := withRevision(evaluateInOrder(rules, facts, languagePolicy), facts.File.ProperRepack, preferPropers)
@@ -667,6 +671,11 @@ func withoutLeadingArtist(name, artist string) (string, bool) {
 // videoMarkerRe matches scene tokens only a video release carries; a concert DVD rip was accepted
 // for an album by the first automatic search (2026-09-29).
 var videoMarkerRe = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(?:dvd-?rip|dvd[r59]|bd-?rip|br-?rip|blu-?ray|web-?dl|web-?rip|hdtv|hdrip|x26[45]|h\.?26[45]|xvid|divx|hevc|(?:480|576|720|1080|2160)[pi])(?:$|[^a-z0-9])`)
+
+// smallFormatRe matches the scene tokens of a single or EP.
+var smallFormatRe = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(?:single|ep|maxi)(?:$|[^a-z0-9])`)
+
+func smallFormat(title string) bool { return smallFormatRe.MatchString(title) }
 
 // videoRelease reports a release name that is a video, not an album.
 func videoRelease(title string) bool { return videoMarkerRe.MatchString(title) }

@@ -297,6 +297,34 @@ func TestSearchItem_AnotherAlbumByTheSameArtistIsNoMatch(t *testing.T) {
 	}
 }
 
+// A single or EP named like the album plus more words is another record ("I Am Happy" was grabbed for "I Am").
+func TestSearchItem_ASingleWithExtraTitleWordsIsNoMatch(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Kavelori", "I Am", 2013, alwaysAcceptRules)
+	searcher := &fakeIndexerSearcher{
+		responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+			return []indexer.RawItem{
+				rawItem("guid-single", "Kavelori-I Am Happy-SINGLE-WEB-2013-GROUP"),
+				rawItem("guid-album", "Kavelori-I Am Deluxe Edition-WEB-2013-GROUP"),
+				rawItem("guid-own", "Kavelori-I Am-SINGLE-WEB-2013-GROUP"),
+			}, nil
+		},
+	}
+	result, err := env.search().SearchItem(t.Context(), item.ID,
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, env.clock.Now())
+	if err != nil {
+		t.Fatalf("SearchItem: %v", err)
+	}
+	var guids []string
+	for _, decision := range result.Decisions {
+		guids = append(guids, decision.ReleaseCandidate.GUID)
+	}
+	slices.Sort(guids)
+	if want := []string{"guid-album", "guid-own"}; !slices.Equal(guids, want) {
+		t.Errorf("decided on %v, want %v", guids, want)
+	}
+}
+
 // A concert video named like the album is no album: a DVD rip was accepted live (2026-09-29).
 func TestSearchItem_AVideoReleaseIsNoMatch(t *testing.T) {
 	env := newSearchTestEnv(t)
