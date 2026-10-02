@@ -2904,6 +2904,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * Preview linking the identical copies one library holds (read only).
+         * @description A file stored at two paths of this library (the scan merges identical bytes into one media object) can share its bytes: the second path becomes a reflink of the first where the filesystem offers it, else a hardlink. This is the plan, with the method probed per pair; nothing is changed by looking. Roots that are offline, not writable or read-only are left out, and so are pairs on different filesystems.
+         */
+        get: operations["getCategoryLinks"];
+        put?: never;
+        /**
+         * Link the identical copies of one library (manage access).
+         * @description Queues the run: a fresh plan, then each pair is compared byte for byte again and its second path swapped for the link atomically. A pair that differs is left alone. Running twice queues once.
+         */
+        post: operations["linkCategoryCopies"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/statistics": {
         parameters: {
             query?: never;
@@ -5852,6 +5878,33 @@ export interface components {
                     keep: boolean;
                     paths: string[];
                 }[];
+            }[];
+        };
+        LinkPreview: {
+            /** @description How many paths would become links; links lists the first of them. */
+            total: number;
+            /**
+             * Format: int64
+             * @description What sharing the bytes would free.
+             */
+            reclaimable_bytes: number;
+            links: {
+                /** Format: int64 */
+                media_object_id: number;
+                /** Format: int64 */
+                size_bytes: number;
+                /** @description The path whose file stays. */
+                keep: string;
+                /** @description The path that becomes a link to it. */
+                replace: string;
+                /** @enum {string} */
+                method: "reflink" | "hardlink";
+            }[];
+            /** @description Paths left alone, counted by reason. */
+            skipped: {
+                /** @enum {string} */
+                reason: "missing" | "size-changed" | "other-filesystem" | "no-method";
+                count: number;
             }[];
         };
         CategoryStatistics: {
@@ -10988,6 +11041,54 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getCategoryLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The plan. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkPreview"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    linkCategoryCopies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getCategoryStatistics: {

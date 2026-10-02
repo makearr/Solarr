@@ -33,7 +33,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/jobs/cachebudget", "internal/jobs/capacity", "internal/media/music", "internal/metadata/metacache",
 		"internal/metadata/acoustid", "internal/metadata/musicbrainz", "internal/metadata/theaudiodb",
 		"internal/metadata/wikidata", "internal/moving/drainjob",
-		"internal/moving/mover", "internal/moving/moverjob", "internal/platform/clock", "internal/platform/config",
+		"internal/moving/linkjob", "internal/moving/mover", "internal/moving/moverjob", "internal/platform/clock", "internal/platform/config",
 		"internal/platform/egress", "internal/platform/events", "internal/platform/fsx",
 		"internal/platform/httpx", "internal/platform/logbuffer", "internal/platform/mediatool",
 		"internal/platform/privilege",
@@ -45,7 +45,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/identify/model", "internal/identify/priority", "internal/importing/arrimport",
 		"internal/importing/importjob", "internal/importing/inspect", "internal/jobs",
 		"internal/jobs/cachebudget", "internal/media/music", "internal/metadata/musicbrainz",
-		"internal/moving/drainjob", "internal/moving/mover", "internal/moving/moverjob",
+		"internal/moving/drainjob", "internal/moving/linkjob", "internal/moving/mover", "internal/moving/moverjob",
 		"internal/platform/clock", "internal/platform/egress", "internal/platform/fsx",
 		"internal/platform/httpx", "internal/platform/paginate",
 	},
@@ -131,6 +131,11 @@ var allowedInternalImports = map[string][]string{
 	// separate package when it lands, the same split internal/importing/inspect
 	// keeps from internal/importing/importjob.
 	"internal/moving/mover": {"internal/platform/fsx", "internal/moving/placement"},
+	// Replaces the second path of a media object with a link to the first; file I/O only, no database.
+	"internal/moving/linker": {"internal/platform/fsx"},
+	"internal/moving/linkjob": {
+		"internal/db/library", "internal/jobs", "internal/moving/linker", "internal/platform/fsx",
+	},
 	// ADR-48's import inspection: walk, classify, group. No media-type
 	// knowledge and no database of its own (ADR-23) -- tag reading and
 	// segment plausibility are both injected functions, so this never

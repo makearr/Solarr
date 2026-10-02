@@ -267,6 +267,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		WorksMonitor:          worksMonitor,
 		WorkEditor:            workEditor,
 		Duplicates:            fakeDuplicates{},
+		Links:                 &fakeLinks{},
 		Search:                search,
 		Unidentified:          unidentified,
 		UnidentifiedResolver:  unidentifiedResolver,

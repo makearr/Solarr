@@ -28,6 +28,7 @@ type Mem struct {
 	renameSupported   bool
 	writeDenied       map[string]bool
 
+	nextInode      uint64
 	diskTotalBytes int64
 	diskFreeBytes  int64
 }
@@ -50,8 +51,9 @@ type memNode struct {
 // memContent is shared between the two paths of a hardlink, which is what
 // makes "wrote through one path, read through the other" testable.
 type memContent struct {
-	mu   sync.Mutex
-	data []byte
+	inode uint64
+	mu    sync.Mutex
+	data  []byte
 }
 
 // NewMem returns an empty filesystem containing only the root directory.
@@ -137,6 +139,12 @@ func (m *Mem) SetWriteDenied(directory string, denied bool) {
 
 func (m *Mem) now() time.Time { return m.clock.Now() }
 
+// newInode numbers a new content; callers hold m.mu for writing.
+func (m *Mem) newInode() uint64 {
+	m.nextInode++
+	return m.nextInode
+}
+
 func (m *Mem) Stat(path string) (FileInfo, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -169,6 +177,7 @@ func (m *Mem) statLocked(op, path string) (FileInfo, error) {
 	if node.content != nil {
 		node.content.mu.Lock()
 		info.Size = int64(len(node.content.data))
+		info.Inode = node.content.inode
 		node.content.mu.Unlock()
 	}
 	return info, nil
@@ -215,7 +224,7 @@ func (m *Mem) Create(path string) (io.WriteCloser, error) {
 		return &memWriter{content: existing.content}, nil
 	}
 
-	node := &memNode{content: &memContent{}, mode: filePerm, modTime: m.now(), uid: -1, gid: -1}
+	node := &memNode{content: &memContent{inode: m.newInode()}, mode: filePerm, modTime: m.now(), uid: -1, gid: -1}
 	m.nodes[resolved] = node
 	m.touchParent(resolved)
 	return &memWriter{content: node.content}, nil
@@ -469,7 +478,7 @@ func (m *Mem) Reflink(oldPath, newPath string) error {
 	node.content.mu.Unlock()
 
 	// A clone is copy-on-write, so the two paths hold equal but independent data.
-	m.nodes[target] = &memNode{content: &memContent{data: cloned}, mode: node.mode, modTime: m.now(), uid: -1, gid: -1}
+	m.nodes[target] = &memNode{content: &memContent{inode: m.newInode(), data: cloned}, mode: node.mode, modTime: m.now(), uid: -1, gid: -1}
 	m.touchParent(target)
 	m.mu.Unlock()
 	return nil

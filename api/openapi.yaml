@@ -4721,6 +4721,43 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /categories/{id}/links:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getCategoryLinks
+      tags: [library]
+      summary: Preview linking the identical copies one library holds (read only).
+      description: >-
+        A file stored at two paths of this library (the scan merges identical bytes into one media object) can share its
+        bytes: the second path becomes a reflink of the first where the filesystem offers it, else a hardlink. This is the
+        plan, with the method probed per pair; nothing is changed by looking. Roots that are offline, not writable or
+        read-only are left out, and so are pairs on different filesystems.
+      responses:
+        "200":
+          description: The plan.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LinkPreview" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: linkCategoryCopies
+      tags: [library]
+      summary: Link the identical copies of one library (manage access).
+      description: >-
+        Queues the run: a fresh plan, then each pair is compared byte for byte again and its second path swapped for the
+        link atomically. A pair that differs is left alone. Running twice queues once.
+      responses:
+        "202": { description: Queued. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/statistics:
     parameters:
       - name: id
@@ -8811,6 +8848,33 @@ components:
                     lossless: { type: boolean }
                     keep: { type: boolean, description: The copy to keep. }
                     paths: { type: array, items: { type: string } }
+
+    LinkPreview:
+      type: object
+      required: [links, total, reclaimable_bytes, skipped]
+      properties:
+        total: { type: integer, description: How many paths would become links; links lists the first of them. }
+        reclaimable_bytes: { type: integer, format: int64, description: What sharing the bytes would free. }
+        links:
+          type: array
+          items:
+            type: object
+            required: [media_object_id, size_bytes, keep, replace, method]
+            properties:
+              media_object_id: { type: integer, format: int64 }
+              size_bytes: { type: integer, format: int64 }
+              keep: { type: string, description: The path whose file stays. }
+              replace: { type: string, description: The path that becomes a link to it. }
+              method: { type: string, enum: [reflink, hardlink] }
+        skipped:
+          type: array
+          description: Paths left alone, counted by reason.
+          items:
+            type: object
+            required: [reason, count]
+            properties:
+              reason: { type: string, enum: [missing, size-changed, other-filesystem, no-method] }
+              count: { type: integer }
 
     CategoryStatistics:
       type: object
