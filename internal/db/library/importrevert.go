@@ -130,6 +130,11 @@ func (r ImportRevert) Revert(ctx context.Context, sessionID int64, recycling Rec
 	}
 
 	for _, unit := range placed {
+		if !unit.WorkCreated {
+			if err := r.physical.RecomputeWorkItems(ctx, *unit.WorkID); err != nil {
+				return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
+			}
+		}
 		if unit.EditionCreated && unit.EditionID != nil {
 			if err := r.identity.DeleteEdition(ctx, *unit.EditionID); err != nil {
 				return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)

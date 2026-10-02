@@ -231,3 +231,12 @@ func (u Unidentified) List(ctx context.Context, rootFolderIDs []int64, after pag
 	}
 	return views, nil
 }
+
+// CandidatesJSON is how a unit's ranked suggestions are stored, "[]" when there are none.
+func CandidatesJSON(candidates []model.Identification) string {
+	encoded, err := encodeCandidates(candidates)
+	if err != nil {
+		return "[]"
+	}
+	return encoded
+}

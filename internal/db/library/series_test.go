@@ -208,3 +208,39 @@ func TestSeriesReaderListsAndDetailsOnlyWhatTheCategoryHolds(t *testing.T) {
 		t.Errorf("detail = %+v, %v", detail, err)
 	}
 }
+
+func TestRecomputeWorkItemsFollowsRemovedFiles(t *testing.T) {
+	opened, queries := newLibrary(t)
+	write := sampleSeries()
+	write.Parts = []library.SeriesPartWrite{{MediaRef: "s01:e01", SortKey: "a", MonitoredIfNew: true}, {MediaRef: "s01:e02", SortKey: "b", MonitoredIfNew: true}}
+	series := library.NewSeries(opened)
+	result, err := series.Upsert(t.Context(), seriesAt, write)
+	if err != nil {
+		t.Fatal(err)
+	}
+	desired := library.NewDesired(opened)
+	item, err := desired.EnsureSeasonItem(t.Context(), library.SeasonRequest{WorkID: result.WorkID, MediaRef: "s01", CategoryID: 1, ProfileID: 1, Monitored: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	physical := library.NewPhysical(opened)
+	registered, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{{RelPath: "a.mkv", SizeBytes: 1, QuickHash: "h", FirstSeenAt: seriesAt}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := series.AttachFiles(t.Context(), seriesAt, result.WorkID, 1, []library.SeriesFileLink{{MediaObjectID: registered[0].MediaObjectID, Parts: []library.PartKey{{MediaRef: "s01:e01"}}}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := queries.GetDesiredItem(t.Context(), item.ID); got.PresentCount != 1 || got.State != "PARTIAL" {
+		t.Fatalf("after attach = %+v", got)
+	}
+	if err := physical.DeleteObject(t.Context(), registered[0].MediaObjectID); err != nil {
+		t.Fatal(err)
+	}
+	if err := physical.RecomputeWorkItems(t.Context(), result.WorkID); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := queries.GetDesiredItem(t.Context(), item.ID); got.PresentCount != 0 || got.State != "MISSING" {
+		t.Errorf("after removing the file = %+v: the counts follow the files", got)
+	}
+}

@@ -131,3 +131,29 @@ func seasonOf(mediaRef string) string {
 	season, _, _ := strings.Cut(mediaRef, ":")
 	return season
 }
+
+// ResolvedPart is the episode a PartKey names.
+type ResolvedPart struct {
+	PartID   int64
+	MediaRef string
+	Title    string
+	Date     string
+}
+
+// ResolveParts looks each key up in a series: its media_ref, else its alternate numbering. A key naming no episode
+// is absent from the result, which is parallel to keys only through Found.
+func (s Series) ResolveParts(ctx context.Context, workID int64, keys []PartKey) (parts []ResolvedPart, missing int, err error) {
+	queries := librarydb.New(s.store.Read())
+	for _, key := range keys {
+		part, found, err := resolveSeriesPart(ctx, queries, workID, key)
+		if err != nil {
+			return nil, 0, err
+		}
+		if !found {
+			missing++
+			continue
+		}
+		parts = append(parts, ResolvedPart{PartID: part.ID, MediaRef: part.MediaRef, Title: part.Title.String, Date: part.Date.String})
+	}
+	return parts, missing, nil
+}
