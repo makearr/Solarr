@@ -38,7 +38,7 @@ type ImportSessionLister interface {
 	// CommitImportUnit force-commits one QUEUE-decision unit by hand
 	// ("commit what was held"), using the same top-ranked candidate IDENTIFY
 	// already found.
-	CommitImportUnit(ctx context.Context, sessionID, unitID int64) (ImportUnitRow, error)
+	CommitImportUnit(ctx context.Context, sessionID, unitID int64, as *ImportIdentity) (ImportUnitRow, error)
 	// CommitHeldImportUnits force-commits the units a session held for
 	// review, all of them or the named subset -- CommitImportUnit repeated,
 	// best-effort.
@@ -59,6 +59,9 @@ var ErrImportSessionNotRevertible = errors.New("apiserver: import session cannot
 // ErrImportSessionCategoryAlreadySet is AssignImportCategory's refusal to
 // re-point an already-targeted session at a different category.
 var ErrImportSessionCategoryAlreadySet = errors.New("apiserver: import session already has a category")
+
+// ImportIdentity is the album a person named for a unit, instead of the one identification ranked first.
+type ImportIdentity struct{ Provider, ExternalID string }
 
 // ErrImportSessionReverted is AssignImportCategory's and CommitImportUnit's
 // refusal to place anything new into a session whose own placements were
@@ -601,7 +604,21 @@ func (s *Server) CommitImportUnit(w http.ResponseWriter, r *http.Request, id, un
 		return
 	}
 
-	row, err := s.importSessions.CommitImportUnit(r.Context(), id, unitID)
+	var as *ImportIdentity
+	var body gen.CommitImportUnitJSONRequestBody
+	switch err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); {
+	case errors.Is(err, io.EOF): // no body: the unit's own top candidate
+	case err != nil:
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+		return
+	case body.Provider == "" || body.ExternalId == "":
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "provider and external_id are both needed")
+		return
+	default:
+		as = &ImportIdentity{Provider: body.Provider, ExternalID: body.ExternalId}
+	}
+
+	row, err := s.importSessions.CommitImportUnit(r.Context(), id, unitID, as)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such import session or unit")

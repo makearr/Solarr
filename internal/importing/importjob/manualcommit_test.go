@@ -564,3 +564,34 @@ func TestManualCommitter_CommitAllHeldSkipsAUnitThatIsNotQueued(t *testing.T) {
 		t.Errorf("the committer ran %d times, want 0", len(committer.calls))
 	}
 }
+
+// "Identify as...": the album a person names is placed instead of the unit's own top candidate, with the same
+// placement a stated identifier gets.
+func TestManualCommitter_CommitHeldAsPlacesTheNamedAlbumNotTheTopCandidate(t *testing.T) {
+	fx := newFixture(t, "Artist/Album/01.flac")
+	fx.tool.byPath[filepath.Join(root, "Artist/Album/01.flac")] =
+		mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+
+	catID := int64(7)
+	if err := fx.run(t, fx.job(t, 0.99), importjob.Payload{
+		SourcePath: root, Origin: library.ImportOriginManual, CategoryID: &catID,
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	sessions := fx.sessions()
+	done, _ := sessions.List(t.Context(), library.ImportDone, false)
+	units, err := sessions.ListUnits(t.Context(), done[0].ID)
+	if err != nil || len(units) != 1 || units[0].Decision != library.UnitQueue {
+		t.Fatalf("units = %+v, %v, want one QUEUE unit", units, err)
+	}
+
+	committer := &fakeCommitter{workID: seedWork(t, fx)}
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
+	const chosen = "11111111-2222-3333-4444-555555555555"
+	if _, err := manual.CommitHeldAs(t.Context(), units[0].ID, "musicbrainz:release-group", chosen); err != nil {
+		t.Fatalf("CommitHeldAs: %v", err)
+	}
+	if len(committer.calls) != 1 || committer.calls[0].externalID != chosen {
+		t.Fatalf("calls = %+v, want one placement as %s, not as the file's own %s", committer.calls, chosen, releaseGroupMBID)
+	}
+}

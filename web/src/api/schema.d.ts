@@ -2552,6 +2552,8 @@ export interface paths {
         /**
          * Commit one unit DECIDE queued below the confidence threshold, by hand ("commit what was held", ADR-48). Administrator only.
          * @description A human override of DECIDE's own threshold, not a second identification: places the unit using the same top-ranked candidate IDENTIFY already found (GET .../units already shows it), never a re-run of IDENTIFY and never a choice among the other candidates. Refused with 409 if the unit is not currently QUEUE, if it has no candidate to commit (IDENTIFY found nothing at all), if the session has no category yet (assign one first, POST .../category), or if the session was reverted. Refused with 409, distinctly, if the unit's own files no longer match what WALK originally found (re-walked to place it, since import_unit keeps no member-file list of its own) -- the source changed since inspection. Also refused with 409 when this unit's own rel_path is not unique within the session: a flat directory GROUP split into several sibling units by track continuity alone re-walks back into all of them at once, with no reliable way to say which one this was -- a known, narrow gap (private/questions.md), not attempted this pass.
+         *
+         *     With a body naming a provider and an external id ("Identify as..."), the unit is placed as that album instead of its top candidate, which is also how a unit IDENTIFY found nothing for is resolved by hand.
          */
         post: operations["commitImportUnit"];
         delete?: never;
@@ -10209,7 +10211,15 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @example musicbrainz:release-group */
+                    provider: string;
+                    external_id: string;
+                };
+            };
+        };
         responses: {
             /** @description Placed. */
             200: {

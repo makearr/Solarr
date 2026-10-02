@@ -15,6 +15,8 @@ import (
 )
 
 type fakeImportSessionLister struct {
+	// commitAs is the album a commit named; nil when it took the top candidate.
+	commitAs *apiserver.ImportIdentity
 	sessions []apiserver.ImportSessionRow
 	units    []apiserver.ImportUnitRow
 	err      error
@@ -76,9 +78,9 @@ func (f *fakeImportSessionLister) AssignImportCategory(
 }
 
 func (f *fakeImportSessionLister) CommitImportUnit(
-	_ context.Context, sessionID, unitID int64,
+	_ context.Context, sessionID, unitID int64, as *apiserver.ImportIdentity,
 ) (apiserver.ImportUnitRow, error) {
-	f.commitSessionID, f.commitUnitID = sessionID, unitID
+	f.commitSessionID, f.commitUnitID, f.commitAs = sessionID, unitID, as
 	return f.commitResult, f.commitErr
 }
 
@@ -577,6 +579,30 @@ func TestCommitImportUnit_AnswersTheLister(t *testing.T) {
 	}
 	if body["decision"] != "COMMIT" || body["work_id"] != float64(3) {
 		t.Errorf("response = %+v, want the fake's commitResult echoed back", body)
+	}
+}
+
+func TestCommitImportUnit_IdentifyAsPassesTheNamedAlbumAndNeedsBothFields(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/42/units/5/commit",
+		`{"provider":"musicbrainz:release-group","external_id":"abc"}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d (%s)", recorder.Code, recorder.Body)
+	}
+	if want := (apiserver.ImportIdentity{Provider: "musicbrainz:release-group", ExternalID: "abc"}); fixture.importSessions.commitAs == nil ||
+		*fixture.importSessions.commitAs != want {
+		t.Errorf("commitAs = %+v, want %+v", fixture.importSessions.commitAs, want)
+	}
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/42/units/5/commit", `{"provider":"x"}`)); recorder.Code != http.StatusBadRequest {
+		t.Errorf("a body missing external_id: status %d, want 400", recorder.Code)
+	}
+	fixture.importSessions.commitAs = &apiserver.ImportIdentity{}
+	fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/42/units/5/commit", ""))
+	if fixture.importSessions.commitAs != nil {
+		t.Errorf("an empty body must take the top candidate, got %+v", fixture.importSessions.commitAs)
 	}
 }
 

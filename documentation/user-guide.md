@@ -130,6 +130,9 @@ folder. Solarr works out what is in it.
 - **Add unrecognised albums** (off by default): a folder no metadata source recognises still
   becomes an album, named by its tags or folder and marked **Unverified**. It is not searched for;
   commit it from the review with the right candidate and its files move onto the real album.
+- A folder held for review has **Commit anyway** (its best match) and **Identify as…**: search for the
+  album the files are, pick it, and they are placed as that album, which is also the way out for a folder
+  nothing could identify. Both need the session to have a library.
 - Every import can be **reverted** from its session.
 
 Files a library scan could not identify wait under **Library → Music → Unidentified**.
