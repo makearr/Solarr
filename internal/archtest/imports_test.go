@@ -77,6 +77,8 @@ var allowedInternalImports = map[string][]string{
 	// ADR-18's parser: pure string-to-struct, no I/O, so it depends on nothing but
 	// the attribute vocabulary it shares with future scorers via model.Attributes.
 	"internal/identify/parse": {"internal/identify/model"},
+	// Stage 8's TV parser: pure too, and it brings no domain types with it.
+	"internal/identify/parsetv": {},
 	// ADR-40's quality/language interpreter: pure rule evaluation producing a
 	// model.Decision, no I/O. A caller decodes settings.QualityProfile's raw JSON
 	// itself and passes the parsed rules in, so this never imports internal/db/settings.

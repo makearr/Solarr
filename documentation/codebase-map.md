@@ -23,7 +23,7 @@ internal/
 ├── jobs/       the durable queue, executor, dispatcher, task registry
 │               + capacity  cachebudget
 ├── metadata/   musicbrainz  wikidata  acoustid  metacache  metaresolve
-├── identify/   model  parse  match  score  priority
+├── identify/   model  parse  parsetv  match  score  priority
 ├── scanning/   scan  probe
 ├── importing/  inspect  importjob
 ├── moving/     mover  moverjob  drainjob  placement  naming
@@ -39,7 +39,7 @@ internal/
 | `db` | One writer and a read pool per database (`store`), `settings.db` cached in memory, the `library.db` repositories, post-restore reconciliation |
 | `jobs` | The durable queue, and the maintenance jobs that belong to no pipeline |
 | `metadata` | Providers and the shared cache in front of them; field-level provider merge |
-| `identify` | Pure decision logic, no I/O: domain types, the release-name parser, identity matching, quality scoring, acquisition priority |
+| `identify` | Pure decision logic, no I/O: domain types, the release-name parsers (music; `parsetv` for TV, Sonarr's patterns on regexp2), identity matching, quality scoring, acquisition priority |
 | `scanning` | The library sweep and the background probe that fills measured attributes |
 | `importing` | Import inspection (WALK to DECIDE) and its resumable job |
 | `moving` | The move engine, its apply job, drain orchestration, root-folder placement, path templates |

@@ -1,0 +1,18 @@
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["[ANBU-AonE]_SeriesTitle_26-27_[F224EF26].avi", "SeriesTitle", 26, 27]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["[Doutei] Some Good, Anime Show - 01-12 [BD][720p-AAC]", "Some Good, Anime Show", 1, 12]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["Series Title (2010) - 01-02-03 - Episode Title (1) HDTV-720p", "Series Title (2010)", 1, 3]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["[RlsGrp] Series Title (2010) - S01E01-02-03 - 001-002-003 - Episode Title HDTV-720p v2", "Series Title (2010)", 1, 3]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["[RlsGrp] Series Title (2010) - S01E01-02 - 001-002 - Episode Title HDTV-720p v2", "Series Title (2010)", 1, 2]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["Series Title (2010) - S01E01-02 (001-002) - Episode Title (1) HDTV-720p v2 [RlsGrp]", "Series Title (2010)", 1, 2]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["[HorribleSubs] Some Anime Show!! (01-25) [1080p] (Batch)", "Some Anime Show!!", 1, 25]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["Some Anime Show (2011) Episode 99-100 [1080p] [Dual.Audio] [x265]", "Some Anime Show (2011)", 99, 100]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["Some Anime Show 1-13 (English Dub) [720p]", "Some Anime Show", 1, 13]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["Series.Title.Ep01-12.Complete.English.AC3.DL.1080p.BluRay.x264", "Series Title", 1, 12]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["[Judas] Some Anime Show 091-123 [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs]", "Some Anime Show", 91, 123]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["[Judas] Some Anime Show - 091-123 [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs]", "Some Anime Show", 91, 123]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["[HorribleSubs] Some Anime Show 01 - 119 [1080p] [Batch]", "Some Anime Show", 1, 119]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["[Erai-raws] Series Title! - 01~10 [1080p][Multiple Subtitle]", "Series Title!", 1, 10]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["[Erai-raws] Series-Title! 2 - 01~10 [1080p][Multiple Subtitle]", "Series-Title! 2", 1, 10]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["[Erai-raws] Series Title! - 01 ~ 10 [1080p][Multiple Subtitle]", "Series Title!", 1, 10]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["[Erai-raws] Series-Title! 2 - 01 ~ 10 [1080p][Multiple Subtitle]", "Series-Title! 2", 1, 10]}
+{"f": "AbsoluteEpisodeNumberParserFixture", "a": ["Series_Title_2_[01-05]_[AniLibria_TV]_[WEBRip_1080p]", "Series Title 2", 1, 5]}
