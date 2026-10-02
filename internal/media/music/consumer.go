@@ -689,7 +689,11 @@ func closer(candidate, incumbent, want time.Duration) bool {
 // recognised: the names come from the recording, the length from the file itself,
 // and the position from its name, since AcoustID knows neither.
 func recordedTrack(one scan.Observed, recording acoustid.Recording, decoded time.Duration) LocalTrack {
-	local := ReadLocalTrack(one.Probe.Tags, one.Probe.Measured, one.File.RelPath)
+	return recordedLocal(ReadLocalTrack(one.Probe.Tags, one.Probe.Measured, one.File.RelPath), recording, decoded)
+}
+
+// recordedLocal is a local track with the names its audio gave it.
+func recordedLocal(local LocalTrack, recording acoustid.Recording, decoded time.Duration) LocalTrack {
 	// A name recovered from the audio is evidence of the same standing as a tag --
 	// stronger, in truth, since a tag can say anything and the audio cannot.
 	local.Title = Claim{Value: recording.Title, Provenance: ProvenanceTag}
