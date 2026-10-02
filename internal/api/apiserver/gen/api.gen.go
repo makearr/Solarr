@@ -885,16 +885,22 @@ type ArrImportRun struct {
 	AlbumsMatched int64 `json:"albums_matched"`
 
 	// App Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships. prowlarr has no library: its active indexers and download clients are used from it.
-	App            ArrApp            `json:"app"`
-	ArtistsCreated int64             `json:"artists_created"`
-	ArtistsMatched int64             `json:"artists_matched"`
-	Error          *string           `json:"error,omitempty"`
-	FinishedAt     *time.Time        `json:"finished_at,omitempty"`
-	Id             int64             `json:"id"`
-	InstanceId     int64             `json:"instance_id"`
-	ItemsParked    int64             `json:"items_parked"`
-	StartedAt      time.Time         `json:"started_at"`
-	State          ArrImportRunState `json:"state"`
+	App            ArrApp `json:"app"`
+	ArtistsCreated int64  `json:"artists_created"`
+
+	// ArtistsDone Artists walked so far; absent once it has finished.
+	ArtistsDone    *int64 `json:"artists_done,omitempty"`
+	ArtistsMatched int64  `json:"artists_matched"`
+
+	// ArtistsTotal Artists the running import will walk; absent once it has finished.
+	ArtistsTotal *int64            `json:"artists_total,omitempty"`
+	Error        *string           `json:"error,omitempty"`
+	FinishedAt   *time.Time        `json:"finished_at,omitempty"`
+	Id           int64             `json:"id"`
+	InstanceId   int64             `json:"instance_id"`
+	ItemsParked  int64             `json:"items_parked"`
+	StartedAt    time.Time         `json:"started_at"`
+	State        ArrImportRunState `json:"state"`
 }
 
 // ArrImportRunState defines model for ArrImportRun.State.

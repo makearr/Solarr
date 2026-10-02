@@ -205,8 +205,10 @@ function RunSummary({ run }: { run: ArrImportRun }) {
   if (run.state === "RUNNING") {
     return (
       <p className="rounded-md bg-canvas px-2 py-1.5 text-xs text-ink-muted">
-        Started -- a real library can take a few minutes (one Albums call per artist). Expand
-        history below to watch it finish.
+        {run.artists_total
+          ? `Walking artist ${Math.min((run.artists_done ?? 0) + 1, run.artists_total)} of ${run.artists_total}.`
+          : "Started."}{" "}
+        A real library takes a while (one Albums call per artist); expand history below to watch it finish.
       </p>
     );
   }
@@ -262,6 +264,7 @@ function InstanceHistory({ instanceId }: { instanceId: number }) {
               <span className="w-16 shrink-0">{run.state}</span>
               <span>{new Date(run.started_at).toLocaleString()}</span>
               <span className="ml-auto">
+                {run.state === "RUNNING" && run.artists_total ? `artist ${run.artists_done ?? 0} of ${run.artists_total} · ` : ""}
                 {run.artists_created + run.albums_created} created, {run.artists_matched + run.albums_matched} matched
               </span>
               {run.state === "DONE" && (

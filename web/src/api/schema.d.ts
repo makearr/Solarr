@@ -4745,6 +4745,16 @@ export interface components {
             albums_matched: number;
             /** Format: int64 */
             items_parked: number;
+            /**
+             * Format: int64
+             * @description Artists the running import will walk; absent once it has finished.
+             */
+            artists_total?: number;
+            /**
+             * Format: int64
+             * @description Artists walked so far; absent once it has finished.
+             */
+            artists_done?: number;
         };
         ArrImportItem: {
             /** Format: int64 */
