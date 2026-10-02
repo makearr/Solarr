@@ -131,20 +131,29 @@ func removeVolumes(fsys fsx.FS, primary string) error {
 	for index, entry := range entries {
 		names[index] = entry.Name
 	}
-	remove := []string{path.Base(primary)}
-	if set, found := archive.DetectMultipart(names)[strings.TrimSuffix(path.Base(primary), path.Ext(path.Base(primary)))]; found {
-		for _, name := range names {
-			if belongs(name, set) {
-				remove = append(remove, name)
-			}
-		}
-	}
+	remove := volumesOf(names, path.Base(primary))
 	for _, name := range remove {
 		if err := fsys.Remove(path.Join(directory, name)); err != nil && !isMissing(err) {
 			return err
 		}
 	}
 	return nil
+}
+
+// volumesOf lists the files of the archive whose primary volume is primary: itself plus the rest of its set.
+func volumesOf(names []string, primary string) []string {
+	volumes := []string{primary}
+	for _, set := range archive.DetectMultipart(names) {
+		if set.Primary != primary {
+			continue
+		}
+		for _, name := range names {
+			if belongs(name, set) && name != primary {
+				volumes = append(volumes, name)
+			}
+		}
+	}
+	return volumes
 }
 
 func isMissing(err error) bool { return errors.Is(err, fs.ErrNotExist) }
@@ -214,4 +223,42 @@ func SweepOlderThan(fsys fsx.FS, dir string, cutoff time.Time) (int, error) {
 		removed++
 	}
 	return removed, nil
+}
+
+// Retire moves every archive set of source into the source's own recycle folder, keeping its relative path: a rename
+// on the source's filesystem, so nothing is copied and the bytes stay recoverable until SweepRecycled ages them out.
+func Retire(ctx context.Context, fsys fsx.FS, source string) (int, error) {
+	archives, err := Find(ctx, fsys, source)
+	if err != nil {
+		return 0, err
+	}
+	moved := 0
+	for _, relative := range archives {
+		directory := path.Dir(path.Join(source, relative))
+		entries, err := fsys.ReadDir(directory)
+		if err != nil {
+			return moved, err
+		}
+		names := make([]string, len(entries))
+		for index, entry := range entries {
+			names[index] = entry.Name
+		}
+		volumes := volumesOf(names, path.Base(relative))
+		target := path.Join(source, inspect.RecycleFolder, path.Dir(relative))
+		if err := fsys.MkdirAll(target, 0o755); err != nil {
+			return moved, err
+		}
+		for _, name := range volumes {
+			if err := fsys.Rename(path.Join(directory, name), path.Join(target, name)); err != nil {
+				return moved, err
+			}
+		}
+		moved++
+	}
+	return moved, nil
+}
+
+// SweepRecycled removes what source's recycle folder holds from before cutoff, top-level entries first seen by age.
+func SweepRecycled(fsys fsx.FS, source string, cutoff time.Time) (int, error) {
+	return SweepOlderThan(fsys, path.Join(source, inspect.RecycleFolder), cutoff)
 }

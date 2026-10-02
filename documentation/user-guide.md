@@ -132,7 +132,9 @@ folder. Solarr works out what is in it.
   folder itself a root of that library, scanned where it is, instead of moving files out of it.
 - **Archives are opened like folders**: a zip, rar or 7z (multipart sets as one, archives inside
   archives too) is opened into a workspace under the cache folder and its contents are inspected and
-  committed exactly like a folder. The archive itself is never changed. A download that is only an
+  committed exactly like a folder. A folder you pointed at keeps its archives until everything in them
+  is in the library, then they move into a `.solarr-recycle` folder inside it (deleted after a week by
+  the next import of that folder); a read-only source is never touched. A download that is only an
   archive imports the same way.
 - **Add unrecognised albums** (off by default): a folder no metadata source recognises still
   becomes an album, named by its tags or folder and marked **Unverified**. It is not searched for;

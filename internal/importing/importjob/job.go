@@ -218,6 +218,8 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		if !j.holdsQueuedUnits(ctx, workspace) {
 			if err := unpack.RemoveTree(j.fsys, workspace); err != nil {
 				j.logger.Warn("import workspace not removed", slog.String("workspace", workspace), slog.Any("error", err))
+			} else if payload.Origin == library.ImportOriginManual && !payload.Preview && j.placedAll(ctx, workspace) {
+				j.retireArchives(ctx, payload.SourcePath)
 			}
 		}
 		if !j.hasMedia(ctx, payload.SourcePath) {
@@ -248,6 +250,44 @@ func (j *Job) holdsQueuedUnits(ctx context.Context, sourcePath string) bool {
 		}
 	}
 	return false
+}
+
+// placedAll reports whether the newest finished session of a source placed every unit it held.
+func (j *Job) placedAll(ctx context.Context, sourcePath string) bool {
+	sessions, err := j.sessions.List(ctx, library.ImportDone, true)
+	if err != nil {
+		return false
+	}
+	for _, session := range sessions {
+		if session.SourcePath != sourcePath {
+			continue
+		}
+		units, err := j.sessions.ListUnits(ctx, session.ID)
+		if err != nil || len(units) == 0 {
+			return false
+		}
+		for _, unit := range units {
+			if unit.WorkID == nil {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// retireArchives moves a folder the user pointed at past its archives once their contents are in the library; a
+// source that cannot be written to (a read-only download mount) simply keeps them.
+func (j *Job) retireArchives(ctx context.Context, sourcePath string) {
+	if _, err := unpack.SweepRecycled(j.fsys, sourcePath, j.clock.Now().Add(-workspaceLifetime)); err != nil {
+		j.logger.Warn("old recycled archives not removed", slog.String("source_path", sourcePath), slog.Any("error", err))
+	}
+	moved, err := unpack.Retire(ctx, j.fsys, sourcePath)
+	if err != nil {
+		j.logger.Info("source archives kept in place", slog.String("source_path", sourcePath), slog.Any("error", err))
+		return
+	}
+	j.logger.Info("source archives recycled", slog.String("source_path", sourcePath), slog.Int("archives", moved))
 }
 
 // workspaceLifetime is how long a workspace kept for a review waits before it is swept.
