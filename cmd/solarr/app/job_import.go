@@ -8,9 +8,11 @@ import (
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
@@ -52,8 +54,15 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		AcoustID:   p.acoustIDLookup(),
 		Committer:  p.importCommitter(),
 		Packs:      library.NewPacks(p.library),
-		Workspace:  filepath.Join(p.config.Paths.CacheDir, "import-workspace"),
-		Events:     p.bus,
+		Importers:  map[string]batch.Importer{"tv": p.tvImporter()},
+		MediaTypeOf: func(categoryID int64) string {
+			if category, found := p.cache.Snapshot().Category(categoryID); found {
+				return category.MediaType
+			}
+			return ""
+		},
+		Workspace: filepath.Join(p.config.Paths.CacheDir, "import-workspace"),
+		Events:    p.bus,
 		// A new edition's tracklist is what lets the placed files count towards the album.
 		OnCommitted: func(ctx context.Context) {
 			_, _ = p.enqueueEnrichment(ctx)
@@ -169,4 +178,22 @@ func (p *process) manualCommitter() importjob.ManualCommitter {
 		p.fsys, p.mediaTool(), library.NewImportSessions(p.library), p.importCommitter(),
 		library.NewPacks(p.library),
 	)
+}
+
+// tvImporter is the TV module's batch importer: the same placement rules as music's commit, naming by the library's TV
+// profile.
+func (p *process) tvImporter() tv.Importer {
+	categories := adapters.Categories{Cache: p.cache}
+	service := p.tvService()
+	return tv.NewImporter(tv.ImporterConfig{
+		FS: p.fsys, Roots: adapters.DrainRoots{Cache: p.cache}, Affinity: p.cache, Physical: library.NewPhysical(p.library),
+		Series: service.Series, Reader: library.NewSeriesReader(p.library), Identity: library.NewIdentity(p.library),
+		Desired: library.NewDesired(p.library), Acquisitions: library.NewAcquisitions(p.library),
+		Resolver: tv.Resolver{
+			Service: service, Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
+			DefaultProfileID: p.defaultQualityProfileID, Categories: categories,
+		},
+		Categories: categories, BlockedContent: library.NewBlockedContentStore(p.library), Clock: clock.NewSystem(), Logger: p.logger,
+		TransferLadder: p.transferLadder, RenameOnImport: p.renameOnImport, GroupID: lookupGroupID,
+	})
 }

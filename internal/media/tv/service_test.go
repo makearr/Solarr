@@ -73,7 +73,7 @@ func (f fakeTVmaze) Cast(context.Context, int64) ([]tvmaze.CastMember, error) {
 
 var addNow = time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
 
-func newService(t *testing.T, sky fakeSkyhook, maze fakeTVmaze) (tv.Service, *store.Store) {
+func newService(t *testing.T, sky tv.SeriesSource, maze fakeTVmaze) (tv.Service, *store.Store) {
 	t.Helper()
 	opened := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()

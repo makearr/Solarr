@@ -25,6 +25,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
+	importbatch "github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/importing/pack"
 	"github.com/makearr/Solarr/internal/importing/unpack"
@@ -143,6 +144,10 @@ type Job struct {
 	// unlike committer, detection needs no category and no destination, so
 	// it runs whether or not a session was ever placed.
 	packs library.Packs
+	// importers hand a batch to its media type's own identify-and-place, by media type; music has none and uses the
+	// chain above.
+	importers   map[string]importbatch.Importer
+	mediaTypeOf func(categoryID int64) string
 	// events is optional: nil means no progress is published, the same as
 	// every other optional dependency in this codebase.
 	events *events.Bus
@@ -167,6 +172,9 @@ type Config struct {
 	AcoustID   music.AcoustIDLookup
 	Committer  Committer
 	Packs      library.Packs
+	// Importers and MediaTypeOf route a batch to a media type other than music; both optional.
+	Importers   map[string]importbatch.Importer
+	MediaTypeOf func(categoryID int64) string
 	// Workspace is where archives are opened (outside every library root); empty leaves archives unopened.
 	Workspace string
 	// ArchiveLimits bounds an expansion; zero is archive.DefaultLimits.
@@ -188,6 +196,7 @@ func NewJob(config Config) *Job {
 		tool: config.Tool, search: config.Search, albums: config.Albums, provenance: config.Provenance,
 		acoustID:  config.AcoustID,
 		committer: config.Committer, packs: config.Packs, workspace: config.Workspace, archiveLimits: config.ArchiveLimits,
+		importers: config.Importers, mediaTypeOf: config.MediaTypeOf,
 		events: config.Events, onCommitted: config.OnCommitted, clock: config.Clock, logger: logger,
 	}
 }
@@ -368,7 +377,7 @@ func (j *Job) runSession(ctx context.Context, job jobs.Job, payload Payload) err
 	}
 	seeds := j.provenanceSeeds(ctx, payload.AcquisitionID)
 	result, err := inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{Cursor: cursor},
-		inspect.WalkOptions{},
+		j.walkOptions(payload.CategoryID),
 		func(ctx context.Context, batch []inspect.Unit) error {
 			err := j.commitCluster(ctx, sessionID, payload.SourcePath, identifyCfg, payload.Preview,
 				unverifiedWanted(payload), payload.TransferLadder, seeds, batch)
@@ -713,6 +722,9 @@ func (j *Job) commitCluster(
 		return errCancelled
 	}
 	categoryID := session.CategoryID
+	if importer := j.importerFor(categoryID); importer != nil {
+		return j.importWith(ctx, importer, session, sourcePath, preview, ladder, batch)
+	}
 
 	var relPaths []string
 	for _, unit := range batch {
@@ -1001,4 +1013,69 @@ func Enqueue(ctx context.Context, queue *jobs.Queue, payload Payload) (jobs.Enqu
 		Priority:  jobs.PriorityLow,
 		Payload:   data,
 	})
+}
+
+// importerFor is the media type's own importer for a category, nil for music.
+func (j *Job) importerFor(categoryID *int64) importbatch.Importer {
+	if categoryID == nil || j.mediaTypeOf == nil {
+		return nil
+	}
+	return j.importers[j.mediaTypeOf(*categoryID)]
+}
+
+// importWith records a batch's units, then lets the media type identify, decide and place them.
+func (j *Job) importWith(
+	ctx context.Context, importer importbatch.Importer, session library.Session, sourcePath string, preview bool,
+	ladder []string, batch []inspect.Unit,
+) error {
+	newUnits := make([]library.NewUnit, len(batch))
+	for i, unit := range batch {
+		evidenceJSON, err := json.Marshal(unit.Evidence)
+		if err != nil {
+			return fmt.Errorf("importjob: encode evidence for %s: %w", unit.Directory, err)
+		}
+		var bytes int64
+		for _, f := range unit.Media {
+			bytes += f.SizeBytes
+		}
+		newUnits[i] = library.NewUnit{
+			RelPath: unit.Directory, Shape: string(inspect.ShapeOf(unit)),
+			FileCount: int64(len(unit.Media)), Bytes: bytes, EvidenceJSON: string(evidenceJSON),
+		}
+	}
+	ids, err := j.sessions.AddUnits(ctx, session.ID, newUnits)
+	if err != nil {
+		return fmt.Errorf("importjob: add units: %w", err)
+	}
+	result, err := importer.ImportBatch(ctx, importbatch.Request{
+		SessionID: session.ID, CategoryID: *session.CategoryID, AcquisitionID: session.AcquisitionID, SourcePath: sourcePath,
+		Units: batch, UnitIDs: ids, Preview: preview, Ladder: ladder,
+	})
+	if err != nil {
+		return fmt.Errorf("importjob: import batch: %w", err)
+	}
+	if err := j.sessions.SetUnitDecisions(ctx, session.ID, result.Decisions); err != nil {
+		return fmt.Errorf("importjob: record decisions: %w", err)
+	}
+	for i, placement := range result.Placements {
+		if placement == nil {
+			continue
+		}
+		if err := j.sessions.RecordPlacement(ctx, ids[i], *placement); err != nil {
+			j.logger.Warn("import commit: could not record placement", slog.Int64("unit_id", ids[i]), slog.Any("error", err))
+		}
+	}
+	j.publishProgress(ctx, session.ID, importPhaseWalking, batch[len(batch)-1].Directory)
+	return nil
+}
+
+// videoSizeFloor keeps a sample or a stub out of a video import: smaller than any real episode.
+const videoSizeFloor = 30 << 20
+
+// walkOptions are the inspection options of a category's media type; music takes the defaults.
+func (j *Job) walkOptions(categoryID *int64) inspect.WalkOptions {
+	if j.importerFor(categoryID) != nil {
+		return inspect.WalkOptions{MediaSizeFloorBytes: videoSizeFloor}
+	}
+	return inspect.WalkOptions{}
 }

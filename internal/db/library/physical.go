@@ -441,3 +441,40 @@ func (p Physical) MarkMissing(ctx context.Context, rootFolderID int64, before ti
 		total += int(changed)
 	}
 }
+
+// RecomputeWorkItems brings every desired item of a work back in line with the files that cover it, after files were
+// removed (an import reverted): the counts are derived, and a deleted media_object takes its coverage rows with it.
+func (p Physical) RecomputeWorkItems(ctx context.Context, workID int64) error {
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		items, err := queries.ListDesiredItemsForWork(ctx, workID)
+		if err != nil {
+			return err
+		}
+		for _, item := range items {
+			if item.SatisfactionKind == "SET" {
+				if err := recomputeAlbumTx(ctx, queries, item.ID, workID); err != nil {
+					return err
+				}
+				continue
+			}
+			if err := queries.RecomputePresentCount(ctx, item.ID); err != nil {
+				return err
+			}
+			fresh, err := queries.GetDesiredItem(ctx, item.ID)
+			if err != nil {
+				return err
+			}
+			if err := queries.SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{
+				State: albumState(fresh.RequiredCount, fresh.PresentCount), PresentCount: fresh.PresentCount, ID: item.ID,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("library: recompute items of work %d: %w", workID, err)
+	}
+	return nil
+}
