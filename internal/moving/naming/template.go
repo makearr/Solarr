@@ -131,6 +131,11 @@ func parse(runes []rune, insideConditional bool) ([]Segment, error) {
 			}
 			return nil, fmt.Errorf("naming: unmatched '}' at position %d", i)
 		case '[':
+			if !insideConditional && i+1 < len(runes) && runes[i+1] == '[' {
+				literal.WriteRune('[')
+				i += 2
+				continue
+			}
 			if insideConditional {
 				return nil, fmt.Errorf("naming: nested '[' at position %d is not supported", i)
 			}
@@ -146,6 +151,11 @@ func parse(runes []rune, insideConditional bool) ([]Segment, error) {
 			segments = append(segments, Segment{kind: segConditional, children: children})
 			i = end + 1
 		case ']':
+			if !insideConditional && i+1 < len(runes) && runes[i+1] == ']' {
+				literal.WriteRune(']')
+				i += 2
+				continue
+			}
 			if !insideConditional {
 				return nil, fmt.Errorf("naming: unmatched ']' at position %d", i)
 			}
