@@ -177,6 +177,7 @@ type CollectionExternalID struct {
 type CollectionMember struct {
 	CollectionID int64
 	WorkID       int64
+	PartID       int64
 	Ord          sql.NullInt64
 }
 
@@ -760,14 +761,17 @@ type WorkOrganisation struct {
 }
 
 type WorkPart struct {
-	ID        int64
-	WorkID    int64
-	MediaRef  string
-	SortKey   string
-	Title     sql.NullString
-	RuntimeMs sql.NullInt64
-	Date      sql.NullString
-	Monitored int64
+	ID                  int64
+	WorkID              int64
+	MediaRef            string
+	SortKey             string
+	Title               sql.NullString
+	RuntimeMs           sql.NullInt64
+	Date                sql.NullString
+	Monitored           int64
+	AvailableAt         sql.NullInt64
+	AvailableConfidence string
+	AvailableBasis      string
 }
 
 type WorkPartExternalID struct {
@@ -792,6 +796,17 @@ type WorkRating struct {
 	Score     float64
 	Votes     sql.NullInt64
 	FetchedAt int64
+}
+
+type WorkReleaseFilter struct {
+	ID             int64
+	WorkID         int64
+	MediaRefPrefix string
+	Kind           string
+	Value          string
+	IsRegex        int64
+	Score          int64
+	CreatedAt      int64
 }
 
 type WorkRootFolder struct {

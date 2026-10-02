@@ -403,7 +403,7 @@ func TestAnUnmonitoredPartKeepsItsAirDate(t *testing.T) {
 		ID: part.ID, WorkID: work.ID, MediaRef: "s03e05", SortKey: "0003-0005",
 		Title:     sql.NullString{String: "Straight and True", Valid: true},
 		Date:      sql.NullString{String: "2004-10-24", Valid: true},
-		Monitored: 0,
+		Monitored: 0, AvailableConfidence: "unknown",
 	}
 	if got != want {
 		t.Errorf("the part round-tripped as %+v, want %+v", got, want)

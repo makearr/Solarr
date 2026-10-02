@@ -232,19 +232,19 @@ DELETE FROM work_classification WHERE work_id = ? AND kind = ?;
 -- name: CreateWorkPart :one
 INSERT INTO work_part (work_id, media_ref, sort_key, title, runtime_ms, date, monitored)
 VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored;
+RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis;
 
 -- name: GetWorkPart :one
-SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis
 FROM work_part WHERE id = ?;
 
 -- name: FindWorkPart :one
-SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis
 FROM work_part WHERE work_id = ? AND media_ref = ?;
 
 -- Ordered by the module's sort key. Core never parses media_ref to order parts.
 -- name: ListWorkParts :many
-SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis
 FROM work_part WHERE work_id = ? ORDER BY sort_key, id;
 
 -- What a SET requires follows the monitored parts, so unmonitoring an episode
@@ -268,7 +268,7 @@ ON CONFLICT (provider, external_id, part_id) DO UPDATE SET
 -- One recording appears on many albums, so this returns every part sharing the
 -- identifier. That is the cross-album duplicate question (ADR-35).
 -- name: FindPartsByExternalID :many
-SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored
+SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored, p.available_at, p.available_confidence, p.available_basis
 FROM work_part p
 JOIN work_part_external_id e ON e.part_id = p.id
 WHERE e.provider = ? AND e.external_id = ?
@@ -296,7 +296,7 @@ ON CONFLICT (part_id, scheme, provider) DO UPDATE SET
 -- Anime absolute numbering: episode 137 of a series resolves to the part that
 -- aired numbers do not name (ADR-41). Scoped to the work, or two series collide.
 -- name: FindPartByAltNumber :one
-SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored
+SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored, p.available_at, p.available_confidence, p.available_basis
 FROM work_part p
 JOIN alt_numbering a ON a.part_id = p.id
 WHERE p.work_id = sqlc.arg(work_id)

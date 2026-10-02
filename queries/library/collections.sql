@@ -6,13 +6,13 @@ VALUES (?, ?, ?, ?, ?, ?, ?)
 RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at;
 
 -- name: AddCollectionMember :exec
-INSERT INTO collection_member (collection_id, work_id, ord)
-VALUES (?, ?, ?)
-ON CONFLICT (collection_id, work_id) DO UPDATE SET ord = excluded.ord;
+INSERT INTO collection_member (collection_id, work_id, part_id, ord)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (collection_id, work_id, part_id) DO UPDATE SET ord = excluded.ord;
 
 -- name: ListCollectionMembers :many
-SELECT collection_id, work_id, ord
-FROM collection_member WHERE collection_id = ? ORDER BY ord, work_id;
+SELECT collection_id, work_id, part_id, ord
+FROM collection_member WHERE collection_id = ? ORDER BY ord, work_id, part_id;
 
 -- "You have 4 of 6 Ihaol films" is the first thing library-derived discovery
 -- looks for, so held and stated counts come back together (ADR-38).
