@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -89,6 +90,9 @@ type Rename struct {
 func (a Rename) StartLibraryRename(
 	ctx context.Context, categoryID int64, preview bool,
 ) ([]apiserver.RootRename, error) {
+	if category, found := a.Settings.Snapshot().Category(categoryID); found && category.MediaType != "music" {
+		return nil, errRenameNotBuilt(category.MediaType)
+	}
 	var renames []apiserver.RootRename
 	for _, root := range a.Settings.Snapshot().RootFoldersForCategory(categoryID) {
 		plan, jobID, warnings, err := music.RenameStart(ctx, a.Config, root.ID, &categoryID, preview)
@@ -104,7 +108,21 @@ func (a Rename) StartLibraryRename(
 	return renames, nil
 }
 
+// errRenameNotBuilt refuses a rename the media type has no engine for; applying music's template to its files would
+// misname them.
+func errRenameNotBuilt(mediaType string) error {
+	return fmt.Errorf("%w: renaming a %s library is not built yet; new imports are already named by its format", apiserver.ErrNotBuiltForMediaType, mediaType)
+}
+
 func (a Rename) StartRename(ctx context.Context, rootFolderID int64, preview bool) (apiserver.DrainPlanResult, error) {
+	for _, attachment := range a.Settings.Snapshot().CategoryRoots() {
+		if attachment.RootFolderID != rootFolderID {
+			continue
+		}
+		if category, found := a.Settings.Snapshot().Category(attachment.CategoryID); found && category.MediaType != "music" {
+			return apiserver.DrainPlanResult{}, errRenameNotBuilt(category.MediaType)
+		}
+	}
 	plan, jobID, warnings, err := music.RenameStart(ctx, a.Config, rootFolderID, nil, preview)
 	if err != nil {
 		return apiserver.DrainPlanResult{}, err

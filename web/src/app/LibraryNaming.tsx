@@ -24,6 +24,18 @@ const COLON_REPLACEMENTS: readonly { value: ColonReplacement; label: string }[] 
   { value: "smart", label: "Smart Replace" },
 ];
 
+const MULTI_EPISODE_STYLE = "multi_episode_style";
+
+// Sonarr's six multi-episode styles, with its own example for each.
+const MULTI_EPISODE_STYLES = [
+  { value: "extend", label: "Extend (S01E01-02-03)" },
+  { value: "duplicate", label: "Duplicate (S01E01 - S01E02 - S01E03)" },
+  { value: "repeat", label: "Repeat (S01E01E02E03)" },
+  { value: "scene", label: "Scene (S01E01-E02-E03)" },
+  { value: "range", label: "Range (S01E01-03)" },
+  { value: "prefixed_range", label: "Prefixed Range (S01E01-E03)" },
+] as const;
+
 /** A library's naming, Lidarr's Track Naming section: the toggles, the three formats with a
  *  token builder behind each "?", live examples, presets, and "apply to library". */
 export function LibraryNaming() {
@@ -103,6 +115,7 @@ export function LibraryNaming() {
   if (naming.error !== null || !naming.data) return <Message>This library's naming could not be read.</Message>;
 
   const scheme = naming.data.scheme;
+  const isTV = scheme.slots.some((slot) => slot.key === "standard_episode");
   const namingDirty = JSON.stringify(draft) !== JSON.stringify(naming.data.naming);
   const taggingDirty =
     taggingDraft !== undefined && JSON.stringify(taggingDraft) !== JSON.stringify(tagging.data);
@@ -137,8 +150,12 @@ export function LibraryNaming() {
 
       <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
         <Toggle
-          label="Rename Tracks"
-          help="Off, a file keeps the name it arrived with; it still goes into the artist and album folders."
+          label={isTV ? "Rename Episodes" : "Rename Tracks"}
+          help={
+            isTV
+              ? "Off, a file keeps the name it arrived with; it still goes into the series and season folders."
+              : "Off, a file keeps the name it arrived with; it still goes into the artist and album folders."
+          }
           checked={draft.rename_files}
           onChange={(checked) => setDraft({ ...draft, rename_files: checked })}
         />
@@ -178,7 +195,10 @@ export function LibraryNaming() {
             value={preset?.name ?? ""}
             onChange={(event) => {
               const chosen = scheme.presets.find((candidate) => candidate.name === event.target.value);
-              if (chosen) setDraft({ ...draft, formats: { ...chosen.formats } });
+              if (chosen) {
+                const style = draft.formats[MULTI_EPISODE_STYLE];
+                setDraft({ ...draft, formats: { ...chosen.formats, ...(style ? { [MULTI_EPISODE_STYLE]: style } : {}) } });
+              }
             }}
             className={inputStyle}
           >
@@ -190,6 +210,24 @@ export function LibraryNaming() {
             ))}
           </select>
         </label>
+
+        {isTV && (
+          <label className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <span className="w-48 shrink-0">Multi-Episode Style</span>
+            <select
+              value={draft.formats[MULTI_EPISODE_STYLE] ?? "prefixed_range"}
+              onChange={(event) => setFormat(MULTI_EPISODE_STYLE, event.target.value)}
+              className={inputStyle}
+            >
+              {MULTI_EPISODE_STYLES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-ink-muted">How one file covering several episodes writes its numbers.</span>
+          </label>
+        )}
 
         {scheme.slots.map((slot) => (
           <div key={slot.key} className="flex flex-col gap-1">
@@ -228,7 +266,7 @@ export function LibraryNaming() {
         />
       </section>
 
-      {taggingDraft && (
+      {taggingDraft && !isTV && (
         <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
           <h2 className="text-sm font-medium">Tags</h2>
           <p className="text-xs text-ink-muted">

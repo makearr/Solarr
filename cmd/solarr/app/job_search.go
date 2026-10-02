@@ -82,7 +82,7 @@ func (p *process) tvGrab() tv.Grab {
 			Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library),
 			Candidates: library.NewCandidates(p.library), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist,
 		},
-		Dispatch: p.musicDispatch(),
+		Dispatch: p.dispatchFor("tv"),
 	}
 }
 
@@ -96,10 +96,10 @@ func (p *process) musicSearch() music.Search {
 	}
 }
 
-// downloaderConns resolves every enabled downloader connection fresh, the
-// same "ask, don't cache" discipline indexerConns already follows. A downloader
-// serves the protocol its row names; one with an impl Solarr has no client for is skipped.
-func (p *process) downloaderConns(ctx context.Context) ([]music.DownloaderConn, error) {
+// downloaderConnsFor resolves every enabled downloader connection fresh, the same "ask, don't cache" discipline
+// indexerConns follows, with the client category a media type's downloads are sent under. A downloader serves the
+// protocol its row names; one with an impl Solarr has no client for is skipped.
+func (p *process) downloaderConnsFor(ctx context.Context, mediaType string) ([]music.DownloaderConn, error) {
 	configured, err := p.cache.Downloaders(ctx)
 	if err != nil {
 		return nil, err
@@ -120,7 +120,7 @@ func (p *process) downloaderConns(ctx context.Context) ([]music.DownloaderConn, 
 			continue
 		}
 		conns = append(conns, music.DownloaderConn{
-			ID: downloader.ID, Protocol: downloader.Protocol, Category: downloader.Options().CategoryFor("music"),
+			ID: downloader.ID, Protocol: downloader.Protocol, Category: downloader.Options().CategoryFor(mediaType),
 			MaxQueued:      downloader.Options().MaxQueuedDownloads(),
 			AlwaysSendUser: downloader.Options().SendsUserGrabs(),
 			AlwaysSendRSS:  downloader.Options().SendsRSSGrabs(),
@@ -137,13 +137,17 @@ func (p *process) musicGrab() music.Grab {
 
 // musicDispatch builds internal/media/music.Dispatch (ADR-57's own
 // acquire.send) over the real stores.
-func (p *process) musicDispatch() music.Dispatch {
+func (p *process) musicDispatch() music.Dispatch { return p.dispatchFor("music") }
+
+// dispatchFor is the dispatch of one media type: the same stores, its own client category.
+func (p *process) dispatchFor(mediaType string) music.Dispatch {
 	ready := library.NewReadyQueue(p.library)
 	blocklist := library.NewBlocklistStore(p.library)
 	return music.Dispatch{
 		Candidates: library.NewCandidates(p.library), Acquisitions: library.NewAcquisitions(p.library),
-		Desired: library.NewDesired(p.library), Downloaders: p.downloaderConns,
-		Fetch: p.fetchRelease, History: p.recordDownloadHistory, Ready: &ready, Blocklist: &blocklist,
+		Desired:     library.NewDesired(p.library),
+		Downloaders: func(ctx context.Context) ([]music.DownloaderConn, error) { return p.downloaderConnsFor(ctx, mediaType) },
+		Fetch:       p.fetchRelease, History: p.recordDownloadHistory, Ready: &ready, Blocklist: &blocklist,
 	}
 }
 
