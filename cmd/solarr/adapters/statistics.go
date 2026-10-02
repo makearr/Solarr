@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -44,6 +45,8 @@ func (s Statistics) CategoryStatistics(ctx context.Context, categoryID int64) (a
 		{library.StatFilesByCodec, &view.FilesByCodec},
 		{library.StatAlbumsByState, &view.AlbumsByState},
 		{library.StatDownloadsByState, &view.DownloadsByState},
+		{library.StatGrowthByMonth, &view.GrowthByMonth},
+		{library.StatDecisionsByOutcome, &view.DecisionsByOutcome},
 	} {
 		figures, err := s.Statistics.ForCategory(ctx, metric.name, categoryID)
 		if err != nil {
@@ -56,5 +59,6 @@ func (s Statistics) CategoryStatistics(ctx context.Context, categoryID int64) (a
 			}
 		}
 	}
+	sort.Slice(view.GrowthByMonth, func(i, j int) bool { return view.GrowthByMonth[i].Key < view.GrowthByMonth[j].Key })
 	return view, nil
 }

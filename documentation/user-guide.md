@@ -102,7 +102,8 @@ full, and stop when the library's root folders have no space above their reserve
 - **Activity → Notifications** (and the bell in the header) collects what needs you: the warnings the
   dashboard shows, and the last week's failed downloads and imports.
 - **Library → Statistics**: monitored albums by state (each figure opens those albums), files and bytes
-  by audio codec, and the last 30 days' downloads. Computed once a day, not live.
+  by audio codec, growth by month (when Solarr first saw each file), the last 30 days' release decisions
+  and downloads. Computed once a day, not live.
 - **Calendar**: month, week, a seven-day forecast, one day, an agenda and a year view of the releases of
   artists you follow and albums you have asked for. Green has it, blue is wanted and not out yet, red
   wanted and out.

@@ -86,6 +86,92 @@ func (q *Queries) AggregateAlbumsByCategoryAndState(ctx context.Context) ([]Aggr
 	return items, nil
 }
 
+const aggregateDecisionsByCategoryAndOutcome = `-- name: AggregateDecisionsByCategoryAndOutcome :many
+SELECT d.category_id, cd.outcome, CAST(COUNT(*) AS INTEGER) AS decisions
+FROM candidate_decision cd
+JOIN desired_item d ON d.id = cd.desired_item_id
+WHERE cd.decided_at >= ?1
+GROUP BY d.category_id, cd.outcome
+ORDER BY d.category_id, cd.outcome
+`
+
+type AggregateDecisionsByCategoryAndOutcomeRow struct {
+	CategoryID int64
+	Outcome    string
+	Decisions  int64
+}
+
+// Release decisions since a time, per library and outcome.
+func (q *Queries) AggregateDecisionsByCategoryAndOutcome(ctx context.Context, since int64) ([]AggregateDecisionsByCategoryAndOutcomeRow, error) {
+	rows, err := q.db.QueryContext(ctx, aggregateDecisionsByCategoryAndOutcome, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AggregateDecisionsByCategoryAndOutcomeRow{}
+	for rows.Next() {
+		var i AggregateDecisionsByCategoryAndOutcomeRow
+		if err := rows.Scan(&i.CategoryID, &i.Outcome, &i.Decisions); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const aggregateFilesAddedByRootAndMonth = `-- name: AggregateFilesAddedByRootAndMonth :many
+SELECT lp.root_folder_id,
+       CAST(strftime('%Y-%m', mo.first_seen_at, 'unixepoch') AS TEXT) AS month,
+       CAST(COUNT(*) AS INTEGER) AS files,
+       CAST(COALESCE(SUM(mo.size_bytes), 0) AS INTEGER) AS bytes
+FROM library_path lp
+JOIN media_object mo ON mo.id = lp.media_object_id
+GROUP BY lp.root_folder_id, month
+ORDER BY lp.root_folder_id, month
+`
+
+type AggregateFilesAddedByRootAndMonthRow struct {
+	RootFolderID int64
+	Month        string
+	Files        int64
+	Bytes        int64
+}
+
+// Files and bytes first seen per root folder and month: growth since Solarr began watching.
+func (q *Queries) AggregateFilesAddedByRootAndMonth(ctx context.Context) ([]AggregateFilesAddedByRootAndMonthRow, error) {
+	rows, err := q.db.QueryContext(ctx, aggregateFilesAddedByRootAndMonth)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AggregateFilesAddedByRootAndMonthRow{}
+	for rows.Next() {
+		var i AggregateFilesAddedByRootAndMonthRow
+		if err := rows.Scan(
+			&i.RootFolderID,
+			&i.Month,
+			&i.Files,
+			&i.Bytes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const aggregateFilesByRootAndCodec = `-- name: AggregateFilesByRootAndCodec :many
 
 SELECT lp.root_folder_id,

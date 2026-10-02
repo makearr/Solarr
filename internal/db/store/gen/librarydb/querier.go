@@ -31,6 +31,10 @@ type Querier interface {
 	AggregateAcquisitionsByCategoryAndState(ctx context.Context, since int64) ([]AggregateAcquisitionsByCategoryAndStateRow, error)
 	// Monitored albums per library and state.
 	AggregateAlbumsByCategoryAndState(ctx context.Context) ([]AggregateAlbumsByCategoryAndStateRow, error)
+	// Release decisions since a time, per library and outcome.
+	AggregateDecisionsByCategoryAndOutcome(ctx context.Context, since int64) ([]AggregateDecisionsByCategoryAndOutcomeRow, error)
+	// Files and bytes first seen per root folder and month: growth since Solarr began watching.
+	AggregateFilesAddedByRootAndMonth(ctx context.Context) ([]AggregateFilesAddedByRootAndMonthRow, error)
 	// What the statistics rollup measures (section 21.12): bounded aggregates, run by a background job and read back
 	// from stat_rollup, never live.
 	// Files and bytes per root folder and audio codec; a file with no measured codec yet is "unknown".

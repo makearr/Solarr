@@ -1199,9 +1199,15 @@ type CategoryStatistics struct {
 	AlbumsByState []StatisticsCount `json:"albums_by_state"`
 
 	// ComputedAt When the rollup last ran; absent before the first run.
-	ComputedAt       *time.Time        `json:"computed_at,omitempty"`
-	DownloadsByState []StatisticsCount `json:"downloads_by_state"`
-	FilesByCodec     []StatisticsFiles `json:"files_by_codec"`
+	ComputedAt *time.Time `json:"computed_at,omitempty"`
+
+	// DecisionsByOutcome Release decisions of the last window_days, by ACCEPT, REJECT or DEFER.
+	DecisionsByOutcome []StatisticsCount `json:"decisions_by_outcome"`
+	DownloadsByState   []StatisticsCount `json:"downloads_by_state"`
+	FilesByCodec       []StatisticsFiles `json:"files_by_codec"`
+
+	// GrowthByMonth Files and bytes first seen per month, oldest first; the first scan lands in one month.
+	GrowthByMonth []StatisticsFiles `json:"growth_by_month"`
 
 	// WindowDays How many days back the download figures reach.
 	WindowDays int `json:"window_days"`

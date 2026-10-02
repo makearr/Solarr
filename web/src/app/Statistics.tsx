@@ -5,6 +5,12 @@ import { api } from "@/api/client";
 
 import { formatBytes } from "./Queue";
 
+const OUTCOME_LABELS: Record<string, string> = {
+  ACCEPT: "Acceptable",
+  REJECT: "Rejected",
+  DEFER: "Waiting for facts",
+};
+
 const STATE_LABELS: Record<string, string> = {
   COMPLETE: "Complete",
   PARTIAL: "Partial",
@@ -41,6 +47,9 @@ export function Statistics() {
   const data = stats.data;
   const totalFiles = (data?.files_by_codec ?? []).reduce((sum, row) => sum + row.files, 0);
   const totalBytes = (data?.files_by_codec ?? []).reduce((sum, row) => sum + row.bytes, 0);
+  const growth = data?.growth_by_month ?? [];
+  const largestMonth = Math.max(1, ...growth.map((row) => row.bytes));
+  const decisions = (data?.decisions_by_outcome ?? []).reduce((sum, row) => sum + row.count, 0);
   const albums = (data?.albums_by_state ?? []).reduce((sum, row) => sum + row.count, 0);
 
   return (
@@ -103,6 +112,46 @@ export function Statistics() {
                 </li>
               ))}
               {data.files_by_codec.length === 0 && <li className="text-sm text-ink-muted">No files yet.</li>}
+            </ul>
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-medium">Growth</h2>
+            <p className="text-xs text-ink-muted">
+              Files by the month Solarr first saw them. The first scan of an existing library lands in one month.
+            </p>
+            <ul className="flex flex-col gap-1.5">
+              {growth.map((row) => (
+                <li key={row.key} className="flex items-center gap-3 text-sm">
+                  <span className="w-20 shrink-0 tabular-nums">{row.key}</span>
+                  <span className="relative h-3 flex-1 overflow-hidden rounded-full bg-canvas">
+                    <span
+                      className="absolute inset-y-0 left-0 rounded-full bg-accent"
+                      style={{ width: `${Math.max(1, Math.round((row.bytes / largestMonth) * 100))}%` }}
+                    />
+                  </span>
+                  <span className="w-44 shrink-0 text-right text-xs tabular-nums text-ink-muted">
+                    {row.files} files · {formatBytes(row.bytes)}
+                  </span>
+                </li>
+              ))}
+              {growth.length === 0 && <li className="text-sm text-ink-muted">No files yet.</li>}
+            </ul>
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-medium">Release decisions, last {data.window_days} days</h2>
+            <p className="text-xs text-ink-muted">
+              {decisions} releases judged against your profiles, whichever of them was then downloaded.
+            </p>
+            <ul className="grid gap-2 sm:grid-cols-3">
+              {data.decisions_by_outcome.map((row) => (
+                <li key={row.key} className="flex flex-col rounded-lg border border-border-subtle bg-surface p-3">
+                  <span className="text-2xl font-semibold tabular-nums">{row.count}</span>
+                  <span className="text-xs text-ink-muted">{OUTCOME_LABELS[row.key] ?? row.key}</span>
+                </li>
+              ))}
+              {data.decisions_by_outcome.length === 0 && <li className="text-sm text-ink-muted">No releases judged in this window.</li>}
             </ul>
           </section>
 
