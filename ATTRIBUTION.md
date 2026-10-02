@@ -76,12 +76,29 @@ later is unreliable, and AGPL-3.0 §5 requires that modified files carry promine
 
   | Regex group | Source | Status |
   |---|---|---|
-  | TV identity — season/episode/absolute/daily/multi-episode | Sonarr `Parser.cs` | Not fetched. Lands at stage 8, when a consumer exists |
+  | TV identity — season/episode/absolute/daily/multi-episode | Sonarr `Parser.cs` | **Ported 2026-10-02** into `internal/identify/parsetv` (see "TV parser — from Sonarr" below) |
   | Movie identity — edition and year-disambiguation | Radarr `Parser.cs` | Not fetched. Lands at stage 10, when a consumer exists |
 
 When code is incorporated, record it as:
 
 ```
+### TV parser — from Sonarr (GPL-3.0)
+
+- Source: `github.com/Sonarr/Sonarr`, `develop` branch, fetched 2026-10-02 via `raw.githubusercontent.com`:
+  `src/NzbDrone.Core/Parser/Parser.cs`, `QualityParser.cs`, `LanguageParser.cs`, and the test fixtures in
+  `src/NzbDrone.Core.Test/ParserTests/`.
+- Taken: the 98 `ReportTitleRegex` patterns and the 12 `PreSubstitutionRegex` rewrites verbatim
+  (`internal/identify/parsetv/patterns.go`), the supporting regexes, `ParseMatchCollection`'s numbering logic,
+  `ParseReleaseGroup`, the language vocabulary and the source/resolution/remux/revision regexes of the quality parser.
+  The test cases that fit Solarr's typed output (about 540 title cases, 244 quality cases, 96 language cases) are
+  the golden corpus in `internal/identify/parsetv/testdata/` (JSON Lines, extracted mechanically from the fixtures).
+- Changed: **the patterns use lookaround, backreferences and duplicate group names, which RE2 rejects**, so the
+  package runs them on `github.com/dlclark/regexp2` (a .NET-compatible engine, MIT) instead of being rewritten as in
+  the music parser. **Sonarr's flat `Quality` enum is not taken**: claims keep resolution, source, remux, codec, HDR,
+  audio and revision as separate fields (ADR-40). The air-date plausibility check takes the time as an argument.
+  Languages are ISO codes, not Sonarr's `Language` objects. Subtitle-file language parsing is not ported yet.
+- Files: `internal/identify/parsetv/` (new).
+
 ### <component> — from <project> (<licence>)
 
 - Source: <repository>, <commit or version>
@@ -153,6 +170,7 @@ a user offered the Corresponding Source should be able to see what the binary li
 | `github.com/nwaples/rardecode/v2` | BSD-2-Clause | Pure-Go RAR decoder (ADR-49), including multi-volume sets. `zip`/`tar`/`gzip`/`bzip2` are stdlib and need no entry here |
 | `github.com/bodgit/sevenzip` | BSD-3-Clause | Pure-Go 7z decoder (ADR-49) |
 | `github.com/ulikunitz/xz` | BSD-3-Clause | Pure-Go xz decompression (ADR-49), for `.tar.xz` |
+| `github.com/dlclark/regexp2` | MIT | .NET-compatible regular expressions (lookaround, backreferences, duplicate group names) so Sonarr's TV parser patterns run as written (ADR-18, stage 8). Go's `regexp` rejects all three |
 
 Bundling `unrar` or p7zip was considered and rejected (ADR-49): the UnRAR licence forbids using
 the source to recreate the RAR compression algorithm, which is exactly the kind of licence
