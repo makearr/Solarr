@@ -924,3 +924,17 @@ func TestSearchItem_AsksInTheIndexersMusicCategories(t *testing.T) {
 		}
 	}
 }
+
+// A release name the parser finds no album in ("Dwegki-20Ten [2010] FLAC") was judged by its artist alone, which
+// matched every wanted album of that artist: 162 albums were offered one release (found 2026-10-02).
+func TestJudgeFeed_AReleaseWithNoParsedAlbumIsJudgedByWhatFollowsTheArtist(t *testing.T) {
+	for title, wantDecisions := range map[string]int{"For You": 0, "Come": 0, "20Ten": 1} {
+		env := newSearchTestEnv(t)
+		item := env.createSearchableWork(t, "Dwegki", title, 0, alwaysAcceptRules)
+		result, err := env.search().JudgeFeed(t.Context(), item.ID, music.IndexerConn{ID: 1, Impl: "newznab"},
+			[]indexer.RawItem{rawItem("g1", "Dwegki-20Ten [2010] FLAC")}, env.clock.Now())
+		if err != nil || len(result.Decisions) != wantDecisions {
+			t.Errorf("wanted %q: %d decisions, %v; want %d", title, len(result.Decisions), err, wantDecisions)
+		}
+	}
+}

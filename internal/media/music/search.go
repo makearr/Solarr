@@ -641,6 +641,13 @@ func evaluateRawItems(
 			claimed.Title, against = combinedTitle(parsed.Identity.Artist, parsed.Identity.Album), target
 			if rest, found := withoutLeadingArtist(parsed.Identity.Album, wantedArtist); found {
 				claimed.Title, against = rest, albumTarget
+			} else if parsed.Identity.Album == "" {
+				// No album parsed: the artist alone would match every album of theirs, so judge what follows it.
+				rest, found := withoutLeadingArtist(raw.Title, wantedArtist)
+				if !found || rest == "" {
+					continue
+				}
+				claimed.Title, against = rest, albumTarget
 			}
 		}
 		distance := match.Compute(claimed, against, nil)
