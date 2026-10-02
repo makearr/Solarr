@@ -49,6 +49,9 @@ type ArrSync struct {
 	DefaultProfileID int64
 	Clock            clock.Clock
 	Lidarr           LidarrClientFactory
+	// TV adds the series a Sonarr import maps; Categories resolves a library's quality profile.
+	TV         TVAdder
+	Categories Categories
 	// Progress holds the live figure of running imports; nil keeps none.
 	Progress *ArrProgress
 	Logger   *slog.Logger
@@ -106,7 +109,7 @@ func (a ArrSync) Sync(ctx context.Context, instanceID int64, options apiserver.A
 	if err != nil {
 		return apiserver.ArrImportRun{}, err
 	}
-	if instance.App != settings.ArrAppLidarr {
+	if instance.App != settings.ArrAppLidarr && instance.App != settings.ArrAppSonarr {
 		return apiserver.ArrImportRun{}, fmt.Errorf("%w: %s", apiserver.ErrArrAppNotYetSupported, instance.App)
 	}
 	apiKey, err := a.Cache.DecryptedAPIKey(ctx, instanceID)
@@ -148,7 +151,13 @@ func (a ArrSync) runAndFinish(
 	ctx context.Context, importID, instanceID int64, instance settings.ArrInstance, client arrimport.LidarrClient,
 	options apiserver.ArrSyncOptions,
 ) {
-	counts, syncErr := a.syncLidarr(ctx, importID, instance, client, options)
+	var counts library.ArrImportCounts
+	var syncErr error
+	if instance.App == settings.ArrAppSonarr {
+		counts, syncErr = a.syncSonarr(ctx, importID, instance, client.Sonarr(), options)
+	} else {
+		counts, syncErr = a.syncLidarr(ctx, importID, instance, client, options)
+	}
 	defer a.Progress.clear(importID)
 
 	finishedAt := a.Clock.Now().Unix()
@@ -189,7 +198,7 @@ func (a ArrSync) RootFolders(ctx context.Context, instanceID int64) ([]string, e
 	if err != nil {
 		return nil, err
 	}
-	if instance.App != settings.ArrAppLidarr {
+	if instance.App != settings.ArrAppLidarr && instance.App != settings.ArrAppSonarr {
 		return nil, fmt.Errorf("%w: %s", apiserver.ErrArrAppNotYetSupported, instance.App)
 	}
 	apiKey, err := a.Cache.DecryptedAPIKey(ctx, instanceID)
@@ -198,7 +207,12 @@ func (a ArrSync) RootFolders(ctx context.Context, instanceID int64) ([]string, e
 	}
 
 	client := a.Lidarr(instance.BaseURL, apiKey.Reveal())
-	folders, err := client.RootFolders(ctx)
+	var folders []arrimport.LidarrRootFolder
+	if instance.App == settings.ArrAppSonarr {
+		folders, err = client.Sonarr().RootFolders(ctx)
+	} else {
+		folders, err = client.RootFolders(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}

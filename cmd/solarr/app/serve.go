@@ -590,7 +590,7 @@ func (p *process) startServer(ctx context.Context) error {
 				library.NewPeople(p.library), library.NewSubscriptions(p.library),
 			),
 			DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Lidarr: p.arrClientFactory(),
-			Logger: p.logger,
+			TV: p.tvService(), Categories: adapters.Categories{Cache: p.cache}, Logger: p.logger,
 		},
 		Prowlarr: adapters.Prowlarr{Cache: p.cache, List: p.listProwlarr},
 		ArrConnections: adapters.Prowlarr{

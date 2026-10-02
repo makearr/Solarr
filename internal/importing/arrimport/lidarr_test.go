@@ -186,3 +186,25 @@ func TestLidarrClient_DownloadClientsReadsAddressAndCategory(t *testing.T) {
 		t.Errorf("base URLs = %v", got)
 	}
 }
+
+func TestSonarrClient_SeriesReadsTheV3APIWithTheKey(t *testing.T) {
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"http://sonarr.local/api/v3/series": {status: 200, body: `[{"id":7,"title":"Show","tvdbId":123,"monitored":true,` +
+			`"rootFolderPath":"/series","seasons":[{"seasonNumber":1,"monitored":false}]}]`},
+	}}
+	client := arrimport.NewLidarrClient(newTestClient(t, transport), "http://sonarr.local", "key").Sonarr()
+	series, err := client.Series(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []arrimport.SonarrSeries{{
+		ID: 7, Title: "Show", TVDBID: 123, Monitored: true, RootFolderPath: "/series",
+		Seasons: []arrimport.SonarrSeason{{SeasonNumber: 1}},
+	}}
+	if !reflect.DeepEqual(series, want) {
+		t.Fatalf("series = %+v, want %+v", series, want)
+	}
+	if got := transport.requested[0].Header.Get("X-Api-Key"); got != "key" || transport.requested[0].Method != http.MethodGet {
+		t.Fatalf("request = %s key %q", transport.requested[0].Method, got)
+	}
+}
