@@ -114,7 +114,7 @@ export function Duplicates() {
         <h1 className="text-lg font-semibold">Duplicates</h1>
         <p className="text-sm text-ink-muted">
           The same recording stored more than once: the same artist and title, lengths within a few seconds, in any format and
-          on any album. The copy to keep is the one closer to this library's target quality. This only looks; nothing is
+          on any album. The copy to keep is the one closer to this library's target quality. The list below only looks; nothing is
           removed. Files the probe has not measured yet are not compared.
         </p>
       </header>
