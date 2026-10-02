@@ -7,10 +7,12 @@ import (
 	"slices"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/acquiring/qbittorrent"
 	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // IndexerClientFactory builds a Newznab/Torznab client for one connection's
@@ -21,9 +23,9 @@ import (
 // uses.
 type IndexerClientFactory func(indexerID int64, baseURL, apiKey string, egress settings.IndexerEgress) indexer.Client
 
-// DownloaderClientFactory builds a download client for one connection's own
-// base URL and decrypted credentials. Only SABnzbd exists today (ADR-46).
-type DownloaderClientFactory func(downloaderID int64, baseURL, credentials string) sabnzbd.Client
+// DownloaderHTTPFactory builds the HTTP client of one download connection: its own rate-limit and breaker bucket,
+// the SSRF guard for the configured host.
+type DownloaderHTTPFactory func(downloaderID int64, baseURL string) *httpx.Client
 
 // ConnectionTester runs todo 5.2's own "every connection tested before it is
 // accepted": a read-only capability/version fetch against the real indexer
@@ -31,7 +33,7 @@ type DownloaderClientFactory func(downloaderID int64, baseURL, credentials strin
 type ConnectionTester struct {
 	Cache      *settings.Cache
 	Indexer    IndexerClientFactory
-	Downloader DownloaderClientFactory
+	Downloader DownloaderHTTPFactory
 	Clock      clock.Clock
 }
 
@@ -82,17 +84,46 @@ func (c ConnectionTester) TestDownloader(ctx context.Context, id int64) (apiserv
 		return apiserver.ConnectionTestResult{}, err
 	}
 
-	return c.testSABnzbd(ctx, c.Downloader(id, found.BaseURL, credentials.Reveal()), found.Options()), nil
+	return c.testDownloader(ctx, found.Impl, c.Downloader(id, found.BaseURL), found.BaseURL, credentials.Reveal(), found.Options()), nil
 }
 
 // TestDownloaderConfig tests a client before it is saved: the form's "Test" before "Add".
 func (c ConnectionTester) TestDownloaderConfig(
 	ctx context.Context, impl, baseURL, credentials string, options settings.DownloaderOptions,
 ) (apiserver.ConnectionTestResult, error) {
-	if impl != "sabnzbd" {
-		return apiserver.ConnectionTestResult{Message: fmt.Sprintf("%q is not a download client Solarr knows", impl), TestedAt: c.Clock.Now()}, nil
+	return c.testDownloader(ctx, impl, c.Downloader(0, baseURL), baseURL, credentials, options), nil
+}
+
+func (c ConnectionTester) testDownloader(
+	ctx context.Context, impl string, client *httpx.Client, baseURL, credentials string, options settings.DownloaderOptions,
+) apiserver.ConnectionTestResult {
+	switch impl {
+	case ImplSABnzbd:
+		return c.testSABnzbd(ctx, sabnzbd.NewClient(client, baseURL, credentials), options)
+	case ImplQBittorrent:
+		return c.testQBittorrent(ctx, qbittorrent.NewClient(client, baseURL, credentials), options)
 	}
-	return c.testSABnzbd(ctx, c.Downloader(0, baseURL, credentials), options), nil
+	return apiserver.ConnectionTestResult{Message: fmt.Sprintf("%q is not a download client Solarr knows", impl), TestedAt: c.Clock.Now()}
+}
+
+// testQBittorrent proves the address and the login (the version call needs it), and that the category music is
+// sent under exists, since qBittorrent files an unknown one under no category at all.
+func (c ConnectionTester) testQBittorrent(ctx context.Context, client qbittorrent.Client, options settings.DownloaderOptions) apiserver.ConnectionTestResult {
+	at := c.Clock.Now()
+	version, err := client.Version(ctx)
+	if err != nil {
+		return apiserver.ConnectionTestResult{Message: err.Error(), TestedAt: at}
+	}
+	message := fmt.Sprintf("Connected. qBittorrent %s.", version)
+	category := options.CategoryFor("music")
+	if categories, err := client.Categories(ctx); err == nil && !slices.Contains(categories, category) {
+		message += fmt.Sprintf(" qBittorrent has no %q category yet: it is created when the first torrent is sent.", category)
+	}
+	folder, _ := client.SavePath(ctx)
+	if folder != "" {
+		message += fmt.Sprintf(" Finished downloads go to %s.", folder)
+	}
+	return apiserver.ConnectionTestResult{OK: true, Message: message, TestedAt: at, DownloadFolder: folder}
 }
 
 // testSABnzbd proves the address (version), the key (the download folder needs it) and that the

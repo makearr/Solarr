@@ -3,9 +3,9 @@ package app
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
-	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
@@ -55,10 +55,8 @@ func (p *process) musicSearch() music.Search {
 }
 
 // downloaderConns resolves every enabled downloader connection fresh, the
-// same "ask, don't cache" discipline indexerConns already follows. Only
-// SABnzbd (usenet) exists today (ADR-46) -- an enabled torrent/ddl
-// downloader row would simply never match any candidate's own protocol
-// until a second implementation exists.
+// same "ask, don't cache" discipline indexerConns already follows. A downloader
+// serves the protocol its row names; one with an impl Solarr has no client for is skipped.
 func (p *process) downloaderConns(ctx context.Context) ([]music.DownloaderConn, error) {
 	configured, err := p.cache.Downloaders(ctx)
 	if err != nil {
@@ -68,19 +66,23 @@ func (p *process) downloaderConns(ctx context.Context) ([]music.DownloaderConn, 
 
 	conns := make([]music.DownloaderConn, 0, len(configured))
 	for _, downloader := range configured {
-		if !downloader.Enabled || downloader.Impl != "sabnzbd" {
+		if !downloader.Enabled {
 			continue
 		}
 		credentials, err := p.cache.DecryptedDownloaderCredentials(ctx, downloader.ID)
 		if err != nil {
 			return nil, err
 		}
+		client, known := adapters.NewDownloadClient(downloader.Impl, factory(downloader.ID, downloader.BaseURL), downloader.BaseURL, credentials.Reveal())
+		if !known {
+			continue
+		}
 		conns = append(conns, music.DownloaderConn{
 			ID: downloader.ID, Protocol: downloader.Protocol, Category: downloader.Options().CategoryFor("music"),
 			MaxQueued:      downloader.Options().MaxQueuedDownloads(),
 			AlwaysSendUser: downloader.Options().SendsUserGrabs(),
 			AlwaysSendRSS:  downloader.Options().SendsRSSGrabs(),
-			Client:         sabnzbd.Downloader{Client: factory(downloader.ID, downloader.BaseURL, credentials.Reveal())},
+			Client:         client,
 		})
 	}
 	return conns, nil
@@ -103,9 +105,12 @@ func (p *process) musicDispatch() music.Dispatch {
 	}
 }
 
-// fetchRelease downloads a release's NZB through the indexer that listed it, disabled or not:
+// fetchRelease downloads a release's NZB or torrent through the indexer that listed it, disabled or not:
 // the release was chosen while it was enabled.
 func (p *process) fetchRelease(ctx context.Context, indexerID int64, link string) ([]byte, error) {
+	if strings.HasPrefix(link, "magnet:") {
+		return []byte(link), nil // nothing to fetch: the client takes the link itself
+	}
 	configured, err := p.cache.Indexers(ctx)
 	if err != nil {
 		return nil, err
