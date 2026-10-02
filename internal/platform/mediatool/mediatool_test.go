@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -111,7 +112,7 @@ func TestReadTags_ReportsWhatWasMeasuredNotWhatWasClaimed(t *testing.T) {
 		OverallBitrate: 705600, AudioBitrate: 705600,
 		AudioCodec: "flac", SampleRate: 44100, Channels: 2,
 	}
-	if probes[0].Measured != want {
+	if !reflect.DeepEqual(probes[0].Measured, want) {
 		t.Errorf("Measured = %+v, want %+v", probes[0].Measured, want)
 	}
 }
@@ -513,5 +514,49 @@ func TestFingerprint_AFailedRunWithNoFingerprintIsAnError(t *testing.T) {
 	}
 	if prints[0].Err == nil {
 		t.Error("Err = nil, want the failure reported when nothing was produced")
+	}
+}
+
+func TestReadTags_ReadsTheLanguagesAFileStates(t *testing.T) {
+	cases := []struct {
+		name, reply           string
+		wantAudio, wantLyrics []string
+	}{
+		{
+			name: "ID3 USLT names its language in the key",
+			reply: `{"streams":[{"codec_name":"mp3","codec_type":"audio","tags":{"language":"und"}}],
+			  "format":{"format_name":"mp3","tags":{"lyrics-deu":"Hallo Welt"}}}`,
+			wantLyrics: []string{"de"},
+		},
+		{
+			name: "a Vorbis LANGUAGE tag beside LYRICS",
+			reply: `{"streams":[{"codec_name":"flac","codec_type":"audio"}],
+			  "format":{"format_name":"flac","tags":{"LYRICS":"Hello","LANGUAGE":"eng"}}}`,
+			wantAudio: []string{"en"}, wantLyrics: []string{"en"},
+		},
+		{
+			name: "a stream language alone is not a lyrics language",
+			reply: `{"streams":[{"codec_name":"aac","codec_type":"audio","tags":{"language":"ger"}}],
+			  "format":{"format_name":"mov,mp4,m4a"}}`,
+			wantAudio: []string{"de"},
+		},
+		{
+			name: "undetermined states nothing",
+			reply: `{"streams":[{"codec_name":"flac","codec_type":"audio","tags":{"language":"und"}}],
+			  "format":{"format_name":"flac","tags":{"lyrics-xxx":"la la"}}}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runner := &fakeRunner{respond: probeReplying(tc.reply)}
+			probes, err := mediatool.New(runner, 1).ReadTags(t.Context(), []string{"/music/a"})
+			if err != nil {
+				t.Fatalf("ReadTags: %v", err)
+			}
+			got := probes[0].Measured
+			if !reflect.DeepEqual(got.AudioLanguages, tc.wantAudio) || !reflect.DeepEqual(got.LyricsLanguages, tc.wantLyrics) {
+				t.Errorf("audio %v lyrics %v, want audio %v lyrics %v", got.AudioLanguages, got.LyricsLanguages, tc.wantAudio, tc.wantLyrics)
+			}
+		})
 	}
 }

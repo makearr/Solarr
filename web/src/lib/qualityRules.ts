@@ -13,6 +13,13 @@ export interface BitrateTarget extends Range {
   codec: string;
 }
 
+/** Languages a profile prefers, as two-letter codes: a tie-breaker on the measured file, never a gate (M1g 1.7). */
+export interface LanguagePreferences {
+  audio: string[];
+  lyrics: string[];
+  subtitle: string[];
+}
+
 export interface AudioRules {
   codecs: string[][];
   /** File name endings and the container formats they hold: two dimensions, linked (M1g 1.7). */
@@ -23,10 +30,13 @@ export interface AudioRules {
   bitrates: BitrateTarget[];
   sampleRate: Range | null;
   bitDepth: Range | null;
+  languages: LanguagePreferences;
 }
 
 type Target = { when?: Record<string, string>; min?: string; ideal: string; max?: string; weights?: unknown };
+type ScoringRule = { name: string; score: number; specs: { field: string; has?: string; required?: boolean }[] };
 type Document = {
+  scoring?: ScoringRule[];
   quality_profile?: string;
   require?: { reject_codecs?: string[]; [key: string]: unknown };
   compare?: string[];
@@ -61,6 +71,24 @@ function canonicalTiers(tiers: string[][]): string[][] {
     .filter((tier) => tier.length > 0);
 }
 
+/** A preferred language is one scoring rule named by its kind and code, which is how it is told from the profile's own rules. */
+const LANGUAGE_FIELDS: readonly [keyof LanguagePreferences, string, string][] = [
+  ["audio", "audio_languages", "Preferred audio language: "],
+  ["lyrics", "lyrics_languages", "Preferred lyrics language: "],
+  ["subtitle", "subtitle_languages", "Preferred subtitle language: "],
+];
+const LANGUAGE_SCORE = 2;
+
+function parseLanguages(doc: Document): LanguagePreferences {
+  const languages: LanguagePreferences = { audio: [], lyrics: [], subtitle: [] };
+  for (const [key, , prefix] of LANGUAGE_FIELDS) {
+    for (const rule of doc.scoring ?? []) {
+      if (rule.name.startsWith(prefix)) languages[key].push(rule.name.slice(prefix.length));
+    }
+  }
+  return languages;
+}
+
 const KBPS = /^(\d+(?:\.\d+)?)\s*kbps$/i;
 
 /** The kbps number of "320kbps"; the value unchanged when it has another unit. */
@@ -90,6 +118,7 @@ export function parseAudioRules(json: string): AudioRules {
     })),
     sampleRate: range(doc.targets?.sample_rate?.[0]),
     bitDepth: range(doc.targets?.bit_depth?.[0]),
+    languages: parseLanguages(doc),
   };
 }
 
@@ -151,6 +180,16 @@ export function buildAudioRules(json: string, name: string, rules: AudioRules): 
     }
   }
   doc.compare = compare.filter((entry) => entry !== "score").concat("score");
+
+  const ownRule = (rule: ScoringRule) => LANGUAGE_FIELDS.some(([, , prefix]) => rule.name.startsWith(prefix));
+  const scoring = (doc.scoring ?? []).filter((rule) => !ownRule(rule));
+  for (const [key, field, prefix] of LANGUAGE_FIELDS) {
+    for (const code of rules.languages[key]) {
+      scoring.push({ name: prefix + code, score: LANGUAGE_SCORE, specs: [{ field, has: code, required: true }] });
+    }
+  }
+  if (scoring.length > 0) doc.scoring = scoring;
+  else delete doc.scoring;
 
   return JSON.stringify(doc);
 }

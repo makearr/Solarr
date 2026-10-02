@@ -43,6 +43,7 @@ describe("quality rules", () => {
       buildAudioRules("", "AAC 256", {
         codecs: [["aac"]], extensions: [], containers: [["mp4"]], channels: [], rejectCodecs: [],
         bitrates: [{ codec: "aac", min: "224", ideal: "256", max: "320" }], sampleRate: null, bitDepth: null,
+        languages: { audio: [], lyrics: [], subtitle: [] },
       }),
     );
     expect(doc.compare).toEqual(["audio_codec", "container", "bitrate_distance", "score"]);
@@ -57,5 +58,21 @@ describe("quality rules", () => {
     const rebuilt = JSON.parse(buildAudioRules(older, "x", rules));
     expect(rebuilt.tiers.extension).toEqual([["m4a"], ["mp4"]]);
     expect(rebuilt.compare).toEqual(["container", "extension", "score"]);
+  });
+
+  it("keeps the profile's own scoring rules and writes language preferences as rules of their own", () => {
+    const own = '{"quality_profile":"x","compare":["score"],"scoring":[{"name":"Scene group","score":1,"specs":[{"field":"release_group","matches":"X"}]}]}';
+    const rules = parseAudioRules(own);
+    expect(rules.languages).toEqual({ audio: [], lyrics: [], subtitle: [] });
+    rules.languages.lyrics = ["de", "en"];
+    const doc = JSON.parse(buildAudioRules(own, "x", rules));
+    expect(doc.scoring).toEqual([
+      { name: "Scene group", score: 1, specs: [{ field: "release_group", matches: "X" }] },
+      { name: "Preferred lyrics language: de", score: 2, specs: [{ field: "lyrics_languages", has: "de", required: true }] },
+      { name: "Preferred lyrics language: en", score: 2, specs: [{ field: "lyrics_languages", has: "en", required: true }] },
+    ]);
+    expect(parseAudioRules(JSON.stringify(doc)).languages.lyrics).toEqual(["de", "en"]);
+    rules.languages.lyrics = [];
+    expect(JSON.parse(buildAudioRules(JSON.stringify(doc), "x", rules)).scoring).toEqual(JSON.parse(own).scoring);
   });
 });

@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -104,5 +105,37 @@ func TestReadTags_AgainstRealFFprobeReportsAFileThatIsNotMedia(t *testing.T) {
 	}
 	if probes[1].Err == nil {
 		t.Error("a text file probed successfully")
+	}
+}
+
+// The language keys are spelled by ffprobe, not by us: ID3 puts the code in the key, Vorbis in LANGUAGE.
+func TestReadTags_LyricsLanguageAgainstRealFFprobe(t *testing.T) {
+	requireFFmpeg(t)
+	directory := t.TempDir()
+	write := func(name, codec string, metadata ...string) string {
+		path := filepath.Join(directory, name)
+		args := []string{"-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", "-c:a", codec}
+		for _, entry := range metadata {
+			args = append(args, "-metadata", entry)
+		}
+		if output, err := exec.CommandContext(t.Context(), "ffmpeg", append(args, path)...).CombinedOutput(); err != nil {
+			t.Fatalf("generate %s: %v: %s", name, err, output)
+		}
+		return path
+	}
+	mp3 := write("a.mp3", "libmp3lame", "lyrics-deu=Hallo Welt")
+	flac := write("b.flac", "flac", "LYRICS=Hello", "LANGUAGE=eng")
+	plain := write("c.flac", "flac")
+
+	probes, err := mediatool.New(nil, 1).ReadTags(t.Context(), []string{mp3, flac, plain})
+	if err != nil {
+		t.Fatalf("ReadTags: %v", err)
+	}
+	var got [][]string
+	for _, probe := range probes {
+		got = append(got, probe.Measured.LyricsLanguages)
+	}
+	if want := [][]string{{"de"}, {"en"}, nil}; !reflect.DeepEqual(got, want) {
+		t.Errorf("lyrics languages = %v, want %v", got, want)
 	}
 }

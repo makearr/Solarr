@@ -31,17 +31,19 @@ type FileFacts struct {
 	BitDepth          int
 	AudioLanguages    []string
 	SubtitleLanguages []string
-	EditionTokens     []string
-	ReleaseGroup      string
-	ProperRepack      bool
-	VideoBitrate      int64 // bits/sec
-	AudioBitrate      int64
-	OverallBitrate    int64
-	DurationMs        int64
-	Width             int
-	Height            int
-	FrameRate         float64
-	ScanType          string // "progressive" | "interlaced"
+	// LyricsLanguages is the language a music file's lyrics are in, as the probe read it from the tags.
+	LyricsLanguages []string
+	EditionTokens   []string
+	ReleaseGroup    string
+	ProperRepack    bool
+	VideoBitrate    int64 // bits/sec
+	AudioBitrate    int64
+	OverallBitrate  int64
+	DurationMs      int64
+	Width           int
+	Height          int
+	FrameRate       float64
+	ScanType        string // "progressive" | "interlaced"
 	// Container is ffprobe's own answer; Extension the file's name ending. Either alone stands for the container.
 	Container  string
 	Extension  string
@@ -103,6 +105,8 @@ func (facts Facts) listField(field string) ([]string, bool) {
 		return facts.File.AudioLanguages, len(facts.File.AudioLanguages) > 0
 	case "subtitle_languages":
 		return facts.File.SubtitleLanguages, len(facts.File.SubtitleLanguages) > 0
+	case "lyrics_languages":
+		return facts.File.LyricsLanguages, len(facts.File.LyricsLanguages) > 0
 	default:
 		return nil, false
 	}

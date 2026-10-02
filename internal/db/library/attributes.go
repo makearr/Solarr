@@ -34,6 +34,7 @@ type AttributeClaim struct {
 	ColourDepth, PageCount              int
 	BitrateKbps                         int
 	BitrateMode, VBRPreset              string
+	LyricsLanguages                     []string
 }
 
 // Hash is media_attributes.attr_hash: a deterministic digest of every field in
@@ -51,6 +52,10 @@ func (c AttributeClaim) Hash() string {
 		strconv.FormatBool(c.Lossless), strconv.Itoa(c.SampleRate), c.ImageFormat,
 		strconv.Itoa(c.ColourDepth), strconv.Itoa(c.PageCount), strconv.Itoa(c.BitrateKbps),
 		c.BitrateMode, c.VBRPreset,
+	}
+	// Appended only when set, so every hash interned before the field existed still matches.
+	if len(c.LyricsLanguages) > 0 {
+		fields = append(fields, strings.Join(c.LyricsLanguages, ","))
 	}
 	for _, field := range fields {
 		sum.Write([]byte(field))
@@ -102,6 +107,7 @@ func internParams(c AttributeClaim) librarydb.InternAttributesParams {
 		PageCount:   sql.NullInt64{Int64: int64(c.PageCount), Valid: c.PageCount > 0},
 		BitrateKbps: sql.NullInt64{Int64: int64(c.BitrateKbps), Valid: c.BitrateKbps > 0},
 		BitrateMode: nullString(c.BitrateMode), VbrPreset: nullString(c.VBRPreset),
+		LyricsLanguages: jsonArray(c.LyricsLanguages),
 	}
 }
 
@@ -122,7 +128,7 @@ func attributeClaimFromRow(row librarydb.MediaAttribute) AttributeClaim {
 		SampleRate: int(row.SampleRate.Int64), ImageFormat: row.ImageFormat.String,
 		ColourDepth: int(row.ColourDepth.Int64), PageCount: int(row.PageCount.Int64),
 		BitrateKbps: int(row.BitrateKbps.Int64), BitrateMode: row.BitrateMode.String,
-		VBRPreset: row.VbrPreset.String,
+		VBRPreset: row.VbrPreset.String, LyricsLanguages: jsonStrings(row.LyricsLanguages),
 	}
 }
 

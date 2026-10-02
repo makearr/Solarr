@@ -279,10 +279,12 @@ func parseProbe(output []byte) (Probe, error) {
 	// Stream tags first, so a format-level tag of the same name wins: Vorbis
 	// comments land at format level and are the authoritative copy.
 	tags := Tags{}
+	var streamLanguages []string
 	for _, stream := range decoded.Streams {
 		mergeTags(tags, stream.Tags)
 		switch stream.CodecType {
 		case "audio":
+			streamLanguages = append(streamLanguages, stream.Tags["language"])
 			if measured.AudioCodec == "" {
 				measured.AudioCodec = stream.CodecName
 				measured.AudioBitrate = parseInt(stream.BitRate)
@@ -304,6 +306,8 @@ func parseProbe(output []byte) (Probe, error) {
 		}
 	}
 	mergeTags(tags, decoded.Format.Tags)
+	measured.AudioLanguages = audioLanguages(streamLanguages, tags)
+	measured.LyricsLanguages = lyricsLanguages(tags)
 
 	return Probe{Tags: tags, Measured: measured}, nil
 }

@@ -339,6 +339,41 @@ function AudioRulesForm({ rules, onChange }: { rules: AudioRules; onChange: (rul
         fallback={{ min: "16", ideal: "16", max: "24" }}
         onChange={(bitDepth) => set({ bitDepth })}
       />
+
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-xs font-medium">Preferred languages</legend>
+        <p className="text-xs text-ink-muted">
+          Two-letter codes, comma separated (en, de). A preference only breaks a tie between files of equal quality; a file that
+          states no language is never refused. The language is read from the file's tags when it is probed.
+        </p>
+        {(
+          [
+            ["audio", "Audio language"],
+            ["lyrics", "Lyrics language"],
+            ["subtitle", "Subtitle language"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key} className="flex items-center gap-2 text-xs">
+            <span className="w-32">{label}</span>
+            <input
+              defaultValue={rules.languages[key].join(", ")}
+              placeholder="en, de"
+              onBlur={(event) =>
+                set({
+                  languages: {
+                    ...rules.languages,
+                    [key]: event.target.value
+                      .split(/[\s,]+/)
+                      .map((code) => code.trim().toLowerCase())
+                      .filter((code, index, all) => code !== "" && all.indexOf(code) === index),
+                  },
+                })
+              }
+              className={`${input} w-40`}
+            />
+          </label>
+        ))}
+      </fieldset>
     </div>
   );
 }
