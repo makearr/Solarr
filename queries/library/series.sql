@@ -100,3 +100,16 @@ WHERE d.work_id = ? AND f.role = 'primary' AND f.media_ref <> '';
 
 -- name: SetSeasonPartsMonitored :exec
 UPDATE work_part SET monitored = sqlc.arg(monitored) WHERE work_id = sqlc.arg(work_id) AND media_ref LIKE sqlc.arg(scope);
+
+-- Every title a library's series answers to, canonical and alias, for matching folder names (ADR-41).
+-- name: ListSeriesTitles :many
+SELECT w.id AS work_id, w.canonical_title AS title, w.year AS year
+FROM work w
+WHERE w.media_type = 'tv'
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id))
+UNION ALL
+SELECT t.work_id, t.title, w.year
+FROM work_title t
+JOIN work w ON w.id = t.work_id
+WHERE w.media_type = 'tv'
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id));

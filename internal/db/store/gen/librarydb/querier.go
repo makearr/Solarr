@@ -569,6 +569,8 @@ type Querier interface {
 	// A TV library's series: works with a desired item in the category (visibility is desired-item membership, ADR-27),
 	// ordered by sort title with the id as the tie-break.
 	ListSeriesInCategory(ctx context.Context, arg ListSeriesInCategoryParams) ([]ListSeriesInCategoryRow, error)
+	// Every title a library's series answers to, canonical and alias, for matching folder names (ADR-41).
+	ListSeriesTitles(ctx context.Context, categoryID int64) ([]ListSeriesTitlesRow, error)
 	// Every live path of every media object that lives at more than one place; roots are filtered in Go.
 	ListSharedObjectPaths(ctx context.Context) ([]ListSharedObjectPathsRow, error)
 	// Files measured before the probe read the lyrics language: their stored probe has no such key, so they are read once more.
