@@ -116,7 +116,7 @@ function QueueTable({ items }: { items: readonly QueueItem[] }) {
     <table className="w-full text-left text-xs">
       <thead className="text-ink-muted">
         <tr className="border-b border-border-subtle">
-          <th className="px-2 py-1.5 font-medium">Album</th>
+          <th className="px-2 py-1.5 font-medium">Title</th>
           <th className="px-2 py-1.5 font-medium">Release</th>
           <th className="px-2 py-1.5 font-medium">Status</th>
           <th className="px-2 py-1.5 font-medium">Progress</th>
@@ -252,7 +252,7 @@ function HeldList({ held }: { held: readonly HeldRelease[] }) {
           <thead className="text-ink-muted">
             <tr className="border-b border-border-subtle">
               <th className="w-8 px-2 py-1.5 text-right font-medium">#</th>
-              <th className="px-2 py-1.5 font-medium">Album</th>
+              <th className="px-2 py-1.5 font-medium">Title</th>
               <th className="px-2 py-1.5 font-medium">Release</th>
               <th className="px-2 py-1.5 font-medium">Size</th>
               <th className="px-2 py-1.5 font-medium">Asked by</th>

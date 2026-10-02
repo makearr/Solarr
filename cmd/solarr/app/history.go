@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -64,6 +65,9 @@ func (p *process) describeAcquisition(ctx context.Context, acquisition library.A
 			workID, data.CategoryID = item.WorkID, item.CategoryID
 			if work, err := library.NewWorks(p.library).Detail(ctx, workID); err == nil {
 				data.Album = work.Work.CanonicalTitle
+				if p.isTV(item.CategoryID) && item.MediaRef != "" {
+					data.Album += " " + strings.ToUpper(item.MediaRef)
+				}
 				for _, credit := range work.Credits {
 					if credit.Role == music.CreditRoleArtist {
 						data.Artist = credit.PersonName
