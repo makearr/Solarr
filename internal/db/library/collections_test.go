@@ -248,3 +248,37 @@ func TestArtworkIsReplacedNotAccumulated(t *testing.T) {
 		t.Errorf("%d artwork rows, want one holding the newest key", len(artwork))
 	}
 }
+
+// A crossover event names single episodes of different works, and two parts of one work are two members (T2).
+func TestCollectionMembersCanNamePartsOfAWork(t *testing.T) {
+	opened, queries := newLibrary(t)
+	work := createWork(t, opened, "tv", "Series A")
+	var collectionID int64
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		row, err := q.CreateCollection(ctx, librarydb.CreateCollectionParams{MediaType: "tv", Name: "Event", Kind: "crossover", Source: "user", AddedAt: 1})
+		collectionID = row.ID
+		if err != nil {
+			return err
+		}
+		for index, ref := range []string{"s01e01", "s01e02"} {
+			part, err := q.CreateWorkPart(ctx, librarydb.CreateWorkPartParams{WorkID: work.ID, MediaRef: ref, SortKey: ref, Monitored: 1})
+			if err != nil {
+				return err
+			}
+			if err := q.AddCollectionMember(ctx, librarydb.AddCollectionMemberParams{
+				CollectionID: row.ID, WorkID: work.ID, PartID: part.ID, Ord: sql.NullInt64{Int64: int64(index), Valid: true},
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	members, err := queries.ListCollectionMembers(t.Context(), collectionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 2 || members[0].PartID == 0 || members[0].PartID == members[1].PartID {
+		t.Errorf("members = %+v, want two distinct parts", members)
+	}
+}

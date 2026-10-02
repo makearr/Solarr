@@ -11,19 +11,25 @@ import (
 )
 
 const addCollectionMember = `-- name: AddCollectionMember :exec
-INSERT INTO collection_member (collection_id, work_id, ord)
-VALUES (?, ?, ?)
-ON CONFLICT (collection_id, work_id) DO UPDATE SET ord = excluded.ord
+INSERT INTO collection_member (collection_id, work_id, part_id, ord)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (collection_id, work_id, part_id) DO UPDATE SET ord = excluded.ord
 `
 
 type AddCollectionMemberParams struct {
 	CollectionID int64
 	WorkID       int64
+	PartID       int64
 	Ord          sql.NullInt64
 }
 
 func (q *Queries) AddCollectionMember(ctx context.Context, arg AddCollectionMemberParams) error {
-	_, err := q.db.ExecContext(ctx, addCollectionMember, arg.CollectionID, arg.WorkID, arg.Ord)
+	_, err := q.db.ExecContext(ctx, addCollectionMember,
+		arg.CollectionID,
+		arg.WorkID,
+		arg.PartID,
+		arg.Ord,
+	)
 	return err
 }
 
@@ -283,8 +289,8 @@ func (q *Queries) ListArtworkForSubject(ctx context.Context, arg ListArtworkForS
 }
 
 const listCollectionMembers = `-- name: ListCollectionMembers :many
-SELECT collection_id, work_id, ord
-FROM collection_member WHERE collection_id = ? ORDER BY ord, work_id
+SELECT collection_id, work_id, part_id, ord
+FROM collection_member WHERE collection_id = ? ORDER BY ord, work_id, part_id
 `
 
 func (q *Queries) ListCollectionMembers(ctx context.Context, collectionID int64) ([]CollectionMember, error) {
@@ -296,7 +302,12 @@ func (q *Queries) ListCollectionMembers(ctx context.Context, collectionID int64)
 	items := []CollectionMember{}
 	for rows.Next() {
 		var i CollectionMember
-		if err := rows.Scan(&i.CollectionID, &i.WorkID, &i.Ord); err != nil {
+		if err := rows.Scan(
+			&i.CollectionID,
+			&i.WorkID,
+			&i.PartID,
+			&i.Ord,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
