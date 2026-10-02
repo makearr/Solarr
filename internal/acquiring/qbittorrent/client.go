@@ -203,6 +203,8 @@ func (c Client) Add(ctx context.Context, request AddRequest) error {
 	if request.Category != "" {
 		_ = writer.WriteField("category", request.Category)
 	}
+	// A single-file torrent would otherwise be a bare file; import takes a folder.
+	_ = writer.WriteField("contentLayout", "Subfolder")
 	if request.Magnet != "" {
 		_ = writer.WriteField("urls", request.Magnet)
 	} else {
