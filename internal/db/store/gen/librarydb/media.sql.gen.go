@@ -261,7 +261,7 @@ SELECT id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
        audio_channels, bit_depth, languages, subtitles, edition_tokens,
        release_group, proper_repack, frame_rate, scan_type, container,
        lossless, sample_rate, image_format, colour_depth, page_count,
-       bitrate_kbps, bitrate_mode, vbr_preset
+       bitrate_kbps, bitrate_mode, vbr_preset, lyrics_languages
 FROM media_attributes WHERE id = ?
 `
 
@@ -294,6 +294,7 @@ func (q *Queries) GetAttributes(ctx context.Context, id int64) (MediaAttribute, 
 		&i.BitrateKbps,
 		&i.BitrateMode,
 		&i.VbrPreset,
+		&i.LyricsLanguages,
 	)
 	return i, err
 }
@@ -410,41 +411,42 @@ INSERT INTO media_attributes (attr_hash, resolution, source, video_codec, hdr,
                               subtitles, edition_tokens, release_group, proper_repack,
                               frame_rate, scan_type, container, lossless, sample_rate,
                               image_format, colour_depth, page_count, bitrate_kbps,
-                              bitrate_mode, vbr_preset)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              bitrate_mode, vbr_preset, lyrics_languages)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (attr_hash) DO UPDATE SET attr_hash = excluded.attr_hash
 RETURNING id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
           audio_channels, bit_depth, languages, subtitles, edition_tokens,
           release_group, proper_repack, frame_rate, scan_type, container,
           lossless, sample_rate, image_format, colour_depth, page_count,
-          bitrate_kbps, bitrate_mode, vbr_preset
+          bitrate_kbps, bitrate_mode, vbr_preset, lyrics_languages
 `
 
 type InternAttributesParams struct {
-	AttrHash      string
-	Resolution    sql.NullString
-	Source        sql.NullString
-	VideoCodec    sql.NullString
-	Hdr           sql.NullString
-	AudioCodec    sql.NullString
-	AudioChannels sql.NullString
-	BitDepth      sql.NullInt64
-	Languages     sql.NullString
-	Subtitles     sql.NullString
-	EditionTokens sql.NullString
-	ReleaseGroup  sql.NullString
-	ProperRepack  int64
-	FrameRate     sql.NullFloat64
-	ScanType      sql.NullString
-	Container     sql.NullString
-	Lossless      sql.NullInt64
-	SampleRate    sql.NullInt64
-	ImageFormat   sql.NullString
-	ColourDepth   sql.NullInt64
-	PageCount     sql.NullInt64
-	BitrateKbps   sql.NullInt64
-	BitrateMode   sql.NullString
-	VbrPreset     sql.NullString
+	AttrHash        string
+	Resolution      sql.NullString
+	Source          sql.NullString
+	VideoCodec      sql.NullString
+	Hdr             sql.NullString
+	AudioCodec      sql.NullString
+	AudioChannels   sql.NullString
+	BitDepth        sql.NullInt64
+	Languages       sql.NullString
+	Subtitles       sql.NullString
+	EditionTokens   sql.NullString
+	ReleaseGroup    sql.NullString
+	ProperRepack    int64
+	FrameRate       sql.NullFloat64
+	ScanType        sql.NullString
+	Container       sql.NullString
+	Lossless        sql.NullInt64
+	SampleRate      sql.NullInt64
+	ImageFormat     sql.NullString
+	ColourDepth     sql.NullInt64
+	PageCount       sql.NullInt64
+	BitrateKbps     sql.NullInt64
+	BitrateMode     sql.NullString
+	VbrPreset       sql.NullString
+	LyricsLanguages sql.NullString
 }
 
 // Physical files. Column lists follow table order, or sqlc stops reusing models.
@@ -474,6 +476,7 @@ func (q *Queries) InternAttributes(ctx context.Context, arg InternAttributesPara
 		arg.BitrateKbps,
 		arg.BitrateMode,
 		arg.VbrPreset,
+		arg.LyricsLanguages,
 	)
 	var i MediaAttribute
 	err := row.Scan(
@@ -502,6 +505,7 @@ func (q *Queries) InternAttributes(ctx context.Context, arg InternAttributesPara
 		&i.BitrateKbps,
 		&i.BitrateMode,
 		&i.VbrPreset,
+		&i.LyricsLanguages,
 	)
 	return i, err
 }

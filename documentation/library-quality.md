@@ -60,3 +60,15 @@ the recycle bin -- reason `replaced` for an owned file an upgrade beat, `rejecte
 that measured no better (facts win over the release name). Every path of a recycled file goes with it
 (Invariant 92), and only tracks a Solarr download touched are ever settled this way: duplicates you
 placed yourself are left alone. The nightly cutoff check does the same for anything missed.
+
+**Preferred languages** (profile editor, 2026-10-02). Audio, lyrics and subtitle language, as two-letter codes,
+are tie-breakers: each is a scoring rule named `Preferred <kind> language: <code>` worth +2, never a gate, so a
+file that states no language is never refused. The probe reads them from the file's tags and stores them
+(`media_attributes.languages`, `.lyrics_languages`): ID3 lyrics name their language in the key (`lyrics-deu`), a
+Vorbis comment pairs `LYRICS` with `LANGUAGE`, an MP4 stream carries `language`; three-letter codes become
+two-letter and `und` states nothing. Preferences apply to a *measured* file, so they decide between two files of
+a track (replace in place), not between releases, whose names state no language. A file probed before this
+existed has no lyrics language until it is probed again.
+
+**Edit on an album.** Its own quality profile replaces the library's profile list for that album's search
+and upgrade decisions (`desired_profile_override`); the cutoff state (upgradable or not) is still the library's.

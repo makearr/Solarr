@@ -2,7 +2,9 @@ package library_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -204,5 +206,41 @@ func TestListUnmeasured_OnlyReturnsFilesWithNoMeasuredAttributes(t *testing.T) {
 	}
 	if len(files) != 1 || files[0].MediaObjectID != unmeasured.ID {
 		t.Errorf("ListUnmeasured = %+v, want exactly the unmeasured object", files)
+	}
+}
+
+// Every hash interned before lyrics_languages existed must still be what Hash derives for the same claim.
+func TestAttributeClaim_HashIsUnchangedForAClaimWithoutLyricsLanguages(t *testing.T) {
+	claim := library.AttributeClaim{AudioCodec: "flac", Lossless: true, SampleRate: 44100, BitDepth: 16}
+	sum := sha256.New()
+	for _, field := range []string{
+		"", "", "", "", "flac", "", "16", "", "", "", "", "false", "0", "", "", "true", "44100", "", "0", "0", "0", "", "",
+	} {
+		sum.Write([]byte(field))
+		sum.Write([]byte{0})
+	}
+	if got, want := claim.Hash(), hex.EncodeToString(sum.Sum(nil)); got != want {
+		t.Errorf("Hash() = %s, want the pre-lyrics digest %s", got, want)
+	}
+	before := claim.Hash()
+	claim.LyricsLanguages = []string{"de"}
+	if claim.Hash() == before {
+		t.Error("a lyrics language did not change the hash")
+	}
+}
+
+func TestAttributes_LyricsLanguagesSurviveInterning(t *testing.T) {
+	opened, _ := newLibrary(t)
+	attributes := library.NewAttributes(opened)
+	id, err := attributes.Intern(t.Context(), library.AttributeClaim{AudioCodec: "mp3", LyricsLanguages: []string{"de"}})
+	if err != nil {
+		t.Fatalf("Intern: %v", err)
+	}
+	row, err := librarydb.New(opened.Read()).GetAttributes(t.Context(), id)
+	if err != nil {
+		t.Fatalf("GetAttributes: %v", err)
+	}
+	if !row.LyricsLanguages.Valid || row.LyricsLanguages.String != `["de"]` {
+		t.Errorf("lyrics_languages = %+v, want [\"de\"]", row.LyricsLanguages)
 	}
 }

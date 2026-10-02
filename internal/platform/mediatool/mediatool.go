@@ -73,6 +73,9 @@ type Measured struct {
 	Channels int
 	Width    int
 	Height   int
+	// AudioLanguages and LyricsLanguages are two-letter codes; empty when the file states none.
+	AudioLanguages  []string
+	LyricsLanguages []string
 }
 
 // Probe is one file, as one invocation reported it.

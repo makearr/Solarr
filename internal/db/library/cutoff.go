@@ -46,6 +46,8 @@ type MeasuredFile struct {
 	Extension   string
 	BitrateKbps int64
 	Lossless    bool
+	// AudioLanguages and LyricsLanguages are what the probe read from the tags; empty when none was stated.
+	AudioLanguages, LyricsLanguages []string
 }
 
 // MeasuredFiles answers what the probe measured of each file of a work's album.
@@ -58,9 +60,10 @@ func (d Desired) MeasuredFiles(ctx context.Context, workID int64) ([]MeasuredFil
 	for index, row := range rows {
 		files[index] = MeasuredFile{
 			MediaObjectID: row.MediaObjectID, MediaRef: row.MediaRef, Measured: row.AudioCodec.Valid, AudioCodec: row.AudioCodec.String,
-			Extension:   strings.ToLower(strings.TrimPrefix(path.Ext(row.RelPath), ".")),
-			BitrateKbps: bitrateKbps(row.OverallBitrate, row.AudioBitrate),
-			Lossless:    row.Lossless.Valid && row.Lossless.Int64 == 1,
+			Extension:      strings.ToLower(strings.TrimPrefix(path.Ext(row.RelPath), ".")),
+			BitrateKbps:    bitrateKbps(row.OverallBitrate, row.AudioBitrate),
+			Lossless:       row.Lossless.Valid && row.Lossless.Int64 == 1,
+			AudioLanguages: jsonStrings(row.Languages), LyricsLanguages: jsonStrings(row.LyricsLanguages),
 		}
 	}
 	return files, nil

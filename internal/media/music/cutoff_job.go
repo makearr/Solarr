@@ -296,6 +296,7 @@ func measuredFacts(file library.MeasuredFile) score.Facts {
 	return score.Facts{File: score.FileFacts{
 		AudioCodec: file.AudioCodec, Extension: file.Extension, Lossless: file.Lossless,
 		AudioBitrate: file.BitrateKbps * 1000, OverallBitrate: file.BitrateKbps * 1000,
+		AudioLanguages: file.AudioLanguages, LyricsLanguages: file.LyricsLanguages,
 	}}
 }
 

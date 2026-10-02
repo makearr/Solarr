@@ -6,21 +6,21 @@ INSERT INTO media_attributes (attr_hash, resolution, source, video_codec, hdr,
                               subtitles, edition_tokens, release_group, proper_repack,
                               frame_rate, scan_type, container, lossless, sample_rate,
                               image_format, colour_depth, page_count, bitrate_kbps,
-                              bitrate_mode, vbr_preset)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              bitrate_mode, vbr_preset, lyrics_languages)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (attr_hash) DO UPDATE SET attr_hash = excluded.attr_hash
 RETURNING id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
           audio_channels, bit_depth, languages, subtitles, edition_tokens,
           release_group, proper_repack, frame_rate, scan_type, container,
           lossless, sample_rate, image_format, colour_depth, page_count,
-          bitrate_kbps, bitrate_mode, vbr_preset;
+          bitrate_kbps, bitrate_mode, vbr_preset, lyrics_languages;
 
 -- name: GetAttributes :one
 SELECT id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
        audio_channels, bit_depth, languages, subtitles, edition_tokens,
        release_group, proper_repack, frame_rate, scan_type, container,
        lossless, sample_rate, image_format, colour_depth, page_count,
-       bitrate_kbps, bitrate_mode, vbr_preset
+       bitrate_kbps, bitrate_mode, vbr_preset, lyrics_languages
 FROM media_attributes WHERE id = ?;
 
 -- Returning the row costs four times the insert itself at import scale, so this is

@@ -33,6 +33,7 @@ func attributeClaimFromMeasured(m mediatool.Measured) library.AttributeClaim {
 		BitDepth:    m.BitDepth,
 		Lossless:    isLosslessCodec(m.AudioCodec),
 		BitrateKbps: int(m.AudioBitrate / 1000),
+		Languages:   m.AudioLanguages, LyricsLanguages: m.LyricsLanguages,
 	}
 	if m.Channels > 0 {
 		claim.AudioChannels = strconv.Itoa(m.Channels)

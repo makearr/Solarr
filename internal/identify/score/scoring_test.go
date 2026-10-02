@@ -112,3 +112,13 @@ func TestEvaluateScoring_SumsEveryMatchingRule(t *testing.T) {
 		t.Errorf("components = %+v, want exactly rule a with delta 10", components)
 	}
 }
+
+func TestScoringRuleMatches_LyricsLanguageIsAListField(t *testing.T) {
+	rule := ScoringRule{Specs: []Spec{{Field: "lyrics_languages", Has: "de", Required: true}}}
+	if !scoringRuleMatches(rule, Facts{File: FileFacts{LyricsLanguages: []string{"en", "de"}}}, nil) {
+		t.Error("lyrics in de and en: want the rule to match de")
+	}
+	if scoringRuleMatches(rule, Facts{}, nil) {
+		t.Error("a file with no stated lyrics language must not match")
+	}
+}

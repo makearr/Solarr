@@ -409,31 +409,32 @@ type ManualIdentification struct {
 }
 
 type MediaAttribute struct {
-	ID            int64
-	AttrHash      string
-	Resolution    sql.NullString
-	Source        sql.NullString
-	VideoCodec    sql.NullString
-	Hdr           sql.NullString
-	AudioCodec    sql.NullString
-	AudioChannels sql.NullString
-	BitDepth      sql.NullInt64
-	Languages     sql.NullString
-	Subtitles     sql.NullString
-	EditionTokens sql.NullString
-	ReleaseGroup  sql.NullString
-	ProperRepack  int64
-	FrameRate     sql.NullFloat64
-	ScanType      sql.NullString
-	Container     sql.NullString
-	Lossless      sql.NullInt64
-	SampleRate    sql.NullInt64
-	ImageFormat   sql.NullString
-	ColourDepth   sql.NullInt64
-	PageCount     sql.NullInt64
-	BitrateKbps   sql.NullInt64
-	BitrateMode   sql.NullString
-	VbrPreset     sql.NullString
+	ID              int64
+	AttrHash        string
+	Resolution      sql.NullString
+	Source          sql.NullString
+	VideoCodec      sql.NullString
+	Hdr             sql.NullString
+	AudioCodec      sql.NullString
+	AudioChannels   sql.NullString
+	BitDepth        sql.NullInt64
+	Languages       sql.NullString
+	Subtitles       sql.NullString
+	EditionTokens   sql.NullString
+	ReleaseGroup    sql.NullString
+	ProperRepack    int64
+	FrameRate       sql.NullFloat64
+	ScanType        sql.NullString
+	Container       sql.NullString
+	Lossless        sql.NullInt64
+	SampleRate      sql.NullInt64
+	ImageFormat     sql.NullString
+	ColourDepth     sql.NullInt64
+	PageCount       sql.NullInt64
+	BitrateKbps     sql.NullInt64
+	BitrateMode     sql.NullString
+	VbrPreset       sql.NullString
+	LyricsLanguages sql.NullString
 }
 
 type MediaObject struct {
