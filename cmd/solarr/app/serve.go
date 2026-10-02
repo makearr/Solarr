@@ -813,10 +813,7 @@ func (p *process) fileRemover() adapters.RemoveAndBlock {
 	}
 }
 
-// validateNaming dispatches to the one media type with a naming scheme until stage 9's plugins.
+// validateNaming dispatches to the media types that declare a naming scheme (adapters.namingModules).
 func validateNaming(mediaType string, profile settings.NamingProfile) error {
-	if mediaType != "music" {
-		return fmt.Errorf("naming: %s has no naming scheme yet", mediaType)
-	}
-	return music.ValidateNaming(profile)
+	return adapters.ValidateNaming(mediaType, profile)
 }

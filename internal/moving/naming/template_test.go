@@ -180,3 +180,11 @@ func TestValidateTokens_IgnoresCaseAndSpelling(t *testing.T) {
 		}
 	}
 }
+
+func TestCompile_BracketEscapeWritesLiteralBrackets(t *testing.T) {
+	segments := mustCompile(t, "Show [[tvdbid-{id}]] [{Optional}]")
+	rendered, _ := naming.Render(segments, naming.Context{"id": "12"}, naming.DefaultOptions)
+	if rendered != "Show [tvdbid-12] " {
+		t.Errorf("rendered = %q, want literal brackets kept and the unresolved conditional dropped", rendered)
+	}
+}
