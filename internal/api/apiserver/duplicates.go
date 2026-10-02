@@ -9,17 +9,24 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 )
 
-// DuplicateGroupRow is files believed to be one file stored more than once; each copy lists the paths reaching it,
-// as a root folder id and the path under it.
+// DuplicateGroupRow is one track a library holds more than once and which copy to keep.
 type DuplicateGroupRow struct {
-	SizeBytes int64
-	Copies    []DuplicateCopyRow
+	Artist, Title string
+	Copies        []DuplicateCopyRow
+	// Keep indexes Copies; KeepReason says why that one.
+	Keep       int
+	KeepReason string
 }
 
-// DuplicateCopyRow is one stored file.
+// DuplicateCopyRow is one stored file of the track.
 type DuplicateCopyRow struct {
-	MediaObjectID int64
-	Paths         []DuplicatePathRow
+	MediaObjectID, WorkID int64
+	Album                 string
+	SizeBytes, DurationMs int64
+	BitrateKbps           int64
+	AudioCodec            string
+	Lossless              bool
+	Paths                 []DuplicatePathRow
 }
 
 // DuplicatePathRow is one path of a copy.
@@ -28,9 +35,9 @@ type DuplicatePathRow struct {
 	RelPath      string
 }
 
-// DuplicateReader finds likely copies under some root folders.
+// DuplicateReader finds the tracks a library holds more than once.
 type DuplicateReader interface {
-	Duplicates(ctx context.Context, rootFolderIDs []int64, limit int) ([]DuplicateGroupRow, error)
+	Duplicates(ctx context.Context, categoryID int64, rootFolderIDs []int64, limit int) ([]DuplicateGroupRow, error)
 }
 
 // duplicateGroupLimit bounds one report.
@@ -42,7 +49,7 @@ func (s *Server) routeGetCategoryDuplicates(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-// GetCategoryDuplicates answers one library's likely duplicate files; a library the caller cannot read is 404.
+// GetCategoryDuplicates answers one library's duplicate tracks; a library the caller cannot read is 404.
 func (s *Server) GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
@@ -64,17 +71,27 @@ func (s *Server) GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, i
 	for i, folder := range folders {
 		roots[i], rootPath[folder.ID] = folder.ID, folder.Path
 	}
-	groups, err := s.duplicates.Duplicates(r.Context(), roots, duplicateGroupLimit)
+	groups, err := s.duplicates.Duplicates(r.Context(), id, roots, duplicateGroupLimit)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
 	type copyView struct {
 		MediaObjectID int64    `json:"media_object_id"`
+		WorkID        int64    `json:"work_id"`
+		Album         string   `json:"album"`
+		SizeBytes     int64    `json:"size_bytes"`
+		DurationMs    int64    `json:"duration_ms"`
+		BitrateKbps   int64    `json:"bitrate_kbps"`
+		AudioCodec    string   `json:"audio_codec"`
+		Lossless      bool     `json:"lossless"`
+		Keep          bool     `json:"keep"`
 		Paths         []string `json:"paths"`
 	}
 	type groupView struct {
-		SizeBytes        int64      `json:"size_bytes"`
+		Artist           string     `json:"artist"`
+		Title            string     `json:"title"`
+		KeepReason       string     `json:"keep_reason"`
 		ReclaimableBytes int64      `json:"reclaimable_bytes"`
 		Copies           []copyView `json:"copies"`
 	}
@@ -83,13 +100,20 @@ func (s *Server) GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, i
 		Groups           []groupView `json:"groups"`
 	}{Groups: make([]groupView, 0, len(groups))}
 	for _, group := range groups {
-		view := groupView{SizeBytes: group.SizeBytes, ReclaimableBytes: group.SizeBytes * int64(len(group.Copies)-1)}
-		for _, copy := range group.Copies {
+		view := groupView{Artist: group.Artist, Title: group.Title, KeepReason: group.KeepReason}
+		for index, copy := range group.Copies {
 			paths := make([]string, len(copy.Paths))
 			for i, one := range copy.Paths {
 				paths[i] = path.Join(rootPath[one.RootFolderID], one.RelPath)
 			}
-			view.Copies = append(view.Copies, copyView{MediaObjectID: copy.MediaObjectID, Paths: paths})
+			if index != group.Keep {
+				view.ReclaimableBytes += copy.SizeBytes
+			}
+			view.Copies = append(view.Copies, copyView{
+				MediaObjectID: copy.MediaObjectID, WorkID: copy.WorkID, Album: copy.Album, SizeBytes: copy.SizeBytes,
+				DurationMs: copy.DurationMs, BitrateKbps: copy.BitrateKbps, AudioCodec: copy.AudioCodec, Lossless: copy.Lossless,
+				Keep: index == group.Keep, Paths: paths,
+			})
 		}
 		report.Groups = append(report.Groups, view)
 		report.ReclaimableBytes += view.ReclaimableBytes

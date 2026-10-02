@@ -441,9 +441,6 @@ type Querier interface {
 	// Which of an album's files a Solarr download brought in: placed by an import session a download
 	// started. Only those can replace an owned file (M1d).
 	ListDownloadedFilesForWork(ctx context.Context, workID int64) ([]int64, error)
-	// Files with the same size and the same sampled content, whatever their names: the likely copies of one file.
-	ListDuplicateGroups(ctx context.Context, pageSize int64) ([]ListDuplicateGroupsRow, error)
-	ListDuplicateMembers(ctx context.Context, arg ListDuplicateMembersParams) ([]ListDuplicateMembersRow, error)
 	ListEditionExternalIDs(ctx context.Context, editionID int64) ([]EditionExternalID, error)
 	// Works identified at release-group level only (the text search never picks an
 	// edition): no edition, and either not enriched yet (no credit) or with files on
@@ -571,6 +568,9 @@ type Querier interface {
 	ListTagsForSubject(ctx context.Context, arg ListTagsForSubjectParams) ([]TagAssignment, error)
 	// The work detail page's own need, same reasoning as ListCreditsForWorkWithPerson.
 	ListTagsForSubjectWithName(ctx context.Context, arg ListTagsForSubjectWithNameParams) ([]ListTagsForSubjectWithNameRow, error)
+	// Every file that covers a track, with what identifies the track: its title, artist and length. Duplicates are found
+	// from these in Go, by what the file is and not by its bytes.
+	ListTrackFilesWithMetadata(ctx context.Context, categoryID int64) ([]ListTrackFilesWithMetadataRow, error)
 	// Fingerprint generation is the lowest-priority background work and resumable,
 	// so it asks for the next unfingerprinted rows rather than scanning (ADR-35).
 	ListUnfingerprinted(ctx context.Context, arg ListUnfingerprintedParams) ([]MediaObject, error)

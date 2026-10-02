@@ -39,26 +39,17 @@ export function Network() {
   if (network.error !== null || !network.data) return null;
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Network</h2>
-      <p className="text-xs text-ink-muted">
-        The listen port, a global proxy and an IP whitelist. The whitelist can only deny --
-        it never authenticates and never grants.
+    <section className="flex flex-col gap-3">
+      <p className="max-w-2xl text-sm text-ink-muted">
+        Where Solarr listens, how it reaches the internet, and who may reach it. The IP whitelist can only deny: it never
+        authenticates and never grants.
       </p>
-
-      <div className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3">
-        <NetworkForm
-          network={network.data}
-          onSave={(body) => update.mutate(body)}
-          busy={update.isPending}
-        />
-        {update.isError && (
-          <p className="text-xs text-danger">
-            That change was refused -- often because it would exclude the address you are using
-            right now.
-          </p>
-        )}
-      </div>
+      <NetworkForm network={network.data} onSave={(body) => update.mutate(body)} busy={update.isPending} />
+      {update.isError && (
+        <p className="text-sm text-danger">
+          That change was refused, often because it would exclude the address you are using right now.
+        </p>
+      )}
     </section>
   );
 }
@@ -94,7 +85,7 @@ function NetworkForm({
 
   return (
     <form
-      className="flex flex-col gap-3 text-xs text-ink-muted"
+      className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault();
         onSave({
@@ -107,95 +98,117 @@ function NetworkForm({
         });
       }}
     >
-      <label className="flex flex-col gap-1">
-        Port
-        <input
-          type="number"
-          min={0}
-          max={65535}
-          value={port}
-          disabled={busy}
-          onChange={(event) => setPort(Number(event.target.value))}
-          className={inputStyle}
-        />
+      <Card title="Listen port" help="The port Solarr serves on. A change needs a restart of the container.">
+        <label className="flex w-40 flex-col gap-1 text-xs text-ink-muted">
+          Port
+          <input
+            type="number"
+            min={0}
+            max={65535}
+            value={port}
+            disabled={busy}
+            onChange={(event) => setPort(Number(event.target.value))}
+            className={inputStyle}
+          />
+        </label>
         {network.restart_required && (
-          <span className="flex items-center gap-1.5 text-[0.6875rem] text-amber-600 dark:text-amber-400">
+          <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
             <AlertTriangle aria-hidden className="size-3.5" />
-            Port {network.port} is saved but not live yet -- restart the container.
-          </span>
+            Port {network.port} is saved but not live yet: restart the container.
+          </p>
         )}
-      </label>
+      </Card>
 
-      <Toggle
-        label="Send outbound traffic through a proxy"
-        checked={proxyEnabled}
-        disabled={busy}
-        onChange={setProxyEnabled}
-      />
+      <Card
+        title="Outbound proxy"
+        help="Send Solarr's own internet traffic (metadata providers, indexers) through a proxy. Addresses in the bypass list always go direct."
+        toggle={<Toggle label="Use a proxy" checked={proxyEnabled} disabled={busy} onChange={setProxyEnabled} />}
+      >
+        <div className={`flex flex-col gap-3 ${proxyEnabled ? "" : "opacity-60"}`}>
+          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+            Proxy address
+            <input
+              type="text"
+              placeholder="socks5://host:1080"
+              value={proxyURL}
+              disabled={busy}
+              onChange={(event) => setProxyURL(event.target.value)}
+              className={`${inputStyle} max-w-md`}
+            />
+            <span>http, https or socks5, with a port.</span>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+            Bypass
+            <textarea
+              rows={4}
+              placeholder={"10.0.0.0/8\n.lan"}
+              value={proxyBypass}
+              disabled={busy}
+              onChange={(event) => setProxyBypass(event.target.value)}
+              className={`${inputStyle} max-w-md font-mono`}
+            />
+            <span>One network (CIDR) or host suffix (.lan) per line.</span>
+          </label>
+        </div>
+      </Card>
 
-      <label className="flex flex-col gap-1">
-        Proxy
-        <input
-          type="text"
-          placeholder="socks5://host:1080"
-          value={proxyURL}
-          disabled={busy}
-          onChange={(event) => setProxyURL(event.target.value)}
-          className={`${inputStyle} w-64`}
-        />
-        <span className="text-[0.6875rem]">http, https or socks5, with a port. Used only while the box above is ticked.</span>
-      </label>
+      <Card
+        title="IP whitelist"
+        help="Only these addresses may reach Solarr. /api/v1/health always stays reachable, and a list that would exclude the address you are using now is refused."
+        toggle={<Toggle label="Only allow these addresses" checked={allowEnabled} disabled={busy} onChange={setAllowEnabled} />}
+      >
+        <label className={`flex flex-col gap-1 text-xs text-ink-muted ${allowEnabled ? "" : "opacity-60"}`}>
+          Allowed networks
+          <textarea
+            rows={4}
+            placeholder={"10.0.0.0/8\n192.168.1.0/24"}
+            value={allowCIDRs}
+            disabled={busy}
+            onChange={(event) => setAllowCIDRs(event.target.value)}
+            className={`${inputStyle} max-w-md font-mono`}
+          />
+          <span>One network (CIDR) per line.</span>
+        </label>
+      </Card>
 
-      <label className="flex flex-col gap-1">
-        Proxy bypass
-        <textarea
-          rows={3}
-          placeholder={"10.0.0.0/8\n.lan"}
-          value={proxyBypass}
-          disabled={busy}
-          onChange={(event) => setProxyBypass(event.target.value)}
-          className={`${inputStyle} w-64 font-mono`}
-        />
-        <span className="text-[0.6875rem]">
-          One CIDR or host suffix (".lan") per line. These always go direct.
-        </span>
-      </label>
-
-      <Toggle
-        label="Only allow these addresses to reach this instance"
-        checked={allowEnabled}
-        disabled={busy}
-        onChange={setAllowEnabled}
-      />
-
-      <label className="flex flex-col gap-1">
-        IP whitelist
-        <textarea
-          rows={3}
-          placeholder={"10.0.0.0/8\n192.168.1.0/24"}
-          value={allowCIDRs}
-          disabled={busy}
-          onChange={(event) => setAllowCIDRs(event.target.value)}
-          className={`${inputStyle} w-64 font-mono`}
-        />
-        <span className="text-[0.6875rem]">
-          One CIDR per line, used only while the box above is ticked. /api/v1/health always stays
-          reachable, and enabling a list that would exclude the address you're using right now is
-          refused outright.
-        </span>
-      </label>
-
-      {dirty && (
+      <div className="sticky bottom-0 -mx-1 flex items-center gap-3 border-t border-border-subtle bg-canvas/95 px-1 py-3 backdrop-blur">
         <button
           type="submit"
-          disabled={busy}
-          className="w-fit rounded-md bg-accent px-2 py-1 text-accent-ink disabled:opacity-50
+          disabled={busy || !dirty}
+          className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
                      focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
-          Save
+          {busy ? "Saving…" : "Save"}
         </button>
-      )}
+        {dirty && <span className="text-xs text-ink-muted">Unsaved changes</span>}
+      </div>
     </form>
+  );
+}
+
+/** One group of related settings: a heading, what it does, an optional on/off switch and the fields. */
+function Card({
+  title,
+  help,
+  toggle,
+  children,
+}: {
+  title: string;
+  help: string;
+  toggle?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
+      <div className="flex items-start gap-4">
+        <div className="flex flex-1 flex-col gap-0.5">
+          <h2 className="text-sm font-medium">{title}</h2>
+          <p className="max-w-xl text-xs text-ink-muted">{help}</p>
+        </div>
+        {toggle}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -211,14 +224,18 @@ function Toggle({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label className="flex items-center gap-2 text-ink">
+    <label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-ink">
+      {label}
       <input
         type="checkbox"
+        role="switch"
         checked={checked}
         disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
+        className="h-5 w-9 cursor-pointer appearance-none rounded-full bg-border-subtle transition-colors
+                   checked:bg-accent relative after:absolute after:left-0.5 after:top-0.5 after:size-4
+                   after:rounded-full after:bg-white after:transition-transform checked:after:translate-x-4"
       />
-      {label}
     </label>
   );
 }
@@ -231,5 +248,5 @@ function splitLines(value: string): string[] {
 }
 
 const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-1.5 py-1 text-xs text-ink " +
+  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

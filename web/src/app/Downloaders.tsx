@@ -442,6 +442,26 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
   const [signInUser, setSignInUser] = useState("");
   const [signInSecret, setSignInSecret] = useState("");
   const newSecret = torrent ? (signInSecret === "" && signInUser === "" ? "" : joinCredentials(signInUser, signInSecret)) : signInSecret;
+  // The folder this client's finished downloads are in, as Solarr sees it, becomes a download folder (a client added
+  // before the folder was a step of adding it has none).
+  const folderPath = localPath || remotePath;
+  const folders = useQuery({
+    queryKey: ["downloadfolders"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/downloadfolders");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const queryClient = useQueryClient();
+  const hasFolder = folderPath !== "" && (folders.data ?? []).some((folder) => folder.path.replace(/\/$/, "") === folderPath.replace(/\/$/, ""));
+  const addFolder = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST("/downloadfolders", { body: { path: folderPath, label: downloader.name, watch: false } });
+      if (error) throw new Error((error as { detail?: string }).detail ?? "It could not be added.");
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["downloadfolders"] }),
+  });
   const save = useMutation({
     mutationFn: async () => {
       if (newSecret !== "") {
@@ -518,6 +538,26 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
       >
         Save
       </button>
+      {folderPath !== "" && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+          {hasFolder ? (
+            <span>{folderPath} is a download folder.</span>
+          ) : (
+            <>
+              <span>{folderPath} is not a download folder yet, so its downloads cannot be imported.</span>
+              <button
+                type="button"
+                disabled={addFolder.isPending}
+                onClick={() => addFolder.mutate()}
+                className="rounded-md border border-border-subtle px-2 py-1 text-ink hover:border-accent disabled:opacity-50"
+              >
+                Add it to Download folders
+              </button>
+            </>
+          )}
+          {addFolder.isError && <span className="text-danger">{(addFolder.error as Error).message}</span>}
+        </div>
+      )}
       {save.isError && <p className="text-xs text-danger">The options could not be saved.</p>}
     </div>
   );

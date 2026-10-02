@@ -4707,10 +4707,11 @@ paths:
     get:
       operationId: getCategoryDuplicates
       tags: [library]
-      summary: Files of one library that are likely copies of one another (read only).
+      summary: Tracks one library holds more than once, found by artist, title and length (read only).
       description: >-
-        Files with the same size and the same sampled content, wherever they sit, with what keeping one copy of each
-        group would free. Nothing is linked or removed by looking; a library's largest groups come first.
+        Files that are one recording (the same artist and title, lengths within a few seconds), in whatever format and on
+        whichever album, with the copy to keep: the one that meets the library's target quality, else its profiles' first
+        choice. Nothing is changed by looking; the groups with the most to free come first.
       responses:
         "200":
           description: The groups, largest reclaimable first.
@@ -8783,26 +8784,33 @@ components:
       type: object
       required: [groups, reclaimable_bytes]
       properties:
-        reclaimable_bytes: { type: integer, format: int64, description: What keeping one copy of every group would free. }
+        reclaimable_bytes: { type: integer, format: int64, description: What dropping every copy but the recommended one would free. }
         groups:
           type: array
           items:
             type: object
-            required: [size_bytes, reclaimable_bytes, copies]
+            required: [artist, title, keep_reason, reclaimable_bytes, copies]
             properties:
-              size_bytes: { type: integer, format: int64 }
+              artist: { type: string }
+              title: { type: string }
+              keep_reason: { type: string, description: Why the recommended copy is the one to keep. }
               reclaimable_bytes: { type: integer, format: int64 }
               copies:
                 type: array
-                description: Each stored file once, with every path that reaches it (a hardlinked file has several).
                 items:
                   type: object
-                  required: [media_object_id, paths]
+                  required: [media_object_id, work_id, album, size_bytes, duration_ms, bitrate_kbps, audio_codec, lossless, keep, paths]
                   properties:
                     media_object_id: { type: integer, format: int64 }
-                    paths:
-                      type: array
-                      items: { type: string, description: The full path. }
+                    work_id: { type: integer, format: int64 }
+                    album: { type: string }
+                    size_bytes: { type: integer, format: int64 }
+                    duration_ms: { type: integer, format: int64 }
+                    bitrate_kbps: { type: integer, format: int64 }
+                    audio_codec: { type: string }
+                    lossless: { type: boolean }
+                    keep: { type: boolean, description: The copy to keep. }
+                    paths: { type: array, items: { type: string } }
 
     CategoryStatistics:
       type: object

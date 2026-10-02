@@ -1,6 +1,9 @@
 package match
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Dimension names, shared between DistancePart.Dimension and Weights keys.
 const (
@@ -123,6 +126,9 @@ func titleDistance(claimed, candidate string) (DistancePart, bool) {
 		return DistancePart{}, false
 	}
 	similarity, method := bestTitleSimilarity(claimed, candidate)
+	if distinctive, ok := distinctiveSimilarity(claimed, candidate); ok && distinctive < similarity {
+		similarity, method = distinctive, "distinctive words"
+	}
 	return DistancePart{Dimension: DimensionTitle, Distance: 1 - similarity,
 		Detail: fmt.Sprintf("title %.2f %s", similarity, method)}, true
 }
@@ -138,6 +144,35 @@ func bestTitleSimilarity(a, b string) (score float64, method string) {
 		return jaroWinklerSimilarity, "jaro-winkler"
 	}
 	return tokenSimilarity, "token-set"
+}
+
+// descriptorWords say what kind of release a title is, not which one: two soundtracks share "original motion
+// picture soundtrack" and are different albums (a Trainspotting release was accepted for Wijdt Sirtuvz 3, 2026-10-02).
+var descriptorWords = map[string]bool{
+	"the": true, "of": true, "and": true, "from": true, "original": true, "motion": true, "picture": true,
+	"soundtrack": true, "music": true, "ost": true, "score": true, "deluxe": true, "edition": true, "expanded": true,
+	"remastered": true, "special": true, "version": true, "bonus": true, "tracks": true, "album": true, "cd": true,
+	"ep": true, "single": true,
+}
+
+// distinctiveSimilarity compares two titles by the words that are not descriptors. ok is false when either has
+// none left, in which case the whole title is all there is to compare.
+func distinctiveSimilarity(a, b string) (float64, bool) {
+	strip := func(title string) string {
+		var kept []string
+		for _, word := range strings.Fields(normalizeTitle(title)) {
+			if !descriptorWords[word] {
+				kept = append(kept, word)
+			}
+		}
+		return strings.Join(kept, " ")
+	}
+	strippedA, strippedB := strip(a), strip(b)
+	if strippedA == "" || strippedB == "" {
+		return 0, false
+	}
+	score, _ := bestTitleSimilarity(strippedA, strippedB)
+	return score, true
 }
 
 // TitleSimilarity is section 10.2's title comparison (the better of token-set

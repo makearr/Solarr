@@ -611,7 +611,7 @@ func (p *process) startServer(ctx context.Context) error {
 		Artwork:        adapters.Artwork{Artworks: library.NewArtworks(p.library)},
 		ArtworkChoices: p.artworkChoices(),
 		Statistics:     adapters.Statistics{Statistics: library.NewStatistics(p.library)},
-		Duplicates:     adapters.Duplicates{Store: library.NewDuplicates(p.library)},
+		Duplicates:     adapters.Duplicates{Store: library.NewDuplicates(p.library), Settings: p.cache},
 		IncompleteDiscographies: adapters.IncompleteDiscographies{
 			Statistics: library.NewStatistics(p.library), People: library.NewPeople(p.library),
 		},
