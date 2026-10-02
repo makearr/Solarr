@@ -2727,6 +2727,61 @@ paths:
                 items: { type: string }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /tags/own:
+    get:
+      operationId: listOwnTags
+      tags: [library]
+      summary: The tags created from the Edit dialog, with how many albums carry each.
+      responses:
+        "200":
+          description: The tags, by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, name, works]
+                  properties:
+                    id: { type: integer, format: int64 }
+                    name: { type: string }
+                    works: { type: integer, format: int64 }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /tags/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: renameTag
+      tags: [library]
+      summary: Rename one of the user's own tags. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        "204": { description: Renamed. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteTag
+      tags: [library]
+      summary: Delete one of the user's own tags and take it off every album. Administrator only.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/parts/{partId}/monitor:
     parameters:
       - name: id

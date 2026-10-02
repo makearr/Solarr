@@ -3,6 +3,7 @@ package apiserver_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net/http"
 	"reflect"
 	"testing"
@@ -19,6 +20,8 @@ type fakeWorkEditor struct {
 	bulkSelection apiserver.BulkSelection
 	bulkChange    apiserver.BulkEditChange
 	bulkPreview   bool
+	renamed       string
+	deleted       int64
 }
 
 func (f *fakeWorkEditor) GetWorkEdit(context.Context, int64) (apiserver.WorkEditRow, error) {
@@ -35,6 +38,20 @@ func (f *fakeWorkEditor) BulkEdit(
 ) (int64, error) {
 	f.bulkSelection, f.bulkChange, f.bulkPreview = selection, change, preview
 	return 7, f.err
+}
+
+func (f *fakeWorkEditor) ListOwnTags(context.Context) ([]apiserver.OwnTagRow, error) {
+	return []apiserver.OwnTagRow{{ID: 3, Name: "Sleep", Works: 12}}, nil
+}
+
+func (f *fakeWorkEditor) RenameTag(_ context.Context, id int64, name string) error {
+	f.renamed = fmt.Sprintf("%d=%s", id, name)
+	return f.err
+}
+
+func (f *fakeWorkEditor) DeleteTag(_ context.Context, id int64) error {
+	f.deleted = id
+	return f.err
 }
 
 func (f *fakeWorkEditor) ListTags(context.Context) ([]string, error) {
@@ -110,5 +127,45 @@ func TestBulkEditWorks_NeedsRequestPermissionOnTheLibrary(t *testing.T) {
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/bulk/edit", `{"category_id":1,"monitored":true}`))
 	if recorder.Code == http.StatusOK {
 		t.Fatalf("a read-only user bulk-edited: status %d", recorder.Code)
+	}
+}
+
+func TestOwnTags_ListRenameDeleteAreAdministratorWorkAndMapConflicts(t *testing.T) {
+	fixture, cookies := visibleWorksFixture(t) // a read-only listener
+	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/tags/3", `{"name":"Nap"}`)); recorder.Code != http.StatusForbidden {
+		t.Fatalf("rename by a listener: status %d, want 403", recorder.Code)
+	}
+	if recorder := fixture.do(authedDelete(t, cookies, "/api/v1/tags/3")); recorder.Code != http.StatusForbidden {
+		t.Fatalf("delete by a listener: status %d, want 403", recorder.Code)
+	}
+	if fixture.workEditor.renamed != "" || fixture.workEditor.deleted != 0 {
+		t.Fatal("a listener reached the tag store")
+	}
+	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/tags/own")); recorder.Code != http.StatusOK ||
+		recorder.Body.String() != "[{\"id\":3,\"name\":\"Sleep\",\"works\":12}]\n" {
+		t.Fatalf("list: status %d, body %q", recorder.Code, recorder.Body)
+	}
+}
+
+func TestOwnTags_AnAdministratorRenamesAndDeletesAndATakenNameIs409(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/tags/3", `{"name":"  Nap "}`)); recorder.Code != http.StatusNoContent {
+		t.Fatalf("rename: status %d, body %s", recorder.Code, recorder.Body)
+	}
+	if fixture.workEditor.renamed != "3=Nap" {
+		t.Errorf("renamed %q, want the trimmed name", fixture.workEditor.renamed)
+	}
+	if recorder := fixture.do(authedDelete(t, cookies, "/api/v1/tags/3")); recorder.Code != http.StatusNoContent || fixture.workEditor.deleted != 3 {
+		t.Fatalf("delete: status %d, deleted %d", recorder.Code, fixture.workEditor.deleted)
+	}
+	fixture.workEditor.err = apiserver.ErrTagNameTaken
+	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/tags/3", `{"name":"Rock"}`)); recorder.Code != http.StatusConflict {
+		t.Fatalf("taken name: status %d, want 409", recorder.Code)
+	}
+	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/tags/3", `{"name":"  "}`)); recorder.Code != http.StatusBadRequest {
+		t.Fatalf("blank name: status %d, want 400", recorder.Code)
 	}
 }

@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -139,4 +140,31 @@ func applyBulkChange(edit apiserver.WorkEditRow, change apiserver.BulkEditChange
 	}
 	edit.Tags = tags
 	return edit
+}
+
+// ListOwnTags answers the user's tags with their use.
+func (a WorkEdit) ListOwnTags(ctx context.Context) ([]apiserver.OwnTagRow, error) {
+	tags, err := a.People.ListUserTags(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]apiserver.OwnTagRow, len(tags))
+	for i, tag := range tags {
+		rows[i] = apiserver.OwnTagRow{ID: tag.ID, Name: tag.Name, Works: tag.Works}
+	}
+	return rows, nil
+}
+
+// RenameTag renames one of the user's tags.
+func (a WorkEdit) RenameTag(ctx context.Context, id int64, name string) error {
+	err := a.People.RenameUserTag(ctx, id, name)
+	if errors.Is(err, library.ErrTagExists) {
+		return apiserver.ErrTagNameTaken
+	}
+	return err
+}
+
+// DeleteTag removes one of the user's tags.
+func (a WorkEdit) DeleteTag(ctx context.Context, id int64) error {
+	return a.People.DeleteUserTag(ctx, id)
 }
