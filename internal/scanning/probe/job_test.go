@@ -213,3 +213,49 @@ func TestJob_RunYieldsOnceItsTimeIsSpent(t *testing.T) {
 		t.Errorf("%d files left unmeasured, want the 50 past the first batch", len(left))
 	}
 }
+
+// A file measured before the probe read lyrics languages is read again, once.
+func TestJob_RunReadsAgainAFileMeasuredBeforeLyricsLanguages(t *testing.T) {
+	opened := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "track.flac"), []byte("not real audio, the tool is faked"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ids, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "track.flac", SizeBytes: 34, QuickHash: "hash-1", FirstSeenAt: time.Unix(0, 0)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := physical.RecordMeasured(t.Context(), ids[0].MediaObjectID, library.AttributeClaim{AudioCodec: "flac"},
+		library.MeasuredScalars{ProbeJSON: `{"AudioCodec":"flac"}`}, "", 1); err != nil {
+		t.Fatal(err)
+	}
+	if stale, err := physical.ListStaleProbes(t.Context(), 0, 10); err != nil || len(stale) != 1 {
+		t.Fatalf("stale before = %+v, %v; want the one file", stale, err)
+	}
+
+	job := probe.NewJob(probe.Config{
+		Physical: physical, Coverage: library.NewProbeCoverage(opened, clock.NewFakeAtEpoch()),
+		Roots: fakeRoots{1: settings.RootFolder{ID: 1, Path: root, Online: true}},
+		Tool: &fakeTool{measured: mediatool.Measured{
+			AudioCodec: "flac", Duration: 3 * time.Second, LyricsLanguages: []string{"de"},
+		}},
+		Clock: clock.NewFakeAtEpoch(), Logger: slog.New(slog.DiscardHandler),
+	})
+	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stale, err := physical.ListStaleProbes(t.Context(), 0, 10); err != nil || len(stale) != 0 {
+		t.Errorf("stale after = %+v, %v; want none", stale, err)
+	}
+	object, err := librarydb.New(opened.Read()).GetMediaObject(t.Context(), ids[0].MediaObjectID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attrs, err := librarydb.New(opened.Read()).GetAttributes(t.Context(), object.MeasuredAttributesID.Int64)
+	if err != nil || attrs.LyricsLanguages.String != `["de"]` {
+		t.Errorf("lyrics languages = %q, %v; want [\"de\"]", attrs.LyricsLanguages.String, err)
+	}
+}

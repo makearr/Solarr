@@ -189,6 +189,19 @@ func (p Physical) ListUnmeasured(ctx context.Context, afterID int64, pageSize in
 	return files, nil
 }
 
+// ListStaleProbes pages through the files measured before the probe read lyrics languages, oldest id first.
+func (p Physical) ListStaleProbes(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
+	rows, err := librarydb.New(p.store.Read()).ListStaleProbes(ctx, librarydb.ListStaleProbesParams{AfterID: afterID, PageSize: pageSize})
+	if err != nil {
+		return nil, fmt.Errorf("library: list stale probes: %w", err)
+	}
+	files := make([]UnmeasuredFile, len(rows))
+	for index, row := range rows {
+		files[index] = UnmeasuredFile{MediaObjectID: row.ID, RootFolderID: row.RootFolderID, RelPath: row.RelPath}
+	}
+	return files, nil
+}
+
 // FileOnRoot is one real file currently on a root, for ADR-51's drain --
 // the primary path only (see ListPathsForRootWithSize's own doc comment for
 // the narrow cross-entry-hardlink gap this leaves).

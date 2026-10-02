@@ -116,6 +116,16 @@ WHERE o.measured_attributes_id IS NULL AND o.id > sqlc.arg(after_id)
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
+-- Files measured before the probe read the lyrics language: their stored probe has no such key, so they are read once more.
+-- name: ListStaleProbes :many
+SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
+WHERE o.measured_attributes_id IS NOT NULL AND o.probe_json IS NOT NULL
+  AND o.probe_json NOT LIKE '%"LyricsLanguages"%' AND o.id > sqlc.arg(after_id)
+ORDER BY o.id
+LIMIT sqlc.arg(page_size);
+
 -- Probe coverage, the same per-root shape CountLibraryPathsByRootFolder already
 -- answers for the denominator (library.CategoryCounters' own precedent) --
 -- "probed" is the numerator a coverage counter reconciles against it.
