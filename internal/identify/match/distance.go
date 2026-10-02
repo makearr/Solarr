@@ -2,6 +2,7 @@ package match
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -129,8 +130,53 @@ func titleDistance(claimed, candidate string) (DistancePart, bool) {
 	if distinctive, ok := distinctiveSimilarity(claimed, candidate); ok && distinctive < similarity {
 		similarity, method = distinctive, "distinctive words"
 	}
+	if differentNumbers(claimed, candidate) {
+		similarity, method = min(similarity, differentNumbersSimilarity), "different numbers"
+	}
 	return DistancePart{Dimension: DimensionTitle, Distance: 1 - similarity,
 		Detail: fmt.Sprintf("title %.2f %s", similarity, method)}, true
+}
+
+// differentNumbersSimilarity caps two titles that differ in their sequel number: "Wijdt Sirtuvz 2" and
+// "Wijdt Sirtuvz 3", "The Best of X" and "The Best of X Volume 2", are neighbours in spelling and different albums.
+const differentNumbersSimilarity = 0.4
+
+var romanNumerals = map[string]int{"ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10}
+
+// sequelNumbers are the standalone numbers of a title: one to three digits or a roman numeral from II, never a
+// year and never a disc number. A title with none is the first of its series, so it reads as {1}.
+func sequelNumbers(title string) map[int]bool {
+	tokens := strings.Fields(normalizeTitle(title))
+	found := map[int]bool{}
+	for index, token := range tokens {
+		number, err := strconv.Atoi(token)
+		if err != nil || len(token) > 3 {
+			number = romanNumerals[token]
+		}
+		if number == 0 || (index > 0 && discWords[tokens[index-1]]) {
+			continue
+		}
+		found[number] = true
+	}
+	if len(found) == 0 {
+		found[1] = true
+	}
+	return found
+}
+
+var discWords = map[string]bool{"disc": true, "disk": true, "cd": true, "dvd": true}
+
+func differentNumbers(a, b string) bool {
+	setA, setB := sequelNumbers(a), sequelNumbers(b)
+	if len(setA) != len(setB) {
+		return true
+	}
+	for number := range setA {
+		if !setB[number] {
+			return true
+		}
+	}
+	return false
 }
 
 // bestTitleSimilarity is the shared "best of token-set overlap and Jaro-Winkler"

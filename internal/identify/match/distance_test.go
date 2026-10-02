@@ -277,3 +277,30 @@ func TestTitleDistance_ADescriptorOnlyOverlapIsNotAMatch(t *testing.T) {
 		t.Errorf("a title of nothing but descriptors keeps the whole-title comparison, got %.2f", bare.Distance)
 	}
 }
+
+// A neighbour in spelling is not the same album when its sequel number differs.
+func TestTitleDistance_ADifferentSequelNumberIsADifferentAlbum(t *testing.T) {
+	for _, pair := range [][2]string{
+		{"The Best of Gajk Sesvin", "The Best of Gajk Sesvin Volume 2"},
+		{"Wijdt Sirtuvz 2", "Wijdt Sirtuvz 3"},
+		{"Now 52", "Now 53"},
+		{"Greatest Hits Vol. 1", "Greatest Hits Vol. II"},
+	} {
+		part, _ := titleDistance(pair[0], pair[1])
+		if part.Distance < 0.5 {
+			t.Errorf("%q vs %q: distance = %.2f (%s), want far apart", pair[0], pair[1], part.Distance, part.Detail)
+		}
+	}
+	for _, pair := range [][2]string{
+		{"Greatest Hits Volume 2", "Greatest Hits, Vol. II"},
+		{"Greatest Hits", "Greatest Hits Volume 1"},
+		{"Blink-182", "Blink 182"},
+		{"Album (Disc 1)", "Album (Disc 2)"},
+		{"Greatest Hits 1977-1990", "Greatest Hits 1977 1990"},
+	} {
+		part, _ := titleDistance(pair[0], pair[1])
+		if part.Distance > 0.3 {
+			t.Errorf("%q vs %q: distance = %.2f (%s), want close", pair[0], pair[1], part.Distance, part.Detail)
+		}
+	}
+}
